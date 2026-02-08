@@ -80,11 +80,15 @@ object ConfigService {
             val darkStyle = darkMode?.getAsJsonObject("style")
             val darkGradient = darkStyle?.getAsJsonObject("background")?.getAsJsonObject("gradient")
 
+            val rawLabel = appearance.getAsJsonObject("label")?.get("text")?.asString ?: ""
+            val rawVisible = action.get("visibleText")?.asString ?: ""
+            val rawHidden = action.get("hiddenPrompt")?.asString ?: ""
+
             buttons.add(
                 QuickHelpButton(
                     id = btn.get("id")?.asString ?: "",
                     category = btn.get("category")?.let { if (it.isJsonNull) null else it.asString },
-                    labelText = appearance.getAsJsonObject("label")?.get("text")?.asString ?: "",
+                    labelText = resolveI18nKey(rawLabel),
                     labelColor = parseColor(appearance.getAsJsonObject("label")?.get("color")?.asString),
                     iconPath = appearance.getAsJsonObject("icon")?.get("value")?.asString ?: "",
                     iconColor = parseColor(appearance.getAsJsonObject("icon")?.get("color")?.asString),
@@ -94,8 +98,8 @@ object ConfigService {
                     darkIconColor = parseColor(darkMode?.getAsJsonObject("icon")?.get("color")?.asString),
                     darkGradientStart = parseColor(darkGradient?.get("start")?.asString),
                     darkGradientEnd = parseColor(darkGradient?.get("end")?.asString),
-                    visibleText = action.get("visibleText")?.asString ?: "",
-                    hiddenPrompt = action.get("hiddenPrompt")?.asString ?: ""
+                    visibleText = resolveI18nKey(rawVisible),
+                    hiddenPrompt = resolveI18nKey(rawHidden)
                 )
             )
         }
@@ -108,6 +112,25 @@ object ConfigService {
             ?.getAsJsonObject("quickHelp")
             ?.getAsJsonObject("layout")
             ?.get("columns")?.asInt ?: 2
+    }
+
+    /**
+     * Resolve an i18n key (e.g. "quickhelp.justChat") to its localized string.
+     * Converts dotted keys to Android resource names (quickhelp.justChat → quickhelp_just_chat),
+     * then looks up via resources. Falls back to the raw key if not found.
+     */
+    fun resolveI18nKey(key: String): String {
+        if (key.isBlank()) return key
+        val context = GenieAIApplication.instance
+        // Convert dotted camelCase key to snake_case resource name
+        // e.g. "quickhelp.justChat" → "quickhelp_just_chat"
+        // e.g. "quickhelp.applyForIDUserPrompt" → "quickhelp_apply_for_id_user_prompt"
+        val resourceName = key
+            .replace(".", "_")
+            .replace(Regex("([a-z])([A-Z])")) { "${it.groupValues[1]}_${it.groupValues[2]}" }
+            .lowercase()
+        val resId = context.resources.getIdentifier(resourceName, "string", context.packageName)
+        return if (resId != 0) context.getString(resId) else key
     }
 
     private fun parseColor(hex: String?): Color {

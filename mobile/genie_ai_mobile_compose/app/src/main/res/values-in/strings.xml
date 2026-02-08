@@ -15,6 +15,8 @@
     <string name="login_terms">Dengan masuk, Anda menyetujui Ketentuan Layanan dan Kebijakan Privasi kami</string>
     <string name="login_error">Gagal masuk. Silakan periksa kredensial Anda.</string>
     <string name="login_fields_required">Nama pengguna dan kata sandi wajib diisi</string>
+    <string name="login_invalid_credentials">Nama pengguna atau kata sandi salah</string>
+    <string name="login_too_many_attempts">Terlalu banyak percobaan masuk. Silakan coba lagi nanti.</string>
 
     <!-- Register -->
     <string name="register_create_account">Buat Akun Baru</string>
@@ -36,6 +38,12 @@
     <string name="register_verification_sent">Email verifikasi telah dikirim ke %1$s</string>
     <string name="register_check_email_instructions">Silakan periksa email Anda dan ikuti petunjuk untuk memverifikasi akun Anda sebelum masuk.</string>
     <string name="register_back_to_login">Kembali ke Masuk</string>
+    <string name="register_username_min_length">Nama pengguna harus minimal 3 karakter</string>
+    <string name="register_invalid_email">Silakan masukkan alamat email yang valid</string>
+    <string name="register_password_requirements">Kata sandi harus minimal 8 karakter dengan minimal 1 angka dan 1 huruf besar</string>
+    <string name="register_must_accept_terms">Anda harus menerima Ketentuan Layanan</string>
+    <string name="register_username_exists">Nama pengguna sudah ada</string>
+    <string name="register_email_exists">Email sudah terdaftar</string>
 
     <!-- Password Reset -->
     <string name="password_reset_title">Atur Ulang Kata Sandi</string>
@@ -86,6 +94,28 @@
     <string name="sidebar_rename_chat">Ubah Nama Obrolan</string>
     <string name="sidebar_move_chat">Pindahkan Obrolan</string>
     <string name="sidebar_create_folder">Buat Folder</string>
+    <string name="sidebar_edit_folder">Edit Folder</string>
+    <string name="sidebar_delete_folder">Hapus Folder</string>
+    <string name="sidebar_folder_name">Nama Folder</string>
+    <string name="sidebar_folder_name_placeholder">Masukkan nama folder</string>
+    <string name="sidebar_move_chat_to">Pindahkan Obrolan Ke</string>
+    <string name="sidebar_select_folder">Pilih Folder</string>
+    <string name="sidebar_delete_chat_confirm">Apakah Anda yakin ingin menghapus obrolan ini?</string>
+    <string name="sidebar_delete_chat_warning">Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="sidebar_chat_title">Judul Obrolan</string>
+    <string name="sidebar_chat_title_placeholder">Masukkan judul untuk obrolan ini</string>
+    <string name="sidebar_delete_folder_confirm">Apakah Anda yakin ingin menghapus folder ini?</string>
+    <string name="sidebar_chats_move_warning">Semua obrolan dalam folder ini akan dipindahkan ke folder default.</string>
+    <string name="sidebar_no_starred_chats">Belum ada percakapan berbintang. Beri bintang pada percakapan untuk menambahkannya di sini.</string>
+    <string name="sidebar_no_archived_chats">Belum ada percakapan yang diarsipkan.</string>
+    <string name="sidebar_no_search_results">Tidak ada percakapan ditemukan</string>
+    <string name="sidebar_loading_chats">Memuat percakapan…</string>
+    <string name="sidebar_error_loading">Gagal memuat percakapan. Silakan coba lagi.</string>
+    <string name="sidebar_confidence">Kepercayaan</string>
+    <string name="sidebar_labels">Label</string>
+    <string name="sidebar_open">Buka</string>
+    <string name="sidebar_faq_error">FAQ tidak tersedia</string>
+    <string name="sidebar_empty_folder">Folder ini kosong. Pindahkan percakapan ke sini dari menu obrolan.</string>
 
     <!-- Chatbot -->
     <string name="chatbot_placeholder">Ketik pertanyaan Anda di sini…</string>
@@ -98,8 +128,22 @@
     <string name="chatbot_remove_context">Hapus Konteks</string>
     <string name="chatbot_save_chat">Simpan Obrolan</string>
     <string name="chatbot_export_chat">Ekspor Obrolan</string>
+    <string name="chatbot_unsaved_changes">Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?</string>
+    <string name="chatbot_new_chat_started">Memulai percakapan baru</string>
+    <string name="chatbot_conversation_loaded">Percakapan berhasil dimuat!</string>
+    <string name="chatbot_save_confirm_title">Simpan Percakapan yang Ada</string>
+    <string name="chatbot_save_confirm_message">Simpan percakapan yang ada?</string>
+    <string name="chatbot_discard_and_new">Buang &amp; Baru</string>
+    <string name="chatbot_save_and_new">Simpan &amp; Baru</string>
+    <string name="chatbot_save_first">Simpan Dulu</string>
+    <string name="chatbot_export_filename">Nama File</string>
+    <string name="chatbot_export_filename_placeholder">Masukkan nama file</string>
+    <string name="chatbot_export_button">Ekspor</string>
+    <string name="chatbot_export_success">Obrolan berhasil diekspor</string>
+    <string name="chatbot_export_error">Gagal mengekspor obrolan. Silakan coba lagi.</string>
+    <string name="chatbot_chat_saved">Obrolan Tersimpan</string>
 
-    <!-- Quick Help -->
+    <!-- Quick Help - Button Labels -->
     <string name="quickhelp_just_chat">Ngobrol Saja</string>
     <string name="quickhelp_apply_for_id">Ajukan KTP</string>
     <string name="quickhelp_pay_taxes">Bayar Pajak</string>
@@ -109,6 +153,28 @@
     <string name="quickhelp_transport_licenses">Transportasi</string>
     <string name="quickhelp_housing_programs">Perumahan</string>
     <string name="quickhelp_find_jobs">Cari Pekerjaan</string>
+
+    <!-- Quick Help - User-Visible Prompts (shown as the user's message in chat) -->
+    <string name="quickhelp_just_chat_user_prompt">Saya ingin mengobrol secara umum tentang kehidupan di Kenya.</string>
+    <string name="quickhelp_apply_for_id_user_prompt">Saya ingin mencari tahu tentang cara mengajukan KTP Nasional di Kenya.</string>
+    <string name="quickhelp_pay_taxes_user_prompt">Saya ingin bertanya tentang membayar pajak atau mengajukan laporan KRA di Kenya.</string>
+    <string name="quickhelp_start_business_user_prompt">Saya ingin mencari tahu tentang mendaftarkan usaha atau perusahaan baru di Kenya.</string>
+    <string name="quickhelp_find_healthcare_user_prompt">Saya ingin bertanya tentang fasilitas kesehatan publik dan asuransi (NHIF/SHIF) di Kenya.</string>
+    <string name="quickhelp_education_services_user_prompt">Saya ingin mencari tahu tentang sekolah dan layanan pendidikan di Kenya.</string>
+    <string name="quickhelp_transport_licenses_user_prompt">Saya ingin bertanya tentang SIM dan layanan NTSA di Kenya.</string>
+    <string name="quickhelp_housing_programs_user_prompt">Saya ingin mencari tahu tentang Program Perumahan Terjangkau (Boma Yangu) di Kenya.</string>
+    <string name="quickhelp_find_jobs_user_prompt">Saya ingin bertanya tentang lowongan kerja pemerintah dan lamaran PSC di Kenya.</string>
+
+    <!-- Quick Help - Hidden System Prompts (sent to the AI, not shown to user) -->
+    <string name="quickhelp_just_chat_prompt">Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_apply_for_id_prompt">Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents\' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_pay_taxes_prompt">Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_start_business_prompt">Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_healthcare_prompt">Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_education_services_prompt">Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_transport_licenses_prompt">Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_housing_programs_prompt">Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_jobs_prompt">Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as \'Genie AI\'.</string>
 
     <!-- Feedback -->
     <string name="feedback_title">Bantu Kami Meningkatkan</string>
@@ -151,17 +217,153 @@
     <string name="settings_deletion_reason">Alasan penghapusan (opsional)</string>
     <string name="settings_confirm_reset_user_data">Apakah Anda yakin ingin mengatur ulang semua data profil Anda? Ini akan menghapus semua informasi profil dan riwayat obrolan Anda, tetapi mempertahankan kredensial akun Anda.</string>
     <string name="settings_reset">Atur Ulang</string>
+    <string name="settings_password_reset_initiated">Tautan atur ulang kata sandi telah dikirim ke alamat email Anda.</string>
 
     <!-- User Profile -->
     <string name="user_profile_title">Profil Pengguna</string>
     <string name="user_profile_save">Simpan Profil</string>
     <string name="user_profile_previous">Sebelumnya</string>
     <string name="user_profile_next">Berikutnya</string>
-    <string name="user_profile_full_name">Nama lengkap</string>
+    <string name="user_profile_full_name">Nama lengkap (termasuk nama panggilan)</string>
     <string name="user_profile_dob">Tanggal lahir</string>
     <string name="user_profile_gender">Jenis kelamin</string>
     <string name="user_profile_nationality">Kewarganegaraan</string>
     <string name="user_profile_marital_status">Status perkawinan</string>
+    <string name="user_profile_saving">Menyimpan…</string>
+    <string name="user_profile_save_success">Profil berhasil disimpan</string>
+    <string name="user_profile_save_error">Gagal menyimpan profil</string>
+    <string name="user_profile_load_error">Gagal memuat data profil</string>
+    <string name="user_profile_privacy_info">Dengan memberikan lebih banyak informasi, Anda akan mendapatkan respons yang lebih akurat dan bermakna dari chatbot.</string>
+    <string name="user_profile_privacy_policy_link">Kebijakan Privasi</string>
+
+    <!-- Profile Tabs (Full) -->
+    <string name="user_profile_tab_1">Data Identifikasi Pribadi</string>
+    <string name="user_profile_tab_2">Pencatatan Sipil &amp; Dokumentasi</string>
+    <string name="user_profile_tab_3">Informasi Alamat &amp; Tempat Tinggal</string>
+    <string name="user_profile_tab_4">Dokumen Identitas &amp; Perjalanan</string>
+    <string name="user_profile_tab_5">Catatan Kesehatan &amp; Medis</string>
+    <string name="user_profile_tab_6">Data Pekerjaan &amp; Ekonomi</string>
+    <string name="user_profile_tab_7">Catatan Pendidikan &amp; Akademik</string>
+    <string name="user_profile_tab_8">Data Keuangan &amp; Pajak</string>
+    <string name="user_profile_tab_9">Jaminan Sosial &amp; Kesejahteraan</string>
+    <string name="user_profile_tab_10">Catatan Hukum &amp; Pidana</string>
+    <string name="user_profile_tab_11">Transportasi &amp; Mobilitas</string>
+    <string name="user_profile_tab_12">Partisipasi Sipil &amp; Politik</string>
+
+    <!-- Profile Tabs (Short) -->
+    <string name="user_profile_tab_short_personal">Pribadi</string>
+    <string name="user_profile_tab_short_civil">Sipil</string>
+    <string name="user_profile_tab_short_address">Alamat</string>
+    <string name="user_profile_tab_short_identity">Identitas</string>
+    <string name="user_profile_tab_short_health">Kesehatan</string>
+    <string name="user_profile_tab_short_employment">Pekerjaan</string>
+    <string name="user_profile_tab_short_education">Pendidikan</string>
+    <string name="user_profile_tab_short_financial">Keuangan</string>
+    <string name="user_profile_tab_short_social">Sosial</string>
+    <string name="user_profile_tab_short_criminal">Pidana</string>
+    <string name="user_profile_tab_short_transport">Transportasi</string>
+    <string name="user_profile_tab_short_civic">Kewarganegaraan</string>
+
+    <!-- Profile Fields -->
+    <string name="user_profile_field_photograph">Foto</string>
+    <string name="user_profile_field_biometric">Sidik jari / Data biometrik</string>
+    <string name="user_profile_field_birth_cert">Akta kelahiran</string>
+    <string name="user_profile_field_death_cert">Akta kematian</string>
+    <string name="user_profile_field_marriage_divorce">Catatan pernikahan / perceraian</string>
+    <string name="user_profile_field_adoption">Catatan adopsi</string>
+    <string name="user_profile_field_citizenship">Dokumen kewarganegaraan / naturalisasi</string>
+    <string name="user_profile_field_immigration">Riwayat imigrasi &amp; visa</string>
+    <string name="user_profile_field_current_address">Alamat tempat tinggal saat ini</string>
+    <string name="user_profile_field_previous_addresses">Alamat sebelumnya</string>
+    <string name="user_profile_field_postal_code">Kode Pos</string>
+    <string name="user_profile_field_country">Negara</string>
+    <string name="user_profile_field_residency_status">Status Tempat Tinggal</string>
+    <string name="user_profile_field_home_or_rental">Detail kepemilikan rumah atau sewa</string>
+    <string name="user_profile_field_utility_bills">Tagihan utilitas terkait alamat</string>
+    <string name="user_profile_field_land_records">Catatan kepemilikan tanah dan properti</string>
+    <string name="user_profile_field_id_card">Nomor KTP</string>
+    <string name="user_profile_field_passport">Detail paspor</string>
+    <string name="user_profile_field_drivers_license">Surat Izin Mengemudi</string>
+    <string name="user_profile_field_voter_id">Kartu Pemilih</string>
+    <string name="user_profile_field_ssn">Nomor Jaminan Sosial / Asuransi Nasional</string>
+    <string name="user_profile_field_military_records">Catatan dinas militer</string>
+    <string name="user_profile_field_medical_history">Riwayat medis dan kondisi kesehatan</string>
+    <string name="user_profile_field_vaccinations">Catatan vaksinasi</string>
+    <string name="user_profile_field_insurance_details">Detail asuransi kesehatan</string>
+    <string name="user_profile_field_disability">Status disabilitas</string>
+    <string name="user_profile_field_blood_type">Golongan Darah</string>
+    <string name="user_profile_field_organ_donor">Status donor organ</string>
+    <string name="user_profile_field_prescriptions">Resep dan perawatan yang diterima</string>
+    <string name="user_profile_field_mental_health">Riwayat kesehatan mental</string>
+    <string name="user_profile_field_employment_history">Riwayat pekerjaan</string>
+    <string name="user_profile_field_current_employer">Detail perusahaan saat ini</string>
+    <string name="user_profile_field_work_permits">Izin kerja dan kontrak kerja</string>
+    <string name="user_profile_field_certifications">Sertifikasi dan lisensi profesional</string>
+    <string name="user_profile_field_unemployment">Status pengangguran dan tunjangan yang diterima</string>
+    <string name="user_profile_field_tin">Nomor Pokok Wajib Pajak (NPWP)</string>
+    <string name="user_profile_field_business_affiliations">Kepemilikan usaha dan afiliasi perusahaan</string>
+    <string name="user_profile_field_schools">Sekolah dan universitas yang dihadiri</string>
+    <string name="user_profile_field_education">Pendidikan</string>
+    <string name="user_profile_field_degrees">Diploma, gelar, dan sertifikasi</string>
+    <string name="user_profile_field_performance">Prestasi akademik dan nilai ujian</string>
+    <string name="user_profile_field_scholarships">Beasiswa dan bantuan keuangan yang diterima</string>
+    <string name="user_profile_field_income_tax">Catatan pajak penghasilan</string>
+    <string name="user_profile_field_bank_accounts">Rekening bank dan keuangan</string>
+    <string name="user_profile_field_property_tax">Pembayaran pajak properti</string>
+    <string name="user_profile_field_business_tax">Pelaporan pajak usaha</string>
+    <string name="user_profile_field_pension_contrib">Kontribusi dan penarikan pensiun</string>
+    <string name="user_profile_field_loan_aid">Catatan pinjaman dan bantuan pemerintah</string>
+    <string name="user_profile_field_pension_status">Status dan kontribusi pensiun</string>
+    <string name="user_profile_field_childcare">Dukungan pengasuhan anak</string>
+    <string name="user_profile_field_food_assistance">Bantuan pangan / program kesejahteraan</string>
+    <string name="user_profile_field_housing_assistance">Bantuan perumahan</string>
+    <string name="user_profile_field_police_records">Catatan kepolisian (riwayat pidana, penangkapan, tuduhan)</string>
+    <string name="user_profile_field_court_cases">Riwayat kasus pengadilan</string>
+    <string name="user_profile_field_fines_penalties">Denda dan sanksi</string>
+    <string name="user_profile_field_parole_probation">Status pembebasan bersyarat atau masa percobaan</string>
+    <string name="user_profile_field_vehicle_reg">Detail registrasi kendaraan</string>
+    <string name="user_profile_field_traffic_violations">Pelanggaran lalu lintas dan denda</string>
+    <string name="user_profile_field_license_history">Riwayat SIM dan pengesahan</string>
+    <string name="user_profile_field_public_transport_card">Penggunaan kartu transportasi umum</string>
+    <string name="user_profile_field_voter_registration">Detail pendaftaran pemilih</string>
+    <string name="user_profile_field_election_history">Riwayat partisipasi pemilu</string>
+    <string name="user_profile_field_party_membership">Keanggotaan partai politik</string>
+    <string name="user_profile_field_military_status">Status dinas militer atau wajib militer</string>
+    <string name="user_profile_field_public_service_roles">Peran pelayanan publik</string>
+
+    <!-- Profile Dropdown Values -->
+    <string name="gender_male">Laki-laki</string>
+    <string name="gender_female">Perempuan</string>
+    <string name="gender_other">Lainnya</string>
+    <string name="gender_prefer_not">Memilih untuk tidak menyebutkan</string>
+    <string name="marital_single">Belum Menikah</string>
+    <string name="marital_married">Menikah</string>
+    <string name="marital_divorced">Bercerai</string>
+    <string name="marital_widowed">Janda/Duda</string>
+    <string name="marital_other">Lainnya</string>
+    <string name="residency_citizen">Warga Negara</string>
+    <string name="residency_permanent_resident">Penduduk Tetap</string>
+    <string name="residency_temporary_resident">Penduduk Sementara</string>
+    <string name="residency_other">Lainnya</string>
+    <string name="employment_employed">Bekerja</string>
+    <string name="employment_self_employed">Wiraswasta</string>
+    <string name="employment_unemployed">Tidak Bekerja</string>
+    <string name="employment_student">Pelajar/Mahasiswa</string>
+    <string name="employment_retired">Pensiunan</string>
+    <string name="employment_homemaker">Ibu Rumah Tangga</string>
+    <string name="employment_other">Lainnya</string>
+    <string name="education_primary">Pendidikan Dasar</string>
+    <string name="education_secondary">Pendidikan Menengah Pertama</string>
+    <string name="education_high_school">Sekolah Menengah Atas</string>
+    <string name="education_vocational">Pelatihan Kejuruan</string>
+    <string name="education_associate">Gelar Diploma</string>
+    <string name="education_bachelor">Gelar Sarjana</string>
+    <string name="education_master">Gelar Magister</string>
+    <string name="education_doctoral">Gelar Doktoral</string>
+    <string name="education_professional">Gelar Profesional</string>
+    <string name="education_other">Lainnya</string>
+    <string name="yes">Ya</string>
+    <string name="no">Tidak</string>
 
     <!-- About -->
     <string name="about_title">Tentang</string>
@@ -181,5 +383,8 @@
     <string name="common_edit">Edit</string>
     <string name="common_done">Selesai</string>
     <string name="common_clear">Hapus</string>
-    <string name="common_retry">Coba lagi</string>
+    <string name="common_retry">Coba Lagi</string>
+    <string name="common_create">Buat</string>
+    <string name="common_move">Pindahkan</string>
+    <string name="common_open">Buka</string>
 </resources>

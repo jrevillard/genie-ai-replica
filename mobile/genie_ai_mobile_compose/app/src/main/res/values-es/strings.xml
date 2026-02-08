@@ -15,6 +15,8 @@
     <string name="login_terms">Al iniciar sesión, aceptas nuestros Términos de servicio y Política de privacidad</string>
     <string name="login_error">Error de inicio de sesión. Por favor, verifica tus credenciales.</string>
     <string name="login_fields_required">El nombre de usuario y la contraseña son obligatorios</string>
+    <string name="login_invalid_credentials">Nombre de usuario o contraseña no válidos</string>
+    <string name="login_too_many_attempts">Demasiados intentos de inicio de sesión. Por favor, inténtalo de nuevo más tarde.</string>
 
     <!-- Register -->
     <string name="register_create_account">Crear nueva cuenta</string>
@@ -36,6 +38,12 @@
     <string name="register_verification_sent">Se ha enviado un correo de verificación a %1$s</string>
     <string name="register_check_email_instructions">Por favor, revisa tu correo electrónico y sigue las instrucciones para verificar tu cuenta antes de iniciar sesión.</string>
     <string name="register_back_to_login">Volver al inicio de sesión</string>
+    <string name="register_username_min_length">El nombre de usuario debe tener al menos 3 caracteres</string>
+    <string name="register_invalid_email">Por favor, introduce una dirección de correo electrónico válida</string>
+    <string name="register_password_requirements">La contraseña debe tener al menos 8 caracteres con al menos 1 número y 1 letra mayúscula</string>
+    <string name="register_must_accept_terms">Debes aceptar los Términos de servicio</string>
+    <string name="register_username_exists">El nombre de usuario ya existe</string>
+    <string name="register_email_exists">El correo electrónico ya existe</string>
 
     <!-- Password Reset -->
     <string name="password_reset_title">Restablecer tu contraseña</string>
@@ -86,6 +94,28 @@
     <string name="sidebar_rename_chat">Renombrar chat</string>
     <string name="sidebar_move_chat">Mover chat</string>
     <string name="sidebar_create_folder">Crear carpeta</string>
+    <string name="sidebar_edit_folder">Editar carpeta</string>
+    <string name="sidebar_delete_folder">Eliminar carpeta</string>
+    <string name="sidebar_folder_name">Nombre de carpeta</string>
+    <string name="sidebar_folder_name_placeholder">Introduce el nombre de la carpeta</string>
+    <string name="sidebar_move_chat_to">Mover chat a</string>
+    <string name="sidebar_select_folder">Seleccionar carpeta</string>
+    <string name="sidebar_delete_chat_confirm">¿Estás seguro de que deseas eliminar este chat?</string>
+    <string name="sidebar_delete_chat_warning">Esta acción no se puede deshacer.</string>
+    <string name="sidebar_chat_title">Título del chat</string>
+    <string name="sidebar_chat_title_placeholder">Introduce un título para este chat</string>
+    <string name="sidebar_delete_folder_confirm">¿Estás seguro de que deseas eliminar esta carpeta?</string>
+    <string name="sidebar_chats_move_warning">Todos los chats de esta carpeta se moverán a la carpeta predeterminada.</string>
+    <string name="sidebar_no_starred_chats">Aún no hay conversaciones destacadas. Destaca una conversación para añadirla aquí.</string>
+    <string name="sidebar_no_archived_chats">Aún no hay conversaciones archivadas.</string>
+    <string name="sidebar_no_search_results">No se encontraron conversaciones</string>
+    <string name="sidebar_loading_chats">Cargando conversaciones…</string>
+    <string name="sidebar_error_loading">Error al cargar las conversaciones. Por favor, inténtalo de nuevo.</string>
+    <string name="sidebar_confidence">Confianza</string>
+    <string name="sidebar_labels">Etiquetas</string>
+    <string name="sidebar_open">Abrir</string>
+    <string name="sidebar_faq_error">Preguntas frecuentes no disponibles</string>
+    <string name="sidebar_empty_folder">Esta carpeta está vacía. Mueve conversaciones aquí desde el menú del chat.</string>
 
     <!-- Chatbot -->
     <string name="chatbot_placeholder">Escribe tu consulta aquí…</string>
@@ -98,8 +128,22 @@
     <string name="chatbot_remove_context">Eliminar contexto</string>
     <string name="chatbot_save_chat">Guardar chat</string>
     <string name="chatbot_export_chat">Exportar chat</string>
+    <string name="chatbot_unsaved_changes">Tienes cambios sin guardar. ¿Estás seguro de que deseas iniciar un nuevo chat?</string>
+    <string name="chatbot_new_chat_started">Se inició una nueva conversación</string>
+    <string name="chatbot_conversation_loaded">¡Conversación cargada con éxito!</string>
+    <string name="chatbot_save_confirm_title">Guardar conversación existente</string>
+    <string name="chatbot_save_confirm_message">¿Guardar la conversación existente?</string>
+    <string name="chatbot_discard_and_new">Descartar &amp; Nuevo</string>
+    <string name="chatbot_save_and_new">Guardar &amp; Nuevo</string>
+    <string name="chatbot_save_first">Guardar primero</string>
+    <string name="chatbot_export_filename">Nombre del archivo</string>
+    <string name="chatbot_export_filename_placeholder">Introduce el nombre del archivo</string>
+    <string name="chatbot_export_button">Exportar</string>
+    <string name="chatbot_export_success">Chat exportado con éxito</string>
+    <string name="chatbot_export_error">Error al exportar el chat. Por favor, inténtalo de nuevo.</string>
+    <string name="chatbot_chat_saved">Chat guardado</string>
 
-    <!-- Quick Help -->
+    <!-- Quick Help - Button Labels -->
     <string name="quickhelp_just_chat">Solo chatear</string>
     <string name="quickhelp_apply_for_id">Solicitar identificación</string>
     <string name="quickhelp_pay_taxes">Pagar impuestos</string>
@@ -109,6 +153,28 @@
     <string name="quickhelp_transport_licenses">Transporte</string>
     <string name="quickhelp_housing_programs">Vivienda</string>
     <string name="quickhelp_find_jobs">Buscar empleo</string>
+
+    <!-- Quick Help - User-Visible Prompts (shown as the user's message in chat) -->
+    <string name="quickhelp_just_chat_user_prompt">Quiero conversar en general sobre la vida en Kenia.</string>
+    <string name="quickhelp_apply_for_id_user_prompt">Quiero informarme sobre cómo solicitar un documento nacional de identidad en Kenia.</string>
+    <string name="quickhelp_pay_taxes_user_prompt">Quiero preguntar sobre el pago de impuestos o la presentación de mis declaraciones de KRA en Kenia.</string>
+    <string name="quickhelp_start_business_user_prompt">Quiero informarme sobre cómo registrar una nueva empresa o negocio en Kenia.</string>
+    <string name="quickhelp_find_healthcare_user_prompt">Quiero preguntar sobre los centros de salud públicos y el seguro médico (NHIF/SHIF) en Kenia.</string>
+    <string name="quickhelp_education_services_user_prompt">Quiero informarme sobre las escuelas y los servicios educativos en Kenia.</string>
+    <string name="quickhelp_transport_licenses_user_prompt">Quiero preguntar sobre las licencias de conducir y los servicios de NTSA en Kenia.</string>
+    <string name="quickhelp_housing_programs_user_prompt">Quiero informarme sobre el Programa de Vivienda Asequible (Boma Yangu) en Kenia.</string>
+    <string name="quickhelp_find_jobs_user_prompt">Quiero preguntar sobre oportunidades de empleo en el gobierno y solicitudes de la PSC en Kenia.</string>
+
+    <!-- Quick Help - Hidden System Prompts (sent to the AI, not shown to user) -->
+    <string name="quickhelp_just_chat_prompt">Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_apply_for_id_prompt">Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents\' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_pay_taxes_prompt">Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_start_business_prompt">Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_healthcare_prompt">Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_education_services_prompt">Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_transport_licenses_prompt">Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_housing_programs_prompt">Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_jobs_prompt">Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as \'Genie AI\'.</string>
 
     <!-- Feedback -->
     <string name="feedback_title">Ayúdanos a mejorar</string>
@@ -151,17 +217,153 @@
     <string name="settings_deletion_reason">Motivo de la eliminación (opcional)</string>
     <string name="settings_confirm_reset_user_data">¿Estás seguro de que deseas restablecer todos tus datos de perfil? Esto eliminará toda tu información de perfil y el historial de chat, pero mantendrá las credenciales de tu cuenta.</string>
     <string name="settings_reset">Restablecer</string>
+    <string name="settings_password_reset_initiated">Se ha enviado un enlace de restablecimiento de contraseña a tu dirección de correo electrónico.</string>
 
     <!-- User Profile -->
     <string name="user_profile_title">Perfil de usuario</string>
     <string name="user_profile_save">Guardar perfil</string>
     <string name="user_profile_previous">Anterior</string>
     <string name="user_profile_next">Siguiente</string>
-    <string name="user_profile_full_name">Nombre completo</string>
+    <string name="user_profile_full_name">Nombre completo (incluyendo alias)</string>
     <string name="user_profile_dob">Fecha de nacimiento</string>
     <string name="user_profile_gender">Género</string>
     <string name="user_profile_nationality">Nacionalidad</string>
     <string name="user_profile_marital_status">Estado civil</string>
+    <string name="user_profile_saving">Guardando…</string>
+    <string name="user_profile_save_success">Perfil guardado con éxito</string>
+    <string name="user_profile_save_error">Error al guardar el perfil</string>
+    <string name="user_profile_load_error">Error al cargar los datos del perfil</string>
+    <string name="user_profile_privacy_info">Al proporcionar más información, obtendrás respuestas más precisas y significativas del chatbot.</string>
+    <string name="user_profile_privacy_policy_link">Política de privacidad</string>
+
+    <!-- Profile Tabs (Full) -->
+    <string name="user_profile_tab_1">Datos de identificación personal</string>
+    <string name="user_profile_tab_2">Registro civil &amp; Documentación</string>
+    <string name="user_profile_tab_3">Dirección &amp; Información de residencia</string>
+    <string name="user_profile_tab_4">Documentos de identidad &amp; Viaje</string>
+    <string name="user_profile_tab_5">Registros de salud &amp; Médicos</string>
+    <string name="user_profile_tab_6">Datos de empleo &amp; Economía</string>
+    <string name="user_profile_tab_7">Registros de educación &amp; Académicos</string>
+    <string name="user_profile_tab_8">Datos financieros &amp; Fiscales</string>
+    <string name="user_profile_tab_9">Seguridad social &amp; Bienestar</string>
+    <string name="user_profile_tab_10">Registros penales &amp; Legales</string>
+    <string name="user_profile_tab_11">Transporte &amp; Movilidad</string>
+    <string name="user_profile_tab_12">Participación cívica &amp; Política</string>
+
+    <!-- Profile Tabs (Short) -->
+    <string name="user_profile_tab_short_personal">Personal</string>
+    <string name="user_profile_tab_short_civil">Civil</string>
+    <string name="user_profile_tab_short_address">Dirección</string>
+    <string name="user_profile_tab_short_identity">Identidad</string>
+    <string name="user_profile_tab_short_health">Salud</string>
+    <string name="user_profile_tab_short_employment">Empleo</string>
+    <string name="user_profile_tab_short_education">Educación</string>
+    <string name="user_profile_tab_short_financial">Finanzas</string>
+    <string name="user_profile_tab_short_social">Social</string>
+    <string name="user_profile_tab_short_criminal">Penal</string>
+    <string name="user_profile_tab_short_transport">Transporte</string>
+    <string name="user_profile_tab_short_civic">Cívico</string>
+
+    <!-- Profile Fields -->
+    <string name="user_profile_field_photograph">Fotografía</string>
+    <string name="user_profile_field_biometric">Huellas dactilares / Datos biométricos</string>
+    <string name="user_profile_field_birth_cert">Certificado de nacimiento</string>
+    <string name="user_profile_field_death_cert">Certificado de defunción</string>
+    <string name="user_profile_field_marriage_divorce">Registros de matrimonio / Divorcio</string>
+    <string name="user_profile_field_adoption">Registros de adopción</string>
+    <string name="user_profile_field_citizenship">Documentos de ciudadanía / Naturalización</string>
+    <string name="user_profile_field_immigration">Historial de inmigración &amp; Visas</string>
+    <string name="user_profile_field_current_address">Dirección residencial actual</string>
+    <string name="user_profile_field_previous_addresses">Direcciones anteriores</string>
+    <string name="user_profile_field_postal_code">Código postal</string>
+    <string name="user_profile_field_country">País</string>
+    <string name="user_profile_field_residency_status">Estado de residencia</string>
+    <string name="user_profile_field_home_or_rental">Detalles de propiedad o alquiler de vivienda</string>
+    <string name="user_profile_field_utility_bills">Facturas de servicios públicos vinculadas a la dirección</string>
+    <string name="user_profile_field_land_records">Registros de propiedad de terrenos e inmuebles</string>
+    <string name="user_profile_field_id_card">Número de documento nacional de identidad</string>
+    <string name="user_profile_field_passport">Datos del pasaporte</string>
+    <string name="user_profile_field_drivers_license">Licencia de conducir</string>
+    <string name="user_profile_field_voter_id">Credencial de elector</string>
+    <string name="user_profile_field_ssn">Número de Seguridad Social / Seguro Nacional</string>
+    <string name="user_profile_field_military_records">Registros de servicio militar</string>
+    <string name="user_profile_field_medical_history">Historial médico y condiciones de salud</string>
+    <string name="user_profile_field_vaccinations">Registros de vacunación</string>
+    <string name="user_profile_field_insurance_details">Detalles del seguro médico</string>
+    <string name="user_profile_field_disability">Estado de discapacidad</string>
+    <string name="user_profile_field_blood_type">Tipo de sangre</string>
+    <string name="user_profile_field_organ_donor">Estado de donante de órganos</string>
+    <string name="user_profile_field_prescriptions">Recetas y tratamientos recibidos</string>
+    <string name="user_profile_field_mental_health">Historial de salud mental</string>
+    <string name="user_profile_field_employment_history">Historial laboral</string>
+    <string name="user_profile_field_current_employer">Datos del empleador actual</string>
+    <string name="user_profile_field_work_permits">Permisos de trabajo y contratos laborales</string>
+    <string name="user_profile_field_certifications">Certificaciones y licencias profesionales</string>
+    <string name="user_profile_field_unemployment">Estado de desempleo y prestaciones recibidas</string>
+    <string name="user_profile_field_tin">Número de identificación fiscal (TIN)</string>
+    <string name="user_profile_field_business_affiliations">Propiedad de negocios y afiliaciones empresariales</string>
+    <string name="user_profile_field_schools">Escuelas y universidades cursadas</string>
+    <string name="user_profile_field_education">Educación</string>
+    <string name="user_profile_field_degrees">Diplomas, títulos y certificaciones</string>
+    <string name="user_profile_field_performance">Rendimiento académico y calificaciones de exámenes</string>
+    <string name="user_profile_field_scholarships">Becas y ayudas financieras recibidas</string>
+    <string name="user_profile_field_income_tax">Registros de impuesto sobre la renta</string>
+    <string name="user_profile_field_bank_accounts">Cuentas bancarias y financieras</string>
+    <string name="user_profile_field_property_tax">Pagos de impuesto sobre la propiedad</string>
+    <string name="user_profile_field_business_tax">Declaraciones de impuestos de negocios</string>
+    <string name="user_profile_field_pension_contrib">Contribuciones y retiros de pensión</string>
+    <string name="user_profile_field_loan_aid">Registros de préstamos y ayudas gubernamentales</string>
+    <string name="user_profile_field_pension_status">Estado y contribuciones de pensión</string>
+    <string name="user_profile_field_childcare">Apoyo de cuidado infantil</string>
+    <string name="user_profile_field_food_assistance">Asistencia alimentaria / Programas de bienestar</string>
+    <string name="user_profile_field_housing_assistance">Asistencia de vivienda</string>
+    <string name="user_profile_field_police_records">Registros policiales (antecedentes penales, arrestos, cargos)</string>
+    <string name="user_profile_field_court_cases">Historial de casos judiciales</string>
+    <string name="user_profile_field_fines_penalties">Multas y sanciones</string>
+    <string name="user_profile_field_parole_probation">Estado de libertad condicional o probatoria</string>
+    <string name="user_profile_field_vehicle_reg">Datos de registro de vehículos</string>
+    <string name="user_profile_field_traffic_violations">Infracciones de tránsito y multas</string>
+    <string name="user_profile_field_license_history">Historial de licencia de conducir y anotaciones</string>
+    <string name="user_profile_field_public_transport_card">Uso de tarjeta de transporte público</string>
+    <string name="user_profile_field_voter_registration">Datos de registro electoral</string>
+    <string name="user_profile_field_election_history">Historial de participación electoral</string>
+    <string name="user_profile_field_party_membership">Afiliación a partido político</string>
+    <string name="user_profile_field_military_status">Estado de servicio militar o conscripción</string>
+    <string name="user_profile_field_public_service_roles">Roles en el servicio público</string>
+
+    <!-- Profile Dropdown Values -->
+    <string name="gender_male">Masculino</string>
+    <string name="gender_female">Femenino</string>
+    <string name="gender_other">Otro</string>
+    <string name="gender_prefer_not">Prefiero no decirlo</string>
+    <string name="marital_single">Soltero/a</string>
+    <string name="marital_married">Casado/a</string>
+    <string name="marital_divorced">Divorciado/a</string>
+    <string name="marital_widowed">Viudo/a</string>
+    <string name="marital_other">Otro</string>
+    <string name="residency_citizen">Ciudadano/a</string>
+    <string name="residency_permanent_resident">Residente permanente</string>
+    <string name="residency_temporary_resident">Residente temporal</string>
+    <string name="residency_other">Otro</string>
+    <string name="employment_employed">Empleado/a</string>
+    <string name="employment_self_employed">Trabajador/a independiente</string>
+    <string name="employment_unemployed">Desempleado/a</string>
+    <string name="employment_student">Estudiante</string>
+    <string name="employment_retired">Jubilado/a</string>
+    <string name="employment_homemaker">Ama de casa</string>
+    <string name="employment_other">Otro</string>
+    <string name="education_primary">Educación primaria</string>
+    <string name="education_secondary">Educación secundaria</string>
+    <string name="education_high_school">Bachillerato</string>
+    <string name="education_vocational">Formación profesional</string>
+    <string name="education_associate">Título de técnico superior</string>
+    <string name="education_bachelor">Licenciatura</string>
+    <string name="education_master">Maestría</string>
+    <string name="education_doctoral">Doctorado</string>
+    <string name="education_professional">Título profesional</string>
+    <string name="education_other">Otro</string>
+    <string name="yes">Sí</string>
+    <string name="no">No</string>
 
     <!-- About -->
     <string name="about_title">Acerca de</string>
@@ -182,4 +384,7 @@
     <string name="common_done">Hecho</string>
     <string name="common_clear">Borrar</string>
     <string name="common_retry">Reintentar</string>
+    <string name="common_create">Crear</string>
+    <string name="common_move">Mover</string>
+    <string name="common_open">Abrir</string>
 </resources>

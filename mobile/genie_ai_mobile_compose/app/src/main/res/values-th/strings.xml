@@ -15,6 +15,8 @@
     <string name="login_terms">การเข้าสู่ระบบหมายความว่าคุณยอมรับข้อกำหนดการใช้บริการและนโยบายความเป็นส่วนตัวของเรา</string>
     <string name="login_error">เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูลรับรองของคุณ</string>
     <string name="login_fields_required">ต้องระบุชื่อผู้ใช้และรหัสผ่าน</string>
+    <string name="login_invalid_credentials">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</string>
+    <string name="login_too_many_attempts">พยายามเข้าสู่ระบบมากเกินไป กรุณาลองอีกครั้งในภายหลัง</string>
 
     <!-- Register -->
     <string name="register_create_account">สร้างบัญชีใหม่</string>
@@ -36,6 +38,12 @@
     <string name="register_verification_sent">อีเมลยืนยันได้ถูกส่งไปที่ %1$s</string>
     <string name="register_check_email_instructions">กรุณาตรวจสอบอีเมลของคุณและทำตามขั้นตอนเพื่อยืนยันบัญชีก่อนเข้าสู่ระบบ</string>
     <string name="register_back_to_login">กลับไปหน้าเข้าสู่ระบบ</string>
+    <string name="register_username_min_length">ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร</string>
+    <string name="register_invalid_email">กรุณากรอกที่อยู่อีเมลที่ถูกต้อง</string>
+    <string name="register_password_requirements">รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร ประกอบด้วยตัวเลขอย่างน้อย 1 ตัว และตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว</string>
+    <string name="register_must_accept_terms">คุณต้องยอมรับข้อกำหนดการใช้บริการ</string>
+    <string name="register_username_exists">ชื่อผู้ใช้นี้มีอยู่แล้ว</string>
+    <string name="register_email_exists">อีเมลนี้มีอยู่แล้ว</string>
 
     <!-- Password Reset -->
     <string name="password_reset_title">รีเซ็ตรหัสผ่านของคุณ</string>
@@ -69,7 +77,7 @@
     <string name="sidebar_chat_history">ประวัติการสนทนา</string>
     <string name="sidebar_search_placeholder">ค้นหาหมวดความรู้…</string>
     <string name="sidebar_search_conversations">ค้นหาการสนทนา…</string>
-    <string name="sidebar_title">ข้อมูลและทรัพยากร</string>
+    <string name="sidebar_title">ข้อมูล &amp; ทรัพยากร</string>
     <string name="sidebar_related_docs">เอกสารที่เกี่ยวข้อง</string>
     <string name="sidebar_no_documents">ไม่มีเอกสารที่เกี่ยวข้อง</string>
     <string name="sidebar_faq">คำถามที่พบบ่อย</string>
@@ -86,6 +94,28 @@
     <string name="sidebar_rename_chat">เปลี่ยนชื่อการสนทนา</string>
     <string name="sidebar_move_chat">ย้ายการสนทนา</string>
     <string name="sidebar_create_folder">สร้างโฟลเดอร์</string>
+    <string name="sidebar_edit_folder">แก้ไขโฟลเดอร์</string>
+    <string name="sidebar_delete_folder">ลบโฟลเดอร์</string>
+    <string name="sidebar_folder_name">ชื่อโฟลเดอร์</string>
+    <string name="sidebar_folder_name_placeholder">กรอกชื่อโฟลเดอร์</string>
+    <string name="sidebar_move_chat_to">ย้ายการสนทนาไปที่</string>
+    <string name="sidebar_select_folder">เลือกโฟลเดอร์</string>
+    <string name="sidebar_delete_chat_confirm">คุณแน่ใจหรือไม่ว่าต้องการลบการสนทนานี้?</string>
+    <string name="sidebar_delete_chat_warning">การดำเนินการนี้ไม่สามารถยกเลิกได้</string>
+    <string name="sidebar_chat_title">ชื่อการสนทนา</string>
+    <string name="sidebar_chat_title_placeholder">กรอกชื่อสำหรับการสนทนานี้</string>
+    <string name="sidebar_delete_folder_confirm">คุณแน่ใจหรือไม่ว่าต้องการลบโฟลเดอร์นี้?</string>
+    <string name="sidebar_chats_move_warning">การสนทนาทั้งหมดในโฟลเดอร์นี้จะถูกย้ายไปยังโฟลเดอร์เริ่มต้น</string>
+    <string name="sidebar_no_starred_chats">ยังไม่มีการสนทนาที่ติดดาว ติดดาวการสนทนาเพื่อเพิ่มที่นี่</string>
+    <string name="sidebar_no_archived_chats">ยังไม่มีการสนทนาที่เก็บถาวร</string>
+    <string name="sidebar_no_search_results">ไม่พบการสนทนา</string>
+    <string name="sidebar_loading_chats">กำลังโหลดการสนทนา…</string>
+    <string name="sidebar_error_loading">โหลดการสนทนาไม่สำเร็จ กรุณาลองอีกครั้ง</string>
+    <string name="sidebar_confidence">ความเชื่อมั่น</string>
+    <string name="sidebar_labels">ป้ายกำกับ</string>
+    <string name="sidebar_open">เปิด</string>
+    <string name="sidebar_faq_error">คำถามที่พบบ่อยไม่พร้อมใช้งาน</string>
+    <string name="sidebar_empty_folder">โฟลเดอร์นี้ว่างเปล่า ย้ายการสนทนามาที่นี่จากเมนูแชท</string>
 
     <!-- Chatbot -->
     <string name="chatbot_placeholder">พิมพ์คำถามของคุณที่นี่…</string>
@@ -98,8 +128,22 @@
     <string name="chatbot_remove_context">ลบบริบท</string>
     <string name="chatbot_save_chat">บันทึกการสนทนา</string>
     <string name="chatbot_export_chat">ส่งออกการสนทนา</string>
+    <string name="chatbot_unsaved_changes">คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจหรือไม่ว่าต้องการเริ่มสนทนาใหม่?</string>
+    <string name="chatbot_new_chat_started">เริ่มการสนทนาใหม่แล้ว</string>
+    <string name="chatbot_conversation_loaded">โหลดการสนทนาสำเร็จ!</string>
+    <string name="chatbot_save_confirm_title">บันทึกการสนทนาที่มีอยู่</string>
+    <string name="chatbot_save_confirm_message">บันทึกการสนทนาที่มีอยู่?</string>
+    <string name="chatbot_discard_and_new">ยกเลิก &amp; สร้างใหม่</string>
+    <string name="chatbot_save_and_new">บันทึก &amp; สร้างใหม่</string>
+    <string name="chatbot_save_first">บันทึกก่อน</string>
+    <string name="chatbot_export_filename">ชื่อไฟล์</string>
+    <string name="chatbot_export_filename_placeholder">กรอกชื่อไฟล์</string>
+    <string name="chatbot_export_button">ส่งออก</string>
+    <string name="chatbot_export_success">ส่งออกการสนทนาสำเร็จ</string>
+    <string name="chatbot_export_error">ส่งออกการสนทนาไม่สำเร็จ กรุณาลองอีกครั้ง</string>
+    <string name="chatbot_chat_saved">บันทึกการสนทนาแล้ว</string>
 
-    <!-- Quick Help -->
+    <!-- Quick Help - Button Labels -->
     <string name="quickhelp_just_chat">แค่พูดคุย</string>
     <string name="quickhelp_apply_for_id">สมัครบัตรประชาชน</string>
     <string name="quickhelp_pay_taxes">ชำระภาษี</string>
@@ -109,6 +153,28 @@
     <string name="quickhelp_transport_licenses">การขนส่ง</string>
     <string name="quickhelp_housing_programs">ที่อยู่อาศัย</string>
     <string name="quickhelp_find_jobs">หางาน</string>
+
+    <!-- Quick Help - User-Visible Prompts (shown as the user's message in chat) -->
+    <string name="quickhelp_just_chat_user_prompt">ฉันอยากพูดคุยทั่วไปเกี่ยวกับชีวิตในเคนยา</string>
+    <string name="quickhelp_apply_for_id_user_prompt">ฉันอยากทราบเกี่ยวกับการสมัครบัตรประจำตัวประชาชนในเคนยา</string>
+    <string name="quickhelp_pay_taxes_user_prompt">ฉันอยากถามเกี่ยวกับการชำระภาษีหรือการยื่นแบบ KRA ในเคนยา</string>
+    <string name="quickhelp_start_business_user_prompt">ฉันอยากทราบเกี่ยวกับการจดทะเบียนธุรกิจหรือบริษัทใหม่ในเคนยา</string>
+    <string name="quickhelp_find_healthcare_user_prompt">ฉันอยากถามเกี่ยวกับสถานพยาบาลของรัฐและประกันสุขภาพ (NHIF/SHIF) ในเคนยา</string>
+    <string name="quickhelp_education_services_user_prompt">ฉันอยากทราบเกี่ยวกับโรงเรียนและบริการการศึกษาในเคนยา</string>
+    <string name="quickhelp_transport_licenses_user_prompt">ฉันอยากถามเกี่ยวกับใบขับขี่และบริการ NTSA ในเคนยา</string>
+    <string name="quickhelp_housing_programs_user_prompt">ฉันอยากทราบเกี่ยวกับโครงการที่อยู่อาศัยราคาประหยัด (Boma Yangu) ในเคนยา</string>
+    <string name="quickhelp_find_jobs_user_prompt">ฉันอยากถามเกี่ยวกับโอกาสการทำงานในภาครัฐและการสมัคร PSC ในเคนยา</string>
+
+    <!-- Quick Help - Hidden System Prompts (sent to the AI, not shown to user) -->
+    <string name="quickhelp_just_chat_prompt">Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_apply_for_id_prompt">Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents\' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_pay_taxes_prompt">Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_start_business_prompt">Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_healthcare_prompt">Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_education_services_prompt">Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_transport_licenses_prompt">Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_housing_programs_prompt">Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_jobs_prompt">Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as \'Genie AI\'.</string>
 
     <!-- Feedback -->
     <string name="feedback_title">ช่วยเราปรับปรุง</string>
@@ -151,17 +217,153 @@
     <string name="settings_deletion_reason">เหตุผลในการลบ (ไม่บังคับ)</string>
     <string name="settings_confirm_reset_user_data">คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตข้อมูลโปรไฟล์ทั้งหมด? การดำเนินการนี้จะลบข้อมูลโปรไฟล์และประวัติการสนทนาทั้งหมดของคุณ แต่จะเก็บข้อมูลรับรองบัญชีของคุณไว้</string>
     <string name="settings_reset">รีเซ็ต</string>
+    <string name="settings_password_reset_initiated">ลิงก์รีเซ็ตรหัสผ่านได้ถูกส่งไปที่ที่อยู่อีเมลของคุณแล้ว</string>
 
     <!-- User Profile -->
     <string name="user_profile_title">โปรไฟล์ผู้ใช้</string>
     <string name="user_profile_save">บันทึกโปรไฟล์</string>
     <string name="user_profile_previous">ก่อนหน้า</string>
     <string name="user_profile_next">ถัดไป</string>
-    <string name="user_profile_full_name">ชื่อเต็ม</string>
+    <string name="user_profile_full_name">ชื่อเต็ม (รวมชื่อเล่น)</string>
     <string name="user_profile_dob">วันเกิด</string>
     <string name="user_profile_gender">เพศ</string>
     <string name="user_profile_nationality">สัญชาติ</string>
     <string name="user_profile_marital_status">สถานภาพสมรส</string>
+    <string name="user_profile_saving">กำลังบันทึก…</string>
+    <string name="user_profile_save_success">บันทึกโปรไฟล์สำเร็จ</string>
+    <string name="user_profile_save_error">เกิดข้อผิดพลาดในการบันทึกโปรไฟล์</string>
+    <string name="user_profile_load_error">เกิดข้อผิดพลาดในการโหลดข้อมูลโปรไฟล์</string>
+    <string name="user_profile_privacy_info">การให้ข้อมูลเพิ่มเติมจะช่วยให้คุณได้รับคำตอบที่แม่นยำและมีความหมายมากขึ้นจากแชทบอท</string>
+    <string name="user_profile_privacy_policy_link">นโยบายความเป็นส่วนตัว</string>
+
+    <!-- Profile Tabs (Full) -->
+    <string name="user_profile_tab_1">ข้อมูลระบุตัวตนส่วนบุคคล</string>
+    <string name="user_profile_tab_2">การจดทะเบียนราษฎร &amp; เอกสาร</string>
+    <string name="user_profile_tab_3">ที่อยู่ &amp; ข้อมูลถิ่นที่อยู่</string>
+    <string name="user_profile_tab_4">เอกสารแสดงตัวตน &amp; การเดินทาง</string>
+    <string name="user_profile_tab_5">สุขภาพ &amp; บันทึกทางการแพทย์</string>
+    <string name="user_profile_tab_6">การจ้างงาน &amp; ข้อมูลเศรษฐกิจ</string>
+    <string name="user_profile_tab_7">การศึกษา &amp; บันทึกวิชาการ</string>
+    <string name="user_profile_tab_8">การเงิน &amp; ข้อมูลภาษี</string>
+    <string name="user_profile_tab_9">ประกันสังคม &amp; สวัสดิการ</string>
+    <string name="user_profile_tab_10">ประวัติอาชญากรรม &amp; บันทึกทางกฎหมาย</string>
+    <string name="user_profile_tab_11">การขนส่ง &amp; การเดินทาง</string>
+    <string name="user_profile_tab_12">การมีส่วนร่วมทางพลเมือง &amp; การเมือง</string>
+
+    <!-- Profile Tabs (Short) -->
+    <string name="user_profile_tab_short_personal">ส่วนบุคคล</string>
+    <string name="user_profile_tab_short_civil">ทะเบียนราษฎร</string>
+    <string name="user_profile_tab_short_address">ที่อยู่</string>
+    <string name="user_profile_tab_short_identity">ตัวตน</string>
+    <string name="user_profile_tab_short_health">สุขภาพ</string>
+    <string name="user_profile_tab_short_employment">การจ้างงาน</string>
+    <string name="user_profile_tab_short_education">การศึกษา</string>
+    <string name="user_profile_tab_short_financial">การเงิน</string>
+    <string name="user_profile_tab_short_social">สังคม</string>
+    <string name="user_profile_tab_short_criminal">อาชญากรรม</string>
+    <string name="user_profile_tab_short_transport">การขนส่ง</string>
+    <string name="user_profile_tab_short_civic">พลเมือง</string>
+
+    <!-- Profile Fields -->
+    <string name="user_profile_field_photograph">รูปถ่าย</string>
+    <string name="user_profile_field_biometric">ลายนิ้วมือ / ข้อมูลไบโอเมตริก</string>
+    <string name="user_profile_field_birth_cert">สูติบัตร</string>
+    <string name="user_profile_field_death_cert">มรณบัตร</string>
+    <string name="user_profile_field_marriage_divorce">ทะเบียนสมรส / ทะเบียนหย่า</string>
+    <string name="user_profile_field_adoption">บันทึกการรับบุตรบุญธรรม</string>
+    <string name="user_profile_field_citizenship">เอกสารการเป็นพลเมือง / การแปลงสัญชาติ</string>
+    <string name="user_profile_field_immigration">ประวัติการเข้าเมือง &amp; วีซ่า</string>
+    <string name="user_profile_field_current_address">ที่อยู่ปัจจุบัน</string>
+    <string name="user_profile_field_previous_addresses">ที่อยู่เดิม</string>
+    <string name="user_profile_field_postal_code">รหัสไปรษณีย์</string>
+    <string name="user_profile_field_country">ประเทศ</string>
+    <string name="user_profile_field_residency_status">สถานะการพำนัก</string>
+    <string name="user_profile_field_home_or_rental">รายละเอียดการเป็นเจ้าของบ้านหรือการเช่า</string>
+    <string name="user_profile_field_utility_bills">ใบเรียกเก็บค่าสาธารณูปโภคที่ผูกกับที่อยู่</string>
+    <string name="user_profile_field_land_records">บันทึกการเป็นเจ้าของที่ดินและทรัพย์สิน</string>
+    <string name="user_profile_field_id_card">หมายเลขบัตรประจำตัวประชาชน</string>
+    <string name="user_profile_field_passport">รายละเอียดหนังสือเดินทาง</string>
+    <string name="user_profile_field_drivers_license">ใบขับขี่</string>
+    <string name="user_profile_field_voter_id">บัตรเลือกตั้ง</string>
+    <string name="user_profile_field_ssn">หมายเลขประกันสังคม / ประกันแห่งชาติ</string>
+    <string name="user_profile_field_military_records">บันทึกการรับราชการทหาร</string>
+    <string name="user_profile_field_medical_history">ประวัติทางการแพทย์และสภาวะสุขภาพ</string>
+    <string name="user_profile_field_vaccinations">บันทึกการฉีดวัคซีน</string>
+    <string name="user_profile_field_insurance_details">รายละเอียดประกันสุขภาพ</string>
+    <string name="user_profile_field_disability">สถานะความพิการ</string>
+    <string name="user_profile_field_blood_type">หมู่เลือด</string>
+    <string name="user_profile_field_organ_donor">สถานะผู้บริจาคอวัยวะ</string>
+    <string name="user_profile_field_prescriptions">ใบสั่งยาและการรักษาที่ได้รับ</string>
+    <string name="user_profile_field_mental_health">ประวัติสุขภาพจิต</string>
+    <string name="user_profile_field_employment_history">ประวัติการทำงาน</string>
+    <string name="user_profile_field_current_employer">รายละเอียดนายจ้างปัจจุบัน</string>
+    <string name="user_profile_field_work_permits">ใบอนุญาตทำงานและสัญญาจ้าง</string>
+    <string name="user_profile_field_certifications">ใบรับรองและใบอนุญาตวิชาชีพ</string>
+    <string name="user_profile_field_unemployment">สถานะการว่างงานและสวัสดิการที่ได้รับ</string>
+    <string name="user_profile_field_tin">หมายเลขประจำตัวผู้เสียภาษี (TIN)</string>
+    <string name="user_profile_field_business_affiliations">การเป็นเจ้าของธุรกิจและการเกี่ยวข้องกับบริษัท</string>
+    <string name="user_profile_field_schools">โรงเรียนและมหาวิทยาลัยที่เข้าเรียน</string>
+    <string name="user_profile_field_education">การศึกษา</string>
+    <string name="user_profile_field_degrees">อนุปริญญา ปริญญา และใบรับรอง</string>
+    <string name="user_profile_field_performance">ผลการเรียนและคะแนนสอบ</string>
+    <string name="user_profile_field_scholarships">ทุนการศึกษาและความช่วยเหลือทางการเงินที่ได้รับ</string>
+    <string name="user_profile_field_income_tax">บันทึกภาษีเงินได้</string>
+    <string name="user_profile_field_bank_accounts">บัญชีธนาคารและบัญชีการเงิน</string>
+    <string name="user_profile_field_property_tax">การชำระภาษีทรัพย์สิน</string>
+    <string name="user_profile_field_business_tax">การยื่นภาษีธุรกิจ</string>
+    <string name="user_profile_field_pension_contrib">เงินสมทบและการถอนเงินบำนาญ</string>
+    <string name="user_profile_field_loan_aid">บันทึกสินเชื่อและความช่วยเหลือจากรัฐ</string>
+    <string name="user_profile_field_pension_status">สถานะบำนาญและเงินสมทบ</string>
+    <string name="user_profile_field_childcare">การสนับสนุนการดูแลเด็ก</string>
+    <string name="user_profile_field_food_assistance">ความช่วยเหลือด้านอาหาร / โครงการสวัสดิการ</string>
+    <string name="user_profile_field_housing_assistance">ความช่วยเหลือด้านที่อยู่อาศัย</string>
+    <string name="user_profile_field_police_records">บันทึกตำรวจ (ประวัติอาชญากรรม การจับกุม ข้อหา)</string>
+    <string name="user_profile_field_court_cases">ประวัติคดีในศาล</string>
+    <string name="user_profile_field_fines_penalties">ค่าปรับและบทลงโทษ</string>
+    <string name="user_profile_field_parole_probation">สถานะการพักโทษหรือทัณฑ์บน</string>
+    <string name="user_profile_field_vehicle_reg">รายละเอียดการจดทะเบียนรถยนต์</string>
+    <string name="user_profile_field_traffic_violations">การฝ่าฝืนกฎจราจรและค่าปรับ</string>
+    <string name="user_profile_field_license_history">ประวัติใบขับขี่และการรับรอง</string>
+    <string name="user_profile_field_public_transport_card">การใช้บัตรขนส่งสาธารณะ</string>
+    <string name="user_profile_field_voter_registration">รายละเอียดการลงทะเบียนผู้มีสิทธิเลือกตั้ง</string>
+    <string name="user_profile_field_election_history">ประวัติการเข้าร่วมเลือกตั้ง</string>
+    <string name="user_profile_field_party_membership">การเป็นสมาชิกพรรคการเมือง</string>
+    <string name="user_profile_field_military_status">สถานะการรับราชการทหารหรือการเกณฑ์ทหาร</string>
+    <string name="user_profile_field_public_service_roles">บทบาทในราชการ</string>
+
+    <!-- Profile Dropdown Values -->
+    <string name="gender_male">ชาย</string>
+    <string name="gender_female">หญิง</string>
+    <string name="gender_other">อื่น ๆ</string>
+    <string name="gender_prefer_not">ไม่ต้องการระบุ</string>
+    <string name="marital_single">โสด</string>
+    <string name="marital_married">สมรส</string>
+    <string name="marital_divorced">หย่าร้าง</string>
+    <string name="marital_widowed">หม้าย</string>
+    <string name="marital_other">อื่น ๆ</string>
+    <string name="residency_citizen">พลเมือง</string>
+    <string name="residency_permanent_resident">ผู้มีถิ่นที่อยู่ถาวร</string>
+    <string name="residency_temporary_resident">ผู้มีถิ่นที่อยู่ชั่วคราว</string>
+    <string name="residency_other">อื่น ๆ</string>
+    <string name="employment_employed">มีงานทำ</string>
+    <string name="employment_self_employed">ประกอบอาชีพอิสระ</string>
+    <string name="employment_unemployed">ว่างงาน</string>
+    <string name="employment_student">นักเรียน/นักศึกษา</string>
+    <string name="employment_retired">เกษียณ</string>
+    <string name="employment_homemaker">แม่บ้าน</string>
+    <string name="employment_other">อื่น ๆ</string>
+    <string name="education_primary">การศึกษาระดับประถม</string>
+    <string name="education_secondary">การศึกษาระดับมัธยมต้น</string>
+    <string name="education_high_school">มัธยมปลาย</string>
+    <string name="education_vocational">การฝึกอาชีพ</string>
+    <string name="education_associate">อนุปริญญา</string>
+    <string name="education_bachelor">ปริญญาตรี</string>
+    <string name="education_master">ปริญญาโท</string>
+    <string name="education_doctoral">ปริญญาเอก</string>
+    <string name="education_professional">ปริญญาวิชาชีพ</string>
+    <string name="education_other">อื่น ๆ</string>
+    <string name="yes">ใช่</string>
+    <string name="no">ไม่ใช่</string>
 
     <!-- About -->
     <string name="about_title">เกี่ยวกับ</string>
@@ -182,4 +384,7 @@
     <string name="common_done">เสร็จสิ้น</string>
     <string name="common_clear">ล้าง</string>
     <string name="common_retry">ลองอีกครั้ง</string>
+    <string name="common_create">สร้าง</string>
+    <string name="common_move">ย้าย</string>
+    <string name="common_open">เปิด</string>
 </resources>

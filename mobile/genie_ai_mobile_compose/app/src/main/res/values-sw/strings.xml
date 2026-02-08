@@ -15,6 +15,8 @@
     <string name="login_terms">Kwa kuingia, unakubali Masharti ya Huduma na Sera ya Faragha yetu</string>
     <string name="login_error">Kuingia kumeshindikana. Tafadhali angalia taarifa zako.</string>
     <string name="login_fields_required">Jina la mtumiaji na nenosiri vinahitajika</string>
+    <string name="login_invalid_credentials">Jina la mtumiaji au nenosiri si sahihi</string>
+    <string name="login_too_many_attempts">Majaribio mengi ya kuingia. Tafadhali jaribu tena baadaye.</string>
 
     <!-- Register -->
     <string name="register_create_account">Fungua Akaunti Mpya</string>
@@ -36,6 +38,12 @@
     <string name="register_verification_sent">Barua pepe ya uthibitisho imetumwa kwa %1$s</string>
     <string name="register_check_email_instructions">Tafadhali angalia barua pepe yako na ufuate maagizo ili kuthibitisha akaunti yako kabla ya kuingia.</string>
     <string name="register_back_to_login">Rudi kwenye Kuingia</string>
+    <string name="register_username_min_length">Jina la mtumiaji lazima liwe na angalau herufi 3</string>
+    <string name="register_invalid_email">Tafadhali weka anwani sahihi ya barua pepe</string>
+    <string name="register_password_requirements">Nenosiri lazima liwe na angalau herufi 8 zenye angalau nambari 1 na herufi kubwa 1</string>
+    <string name="register_must_accept_terms">Lazima ukubali Masharti ya Huduma</string>
+    <string name="register_username_exists">Jina la mtumiaji tayari linatumika</string>
+    <string name="register_email_exists">Barua pepe tayari inatumika</string>
 
     <!-- Password Reset -->
     <string name="password_reset_title">Weka Upya Nenosiri Lako</string>
@@ -86,6 +94,28 @@
     <string name="sidebar_rename_chat">Badilisha Jina la Mazungumzo</string>
     <string name="sidebar_move_chat">Hamisha Mazungumzo</string>
     <string name="sidebar_create_folder">Tengeneza Folda</string>
+    <string name="sidebar_edit_folder">Hariri Folda</string>
+    <string name="sidebar_delete_folder">Futa Folda</string>
+    <string name="sidebar_folder_name">Jina la Folda</string>
+    <string name="sidebar_folder_name_placeholder">Weka jina la folda</string>
+    <string name="sidebar_move_chat_to">Hamisha Mazungumzo Kwenda</string>
+    <string name="sidebar_select_folder">Chagua Folda</string>
+    <string name="sidebar_delete_chat_confirm">Je, una uhakika unataka kufuta mazungumzo haya?</string>
+    <string name="sidebar_delete_chat_warning">Hatua hii haiwezi kutenduliwa.</string>
+    <string name="sidebar_chat_title">Kichwa cha Mazungumzo</string>
+    <string name="sidebar_chat_title_placeholder">Weka kichwa cha mazungumzo haya</string>
+    <string name="sidebar_delete_folder_confirm">Je, una uhakika unataka kufuta folda hii?</string>
+    <string name="sidebar_chats_move_warning">Mazungumzo yote katika folda hii yatahamishwa kwenye folda ya kawaida.</string>
+    <string name="sidebar_no_starred_chats">Hakuna mazungumzo yenye nyota bado. Weka nyota kwenye mazungumzo ili kuyaongeza hapa.</string>
+    <string name="sidebar_no_archived_chats">Hakuna mazungumzo yaliyohifadhiwa bado.</string>
+    <string name="sidebar_no_search_results">Hakuna mazungumzo yaliyopatikana</string>
+    <string name="sidebar_loading_chats">Inapakia mazungumzo…</string>
+    <string name="sidebar_error_loading">Imeshindikana kupakia mazungumzo. Tafadhali jaribu tena.</string>
+    <string name="sidebar_confidence">Uhakika</string>
+    <string name="sidebar_labels">Lebo</string>
+    <string name="sidebar_open">Fungua</string>
+    <string name="sidebar_faq_error">Maswali yanayoulizwa mara kwa mara hayapatikani</string>
+    <string name="sidebar_empty_folder">Folda hii ni tupu. Hamisha mazungumzo hapa kutoka menyu ya mazungumzo.</string>
 
     <!-- Chatbot -->
     <string name="chatbot_placeholder">Andika swali lako hapa…</string>
@@ -97,9 +127,23 @@
     <string name="chatbot_context_prefix">Muktadha:</string>
     <string name="chatbot_remove_context">Ondoa Muktadha</string>
     <string name="chatbot_save_chat">Hifadhi Mazungumzo</string>
-    <string name="chatbot_export_chat">Hamisha Mazungumzo</string>
+    <string name="chatbot_export_chat">Hamisha Mazungumzo Nje</string>
+    <string name="chatbot_unsaved_changes">Una mabadiliko ambayo hayajahifadhiwa. Je, una uhakika unataka kuanza mazungumzo mapya?</string>
+    <string name="chatbot_new_chat_started">Mazungumzo mapya yameanzishwa</string>
+    <string name="chatbot_conversation_loaded">Mazungumzo yamepakiwa kwa mafanikio!</string>
+    <string name="chatbot_save_confirm_title">Hifadhi Mazungumzo Yaliyopo</string>
+    <string name="chatbot_save_confirm_message">Hifadhi mazungumzo yaliyopo?</string>
+    <string name="chatbot_discard_and_new">Tupa &amp; Mapya</string>
+    <string name="chatbot_save_and_new">Hifadhi &amp; Mapya</string>
+    <string name="chatbot_save_first">Hifadhi Kwanza</string>
+    <string name="chatbot_export_filename">Jina la Faili</string>
+    <string name="chatbot_export_filename_placeholder">Weka jina la faili</string>
+    <string name="chatbot_export_button">Hamisha Nje</string>
+    <string name="chatbot_export_success">Mazungumzo yamehamishwa nje kwa mafanikio</string>
+    <string name="chatbot_export_error">Imeshindikana kuhamisha mazungumzo nje. Tafadhali jaribu tena.</string>
+    <string name="chatbot_chat_saved">Mazungumzo Yamehifadhiwa</string>
 
-    <!-- Quick Help -->
+    <!-- Quick Help - Button Labels -->
     <string name="quickhelp_just_chat">Zungumza Tu</string>
     <string name="quickhelp_apply_for_id">Omba Kitambulisho</string>
     <string name="quickhelp_pay_taxes">Lipa Kodi</string>
@@ -109,6 +153,28 @@
     <string name="quickhelp_transport_licenses">Usafiri</string>
     <string name="quickhelp_housing_programs">Makazi</string>
     <string name="quickhelp_find_jobs">Tafuta Kazi</string>
+
+    <!-- Quick Help - User-Visible Prompts (shown as the user's message in chat) -->
+    <string name="quickhelp_just_chat_user_prompt">Nataka kuzungumza kwa ujumla kuhusu maisha nchini Kenya.</string>
+    <string name="quickhelp_apply_for_id_user_prompt">Nataka kujua kuhusu kuomba Kitambulisho cha Taifa nchini Kenya.</string>
+    <string name="quickhelp_pay_taxes_user_prompt">Nataka kuuliza kuhusu kulipa kodi au kuwasilisha matokeo yangu ya KRA nchini Kenya.</string>
+    <string name="quickhelp_start_business_user_prompt">Nataka kujua kuhusu kusajili biashara au kampuni mpya nchini Kenya.</string>
+    <string name="quickhelp_find_healthcare_user_prompt">Nataka kuuliza kuhusu vituo vya afya vya umma na bima (NHIF/SHIF) nchini Kenya.</string>
+    <string name="quickhelp_education_services_user_prompt">Nataka kujua kuhusu shule na huduma za elimu nchini Kenya.</string>
+    <string name="quickhelp_transport_licenses_user_prompt">Nataka kuuliza kuhusu leseni za udereva na huduma za NTSA nchini Kenya.</string>
+    <string name="quickhelp_housing_programs_user_prompt">Nataka kujua kuhusu Mpango wa Makazi Nafuu (Boma Yangu) nchini Kenya.</string>
+    <string name="quickhelp_find_jobs_user_prompt">Nataka kuuliza kuhusu fursa za kazi za serikali na maombi ya PSC nchini Kenya.</string>
+
+    <!-- Quick Help - Hidden System Prompts (sent to the AI, not shown to user) -->
+    <string name="quickhelp_just_chat_prompt">Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_apply_for_id_prompt">Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents\' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_pay_taxes_prompt">Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_start_business_prompt">Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_healthcare_prompt">Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_education_services_prompt">Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_transport_licenses_prompt">Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_housing_programs_prompt">Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as \'Genie AI\'.</string>
+    <string name="quickhelp_find_jobs_prompt">Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as \'Genie AI\'.</string>
 
     <!-- Feedback -->
     <string name="feedback_title">Tusaidie Kuboresha</string>
@@ -151,17 +217,153 @@
     <string name="settings_deletion_reason">Sababu ya kufuta (si lazima)</string>
     <string name="settings_confirm_reset_user_data">Je, una uhakika unataka kuweka upya data yako yote ya wasifu? Hii itafuta taarifa zako zote za wasifu na historia ya mazungumzo, lakini itahifadhi taarifa za kuingia kwenye akaunti yako.</string>
     <string name="settings_reset">Weka Upya</string>
+    <string name="settings_password_reset_initiated">Kiungo cha kuweka upya nenosiri kimetumwa kwenye anwani yako ya barua pepe.</string>
 
     <!-- User Profile -->
     <string name="user_profile_title">Wasifu wa Mtumiaji</string>
     <string name="user_profile_save">Hifadhi Wasifu</string>
     <string name="user_profile_previous">Iliyotangulia</string>
     <string name="user_profile_next">Inayofuata</string>
-    <string name="user_profile_full_name">Jina kamili</string>
+    <string name="user_profile_full_name">Jina kamili (pamoja na majina ya utani)</string>
     <string name="user_profile_dob">Tarehe ya kuzaliwa</string>
     <string name="user_profile_gender">Jinsia</string>
     <string name="user_profile_nationality">Uraia</string>
     <string name="user_profile_marital_status">Hali ya ndoa</string>
+    <string name="user_profile_saving">Inahifadhi…</string>
+    <string name="user_profile_save_success">Wasifu umehifadhiwa kwa mafanikio</string>
+    <string name="user_profile_save_error">Hitilafu katika kuhifadhi wasifu</string>
+    <string name="user_profile_load_error">Hitilafu katika kupakia data ya wasifu</string>
+    <string name="user_profile_privacy_info">Kwa kutoa taarifa zaidi, utapata majibu sahihi na yenye maana zaidi kutoka kwa chatbot.</string>
+    <string name="user_profile_privacy_policy_link">Sera ya Faragha</string>
+
+    <!-- Profile Tabs (Full) -->
+    <string name="user_profile_tab_1">Data ya Utambulisho wa Kibinafsi</string>
+    <string name="user_profile_tab_2">Usajili wa Kiraia &amp; Nyaraka</string>
+    <string name="user_profile_tab_3">Anwani &amp; Taarifa za Makazi</string>
+    <string name="user_profile_tab_4">Nyaraka za Utambulisho &amp; Usafiri</string>
+    <string name="user_profile_tab_5">Rekodi za Afya &amp; Matibabu</string>
+    <string name="user_profile_tab_6">Data ya Ajira &amp; Uchumi</string>
+    <string name="user_profile_tab_7">Rekodi za Elimu &amp; Masomo</string>
+    <string name="user_profile_tab_8">Data ya Fedha &amp; Kodi</string>
+    <string name="user_profile_tab_9">Hifadhi ya Jamii &amp; Ustawi</string>
+    <string name="user_profile_tab_10">Rekodi za Jinai &amp; Kisheria</string>
+    <string name="user_profile_tab_11">Usafiri &amp; Usafiri</string>
+    <string name="user_profile_tab_12">Ushiriki wa Kiraia &amp; Kisiasa</string>
+
+    <!-- Profile Tabs (Short) -->
+    <string name="user_profile_tab_short_personal">Binafsi</string>
+    <string name="user_profile_tab_short_civil">Kiraia</string>
+    <string name="user_profile_tab_short_address">Anwani</string>
+    <string name="user_profile_tab_short_identity">Utambulisho</string>
+    <string name="user_profile_tab_short_health">Afya</string>
+    <string name="user_profile_tab_short_employment">Ajira</string>
+    <string name="user_profile_tab_short_education">Elimu</string>
+    <string name="user_profile_tab_short_financial">Fedha</string>
+    <string name="user_profile_tab_short_social">Jamii</string>
+    <string name="user_profile_tab_short_criminal">Jinai</string>
+    <string name="user_profile_tab_short_transport">Usafiri</string>
+    <string name="user_profile_tab_short_civic">Kiraia</string>
+
+    <!-- Profile Fields -->
+    <string name="user_profile_field_photograph">Picha</string>
+    <string name="user_profile_field_biometric">Alama za vidole / Data ya kibayometriki</string>
+    <string name="user_profile_field_birth_cert">Cheti cha kuzaliwa</string>
+    <string name="user_profile_field_death_cert">Cheti cha kifo</string>
+    <string name="user_profile_field_marriage_divorce">Rekodi za ndoa / Talaka</string>
+    <string name="user_profile_field_adoption">Rekodi za kuasiliwa</string>
+    <string name="user_profile_field_citizenship">Nyaraka za uraia / Uandikishaji</string>
+    <string name="user_profile_field_immigration">Historia ya uhamiaji &amp; visa</string>
+    <string name="user_profile_field_current_address">Anwani ya sasa ya makazi</string>
+    <string name="user_profile_field_previous_addresses">Anwani za awali</string>
+    <string name="user_profile_field_postal_code">Msimbo wa Posta</string>
+    <string name="user_profile_field_country">Nchi</string>
+    <string name="user_profile_field_residency_status">Hali ya Ukazi</string>
+    <string name="user_profile_field_home_or_rental">Umiliki wa nyumba au maelezo ya kukodisha</string>
+    <string name="user_profile_field_utility_bills">Bili za huduma zinazohusiana na anwani</string>
+    <string name="user_profile_field_land_records">Rekodi za umiliki wa ardhi na mali</string>
+    <string name="user_profile_field_id_card">Nambari ya kitambulisho cha taifa</string>
+    <string name="user_profile_field_passport">Maelezo ya pasipoti</string>
+    <string name="user_profile_field_drivers_license">Leseni ya udereva</string>
+    <string name="user_profile_field_voter_id">Kitambulisho cha mpiga kura</string>
+    <string name="user_profile_field_ssn">Nambari ya Hifadhi ya Jamii / Bima ya Taifa</string>
+    <string name="user_profile_field_military_records">Rekodi za huduma ya kijeshi</string>
+    <string name="user_profile_field_medical_history">Historia ya matibabu na hali za kiafya</string>
+    <string name="user_profile_field_vaccinations">Rekodi za chanjo</string>
+    <string name="user_profile_field_insurance_details">Maelezo ya bima ya afya</string>
+    <string name="user_profile_field_disability">Hali ya ulemavu</string>
+    <string name="user_profile_field_blood_type">Kundi la Damu</string>
+    <string name="user_profile_field_organ_donor">Hali ya kuchangia viungo</string>
+    <string name="user_profile_field_prescriptions">Dawa zilizoandikwa na matibabu yaliyopokelewa</string>
+    <string name="user_profile_field_mental_health">Historia ya afya ya akili</string>
+    <string name="user_profile_field_employment_history">Historia ya ajira</string>
+    <string name="user_profile_field_current_employer">Maelezo ya mwajiri wa sasa</string>
+    <string name="user_profile_field_work_permits">Vibali vya kazi na mikataba ya ajira</string>
+    <string name="user_profile_field_certifications">Vyeti vya kitaaluma na leseni</string>
+    <string name="user_profile_field_unemployment">Hali ya ukosefu wa ajira na faida zilizopokelewa</string>
+    <string name="user_profile_field_tin">Nambari ya utambulisho wa mlipa kodi (TIN)</string>
+    <string name="user_profile_field_business_affiliations">Umiliki wa biashara na uhusiano na makampuni</string>
+    <string name="user_profile_field_schools">Shule na chuo kikuu alichosoma</string>
+    <string name="user_profile_field_education">Elimu</string>
+    <string name="user_profile_field_degrees">Diploma, shahada, na vyeti</string>
+    <string name="user_profile_field_performance">Utendaji wa kitaaluma na alama za mitihani</string>
+    <string name="user_profile_field_scholarships">Udhamini na msaada wa kifedha uliopokelewa</string>
+    <string name="user_profile_field_income_tax">Rekodi za kodi ya mapato</string>
+    <string name="user_profile_field_bank_accounts">Akaunti za benki na fedha</string>
+    <string name="user_profile_field_property_tax">Malipo ya kodi ya mali</string>
+    <string name="user_profile_field_business_tax">Uwasilishaji wa kodi ya biashara</string>
+    <string name="user_profile_field_pension_contrib">Michango na utoaji wa pensheni</string>
+    <string name="user_profile_field_loan_aid">Rekodi za mikopo na msaada wa serikali</string>
+    <string name="user_profile_field_pension_status">Hali ya pensheni na michango</string>
+    <string name="user_profile_field_childcare">Msaada wa malezi ya watoto</string>
+    <string name="user_profile_field_food_assistance">Msaada wa chakula / programu za ustawi</string>
+    <string name="user_profile_field_housing_assistance">Msaada wa makazi</string>
+    <string name="user_profile_field_police_records">Rekodi za polisi (historia ya jinai, kukamatwa, mashtaka)</string>
+    <string name="user_profile_field_court_cases">Historia ya kesi za mahakama</string>
+    <string name="user_profile_field_fines_penalties">Faini na adhabu</string>
+    <string name="user_profile_field_parole_probation">Hali ya paroli au majaribio</string>
+    <string name="user_profile_field_vehicle_reg">Maelezo ya usajili wa gari</string>
+    <string name="user_profile_field_traffic_violations">Makosa ya trafiki na faini</string>
+    <string name="user_profile_field_license_history">Historia ya leseni ya udereva na vibali</string>
+    <string name="user_profile_field_public_transport_card">Matumizi ya kadi ya usafiri wa umma</string>
+    <string name="user_profile_field_voter_registration">Maelezo ya usajili wa mpiga kura</string>
+    <string name="user_profile_field_election_history">Historia ya ushiriki katika uchaguzi</string>
+    <string name="user_profile_field_party_membership">Uanachama wa chama cha kisiasa</string>
+    <string name="user_profile_field_military_status">Hali ya huduma ya kijeshi au kuandikishwa</string>
+    <string name="user_profile_field_public_service_roles">Nafasi za huduma za umma</string>
+
+    <!-- Profile Dropdown Values -->
+    <string name="gender_male">Mwanaume</string>
+    <string name="gender_female">Mwanamke</string>
+    <string name="gender_other">Nyingine</string>
+    <string name="gender_prefer_not">Sipendelei kusema</string>
+    <string name="marital_single">Sijaoa/Sijaolewa</string>
+    <string name="marital_married">Nimeoa/Nimeolewa</string>
+    <string name="marital_divorced">Nimetalikiwa</string>
+    <string name="marital_widowed">Mjane</string>
+    <string name="marital_other">Nyingine</string>
+    <string name="residency_citizen">Raia</string>
+    <string name="residency_permanent_resident">Mkazi wa Kudumu</string>
+    <string name="residency_temporary_resident">Mkazi wa Muda</string>
+    <string name="residency_other">Nyingine</string>
+    <string name="employment_employed">Nimeajiriwa</string>
+    <string name="employment_self_employed">Nimejiajiri</string>
+    <string name="employment_unemployed">Sina Ajira</string>
+    <string name="employment_student">Mwanafunzi</string>
+    <string name="employment_retired">Nimestaafu</string>
+    <string name="employment_homemaker">Mhudumu wa Nyumbani</string>
+    <string name="employment_other">Nyingine</string>
+    <string name="education_primary">Elimu ya Msingi</string>
+    <string name="education_secondary">Elimu ya Sekondari</string>
+    <string name="education_high_school">Shule ya Upili</string>
+    <string name="education_vocational">Mafunzo ya Ufundi</string>
+    <string name="education_associate">Shahada ya Cheti</string>
+    <string name="education_bachelor">Shahada ya Kwanza</string>
+    <string name="education_master">Shahada ya Uzamili</string>
+    <string name="education_doctoral">Shahada ya Uzamivu</string>
+    <string name="education_professional">Shahada ya Kitaaluma</string>
+    <string name="education_other">Nyingine</string>
+    <string name="yes">Ndiyo</string>
+    <string name="no">Hapana</string>
 
     <!-- About -->
     <string name="about_title">Kuhusu</string>
@@ -182,4 +384,7 @@
     <string name="common_done">Imekamilika</string>
     <string name="common_clear">Futa</string>
     <string name="common_retry">Jaribu tena</string>
+    <string name="common_create">Tengeneza</string>
+    <string name="common_move">Hamisha</string>
+    <string name="common_open">Fungua</string>
 </resources>

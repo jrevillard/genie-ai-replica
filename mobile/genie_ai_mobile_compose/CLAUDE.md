@@ -135,7 +135,18 @@ stringResource(R.string.register_verification_sent, email)  // with args
 
 ## Configuration
 
-Theme and app settings loaded from `res/raw/genie_ai_config.json` at startup via `ConfigService.init()`. Includes primary/secondary colors, navbar gradients, quick help buttons, welcome message.
+Theme and app settings loaded from `res/raw/genie_ai_config.json` at startup via `ConfigService.init()` (called in `GenieAIApplication.onCreate()`). Includes primary/secondary colors, navbar gradients, quick help buttons, welcome message.
+
+### Dynamic i18n Key Resolution
+
+The config file stores **translation keys** (e.g. `quickhelp.justChat`) rather than literal text for quick help button labels, user prompts, and system prompts. `ConfigService.resolveI18nKey()` converts these dotted camelCase keys to Android resource names at runtime:
+
+```
+quickhelp.justChat → quickhelp_just_chat → R.string.quickhelp_just_chat
+quickhelp.applyForIDUserPrompt → quickhelp_apply_for_id_user_prompt → R.string.quickhelp_apply_for_id_user_prompt
+```
+
+When adding new config-driven strings, add the corresponding `<string name="...">` entry to all 11 `strings.xml` files.
 
 ## Multi-Platform Development
 
@@ -179,9 +190,11 @@ This project is part of a coordinated multi-platform development effort:
 ## Critical Notes
 
 1. **API Service is a Kotlin `object`** — true singleton, no DI framework needed
-2. **Config loaded from raw resources** — not assets (Android Compose standard)
+2. **Config loaded from raw resources** — not assets (Android Compose standard); initialized in `GenieAIApplication.onCreate()` so it's ready before any screen composes
 3. **Password is SHA-256 hashed** on client before sending to API
 4. **SharedPreferences** for remembered credentials and settings
 5. **Proguard rules** protect Gson models and OkHttp from obfuscation
 6. **Category ID field names vary**: `catKey` → `_key` → `key` → `id` — repositories have fallback chains
 7. **Category name field names vary**: `nameEN` → `name` → `label` — repositories have fallback chains
+8. **ViewModel scoping**: Each `composable()` in NavHost creates its own ViewModel scope. `AuthViewModel` is re-hydrated in MainScreen via `fetchCurrentUser()` (calls `GET /auth/me`) since the LOGIN backstack entry is destroyed on navigation. The token persists in the `ApiService` singleton.
+9. **`GET /auth/me` response** wraps user fields in a `"user"` key (same as login) — parse via `body.getAsJsonObject("user")`

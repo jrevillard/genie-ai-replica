@@ -2,10 +2,12 @@
 // Service for chat queries and feedback
 
 import Foundation
+import os
 
 @Observable
 class ChatService {
     private let api = APIService.shared
+    private static let logger = Logger(subsystem: "com.genieai", category: "llm.remote")
 
     private(set) var isLoading = false
     private(set) var error: String?
@@ -48,14 +50,31 @@ class ChatService {
             payload["context"] = context
         }
 
-        print("[ChatService] Submitting query: \(payload)")
+        Self.logger.info("Remote query: sessionId=\(sessionId, privacy: .private), messages=\(messages.count), categoryId=\(categoryId ?? "nil"), labels=\(contextLabels ?? "nil"), language=\(language ?? "nil")")
 
-        let data = try await api.post("queries", data: payload)
+        let clock = ContinuousClock()
+        let startTime = clock.now
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
+        do {
+            let data = try await api.post("queries", data: payload)
 
-        return try decoder.decode(QueryResponse.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
+
+            let response = try decoder.decode(QueryResponse.self, from: data)
+
+            let duration = clock.now - startTime
+            let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+            let contentLength = response.response?.count ?? response.content?.count ?? 0
+            Self.logger.info("Remote response: id=\(response.id ?? "nil", privacy: .private), confidence=\(response.confidence ?? 0, format: .fixed(precision: 2)), sources=\(response.sources?.count ?? 0), contentLength=\(contentLength), duration=\(durationMs)ms")
+
+            return response
+        } catch {
+            let duration = clock.now - startTime
+            let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+            Self.logger.error("Remote query failed after \(durationMs)ms: \(error.localizedDescription)")
+            throw error
+        }
     }
 
     // MARK: - Offline Query
@@ -68,6 +87,8 @@ class ChatService {
         guard let lastUserMessage = messages.last(where: { $0.role == .user }) else {
             throw NSError(domain: "ChatService", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user message found"])
         }
+
+        Self.logger.info("Routing to offline: messages=\(messages.count), labels=\(contextLabels.joined(separator: ","))")
 
         return try await localRAG.submitQuery(
             query: lastUserMessage.actualContent ?? lastUserMessage.content,
@@ -103,7 +124,7 @@ class ChatService {
             payload["comment"] = comment
         }
 
-        print("[ChatService] Submitting feedback for query \(queryId): \(payload)")
+        Self.logger.info("Submitting feedback: queryId=\(queryId, privacy: .private), rating=\(rating), isPositive=\(isPositive)")
 
         let _ = try await api.post("queries/\(queryId)/feedback", data: payload)
     }

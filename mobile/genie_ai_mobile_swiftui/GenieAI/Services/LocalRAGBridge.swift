@@ -3,10 +3,12 @@
 
 import Foundation
 import LocalRAG
+import os
 
 @Observable
 class LocalRAGBridge {
     private let ragService: LocalRAGService
+    private static let logger = Logger(subsystem: "com.genieai", category: "llm.local")
     private(set) var isReady = false
     private(set) var isLoading = false
     private(set) var error: String?
@@ -48,18 +50,28 @@ class LocalRAGBridge {
         isLoading = true
         error = nil
 
+        Self.logger.info("Initializing local RAG model...")
+
+        let clock = ContinuousClock()
+        let startTime = clock.now
+
         do {
             try await ragService.loadModel()
+            let duration = clock.now - startTime
+            let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+            Self.logger.info("Local RAG model loaded successfully, duration=\(durationMs)ms")
             await MainActor.run {
                 self.isReady = true
                 self.isLoading = false
             }
         } catch {
+            let duration = clock.now - startTime
+            let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
             await MainActor.run {
                 self.error = error.localizedDescription
                 self.isLoading = false
             }
-            print("[LocalRAGBridge] Initialization failed: \(error)")
+            Self.logger.error("Initialization failed after \(durationMs)ms: \(error.localizedDescription)")
         }
     }
 
@@ -72,6 +84,11 @@ class LocalRAGBridge {
         guard isReady else {
             throw LocalRAGError.modelNotLoaded
         }
+
+        Self.logger.info("Local query: length=\(query.count), history=\(conversationHistory.count), labels=\(contextLabels.joined(separator: ","))")
+
+        let clock = ContinuousClock()
+        let startTime = clock.now
 
         // Convert app Messages to LLMMessages
         let llmMessages = conversationHistory.map { msg in
@@ -89,12 +106,18 @@ class LocalRAGBridge {
 
         let ragResponse = try await ragService.query(ragQuery)
 
+        let duration = clock.now - startTime
+        let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+        Self.logger.info("Local response: contentLength=\(ragResponse.content.count), confidence=\(ragResponse.confidence, format: .fixed(precision: 2)), sources=\(ragResponse.sources.count), duration=\(durationMs)ms")
+        Self.logger.debug("Local response sources: \(ragResponse.sources.map { "\($0.title)(\($0.score))" }.joined(separator: ", "))")
+
         // Map RAGResponse to QueryResponse via JSON roundtrip
         return ragResponseToQueryResponse(ragResponse)
     }
 
     /// Index a document for RAG retrieval
     func indexDocument(title: String, content: String, metadata: [String: String] = [:]) async throws {
+        Self.logger.info("Indexing document: title=\(title), contentLength=\(content.count)")
         let document = RAGDocument(title: title, content: content, metadata: metadata)
         try await ragService.indexDocument(document)
     }
@@ -140,7 +163,7 @@ class LocalRAGBridge {
             return try decoder.decode(QueryResponse.self, from: data)
         } catch {
             // Fallback: return a minimal response
-            print("[LocalRAGBridge] JSON roundtrip failed: \(error)")
+            Self.logger.error("JSON roundtrip failed: \(error.localizedDescription)")
             return Self.fallbackResponse(content: ragResponse.content)
         }
     }

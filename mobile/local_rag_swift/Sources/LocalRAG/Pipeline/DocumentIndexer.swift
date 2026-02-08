@@ -2,11 +2,13 @@
 // Chunks, embeds, and stores documents in the vector store
 
 import Foundation
+import os
 
 public actor DocumentIndexer {
     private let chunker: TextChunker
     private let embeddingService: EmbeddingService
     private let vectorStore: VectorStore
+    private static let logger = Logger(subsystem: "com.genieai", category: "rag.pipeline")
 
     public init(
         chunker: TextChunker,
@@ -20,6 +22,11 @@ public actor DocumentIndexer {
 
     /// Index a single document: chunk → embed → store
     public func index(_ document: RAGDocument) async throws {
+        Self.logger.info("Indexing document: id=\(document.id), title=\(document.title), contentLength=\(document.content.count)")
+
+        let clock = ContinuousClock()
+        let startTime = clock.now
+
         let textChunks = chunker.chunk(document.content)
 
         guard !textChunks.isEmpty else {
@@ -45,10 +52,15 @@ public actor DocumentIndexer {
         }
 
         await vectorStore.addChunks(documentChunks)
+
+        let duration = clock.now - startTime
+        let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+        Self.logger.info("Document indexed: id=\(document.id), title=\(document.title), chunks=\(documentChunks.count), duration=\(durationMs)ms")
     }
 
     /// Index multiple documents
     public func indexAll(_ documents: [RAGDocument]) async throws {
+        Self.logger.info("Batch indexing: documents=\(documents.count)")
         for document in documents {
             try await index(document)
         }

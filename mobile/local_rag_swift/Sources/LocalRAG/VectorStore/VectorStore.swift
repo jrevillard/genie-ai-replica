@@ -2,15 +2,18 @@
 // In-memory vector store with cosine similarity search
 
 import Foundation
+import os
 
 public actor VectorStore {
     private var chunks: [DocumentChunk] = []
+    private static let logger = Logger(subsystem: "com.genieai", category: "rag.vectorstore")
 
     public init() {}
 
     /// Add chunks to the store
     public func addChunks(_ newChunks: [DocumentChunk]) {
         chunks.append(contentsOf: newChunks)
+        Self.logger.debug("Added chunks: count=\(newChunks.count), total=\(self.chunks.count)")
     }
 
     /// Remove all chunks for a given document ID
@@ -20,7 +23,9 @@ public actor VectorStore {
 
     /// Remove all chunks
     public func clear() {
+        let count = chunks.count
         chunks.removeAll()
+        Self.logger.info("Cleared vector store: removedChunks=\(count)")
     }
 
     /// Number of stored chunks
@@ -59,7 +64,11 @@ public actor VectorStore {
 
         // Sort by score descending and take top-K
         scored.sort { $0.score > $1.score }
-        return Array(scored.prefix(topK))
+        let results = Array(scored.prefix(topK))
+
+        Self.logger.debug("Search: storeSize=\(self.chunks.count), topK=\(topK), threshold=\(threshold, format: .fixed(precision: 2)), labelFilter=\(labels?.joined(separator: ",") ?? "none"), candidates=\(candidates.count), results=\(results.count)")
+
+        return results
     }
 
     // MARK: - Cosine Similarity

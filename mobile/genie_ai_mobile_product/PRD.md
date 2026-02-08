@@ -678,7 +678,7 @@ All platforms must have identical localized strings for every supported language
 **Base Service:**
 - HTTP client wrapper
 - Bearer token management
-- Request/response logging
+- Request/response logging (see also [Section 15.8: LLM Communication Logging](#158-llm-communication-logging))
 - Error handling
 
 **Proxy Services:**
@@ -830,6 +830,50 @@ sendQuery() → connectivity.isOnline?
 - **Conversation history caching**: Cache recent conversations locally for offline browsing
 - **Cross-platform LocalRAG**: Kotlin Multiplatform or Android-native equivalent for Jetpack Compose
 - **Hybrid mode**: Use local RAG for immediate response while fetching richer API response in background
+
+### 15.8 LLM Communication Logging
+<!-- SwiftUI: GenieAI/Services/ChatService.swift, GenieAI/Services/LocalRAGBridge.swift -->
+<!-- LocalRAG: Sources/LocalRAG/LocalRAGService.swift, Sources/LocalRAG/Providers/LlamaCppProvider.swift, Sources/LocalRAG/Providers/FoundationModelsProvider.swift, Sources/LocalRAG/Embedding/EmbeddingService.swift, Sources/LocalRAG/VectorStore/VectorStore.swift, Sources/LocalRAG/Pipeline/DocumentIndexer.swift -->
+
+All LLM communication paths (remote API and local RAG) must emit structured, leveled logs for debugging, performance monitoring, and production diagnostics.
+
+**Cross-Platform Logging APIs:**
+
+| Platform | API | Subsystem/Tag |
+|----------|-----|---------------|
+| SwiftUI (iOS) | `os.Logger` | `com.genieai` |
+| Jetpack Compose (Android) | `android.util.Log` | `GenieAI` |
+| Flutter | `dart:developer` `log()` | `GenieAI` |
+
+**Log Levels:**
+
+| Level | Usage | Example |
+|-------|-------|---------|
+| Debug | Full prompt text, embedding vectors, detailed search params | Resolved system prompt, per-chunk scores |
+| Info | Request/response summaries, timing, counts | "Remote response: confidence=0.85, sources=3, duration=1200ms" |
+| Error | Failures, fallbacks, unavailable services | "Model load failed", "Embedding unavailable" |
+
+**Remote LLM Logging Fields:**
+- Request: session ID (private/redacted), message count, category ID, context labels, language
+- Response: response ID (private/redacted), confidence score, source count, content length, round-trip duration (ms)
+- Error: failure description, duration at time of failure
+
+**Local LLM Logging Fields:**
+- Model lifecycle: provider type, load/unload events, load duration
+- Pipeline stages: per-stage timing (embed, vector search, generation), chunk counts, similarity scores
+- Generation: prompt token count, generated token count, generation config (maxTokens, temperature, topK, topP), duration
+- Embedding: language, dimension, nil-vector warnings
+- Vector store: store size, search parameters, result counts
+
+**Privacy Requirements:**
+- Session IDs and response IDs must be marked as private/redacted in logs (e.g., `privacy: .private` on iOS)
+- User message content must NOT appear at `.info` level — only at `.debug` (which is not persisted by default)
+- Model file paths must be marked as private/redacted
+
+**Performance Requirements:**
+- Logging must not add measurable overhead to LLM operations
+- Use platform-native structured logging (not `print()` / `println()` / `debugPrint()`)
+- Timing must use monotonic clocks (`ContinuousClock` on iOS, `System.nanoTime()` on Android, `Stopwatch` in Dart)
 
 ---
 

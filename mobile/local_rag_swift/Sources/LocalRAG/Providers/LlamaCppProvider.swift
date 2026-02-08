@@ -3,11 +3,13 @@
 
 import Foundation
 import llama
+import os
 
 public actor LlamaCppProvider: LLMProvider {
     private let modelPath: String
     private var model: OpaquePointer?
     private var context: OpaquePointer?
+    private static let logger = Logger(subsystem: "com.genieai", category: "llm.local.llamacpp")
 
     public init(modelPath: String) {
         self.modelPath = modelPath
@@ -20,6 +22,10 @@ public actor LlamaCppProvider: LLMProvider {
     public func loadModel() async throws {
         guard !isReady else { return }
 
+        Self.logger.info("Loading llama.cpp model: path=\(self.modelPath, privacy: .private)")
+        let clock = ContinuousClock()
+        let startTime = clock.now
+
         llama_backend_init()
 
         // Load model
@@ -27,6 +33,7 @@ public actor LlamaCppProvider: LLMProvider {
         modelParams.n_gpu_layers = 99 // Offload all layers to Metal
 
         guard let loadedModel = llama_load_model_from_file(modelPath, modelParams) else {
+            Self.logger.error("Failed to load model from path=\(self.modelPath, privacy: .private)")
             throw LocalRAGError.modelLoadFailed("Failed to load model from \(modelPath)")
         }
         self.model = loadedModel
@@ -39,12 +46,18 @@ public actor LlamaCppProvider: LLMProvider {
         guard let ctx = llama_new_context_with_model(loadedModel, contextParams) else {
             llama_free_model(loadedModel)
             self.model = nil
+            Self.logger.error("Failed to create llama.cpp context")
             throw LocalRAGError.modelLoadFailed("Failed to create context")
         }
         self.context = ctx
+
+        let duration = clock.now - startTime
+        let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+        Self.logger.info("llama.cpp model loaded: n_ctx=4096, n_batch=512, duration=\(durationMs)ms")
     }
 
     public func unloadModel() async {
+        Self.logger.info("Unloading llama.cpp model")
         if let ctx = context {
             llama_free(ctx)
             self.context = nil
@@ -66,14 +79,23 @@ public actor LlamaCppProvider: LLMProvider {
             throw LocalRAGError.modelNotLoaded
         }
 
+        Self.logger.info("llama.cpp generate: systemPromptLength=\(systemPrompt.count), messages=\(messages.count), contextLength=\(contextText.count), maxTokens=\(config.maxTokens), temperature=\(config.temperature, format: .fixed(precision: 2)), topK=\(config.topK), topP=\(config.topP, format: .fixed(precision: 2))")
+        Self.logger.debug("llama.cpp system prompt: \(systemPrompt)")
+
+        let clock = ContinuousClock()
+        let startTime = clock.now
+
         // Build chat prompt in Gemma/ChatML format
         let prompt = buildPrompt(systemPrompt: systemPrompt, messages: messages, context: contextText)
 
         // Tokenize
         let promptTokens = tokenize(prompt, model: model)
         guard !promptTokens.isEmpty else {
+            Self.logger.error("Failed to tokenize prompt (length=\(prompt.count))")
             throw LocalRAGError.generationFailed("Failed to tokenize prompt")
         }
+
+        Self.logger.info("Tokenized prompt: promptTokens=\(promptTokens.count)")
 
         // Clear KV cache
         llama_kv_cache_clear(context)
@@ -100,6 +122,7 @@ public actor LlamaCppProvider: LLMProvider {
 
             let status = llama_decode(context, batch)
             guard status == 0 else {
+                Self.logger.error("llama_decode failed: status=\(status)")
                 throw LocalRAGError.generationFailed("llama_decode failed with status \(status)")
             }
         }
@@ -158,7 +181,13 @@ public actor LlamaCppProvider: LLMProvider {
         }
 
         // Detokenize
-        return detokenize(generatedTokens, model: model)
+        let result = detokenize(generatedTokens, model: model)
+
+        let duration = clock.now - startTime
+        let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+        Self.logger.info("llama.cpp generation complete: promptTokens=\(promptTokens.count), generatedTokens=\(generatedTokens.count), responseLength=\(result.count), duration=\(durationMs)ms")
+
+        return result
     }
 
     // MARK: - Private

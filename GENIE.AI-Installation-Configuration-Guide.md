@@ -485,12 +485,86 @@ Configuration for the retrieval logic (hybrid search, traversals, etc.).
 | RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
 | ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (OR/AND). | OR |
 
+### Retriever Overview
+
+The retriever's primary role is to receive a query embedding, perform a multi-stage search, and output the top K most relevant document chunks to be processed by a reranker.
+
+The **GENIE.AI retriever** utilizes a hybrid strategy combining vector similarity search, metadata label filtering, and ArangoDB graph traversals to uncover contextually linked information.
+
+#### 1. Vector Search & Candidate Selection
+These parameters define the initial "dragnet" that pulls potential matches from the database.
+
+- **RETRIEVER_ARANGO_FETCH_K** (e.g., 15)
+  - *Logic:* The number of initial candidates fetched for MMR (Maximal Marginal Relevance) or initial filtering.
+  - *Impact:* Higher values increase "recall" (chance of finding the right doc) but also increase database latency and memory usage during the diversity sorting phase.
+
+- **RETRIEVER_ARANGO_K** (e.g., 5)
+  - *Logic:* The final count of chunks passed from the retriever to the reranker.
+  - *Impact:* This is the primary driver of Reranker Latency. Increasing this provides more variety to the reranker but slows down total response time.
+
+- **RETRIEVER_ARANGO_SCORE_THRESHOLD** (e.g., 0.5)
+  - *Logic:* The minimum similarity score required for a chunk to be considered.
+  - *Impact:* Controls precision. Setting this too high may result in "no results found," while setting it too low increases "noise" that can lead to LLM hallucinations.
+
+### 2. Graph Traversal Strategy
+When enabled, the retriever explores relationships in ArangoDB to find relevant neighbors of the initial vector matches.
+
+- **RETRIEVER_ARANGO_TRAVERSAL_ENABLED** (True/False)
+  - *Impact:* Toggles multi-hop retrieval. When True, it adds "hidden" context but increases compute/latency.
+
+- **RETRIEVER_ARANGO_SEARCH_START**
+This determines the strategy of traversal based on provided AQL snippets:
+
+| Mode | Logic | Use Case |
+|---|---|---|
+| CHUNK | Goes from found chunk → Parent Node → Other Linked Edges | Broadening context: "I found a paragraph about Apples. Show me other concepts linked to Apples." |
+| EDGE | Uses found document to fetch its specific source chunk | Grounding metadata: "I found a reference or specific edge. Give me the actual source text." |
+| NODE | Traverses deep into graph up to MAX_DEPTH, finds linked edges and returns their source chunks | Complex reasoning: "Find Suppliers or Risks linked to Product A." |
+
+- **RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH** (e.g., 3)
+  - *Impact:* Limits how many "hops" the search goes. Increasing beyond 2 or 3 can cause exponential latency spikes in dense graphs.
+
+- **RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED** (e.g., 3)
+  - *Impact:* Limits volume of related information injected into a single chunk's context, protecting the LLM's context window.
+
+### 3. Additional Modules: Filtering & Summarization
+These modules refine data before it leaves the retriever.
+
+#### Labels-Based Filtering
+- How it works: Applies strict AQL FILTER based on `categoryLabel` or `serviceLabels` during similarity search.
+- Tuning: Using AND ensures high accuracy for domain-specific queries; OR allows broader exploration.
+
+#### Summarization (`SUMMARIZER_ENABLED`)
+- How it works: Uses an LLM to rewrite each retrieved chunk addressing user query and integrating related info via graph.
+- Impact:
+    - *Accuracy:* Dramatically improves context relevance for final answer.
+    - *Speed:* Major bottleneck due to synchronous LLM calls per chunk, adding several seconds.
+
 **RERANKER Configuration**  
 Configuration for the reranker logic
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker to the ChatQnA workflow. Increasing the number may improve response quality, while decreasing the value may reduce latency. | 3 | 
+
+## The Reranker
+
+The Reranker acts as the final quality filter. It receives the top candidates from the retriever and performs a more computationally intensive **"cross-encoder"** analysis to re-score the relevance of each chunk against the actual user query.
+
+### Key Parameter: `RERANKER_TOP_N`
+
+In the context of **GENIE.AI**, `RERANKER_TOP_N` is currently the key configurable high-level reranker parameter. This parameter controls the final number of high-confidence chunks sent to the LLM as context for response generation.
+
+#### Increasing the value of `RERANKER_TOP_N`
+- **Improves the "Recall"** for the LLM. It is more likely to capture the full answer if the information is spread across multiple documents.
+- Can introduce **"Context Stuffing."** If the extra chunks are only marginally relevant, they can distract the LLM or lead to **"lost in the middle"** phenomena, where the model ignores the most relevant data.
+- **Increases** the time to generate a response. A larger context window requires the LLM to perform more computation during the "prefill" stage, and increased prompt size can lead to higher token costs and slower output.
+
+#### Reducing the value of `RERANKER_TOP_N`
+- Creates a **higher risk of missing the answer.** If reranker's top results are very similar, or if answering requires four specific pieces of information, a low N will result in incomplete or **"I don't know"** responses.
+- Significantly **speeds up** response times. Smaller prompts allow for faster processing by the LLM and reduce memory consumption on inference servers.
+- Forces the LLM to focus only on high-confidence matches, which can reduce hallucinations caused by conflicting or noisy information in lower-ranked chunks.
+
 
 **Crawler Configuration (implemented in the doc repo)**  
 These variables control the specifics of how crawls are done.

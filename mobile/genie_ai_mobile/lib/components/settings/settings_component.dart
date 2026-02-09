@@ -575,26 +575,53 @@ class _SettingsComponentState extends State<SettingsComponent> {
                     fontWeight: FontWeight.bold,
                     color: titleColor)),
           ),
-          Row(children: [
-            // ADDED: Link to About Screen
-            IconButton(
-              icon: Icon(Icons.info_outline, color: titleColor),
-              tooltip: translate("about.title", "About"),
-              onPressed: () => Navigator.pushNamed(context, '/about'),
+          // FIXED: Wrapped buttons Row in Flexible to prevent overflow
+          Flexible(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ADDED: Link to About Screen
+                IconButton(
+                  icon: Icon(Icons.info_outline, color: titleColor),
+                  tooltip: translate("about.title", "About"),
+                  onPressed: () => Navigator.pushNamed(context, '/about'),
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 4),
+                // FIXED: Wrapped TextButton in Flexible to handle long translations
+                Flexible(
+                  child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        translate("settings.close", "Close"),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      )),
+                ),
+                const SizedBox(width: 4),
+                // FIXED: Wrapped ElevatedButton in Flexible to handle long translations
+                Flexible(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: accent,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        minimumSize: const Size(60, 36)),
+                    onPressed: _handleSave,
+                    child: Text(
+                      translate("settings.saveSettings", "Save"),
+                      style: const TextStyle(color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(translate("settings.close", "Close"))),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: accent, elevation: 0),
-              onPressed: _handleSave,
-              child: Text(translate("settings.saveSettings", "Save"),
-                  style: const TextStyle(color: Colors.white)),
-            ),
-          ]),
+          ),
         ],
       ),
     );

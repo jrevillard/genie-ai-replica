@@ -6,7 +6,15 @@ This repository contains code and resources of the GENIE.AI framework - a purpos
 - Modular and adaptable architecture, featuring a customizable UI, hybrid Retrieval-Augmented Generation (RAG) pipeline, and support for agentic and tool-calling capabilities.
 
 - Dockerized deployment optimized for Kubernetes, ensuring scalability, reliability, and ease of maintenance.
-- Developed based on input from a multi-stakeholder working group and built on the [Open Platform for Enterprise AI (OPEA)](https://opea.dev).​
+
+- Developed based on input from a multi-stakeholder working group on open-source AI for digital public services.
+
+- Leverages and integrates latest state-of-the-art open-source tools and libraries for production-grade RAG: 
+   - [Docling](https://github.com/docling-project/docling); 
+   - [Open Platform for Enterprise AI (OPEA)](https://opea.dev); 
+   - [vLLM](https://github.com/vllm-project/vllm)
+
+   among other.​
 
 ### Objective: 
 Empower governments and institutions with a free, open-source, modular stack of software and tools to create tailored, scalable, and context-specific GenAI and RAG applications and conduct reference implementations of solutions addressing selected public sector use cases. 

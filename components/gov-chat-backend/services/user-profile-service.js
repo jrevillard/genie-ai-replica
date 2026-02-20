@@ -94,26 +94,25 @@ class UserProfileService {
         }
       }
 
+      // Create basic user document with timestamps
       const basicDoc = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-
-      if (profileData.personalIdentification) {
-        basicDoc.personalIdentification = profileData.personalIdentification;
-      }
 
       logger.debug('UserProfileService.creating_basic_user_doc', { basicDoc });
       const user = await this.users.save(basicDoc);
       const userId = user._key;
       logger.info('UserProfileService.user_created', { userId });
 
+      // Process all profile data (including custom sections like muslimPreferences, christianPreferences, etc.)
       const processedData = await this.process(userId, profileData, files);
 
       delete processedData._key;
 
+      // Update user with all processed data
       if (Object.keys(processedData).length > 0) {
-        logger.debug('UserProfileService.updating_user_with_full_data', { userId });
+        logger.debug('UserProfileService.updating_user_with_full_data', { userId, processedKeys: Object.keys(processedData) });
         const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
         logger.info('UserProfileService.user_profile_created', {
           userId,
@@ -187,8 +186,30 @@ class UserProfileService {
       logger.info('UserProfileService.get_user_profile_start', { userId });
 
       const user = await this.users.document(userId);
+
+      // If customSettings exists, merge it back into the user object
+      // for backward compatibility with clients that expect custom sections
+      // at the top level (e.g., muslimPreferences, christianPreferences, etc.)
+      if (user.customSettings && typeof user.customSettings === 'object') {
+        logger.debug('UserProfileService.merging_custom_settings', {
+          userId,
+          customSettingsKeys: Object.keys(user.customSettings)
+        });
+
+        // Merge each custom setting back to the top level
+        // This ensures clients can access data via user.muslimPreferences directly
+        for (const key in user.customSettings) {
+          if (!user[key]) {
+            user[key] = user.customSettings[key];
+            logger.debug('UserProfileService.merged_custom_key', { userId, key });
+          }
+        }
+      }
+
       logger.info('UserProfileService.user_profile_retrieved', {
         userId,
+        returnedKeys: Object.keys(user),
+        hasCustomSettings: !!user.customSettings,
         durationMs: Date.now() - startTime
       });
       return user;
@@ -304,7 +325,7 @@ class UserProfileService {
 
   async process(userId, profileData, files) {
     const startTime = Date.now();
-    logger.info('UserProfileService.process_profile_data_start', { userId });
+    logger.info('UserProfileService.process_profile_data_start', { userId, incomingKeys: Object.keys(profileData) });
 
     if (typeof profileData === 'string') {
       try {
@@ -317,12 +338,16 @@ class UserProfileService {
 
     const processedData = {};
 
+    // Step 1: Copy all data from profileData to processedData (except _key)
+    // This ensures ALL sections are preserved, including custom ones
     for (const key in profileData) {
       if (key !== '_key') {
         processedData[key] = profileData[key];
+        logger.debug('UserProfileService.copied_key_to_processed', { userId, key, dataType: typeof profileData[key] });
       }
     }
 
+    // Step 2: Define known sections for file handling only
     const sections = [
       'personalIdentification',
       'civilRegistration',
@@ -335,12 +360,7 @@ class UserProfileService {
       'transportation'
     ];
 
-    for (const section of sections) {
-      if (profileData[section] && !processedData[section]) {
-        processedData[section] = {};
-      }
-    }
-
+    // Step 3: Handle file uploads only for known sections
     for (const section of sections) {
       if (!processedData[section]) continue;
 
@@ -375,8 +395,49 @@ class UserProfileService {
       }
     }
 
+    // Step 4: Identify and aggregate custom/unknown sections into customSettings
+    // This provides a generic way for any application to extend user profile data
+    const knownSections = new Set([
+      ...sections,
+      '_key',
+      'createdAt',
+      'updatedAt',
+      'email',
+      'loginName',
+      'encPassword',
+      'role',
+      'emailVerified',
+      'accessToken',
+      'refreshToken',
+      'tokenVersion',
+      'pendingEmailChange'
+    ]);
+
+    const customSettings = {};
+    for (const key in profileData) {
+      if (!knownSections.has(key) && key !== '_key' && key !== 'customSettings') {
+        // Include any object-type data that's not a known section
+        if (profileData[key] !== null && typeof profileData[key] === 'object') {
+          customSettings[key] = profileData[key];
+          logger.debug('UserProfileService.added_to_custom_settings', { userId, customKey: key });
+        }
+      }
+    }
+
+    // Step 5: If there are custom settings, store them under customSettings key
+    if (Object.keys(customSettings).length > 0) {
+      processedData.customSettings = customSettings;
+      logger.info('UserProfileService.custom_settings_aggregated', {
+        userId,
+        customSettingsKeys: Object.keys(customSettings),
+        durationMs: Date.now() - startTime
+      });
+    }
+
     logger.info('UserProfileService.process_profile_data_completed', {
       userId,
+      processedKeys: Object.keys(processedData),
+      customSettingsCount: Object.keys(customSettings).length,
       durationMs: Date.now() - startTime
     });
     return processedData;

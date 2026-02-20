@@ -113,12 +113,19 @@ class UserProfileService {
       // Update user with all processed data
       if (Object.keys(processedData).length > 0) {
         logger.debug('UserProfileService.updating_user_with_full_data', { userId, processedKeys: Object.keys(processedData) });
-        const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
+        await this.users.update(userId, processedData);
+
+        // Fetch the complete user document after update to ensure all fields are returned
+        const completeUser = await this.users.document(userId);
+
         logger.info('UserProfileService.user_profile_created', {
           userId,
+          returnedKeys: Object.keys(completeUser),
+          hasPersonalIdentification: !!completeUser.personalIdentification,
+          hasCustomSettings: !!completeUser.customSettings,
           durationMs: Date.now() - startTime
         });
-        return updatedUser.new;
+        return completeUser;
       }
 
       logger.info('UserProfileService.user_profile_created', {
@@ -139,7 +146,7 @@ class UserProfileService {
   async updateUserProfile(userId, profileData, files = {}) {
     const startTime = Date.now();
     try {
-      logger.info('UserProfileService.update_user_profile_start', { userId });
+      logger.info('UserProfileService.update_user_profile_start', { userId, incomingKeys: Object.keys(profileData) });
 
       if (typeof profileData === 'string') {
         try {
@@ -162,13 +169,45 @@ class UserProfileService {
 
       delete processedData._key;
 
-      const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
+      const processedKeys = Object.keys(processedData);
+      const hasPersonalIdentification = !!processedData.personalIdentification;
+      const hasIdentityTravel = !!processedData.identityTravel;
+      const hasMuslimPreferences = !!processedData.muslimPreferences;
 
+      console.log(`[DEBUG] Updating user document - userId: ${userId}, processedKeys: ${processedKeys.join(',')}, hasPersonalIdentification: ${hasPersonalIdentification}, hasIdentityTravel: ${hasIdentityTravel}, hasMuslimPreferences: ${hasMuslimPreferences}`);
+
+      logger.info('UserProfileService.updating_user_document', { userId, processedKeys, hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
+      await this.users.update(userId, processedData);
+
+      // Fetch the complete user document after update to ensure all fields are returned
+      // This is necessary because ArangoDB's update() with returnNew: true only returns updated fields
+      const completeUser = await this.users.document(userId, { graceful: true });
+
+      const returnedKeys = Object.keys(completeUser);
+      const returnedHasPersonalIdentification = !!completeUser.personalIdentification;
+      const returnedHasIdentityTravel = !!completeUser.identityTravel;
+      const returnedHasMuslimPreferences = !!completeUser.muslimPreferences;
+      const returnedHasCustomSettings = !!completeUser.customSettings;
+      const personalIdentificationKeys = completeUser.personalIdentification ? Object.keys(completeUser.personalIdentification) : [];
+
+      console.log(`[DEBUG] User profile updated - userId: ${userId}, returnedKeys: ${returnedKeys.join(',')}, hasPersonalIdentification: ${returnedHasPersonalIdentification}, hasIdentityTravel: ${returnedHasIdentityTravel}, hasMuslimPreferences: ${returnedHasMuslimPreferences}, hasCustomSettings: ${returnedHasCustomSettings}`);
+      console.log(`[DEBUG] Complete user data keys:`, JSON.stringify(returnedKeys));
+      console.log(`[DEBUG] personalIdentification exists:`, returnedHasPersonalIdentification);
+      console.log(`[DEBUG] identityTravel exists:`, returnedHasIdentityTravel);
+      console.log(`[DEBUG] muslimPreferences exists:`, returnedHasMuslimPreferences);
+
+      // Log what we're returning for debugging
       logger.info('UserProfileService.user_profile_updated', {
         userId,
+        returnedKeys,
+        hasPersonalIdentification: returnedHasPersonalIdentification,
+        hasIdentityTravel: returnedHasIdentityTravel,
+        hasMuslimPreferences: returnedHasMuslimPreferences,
+        hasCustomSettings: returnedHasCustomSettings,
+        personalIdentificationKeys,
         durationMs: Date.now() - startTime
       });
-      return updatedUser.new;
+      return completeUser;
     } catch (error) {
       logger.error('UserProfileService.update_user_profile_failed', {
         userId,

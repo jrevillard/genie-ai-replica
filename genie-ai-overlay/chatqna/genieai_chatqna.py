@@ -1,7 +1,6 @@
 # Copyright (C) 2024 Intel Corporation
 # Copyright (C) 2025 International Telecommunication Union (ITU)
-# SPDX-License-Identifier: Apache-2.0
-# Developed by Intel. Adapted by ITU
+# SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
 import argparse
 import httpx
 import json
@@ -10,6 +9,7 @@ import re
 import aiohttp # for async http requests
 import requests
 import asyncio
+import copy
 
 from comps import MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType, CustomLogger
 from comps.cores.mega.utils import handle_message
@@ -28,7 +28,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.prompts import PromptTemplate
 
 from langdetect import detect
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from transformers import AutoTokenizer
 
 
@@ -72,6 +72,8 @@ MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max cha
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
+SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
+
 
 ##################################################################################################################################
 # HELPER CLASSES
@@ -116,6 +118,32 @@ class GenieUserProfileClient:
         
         # Log initialization
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
+
+    # def _sanitize_data(self, data):
+    #     if isinstance(data, dict):
+    #         try:
+    #             keys_to_remove = [k for k in data.keys() if k in SENSITIVE_KEYS]
+    #         except:
+    #             logger.info(f"Attention: SENSITIVE_KEYS parameter is not defined. Proceeding with default information masking instructions")
+    #             sensitive_keys = [
+    #                 "email", "phone", "address", "ip_address", "full_name", 
+    #                 "ssn", "ssb", "dob", "credit_card", "password", "encPassword", 
+    #                 "salt", "location", "accessToken", "refreshToken", "_rev", "_key"
+    #                 ]
+    #             keys_to_remove = [k for k in data.keys() if k in sensitive_keys]
+
+    #         for k in keys_to_remove:
+    #             del data[k]
+
+    #         for v in data.values():
+    #             self._sanitize_data(v)
+
+    #     elif isinstance(data, list):
+    #         for item in data:
+    #             self._sanitize_data(item)
+            
+    #     return data
+
 
     async def _get_auth_token(self):
         """
@@ -181,24 +209,40 @@ class GenieUserProfileClient:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers) as response:
+
+                    if response.status == 401:
+                        logger.warning("Cached token rejected (401). Fetching fresh token and retrying...")
+                        self._cached_token = None
+                        token = await self._get_auth_token()
+
+                        if not token:
+                            return None
+                        
+                        headers["Authorization"] = f"Bearer {token}"
+
+                        async with session.get(url, headers=headers) as retry_response:
+                            response = retry_response
+
                     if response.status == 200:
                         profile_data = await response.json()
+                        logger.info(f"Successfully retrieved profile for user {user_id}")
                         
                         # Optional: Mask sensitive fields before returning to LLM context
                         if 'password' in profile_data: del profile_data['password']
                         if 'salt' in profile_data: del profile_data['salt']
                         
-                        logger.info(f"Successfully retrieved profile for user {user_id}")
                         return profile_data
                     
                     elif response.status == 404:
                         logger.warning(f"User profile not found for ID {user_id}")
                         return None
-                    elif response.status == 401:
-                        logger.error(f"Authentication failed for user profile fetch. Token might be invalid.")
-                        # Invalidate cache so next retry fetches a fresh token
-                        self._cached_token = None 
-                        return None
+
+                    # elif response.status == 401:
+                    #     logger.error(f"Authentication failed for user profile fetch. Token might be invalid.")
+                    #     # Invalidate cache so next retry fetches a fresh token
+                    #     self._cached_token = None 
+                    #     return None
+
                     else:
                         logger.error(f"Failed to fetch user profile. Status: {response.status}, Body: {await response.text()}")
                         return None
@@ -206,6 +250,141 @@ class GenieUserProfileClient:
         except Exception as e:
             logger.error(f"Error connecting to Backend Service for profile: {e}")
             return None
+
+
+
+
+class UserContextBuilder:
+
+    def _sanitize_data(self, data):
+        if isinstance(data, dict):
+            try:
+                keys_to_remove = [k for k in data.keys() if k in SENSITIVE_KEYS]
+            except Exception:
+                logger.info(
+                    "Attention: SENSITIVE_KEYS parameter is not defined. "
+                    "Proceeding with default information masking instructions"
+                )
+                sensitive_keys = [
+                    "email", "phoneNumber", "currentAddress", "ipAddress",
+                    "ssn", "ssb", "dob", "credit_card", "password", "encPassword",
+                    "salt", "location", "accessToken", "refreshToken", "_rev", "_key"
+                ]
+                keys_to_remove = [k for k in data.keys() if k in sensitive_keys]
+
+            for k in keys_to_remove:
+                del data[k]
+
+            for v in data.values():
+                self._sanitize_data(v)
+
+        elif isinstance(data, list):
+            for item in data:
+                self._sanitize_data(item)
+
+        return data
+
+
+    def _parse_dob(self, dob_str):
+        """
+        Supports:
+        - YYYY-MM-DD
+        - YYYY.MM.DD
+        """
+        if not isinstance(dob_str, str):
+            return None
+
+        dob_str = dob_str.strip()
+
+        for fmt in ("%Y-%m-%d", "%Y.%m.%d"):
+            try:
+                return datetime.strptime(dob_str, fmt).date()
+            except ValueError:
+                continue
+
+        return None
+
+
+    def _calculate_age(self, birth_date):
+        if not birth_date:
+            return "N/A"
+
+        today = date.today()
+        return (
+            today.year
+            - birth_date.year
+            - ((today.month, today.day) < (birth_date.month, birth_date.day))
+        )
+
+
+    def _extract_primitive_fields(self, data, result=None):
+        """
+        Recursively extract primitive key/value pairs.
+        If dict → recurse inside
+        If list → extract primitives or recurse into dict items
+        """
+        accepted_value_types = (str, int, float, bool)
+
+        if result is None:
+            result = {}
+
+        if isinstance(data, dict):
+            for k, v in data.items():
+
+                if isinstance(v, accepted_value_types):
+                    result[k] = v
+
+                elif isinstance(v, dict):
+                    self._extract_primitive_fields(v, result)
+
+                elif isinstance(v, list):
+                    # If list of primitives → join into string
+                    if all(isinstance(i, accepted_value_types) for i in v):
+                        result[k] = ", ".join(map(str, v))
+                    else:
+                        for item in v:
+                            self._extract_primitive_fields(item, result)
+
+        elif isinstance(data, list):
+            for item in data:
+                self._extract_primitive_fields(item, result)
+
+        return result
+
+
+    def build_user_context_string(self, user_details):
+
+        user_context_string = ""
+
+        # Work on a copy (avoid mutating original payload)
+        sanitized = self._sanitize_data(copy.deepcopy(user_details))
+
+        # Extract primitives
+        flat_fields = self._extract_primitive_fields(sanitized)
+
+        # DoB > changed to age (less sensitive) 
+        age_value = None
+        dob_keys = [k for k in flat_fields.keys() if k.lower() == "dob"]
+
+        for dob_key in dob_keys:
+            dob_raw = flat_fields.pop(dob_key)
+            birth_date = self._parse_dob(dob_raw)
+            age_value = self._calculate_age(birth_date)
+
+        # Build output string
+        lines = []
+
+        for k, v in flat_fields.items():
+            lines.append(f"- {k}: {v}")
+
+        if age_value is not None:
+            lines.append(f"- Age: {age_value}")
+
+        if lines:
+            user_context_string = "\n".join(lines) + "\n        ---\n"
+
+        return user_context_string
+
 
 
 ##################################################################################################################################
@@ -286,21 +465,42 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         user_context_string = ""
 
         if user_details:
-            # Safely extract nested dictionary fields
-            p_ident = user_details.get("personalIdentification", {})
-            addr = user_details.get("addressResidency", {})
+            builder = UserContextBuilder()
+            user_context_string = builder.build_user_context_string(user_details)
+            logger.info(f"\n[ DEBUG ] user_context_string compiled {user_context_string}\n")
+
+            # p_ident = user_details.get("personalIdentification", {})
             
-            full_name = p_ident.get("fullName", "User")
-            dob = p_ident.get("dob", "N/A")
-            address = addr.get("currentAddress", "N/A")
-            
-            # Construct a clear instruction block for the System
-            user_context_string = (
-                f"- Name: {full_name}\n"
-                f"- Date of Birth: {dob}\n"
-                f"- Location/Address: {address}\n"
-                f"        ---\n"
-            )
+            # # Name
+            # full_name = p_ident.get("fullName", "User")
+
+            # # Age
+            # dob = p_ident.get("dob", "N/A")
+            # if dob == "N/A":
+            #     age = "N/A"
+            # else:
+            #     today = date.today()
+            #     birth_date = date.fromisoformat(dob)
+            #     age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+
+            # # Gender
+            # gender = p_ident.get("gender", "N/A")
+
+            # # Naitonality:
+            # nationality = p_ident.get("nationality", "N/A")
+
+            # # E-mail verified:
+            # email_verified = str(user_details.get("emailVerified", "N/A"))
+
+            # # Construct a clear instruction block for the System
+            # user_context_string = (
+            #     f"- Name: {full_name}\n"
+            #     f"- Age: {age}\n"
+            #     f"- Gender: {gender}\n"
+            #     f"- Nationality: {nationality}\n"
+            #     f"- Email verified: {email_verified}\n"
+            #     f"        ---\n"
+            # )
 
 
         ##################################
@@ -561,18 +761,18 @@ class ChatQnAService:
         return None
     
 
-    async def get_auth_token(self):
-        """Get admin auth token"""
-        response = requests.get(GET_AUTH_TOKEN_URL)
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get("accessToken")
-            if access_token:
-                return access_token
-            else:
-                logger.error("Failed to retrieve access token")
-        else:
-            logger.error(f"Failed to call /get-token. Status code: {response.status_code}")
+    # async def get_auth_token(self):
+    #     """Get admin auth token"""
+    #     response = requests.get(GET_AUTH_TOKEN_URL)
+    #     if response.status_code == 200:
+    #         data = response.json()
+    #         access_token = data.get("accessToken")
+    #         if access_token:
+    #             return access_token
+    #         else:
+    #             logger.error("Failed to retrieve access token")
+    #     else:
+    #         logger.error(f"Failed to call /get-token. Status code: {response.status_code}")
 
 
     async def fetch_file_metadata(self, file_id: str) -> dict:
@@ -588,7 +788,7 @@ class ChatQnAService:
         if not file_id:
             return {"categoryLabel": None, "serviceLabels": []}
 
-        auth_token = await self.get_auth_token()
+        auth_token = await self.user_profile_client._get_auth_token()
         if not auth_token:
             logger.error("Failed to get admin auth token.")
             return None
@@ -783,6 +983,56 @@ class ChatQnAService:
         self.megaservice.flow_to(retriever, rerank)
         self.megaservice.flow_to(rerank, llm)
 
+
+    def add_remote_service_genieai(self):
+        """
+        Builds the full RAG pipeline wrapped with input and output translation.
+        Flow: translator_in -> embedding -> retriever -> rerank -> llm -> translator_out
+        """
+
+        embedding = MicroService(
+            name="embedding",
+            host=EMBEDDING_SERVER_HOST_IP,
+            port=EMBEDDING_SERVER_PORT,
+            endpoint="/embed",
+            use_remote_service=True,
+            service_type=ServiceType.EMBEDDING,
+        )
+
+        retriever = MicroService(
+            name="retriever",
+            host=RETRIEVER_SERVICE_HOST_IP,
+            port=RETRIEVER_SERVICE_PORT,
+            endpoint="/v1/retrieval",
+            use_remote_service=True,
+            service_type=ServiceType.RETRIEVER,
+        )
+
+        rerank = MicroService(
+            name="rerank",
+            host=RERANK_SERVER_HOST_IP,
+            port=RERANK_SERVER_PORT,
+            endpoint="/rerank",
+            use_remote_service=True,
+            service_type=ServiceType.RERANK,
+        )
+
+        llm = MicroService(
+            name="llm",
+            host=LLM_SERVER_HOST_IP,
+            port=LLM_SERVER_PORT,
+            api_key=OPENAI_API_KEY,
+            endpoint="/v1/chat/completions",
+            use_remote_service=True,
+            service_type=ServiceType.LLM,
+        )
+
+        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
+        self.megaservice.flow_to(embedding, retriever)
+        self.megaservice.flow_to(retriever, rerank)
+        self.megaservice.flow_to(rerank, llm)
+
+
     async def _get_translated_history_string(self, history: list, target_language: str) -> str:
         """
         A helper that:
@@ -869,7 +1119,7 @@ class ChatQnAService:
         if user_id_header:
             try: 
                 user_details = await self.user_profile_client.get_user_profile(user_id_header)
-                logger.info(f"USER PROFILE RETRIEVED: {user_details}")
+                # logger.info(f"USER PROFILE RETRIEVED: {user_details}")
             except Exception as e:
                 logger.error(f"USER PROFILE ERROR: {e}")
 
@@ -1074,7 +1324,7 @@ class ChatQnAService:
         source_documents_file_ids = []
 
         if logflag:
-            logger.info(f"\nretrieved docs with scores: {retrieved_docs_with_scores}\n")
+            logger.info(f"\n\n[ DEBUG ] retrieved docs with scores: {retrieved_docs_with_scores}\n")
 
         for item in retrieved_docs_with_scores:
             doc_id_by_orchestrator = item.get("id", "N/A")
@@ -1176,6 +1426,7 @@ if __name__ == "__main__":
     # Added --with-translation to prevent crash on unknown argument if CHATQNA_DAVID is used
     parser.add_argument("--with-translation", action="store_true")
     parser.add_argument("--without-translation", action="store_true") 
+    parser.add_argument("--genieai", action="store_true")
     args = parser.parse_args()
 
     chatqna = ChatQnAService(port=MEGA_SERVICE_PORT)
@@ -1185,6 +1436,8 @@ if __name__ == "__main__":
         chatqna.add_remote_service_faqgen()
     elif args.without_translation: 
         chatqna.add_remote_service_without_translation()
+    elif args.genieai:
+        chatqna.add_remote_service_genieai()
     else:
         chatqna.add_remote_service()
 

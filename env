@@ -119,7 +119,9 @@ DATAPREP_SERVICE_PORT=5000
 
 # ========= CHATQNA BACKEND SERVICE ==========
 OPEA_EXAMPLES_URL=https://github.com/opea-project/GenAIExamples.git
-CHATQNA_TYPE=CHATQNA_MACDAVID
+CHATQNA_TYPE=GENIEAI
+# ---- Configs for masking potentially sensitive user data
+SENSITIVE_KEYS=email,phone,currentAddress,ip_address,ssn,ssb,dob,credit_card,password,encPassword,salt,location,accessToken,refreshToken,_rev,_key
 MEGA_SERVICE_HOST_IP=chatqna-xeon-backend-server
 # ---- Embedding service
 EMBEDDING_SERVER_HOST_IP=tei

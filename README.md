@@ -1,20 +1,41 @@
 # GENIE.AI
+
+GENIE.AI was initiated under the Open Source Ecosystem Enabler OSEE programme as an exploratory capacity building instrument designed to help governments understand, experiment with and deploy open source generative AI in a sovereign and responsible manner. What started as a practical learning and experimentation environment progressively evolved into an off the shelf open source reference implementation dedicated to the public sector, facilitating the development of Digital Public Infrastructure and Digital Public Goods.
+GENIE.AI is fully compliant with the OSI Open Source AI Definition and aligned with the Digital Public Goods Standard. It is free, truly open source, transparently governed and designed to be reused, audited, adapted and deployed without licensing barriers, vendor lock in or hidden dependencies.
+The framework empowers public institutions to rapidly design, deploy and manage custom generative AI solutions such as chatbots, digital assistants and domain specific knowledge systems at low cost, with full technical control, institutional ownership and data sovereignty.
+
+### Core Characteristics
+
+GENIE.AI supports digitally inclusive, sovereign and responsible AI development. It is designed to strengthen local capacity, protect public values, ensure transparency in system design, and promote equitable access to AI capabilities across countries, particularly in low and middle income contexts.
+
+Fully open source and interoperable technology stack aligned with GovStack Digital Public Infrastructure principles, enabling seamless integration within national digital ecosystems.
+Modular and adaptable architecture featuring a customizable user interface, hybrid Retrieval Augmented Generation pipelines and support for agentic workflows and tool calling capabilities.
+Containerized deployment optimized for Kubernetes environments, ensuring scalability, resilience, portability and maintainability across diverse public sector infrastructures.
+
+Developed through a multi stakeholder working group on open source AI for digital public services, ensuring alignment with public interest objectives, transparency requirements and real government needs.
+
+Leverages state of the art open source components for production grade RAG systems, including:
+
+
+
+
+
 This repository contains code and resources of the GENIE.AI framework - a purpose-built platform designed to empower public institutions to rapidly design, deploy, and manage custom Generative AI solutions—such as chatbots, digital assistants, and content generation tools—at low cost, with full control, and without external dependency.
 
 - ​​Fully open-source and interoperable technology stack, aligned with [GovStack](https://specs.govstack.global) digital public infrastructure standards, enabling seamless integration with the broader ecosystem of digital public services.
-
 - Modular and adaptable architecture, featuring a customizable UI, hybrid Retrieval-Augmented Generation (RAG) pipeline, and support for agentic and tool-calling capabilities.
-
 - Dockerized deployment optimized for Kubernetes, ensuring scalability, reliability, and ease of maintenance.
-
 - Developed based on input from a multi-stakeholder working group on open-source AI for digital public services.
-
 - Leverages and integrates latest state-of-the-art open-source tools and libraries for production-grade RAG: 
    - [Docling](https://github.com/docling-project/docling); 
    - [Open Platform for Enterprise AI (OPEA)](https://opea.dev); 
    - [vLLM](https://github.com/vllm-project/vllm)
 
-   among other.​
+   among other community driven libraries.​
+
+### International dialogue and governance space
+
+GENIE.AI is discussed and refined within the AI for Good track on open source generative AI for Digital Public Goods, which serves as a global forum for governments, international organizations, technical experts and civil society to exchange on standards, governance models and implementation strategies. This track provides the policy and technical dialogue space where GENIE.AI reference implementations, compliance with OSI AI Definition and alignment with DPG criteria are openly debated and strengthened.
 
 ### Objective: 
 Empower governments and institutions with a free, open-source, modular stack of software and tools to create tailored, scalable, and context-specific GenAI and RAG applications and conduct reference implementations of solutions addressing selected public sector use cases. 

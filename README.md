@@ -6,7 +6,7 @@
 
 The framework empowers public institutions to rapidly design, deploy and manage custom generative AI solutions such as chatbots, digital assistants and domain specific knowledge systems at low cost, with full technical control, institutional ownership and data sovereignty.
 
-### Core Characteristics
+### Core Characteristics:
 
 [GENIE.AI](https://genie-ai.itu.int/) supports digitally inclusive, sovereign and responsible AI development. It is designed to strengthen local capacity, protect public values, ensure transparency in system design, and promote equitable access to AI capabilities across countries, particularly in low and middle income contexts.
 
@@ -27,7 +27,7 @@ Developed through a [multi stakeholder working group](https://osaips.atlassian.n
 
    among other community driven libraries.​
 
-### International dialogue and governance space
+### International dialogue and governance space:
 
 [GENIE.AI](https://genie-ai.itu.int/) is discussed and refined within the AI for Good track on open source generative AI for Digital Public Goods, which serves as a global forum for governments, international organizations, technical experts and civil society to exchange on standards, governance models and implementation strategies. This track provides the policy and technical dialogue space where GENIE.AI reference implementations, compliance with OSI AI Definition and alignment with DPG criteria are openly debated and strengthened.
 
@@ -72,7 +72,7 @@ Through this evolution from OSEE capacity building instrument to structured publ
 A non-exhaustive list of public sector use cases for GenAI and RAG has been collected by a [multi-stakeholder working group on Open-Source Generative AI for Public Services](https://osaips.atlassian.net/wiki/external/ZjA2MjBhMWM1NDQ4NDFhY2EzNTRiYjZjMWNjNjI3NjQ) and is accessible [here](https://osaips.atlassian.net/wiki/external/OTMzYWQ2MWJlYWRmNDk3ZjkwZWYyOWFiYzQzNzQwM2I). 
 
 
-## Project Structure
+## Project Structure:
 
 ```
 GENIE.AI/
@@ -97,7 +97,7 @@ GENIE.AI/
 └── docs/                         # Documentation
 ```
 
-## Quick Start
+## Quick Start:
 
 ### Prerequisites
 
@@ -134,7 +134,7 @@ docker-compose up -d
 - **Mobile App**: See [mobile/genie_ai_mobile/README.md](mobile/genie_ai_mobile/README.md)
 - **API Documentation**: http://localhost:8080/api-docs
 
-## Documentation
+## Documentation:
 
 ### Core Components
 
@@ -161,7 +161,7 @@ docker-compose up -d
 - **[Components Docker Setup](components/README.md)** - Docker Compose orchestration
 - **[Database Setup](components/arangodb/README.md)** - ArangoDB configuration and scripts
 
-## Architecture
+## Architecture:
 
 GENIE.AI is built on a microservices architecture with the following layers:
 
@@ -183,7 +183,7 @@ GENIE.AI is built on a microservices architecture with the following layers:
 | API Gateway | Kong, NGINX |
 | Containerization | Docker, Kubernetes |
 
-## Features
+## Features:
 
 - **Multilingual Support**: 11+ languages with automatic translation
 - **RAG Pipeline**: Hybrid vector-graph retrieval for context-aware responses
@@ -194,7 +194,7 @@ GENIE.AI is built on a microservices architecture with the following layers:
 - **Admin Dashboard**: System monitoring, user management, and security scanning
 - **Offline Capabilities**: Mobile app works without internet connection
 
-## Development
+## Development:
 
 ### Setting Up Development Environment
 
@@ -251,7 +251,7 @@ cd ../../mobile/genie_ai_mobile
 flutter test
 ```
 
-## Deployment
+## Deployment:
 
 ### Docker Deployment
 
@@ -275,15 +275,15 @@ kubectl get pods -n genie-ai
 
 See individual component READMEs for detailed deployment instructions.
 
-## Contributing
+## Contributing:
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## License
+## License:
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
-## Relevant Sites and Resources
+## Relevant Sites and Resources:
 
 - [ITU Initiative on Open Source AI for Public Services](https://www.itu.int/en/ITU-D/ICT-Applications/Pages/Initiatives/ITU_OSPO/Open-Source_AI_for_Public_Services/About_the_Initiative.aspx)
 - [Open Source AI for Public Services - Confluence documentation](https://osaips.atlassian.net/wiki/external/ZjA2MjBhMWM1NDQ4NDFhY2EzNTRiYjZjMWNjNjI3NjQ)

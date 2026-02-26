@@ -1,6 +1,6 @@
 # Third-Party Software and Components Disclosure
 
-This document provides a comprehensive list of all third-party software, components, and frameworks used in the GENIE.AI project. GENIE.AI contains and references intellectual property owned by third parties ("Third Party IP"). Acceptance of these License Terms does not grant any rights to Third Party IP. Users must comply with all applicable license terms for each third-party component.
+This document provides a non-exhaustive list of third-party artefacts (software, components, and frameworks) used in the GENIE.AI project. GENIE.AI contains and references intellectual property owned by third parties ("Third Party IP"). Acceptance of these License Terms does not grant any rights to Third Party IP. Users must comply with all applicable license terms for each third-party component.
 
 **Important Notice:** Use of third-party components may require separate licensing. ITU grants no rights over third-party IP. Users are responsible for ensuring compliance with all third-party licenses.
 

@@ -14,7 +14,7 @@ export const localeNames = {
     th: 'Thai',
     zh: 'Chinese'
   };
-  
+
   // An array of objects for iterating and creating UI elements (used by AdminDashboard.vue)
   export const availableLanguages = [
     { code: 'ar', name: 'Arabic' },

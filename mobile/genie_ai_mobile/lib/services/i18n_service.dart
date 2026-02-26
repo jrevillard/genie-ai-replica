@@ -48,7 +48,7 @@ class I18nService extends ChangeNotifier {
     'en': enLocale,
     'ar': arLocale,
     'de': deLocale,
-    'es': esLocale, 
+    'es': esLocale,
     'fr': frLocale,
     'id': idLocale,
     'pt': ptLocale,

@@ -33,17 +33,65 @@ class TranslationService {
     // Map application language codes to the NLLB model's specific codes.
     // Full list: https://huggingface.co/facebook/nllb-200-distilled-600M
     this.langCodeMap = {
-        en: 'eng_Latn',
-        ar: 'arb_Arab', // Corrected
-        th: 'tha_Thai',
-        zh: 'zho_Hans',
-        de: 'deu_Latn',
-        fr: 'fra_Latn',
-        id: 'ind_Latn',
-        es: 'spa_Latn',
-        ru: 'rus_Cyrl',
-        pt: 'por_Latn',
-        sw: 'swh_Latn', // Kiswahili
+        // Already supported languages
+        en: 'eng_Latn',     // English
+        ar: 'arb_Arab',     // Arabic (Modern Standard)
+        th: 'tha_Thai',     // Thai
+        zh: 'zho_Hans',     // Chinese (Simplified)
+        de: 'deu_Latn',     // German
+        fr: 'fra_Latn',     // French
+        id: 'ind_Latn',     // Indonesian
+        es: 'spa_Latn',     // Spanish
+        ru: 'rus_Cyrl',     // Russian
+        pt: 'por_Latn',     // Portuguese
+        sw: 'swh_Latn',     // Kiswahili
+
+        // Newly added languages
+        am: 'amh_Ethi',     // Amharic
+        az: 'azj_Latn',     // Azerbaijani (North/Latin)
+        bn: 'ben_Beng',     // Bengali
+        fa: 'pes_Arab',     // Persian (Farsi)
+        ff: 'fuv_Latn',     // Fulah (Fulfulde)
+        ha: 'hau_Latn',     // Hausa
+        jv: 'jav_Latn',     // Javanese
+        kk: 'kaz_Cyrl',     // Kazakh
+        ku: 'kmr_Latn',     // Kurdish (Kurmanji/Latin)
+        ml: 'mal_Mlym',     // Malayalam
+        ms: 'zsm_Latn',     // Malay (uses zsm code)
+        om: 'gaz_Latn',     // Oromo (West Central)
+        pa: 'pan_Guru',     // Punjabi (Gurmukhi script)
+        ps: 'pbt_Arab',     // Pashto
+        sd: 'snd_Arab',     // Sindhi
+        skr: 'skr_Arab',    // Saraiki
+        so: 'som_Latn',     // Somali
+        su: 'sun_Latn',     // Sundanese
+        tr: 'tur_Latn',     // Turkish
+        ug: 'uig_Arab',     // Uyghur
+        ur: 'urd_Arab',     // Urdu
+        uz: 'uzn_Latn',     // Uzbek (Northern/Latin)
+        yo: 'yor_Latn',     // Yoruba
+    };
+
+    // Fallback chains for unsupported or error scenarios
+    // Maps language code to its closest alternative for graceful degradation
+    this.fallbackLangMap = {
+        // West African languages fallback to Swahili (regional lingua franca)
+        ff: 'sw', ha: 'sw', yo: 'sw',
+        // South Asian fallbacks
+        skr: 'ur', sd: 'ur', pa: 'ur',
+        // Central Asian fallbacks
+        kk: 'tr', uz: 'tr', ug: 'tr',
+        // Southeast Asian fallbacks
+        ms: 'id', su: 'id', jv: 'id',
+        // Middle Eastern fallbacks
+        ps: 'fa', ku: 'fa',
+        // Horn of Africa fallbacks
+        om: 'sw', so: 'sw',
+        // Other fallbacks
+        am: 'en',  // Amharic to English
+        az: 'tr',  // Azerbaijani to Turkish
+        bn: 'en',  // Bengali to English
+        ml: 'en',  // Malayalam to English
     };
     logger.info('TranslationService constructor called');
     logger.info(`[TRANSLATION-CONFIG] Using ${intraOpNumThreads} threads per job.`);
@@ -169,6 +217,13 @@ class TranslationService {
 
     const targetLangCode = this.langCodeMap[targetLang];
     if (!targetLangCode) {
+      // Check for fallback language
+      const fallbackLang = this.fallbackLangMap[targetLang];
+      if (fallbackLang && this.langCodeMap[fallbackLang]) {
+        logger.warn(`[TRANSLATION-SERVICE] Target language ${targetLang} not directly supported, using fallback ${fallbackLang}`);
+        // Recursively call translate with fallback language
+        return this.translate(texts, sourceLang, fallbackLang);
+      }
       logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code provided: ${targetLang}`);
       throw new Error(`Unsupported target language: ${targetLang}`);
     }

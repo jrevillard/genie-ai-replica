@@ -39,6 +39,11 @@ JWT_SECRET=UJeFROw+yRJeVOPiUTgdcXzlE2eukTfATZPxBfPkptQLZs+ER+iuSA1BIXiJtw1sS181k
 JWT_EXPIRES_IN=24h
 OPENWEATHERMAP_API_KEY=b115ccced35ade4c9a1077b6e5a210dd
 NODE_ENV=production
+# Translation Service Configuration
+# Backend selection: cpu (CPU-based NLLB), gpu (vLLM GPU), or auto (try GPU, fallback to CPU)
+TRANSLATION_BACKEND=cpu
+# CPU model ID (only used when TRANSLATION_BACKEND=cpu or auto)
+TRANSLATION_CPU_MODEL_ID=Xenova/nllb-200-distilled-600M
 TRANSLATION_THREADS=4
 TRANSLATION_BATCHES=5
 TRANSLATION_CACHE=on

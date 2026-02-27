@@ -1,7 +1,10 @@
 const { logger } = require('../shared-lib');
-const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const crypto = require('crypto'); // For generating cache key
 const Redis = require('ioredis');  // For Redis cache
+
+// Import backend modules
+const CpuTranslateBackend = require('./translation/cpu-translate-backend');
+const GpuTranslateBackend = require('./translation/gpu-translate-backend');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -10,6 +13,7 @@ const DEFAULT_BATCHES = 5;
 const intraOpNumThreads = parseInt(process.env.TRANSLATION_THREADS, 10) || DEFAULT_THREADS;
 const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFAULT_BATCHES;
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
+const translationBackend = process.env.TRANSLATION_BACKEND || 'cpu'; // Default to CPU for backward compatibility
 
 // --- Get Redis cache settings from env ---
 const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
@@ -18,89 +22,28 @@ const redisPassword = process.env.TRANSLATION_CACHE_PASSWORD || null;
 
 /**
  * @class TranslationService
- * @description A singleton service for on-the-fly text translation using a self-hosted AI model.
+ * @description A proxy service for on-the-fly text translation using pluggable backends (CPU or GPU).
+ * Backends are configurable via .env file. Defaults to CPU backend with NLLB-200.
  */
 class TranslationService {
   constructor() {
-    this.translator = null;
+    this.backend = null;
+    this.backendType = null;
     this.unified = null;
     this.remarkParse = null;
     this.remarkStringify = null;
     this.visit = null;
     this.initialized = false;
     this.cacheClient = null; // For Redis client
-    
-    // Map application language codes to the NLLB model's specific codes.
-    // Full list: https://huggingface.co/facebook/nllb-200-distilled-600M
-    this.langCodeMap = {
-        // Already supported languages
-        en: 'eng_Latn',     // English
-        ar: 'arb_Arab',     // Arabic (Modern Standard)
-        th: 'tha_Thai',     // Thai
-        zh: 'zho_Hans',     // Chinese (Simplified)
-        de: 'deu_Latn',     // German
-        fr: 'fra_Latn',     // French
-        id: 'ind_Latn',     // Indonesian
-        es: 'spa_Latn',     // Spanish
-        ru: 'rus_Cyrl',     // Russian
-        pt: 'por_Latn',     // Portuguese
-        sw: 'swh_Latn',     // Kiswahili
 
-        // Newly added languages
-        am: 'amh_Ethi',     // Amharic
-        az: 'azj_Latn',     // Azerbaijani (North/Latin)
-        bn: 'ben_Beng',     // Bengali
-        fa: 'pes_Arab',     // Persian (Farsi)
-        ff: 'fuv_Latn',     // Fulah (Fulfulde)
-        ha: 'hau_Latn',     // Hausa
-        jv: 'jav_Latn',     // Javanese
-        kk: 'kaz_Cyrl',     // Kazakh
-        ku: 'kmr_Latn',     // Kurdish (Kurmanji/Latin)
-        ml: 'mal_Mlym',     // Malayalam
-        ms: 'zsm_Latn',     // Malay (uses zsm code)
-        om: 'gaz_Latn',     // Oromo (West Central)
-        pa: 'pan_Guru',     // Punjabi (Gurmukhi script)
-        ps: 'pbt_Arab',     // Pashto
-        sd: 'snd_Arab',     // Sindhi
-        skr: 'skr_Arab',    // Saraiki
-        so: 'som_Latn',     // Somali
-        su: 'sun_Latn',     // Sundanese
-        tr: 'tur_Latn',     // Turkish
-        ug: 'uig_Arab',     // Uyghur
-        ur: 'urd_Arab',     // Urdu
-        uz: 'uzn_Latn',     // Uzbek (Northern/Latin)
-        yo: 'yor_Latn',     // Yoruba
-    };
-
-    // Fallback chains for unsupported or error scenarios
-    // Maps language code to its closest alternative for graceful degradation
-    this.fallbackLangMap = {
-        // West African languages fallback to Swahili (regional lingua franca)
-        ff: 'sw', ha: 'sw', yo: 'sw',
-        // South Asian fallbacks
-        skr: 'ur', sd: 'ur', pa: 'ur',
-        // Central Asian fallbacks
-        kk: 'tr', uz: 'tr', ug: 'tr',
-        // Southeast Asian fallbacks
-        ms: 'id', su: 'id', jv: 'id',
-        // Middle Eastern fallbacks
-        ps: 'fa', ku: 'fa',
-        // Horn of Africa fallbacks
-        om: 'sw', so: 'sw',
-        // Other fallbacks
-        am: 'en',  // Amharic to English
-        az: 'tr',  // Azerbaijani to Turkish
-        bn: 'en',  // Bengali to English
-        ml: 'en',  // Malayalam to English
-    };
-    logger.info('TranslationService constructor called');
-    logger.info(`[TRANSLATION-CONFIG] Using ${intraOpNumThreads} threads per job.`);
-    logger.info(`[TRANSLATION-CONFIG] Using ${numParallelBatches} parallel batches.`);
+    logger.info('[TRANSLATION-SERVICE] Constructor called');
+    logger.info(`[TRANSLATION-CONFIG] Backend: ${translationBackend}`);
+    logger.info(`[TRANSLATION-CONFIG] Threads: ${intraOpNumThreads}, Batches: ${numParallelBatches}`);
     logger.info(`[TRANSLATION-CONFIG] Cache enabled: ${cacheEnabled}`);
 
     if (cacheEnabled) {
       logger.info(`[TRANSLATION-CONFIG] Cache connecting to Redis at ${redisHost}:${redisPort}`);
-      
+
       // Initialize Redis Client
       this.cacheClient = new Redis({
         host: redisHost,
@@ -113,7 +56,7 @@ class TranslationService {
         },
         maxRetriesPerRequest: 3,
         // Prevent hanging if Redis is down on startup
-        enableOfflineQueue: false, 
+        enableOfflineQueue: false,
       });
 
       this.cacheClient.on('error', (err) => {
@@ -126,64 +69,103 @@ class TranslationService {
   }
 
   /**
+   * @method selectBackend
+   * @description Selects and initializes the appropriate translation backend based on configuration.
+   * @returns {Promise<CpuTranslateBackend|GpuTranslateBackend>} The selected backend
+   */
+  async selectBackend() {
+    // If backend already selected, return it
+    if (this.backend) {
+      return this.backend;
+    }
+
+    logger.info(`[TRANSLATION-SERVICE] Selecting backend: ${translationBackend}`);
+
+    try {
+      if (translationBackend === 'gpu') {
+        // Force GPU backend
+        this.backend = new GpuTranslateBackend();
+        await this.backend.init();
+        this.backendType = 'gpu';
+        logger.info('[TRANSLATION-SERVICE] GPU backend selected and initialized');
+        return this.backend;
+      }
+
+      if (translationBackend === 'cpu') {
+        // Force CPU backend
+        this.backend = new CpuTranslateBackend();
+        await this.backend.init();
+        this.backendType = 'cpu';
+        logger.info('[TRANSLATION-SERVICE] CPU backend selected and initialized');
+        return this.backend;
+      }
+
+      if (translationBackend === 'auto') {
+        // Try GPU first, fallback to CPU
+        try {
+          logger.info('[TRANSLATION-SERVICE] Auto mode: Trying GPU backend first');
+          this.backend = new GpuTranslateBackend();
+          await this.backend.init();
+          this.backendType = 'gpu';
+          logger.info('[TRANSLATION-SERVICE] Auto mode: GPU backend successful');
+          return this.backend;
+        } catch (gpuError) {
+          logger.warn(`[TRANSLATION-SERVICE] Auto mode: GPU backend failed (${gpuError.message}), falling back to CPU`);
+          this.backend = new CpuTranslateBackend();
+          await this.backend.init();
+          this.backendType = 'cpu';
+          logger.info('[TRANSLATION-SERVICE] Auto mode: CPU backend initialized as fallback');
+          return this.backend;
+        }
+      }
+
+      throw new Error(`Invalid TRANSLATION_BACKEND value: ${translationBackend}. Must be 'cpu', 'gpu', or 'auto'`);
+
+    } catch (error) {
+      logger.error(`[TRANSLATION-SERVICE] Backend selection failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * @method init
-   * @description Initializes the service by loading the translation model.
+   * @description Initializes the service by selecting and initializing the translation backend.
    * This is a long-running, one-time operation on first startup.
    */
   async init() {
     if (this.initialized) {
-      logger.debug('TranslationService already initialized, skipping');
+      logger.debug('[TRANSLATION-SERVICE] Already initialized, skipping');
       return;
     }
-    try {
-      logger.info('Starting TranslationService initialization: Loading AI model...');
-      
-      // Import ONNX runtime first
-      const ort = await import('onnxruntime-web');
-      ort.env.logLevel = 'fatal';
-      ort.env.debug = false; 
-      logger.debug('Set ONNX global log level to fatal');
-      
-      // Dynamically import the ESM-only transformers.js library
-      const { pipeline } = await import('@xenova/transformers');
-      logger.debug('Loaded transformers.js pipeline');
 
-      // Load the quantized translation pipeline for faster performance
-      this.translator = await pipeline('translation', 'Xenova/nllb-200-distilled-600M', {
-        quantized: true,  // Use quantized model for speed and lower memory
-        session_options: {
-          executionMode: 'parallel',
-          intraOpNumThreads: intraOpNumThreads,
-          interOpNumThreads: 1,
-          graphOptimizationLevel: 'all',
-          // FIX #1: Suppress ONNX warnings directly in the session
-          // 0:VERBOSE, 1:INFO, 2:WARNING, 3:ERROR, 4:FATAL
-          logSeverityLevel: 4,
-        }
-      });
-      logger.debug(`Loaded quantized translation pipeline with ${intraOpNumThreads} threads.`);
+    try {
+      logger.info('[TRANSLATION-SERVICE] Starting initialization: Selecting backend...');
+
+      // Select and initialize backend
+      await this.selectBackend();
 
       // Load markdown processing libraries
       const { unified } = await import('unified');
       this.unified = unified;
-      logger.debug('Loaded unified');
+      logger.debug('[TRANSLATION-SERVICE] Loaded unified');
 
       const remarkParseModule = await import('remark-parse');
       this.remarkParse = remarkParseModule.default;
-      logger.debug('Loaded remark-parse');
+      logger.debug('[TRANSLATION-SERVICE] Loaded remark-parse');
 
       const remarkStringifyModule = await import('remark-stringify');
       this.remarkStringify = remarkStringifyModule.default;
-      logger.debug('Loaded remark-stringify');
+      logger.debug('[TRANSLATION-SERVICE] Loaded remark-stringify');
 
       const { visit } = await import('unist-util-visit');
       this.visit = visit;
-      logger.debug('Loaded unist-util-visit');
-      
+      logger.debug('[TRANSLATION-SERVICE] Loaded unist-util-visit');
+
       this.initialized = true;
-      logger.info('TranslationService initialized successfully. Quantized model is ready.');
+      logger.info('[TRANSLATION-SERVICE] Initialized successfully. Backend is ready.');
+
     } catch (error) {
-      logger.error(`Error initializing TranslationService: ${error.message}`, { stack: error.stack });
+      logger.error(`[TRANSLATION-SERVICE] Initialization failed: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -197,9 +179,9 @@ class TranslationService {
    * @returns {Promise<string[]>} A promise that resolves to an array of translated text strings.
    */
   async translate(texts, sourceLang, targetLang) {
-    if (!this.initialized || !this.translator) {
-      logger.error('TranslationService not initialized. Cannot perform translation.');
-      throw new Error('TranslationService is not ready.');
+    if (!this.initialized || !this.backend) {
+      logger.error('[TRANSLATION-SERVICE] Not initialized. Cannot perform translation.');
+      throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
     }
 
     if (!texts || texts.length === 0) {
@@ -207,49 +189,62 @@ class TranslationService {
       return [];
     }
 
-    logger.info(`[TRANSLATION-SERVICE] Starting translation for ${texts.length} texts from ${sourceLang} to ${targetLang}`);
+    logger.info(`[TRANSLATION-SERVICE] Translating ${texts.length} texts from ${sourceLang} to ${targetLang}`);
 
-    const sourceLangCode = this.langCodeMap[sourceLang];
+    // Get backend language code mappings
+    const sourceLangCode = this.backend.getLanguageCode(sourceLang);
     if (!sourceLangCode) {
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported source language code provided: ${sourceLang}`);
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported source language code: ${sourceLang}`);
       throw new Error(`Unsupported source language: ${sourceLang}`);
     }
 
-    const targetLangCode = this.langCodeMap[targetLang];
-    if (!targetLangCode) {
+    // Check if target language is supported
+    if (!this.backend.isLanguageSupported(targetLang)) {
       // Check for fallback language
-      const fallbackLang = this.fallbackLangMap[targetLang];
-      if (fallbackLang && this.langCodeMap[fallbackLang]) {
+      const fallbackLang = this.backend.getFallbackLanguage(targetLang);
+      if (fallbackLang) {
         logger.warn(`[TRANSLATION-SERVICE] Target language ${targetLang} not directly supported, using fallback ${fallbackLang}`);
         // Recursively call translate with fallback language
         return this.translate(texts, sourceLang, fallbackLang);
       }
-      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code provided: ${targetLang}`);
+      logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code: ${targetLang}`);
       throw new Error(`Unsupported target language: ${targetLang}`);
     }
 
-    try {
-      logger.debug('[TRANSLATION-SERVICE] Starting model inference');
-      const startTime = Date.now();
-      const translations = await this.translator(texts, {
-        src_lang: sourceLangCode, // Use the provided source language
-        tgt_lang: targetLangCode,
-      });
-      
-      const duration = Date.now() - startTime;
-      logger.info(`[TRANSLATION-SERVICE] Translation completed in ${duration}ms.`);
+    const targetLangCode = this.backend.getLanguageCode(targetLang);
 
-      const translatedTexts = translations.map(item => item.translation_text);
-      logger.debug(`[TRANSLATION-SERVICE] Extracted ${translatedTexts.length} translated texts`);
+    try {
+      // Delegate to backend
+      const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
       return translatedTexts;
 
     } catch (error) {
-      logger.error(`[TRANSLATION-SERVICE] AI model failed to translate: ${error.message}`, { 
+      // If backend is GPU and in auto mode, try falling back to CPU
+      if (this.backendType === 'gpu' && translationBackend === 'auto') {
+        logger.warn(`[TRANSLATION-SERVICE] GPU backend failed, falling back to CPU: ${error.message}`);
+        try {
+          this.backend = new CpuTranslateBackend();
+          await this.backend.init();
+          this.backendType = 'cpu';
+          logger.info('[TRANSLATION-SERVICE] CPU backend initialized as fallback');
+
+          // Retry translation with CPU backend
+          const sourceCode = this.backend.getLanguageCode(sourceLang);
+          const targetCode = this.backend.getLanguageCode(targetLang);
+          return await this.backend.translate(texts, sourceCode, targetCode);
+        } catch (cpuError) {
+          logger.error(`[TRANSLATION-SERVICE] CPU fallback also failed: ${cpuError.message}`);
+          throw new Error(`Translation failed on both GPU and CPU backends`);
+        }
+      }
+
+      logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
         stack: error.stack,
         sourceLang: sourceLang,
-        targetLang: targetLang 
+        targetLang: targetLang,
+        backend: this.backendType
       });
-      throw new Error('Failed to perform translation.');
+      throw error;
     }
   }
 
@@ -367,6 +362,34 @@ class TranslationService {
     // --- REDIS CACHE LOGIC (END) ---
 
     return translatedMarkdown;
+  }
+
+  /**
+   * @method getSupportedLanguages
+   * @description Get the list of supported languages for the current backend.
+   * @returns {Object} Map of language codes to model-specific codes.
+   */
+  getSupportedLanguages() {
+    if (!this.backend) {
+      logger.warn('[TRANSLATION-SERVICE] Backend not initialized, returning empty language map');
+      return {};
+    }
+    return this.backend.getSupportedLanguages();
+  }
+
+  /**
+   * @method getBackendInfo
+   * @description Get information about the current backend.
+   * @returns {Object} Backend information.
+   */
+  getBackendInfo() {
+    if (!this.backend) {
+      return {
+        type: 'none',
+        initialized: false,
+      };
+    }
+    return this.backend.getBackendInfo();
   }
 }
 

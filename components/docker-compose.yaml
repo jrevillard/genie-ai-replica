@@ -63,6 +63,19 @@ services:
       - ./gov-chat-backend/Uploads:/app/Uploads
     environment:
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
+      # Translation Service Configuration
+      - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-cpu}
+      - TRANSLATION_CPU_MODEL_ID=${TRANSLATION_CPU_MODEL_ID:-Xenova/nllb-200-distilled-600M}
+      - TRANSLATION_THREADS=${TRANSLATION_THREADS:-4}
+      - TRANSLATION_BATCHES=${TRANSLATION_BATCHES:-5}
+      - TRANSLATION_CACHE=${TRANSLATION_CACHE:-on}
+      - TRANSLATION_CACHE_HOST=${TRANSLATION_CACHE_HOST:-redis-cache}
+      - TRANSLATION_CACHE_PORT=${TRANSLATION_CACHE_PORT:-6379}
+      - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD:-!@#$$5678}
+      # GPU Translation Configuration (vLLM)
+      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
+      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
+      - VLLM_TRANSLATION_SERVICE_PORT=${VLLM_TRANSLATION_SERVICE_PORT:-9031}
     env_file:
       - ./gov-chat-backend/.env
     depends_on:

@@ -61,9 +61,10 @@ async function initWorker() {
 /**
  * Handle translation request
  */
-async function handleTranslate(texts, sourceCode, targetCode) {
+async function handleTranslate(messageId, texts, sourceCode, targetCode) {
   if (!workerInitialized || !translator) {
     return {
+      messageId: messageId,
       success: false,
       error: 'Worker not initialized'
     };
@@ -83,6 +84,7 @@ async function handleTranslate(texts, sourceCode, targetCode) {
     const translatedTexts = translations.map(item => item.translation_text);
 
     return {
+      messageId: messageId,
       success: true,
       translations: translatedTexts,
       duration: duration
@@ -94,6 +96,7 @@ async function handleTranslate(texts, sourceCode, targetCode) {
     });
 
     return {
+      messageId: messageId,
       success: false,
       error: error.message
     };
@@ -115,7 +118,7 @@ parentPort.on('message', async (message) => {
         break;
 
       case 'translate':
-        result = await handleTranslate(data.texts, data.sourceCode, data.targetCode);
+        result = await handleTranslate(data.messageId, data.texts, data.sourceCode, data.targetCode);
         break;
 
       case 'terminate':
@@ -142,7 +145,8 @@ parentPort.on('message', async (message) => {
     parentPort.postMessage({
       type: type,
       success: false,
-      error: error.message
+      error: error.message,
+      data: { messageId: data?.messageId } // Include messageId for error responses
     });
   }
 });

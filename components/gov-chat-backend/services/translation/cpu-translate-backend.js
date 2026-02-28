@@ -103,15 +103,19 @@ class CpuTranslateBackend {
 
     if (type === 'translate') {
       // Resolve the pending promise for this translation
-      if (this.messageQueue.has(this.messageId)) {
-        const { resolve, reject } = this.messageQueue.get(this.messageId);
-        this.messageQueue.delete(this.messageId);
+      // Use the messageId from the response (echoed back by worker)
+      const responseMessageId = data?.messageId;
+      if (responseMessageId && this.messageQueue.has(responseMessageId)) {
+        const { resolve, reject } = this.messageQueue.get(responseMessageId);
+        this.messageQueue.delete(responseMessageId);
 
         if (success) {
           resolve(data.translations);
         } else {
           reject(new Error(error || 'Translation failed'));
         }
+      } else {
+        logger.error(`[CPU-BACKEND] Received translation response for unknown or stale messageId: ${responseMessageId}. Queue has: ${Array.from(this.messageQueue.keys()).join(', ')}`);
       }
       return;
     }
@@ -277,10 +281,11 @@ class CpuTranslateBackend {
         // Store the promise callbacks
         this.messageQueue.set(this.messageId, { resolve, reject });
 
-        // Send translation request to worker
+        // Send translation request to worker (include messageId for response matching)
         this.worker.postMessage({
           type: 'translate',
           data: {
+            messageId: this.messageId,
             texts,
             sourceCode,
             targetCode

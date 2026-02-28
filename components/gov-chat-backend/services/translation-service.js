@@ -35,6 +35,7 @@ class TranslationService {
     this.visit = null;
     this.initialized = false;
     this.cacheClient = null; // For Redis client
+    this.inFlightTranslations = new Map(); // Track in-progress translations: key = docHash:lang, value = Promise
 
     logger.info('[TRANSLATION-SERVICE] Constructor called');
     logger.info(`[TRANSLATION-CONFIG] Backend: ${translationBackend}`);
@@ -268,6 +269,8 @@ class TranslationService {
     const docName = crypto.createHash('md5').update(markdownContent).digest('hex');
     // Create the cache key in the format <prefix>:<name>:<locale>
     const cacheKey = `translation:${docName}:${targetLang}`;
+    // Key for in-flight tracking (combines doc hash and target language)
+    const inFlightKey = `${docName}:${targetLang}`;
 
     if (cacheEnabled && this.cacheClient) {
       try {
@@ -283,85 +286,137 @@ class TranslationService {
     }
     // --- REDIS CACHE LOGIC (END) ---
 
+    // --- IN-FLIGHT TRACKING: Check if translation is already in progress ---
+    if (this.inFlightTranslations.has(inFlightKey)) {
+      logger.info(`[TRANSLATION-SERVICE] In-flight translation HIT for ${inFlightKey}. Waiting for existing promise...`);
+      const existingPromise = this.inFlightTranslations.get(inFlightKey);
+      return await existingPromise;
+    }
+
+    // --- IN-FLIGHT TRACKING: Create new translation promise ---
     logger.info(`[TRANSLATION-SERVICE] Starting markdown translation from ${sourceLang} to ${targetLang}`);
-    const startTime = Date.now();
 
-    // Parse the markdown into an AST
-    const processor = this.unified().use(this.remarkParse);
-    const tree = processor.parse(markdownContent);
+    // Create the translation promise
+    const translationPromise = (async () => {
+      const startTime = Date.now();
 
-    // Collect all text nodes
-    const textNodes = [];
-    this.visit(tree, 'text', (node) => {
-      textNodes.push(node);
-    });
-
-    const texts = textNodes.map(node => node.value);
-    logger.info(`[TRANSLATION-SERVICE] Extracted ${texts.length} text nodes for translation`);
-
-    if (texts.length === 0) {
-        logger.warn('[TRANSLATION-SERVICE] No text nodes found to translate. Returning original content.');
-        return markdownContent;
-    }
-
-    // --- Controlled Concurrency Logic ---
-    const numBatches = numParallelBatches;
-    const batchSize = Math.ceil(texts.length / numBatches);
-    const batches = [];
-
-    logger.info(`[TRANSLATION-SERVICE] Splitting ${texts.length} texts into ${numBatches} parallel batches of size ~${batchSize}`);
-
-    for (let i = 0; i < texts.length; i += batchSize) {
-      batches.push(texts.slice(i, i + batchSize));
-    }
-
-    // Create an array of promises, one for each batch
-    const translationPromises = batches.map((batch, index) => {
-      logger.debug(`[TRANSLATION-SERVICE] Starting parallel batch ${index + 1}/${batches.length}`);
-      return this.translate(batch, sourceLang, targetLang);
-    });
-
-    // Run all batches concurrently
-    const translatedBatches = await Promise.all(translationPromises);
-
-    // Flatten the array of arrays back into a single array
-    const translatedTexts = translatedBatches.flat();
-
-    const duration = Date.now() - startTime;
-    logger.info(`[TRANSLATION-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`);
-
-    // Sanity check
-    if (translatedTexts.length !== textNodes.length) {
-        logger.error(`[TRANSLATION-SERVICE] Mismatch in text node count. Original: ${textNodes.length}, Translated: ${translatedTexts.length}. Aborting.`);
-        // This is the corrected syntax
-        throw new Error('Translation failed due to text count mismatch.');
-    }
-
-    // Replace original texts with translated ones
-    textNodes.forEach((node, index) => {
-      node.value = translatedTexts[index];
-    });
-
-    // Stringify back to markdown
-    const translatedMarkdown = this.unified()
-      .use(this.remarkStringify)
-      .stringify(tree);
-    
-    logger.info('[TRANSLATION-SERVICE] Markdown translation completed successfully');
-
-    // --- REDIS CACHE LOGIC (SET) ---
-    if (cacheEnabled && this.cacheClient) {
       try {
-        // This command now sets the key permanently, with no expiration.
-        await this.cacheClient.set(cacheKey, translatedMarkdown);
-        logger.info(`[TRANSLATION-CACHE] SET: Stored translation PERMANENTLY in Redis key ${cacheKey}`);
-      } catch (error) {
-        logger.error(`[TRANSLATION-CACHE] FAILED to write cache to Redis: ${error.message}`);
-      }
-    }
-    // --- REDIS CACHE LOGIC (END) ---
+        // Parse the markdown into an AST
+        logger.debug('[TRANSLATION-SERVICE] Parsing markdown into AST...');
+        const processor = this.unified().use(this.remarkParse);
+        const tree = processor.parse(markdownContent);
+        logger.debug('[TRANSLATION-SERVICE] Markdown parsed successfully');
 
-    return translatedMarkdown;
+        // Collect all text nodes
+        const textNodes = [];
+        this.visit(tree, 'text', (node) => {
+          textNodes.push(node);
+        });
+
+        const texts = textNodes.map(node => node.value);
+        logger.info(`[TRANSLATION-SERVICE] Extracted ${texts.length} text nodes for translation`);
+
+        if (texts.length === 0) {
+          logger.warn('[TRANSLATION-SERVICE] No text nodes found to translate. Returning original content.');
+          return markdownContent;
+        }
+
+        // --- Controlled Concurrency Logic ---
+        const numBatches = numParallelBatches;
+        const batchSize = Math.ceil(texts.length / numBatches);
+        const batches = [];
+
+        logger.info(`[TRANSLATION-SERVICE] Splitting ${texts.length} texts into ${numBatches} parallel batches of size ~${batchSize}`);
+
+        for (let i = 0; i < texts.length; i += batchSize) {
+          batches.push(texts.slice(i, i + batchSize));
+        }
+
+        // Create an array of promises, one for each batch
+        const translationPromises = batches.map((batch, index) => {
+          logger.debug(`[TRANSLATION-SERVICE] Starting parallel batch ${index + 1}/${batches.length}`);
+          return this.translate(batch, sourceLang, targetLang);
+        });
+
+        // Run all batches concurrently
+        logger.debug('[TRANSLATION-SERVICE] Waiting for all batches to complete...');
+        const translatedBatches = await Promise.all(translationPromises);
+
+        // Flatten the array of arrays back into a single array
+        const translatedTexts = translatedBatches.flat();
+
+        const duration = Date.now() - startTime;
+        logger.info(`[TRANSLATION-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`);
+
+        // Sanity check
+        if (translatedTexts.length !== textNodes.length) {
+          logger.error(`[TRANSLATION-SERVICE] Mismatch in text node count. Original: ${textNodes.length}, Translated: ${translatedTexts.length}. Aborting.`);
+          throw new Error('Translation failed due to text count mismatch.');
+        }
+
+        // Replace original texts with translated ones
+        logger.debug('[TRANSLATION-SERVICE] Replacing translated text in AST...');
+        textNodes.forEach((node, index) => {
+          node.value = translatedTexts[index];
+        });
+        logger.debug('[TRANSLATION-SERVICE] Text replacement completed');
+
+        // Stringify back to markdown
+        logger.debug('[TRANSLATION-SERVICE] Converting AST back to markdown...');
+        const translatedMarkdown = this.unified()
+          .use(this.remarkStringify)
+          .stringify(tree);
+        logger.debug('[TRANSLATION-SERVICE] Markdown stringification completed');
+
+        logger.info('[TRANSLATION-SERVICE] Markdown translation completed successfully');
+
+        // --- REDIS CACHE LOGIC (SET) ---
+        if (cacheEnabled && this.cacheClient) {
+          try {
+            // This command now sets the key permanently, with no expiration.
+            await this.cacheClient.set(cacheKey, translatedMarkdown);
+            logger.info(`[TRANSLATION-CACHE] SET: Stored translation PERMANENTLY in Redis key ${cacheKey}`);
+          } catch (error) {
+            logger.error(`[TRANSLATION-CACHE] FAILED to write cache to Redis: ${error.message}`);
+          }
+        }
+        // --- REDIS CACHE LOGIC (END) ---
+
+        return translatedMarkdown;
+
+      } catch (error) {
+        // Log the error with full details
+        logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
+          stack: error.stack,
+          inFlightKey: inFlightKey,
+          sourceLang: sourceLang,
+          targetLang: targetLang,
+          duration: Date.now() - startTime
+        });
+        throw error; // Re-throw to reject the promise
+
+      } finally {
+        // --- IN-FLIGHT TRACKING: Clean up after completion/failure ---
+        this.inFlightTranslations.delete(inFlightKey);
+        logger.info(`[TRANSLATION-SERVICE] Removed in-flight translation for ${inFlightKey}`);
+      }
+    })();
+
+    // Store promise in in-flight cache
+    this.inFlightTranslations.set(inFlightKey, translationPromise);
+    logger.info(`[TRANSLATION-SERVICE] Added in-flight translation for ${inFlightKey}`);
+
+    // Add timeout to prevent hanging (default 1 hour for large documents)
+    const timeoutMs = 3600000; // 1 hour
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => {
+        this.inFlightTranslations.delete(inFlightKey);
+        reject(new Error(`[TRANSLATION-SERVICE] Translation timeout after ${timeoutMs}ms for ${inFlightKey}`));
+      }, timeoutMs)
+    );
+
+    // Return the promise with timeout
+    return await Promise.race([translationPromise, timeoutPromise]);
   }
 
   /**

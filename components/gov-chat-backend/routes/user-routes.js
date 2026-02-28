@@ -462,19 +462,19 @@ module.exports = (userService) => {
 /**
    * @swagger
    * /api/users/{userId}/context:
-   * get:
-   * summary: Get safe user context for AI
-   * description: Retrieves a sanitized subset of user data specifically for AI context enrichment
-   * tags: [User]
-   * parameters:
-   * - in: path
-   * name: userId
-   * required: true
-   * schema:
-   * type: string
-   * responses:
-   * 200:
-   * description: Safe user context
+   *   get:
+   *     summary: Get safe user context for AI
+   *     description: Retrieves a sanitized subset of user data specifically for AI context enrichment
+   *     tags: [User]
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Safe user context
    */
   router.get('/:userId/context', (req, res, next) => {
     // 1. Enforce Authentication

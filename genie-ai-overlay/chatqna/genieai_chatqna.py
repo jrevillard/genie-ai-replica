@@ -1153,28 +1153,48 @@ class ChatQnAService:
 
         if logflag:
             logger.info(f"Language from frontend - context.language: {chat_request.context.language if chat_request.context else None}, direct language: {chat_request.language}, final: {original_language}")
+            logger.info(f"Language debug - type: {type(original_language)}, repr: {repr(original_language)} if original_language else None")
 
         # Re-enabled language detection as fallback ---
         try:
+            if logflag:
+                logger.info(f"Language detection check - original_language is None: {original_language is None}, is empty string: {original_language == '' if original_language else 'N/A'}")
+
             if not original_language or original_language.strip() == "":
+                if logflag:
+                    logger.info(f"Triggering auto-detection because original_language is falsy or empty")
+
                 # Attempt to detect language from the last user message
                 last_user_content = ""
                 for msg in reversed(full_chat_history):
                     if msg.get("role") == "user":
                         last_user_content = msg.get("content", "")
                         break
-                
+
+                if logflag:
+                    logger.info(f"Last user content for detection (first 100 chars): {last_user_content[:100] if last_user_content else 'None'}")
+
                 if last_user_content:
                     detected_lang = detect(last_user_content)
+                    if logflag:
+                        logger.info(f"langdetect result: '{detected_lang}' (will convert to uppercase: '{detected_lang.upper()}')")
+
                     # Load supported languages to validate the detection
                     language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
+
                     # Only use detected language if it's in our supported list OR if it's 'en'
-                    if detected_lang and (detected_lang.lower() in language_codes or detected_lang.lower() == 'en'):
+                    is_supported = detected_lang and (detected_lang.lower() in language_codes or detected_lang.lower() == 'en')
+
+                    if logflag:
+                        logger.info(f"Language validation - detected '{detected_lang}', supported: {is_supported}, in language_codes: {detected_lang.lower() in language_codes if detected_lang else 'N/A'}")
+
+                    if is_supported:
                         if detected_lang.upper() != "EN":
                             original_language = detected_lang.upper()
                             logger.info(f"Auto-detected language: {original_language}")
                     else:
-                        logger.warning(f"Detected language '{detected_lang}' is not in supported languages list. Ignoring auto-detection.")
+                        logger.warning(f"Detected language '{detected_lang}' is not in supported languages list. Ignoring auto-detection. Falling back to EN.")
+                        original_language = "EN"
         except Exception as e:
             logger.warning(f"Language detection failed: {e}")
             # Fallback to English if detection fails
@@ -1276,15 +1296,28 @@ class ChatQnAService:
         llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get("text", "Sorry, I could not generate a response.")
         
         if original_language and original_language.strip() != "EN":
+            if logflag:
+                logger.info(f"Translation requested - original_language: '{original_language}' (type: {type(original_language).__name__})")
+
             # Load Language Codes
             language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
-            
+
+            if logflag:
+                logger.info(f"Language codes loaded - keys: {list(language_codes.keys())[:10]}... (total: {len(language_codes)})")
+
             # Fallback logic for language codes. If not in map, use the original code.
             target_lang_name = original_language
-            if original_language.lower() in language_codes:
-                target_lang_name = language_codes[original_language.lower()]
+            lookup_key = original_language.lower()
+
+            if logflag:
+                logger.info(f"Looking up language code: '{lookup_key}' in language_codes")
+
+            if lookup_key in language_codes:
+                target_lang_name = language_codes[lookup_key]
+                if logflag:
+                    logger.info(f"Found language code mapping: '{lookup_key}' -> '{target_lang_name}'")
             else:
-                logger.warning(f"Warning: Language '{original_language}' not found in language codes. Attempting to translate using code directly.")
+                logger.warning(f"Warning: Language '{original_language}' not found in language codes (lookup key: '{lookup_key}'). Attempting to translate using code directly.")
 
             if logflag:
                 logger.debug(f"LLM reponse translated into: {target_lang_name}")

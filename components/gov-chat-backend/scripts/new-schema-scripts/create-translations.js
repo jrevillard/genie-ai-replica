@@ -411,17 +411,29 @@ class TranslationCreator {
     try {
       console.log(`\nCreating category translations for ${lang}...`);
 
-      // Fetch existing English categories
-      const categories = await this.db.query(aql`
-        FOR cat IN ${this.serviceCategories}
-          FILTER cat.nameEN != null
-          RETURN { _key: cat._key, nameEN: cat.nameEN }
+      // First, try to fetch English translations from serviceCategoryTranslations
+      let categories = await this.db.query(aql`
+        FOR trans IN ${this.categoryTranslations}
+          FILTER LOWER(trans.languageCode) == "en" AND trans.translation != null
+          RETURN { _key: trans.serviceCategoryId, nameEN: trans.translation }
       `).then(cursor => cursor.all());
 
-      // Fetch existing translations for the language
+      // If no translations found, fall back to nameEN in base collection
+      if (categories.length === 0) {
+        console.log('No English translations found in serviceCategoryTranslations, checking serviceCategories.nameEN...');
+        categories = await this.db.query(aql`
+          FOR cat IN ${this.serviceCategories}
+            FILTER cat.nameEN != null
+            RETURN { _key: cat._key, nameEN: cat.nameEN }
+        `).then(cursor => cursor.all());
+      }
+
+      console.log(`Found ${categories.length} categories to translate.`);
+
+      // Fetch existing translations for the language (case-insensitive)
       const existingTranslations = await this.db.query(aql`
         FOR trans IN ${this.categoryTranslations}
-          FILTER trans.languageCode == ${lang}
+          FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
           RETURN trans.serviceCategoryId
       `).then(cursor => cursor.all());
 
@@ -446,10 +458,10 @@ class TranslationCreator {
               REMOVE edge IN ${this.categoryTranslationsEdge}
           `);
 
-          // Delete the translation document
+          // Delete the translation document (case-insensitive languageCode)
           await this.db.query(aql`
             FOR trans IN ${this.categoryTranslations}
-              FILTER trans.serviceCategoryId == ${categoryId} AND trans.languageCode == ${lang}
+              FILTER trans.serviceCategoryId == ${categoryId} AND LOWER(trans.languageCode) == ${lang.toLowerCase()}
               REMOVE trans IN ${this.categoryTranslations}
           `);
         }
@@ -458,12 +470,13 @@ class TranslationCreator {
       }
 
       let inserted = 0;
+      const langLower = lang.toLowerCase(); // Use lowercase for languageCode
       for (const category of categories) {
         const translatedName = await this.generateTranslation(category.nameEN, lang);
         const translation = {
-          _key: `${category._key}_${lang}`,
+          _key: `${category._key}_${langLower}`,
           serviceCategoryId: category._key,
-          languageCode: lang,
+          languageCode: langLower, // Store lowercase
           translation: translatedName,
           isActive: true,
           createdAt: new Date().toISOString()
@@ -497,17 +510,29 @@ class TranslationCreator {
     try {
       console.log(`\nCreating service translations for ${lang}...`);
 
-      // Fetch existing English services
-      const services = await this.db.query(aql`
-        FOR srv IN ${this.services}
-          FILTER srv.nameEN != null
-          RETURN { _key: srv._key, nameEN: srv.nameEN }
+      // First, try to fetch English translations from serviceTranslations
+      let services = await this.db.query(aql`
+        FOR trans IN ${this.serviceTranslations}
+          FILTER LOWER(trans.languageCode) == "en" AND trans.translation != null
+          RETURN { _key: trans.serviceId, nameEN: trans.translation }
       `).then(cursor => cursor.all());
 
-      // Fetch existing translations for the language
+      // If no translations found, fall back to nameEN in base collection
+      if (services.length === 0) {
+        console.log('No English translations found in serviceTranslations, checking services.nameEN...');
+        services = await this.db.query(aql`
+          FOR srv IN ${this.services}
+            FILTER srv.nameEN != null
+            RETURN { _key: srv._key, nameEN: srv.nameEN }
+        `).then(cursor => cursor.all());
+      }
+
+      console.log(`Found ${services.length} services to translate.`);
+
+      // Fetch existing translations for the language (case-insensitive)
       const existingTranslations = await this.db.query(aql`
         FOR trans IN ${this.serviceTranslations}
-          FILTER trans.languageCode == ${lang}
+          FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
           RETURN trans.serviceId
       `).then(cursor => cursor.all());
 
@@ -532,10 +557,10 @@ class TranslationCreator {
               REMOVE edge IN ${this.serviceTranslationsEdge}
           `);
 
-          // Delete the translation document
+          // Delete the translation document (case-insensitive languageCode)
           await this.db.query(aql`
             FOR trans IN ${this.serviceTranslations}
-              FILTER trans.serviceId == ${serviceId} AND trans.languageCode == ${lang}
+              FILTER trans.serviceId == ${serviceId} AND LOWER(trans.languageCode) == ${lang.toLowerCase()}
               REMOVE trans IN ${this.serviceTranslations}
           `);
         }
@@ -544,12 +569,13 @@ class TranslationCreator {
       }
 
       let inserted = 0;
+      const langLower = lang.toLowerCase(); // Use lowercase for languageCode
       for (const service of services) {
         const translatedName = await this.generateTranslation(service.nameEN, lang);
         const translation = {
-          _key: `${service._key}_${lang}`,
+          _key: `${service._key}_${langLower}`,
           serviceId: service._key,
-          languageCode: lang,
+          languageCode: langLower, // Store lowercase
           translation: translatedName,
           isActive: true,
           createdAt: new Date().toISOString()

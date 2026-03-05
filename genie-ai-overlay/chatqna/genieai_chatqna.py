@@ -1166,9 +1166,15 @@ class ChatQnAService:
                 
                 if last_user_content:
                     detected_lang = detect(last_user_content)
-                    if detected_lang and detected_lang.upper() != "EN":
-                        original_language = detected_lang.upper()
-                        logger.info(f"Auto-detected language: {original_language}")
+                    # Load supported languages to validate the detection
+                    language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
+                    # Only use detected language if it's in our supported list OR if it's 'en'
+                    if detected_lang and (detected_lang.lower() in language_codes or detected_lang.lower() == 'en'):
+                        if detected_lang.upper() != "EN":
+                            original_language = detected_lang.upper()
+                            logger.info(f"Auto-detected language: {original_language}")
+                    else:
+                        logger.warning(f"Detected language '{detected_lang}' is not in supported languages list. Ignoring auto-detection.")
         except Exception as e:
             logger.warning(f"Language detection failed: {e}")
             # Fallback to English if detection fails

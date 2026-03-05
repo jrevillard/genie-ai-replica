@@ -1144,8 +1144,16 @@ class ChatQnAService:
         if logflag:
             logger.debug(f'Incoming Chat Request: {chat_request}')
         full_chat_history = chat_request.messages
-        original_language = chat_request.context.language if chat_request.context else None
-        
+        # Check both context.language and the direct language field
+        original_language = None
+        if chat_request.context and chat_request.context.language:
+            original_language = chat_request.context.language
+        elif chat_request.language and chat_request.language != "auto":
+            original_language = chat_request.language
+
+        if logflag:
+            logger.info(f"Language from frontend - context.language: {chat_request.context.language if chat_request.context else None}, direct language: {chat_request.language}, final: {original_language}")
+
         # Re-enabled language detection as fallback ---
         try:
             if not original_language or original_language.strip() == "":

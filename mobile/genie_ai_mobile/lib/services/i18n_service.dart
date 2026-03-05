@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/i18n/locales/en.dart';
 import 'package:genie_ai_mobile/i18n/locales/ar.dart';
 import 'package:genie_ai_mobile/i18n/locales/de.dart';
-import 'package:genie_ai_mobile/i18n/locales/es.dart'; 
+import 'package:genie_ai_mobile/i18n/locales/es.dart';
 import 'package:genie_ai_mobile/i18n/locales/fr.dart';
 import 'package:genie_ai_mobile/i18n/locales/id.dart';
 import 'package:genie_ai_mobile/i18n/locales/pt.dart';
@@ -10,6 +10,9 @@ import 'package:genie_ai_mobile/i18n/locales/ru.dart';
 import 'package:genie_ai_mobile/i18n/locales/sw.dart';
 import 'package:genie_ai_mobile/i18n/locales/th.dart';
 import 'package:genie_ai_mobile/i18n/locales/zh.dart';
+import 'package:genie_ai_mobile/i18n/locales/bn.dart';
+import 'package:genie_ai_mobile/i18n/locales/mnk.dart';
+import 'package:genie_ai_mobile/i18n/locales/st.dart';
 
 class I18nService extends ChangeNotifier {
   // Singleton Pattern
@@ -32,6 +35,7 @@ class I18nService extends ChangeNotifier {
   final Map<String, String> supportedLanguages = {
     'en': 'English',
     'ar': 'Arabic',
+    'bn': 'Bengali',
     'de': 'German',
     'es': 'Spanish',
     'fr': 'French',
@@ -41,12 +45,15 @@ class I18nService extends ChangeNotifier {
     'zh': 'Chinese',
     'ru': 'Russian',
     'th': 'Thai',
+    'mnk': 'Mandinka',
+    'st': 'Sesotho',
   };
 
   // Translation Data Store
   final Map<String, Map<String, dynamic>> _localizedValues = {
     'en': enLocale,
     'ar': arLocale,
+    'bn': bnLocale,
     'de': deLocale,
     'es': esLocale,
     'fr': frLocale,
@@ -56,6 +63,8 @@ class I18nService extends ChangeNotifier {
     'sw': swLocale,
     'th': thLocale,
     'zh': zhLocale,
+    'mnk': mnkLocale,
+    'st': stLocale,
   };
 
   /// Changes the language and notifies listeners to rebuild the app

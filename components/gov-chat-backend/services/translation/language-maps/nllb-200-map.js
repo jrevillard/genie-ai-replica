@@ -54,6 +54,11 @@ module.exports = {
     ur: 'urd_Arab',     // Urdu
     uz: 'uzn_Latn',     // Uzbek (Northern/Latin)
     yo: 'yor_Latn',     // Yoruba
+
+    // Newly added languages - Mandinka and Sesotho
+    man: 'dyu_Latn',    // Mandinka (using Dyula as linguistic proxy - Mande language family)
+    mnk: 'dyu_Latn',    // Mandinka (alternative ISO code - maps to same Dyula proxy)
+    st: 'sot_Latn',     // Sesotho (Southern Sotho)
   },
 
   // Language fallback chains for graceful degradation
@@ -75,6 +80,10 @@ module.exports = {
     az: 'tr',  // Azerbaijani to Turkish
     bn: 'en',  // Bengali to English
     ml: 'en',  // Malayalam to English
+    // Newly added fallbacks
+    man: 'en', // Mandinka to English (proxy language may have quality issues)
+    mnk: 'en', // Mandinka (alternative code) to English
+    st: 'en',  // Sesotho to English
   },
 
   // NLLB-200 does not use prompt templates (direct model call)

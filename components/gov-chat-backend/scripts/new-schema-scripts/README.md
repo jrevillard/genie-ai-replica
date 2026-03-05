@@ -232,7 +232,7 @@ This structure enables:
 | export-service-categories.js | Export serviceCategories, services, categoryServices, and translation collections. | **READ ONLY** | None |
 | import-service-categories.js | Import serviceCategories, services, categoryServices, and translation collections from a full export file. | **WRITES DATA** | **Schema validation must be disabled** |
 | create-knowledge-hierarchy.js | Interactively or from a simple JSON file, **populates** the initial English serviceCategories and services hierarchy. | **WRITES DATA** | npm install inquirer yargs. **Target collections must exist.** |
-| create-translations.js | Create translations for serviceCategories and services using Google Cloud Translate API. | **WRITES DATA** | Google Cloud credentials, API enabled |
+| create-translations.js | Create translations for serviceCategories and services using Google Cloud Translate API or the Internal Translation Service. | **WRITES DATA** | Google Cloud credentials (for google) or valid user credentials (for internal) |
 
 **Note**: The category-migration.js script is no longer needed, as translation support is now handled by create-translations.js for adding new languages and by import-service-categories.js for importing existing translations.
 
@@ -500,17 +500,36 @@ node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
 Use create-translations.js to automatically generate translations for your new hierarchy. Run the script for each target language (e.g., Indonesian ID, French FR).
 
+The script supports two translation engines:
+
+**Option A: Using Google Cloud Translate API**
+
 Bash
 
-\# Set database and Google credentials  
-source set-env.sh  
+\# Set database and Google credentials
+source set-env.sh
 export GOOGLE\_CREDENTIALS\_PATH="./google-credentials.json"
 
-\# Create Indonesian translations  
+\# Create Indonesian translations
 node create-translations.js ID
 
-\# Create French translations  
+\# Create French translations
 node create-translations.js FR
+
+**Option B: Using Internal Translation Service**
+
+Bash
+
+\# Set database credentials
+source set-env.sh
+
+\# Create Indonesian translations using internal service
+node create-translations.js ID --translation-engine=internal
+
+\# Create French translations using internal service
+node create-translations.js FR --translation-engine=internal
+
+When using the internal translation service, you will be prompted for username and password to authenticate with the backend API (endpoints: /api/auth/login and /api/translate, default base URL: http://localhost:3000).
 
 ### **Result: GENIE.AI Instance with Custom Hierarchy and Multi-language Support**
 
@@ -780,9 +799,17 @@ FOR svc IN services
 
 **"Google Translate API error"**
 
-* Verify google-credentials.json contains valid credentials and an API key.  
-* Ensure the Cloud Translation API is enabled in Google Cloud Console.  
+* Verify google-credentials.json contains valid credentials and an API key.
+* Ensure the Cloud Translation API is enabled in Google Cloud Console.
 * Check network connectivity and API quota limits.
+
+**"Internal Translation Service error"**
+
+* Verify the backend service is running at http://localhost:3000 (or your TRANSLATION_SERVICE_URL).
+* Verify the endpoints are accessible: http://localhost:3000/api/auth/login and http://localhost:3000/api/translate.
+* Check that your username and password are correct.
+* Ensure the translation service has been initialized (can take time on first startup).
+* Check backend logs for translation service errors.
 
 ---
 
@@ -845,10 +872,33 @@ const services \= \[
 
 Bash
 
-node create-translations.js ID  
+# Using Google Cloud Translate API (default)
+node create-translations.js ID
 node create-translations.js ES
 
+# OR using Internal Translation Service
+node create-translations.js ID --translation-engine=internal
+node create-translations.js ES --translation-engine=internal
+
 **Note**: A future utility will simplify this process by providing a UI or CLI to define categories and services in English and generate translations.
+
+### **Translation Engine Configuration**
+
+**Environment Variables:**
+
+For Google Cloud Translate API:
+- `GOOGLE_CREDENTIALS_PATH`: Path to Google credentials JSON (default: ./google-credentials.json)
+
+For Internal Translation Service:
+- `TRANSLATION_SERVICE_URL`: Internal translation service URL (default: http://localhost:3000)
+
+**Authentication (Internal Service):**
+
+When using `--translation-engine=internal`, you will be prompted for:
+- Username: Your backend username
+- Password: Your backend password
+
+The script will authenticate via the `/api/auth/login` endpoint and use the returned JWT token to call the `/api/translate` endpoint.
 
 ---
 

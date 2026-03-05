@@ -965,7 +965,125 @@ node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
 ### 5.5 Generate Translations
 
-(Optional) Use create-translations.js to auto-generate labels for other supported languages (requires Google Cloud credentials).
+(Optional) Use `create-translations.js` to auto-generate labels for other supported languages. The script supports **two translation engines**:
+
+#### **Option A: Internal Translation Service (Recommended)**
+
+Uses the built-in NLLB-200 translation model running in the GENIE.AI stack. No external API keys required.
+
+**Prerequisites:**
+- GENIE.AI services must be running (`docker-compose up -d`)
+- Valid user account with login credentials
+
+**Usage:**
+
+```bash
+# Navigate to the scripts directory
+cd components/gov-chat-backend/scripts/new-schema-scripts
+
+# Run the script with the internal translation engine
+node create-translations.js <LANG> --translation-engine=internal
+```
+
+**Example commands:**
+
+```bash
+# Generate French translations
+node create-translations.js FR --translation-engine=internal
+
+# Generate Bengali translations
+node create-translations.js BN --translation-engine=internal
+
+# Generate Mandinka translations for Vue 3 frontend
+node create-translations.js MAN --translation-engine=internal
+
+# Generate Mandinka translations for mobile app (uses different code)
+node create-translations.js MNK --translation-engine=internal
+
+# Generate Sesotho translations
+node create-translations.js ST --translation-engine=internal
+```
+
+**Authentication:**
+When using `--translation-engine=internal`, the script will prompt for:
+- Username (e.g., your admin account)
+- Password (entered securely, not echoed to terminal)
+
+The script authenticates with the backend at `http://localhost:3000/api/auth/login` and uses the JWT token to call the internal translation service.
+
+**Supported Language Codes:**
+- `ar` - Arabic
+- `bn` - Bengali
+- `de` - German
+- `en` - English (source language, cannot create translations)
+- `es` - Spanish
+- `fr` - French
+- `id` - Indonesian
+- `man` - Mandinka (Vue 3 frontend)
+- `mnk` - Mandinka (Mobile app - both codes map to same translation)
+- `pt` - Portuguese
+- `ru` - Russian
+- `st` - Sesotho
+- `sw` - Kiswahili
+- `th` - Thai
+- `zh` - Chinese
+
+#### **Option B: Google Cloud Translation API**
+
+Uses Google Cloud Translate API. Requires Google Cloud credentials and API key.
+
+**Prerequisites:**
+- Google Cloud project with Translation API enabled
+- Service account credentials JSON file
+- Set `GOOGLE_APPLICATION_CREDENTIALS` environment variable
+
+**Usage:**
+
+```bash
+# Navigate to the scripts directory
+cd components/gov-chat-backend/scripts/new-schema-scripts
+
+# Set your Google Cloud credentials (Linux/Mac)
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/credentials.json"
+
+# Run the script with Google Translate (default engine)
+node create-translations.js <LANG>
+# OR explicitly specify:
+node create-translations.js <LANG> --translation-engine=google
+```
+
+**Example:**
+
+```bash
+# Generate French translations using Google Cloud
+node create-translations.js FR --translation-engine=google
+```
+
+#### **Script Behavior**
+
+- **Existing Translations:** If translations already exist for a language, the script will prompt to overwrite them.
+- **Database Storage:** Language codes are stored in UPPERCASE in the database (e.g., `FR`, `BN`, `MNK`).
+- **Translation Content:** Both engines translate service categories and services from English to the target language.
+- **Internal Service Details:** The internal service uses the NLLB-200 distilled model with Dyula as a linguistic proxy for Mandinka (Mande language family).
+
+#### **Troubleshooting**
+
+**Internal Translation Service Errors:**
+
+| Error | Solution |
+|-------|----------|
+| `404 Not Found` | Ensure backend services are running: `docker-compose ps` |
+| `401 Unauthorized` | Verify credentials are correct. Password is hashed via SHA-256 before sending. |
+| `500 Unsupported language code` | Check that the language code is supported by NLLB-200 model (see list above). |
+| `Connection refused` | Ensure the backend is accessible at `http://localhost:3000` |
+
+**Google Cloud Errors:**
+
+| Error | Solution |
+|-------|----------|
+| `Invalid credentials` | Verify `GOOGLE_APPLICATION_CREDENTIALS` path is correct and file is valid JSON. |
+| `API key not found` | Ensure Translation API is enabled in your Google Cloud project. |
+| `Quota exceeded` | Check your Google Cloud usage quotas and billing status. |
 
 #### **Method 2: Manual Admin Dashboard Approach**
 

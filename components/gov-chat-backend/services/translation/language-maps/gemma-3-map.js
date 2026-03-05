@@ -67,6 +67,11 @@ module.exports = {
     uz: 'uz',     // Uzbek
     yo: 'yo',     // Yoruba
     ckb: 'ckb',   // Sorani Kurdish (34th language)
+
+    // Newly added languages - Mandinka and Sesotho
+    man: 'man',   // Mandinka (ISO 639-2)
+    mnk: 'mnk',   // Mandinka (ISO 639-3)
+    st: 'st',     // Sesotho
   },
 
   // Language fallback chains for graceful degradation
@@ -88,6 +93,10 @@ module.exports = {
     az: 'tr',  // Azerbaijani to Turkish
     bn: 'en',  // Bengali to English
     ml: 'en',  // Malayalam to English
+    // Newly added fallbacks
+    man: 'en', // Mandinka to English
+    mnk: 'en', // Mandinka (alternative code) to English
+    st: 'en',  // Sesotho to English
   },
 
   // Gemma-3 requires prompt-based translation
@@ -104,5 +113,7 @@ module.exports = {
     ml: 'Malayalam', ms: 'Malay', om: 'Oromo', pa: 'Punjabi', ps: 'Pashto',
     sd: 'Sindhi', skr: 'Saraiki', so: 'Somali', su: 'Sundanese', tr: 'Turkish',
     ug: 'Uyghur', ur: 'Urdu', uz: 'Uzbek', yo: 'Yoruba', ckb: 'Sorani Kurdish',
+    // Newly added language names
+    man: 'Mandinka', mnk: 'Mandinka', st: 'Sesotho',
   },
 };

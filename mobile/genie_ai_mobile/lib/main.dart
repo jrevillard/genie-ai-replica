@@ -13,6 +13,7 @@ import 'package:flutter_localizations/flutter_localizations.dart'; // REQUIRED F
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
+import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
@@ -130,8 +131,8 @@ class _MyAppState extends State<MyApp> {
           supportedLocales:
               I18nService().supportedLanguages.keys.map((code) => Locale(code)),
           localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
+            FallbackMaterialLocalizationsDelegate(),
+            FallbackWidgetsLocalizationsDelegate(),
             GlobalCupertinoLocalizations.delegate,
           ],
           theme: ThemeManager().lightTheme,

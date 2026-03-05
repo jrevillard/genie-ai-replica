@@ -3,57 +3,45 @@
  * * This script creates translations for service categories and services in an ArangoDB database,
  * inserting them into the `serviceCategoryTranslations` and `serviceTranslations` collections,
  * along with edges in `serviceCategoryTranslationsEdge` and `serviceTranslationsEdge`.
- * It uses the Google Cloud Translate API to translate English (`nameEN`) fields from the
- * `serviceCategories` and `services` collections into the specified target language.
- * Translations and edges are only created if they do not already exist for the target language.
- * * Authentication:
- * - Uses a Google Cloud service account for server-to-server authentication with the
- * Google Cloud Translate API.
- * - Credentials are loaded from a JSON file (default: `google-credentials.json`), which
- * must be a Google Cloud service account key JSON with an added `apiKey` field.
- * - Do NOT use an OAuth 2.0 Client ID or client secret, as they are for user-based flows.
+ * * Translation Engines:
+ * This script supports two translation engines:
+ * 1. Google Cloud Translate API (original behavior)
+ * 2. Internal Translation Service (node.js backend with vLLM guardrail)
  * * Usage:
- * node create-translations.js <lang>
+ * node create-translations.js <lang> [--translation-engine=google|internal]
  * * Parameters:
  * - lang: Target language code (e.g., EN, FR, SW, ID, en, fr, sw, id). Case-insensitive.
  * Cannot be EN (English is the source language).
- * * Configuration File:
- * - File: `google-credentials.json` (override with GOOGLE_CREDENTIALS_PATH env variable)
- * - Format: Standard Google Cloud service account key JSON with an added `apiKey` field:
- * {
- * "type": "service_account",
- * "project_id": "your-project-id",
- * "private_key_id": "...",
- * "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
- * "client_email": "your-service-account@your-project-id.iam.gserviceaccount.com",
- * "client_id": "...",
- * "auth_uri": "...",
- * "token_uri": "...",
- * "auth_provider_x509_cert_url": "...",
- * "client_x509_cert_url": "...",
- * "universe_domain": "googleapis.com",
- * "apiKey": "your-api-key"
- * }
- * - Obtain credentials:
- * 1. Go to Google Cloud Console > IAM & Admin > Service Accounts.
- * 2. Create a service account with the 'Cloud Translation API User' role (roles/cloudtranslate.user).
- * 3. Download the JSON key file.
- * 4. Add the `apiKey` field by creating an API key in APIs & Services > Credentials > Create Credentials > API Key.
- * 5. Enable the Cloud Translation API in APIs & Services > Library.
+ * - --translation-engine: (Optional) Translation engine to use. Default: google.
+ *   - google: Uses Google Cloud Translate API
+ *   - internal: Uses the internal translation service (requires authentication)
+ * * Configuration for Google Translate:
+ * - Uses a Google Cloud service account for server-to-server authentication.
+ * - Credentials are loaded from a JSON file (default: `google-credentials.json`).
+ * - Environment variable: GOOGLE_CREDENTIALS_PATH (default: ./google-credentials.json)
+ * * Configuration for Internal Translation Service:
+ * - Connects to the backend API at http://localhost:3000/api/translate
+ * - Prompts for username/password for authentication
+ * - Obtains JWT token via /api/auth/login endpoint
+ * - Environment variable: TRANSLATION_SERVICE_URL (default: http://localhost:3000)
  * * Environment Variables (in .env file):
  * - ARANGO_URL: ArangoDB URL (default: http://localhost:8529)
  * - ARANGO_DATABASE: Database name (default: genie)
  * - ARANGO_USERNAME: ArangoDB username (default: root)
  * - ARANGO_PASSWORD: ArangoDB password (default: test)
  * - GOOGLE_CREDENTIALS_PATH: Path to Google credentials JSON (default: ./google-credentials.json)
+ * - TRANSLATION_SERVICE_URL: Internal translation service URL (default: http://localhost:3000)
  * * Prerequisites:
  * - Install dependencies: `npm install arangojs dotenv @google-cloud/translate`
  * - Ensure ArangoDB collections exist: `serviceCategories`, `services`
  * - The script will create `serviceCategoryTranslations`, `serviceTranslations`,
  * `serviceCategoryTranslationsEdge`, and `serviceTranslationsEdge` if they don’t exist
- * - Create `google-credentials.json` with valid service account credentials and API key
- * * Example:
+ * * Examples:
+ * # Using Google Translate (default)
  * node create-translations.js ID
+ * node create-translations.js FR --translation-engine=google
+ * # Using Internal Translation Service
+ * node create-translations.js FR --translation-engine=internal
  * * Output:
  * - Logs creation of translations and edges
  * - Skips existing translations
@@ -62,9 +50,8 @@
  * - Assumes `nameEN` fields in `serviceCategories` and `services` are the source texts.
  * - Translation keys are formatted as `${categoryKey}_${lang}` and `${serviceKey}_${lang}`.
  * - Edges link translations to their respective categories/services.
- * - Handles Google Translate API errors with a fallback placeholder translation.
+ * - Handles translation API errors with a fallback placeholder translation.
  * - Schema aligns with import-service-categories.js, using `serviceCategoryId`, `languageCode`, and `translation`.
- * - Date/time: Script uses current date/time (e.g., 2025-06-28 21:44 WIB).
  */
 
 const { Database, aql } = require('arangojs');
@@ -72,7 +59,158 @@ const { Translate } = require('@google-cloud/translate').v2;
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const crypto = require('crypto');
 require('dotenv').config();
+
+// --- Internal Translation Service Client ---
+/**
+ * InternalTranslationClient
+ * Handles translation via the internal translation service API
+ */
+class InternalTranslationClient {
+  constructor() {
+    // Backend URL from docker-compose.yaml - backend runs on port 3000
+    // Routes are mounted at /api/ prefix based on index.js configuration
+    this.baseUrl = process.env.TRANSLATION_SERVICE_URL || 'http://localhost:3000';
+    this.translateEndpoint = `${this.baseUrl}/api/translate`;
+    this.loginEndpoint = `${this.baseUrl}/api/auth/login`;
+    this.token = null;
+  }
+
+  /**
+   * Prompt user for credentials and perform login
+   */
+  async authenticate() {
+    console.log('\n--- Internal Translation Service Authentication ---');
+    console.log(`Connecting to: ${this.baseUrl}`);
+
+    const username = await this.askQuestion('Enter username: ');
+    const password = await this.askQuestion('Enter password: ', true);
+
+    // Hash password using SHA-256 (same as frontend)
+    const encPassword = this.hashPassword(password);
+
+    try {
+      const response = await fetch(this.loginEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          loginName: username,
+          encPassword: encPassword, // Send hashed password
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Login failed: ${response.status} ${response.statusText}. ${errorData.message || ''}`);
+      }
+
+      const data = await response.json();
+
+      // The login endpoint returns { accessToken, refreshToken, user }
+      if (!data.accessToken) {
+        throw new Error('No access token returned from login');
+      }
+
+      this.token = data.accessToken;
+      console.log('✓ Authentication successful!');
+      return true;
+    } catch (error) {
+      console.error(`✗ Authentication failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Hash a password using SHA-256
+   * Note: This matches the frontend hashing for compatibility
+   * @param {string} password The password to hash
+   * @returns {string} The hashed password
+   */
+  hashPassword(password) {
+    return crypto
+      .createHash('sha256')
+      .update(password)
+      .digest('hex');
+  }
+
+  /**
+   * Translate text using the internal translation service
+   * @param {string} text - Text to translate
+   * @param {string} sourceLang - Source language code (e.g., 'en')
+   * @param {string} targetLang - Target language code (e.g., 'fr')
+   * @returns {Promise<string>} Translated text
+   */
+  async translate(text, sourceLang, targetLang) {
+    if (!this.token) {
+      throw new Error('Not authenticated. Call authenticate() first.');
+    }
+
+    try {
+      const response = await fetch(this.translateEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          texts: [text],
+          source_lang: sourceLang,
+          target_lang: targetLang,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Translation request failed: ${response.status} ${response.statusText}. ${errorData.message || ''}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.translated_texts || data.translated_texts.length === 0) {
+        throw new Error('No translated text returned from service');
+      }
+
+      return data.translated_texts[0];
+    } catch (error) {
+      console.error(`Translation failed for "${text}" to ${targetLang}:`, error.message);
+      // Fallback to placeholder
+      return `${text} (${targetLang})`;
+    }
+  }
+
+  /**
+   * Ask a question in the console and return the user's answer.
+   * @param {string} query - The question to display to the user.
+   * @param {boolean} hidden - Whether to hide the input (for passwords).
+   * @returns {Promise<string>} The user's answer.
+   */
+  askQuestion(query, hidden = false) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    return new Promise(resolve => {
+      if (hidden) {
+        // Hide input for password
+        const stdin = process.stdin;
+        stdin.on('data', (char) => {
+          if (char === '\n' || char === '\r' || char === '\u0004') {
+            rl.close();
+          }
+        });
+      }
+
+      rl.question(query, ans => {
+        rl.close();
+        resolve(ans);
+      });
+    });
+  }
+}
 
 /**
  * Asks a question in the console and returns the user's answer.
@@ -92,7 +230,28 @@ function askQuestion(query) {
 }
 
 class TranslationCreator {
-  constructor(dbConfig) {
+  constructor(dbConfig, translationEngine = 'google') {
+    this.translationEngine = translationEngine;
+    this.googleTranslate = null;
+    this.internalTranslate = null;
+
+    // Initialize the appropriate translation client
+    if (translationEngine === 'google') {
+      this.initGoogleTranslate();
+    } else if (translationEngine === 'internal') {
+      this.internalTranslate = new InternalTranslationClient();
+    } else {
+      throw new Error(`Invalid translation engine: ${translationEngine}. Must be 'google' or 'internal'.`);
+    }
+
+    // Initialize ArangoDB connection
+    this.db = new Database(dbConfig);
+  }
+
+  /**
+   * Initialize Google Cloud Translation client
+   */
+  initGoogleTranslate() {
     // Load Google Cloud credentials from JSON file
     const credentialsPath = process.env.GOOGLE_CREDENTIALS_PATH || './google-credentials.json';
     let credentials;
@@ -113,7 +272,7 @@ class TranslationCreator {
       throw new Error('Google credentials JSON must contain project_id, client_email, private_key, and apiKey');
     }
 
-    this.translate = new Translate({
+    this.googleTranslate = new Translate({
       projectId,
       credentials: {
         client_email: clientEmail,
@@ -122,8 +281,16 @@ class TranslationCreator {
       key: apiKey
     });
 
-    // Initialize ArangoDB connection
-    this.db = new Database(dbConfig);
+    console.log('✓ Google Cloud Translation client initialized');
+  }
+
+  /**
+   * Authenticate internal translation client (if applicable)
+   */
+  async authenticate() {
+    if (this.translationEngine === 'internal' && this.internalTranslate) {
+      await this.internalTranslate.authenticate();
+    }
   }
 
   /**
@@ -211,23 +378,29 @@ class TranslationCreator {
   }
 
   /**
-   * Generate translation using Google Translate API
+   * Generate translation using the selected translation engine
    * @param {string} text - Original English text
    * @param {string} lang - Target language code
    * @returns {string} - Translated text
    */
   async generateTranslation(text, lang) {
-    try {
-      const [translation] = await this.translate.translate(text, {
-        from: 'en',
-        to: lang.toLowerCase()
-      });
-      return translation;
-    } catch (error) {
-      console.error(`Translation failed for "${text}" to ${lang}:`, error.message);
-      // Fallback to placeholder
-      return `${text} (${lang})`;
+    if (this.translationEngine === 'google') {
+      try {
+        const [translation] = await this.googleTranslate.translate(text, {
+          from: 'en',
+          to: lang.toLowerCase()
+        });
+        return translation;
+      } catch (error) {
+        console.error(`Translation failed for "${text}" to ${lang}:`, error.message);
+        // Fallback to placeholder
+        return `${text} (${lang})`;
+      }
+    } else if (this.translationEngine === 'internal') {
+      // Internal translation service expects lowercase language codes
+      return await this.internalTranslate.translate(text, 'en', lang.toLowerCase());
     }
+    throw new Error('No translation engine available');
   }
 
   /**
@@ -252,13 +425,40 @@ class TranslationCreator {
           RETURN trans.serviceCategoryId
       `).then(cursor => cursor.all());
 
-      let inserted = 0;
-      for (const category of categories) {
-        if (existingTranslations.includes(category._key)) {
-          console.log(`- Skipping category "${category.nameEN}": translation for ${lang} already exists.`);
-          continue;
+      // Check if there are existing translations
+      if (existingTranslations.length > 0) {
+        console.log(`\nFound ${existingTranslations.length} existing translations for ${lang}.`);
+        const answer = await askQuestion(`Do you want to overwrite existing translations for ${lang}? (y/N) `);
+
+        if (answer.toLowerCase() !== 'y') {
+          console.log(`Skipping category translations for ${lang} as requested.`);
+          return 0;
         }
 
+        console.log(`Deleting existing translations for ${lang}...`);
+
+        // Delete existing translations and edges
+        for (const categoryId of existingTranslations) {
+          // Delete the edge first (due to foreign key constraints)
+          await this.db.query(aql`
+            FOR edge IN ${this.categoryTranslationsEdge}
+              FILTER edge._from == ${`serviceCategories/${categoryId}`}
+              REMOVE edge IN ${this.categoryTranslationsEdge}
+          `);
+
+          // Delete the translation document
+          await this.db.query(aql`
+            FOR trans IN ${this.categoryTranslations}
+              FILTER trans.serviceCategoryId == ${categoryId} AND trans.languageCode == ${lang}
+              REMOVE trans IN ${this.categoryTranslations}
+          `);
+        }
+
+        console.log(`✓ Deleted ${existingTranslations.length} existing category translations and edges for ${lang}.`);
+      }
+
+      let inserted = 0;
+      for (const category of categories) {
         const translatedName = await this.generateTranslation(category.nameEN, lang);
         const translation = {
           _key: `${category._key}_${lang}`,
@@ -311,13 +511,40 @@ class TranslationCreator {
           RETURN trans.serviceId
       `).then(cursor => cursor.all());
 
-      let inserted = 0;
-      for (const service of services) {
-        if (existingTranslations.includes(service._key)) {
-          console.log(`- Skipping service "${service.nameEN}": translation for ${lang} already exists.`);
-          continue;
+      // Check if there are existing translations
+      if (existingTranslations.length > 0) {
+        console.log(`\nFound ${existingTranslations.length} existing translations for ${lang}.`);
+        const answer = await askQuestion(`Do you want to overwrite existing translations for ${lang}? (y/N) `);
+
+        if (answer.toLowerCase() !== 'y') {
+          console.log(`Skipping service translations for ${lang} as requested.`);
+          return 0;
         }
 
+        console.log(`Deleting existing translations for ${lang}...`);
+
+        // Delete existing translations and edges
+        for (const serviceId of existingTranslations) {
+          // Delete the edge first (due to foreign key constraints)
+          await this.db.query(aql`
+            FOR edge IN ${this.serviceTranslationsEdge}
+              FILTER edge._from == ${`services/${serviceId}`}
+              REMOVE edge IN ${this.serviceTranslationsEdge}
+          `);
+
+          // Delete the translation document
+          await this.db.query(aql`
+            FOR trans IN ${this.serviceTranslations}
+              FILTER trans.serviceId == ${serviceId} AND trans.languageCode == ${lang}
+              REMOVE trans IN ${this.serviceTranslations}
+          `);
+        }
+
+        console.log(`✓ Deleted ${existingTranslations.length} existing service translations and edges for ${lang}.`);
+      }
+
+      let inserted = 0;
+      for (const service of services) {
         const translatedName = await this.generateTranslation(service.nameEN, lang);
         const translation = {
           _key: `${service._key}_${lang}`,
@@ -367,10 +594,28 @@ class TranslationCreator {
 }
 
 async function main() {
-  const lang = process.argv[2];
+  // Parse command line arguments
+  const args = process.argv.slice(2);
+  let lang = null;
+  let translationEngine = 'google'; // Default to Google Translate
+
+  for (const arg of args) {
+    if (arg.startsWith('--translation-engine=')) {
+      translationEngine = arg.split('=')[1];
+      if (translationEngine !== 'google' && translationEngine !== 'internal') {
+        console.error('✗ Invalid translation engine. Must be "google" or "internal".');
+        console.error('Usage: node create-translations.js <lang> [--translation-engine=google|internal]');
+        process.exit(1);
+      }
+    } else if (!arg.startsWith('--')) {
+      lang = arg;
+    }
+  }
+
   if (!lang) {
-    console.error('Usage: node create-translations.js <lang>');
+    console.error('Usage: node create-translations.js <lang> [--translation-engine=google|internal]');
     console.error('Example: node create-translations.js ID');
+    console.error('         node create-translations.js FR --translation-engine=internal');
     process.exit(1);
   }
 
@@ -386,11 +631,17 @@ async function main() {
 
     // --- Confirmation Prompt ---
     console.log('--- Database Translation Creation Script ---');
+    console.log(`Translation Engine: ${translationEngine === 'google' ? 'Google Cloud Translate' : 'Internal Translation Service'}`);
     console.log(`This script will translate categories and services into '${lang.toUpperCase()}'.`);
     console.log('\nDatabase configuration to be used:');
     console.log(`  URL:      ${dbConfig.url}`);
     console.log(`  Database: ${dbConfig.databaseName}`);
     console.log(`  User:     ${dbConfig.auth.username}`);
+
+    if (translationEngine === 'internal') {
+      const serviceUrl = process.env.TRANSLATION_SERVICE_URL || 'http://localhost:3000';
+      console.log(`\nTranslation Service: ${serviceUrl}`);
+    }
 
     const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
 
@@ -401,7 +652,13 @@ async function main() {
     // --- End Confirmation Prompt ---
 
   try {
-    const creator = new TranslationCreator(dbConfig);
+    const creator = new TranslationCreator(dbConfig, translationEngine);
+
+    // Authenticate if using internal translation service
+    if (translationEngine === 'internal') {
+      await creator.authenticate();
+    }
+
     await creator.run(lang);
     process.exit(0);
   } catch (error) {

@@ -66,6 +66,11 @@ module.exports = {
     uz: 'uz',     // Uzbek
     yo: 'yo',     // Yoruba
     ckb: 'ckb',   // Sorani Kurdish (34th language)
+
+    // Newly added languages - Mandinka and Sesotho
+    man: 'man',   // Mandinka (ISO 639-2)
+    mnk: 'mnk',   // Mandinka (ISO 639-3)
+    st: 'st',     // Sesotho
   },
 
   // Language fallback chains for graceful degradation
@@ -87,6 +92,10 @@ module.exports = {
     az: 'tr',  // Azerbaijani to Turkish
     bn: 'en',  // Bengali to English
     ml: 'en',  // Malayalam to English
+    // Newly added fallbacks
+    man: 'en', // Mandinka to English
+    mnk: 'en', // Mandinka (alternative code) to English
+    st: 'en',  // Sesotho to English
   },
 
   // TranslateGemma uses structured chat format, not prompt templates

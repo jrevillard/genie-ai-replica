@@ -51,14 +51,14 @@ class ServiceCategoryService {
         query = aql`
           FOR trans IN serviceCategoryTranslations
             FILTER trans.serviceCategoryId == ${documentId}
-            FILTER trans.languageCode == ${upperLocale}
+            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
             RETURN trans.translation
         `;
       } else if (collectionType === 'service') {
         query = aql`
           FOR trans IN serviceTranslations
             FILTER trans.serviceId == ${documentId}
-            FILTER trans.languageCode == ${upperLocale}
+            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
             RETURN trans.translation
         `;
       } else {
@@ -400,7 +400,7 @@ class ServiceCategoryService {
         LET categoryTranslation = FIRST(
           FOR trans IN serviceCategoryTranslations
             FILTER trans.serviceCategoryId == category._key
-            FILTER trans.languageCode == ${upperLocale}
+            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
             RETURN trans.translation
         )
         LET services = (
@@ -411,7 +411,7 @@ class ServiceCategoryService {
               LET serviceTranslation = FIRST(
                 FOR trans IN serviceTranslations
                   FILTER trans.serviceId == service._key
-                  FILTER trans.languageCode == ${upperLocale}
+                  FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
                   RETURN trans.translation
               )
               SORT edge.order ASC
@@ -456,7 +456,7 @@ class ServiceCategoryService {
               LET categoryTranslation = FIRST(
                   FOR trans IN serviceCategoryTranslations
                       FILTER trans.serviceCategoryId == category._key
-                      FILTER trans.languageCode == ${upperLocale}
+                      FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
                       RETURN trans.translation
               )
               LET services = (
@@ -467,7 +467,7 @@ class ServiceCategoryService {
                           LET serviceTranslation = FIRST(
                               FOR trans IN serviceTranslations
                                   FILTER trans.serviceId == service._key
-                                  FILTER trans.languageCode == ${upperLocale}
+                                  FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
                                   RETURN trans.translation
                           )
                           SORT edge.order ASC
@@ -516,7 +516,7 @@ class ServiceCategoryService {
         LET categoryTranslation = FIRST(
           FOR trans IN serviceCategoryTranslations
             FILTER trans.serviceCategoryId == category._key
-            FILTER trans.languageCode == ${upperLocale}
+            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
             RETURN trans.translation
         )
         LET services = (
@@ -527,7 +527,7 @@ class ServiceCategoryService {
               LET serviceTranslation = FIRST(
                 FOR trans IN serviceTranslations
                   FILTER trans.serviceId == service._key
-                  FILTER trans.languageCode == ${upperLocale}
+                  FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
                   RETURN trans.translation
               )
               SORT edge.order ASC
@@ -673,7 +673,7 @@ class ServiceCategoryService {
       const query = aql`
         LET matchingCategories = (
           FOR trans IN serviceCategoryTranslations
-            FILTER trans.languageCode == ${upperLocale}
+            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
             FILTER LOWER(trans.translation) LIKE ${'%' + lowerQuery + '%'}
             LET category = DOCUMENT(CONCAT('serviceCategories/', trans.serviceCategoryId))
             FILTER category != null
@@ -684,10 +684,10 @@ class ServiceCategoryService {
               name: trans.translation
             }
         )
-        
+
         LET matchingServices = (
           FOR trans IN serviceTranslations
-            FILTER trans.languageCode == ${upperLocale}
+            FILTER LOWER(trans.languageCode) == LOWER(${upperLocale})
             FILTER LOWER(trans.translation) LIKE ${'%' + lowerQuery + '%'}
             LET service = DOCUMENT(CONCAT('services/', trans.serviceId))
             FILTER service != null
@@ -695,7 +695,7 @@ class ServiceCategoryService {
             LET categoryTrans = FIRST(
               FOR catTrans IN serviceCategoryTranslations
                 FILTER catTrans.serviceCategoryId == service.categoryId
-                FILTER catTrans.languageCode == ${upperLocale}
+                FILTER LOWER(catTrans.languageCode) == LOWER(${upperLocale})
                 RETURN catTrans.translation
             )
             SORT service.order ASC
@@ -707,7 +707,7 @@ class ServiceCategoryService {
               categoryName: categoryTrans
             }
         )
-        
+
         RETURN {
           categories: matchingCategories,
           services: matchingServices

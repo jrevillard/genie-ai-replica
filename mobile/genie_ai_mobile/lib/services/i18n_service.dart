@@ -11,7 +11,7 @@ import 'package:genie_ai_mobile/i18n/locales/sw.dart';
 import 'package:genie_ai_mobile/i18n/locales/th.dart';
 import 'package:genie_ai_mobile/i18n/locales/zh.dart';
 import 'package:genie_ai_mobile/i18n/locales/bn.dart';
-import 'package:genie_ai_mobile/i18n/locales/mnk.dart';
+import 'package:genie_ai_mobile/i18n/locales/man.dart';
 import 'package:genie_ai_mobile/i18n/locales/st.dart';
 
 class I18nService extends ChangeNotifier {
@@ -33,20 +33,20 @@ class I18nService extends ChangeNotifier {
 
   // Supported Languages Configuration
   final Map<String, String> supportedLanguages = {
-    'en': 'English',
     'ar': 'Arabic',
     'bn': 'Bengali',
-    'de': 'German',
-    'es': 'Spanish',
-    'fr': 'French',
-    'id': 'Indonesian',
-    'sw': 'Kiswahili',
-    'pt': 'Portuguese',
     'zh': 'Chinese',
+    'en': 'English',
+    'fr': 'French',
+    'de': 'German',
+    'id': 'Indonesian',
+    'man': 'Mandinka',
+    'pt': 'Portuguese',
     'ru': 'Russian',
-    'th': 'Thai',
-    'mnk': 'Mandinka',
     'st': 'Sesotho',
+    'es': 'Spanish',
+    'sw': 'Kiswahili',
+    'th': 'Thai',
   };
 
   // Translation Data Store
@@ -63,7 +63,7 @@ class I18nService extends ChangeNotifier {
     'sw': swLocale,
     'th': thLocale,
     'zh': zhLocale,
-    'mnk': mnkLocale,
+    'man': manLocale,
     'st': stLocale,
   };
 

@@ -521,10 +521,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         '[UI] Building profile icon, current value: $icon (${icon.runtimeType})');
 
     String? url;
+    String? assetPath;
     XFile? xfile;
     File? file;
 
     if (icon is String && icon.startsWith('http')) url = icon;
+    if (icon is String && icon.startsWith('assets/')) assetPath = icon;
     if (icon is XFile) xfile = icon;
     if (icon is File) file = icon;
 
@@ -541,11 +543,13 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     ? FileImage(File(xfile.path))
                     : url != null
                         ? NetworkImage(url)
-                        : null,
-            backgroundColor: url == null && xfile == null && file == null
+                        : assetPath != null
+                            ? AssetImage(assetPath) as ImageProvider
+                            : null,
+            backgroundColor: url == null && xfile == null && file == null && assetPath == null
                 ? _initialsColor
                 : null,
-            child: url == null && xfile == null && file == null
+            child: url == null && xfile == null && file == null && assetPath == null
                 ? Text(
                     _getInitials(
                         _formData['personalIdentification']?['fullName']),

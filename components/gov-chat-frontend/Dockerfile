@@ -11,9 +11,14 @@ RUN npm install
 # Copy the entire project
 COPY . .
 
+# Build the Vue app for production
+RUN npm run build
+
+# Install http-server to serve static files
+RUN npm install -g http-server
+
 # Expose the port the Vue app runs on
 EXPOSE 8090
 
-# Start the Vue.js development server
-CMD ["npm", "run", "serve"]
-
+# Serve the built app with http-server
+CMD ["sh", "-c", "http-server /app/dist -p 8090"]

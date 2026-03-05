@@ -39,8 +39,9 @@ logflag = os.getenv("LOGFLAG", True)
 MEGA_SERVICE_PORT = int(os.getenv("MEGA_SERVICE_PORT", 8888))
 GUARDRAIL_SERVICE_HOST_IP = os.getenv("GUARDRAIL_SERVICE_HOST_IP", "0.0.0.0")
 GUARDRAIL_SERVICE_PORT = int(os.getenv("GUARDRAIL_SERVICE_PORT", 80))
-TRANSLATION_SERVICE_HOST_IP = os.getenv("TRANSLATION_SERVICE_HOST_IP", "0.0.0.0") 
-TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80)) 
+TRANSLATION_SERVICE_HOST_IP = os.getenv("TRANSLATION_SERVICE_HOST_IP", "0.0.0.0")
+TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80))
+TRANSLATION_SERVICE_TIMEOUT = int(os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180))  # Timeout in seconds for translation service (default: 3 minutes) 
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
@@ -1079,7 +1080,7 @@ class ChatQnAService:
             logger.debug(f"Payload for translation service: {payload}")
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
                 response = await client.post(
                     f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
                     json=payload,
@@ -1092,6 +1093,9 @@ class ChatQnAService:
                     logger.debug(f"Translated chat history: {translated_blob.strip()}")
                 return translated_blob.strip()
 
+        except httpx.TimeoutException as e:
+            logger.error(f"History translation timeout after {TRANSLATION_SERVICE_TIMEOUT} seconds. Returning history in original language. Error: {e}")
+            return flattened_history_string
         except Exception as e:
             logger.error(f"Translation error: {e}")
             return flattened_history_string
@@ -1106,6 +1110,77 @@ class ChatQnAService:
         except Exception as e:
             logger.error(f"Error loading language codes from {filepath}: {e}")
             return {}
+
+    def _split_text_into_chunks(self, text: str, max_chars: int = 2000) -> list:
+        """Split text into chunks, trying to break at sentence boundaries."""
+        if len(text) <= max_chars:
+            return [text]
+
+        chunks = []
+        current_chunk = ""
+        sentences = text.replace('\n\n', '\n').split('. ')
+
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) + 2 <= max_chars:
+                current_chunk += sentence + ". "
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = sentence + ". "
+
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+
+        return chunks
+
+    async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None) -> str:
+        """Translate a single chunk of text."""
+        # More specific prompt to avoid language confusion (e.g., Sesotho vs Afrikaans, Bengali vs Hindi)
+        language_notes = {
+            "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
+            "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
+            "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali)."
+        }
+
+        note = language_notes.get(target_lang, "")
+
+        if iso_code:
+            prompt = f"Translate the following text to {target_lang} (ISO 639-1 code: {iso_code}). {note} Only output the translated text, nothing else.\n\nText: {text}\n\nTranslation:"
+        else:
+            prompt = f"Translate the following text to {target_lang}. {note} Only output the translated text.\n\nText: {text}\n\nTranslation:"
+        payload = {
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0,
+            "stream": False
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
+                )
+                response.raise_for_status()
+                response_data = response.json()
+                return response_data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.warning(f"Failed to translate chunk, returning original: {e}")
+            return text
+
+    async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None) -> str:
+        """Translate long text by splitting into chunks and translating separately."""
+        chunks = self._split_text_into_chunks(text, max_chars=2000)
+
+        if logflag:
+            logger.info(f"Translating {len(text)} chars in {len(chunks)} chunks to {target_lang}")
+
+        # Translate chunks concurrently
+        translated_chunks = await asyncio.gather(
+            *[self._translate_text_chunk(chunk, target_lang, iso_code) for chunk in chunks]
+        )
+
+        return " ".join(translated_chunks)
 
     async def handle_request(self, request: Request):
         data = await request.json()
@@ -1320,33 +1395,14 @@ class ChatQnAService:
                 logger.warning(f"Warning: Language '{original_language}' not found in language codes (lookup key: '{lookup_key}'). Attempting to translate using code directly.")
 
             if logflag:
-                logger.debug(f"LLM reponse translated into: {target_lang_name}")
-        
-            prompt = f"Translate the following text to {target_lang_name}. Please only output the translated text. No additional commentary.\n\nTEXT: {llm_response} \n\nTRANSLATION: "
-            if logflag:
-                logger.debug(f'Prompt for translating the output: {prompt}')
-
-            payload = {
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
-                "stream": False 
-            }
+                logger.debug(f"LLM response to be translated into: {target_lang_name}")
 
             try:
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.post(
-                        f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
-                        json=payload,
-                        headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
-                    )
-                    response.raise_for_status()
-                    response_data = response.json()
-                    translated_blob = response_data["choices"][0]["message"]["content"]
-                    final_text_response = translated_blob.strip()
-
+                final_text_response = await self._translate_with_chunking(llm_response, target_lang_name, original_language)
+                if logflag:
+                    logger.info(f"Translation completed successfully")
             except Exception as e:
-                # Corrected error message to refer to "response" translation, not "history"
-                logger.error(f"An error occurred during response translation: {e}")
+                logger.error(f"Translation failed: {e}, returning original response")
                 final_text_response = llm_response
         else:
             final_text_response = llm_response

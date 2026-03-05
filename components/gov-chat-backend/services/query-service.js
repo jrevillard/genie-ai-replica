@@ -412,7 +412,8 @@ class QueryService {
             messages: queryData.messages,
             context: {
               categoryLabel: queryData.context.categoryLabel,
-              serviceLabels: queryData.context.serviceLabels
+              serviceLabels: queryData.context.serviceLabels,
+              language: queryData.context.language
             },
             user_id: queryData.userId,
             stream: false

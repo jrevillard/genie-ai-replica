@@ -470,39 +470,6 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             user_context_string = builder.build_user_context_string(user_details)
             logger.info(f"\n[ DEBUG ] user_context_string compiled {user_context_string}\n")
 
-            # p_ident = user_details.get("personalIdentification", {})
-            
-            # # Name
-            # full_name = p_ident.get("fullName", "User")
-
-            # # Age
-            # dob = p_ident.get("dob", "N/A")
-            # if dob == "N/A":
-            #     age = "N/A"
-            # else:
-            #     today = date.today()
-            #     birth_date = date.fromisoformat(dob)
-            #     age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
-
-            # # Gender
-            # gender = p_ident.get("gender", "N/A")
-
-            # # Naitonality:
-            # nationality = p_ident.get("nationality", "N/A")
-
-            # # E-mail verified:
-            # email_verified = str(user_details.get("emailVerified", "N/A"))
-
-            # # Construct a clear instruction block for the System
-            # user_context_string = (
-            #     f"- Name: {full_name}\n"
-            #     f"- Age: {age}\n"
-            #     f"- Gender: {gender}\n"
-            #     f"- Nationality: {nationality}\n"
-            #     f"- Email verified: {email_verified}\n"
-            #     f"        ---\n"
-            # )
-
 
         ##################################
         ###### Token limit handling ######
@@ -559,7 +526,6 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
     return inputs
 
-
 def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_dict, **kwargs):
     next_data = {}
 
@@ -573,7 +539,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         return {"text": translated_text}
 
-    if self.services[cur_node].service_type == ServiceType.EMBEDDING:
+    elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
             logger.debug(f'Raw output of the embedding\n {data}\n')
         assert isinstance(data, list)
@@ -598,7 +564,6 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         metadata = data.get('metadata')
         if metadata and len(metadata) > 0:
             if RETRIEVER_SEARCH_START == 'node' or RETRIEVER_SEARCH_START == 'edge':
-                # Make sure the len(file_list_list) == the number of retrieved chunks that contains 'RELATED INFORMATION'
                 related_info_count = sum(1 for doc in retrieved_docs if '\n------\nRELATED INFORMATION:\n------\n' in doc['text'])
                 assert len(file_id_list) == related_info_count, f"Length of file_id_list {len(file_id_list)} is not equal to related_info_count {related_info_count}"
                 for retrieved_doc in retrieved_docs:
@@ -609,7 +574,6 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                     else:
                         file_id_pairs[doc_id] = ''
             elif RETRIEVER_SEARCH_START == 'chunk':
-                # Make sure the len(file_list_list) == the number of retrieved chunks
                 assert len(file_id_list) == len(retrieved_docs), f"Length of file_id_list {len(file_id_list)} is not equal to length of retrieved_docs {len(retrieved_docs)}"
                 for retrieved_doc in retrieved_docs:
                     doc_id = retrieved_doc['id']
@@ -619,18 +583,21 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         if logflag:
             logger.debug(f'File ID Pairs: {file_id_pairs}')
-      
-
+        
         with_rerank = runtime_graph.downstream(cur_node)[0].startswith("rerank")
         if with_rerank and retrieved_docs:
-            # forward to rerank
             # prepare inputs for rerank
-            next_data["query"] = data["initial_query"]
-            next_data["documents"] = retrieved_docs
-            next_data["texts"] = doc_texts
+            next_data["initial_query"] = data["initial_query"]
+            next_data["retrieved_docs"] = retrieved_docs
             next_data["file_id_pairs"] = file_id_pairs
+
+            # Expected data format if using tei_reranker directly (bypassing reranker service):
+            # next_data["query"] = data["initial_query"]
+            # next_data["documents"] = retrieved_docs
+            # next_data["texts"] = doc_texts
+            # next_data["file_id_pairs"] = file_id_pairs
+            
         else:
-            # forward to llm
             if not retrieved_docs and with_rerank:
                 # delete the rerank from retriever -> rerank -> llm
                 for ds in reversed(runtime_graph.downstream(cur_node)):
@@ -639,21 +606,19 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                     runtime_graph.delete_node_if_exists(ds)
 
             # handle template
-            # if user provides template, then format the prompt with it
-            # otherwise, use the default template
             prompt = data["initial_query"]
             chat_template = llm_parameters_dict["chat_template"]
             if chat_template:
                 prompt_template = PromptTemplate.from_template(chat_template)
                 input_variables = prompt_template.input_variables
                 if sorted(input_variables) == ["context", "question"]:
-                    prompt = prompt_template.format(question=data["initial_query"], context="\n".join(docs))
+                    prompt = prompt_template.format(question=data["initial_query"], context="\n".join(doc_texts)) 
                 elif input_variables == ["question"]:
                     prompt = prompt_template.format(question=data["initial_query"])
                 else:
                     if logflag:
                         logger.debug(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
-                    prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], docs)
+                    prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
             else:
                 prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
 
@@ -662,45 +627,74 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         next_data["retrieved_docs"] = retrieved_docs
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
-        # rerank the inputs with the scores
-        reranker_parameters = kwargs.get("reranker_parameters", None)
-        top_n = reranker_parameters.top_n if reranker_parameters else 1
-        original_docs = inputs["documents"]
-        rerank_scores = data
         if logflag:
-            logger.info(f"\nTHESE ARE THE RERANK SCORES: {rerank_scores}")
-
+            logger.info(f"\n[ DEBUG ] MICROSERVICE RERANK OUTPUT: {data}")
+            
+        docs = []
         reranked_docs_with_scores = []
-        for best_response in rerank_scores[:top_n]:
-            doc_index = best_response['index']
-            new_score = best_response['score']
 
-            reranked_doc = original_docs[doc_index]
-            reranked_doc["score"] = new_score
-            reranked_docs_with_scores.append(reranked_doc)
+        # RECOVERY OF IDs: Create a mapping of text to original document ID
+        original_retrieved_docs = inputs.get("retrieved_docs", [])
+        text_to_id = {doc.get("text", ""): doc.get("id", "N/A") for doc in original_retrieved_docs}
+
+        # 1. Handle output from custom Genie Python Wrapper
+        if isinstance(data, dict):
+            if "reranked_docs" in data:
+                for doc in data["reranked_docs"]:
+                    doc_text = doc.get("text", "")
+                    docs.append(doc_text)
+                    
+                    # Reconstruct the rich document object for the frontend
+                    reranked_docs_with_scores.append({
+                        "id": text_to_id.get(doc_text, "N/A"),
+                        "text": doc_text,
+                        "score": doc.get("score", 0.0)
+                    })
+            elif "documents" in data:
+                for doc_text in data["documents"]:
+                    docs.append(doc_text)
+                    reranked_docs_with_scores.append({
+                        "id": text_to_id.get(doc_text, "N/A"),
+                        "text": doc_text,
+                        "score": 0.0
+                    })
+            
+        # 2. Fallback for raw TEI output
+        elif isinstance(data, list):
+            reranker_parameters = kwargs.get("reranker_parameters", None)
+            top_n = reranker_parameters.top_n if reranker_parameters else 1
+            original_docs = inputs.get("documents", [])
+                
+            for best_response in data[:top_n]:
+                doc_index = best_response.get('index')
+                if doc_index is not None and doc_index < len(original_docs):
+                    reranked_doc = original_docs[doc_index]
+                    reranked_doc["score"] = best_response.get('score')
+                    reranked_docs_with_scores.append(reranked_doc)
+                    docs.append(reranked_doc.get("text", ""))
+
+        # 3. Build the RAG prompt
+        initial_query = inputs.get("initial_query", " ") 
+        chat_template = llm_parameters_dict.get("chat_template") if llm_parameters_dict else None
         
-        next_data["retrieved_docs"] = reranked_docs_with_scores
-
-        # handle template
-        # if user provides template, then format the prompt with it
-        # otherwise, use the default template
-        reranked_doc_texts = [doc["text"] for doc in reranked_docs_with_scores]
-        prompt = inputs["query"]
-        chat_template = llm_parameters_dict["chat_template"]
         if chat_template:
             prompt_template = PromptTemplate.from_template(chat_template)
             input_variables = prompt_template.input_variables
             if sorted(input_variables) == ["context", "question"]:
-                prompt = prompt_template.format(question=prompt, context="\n".join(reranked_docs))
+                prompt = prompt_template.format(question=initial_query, context="\n".join(docs))
             elif input_variables == ["question"]:
-                prompt = prompt_template.format(question=prompt)
+                prompt = prompt_template.format(question=initial_query)
             else:
-                logger.info(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
-                prompt = ChatTemplate.generate_rag_prompt(prompt, reranked_doc_texts)
+                prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
         else:
-            prompt = ChatTemplate.generate_rag_prompt(prompt, reranked_doc_texts)
-
+            prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
+            
         next_data["inputs"] = prompt
+        next_data["retrieved_docs"] = reranked_docs_with_scores
+        
+        # 4. Preserve file mappings for citations
+        if "file_id_pairs" in inputs:
+            next_data["file_id_pairs"] = inputs["file_id_pairs"]
 
     elif self.services[cur_node].service_type == ServiceType.LLM and not llm_parameters_dict["stream"]:
         if "faqgen" in self.services[cur_node].endpoint:
@@ -714,9 +708,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     else:
         next_data = data
 
+    if logflag:
+        logger.info(f"\n[ DEBUG ] FINAL ALIGNED DATA FOR NEXT NODE:\n{json.dumps(next_data, indent=2, default=str)}\n")
+
     return next_data
-
-
+        
 def align_generator(self, gen, **kwargs):
     # OpenAI response format
     # data:{"id":"","object":"text_completion","created":1725530204,"model":"meta-llama/Meta-Llama-3-8B-Instruct","system_fingerprint":"2.0.1-native","choices":[{"index":0,"delta":{"role":"assistant","content":"?"},"logprobs":null,"finish_reason":null}]}\n\n'
@@ -761,19 +757,6 @@ class ChatQnAService:
                 return key
         return None
     
-
-    # async def get_auth_token(self):
-    #     """Get admin auth token"""
-    #     response = requests.get(GET_AUTH_TOKEN_URL)
-    #     if response.status_code == 200:
-    #         data = response.json()
-    #         access_token = data.get("accessToken")
-    #         if access_token:
-    #             return access_token
-    #         else:
-    #             logger.error("Failed to retrieve access token")
-    #     else:
-    #         logger.error(f"Failed to call /get-token. Status code: {response.status_code}")
 
 
     async def fetch_file_metadata(self, file_id: str) -> dict:
@@ -841,7 +824,7 @@ class ChatQnAService:
             name="rerank",
             host=RERANK_SERVER_HOST_IP,
             port=RERANK_SERVER_PORT,
-            endpoint="/rerank",
+            endpoint="/v1/reranking",
             use_remote_service=True,
             service_type=ServiceType.RERANK,
         )
@@ -917,7 +900,7 @@ class ChatQnAService:
             name="rerank",
             host=RERANK_SERVER_HOST_IP,
             port=RERANK_SERVER_PORT,
-            endpoint="/rerank",
+            endpoint="/v1/reranking",
             use_remote_service=True,
             service_type=ServiceType.RERANK,
         )
@@ -963,7 +946,7 @@ class ChatQnAService:
             name="rerank",
             host=RERANK_SERVER_HOST_IP,
             port=RERANK_SERVER_PORT,
-            endpoint="/rerank",
+            endpoint="/v1/reranking",
             use_remote_service=True,
             service_type=ServiceType.RERANK,
         )
@@ -1013,7 +996,7 @@ class ChatQnAService:
             name="rerank",
             host=RERANK_SERVER_HOST_IP,
             port=RERANK_SERVER_PORT,
-            endpoint="/rerank",
+            endpoint="/v1/reranking",
             use_remote_service=True,
             service_type=ServiceType.RERANK,
         )
@@ -1441,7 +1424,9 @@ class ChatQnAService:
                     continue
                 else:
                     if file_id in source_documents_file_ids:
-                        logger.warning(f"Warning: Duplicate File ID {file_id} found. Skipping duplicate.")
+                        logger.info(f"Note: Duplicate File ID {file_id} found. Skipping duplicate.")
+                        score = item.get("score", 0.0)
+                        scores.append(score)
                         continue
                     else:
                         logger.info(f"Document ID {doc_id_by_orchestrator} mapped to File ID {file_id}.")
@@ -1478,7 +1463,6 @@ class ChatQnAService:
                             "document_id": file_id,
                             "document_name": file_name,
                             "url": file_read_url,
-                            "text": item.get("text", ""),
                             "categoryLabel": labels, 
                             "serviceLabels": [], 
                             "score": score,

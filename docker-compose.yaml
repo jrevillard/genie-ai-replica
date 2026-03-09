@@ -518,7 +518,6 @@ services:
       --port ${VLLM_TRANSLATION_SERVICE_PORT}
       --no-enable-chunked-prefill
       --max-num-seqs 16
-
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA
@@ -650,8 +649,14 @@ services:
     restart: "no"
 
   reranker:
-    container_name: reranker
-    image: opea/reranking:latest
+    build:
+      context: .
+      dockerfile: ./genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
+      args:
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
+    image: genie-ai-reranker:${OPEA_VERSION:-latest}
+    container_name: genie-ai-reranker
     depends_on:
       tei_reranker:
         condition: service_healthy
@@ -660,6 +665,9 @@ services:
     environment:
       - RERANKER_MODEL_ENDPOINT=${RERANKER_MODEL_ENDPOINT}
       - TEI_RERANKING_ENDPOINT=${TEI_RERANKING_ENDPOINT}
+      - RERANK_COMPONENT_NAME=${RERANK_COMPONENT_NAME:-GENIE_TEI_RERANKING}
+      - RERANKING_STRATEGY=${RERANKING_STRATEGY}
+      - RERANKING_THRESHOLD=${RERANKING_THRESHOLD}
     ports:
       - "6100:8000"
     ipc: "host"

@@ -11,7 +11,7 @@ class GenieAiConfig {
   static Future<void> load() async {
     if (_loaded) return;
     try {
-      final String jsonString = await rootBundle.loadString('config/genie-ai-config.json');
+      final String jsonString = await rootBundle.loadString('assets/config/genie-ai-config.json');
       final Map<String, dynamic> config = json.decode(jsonString);
 
       // FIX: Access nested keys based on your JSON structure

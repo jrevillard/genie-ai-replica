@@ -329,7 +329,7 @@
     "title": "Genie AI",
     "icon": {
       "type": "file",
-      "value": "/config/genie-ai-icon-light.svg"
+      "value": "assets/config/genie-ai-icon-light.svg"
     }
   },
   "theme": {

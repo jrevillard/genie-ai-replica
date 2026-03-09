@@ -4,7 +4,8 @@
       "Bash(dir:*)",
       "Bash(findstr:*)",
       "Bash(bn)",
-      "Bash(st \")"
+      "Bash(st \")",
+      "Bash(flutter clean)"
     ]
   }
 }

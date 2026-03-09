@@ -65,6 +65,7 @@ flutter:
   assets:
     - assets/images/
     - assets/images/genie-ai-icon-light.svg
+    - assets/config/genie-ai-icon-light.svg
     - assets/config/
     - assets/config/genie-ai-config.json
     - assets/config/quickhelp/

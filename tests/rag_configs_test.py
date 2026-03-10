@@ -1,12 +1,9 @@
 # Script for automated RAG param testing 
 # ahead of GENIE.AI 1.0 legendary release
 
-
-import subprocess
 import requests
 import time
 import pandas as pd
-import os
 import itertools
 from pathlib import Path
 
@@ -28,15 +25,14 @@ QUESTIONS = [
 # see parameters_for_testing/params_for_testing for further detail
 
 # Function to help generate combinations that account for conditionality 
-# Basically, trying to replicate different branches here 
 def generate_configurations():
     print("Building MASSIVE configuration grid...")
     
     # Base parameters that always apply
     base_params = {
-        "RETRIEVER_ARANGO_K": [5, 10, 30],
-        "RETRIEVER_ARANGO_FETCH_K": [5, 10, 30],
-        "RETRIEVER_ARANGO_SCORE_THRESHOLD": [0.5, 0.7, 0.9],
+        "RETRIEVER_ARANGO_K": [20, 30, 50],
+        "RETRIEVER_ARANGO_FETCH_K": [50],
+        "RETRIEVER_ARANGO_SCORE_THRESHOLD": [0.7, 0.9],
         "RETRIEVER_ARANGO_SEARCH_START": ['chunk', 'edge', 'node'],
     }
     
@@ -55,10 +51,9 @@ def generate_configurations():
         traversal_combos.append(tc_false)
         
         # Tree branch when traversal is enabled 
-        # not sure if nested FOR loops are optimal here, but should do the job
-        for depth in [1, 2, 3]:
+        for depth in [1, 2]:
             for ret in [2, 3, 5]:
-                for st in [0.5, 0.7, 0.9]:
+                for st in [0.7, 0.9]:
                     tc_true = bc.copy()
                     tc_true["RETRIEVER_ARANGO_TRAVERSAL_ENABLED"] = 'true'
                     tc_true["RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH"] = depth
@@ -99,7 +94,6 @@ def generate_configurations():
 # --- 3. HELPER FUNCTIONS ---
 # saving to csv
 def save_result(data_dict):
-
     df = pd.DataFrame([data_dict])
 
     if not Path(RESULTS_FILE).is_file():
@@ -108,11 +102,14 @@ def save_result(data_dict):
         df.to_csv(RESULTS_FILE, mode='a', header=False, index=False)
 
 # sending payload to the ChatQnA
-def query_rag(question):
-    # Sends the question to Kong gateway to account for the network overhead
-    # Also to help control for potential gateway errors (if any)
+def query_rag(question, config):
+    # Sends the question and the configuration payload directly to the API
+    payload = {
+        "messages": question, 
+        "stream": False,
+        "rag_params": config  
+    }
     
-    payload = {"messages": question, "stream": False} # <<< NEED TO CHECK THIS
     try:
         start_t = time.time()
         response = requests.post(TARGET_URL, json=payload, timeout=90)
@@ -128,44 +125,23 @@ def query_rag(question):
 
 # MAIN
 def main():
-    
     configurations = generate_configurations()
-
-    # saving a copy just in case
-    base_env = os.environ.copy()
     
     for i, config in enumerate(configurations):
         print(f"\n--- [Config {i+1}/{len(configurations)}] ---")
         
-        # 1. Update Environment
-        current_env = {**base_env, **{k: str(v) for k, v in config.items()}}
-        
-        # 2. Restart ONLY the affected containers to save time
-        print("Restarting chatqna, retriever, and reranker...")
-        # ################################################################################
-        # DAVID, please review this:
-        subprocess.run([
-            "sudo", "docker-compose", "up", "-d", 
-            "chatqna-xeon-backend-server", 
-            "retriever-arango-service", 
-            "reranker"
-        ], env=current_env, check=True, stdout=subprocess.DEVNULL)
-        # ################################################################################
-        
-        # 3. Wait for internal Python services to initialize
-        time.sleep(15) 
-        
-        # 4. Run the questions
+        Run the questions
         for q_idx, question in enumerate(QUESTIONS):
             print(f"  -> Asking Q{q_idx + 1}...")
             
-            # Send a quick throwaway request on Q1 to warm up caches (optional but recommended)
-            if q_idx == 0:
-                requests.post(TARGET_URL, json={"messages": "ping", "stream": False}, timeout=10)
+            Send a quick throwaway request ONLY on the very first run to warm up caches
+            if i == 0 and q_idx == 0:
+                requests.post(TARGET_URL, json={"messages": "ping", "rag_params": config, "stream": False}, timeout=10)
             
-            answer, latency, status = query_rag(question)
+            # Pass the config to the query function
+            answer, latency, status = query_rag(question, config)
             
-            # 5. Save immediately
+            # Save results
             result_row = {
                 "config_id": i + 1,
                 **config,
@@ -181,6 +157,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-

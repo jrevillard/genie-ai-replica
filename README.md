@@ -90,11 +90,33 @@ GENIE.AI/
 │   ├── core/                     # Core libraries and protocols
 │   ├── dataprep/                 # Data preparation service
 │   ├── http-service/             # HTTP client wrapper
-│   └── retriever/                # Hybrid vector-graph retriever
+│   ├── retriever/                # Hybrid vector-graph retriever
+│   └── reranker/                 # Reranking microservice
 ├── api-gateway-solution/         # API Gateway (Kong/NGINX)
-├── configs/opea-config/          # OPEA infrastructure configuration
+├── configs/                      # Configuration files
+│   └── opea-config/              # OPEA infrastructure configuration
 ├── data/                         # Country-specific data
-└── docs/                         # Documentation
+│   ├── el-salvador/              # El Salvador data
+│   ├── gambia/                   # Gambia data
+│   ├── kenya/                    # Kenya data
+│   └── lesotho/                  # Lesotho data
+├── docs/                         # Documentation
+├── tests/                        # End-to-end and integration tests
+├── logs/                         # Application logs
+├── CLA.md                        # Contributor License Agreement
+├── CONTRIBUTING.md               # Contribution guidelines
+├── STANDARDS.md                  # Coding standards specification
+├── THIRD_PARTY.md                # Third-party software disclosure
+├── GENIE.AI-Installation-Configuration-Guide.md  # Installation guide
+├── GENIE.AI-Data-Labelling-Strategy.md           # Data labeling strategy
+├── UNICC-ITU-Genie-AI Code Management Process.md # Development workflow
+├── proposed-repo-structure-changes.md            # Repository architecture
+├── docker-compose.yaml          # Main Docker Compose configuration
+├── docker-compose-t4.yaml       # T4 GPU variant configuration
+├── docker-compose-RTX6000-ADA.yaml # RTX 6000 ADA GPU variant
+├── env                          # Environment configuration (main)
+├── env-T4                       # Environment configuration (T4 variant)
+└── package.json                 # Node.js dependencies and scripts
 ```
 
 ## Quick Start:
@@ -135,6 +157,20 @@ docker-compose up -d
 - **API Documentation**: http://localhost:8080/api-docs
 
 ## Documentation:
+
+### Project Standards & Governance
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Comprehensive contribution guidelines, required documentation, and submission processes
+- **[STANDARDS.md](STANDARDS.md)** - Complete coding standards specification (JavaScript, Vue 3, Node.js, Python, Bash, Docker)
+- **[CLA.md](CLA.md)** - Contributor License Agreement with challenge-specific provisions
+- **[THIRD_PARTY.md](THIRD_PARTY.md)** - Third-party software disclosure and licensing requirements
+- **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development workflow, branching strategy, and code review processes
+
+### Technical Guides
+
+- **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Comprehensive installation, setup, and configuration instructions
+- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling process for hybrid RAG systems
+- **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture and component organization
 
 ### Core Components
 
@@ -275,9 +311,43 @@ kubectl get pods -n genie-ai
 
 See individual component READMEs for detailed deployment instructions.
 
+## Project Documentation:
+
+### Essential Standards & Guidelines
+
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines, required documentation, and submission processes
+- **[STANDARDS.md](STANDARDS.md)** - Project coding standards specification covering all technologies
+- **[CLA.md](CLA.md)** - Contributor License Agreement (must be accepted before contributing)
+- **[THIRD_PARTY.md](THIRD_PARTY.md)** - Third-party software disclosure and licensing requirements
+
+### Technical Documentation
+
+- **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Detailed installation, setup, and configuration instructions
+- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling process for hybrid RAG systems
+- **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development workflow, branching strategy, and code review processes
+- **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture and component organization
+
+### Documentation Requirements
+
+Before contributing to GENIE.AI, all contributors must review and agree to:
+1. **[CLA.md](CLA.md)** - Accept the Contributor License Agreement
+2. **[STANDARDS.md](STANDARDS.md)** - Understand coding standards and best practices
+3. **[CONTRIBUTING.md](CONTRIBUTING.md)** - Follow contribution guidelines and workflows
+4. **[THIRD_PARTY.md](THIRD_PARTY.md)** - Comply with third-party integration requirements
+5. **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Follow development workflow and branching strategy
+
 ## Contributing:
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for comprehensive guidelines.
+
+### Contribution Process
+
+1. Review and accept [CLA.md](CLA.md)
+2. Read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution areas and guidelines
+3. Follow [STANDARDS.md](STANDARDS.md) for all code contributions
+4. Review [THIRD_PARTY.md](THIRD_PARTY.md) for third-party dependency requirements
+5. Follow the workflow in [UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)
+6. Set up your environment using [GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)
 
 ## License:
 
@@ -292,3 +362,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - [OPEA (Open Platform for Enterprise AI)](https://opea.dev)
 - [GovStack Digital Public Infrastructure](https://specs.govstack.global)
 
+**Document Version:** 2.0
+**Last Updated:** March 10, 2026
+**Project:** GENIE.AI
+**Maintained By:** ITU (International Telecommunication Union)

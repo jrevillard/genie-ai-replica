@@ -1221,9 +1221,435 @@ EMBEDDING\_LABEL\_THRESHOLD=0.75
 
 Bash
 
-\# Keyword Match Mode  
+\# Keyword Match Mode
 LABELING\_STRATEGY=bm25
 
-\# Relevance Score Threshold  
-\# Start at 2.0. This is a raw score, not a percentage.  
-BM25\_LABEL\_THRESHOLD=2.0  
+\# Relevance Score Threshold
+\# Start at 2.0. This is a raw score, not a percentage.
+BM25\_LABEL\_THRESHOLD=2.0
+
+---
+
+# Step 9: Mobile Application Configuration
+
+## 9.1 Overview
+
+The GENIE.AI mobile application is a cross-platform Flutter application that provides users with access to the GENIE.AI chatbot functionality on Android, iOS, Web, and Desktop platforms. This section covers the configuration steps required to deploy and customize the mobile application for your specific GENIE.AI deployment.
+
+**Key Features:**
+- Cross-platform support (Android, iOS, Web, Desktop)
+- Multi-language support (11 languages)
+- Configuration-driven theming (JSON-based)
+- Complete authentication flow (login, register, password reset)
+- PDF export functionality
+- Online/offline detection
+- Material Design 3 UI
+
+## 9.2 Prerequisites
+
+### Required Software
+
+| Software | Minimum Version | Notes |
+|----------|-----------------|-------|
+| **Flutter SDK** | 3.10.8+ | Download from [flutter.dev](https://flutter.dev) |
+| **Dart SDK** | 3.10.8+ | Included with Flutter |
+| **Git** | Latest | For version control |
+| **VS Code** | Latest | Recommended IDE with Flutter/Dart extensions |
+| **Android Studio** | Latest | Required for Android SDK & Emulator |
+| **Java JDK** | 17 | Required for Android builds (Gradle 8.5+) |
+
+### Optional Software
+- **Xcode** (macOS only) - Required for iOS builds
+- **Chrome/Edge** - For web development testing
+
+### IDE Setup (VS Code)
+
+Install these extensions:
+- Flutter
+- Dart
+- Flutter Widget Snippets
+
+**Recommended VS Code Settings** (to minimize file locking on Windows):
+
+```json
+{
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/build/**": true,
+    "**/.dart_tool/**": true
+  },
+  "files.hotExit": "off"
+}
+```
+
+## 9.3 Mobile Application Structure
+
+The mobile application is located in the `mobile/genie_ai_mobile/` directory:
+
+```
+mobile/genie_ai_mobile/
+├── lib/
+│   ├── main.dart                          # App entry point
+│   ├── i18n/                              # Internationalization
+│   │   └── locales/                       # Language files
+│   ├── components/                        # UI Components
+│   │   ├── auth/                          # Authentication screens
+│   │   ├── chat/                          # Chat functionality
+│   │   ├── settings/                      # Settings screens
+│   │   └── shared/                        # Shared UI elements
+│   ├── services/                          # Business logic & API
+│   │   ├── api_service.dart               # Base API client
+│   │   ├── auth_proxy.dart                # Authentication API
+│   │   ├── chatbot_proxy.dart             # Chatbot API
+│   │   └── genie_ai_config.dart           # Configuration loader
+│   └── utils/                             # Utilities
+│       └── theme_manager.dart             # Theme management
+├── assets/
+│   ├── config/
+│   │   └── genie-ai-config.json          # App configuration
+│   ├── images/                           # Images and icons
+│   ├── fonts/                            # Custom fonts
+│   └── FAQ.md                            # FAQ content
+└── pubspec.yaml                          # Dependencies
+```
+
+## 9.4 API Configuration
+
+### Setting the Backend API Endpoint
+
+The mobile application connects to your GENIE.AI backend API. Configure the API endpoint in `lib/services/api_service.dart`:
+
+**File:** `mobile/genie_ai_mobile/lib/services/api_service.dart`
+
+```dart
+class ApiService {
+  // Production API endpoint - UPDATE THIS TO YOUR BACKEND URL
+  String get baseUrl => 'https://your-domain.com/api';
+
+  // For local development:
+  // String get baseUrl => 'http://localhost:3000/api';
+}
+```
+
+**Configuration Steps:**
+
+1. **Open the file:** `mobile/genie_ai_mobile/lib/services/api_service.dart`
+2. **Locate line 10** (approximately): `String get baseUrl => 'https://genie-ai.itu.int/api';`
+3. **Replace the URL** with your actual backend API endpoint
+4. **Save the file**
+
+**Example configurations:**
+
+```dart
+// Production environment
+String get baseUrl => 'https://genie-ai.your-org.com/api';
+
+// Staging environment
+String get baseUrl => 'https://staging.genie-ai.your-org.com/api';
+
+// Local development
+String get baseUrl => 'http://localhost:3000/api';
+
+// Local network testing (use your actual IP)
+String get baseUrl => 'http://192.168.1.100:3000/api';
+```
+
+## 9.5 App Configuration (genie-ai-config.json)
+
+The mobile application uses a comprehensive JSON configuration file for theming and feature customization. This file is located at `mobile/genie_ai_mobile/assets/config/genie-ai-config.json`.
+
+### Configuration Structure
+
+```json
+{
+  "app": {
+    "title": "Genie AI",
+    "icon": {
+      "type": "file",
+      "value": "assets/config/genie-ai-icon-light.svg"
+    }
+  },
+  "theme": {
+    "primaryColor": "#4682B4",
+    "secondaryColor": "#5F9EA0",
+    "backgroundColor": "#D3E0EA",
+    "textColor": "#1C2526",
+    "navbar": {
+      "gradientStart": "#4682B4",
+      "gradientEnd": "#5F9EA0",
+      "textColor": "#F0F8FF"
+    }
+  },
+  "features": {
+    "chat": {
+      "welcomeMessage": "Welcome to Genie AI",
+      "botName": "Genie AI",
+      "quickHelp": {
+        "layout": {
+          "columns": 2,
+          "gapX": "8px",
+          "gapY": "8px",
+          "childAspectRatio": 4.2
+        },
+        "buttons": [
+          {
+            "id": "just-chat",
+            "category": null,
+            "action": {
+              "visibleText": "quickhelp.justChatUserPrompt",
+              "hiddenPrompt": "quickhelp.justChatPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.justChat",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/just-chat.svg",
+                "color": "#4682B4"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+### Customization Options
+
+#### 1. App Title and Icon
+
+```json
+"app": {
+  "title": "Your App Name",
+  "icon": {
+    "type": "file",
+    "value": "assets/config/your-icon.svg"
+  }
+}
+```
+
+#### 2. Theme Colors
+
+```json
+"theme": {
+  "primaryColor": "#4682B4",        // Main brand color
+  "secondaryColor": "#5F9EA0",      // Accent color
+  "backgroundColor": "#D3E0EA",     // Background color
+  "textColor": "#1C2526",           // Primary text color
+  "navbar": {
+    "gradientStart": "#4682B4",     // Navbar gradient start
+    "gradientEnd": "#5F9EA0",       // Navbar gradient end
+    "textColor": "#F0F8FF"          // Navbar text color
+  }
+}
+```
+
+#### 3. Chat Configuration
+
+```json
+"features": {
+  "chat": {
+    "welcomeMessage": "Welcome to Your App",
+    "botName": "Your Bot Name"
+  }
+}
+```
+
+#### 4. Quick Help Buttons
+
+Quick Help buttons provide pre-configured prompts for common tasks. Each button is associated with a category from your Knowledge Hierarchy:
+
+```json
+"buttons": [
+  {
+    "id": "unique-button-id",
+    "category": "1",  // Category ID from your Knowledge Hierarchy
+    "action": {
+      "visibleText": "quickhelp.userPrompt",
+      "hiddenPrompt": "quickhelp.systemPrompt"
+    },
+    "appearance": {
+      "label": {
+        "text": "Button Label",
+        "color": "#1C2526"
+      },
+      "icon": {
+        "value": "/config/quickhelp/your-icon.svg",
+        "color": "#4682B4"
+      },
+      "style": {
+        "background": {
+          "gradient": {
+            "start": "#D3E0EA",
+            "end": "#A3BFFA",
+            "direction": "horizontal"
+          }
+        }
+      }
+    }
+  }
+]
+```
+
+**Quick Help Button Configuration:**
+
+1. **id**: Unique identifier for the button
+2. **category**: Category ID from your Knowledge Hierarchy (or `null` for general chat)
+3. **action.visibleText**: Text displayed to users in the chat
+4. **action.hiddenPrompt**: Actual prompt sent to the LLM
+5. **appearance**: Visual styling (colors, icons, gradients)
+6. **darkMode**: Optional dark mode overrides
+
+## 9.6 Asset Configuration
+
+### Declaring Assets (pubspec.yaml)
+
+All assets must be declared in `mobile/genie_ai_mobile/pubspec.yaml`:
+
+```yaml
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    - assets/images/
+    - assets/config/
+    - assets/config/genie-ai-config.json
+    - assets/config/quickhelp/
+    - assets/FAQ.md
+    - assets/icons/
+
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+```
+
+**Important:**
+- After modifying `pubspec.yaml`, run `flutter pub get` to update dependencies
+- Ensure all asset files exist in the specified paths
+- Icons referenced in `genie-ai-config.json` must be present in `assets/config/quickhelp/`
+
+## 9.7 Building the Mobile Application
+
+### 1. Install Dependencies
+
+```bash
+cd mobile/genie_ai_mobile
+flutter pub get
+```
+
+### 2. Verify Flutter Setup
+
+```bash
+flutter doctor
+```
+
+Fix any issues reported before proceeding.
+
+### 3. Running on Different Platforms
+
+#### Web Development (Fastest Iteration)
+
+```bash
+flutter run -d chrome
+```
+
+#### Android Debug
+
+```bash
+# Enable USB debugging on device
+flutter run
+```
+
+#### iOS Debug (macOS only)
+
+```bash
+flutter run -d iphone
+```
+
+### 4. Building for Release
+
+#### Android Release Build
+
+```bash
+# Clean the project
+flutter clean
+
+# Build APK (for direct installation)
+flutter build apk --no-tree-shake-icons
+
+# Build App Bundle (for Play Store)
+flutter build appbundle --no-tree-shake-icons
+```
+
+**Output locations:**
+- APK: `build/app/outputs/flutter-apk/app-release.apk`
+- AAB: `build/app/outputs/bundle/release/app-release.aab`
+
+#### iOS Release Build (macOS only)
+
+```bash
+# Build the iOS app
+flutter build ios --no-tree-shake-icons
+
+# Open in Xcode
+open ios/Runner.xcworkspace
+
+# In Xcode:
+# - Select your team
+# - Update signing certificates
+# - Archive the app
+# - Distribute to App Store Connect
+```
+
+#### Web Build
+
+```bash
+flutter build web
+```
+
+## 9.8 Configuration Summary
+
+| Configuration Item | File Location | Description |
+|--------------------|---------------|-------------|
+| API Endpoint | `lib/services/api_service.dart:10` | Backend API base URL |
+| App Title | `assets/config/genie-ai-config.json:329` | Application title |
+| Bot Name | `assets/config/genie-ai-config.json:349` | Chatbot display name |
+| Theme Colors | `assets/config/genie-ai-config.json:336-344` | Primary, secondary, background colors |
+| Quick Help Buttons | `assets/config/genie-ai-config.json:370+` | Pre-configured prompt buttons |
+| Assets | `pubspec.yaml:66-73` | Declared assets for the app |
+
+## 9.9 Troubleshooting
+
+### Issue: Mobile app can't connect to API
+
+**Solution:**
+1. Verify the API endpoint in `lib/services/api_service.dart`
+2. Check network permissions (Android requires `INTERNET` permission)
+3. Ensure SSL certificates are valid (development: certificate override available in `main.dart`)
+
+### Issue: Assets not loading
+
+**Solution:**
+1. Verify all assets are declared in `pubspec.yaml`
+2. Run `flutter pub get` after modifying `pubspec.yaml`
+3. Check file paths are correct (case-sensitive)
+
+### Issue: Build fails on Windows
+
+**Solution:**
+1. Close VS Code before building
+2. Move project out of OneDrive/Dropbox folders
+3. Use the PowerShell build script if available: `.\build-release.ps1`
+
+### Issue: Theme not loading
+
+**Solution:**
+1. Verify `genie-ai-config.json` is valid JSON
+2. Check that the config file is declared in `pubspec.yaml`
+3. Ensure the config loader is initialized in `main.dart`  

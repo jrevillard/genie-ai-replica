@@ -1,25 +1,133 @@
 # Contribution Guidelines
 
-Thank you for your interest in the GENIE.AI initiative. This document outlines potential ways you can contribute. As the initiative is still in its early stages, the current focus is on the key areas of work and the primary needs of the project. Detailed guidelines for submitting contributions will be provided in a later iteration of this document.
+Thank you for your interest in the GENIE.AI initiative. This document provides a comprehensive guide for contributors, including required documentation, contribution areas, and submission processes.
 
-### Which areas of work you can contribute to? 
+## 📋 Prerequisite Documentation
 
-1.	***Collection of Data for Fine-Tuning and Testing***
--	Data is crucial for refining and testing AI models. If you have access to relevant datasets that can help in fine-tuning our models, your contribution will be invaluable.
--	Ideal Contributors: Data scientists, researchers, academic institutions, and governmental bodies with access to public sector data.
+Before contributing to GENIE.AI, all contributors must review and agree to the following documentation:
 
-2.	***Contribution of Fully Open-Source Fine-Tuned LLMs and Embedding Models***
--	If you have developed or fine-tuned large language models (LLMs) or embedding models that are fully open-source, contributing them to our initiative can greatly accelerate our progress.
--	Ideal Contributors: AI developers, machine learning researchers, and open-source enthusiasts.
+### Required Reading
+1. **[CLA.md](CLA.md)** - Contributor License Agreement
+   - **MUST be accepted** before any code contribution
+   - Defines copyright and patent licenses
+   - Outlines compliance requirements and representations
+   - Includes challenge-specific provisions for GenAI for Good Challenge participants
 
-3.	***Development and Optimization of RAG Methods for Public Sector Needs***
--	Research and develop Retrieval-Augmented Generation (RAG) methods tailored to the unique requirements of public sector applications to enhance efficiency and accuracy.
--	Ideal Contributors: AI researchers, machine learning engineers, and public sector technology experts.
+2. **[STANDARDS.md](STANDARDS.md)** - Project Coding Standards Specification
+   - Mandatory coding standards for all contributions
+   - Covers JavaScript, Vue 3, Node.js, Python, Bash, and more
+   - Defines documentation, Docker, and internationalization standards
+   - All contributions must adhere to these standards
 
-4.	***Optimizing Solutions for Selected Under-Served Languages***
--	Many public sector needs are language-specific. Help us optimize our AI solutions for under-served languages to ensure inclusivity and accessibility.
--	Ideal Contributors: Linguists, AI developers with multilingual expertise, and local language experts.
+3. **[THIRD_PARTY.md](THIRD_PARTY.md)** - Third-Party Software Disclosure
+   - Requirements for disclosing third-party dependencies
+   - Licensing compliance for all external components
+   - Attribution requirements (e.g., FontAwesome icons)
+   - Must be updated for any new dependencies introduced
 
-### Useful links:
--	[Contributor Covenant](https://www.contributor-covenant.org/) 
+### Essential Documentation
+4. **[README.md](README.md)** - Project Overview
+   - High-level understanding of GENIE.AI initiative
+   - Architecture and technology stack
+   - Quick start guide and development setup
+   - Deployment instructions
 
+5. **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Technical Setup
+   - Detailed installation and configuration instructions
+   - Environment setup and prerequisites
+   - Docker and Kubernetes deployment guides
+   - Troubleshooting and best practices
+
+6. **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development Workflow
+   - Repository access and branching strategy
+   - Code submission and review processes
+   - GitLab configuration for challenge teams
+   - Conflict resolution and communication guidelines
+
+### Specialized Documentation
+7. **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data Labeling for RAG
+   - Understanding the hybrid RAG pipeline
+   - Data labeling and enrichment strategies
+   - Knowledge graph integration
+   - Best practices for domain-specific labeling
+
+8. **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository Architecture
+   - Current and proposed repository structure
+   - Component organization and shared libraries
+   - Modularity and scalability considerations
+
+## 🎯 Areas of Contribution
+
+### 1. Collection of Data for Fine-Tuning and Testing
+- **What**: Contribute relevant datasets for refining and testing AI models
+- **Ideal Contributors**: Data scientists, researchers, academic institutions, governmental bodies
+- **Documentation**: Review [GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md) for data preparation guidelines
+
+### 2. Open-Source Fine-Tuned LLMs and Embedding Models
+- **What**: Contribute fully open-source fine-tuned models
+- **Ideal Contributors**: AI developers, ML researchers, open-source enthusiasts
+- **Standards**: Must comply with [STANDARDS.md](STANDARDS.md) and [THIRD_PARTY.md](THIRD_PARTY.md)
+
+### 3. RAG Methods for Public Sector Needs
+- **What**: Develop Retrieval-Augmented Generation methods for public sector applications
+- **Ideal Contributors**: AI researchers, ML engineers, public sector technology experts
+- **Context**: See [GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md) for hybrid RAG approach
+
+### 4. Under-Served Language Optimization
+- **What**: Optimize AI solutions for under-served languages
+- **Ideal Contributors**: Linguists, multilingual AI developers, local language experts
+- **Standards**: Follow internationalization guidelines in [STANDARDS.md](STANDARDS.md)
+
+## 🚀 Getting Started
+
+### For All Contributors
+1. **Review Documentation**: Read all required documentation listed above
+2. **Accept CLA**: Review and accept [CLA.md](CLA.md)
+3. **Setup Environment**: Follow [GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)
+4. **Understand Process**: Review [UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)
+5. **Follow Standards**: Ensure all code meets [STANDARDS.md](STANDARDS.md) requirements
+
+### For Challenge Participants
+If you're participating in the **GenAI for Good Challenge**, please note:
+- Challenge-specific provisions are in [CLA.md](CLA.md) (Appendix)
+- Team branch setup is detailed in [UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)
+- Submission deadline: **1 December 2025**
+- Focus areas: Agriculture (Lesotho), Health (The Gambia), Climate (Bangladesh)
+
+## 📝 Submission Process
+
+1. **Branch Strategy**: Follow the branching strategy in [UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)
+2. **Code Quality**: Ensure compliance with [STANDARDS.md](STANDARDS.md)
+3. **Testing**: Test thoroughly using guidelines from [GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)
+4. **Third-Party Check**: Update [THIRD_PARTY.md](THIRD_PARTY.md) for any new dependencies
+5. **Submit**: Create merge request following the code management process
+
+## 🔍 Additional Resources
+
+### Documentation Links
+- **[README.md](README.md)** - Project overview and quick start
+- **[STANDARDS.md](STANDARDS.md)** - Coding standards and best practices
+- **[CLA.md](CLA.md)** - Contributor license agreement
+- **[THIRD_PARTY.md](THIRD_PARTY.md)** - Third-party software disclosure
+- **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Setup and configuration
+- **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling guidelines
+- **[UNICC-ITU-Genie-AI Code Management Process.md](UNICC-ITU-Genie-AI%20Code%20Management%20Process.md)** - Development workflow
+- **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture
+
+### External Resources
+- **[Contributor Covenant](https://www.contributor-covenant.org/)** - Code of conduct
+- **[ITU Initiative on Open Source AI for Public Services](https://www.itu.int/en/ITU-D/ICT-Applications/Pages/Initiatives/ITU_OSPO/Open-Source_AI_for_Public_Services/About_the_Initiative.aspx)**
+- **[AI for Good Global Summit](https://aiforgood.itu.int/eventcat/discovery-open-source-ai-for-digital-public-goods/)**
+
+## 💬 Community and Communication
+
+- **GitLab Repository**: https://opensource.unicc.org/un/itu/genie-ai/
+- **Issue Tracker**: https://opensource.unicc.org/un/itu/genie-ai/-/issues
+- **Challenge Website**: https://ieeeht.org/get-involved/funding-opportunities/genai-for-good/
+
+For questions about contributions, please open an issue in the GitLab repository or contact the GENIE.AI Project Team. 
+
+**Document Version:** 2.0
+**Last Updated:** March 10, 2026
+**Project:** GENIE.AI
+**Maintained By:** ITU (International Telecommunication Union)

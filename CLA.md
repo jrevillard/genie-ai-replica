@@ -1,9 +1,9 @@
 # Contributor License Agreement (CLA)
 
-**Project:** GENIE.AI (GenAI for Good Challenge)
-**Sponsored by:** IEEE Humanitarian Technologies (IEEE HT) and International Telecommunication Union (ITU)
-**Version:** 1.0
-**Effective Date:** February 25, 2026
+**Project:** GENIE.AI 
+**Maintained By:** International Telecommunication Union (ITU)
+**Version:** 2.0
+**Effective Date:** March 10, 2026
 
 ---
 
@@ -59,18 +59,23 @@ For purposes of this definition, "submitted" means any form of electronic, verba
 **4.1 Mandatory Compliance.** You agree to comply with all Project processes, standards, and guidelines as established from time to time by the Project maintainers. These include, but are not limited to:
 
 - **CONTRIBUTING.md:** Guidelines for contribution areas, submission processes, and community standards
+
 - **STANDARDS.md:** GENIE.AI Project Coding Standards Specification, including:
   - General principles (clarity, separation of concerns, robustness)
   - JavaScript standards (ES6+, ESLint, Prettier)
   - Vue 3 frontend standards (Composition API, component structure)
   - Node.js & Express backend standards (RESTful API design)
   - Python standards (PEP 8, type hints, docstrings)
+  - Flutter & Dart standards (mobile development)
   - Bash scripting standards
   - Data & schema standards (JSON, ArangoDB)
   - Internationalization (i18n) system standards
   - OPEA integration & RAG pattern standards
   - Documentation standards
   - Docker & Docker Compose standards
+  - API documentation standards
+  - Security standards
+  - Logging standards
 
 - **UNICC-ITU-Genie-AI Code Management Process.md:** The code management process covering:
   - Repository access and branching strategy
@@ -79,8 +84,38 @@ For purposes of this definition, "submitted" means any form of electronic, verba
   - Merge request procedures
   - Conflict resolution
   - Communication and documentation requirements
+  - Challenge team branch setup and access controls
+  - Third-party collaboration workflows
 
-- **THIRD_PARTY.md:** Third-party software disclosure and licensing requirements
+- **THIRD_PARTY.md:** Third-party software disclosure and licensing requirements, including:
+  - Comprehensive list of all third-party dependencies
+  - License compliance requirements for each component
+  - Attribution requirements (e.g., FontAwesome icons under CC BY 4.0)
+  - Important license change warnings (e.g., ArangoDB 3.12.x vs 4.x+)
+  - Copyleft license considerations (e.g., ClamAV GPL 2.0)
+  - Non-open source license alerts (e.g., MongoDB SSPL)
+
+- **README.md:** Project overview and architecture understanding, including:
+  - High-level understanding of GENIE.AI initiative and objectives
+  - Architecture and technology stack
+  - Quick start guide and development setup
+  - Deployment instructions
+  - Documentation structure and navigation
+
+- **GENIE.AI-Installation-Configuration-Guide.md:** Technical setup and configuration requirements, including:
+  - Detailed installation and configuration instructions
+  - Environment setup and prerequisites
+  - Docker and Kubernetes deployment guides
+  - Data curation and knowledge hierarchy design
+  - Troubleshooting and best practices
+  - Configuration management and customization
+
+- **GENIE.AI-Data-Labelling-Strategy.md:** Data labeling and enrichment guidelines for RAG systems, including:
+  - Domain-specific labeling schemas
+  - Knowledge graph enrichment strategies
+  - Hybrid retrieval patterns (vector + graph + labels)
+  - LLM-driven labeling processes
+  - Data chunking and ingestion workflows
 
 **4.2 Code Quality.** You agree that all Contributions will:
 - Adhere to the coding standards specified in STANDARDS.md
@@ -90,9 +125,19 @@ For purposes of this definition, "submitted" means any form of electronic, verba
 
 **4.3 Third-Party Dependencies.** You agree to:
 - Disclose all third-party software, components, and dependencies used in Your Contribution
-- Ensure all third-party dependencies comply with the Project's licensing requirements
-- Update THIRD_PARTY.md as required for any new dependencies introduced
+- Ensure all third-party dependencies comply with the Project's licensing requirements as specified in THIRD_PARTY.md
+- Update THIRD_PARTY.md as required for any new dependencies introduced, including:
+  - Component type and version information
+  - Repository links and license URLs
+  - License type and compliance requirements
+  - Attribution requirements (e.g., CC BY 4.0 for FontAwesome icons)
+  - Any license change warnings or restrictions
 - Obtain any necessary licenses or permissions for third-party components before submission
+- Pay special attention to components with:
+  - Copyleft licenses (e.g., GPL 2.0 - ClamAV) that may affect derivative works
+  - Non-open source licenses (e.g., SSPL - MongoDB) that may require commercial licensing
+  - License changes in newer versions (e.g., ArangoDB 4.x+ BSL vs 3.12.x Apache 2.0)
+  - Attribution requirements (e.g., FontAwesome icons under CC BY 4.0)
 
 ---
 
@@ -148,10 +193,19 @@ For purposes of this definition, "submitted" means any form of electronic, verba
 **8.1 Third-Party IP Acknowledgment.** You acknowledge that the GENIE.AI Project contains and references intellectual property owned by third parties ("Third Party IP") as disclosed in THIRD_PARTY.md. Acceptance of this CLA does not grant any rights to Third Party IP.
 
 **8.2 Third-Party License Compliance.** You are responsible for:
-- Complying with all applicable license terms for each third-party component used in Your Contribution
-- Obtaining any necessary licenses or permissions for third-party components
-- Providing required attributions for third-party components (e.g., FontAwesome icons require attribution under CC BY 4.0)
+- Complying with all applicable license terms for each third-party component used in Your Contribution as detailed in THIRD_PARTY.md
+- Understanding and respecting different license categories:
+  - **Permissive licenses** (MIT, Apache 2.0, BSD) - generally business-friendly
+  - **Copyleft licenses** (GPL 2.0, MPL 2.0) - may require derivative works to use same license
+  - **Non-open source licenses** (SSPL, BSL) - may require commercial licensing or have usage restrictions
+- Obtaining any necessary licenses or permissions for third-party components before submission
+- Providing required attributions for third-party components, including:
+  - FontAwesome icons (CC BY 4.0) - must include attribution in deployed code
+  - Other components with Creative Commons or attribution requirements
+- Monitoring for license changes in dependency updates (e.g., ArangoDB 3.12.x vs 4.x+)
 - Respecting all license restrictions and requirements for third-party components
+- Maintaining all copyright notices and license text in deployed code
+- Consulting THIRD_PARTY.md for comprehensive list of all third-party components and their specific license requirements
 
 ---
 
@@ -203,11 +257,21 @@ For purposes of this definition, "submitted" means any form of electronic, verba
 
 **YOU FURTHER ACKNOWLEDGE THAT:**
 
-1. You have read and understand the CONTRIBUTING.md, STANDARDS.md, UNICC-ITU-Genie-AI Code Management Process.md, and THIRD_PARTY.md documents
+1. You have read and understand the following mandatory project documentation:
+   - **CONTRIBUTING.md** - Contribution guidelines and submission processes
+   - **STANDARDS.md** - Complete coding standards specification
+   - **UNICC-ITU-Genie-AI Code Management Process.md** - Development workflow and branching strategy
+   - **THIRD_PARTY.md** - Third-party integration and licensing requirements
+   - **README.md** - Project overview and architecture
+   - **GENIE.AI-Installation-Configuration-Guide.md** - Technical setup and configuration
+   - **GENIE.AI-Data-Labelling-Strategy.md** - Data labeling and RAG system guidelines (if contributing data or models)
+
 2. Your Contributions will be licensed under the Apache License 2.0
 3. You are granting the Project the copyright and patent licenses described in this CLA
 4. You have the legal right to grant these licenses
-5. Your Contributions comply with all Project standards and processes
+5. Your Contributions comply with all Project standards, processes, and documentation requirements
+6. You understand the third-party license compliance requirements and will update THIRD_PARTY.md for any new dependencies
+7. You will follow the code management process, including proper branching, testing, and review procedures
 
 ---
 
@@ -247,7 +311,7 @@ United Nations International Computing Centre (UNICC)
 **A.3 Submission Deadline.** Contributions submitted for the Challenge must comply with the submission deadline of **1 December 2025**. Late submissions may not be considered for evaluation or funding.
 
 **A.4 Funding and Awards.**
-- Up to **$25,000 USD in funding** is available for winning teams.
+- Some **funding** is available for winning teams (see the web site for details).
 - Submission of a Contribution does not guarantee any award, prize, funding, or recognition.
 - The Challenge judges' decisions are final.
 - Funding is contingent upon compliance with all Challenge requirements and this CLA.
@@ -293,7 +357,7 @@ Participants agree to engage with each phase as required by the Challenge organi
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** February 25, 2026
+**Document Version:** 2.0
+**Last Updated:** March 10, 2026
 **Project:** GENIE.AI
-**Maintained By:** ITU (International Telecommunication Union) and UNICC (United Nations International Computing Centre)
+**Maintained By:** ITU (International Telecommunication Union)

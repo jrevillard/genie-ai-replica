@@ -8,9 +8,8 @@
 # ------------------------------------------------------------------
 
 # importing all existing models from the original OPEA api protocol
-from api_protocol import *  
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any, Union, Literal
+from api_protocol import * from pydantic import BaseModel, Field
+from typing import Optional, List, Dict
 
 
 class RetrievalRequestArangoDB(RetrievalRequest):
@@ -27,7 +26,6 @@ class RetrievalRequestArangoDB(RetrievalRequest):
     traversal_score_threshold: float | None = None
     traversal_query: str | None = None
     context: Optional[Dict[str, Any]] = None  # need to update in other files filter --> context
-    rag_params: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class RequestContext(BaseModel):
@@ -46,7 +44,6 @@ class ChatCompletionRequest(BaseModel):
         List[Dict[str, str]],
         List[Dict[str, Union[str, List[Dict[str, Union[str, Dict[str, str]]]]]]],
     ]
-    rag_params: Optional[Dict[str, Any]] = Field(default_factory=dict)
     model: Optional[str] = None
     modalities: List[Literal["text", "audio"]] = Field(default=["text"])
     frequency_penalty: Optional[float] = 0.0
@@ -173,18 +170,31 @@ class ChatCompletionRequest(BaseModel):
     top_n: Optional[int] = None
     reranked_docs: Union[List[RerankingResponseData], List[Dict[str, Any]]] = Field(default_factory=list)
 
+    # Testing optimisations
+    # Dynamic Parameters for End-to-End ChatQnA Testing Pass-through ---
+    
+    # Reranker Custom Parameters
+    reranking_strategy: Optional[str] = None
+    reranking_threshold: Optional[float] = None
+    reranker_top_n: Optional[int] = None
+
+    # Retriever Custom Parameters (ArangoDB)
+    graph_name: Optional[str] = None
+    search_start: Optional[str] = None
+    search_mode: Optional[str] = None
+    num_centroids: Optional[int] = None
+    distance_strategy: Optional[str] = None
+    use_approx_search: Optional[bool] = None
+    enable_traversal: Optional[bool] = None
+    enable_summarizer: Optional[bool] = None
+    traversal_max_depth: Optional[int] = None
+    traversal_max_returned: Optional[int] = None
+    traversal_score_threshold: Optional[float] = None
+    traversal_query: Optional[str] = None
+    # -----------------------------------------------------------------------------
+
     # define
     request_type: Literal["chat"] = "chat"
-
-class RerankingRequest(BaseModel):
-    input: str
-    retrieved_docs: Union[List[RetrievalResponseData], List[Dict[str, Any]], List[str]]
-    top_n: PositiveInt = 1
-
-    # define
-    request_type: Literal["reranking"] = "reranking"
-    rag_params: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
 
 class TranslationRequest(BaseModel):
     text: str

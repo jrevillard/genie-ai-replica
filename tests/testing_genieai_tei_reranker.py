@@ -26,10 +26,9 @@ from integrations.tei import OpeaTEIReranking
 logger = CustomLogger("genie_tei_reranking")
 logflag = os.getenv("LOGFLAG", False)
 
-# 1. Renamed to defaults so they act as a fallback if the API payload doesn't contain them
-DEFAULT_RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice") 
-DEFAULT_RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
-DEFAULT_RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice") # slice, threshold, knee_threshold
+RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
+RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 1))
 
 @OpeaComponentRegistry.register("GENIE_TEI_RERANKING")
 class GenieTEIReranking(OpeaTEIReranking):
@@ -43,13 +42,18 @@ class GenieTEIReranking(OpeaTEIReranking):
     ) -> Union[LLMParamsDoc, RerankingResponse, ChatCompletionRequest]:
         """Invokes the reranking service to generate rerankings for the provided input."""
         
-        # ---> NEW: Extract dynamic parameters from the payload sent by ChatQnA
-        rag_params = getattr(input, 'rag_params', {})
+        # Testing optimisation
+        # Extract parameters dynamically from request payload to support automated testing sweeps via ChatQnA
+        input_dict = input.model_dump(exclude_none=True) if hasattr(input, "model_dump") else getattr(input, "dict", lambda: {})()
         
-        # Override environment variables with request-level parameters
-        current_strategy = str(rag_params.get("RERANKING_STRATEGY", DEFAULT_RERANKING_STRATEGY))
-        current_threshold = float(rag_params.get("RERANKING_THRESHOLD", DEFAULT_RERANKING_THRESHOLD))
-        current_top_n = int(rag_params.get("RERANKER_TOP_N", DEFAULT_RERANKER_TOP_N))
+        current_strategy = input_dict.get("reranking_strategy", RERANKING_STRATEGY)
+        current_threshold = input_dict.get("reranking_threshold", RERANKING_THRESHOLD)
+        current_top_n = input_dict.get("reranker_top_n", RERANKER_TOP_N)
+
+        logger.info(f"[ DEBUG - VERBOSE ] Extracted dynamic reranker params from payload:")
+        logger.info(f"[ DEBUG - VERBOSE ]   -> Strategy: {current_strategy} (Fallback env: {RERANKING_STRATEGY})")
+        logger.info(f"[ DEBUG - VERBOSE ]   -> Threshold: {current_threshold} (Fallback env: {RERANKING_THRESHOLD})")
+        logger.info(f"[ DEBUG - VERBOSE ]   -> Top N: {current_top_n} (Fallback env: {RERANKER_TOP_N})")
 
         reranking_results = []
 
@@ -67,11 +71,12 @@ class GenieTEIReranking(OpeaTEIReranking):
                 ) as resp:
                     decoded_response = await resp.json()
 
-            logger.info(f"[ DEBUG ] Selected RERANKING STRATEGY is {current_strategy}")
+            # Checking RERANKING_STRATEGY param value using the dynamic variable
+            logger.info(f"[ DEBUG - VERBOSE ] Executing RERANKING STRATEGY branch: {current_strategy}")
 
-            # ---> NEW: Apply dynamic variables to logic mapping
-            if current_strategy == "slice":              
-                for best_response in decoded_response[:current_top_n]:
+            if current_strategy == "slice":
+                top_n = current_top_n if current_top_n else 1                
+                for best_response in decoded_response[:top_n]:
                     reranking_results.append({
                         "text": input.retrieved_docs[best_response["index"]].text, 
                         "score": best_response["score"]
@@ -107,7 +112,8 @@ class GenieTEIReranking(OpeaTEIReranking):
                     })
             else:
                 logger.warning(f"Unknown strategy {current_strategy}. Defaulting to slice.")
-                for best_response in decoded_response[:current_top_n]:
+                top_n = current_top_n if current_top_n else 1
+                for best_response in decoded_response[: top_n]:
                     reranking_results.append({
                         "text": input.retrieved_docs[best_response["index"]].text, 
                         "score": best_response["score"]
@@ -122,6 +128,7 @@ class GenieTEIReranking(OpeaTEIReranking):
         ]
         
         if isinstance(input, SearchedDoc):
+            # 2. Return the RerankingResponse (preserves scores) instead of LLMParamsDoc (deletes scores)
             result = RerankingResponse(reranked_docs=reranking_docs)
             if logflag:
                 logger.info(result)

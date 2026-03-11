@@ -122,31 +122,6 @@ class GenieUserProfileClient:
         # Log initialization
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
 
-    # def _sanitize_data(self, data):
-    #     if isinstance(data, dict):
-    #         try:
-    #             keys_to_remove = [k for k in data.keys() if k in SENSITIVE_KEYS]
-    #         except:
-    #             logger.info(f"Attention: SENSITIVE_KEYS parameter is not defined. Proceeding with default information masking instructions")
-    #             sensitive_keys = [
-    #                 "email", "phone", "address", "ip_address", "full_name", 
-    #                 "ssn", "ssb", "dob", "credit_card", "password", "encPassword", 
-    #                 "salt", "location", "accessToken", "refreshToken", "_rev", "_key"
-    #                 ]
-    #             keys_to_remove = [k for k in data.keys() if k in sensitive_keys]
-
-    #         for k in keys_to_remove:
-    #             del data[k]
-
-    #         for v in data.values():
-    #             self._sanitize_data(v)
-
-    #     elif isinstance(data, list):
-    #         for item in data:
-    #             self._sanitize_data(item)
-            
-    #     return data
-
 
     async def _get_auth_token(self):
         """
@@ -239,12 +214,6 @@ class GenieUserProfileClient:
                     elif response.status == 404:
                         logger.warning(f"User profile not found for ID {user_id}")
                         return None
-
-                    # elif response.status == 401:
-                    #     logger.error(f"Authentication failed for user profile fetch. Token might be invalid.")
-                    #     # Invalidate cache so next retry fetches a fresh token
-                    #     self._cached_token = None 
-                    #     return None
 
                     else:
                         logger.error(f"Failed to fetch user profile. Status: {response.status}, Body: {await response.text()}")
@@ -411,9 +380,6 @@ def get_tokenizer():
 ##################################################################################################################################
 def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **kwargs):
 
-    # Unpacking rag_params from the payload
-    rag_params = inputs.get("rag_params", {})
-
     if self.services[cur_node].service_type == ServiceType.TRANSLATOR:
         original_text = inputs["text"]
         original_language = kwargs.get("original_language", "auto")
@@ -451,28 +417,19 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         retrieval_context = kwargs.get('retrieval_context', {})
         if retrieval_context:
             inputs['context'] = retrieval_context
-
-        inputs["k"] = int(rag_params.get("RETRIEVER_ARANGO_K", RETRIEVER_K))
-        inputs["fetch_k"] = int(rag_params.get("RETRIEVER_ARANGO_FETCH_K", RETRIEVER_FETCH_K))
-        inputs["score_threshold"] = float(rag_params.get("RETRIEVER_ARANGO_SCORE_THRESHOLD", RETRIEVER_SCORE_THRESHOLD))
-        inputs["search_start"] = rag_params.get("RETRIEVER_ARANGO_SCORE_THRESHOLD", RETRIEVER_SCORE_THRESHOLD)
-        inputs["traversal_enabled"] = rag_params.get("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", RETRIEVER_ARANGO_TRAVERSAL_ENABLED)
-        inputs["traversal_max_depth"] = int(rag_params.get("RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH", RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH))
-        inputs["traversal_max_returned"] = int(rag_params.get("RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED", RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED))
-        inputs["traversal_score_threshold"] = float(rag_params.get("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD))
-
-        inputs["rag_params"] = rag_params
-
+            
+        # Testing optimisations
+        # ArangoDB parameter values from payload
+        custom_retriever_params = kwargs.get("custom_retriever_params", {})
+        if custom_retriever_params:
+            inputs.update({k: v for k, v in custom_retriever_params.items() if v is not None})
+        if logflag:
+            logger.info(f"[ DEBUG - VERBOSE ] Retriever aligned inputs updated with custom params: {inputs}")
+        # -----------------------------------------------------------
     
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         if logflag:
             logger.debug(f"Aligned input of the reranker: {inputs}")
-
-        inputs["rerank_strategy"] = rag_params.get("RERANKING_STRATEGY", RERANKING_STRATEGY)
-        inputs["reranker_top_n"] = int(rag_params.get("RERANKER_TOP_N", RERANKER_TOP_N))
-        inputs["reranking_threshold"] = int(rag_params.get("RERANKING_THRESHOLD", RERANKING_THRESHOLD))
-
-        inputs["rag_params"] = rag_params
 
 
     elif self.services[cur_node].service_type == ServiceType.LLM:
@@ -613,12 +570,15 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             next_data["initial_query"] = data["initial_query"]
             next_data["retrieved_docs"] = retrieved_docs
             next_data["file_id_pairs"] = file_id_pairs
-
-            # Expected data format if using tei_reranker directly (bypassing reranker service):
-            # next_data["query"] = data["initial_query"]
-            # next_data["documents"] = retrieved_docs
-            # next_data["texts"] = doc_texts
-            # next_data["file_id_pairs"] = file_id_pairs
+            
+            # Testing optimisations
+            # Inject dynamic reranker parameters for downstream processing 
+            custom_reranker_params = kwargs.get("custom_reranker_params", {})
+            if custom_reranker_params:
+                next_data.update({k: v for k, v in custom_reranker_params.items() if v is not None})
+            if logflag:
+                logger.info(f"[ DEBUG - VERBOSE ] Reranker inputs prepared with custom params: {next_data}")
+            # -------------------------------------------------------------------------
             
         else:
             if not retrieved_docs and with_rerank:
@@ -738,7 +698,6 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         
 def align_generator(self, gen, **kwargs):
     # OpenAI response format
-    # data:{"id":"","object":"text_completion","created":1725530204,"model":"meta-llama/Meta-Llama-3-8B-Instruct","system_fingerprint":"2.0.1-native","choices":[{"index":0,"delta":{"role":"assistant","content":"?"},"logprobs":null,"finish_reason":null}]}\n\n'
     for line in gen:
         line = line.decode("utf-8")
         chunks = [chunk.strip() for chunk in line.split("\n\n") if chunk.strip()]
@@ -799,7 +758,6 @@ class ChatQnAService:
         if not auth_token:
             logger.error("Failed to get admin auth token.")
             return None
-            # return ""
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
         headers = {"Authorization": f"Bearer {auth_token}"}
@@ -821,7 +779,6 @@ class ChatQnAService:
             logger.error(f"An error occurred while fetching metadata for file ID {file_id}: {e}")
 
         return None
-        #return []
 
     def add_remote_service(self):
 
@@ -1200,17 +1157,13 @@ class ChatQnAService:
         if user_id_header:
             try: 
                 user_details = await self.user_profile_client.get_user_profile(user_id_header)
-                # logger.info(f"USER PROFILE RETRIEVED: {user_details}")
             except Exception as e:
                 logger.error(f"USER PROFILE ERROR: {e}")
 
+        # -----------------------------------------------
+
         chat_request = ChatCompletionRequest.parse_obj(data)
-
-        # --- ENV PARAM EXTRACTION FROM PYDANTIC MODEL (IF PARAM VALUES IN THE PAYLOAD)
-        rag_params = chat_request.rag_params if chat_request.rag_params else {}
-
-        prompt = handle_message(chat_request.messages)
-
+        
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
         logger.info(f"Parsed chat request: {chat_request}")
         
@@ -1222,7 +1175,7 @@ class ChatQnAService:
             except:
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
         logger.info(f"Context: {retrieval_context}")
-        
+        # -----------------------------------------------
 
         if logflag:
             logger.debug(f'Incoming Chat Request: {chat_request}')
@@ -1335,55 +1288,48 @@ class ChatQnAService:
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
             stream=chat_request.stream if chat_request.stream else False,
             chat_template=chat_request.chat_template if chat_request.chat_template else None,
+            model=chat_request.model if chat_request.model else None,
         )
-
-        initial_inputs = {
-            "messages": chat_request.messages,
-            "text": last_translated_message_content,
-            "rag_params": rag_params,  
-            "context": chat_request.context.model_dump() if chat_request.context else None,
-            "language": chat_request.language
-        }
-
-        # parameters = LLMParams(
-        #     max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
-        #     top_k=chat_request.top_k if chat_request.top_k else 10,
-        #     top_p=chat_request.top_p if chat_request.top_p else 0.95,
-        #     temperature=chat_request.temperature if chat_request.temperature else 0.01,
-        #     frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
-        #     presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
-        #     repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
-        #     stream=chat_request.stream if chat_request.stream else False,
-        #     chat_template=chat_request.chat_template if chat_request.chat_template else None,
-        #     model=chat_request.model if chat_request.model else None,
-        # )
         retriever_parameters = RetrieverParms(
             # in the current implementation, search_type should always be set to similarity_score_threshold, 
             # otherwise not possible to calculate confidence scores
             search_type=chat_request.search_type if chat_request.search_type else "similarity_score_threshold",
-            # k=chat_request.k if chat_request.k else 4,
-            # k=chat_request.k if chat_request.k is not None else RETRIEVER_K,
-            k=chat_request.k if chat_request.k is not None else int(rag_params.get("RETRIEVER_ARANGO_K", RETRIEVER_K)),
-            # distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold else None,
-            # distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
-            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else float(rag_params.get("RETRIEVER_DISTANCE_THRESHOLD", RETRIEVER_DISTANCE_THRESHOLD)),
-            # fetch_k=chat_request.fetch_k if chat_request.fetch_k else 20,
-            # fetch_k=chat_request.fetch_k if chat_request.fetch_k is not None else RETRIEVER_FETCH_K,
-            fetch_k=chat_request.fetch_k if chat_request.fetch_k is not None else int(rag_params.get("RETRIEVER_ARANGO_FETCH_K", RETRIEVER_FETCH_K)),
-            # lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult else 0.5,
-            # lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
-            lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else float(rag_params.get("RETRIEVER_LAMBDA_MULT", RETRIEVER_LAMBDA_MULT)),
-            # score_threshold=chat_request.score_threshold if chat_request.score_threshold else 0.01,
-            # score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
-            score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else float(rag_params.get("RETRIEVER_ARANGO_SCORE_THRESHOLD", RETRIEVER_SCORE_THRESHOLD))
+            k=chat_request.k if chat_request.k is not None else RETRIEVER_K,
+            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
+            fetch_k=chat_request.fetch_k if chat_request.fetch_k is not None else RETRIEVER_FETCH_K,
+            lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
+            score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
         )
         reranker_parameters = RerankerParms(
-            # top_n=chat_request.top_n if chat_request.top_n else 1,
             top_n=chat_request.top_n if chat_request.top_n is not None else RERANKER_TOP_N,
         )
 
+        # Testing optimisations 
+        # Extract parameters from payload for testing --------------
+        custom_retriever_params = {
+            "graph_name": chat_request.graph_name,
+            "search_start": chat_request.search_start,
+            "search_mode": chat_request.search_mode,
+            "num_centroids": chat_request.num_centroids,
+            "distance_strategy": chat_request.distance_strategy,
+            "use_approx_search": chat_request.use_approx_search,
+            "enable_traversal": chat_request.enable_traversal,
+            "enable_summarizer": chat_request.enable_summarizer,
+            "traversal_max_depth": chat_request.traversal_max_depth,
+            "traversal_max_returned": chat_request.traversal_max_returned,
+            "traversal_score_threshold": chat_request.traversal_score_threshold,
+            "traversal_query": chat_request.traversal_query,
+        }
+        
+        custom_reranker_params = {
+            "reranking_strategy": chat_request.reranking_strategy,
+            "reranking_threshold": chat_request.reranking_threshold,
+            "reranker_top_n": chat_request.reranker_top_n,
+        }
+        # -----------------------------------------------------------
+
         result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs=initial_inputs,
+            initial_inputs={"text": last_translated_message_content},
             llm_parameters=parameters,
             retriever_parameters=retriever_parameters,
             reranker_parameters=reranker_parameters,
@@ -1391,6 +1337,9 @@ class ChatQnAService:
             retrieval_context=retrieval_context,
             original_language=original_language,
             user_details = user_details,
+            # Pass extracted test configurations downstream
+            custom_retriever_params=custom_retriever_params,
+            custom_reranker_params=custom_reranker_params,
         )
 
         if logflag:

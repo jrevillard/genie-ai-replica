@@ -1,17 +1,20 @@
-# Script for automated RAG param testing 
-# ahead of GENIE.AI 1.0 legendary release
-
 import requests
 import time
 import pandas as pd
 import itertools
 from pathlib import Path
+import concurrent.futures
+import threading
 
-# --- 1. CONFIGURATION ---
+# --- CONFIGURATION ---
+# Target the Kong gateway serving ChatQnA, or 8888 directly
 TARGET_URL = "http://localhost:8010/v1/chatqna"
-RESULTS_FILE = "rag_testing_results.csv"
+RESULTS_FILE = "genie_ai_hybrid_rag_results.csv"
+MAX_WORKERS = 8
 
-# TEST QUESTIONS 
+csv_lock = threading.Lock()
+
+# TEST QUERIES 
 # see parameters_for_testing/methodology for further detail
 QUESTIONS = [
     "What is the altitude range and average monthly rainfall of the Masai Mara National Reserve?",
@@ -21,139 +24,158 @@ QUESTIONS = [
     "Based on the documentation, contrast the specific shortcomings of conventional vector-only RAG pipelines with the corresponding benefits introduced by this hybrid approach. Be sure to address issues of interpretability, precision, and domain adaptability."
 ]
 
-# TEST PARAMETERS
+# PARAMETER CONFIGURATIONS FOR TESTING
 # see parameters_for_testing/params_for_testing for further detail
-
-# Function to help generate combinations that account for conditionality 
 def generate_configurations():
     print("Building MASSIVE configuration grid...")
     
-    # Base parameters that always apply
-    base_params = {
-        "RETRIEVER_ARANGO_K": [20, 30, 50],
-        "RETRIEVER_ARANGO_FETCH_K": [50],
-        "RETRIEVER_ARANGO_SCORE_THRESHOLD": [0.7, 0.9],
-        "RETRIEVER_ARANGO_SEARCH_START": ['chunk', 'edge', 'node'],
+    # Retriever Base Params
+    ret_params = {
+        "k": [5, 10, 30],
+        "fetch_k": [10, 30],
+        "search_start": ['chunk', 'edge']
     }
+    r_keys, r_values = zip(*ret_params.items())
+    base_ret_combos = [dict(zip(r_keys, v)) for v in itertools.product(*r_values)]
     
-    keys, values = zip(*base_params.items())
-    base_combos = [dict(zip(keys, v)) for v in itertools.product(*values)]
-    
-    # Params conditional on traversal logic value
     traversal_combos = []
-    for bc in base_combos:
-        # Tree branch when traversal is disabled
+    for bc in base_ret_combos:
+        # Branch 1: Traversal Disabled
         tc_false = bc.copy()
-        tc_false["RETRIEVER_ARANGO_TRAVERSAL_ENABLED"] = 'false'
-        tc_false["RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH"] = 1      # Dummy default
-        tc_false["RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED"] = 2   # Dummy default
-        tc_false["RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD"] = 0.5 # Dummy default
+        tc_false["enable_traversal"] = False
+        tc_false["traversal_score_threshold"] = 0.5
         traversal_combos.append(tc_false)
         
-        # Tree branch when traversal is enabled 
+        # Branch 2: Traversal Enabled
         for depth in [1, 2]:
-            for ret in [2, 3, 5]:
-                for st in [0.7, 0.9]:
+            for ret in [2, 5]:
+                for thresh in [0.5, 0.7]:
                     tc_true = bc.copy()
-                    tc_true["RETRIEVER_ARANGO_TRAVERSAL_ENABLED"] = 'true'
-                    tc_true["RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH"] = depth
-                    tc_true["RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED"] = ret
-                    tc_true["RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD"] = st
+                    tc_true["enable_traversal"] = True
+                    tc_true["traversal_max_depth"] = depth
+                    tc_true["traversal_max_returned"] = ret
+                    tc_true["traversal_score_threshold"] = thresh
                     traversal_combos.append(tc_true)
-                    
-    # Reranking logic
+
+    # Reranker Multiplier
     final_combos = []
     for tc in traversal_combos:
-        # Tree branch when strategy is slice
-        for top_n in [3, 5, 10]:
+        for top_n in [3, 5]:
             fc = tc.copy()
-            fc["RERANKING_STRATEGY"] = 'slice'
-            fc["RERANKER_TOP_N"] = top_n
-            fc["RERANKING_THRESHOLD"] = 0.5 # Dummy default
+            fc["reranking_strategy"] = "slice"
+            fc["reranker_top_n"] = top_n
+            fc["reranking_threshold"] = 0.0 
             final_combos.append(fc)
             
-        # Tree branch when strategy is threshold 
-        for th in [0.5, 0.7, 0.9]:
+        for thresh in [0.5, 0.7]:
             fc = tc.copy()
-            fc["RERANKING_STRATEGY"] = 'threshold'
-            fc["RERANKER_TOP_N"] = 5 # Dummy default
-            fc["RERANKING_THRESHOLD"] = th
+            fc["reranking_strategy"] = "threshold"
+            fc["reranker_top_n"] = 5 
+            fc["reranking_threshold"] = thresh
             final_combos.append(fc)
             
-        # Tree branch when strategy is knee threshold 
         fc = tc.copy()
-        fc["RERANKING_STRATEGY"] = 'knee_threshold'
-        fc["RERANKER_TOP_N"] = 5 # Dummy default value
-        fc["RERANKING_THRESHOLD"] = 0.5 # Dummy default value
+        fc["reranking_strategy"] = "knee_threshold"
+        fc["reranker_top_n"] = 5 
+        fc["reranking_threshold"] = 0.0 
         final_combos.append(fc)
-        
+
     print(f"Total configurations generated: {len(final_combos)}")
     return final_combos
 
-
-# --- 3. HELPER FUNCTIONS ---
-# saving to csv
 def save_result(data_dict):
     df = pd.DataFrame([data_dict])
+    with csv_lock:
+        if not Path(RESULTS_FILE).is_file():
+            df.to_csv(RESULTS_FILE, index=False)
+        else:
+            df.to_csv(RESULTS_FILE, mode='a', header=False, index=False)
 
-    if not Path(RESULTS_FILE).is_file():
-        df.to_csv(RESULTS_FILE, index=False)
-    else:
-        df.to_csv(RESULTS_FILE, mode='a', header=False, index=False)
+def wait_for_service(url, timeout_sec=300):
+    print(f"Polling mega-service at {url} for readiness...")
+    start_t = time.time()
+    
+    while time.time() - start_t < timeout_sec:
+        try:
+            requests.post(url, json={"messages": "ping", "stream": False}, timeout=5)
+            print(f"Service at {url} is UP and accepting queries.")
+            return True
+        except requests.exceptions.RequestException:
+            time.sleep(5)
+            
+    raise RuntimeError(f"Service at {url} failed to initialize within {timeout_sec} seconds.")
 
-# sending payload to the ChatQnA
-def query_rag(question, config):
-    # Sends the question and the configuration payload directly to the API
+def execute_test(config_id, config, q_idx, question):
+    start_t = time.time()
+    
     payload = {
-        "messages": question, 
+        "messages": question,
         "stream": False,
-        "rag_params": config  
+        **config
     }
     
     try:
-        start_t = time.time()
-        response = requests.post(TARGET_URL, json=payload, timeout=90)
-        duration = time.time() - start_t
+        # 120s timeout accounts for peak hardware contention when 8 queries hit vLLM/Arango simultaneously
+        response = requests.post(TARGET_URL, json=payload, timeout=120)
+        total_latency = time.time() - start_t
         
         if response.status_code == 200:
-            ans = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-            return ans, duration, response.status_code
+            # Parsing the JSON by ChatQnA
+            resp_json = response.json()
+            
+            answer_text = resp_json.get("response", "")
+            if not answer_text:
+                answer_text = resp_json.get("choices", [{}])[0].get("message", {}).get("content", "ERROR: Empty LLM content returned.")
+                
+            return save_and_return(config_id, q_idx, question, config, 200, total_latency, answer_text)
         else:
-            return f"HTTP Error {response.status_code}", duration, response.status_code
-    except Exception as e:
-        return f"Request Failed: {str(e)}", 0, 500
+            return save_and_return(config_id, q_idx, question, config, response.status_code, total_latency, f"Gateway Error: {response.text}")
+            
+    except requests.exceptions.RequestException as e:
+        return save_and_return(config_id, q_idx, question, config, 500, time.time() - start_t, f"Network/Timeout Error: {str(e)}")
 
-# MAIN
+def save_and_return(c_id, q_id, q_text, config, status, latency, answer):
+    result_row = {
+        "config_id": c_id,
+        "question_id": q_id,
+        "question": q_text,
+        **config,
+        "status_code": status,
+        "latency_sec": round(latency, 2),
+        "answer": answer 
+    }
+    save_result(result_row)
+    return c_id, q_id, status, latency
+
 def main():
     configurations = generate_configurations()
     
+    # Hold execution until the mega-service responds
+    wait_for_service(TARGET_URL)
+    
+    print(f"\nInitiating End-to-End ChatQnA Executor with {MAX_WORKERS} workers...")
+    
+    tasks = []
     for i, config in enumerate(configurations):
-        print(f"\n--- [Config {i+1}/{len(configurations)}] ---")
-        
-        Run the questions
         for q_idx, question in enumerate(QUESTIONS):
-            print(f"  -> Asking Q{q_idx + 1}...")
+            tasks.append((i + 1, config, q_idx + 1, question))
             
-            Send a quick throwaway request ONLY on the very first run to warm up caches
-            if i == 0 and q_idx == 0:
-                requests.post(TARGET_URL, json={"messages": "ping", "rag_params": config, "stream": False}, timeout=10)
-            
-            # Pass the config to the query function
-            answer, latency, status = query_rag(question, config)
-            
-            # Save results
-            result_row = {
-                "config_id": i + 1,
-                **config,
-                "question_id": q_idx + 1,
-                "question": question,
-                "status_code": status,
-                "latency_sec": round(latency, 2),
-                "answer": answer
-            }
-            save_result(result_row)
-            
-            print(f"     Completed in {latency:.2f}s")
+    # Deploy threaded workers
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(execute_test, *t): t for t in tasks}
+        
+        for count, future in enumerate(concurrent.futures.as_completed(futures), 1):
+            try:
+                c_id, q_id, status, latency = future.result()
+                if status == 200:
+                    print(f"[{count}/{len(tasks)}] Success - Config {c_id}, Q{q_id} ({latency:.2f}s)")
+                else:
+                    print(f"[{count}/{len(tasks)}] FAILED (HTTP {status}) - Config {c_id}, Q{q_id} ({latency:.2f}s)")
+            except Exception as e:
+                print(f"[{count}/{len(tasks)}] Thread crashed: {str(e)}")
+
+    print("\nEnd-to-End Testing Matrix Complete. LLM Answers are ready for tester review.")
 
 if __name__ == "__main__":
     main()
+    

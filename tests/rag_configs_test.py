@@ -5,12 +5,15 @@ import itertools
 from pathlib import Path
 import concurrent.futures
 import threading
+import random
 
-# --- CONFIGURATION ---
+# --- Short Test for Testing Logic Validation ---
+SMOKE_TEST_MODE = True #False #True  # Set to False for the full production run
+
 # Target the Kong gateway serving ChatQnA, or 8888 directly
-TARGET_URL = "http://localhost:8010/v1/chatqna"
-RESULTS_FILE = "genie_ai_hybrid_rag_results.csv"
-MAX_WORKERS = 8
+TARGET_URL = "http://localhost:8888/v1/chatqna"
+RESULTS_FILE = "genieai_rag_config_test_results_second_run.csv"
+MAX_WORKERS = 8 if not SMOKE_TEST_MODE else 1  # Force 1 worker in test mode for cleaner logs
 
 csv_lock = threading.Lock()
 
@@ -91,13 +94,18 @@ def save_result(data_dict):
         else:
             df.to_csv(RESULTS_FILE, mode='a', header=False, index=False)
 
-def wait_for_service(url, timeout_sec=300):
+def wait_for_service(url, timeout_sec=180):
     print(f"Polling mega-service at {url} for readiness...")
     start_t = time.time()
     
     while time.time() - start_t < timeout_sec:
         try:
-            requests.post(url, json={"messages": "ping", "stream": False}, timeout=5)
+            response = requests.post(
+                url, 
+                json={"messages": [{"role": "user", "content": "ping"}], "stream": False}, 
+                timeout=5
+            )
+            response.raise_for_status()
             print(f"Service at {url} is UP and accepting queries.")
             return True
         except requests.exceptions.RequestException:
@@ -109,29 +117,43 @@ def execute_test(config_id, config, q_idx, question):
     start_t = time.time()
     
     payload = {
-        "messages": question,
+        "messages": [{"role": "user", "content": question}],
+        "context": {'categoryLabel': 'General', 'serviceLabels': []},
         "stream": False,
         **config
     }
     
+    if SMOKE_TEST_MODE:
+        print(f"\n--- [VERBOSE] Config {config_id}, Q{q_idx} ---")
+        print(f"Payload: {payload}")
+    
     try:
-        # 120s timeout accounts for peak hardware contention when 8 queries hit vLLM/Arango simultaneously
+        # 120s timeout accounts for peak hardware contention
         response = requests.post(TARGET_URL, json=payload, timeout=120)
         total_latency = time.time() - start_t
         
+        if SMOKE_TEST_MODE:
+            print(f"Status Code: {response.status_code} | Latency: {total_latency:.2f}s")
+        
         if response.status_code == 200:
-            # Parsing the JSON by ChatQnA
             resp_json = response.json()
             
             answer_text = resp_json.get("response", "")
             if not answer_text:
                 answer_text = resp_json.get("choices", [{}])[0].get("message", {}).get("content", "ERROR: Empty LLM content returned.")
+            
+            if SMOKE_TEST_MODE:
+                print(f"Answer snippet: {answer_text[:150]}...")
                 
             return save_and_return(config_id, q_idx, question, config, 200, total_latency, answer_text)
         else:
+            if SMOKE_TEST_MODE:
+                print(f"Gateway Error: {response.text}")
             return save_and_return(config_id, q_idx, question, config, response.status_code, total_latency, f"Gateway Error: {response.text}")
             
     except requests.exceptions.RequestException as e:
+        if SMOKE_TEST_MODE:
+            print(f"Network/Timeout Error: {str(e)}")
         return save_and_return(config_id, q_idx, question, config, 500, time.time() - start_t, f"Network/Timeout Error: {str(e)}")
 
 def save_and_return(c_id, q_id, q_text, config, status, latency, answer):
@@ -149,6 +171,12 @@ def save_and_return(c_id, q_id, q_text, config, status, latency, answer):
 
 def main():
     configurations = generate_configurations()
+    
+    if SMOKE_TEST_MODE:
+        sample_size = min(10, len(configurations))
+        configurations = random.sample(configurations, sample_size)
+        print(f"\n[!] TEST MODE ENABLED: Randomly sampled {sample_size} configurations.")
+        print("[!] Threading reduced to 1 worker for sequential, verbose logging.\n")
     
     # Hold execution until the mega-service responds
     wait_for_service(TARGET_URL)
@@ -174,8 +202,7 @@ def main():
             except Exception as e:
                 print(f"[{count}/{len(tasks)}] Thread crashed: {str(e)}")
 
-    print("\nEnd-to-End Testing Matrix Complete. LLM Answers are ready for tester review.")
+    print("\nEnd-to-End Testing Matrix Complete. \nGENIE.AI answers are ready for review.")
 
 if __name__ == "__main__":
     main()
-    

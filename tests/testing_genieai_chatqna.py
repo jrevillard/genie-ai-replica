@@ -589,21 +589,37 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                     runtime_graph.delete_node_if_exists(ds)
 
             # handle template
-            prompt = data["initial_query"]
+            # prompt = data["initial_query"]
+            prompt = data.get("initial_query", data.get("text"))
+            if not prompt:
+                prompt = data.get("inputs", "")
+
             chat_template = llm_parameters_dict["chat_template"]
             if chat_template:
                 prompt_template = PromptTemplate.from_template(chat_template)
                 input_variables = prompt_template.input_variables
                 if sorted(input_variables) == ["context", "question"]:
-                    prompt = prompt_template.format(question=data["initial_query"], context="\n".join(doc_texts)) 
+                    # prompt = prompt_template.format(question=data["initial_query"], context="\n".join(doc_texts))
+                    query_text = data.get("initial_query", data.get("text"))
+                    prompt = prompt_template.format(question=query_text, context="\n".join(doc_texts)) 
+
                 elif input_variables == ["question"]:
-                    prompt = prompt_template.format(question=data["initial_query"])
+                    # prompt = prompt_template.format(question=data["initial_query"])
+                    query_text = data.get("initial_query", data.get("text"))
+                    prompt = prompt_template.format(question=query_text)
+
                 else:
                     if logflag:
                         logger.debug(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
-                    prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
+                    # prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
+                    query_text = data.get("initial_query", data.get("text"))
+                    prompt = ChatTemplate.generate_rag_prompt(query_text, doc_texts)
+
             else:
-                prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
+                # prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
+                query_text = data.get("initial_query", data.get("text"))
+                prompt = ChatTemplate.generate_rag_prompt(query_text, doc_texts)
+
 
             next_data["inputs"] = prompt
         

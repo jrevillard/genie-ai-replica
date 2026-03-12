@@ -8,7 +8,8 @@
 # ------------------------------------------------------------------
 
 # importing all existing models from the original OPEA api protocol
-from api_protocol import * from pydantic import BaseModel, Field
+from api_protocol import * 
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 
 

@@ -152,21 +152,23 @@ class ChatCompletionRequest(BaseModel):
 
     # retrieval
     search_type: str = "similarity_score_threshold" #"similarity"
-    # k: int = 4
     k: Optional[int] = None
-    distance_threshold: Optional[float] = None
-    # fetch_k: int = 20
     fetch_k: Optional[int] = None
-    # lambda_mult: float = 0.5
+    search_start: Optional[str] = None
+    enable_traversal: Optional[bool] = None
+    traversal_max_depth: Optional[int] = None
+    traversal_max_returned: Optional[int] = None
+    traversal_score_threshold: Optional[float] = None
+    distance_threshold: Optional[float] = None
     lambda_mult: Optional[float] = None
-    # score_threshold: float = 0.01
     score_threshold: Optional[float] = None
     retrieved_docs: Union[List[RetrievalResponseData], List[Dict[str, Any]]] = Field(default_factory=list)
     index_name: Optional[str] = None
 
     # reranking
-    # top_n: int = 2 Old version
+    reranking_strategy: Optional[str] = None
     top_n: Optional[int] = None
+    reranking_threshold: Optional[float] = None
     reranked_docs: Union[List[RerankingResponseData], List[Dict[str, Any]]] = Field(default_factory=list)
 
     # define
@@ -234,4 +236,3 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         self.file_type = file_type
         self.upload_date = upload_date
         self.file_labels = file_labels
-

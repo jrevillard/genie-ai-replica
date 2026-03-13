@@ -9,6 +9,7 @@ import random
 
 # --- Short Test for Testing Logic Validation ---
 SMOKE_TEST_MODE = True #False #True  # Set to False for the full production run
+SAMPLE_SIZE = 1
 
 # Target the Kong gateway serving ChatQnA, or 8888 directly
 TARGET_URL = "http://localhost:8888/v1/chatqna"
@@ -20,12 +21,12 @@ csv_lock = threading.Lock()
 # TEST QUERIES 
 # see parameters_for_testing/methodology for further detail
 QUESTIONS = [
-    "What is the altitude range and average monthly rainfall of the Masai Mara National Reserve?",
-    "I am a non-resident adult planning a safari for August 2025. Compare the daily park entry fees (including any applicable concession fees) for staying inside the Masai Mara National Reserve versus staying inside the Serengeti National Park.",
-    "Why is the risk of contracting Malaria considered very low in the Serengeti National Park, and what specific preventative measures does the document still recommend tourists take?",
-    "What technique is used to prevent the Large Language Model (LLM) from experiencing 'drift' during label assignment, and what is the exact financial cost of running this LLM per 1,000 queries?",
-    "Based on the documentation, contrast the specific shortcomings of conventional vector-only RAG pipelines with the corresponding benefits introduced by this hybrid approach. Be sure to address issues of interpretability, precision, and domain adaptability."
-]
+     "What is the altitude range and average monthly rainfall of the Masai Mara National Reserve?",
+     "I am a non-resident adult planning a safari for August 2025. Compare the daily park entry fees (including any applicable concession fees) for staying inside the Masai Mara National Reserve versus staying inside the Serengeti National Park.",
+     "Why is the risk of contracting Malaria considered very low in the Serengeti National Park, and what specific preventative measures does the document still recommend tourists take?",
+     "What technique is used to prevent the Large Language Model (LLM) from experiencing 'drift' during label assignment, and what is the exact financial cost of running this LLM per 1,000 queries?",
+     "Based on the documentation, contrast the specific shortcomings of conventional vector-only RAG pipelines with the corresponding benefits introduced by this hybrid approach. Be sure to address issues of interpretability, precision, and domain adaptability."
+ ]
 
 # PARAMETER CONFIGURATIONS FOR TESTING
 # see parameters_for_testing/params_for_testing for further detail
@@ -36,7 +37,7 @@ def generate_configurations():
     ret_params = {
         "k": [5, 10, 30],
         "fetch_k": [10, 30],
-        "search_start": ['chunk', 'edge']
+        "search_start": ['chunk', 'edge', 'node']
     }
     r_keys, r_values = zip(*ret_params.items())
     base_ret_combos = [dict(zip(r_keys, v)) for v in itertools.product(*r_values)]
@@ -66,7 +67,7 @@ def generate_configurations():
         for top_n in [3, 5]:
             fc = tc.copy()
             fc["reranking_strategy"] = "slice"
-            fc["reranker_top_n"] = top_n
+            fc["top_n"] = top_n
             fc["reranking_threshold"] = 0.0 
             final_combos.append(fc)
             
@@ -120,6 +121,7 @@ def execute_test(config_id, config, q_idx, question):
         "messages": [{"role": "user", "content": question}],
         "context": {'categoryLabel': 'General', 'serviceLabels': []},
         "stream": False,
+        "user_id":"0001",
         **config
     }
     
@@ -173,7 +175,7 @@ def main():
     configurations = generate_configurations()
     
     if SMOKE_TEST_MODE:
-        sample_size = min(10, len(configurations))
+        sample_size = min(SAMPLE_SIZE, len(configurations))
         configurations = random.sample(configurations, sample_size)
         print(f"\n[!] TEST MODE ENABLED: Randomly sampled {sample_size} configurations.")
         print("[!] Threading reduced to 1 worker for sequential, verbose logging.\n")

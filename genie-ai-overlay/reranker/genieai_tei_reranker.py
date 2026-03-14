@@ -7,6 +7,7 @@ import os
 import aiohttp
 from typing import Union
 from kneed import KneeLocator
+from typing import Optional
 
 from huggingface_hub import AsyncInferenceClient
 
@@ -20,6 +21,12 @@ from comps.cores.proto.api_protocol import (
 
 # Importing the base class from original OPEA
 from integrations.tei import OpeaTEIReranking 
+
+# Defining a custom data subclass
+class GenieSearchedDoc(SearchedDoc):
+    reranking_strategy: Optional[str] = None
+    reranking_threshold: Optional[float] = None
+    top_n: Optional[int] = None
 
 logger = CustomLogger("genie_tei_reranking")
 logflag = os.getenv("LOGFLAG", False)
@@ -36,10 +43,19 @@ class GenieTEIReranking(OpeaTEIReranking):
     """
 
     async def invoke(
-        self, input: Union[SearchedDoc, RerankingRequest, ChatCompletionRequest]
+        self, input: Union[GenieSearchedDoc, RerankingRequest, ChatCompletionRequest]
     ) -> Union[LLMParamsDoc, RerankingResponse, ChatCompletionRequest]:
         """Invokes the reranking service to generate rerankings for the provided input."""
+
+        # Testing optimisation
+        # Extract parameters dynamically from request payload to support automated testing sweeps via ChatQnA
+        input_dict = input.model_dump(exclude_none=True) if hasattr(input, "model_dump") else getattr(input, "dict", lambda: {})()
+        logger.info(f'[ DEBUG - VERBOSE ] RERANKER INPUT: {input_dict}')
+
         reranking_results = []
+        reranking_strategy = input_dict.get("reranking_strategy", RERANKING_STRATEGY)
+        reranking_threshold = input_dict.get("reranking_threshold", RERANKING_THRESHOLD)
+        reranker_top_n = input_dict.get("top_n", RERANKER_TOP_N)
 
         if input.retrieved_docs:
             docs = [doc.text for doc in input.retrieved_docs]
@@ -48,14 +64,6 @@ class GenieTEIReranking(OpeaTEIReranking):
             else:
                 query = input.input
 
-            # response = await self.client.post(
-            #     json={"query": query, "texts": docs},
-            #     model=f"{self.base_url}/rerank",
-            #     task="text-reranking",
-            # )
-            
-            # decoded_response = json.loads(response.decode())
-
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.base_url}/rerank", 
@@ -63,38 +71,41 @@ class GenieTEIReranking(OpeaTEIReranking):
                 ) as resp:
                     decoded_response = await resp.json()
 
-            # Checking RERANKING_STRATEGY param value:
-            logger.info(f"[ DEBUG ] Selected RERANKING STRATEGY is {RERANKING_STRATEGY}")
+            # Checking reranking_strategy param value:
+            logger.info(f"[ DEBUG ] Selected RERANKING STRATEGY is {reranking_strategy}")
 
-            if RERANKING_STRATEGY == "slice":
-                top_n = RERANKER_TOP_N if RERANKER_TOP_N else 1                
+            if reranking_strategy == "slice":
+                top_n = reranker_top_n if reranker_top_n else 1                
                 for best_response in decoded_response[:top_n]:
                     reranking_results.append({
                         "text": input.retrieved_docs[best_response["index"]].text, 
                         "score": best_response["score"]
                     })
 
-            elif RERANKING_STRATEGY == "threshold":
+            elif reranking_strategy == "threshold":
+                document_scores = [resp["score"] for resp in decoded_response]
+                logger.info(f"[ DEBUG ] Reranked document scores {document_scores}")
                 for best_response in decoded_response:
-                    if best_response["score"] >= RERANKING_THRESHOLD:
+                    if best_response["score"] >= reranking_threshold:
                         reranking_results.append({
                             "text": input.retrieved_docs[best_response["index"]].text, 
                             "score": best_response["score"]
                         })
 
-            elif RERANKING_STRATEGY == "knee_threshold":
-                scores = [resp["score"] for resp in decoded_response]
-                indices = list(range(len(scores)))
+            elif reranking_strategy == "knee_threshold":
+                document_scores = [resp["score"] for resp in decoded_response]
+                logger.info(f"[ DEBUG ] Reranked document scores {document_scores}")
+                indices = list(range(len(document_scores)))
 
                 kneedle = KneeLocator(
                     indices,
-                    scores,
+                    document_scores,
                     curve="convex",
                     direction="decreasing"
                 )
 
                 # If a knee is found, slice up to the knee + 1. Otherwise, keep all.
-                cutoff = kneedle.knee + 1 if kneedle.knee is not None else len(scores)
+                cutoff = kneedle.knee + 1 if kneedle.knee is not None else len(document_scores)
 
                 for i in range(cutoff):
                     best_response = decoded_response[i]
@@ -103,7 +114,7 @@ class GenieTEIReranking(OpeaTEIReranking):
                         "score": best_response["score"]
                     })
             else:
-                logger.warning(f"Unknown strategy {RERANKING_STRATEGY}. Defaulting to slice.")
+                logger.warning(f"Unknown strategy {reranking_strategy}. Defaulting to slice.")
                 for best_response in decoded_response[: input.top_n]:
                     reranking_results.append({
                         "text": input.retrieved_docs[best_response["index"]].text, 
@@ -139,3 +150,4 @@ class GenieTEIReranking(OpeaTEIReranking):
                     logger.info(input)
                 return input
         
+

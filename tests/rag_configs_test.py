@@ -21,12 +21,13 @@ csv_lock = threading.Lock()
 # TEST QUERIES 
 # see parameters_for_testing/methodology for further detail
 QUESTIONS = [
-     "What is the altitude range and average monthly rainfall of the Masai Mara National Reserve?",
-     "I am a non-resident adult planning a safari for August 2025. Compare the daily park entry fees (including any applicable concession fees) for staying inside the Masai Mara National Reserve versus staying inside the Serengeti National Park.",
-     "Why is the risk of contracting Malaria considered very low in the Serengeti National Park, and what specific preventative measures does the document still recommend tourists take?",
-     "What technique is used to prevent the Large Language Model (LLM) from experiencing 'drift' during label assignment, and what is the exact financial cost of running this LLM per 1,000 queries?",
-     "Based on the documentation, contrast the specific shortcomings of conventional vector-only RAG pipelines with the corresponding benefits introduced by this hybrid approach. Be sure to address issues of interpretability, precision, and domain adaptability."
- ]
+    "What is the altitude range and average monthly rainfall of the Masai Mara National Reserve?",
+    "I am a non-resident adult planning a safari for August 2025. Compare the daily park entry fees (including any applicable concession fees) for staying inside the Masai Mara National Reserve versus staying inside the Serengeti National Park.",
+    "Why is the risk of contracting Malaria considered very low in the Serengeti National Park, and what specific preventative measures does the document still recommend tourists take?",
+    "What technique is used to prevent the Large Language Model (LLM) from experiencing 'drift' during label assignment, and what is the exact financial cost of running this LLM per 1,000 queries?",
+    "Based on the documentation, contrast the specific shortcomings of conventional vector-only RAG pipelines with the corresponding benefits introduced by this hybrid approach. Be sure to address issues of interpretability, precision, and domain adaptability."
+]
+# QUESTIONS = ["What is GENIE.AI and what approach does it adopt for retrieval?"]
 
 # PARAMETER CONFIGURATIONS FOR TESTING
 # see parameters_for_testing/params_for_testing for further detail
@@ -55,7 +56,7 @@ def generate_configurations():
             for ret in [2, 5]:
                 for thresh in [0.5, 0.7]:
                     tc_true = bc.copy()
-                    tc_true["enable_traversal"] = True
+                    tc_true["enable_traversal"] = "true"
                     tc_true["traversal_max_depth"] = depth
                     tc_true["traversal_max_returned"] = ret
                     tc_true["traversal_score_threshold"] = thresh
@@ -91,9 +92,9 @@ def save_result(data_dict):
     df = pd.DataFrame([data_dict])
     with csv_lock:
         if not Path(RESULTS_FILE).is_file():
-            df.to_csv(RESULTS_FILE, index=False)
+            df.to_csv(RESULTS_FILE, sep='|', index=False)
         else:
-            df.to_csv(RESULTS_FILE, mode='a', header=False, index=False)
+            df.to_csv(RESULTS_FILE, sep='|', mode='a', header=False, index=False)
 
 def wait_for_service(url, timeout_sec=180):
     print(f"Polling mega-service at {url} for readiness...")

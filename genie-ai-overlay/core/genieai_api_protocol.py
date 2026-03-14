@@ -155,7 +155,7 @@ class ChatCompletionRequest(BaseModel):
     k: Optional[int] = None
     fetch_k: Optional[int] = None
     search_start: Optional[str] = None
-    enable_traversal: Optional[bool] = None
+    enable_traversal: Optional[str] = None
     traversal_max_depth: Optional[int] = None
     traversal_max_returned: Optional[int] = None
     traversal_score_threshold: Optional[float] = None

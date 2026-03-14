@@ -3,7 +3,7 @@
 
 import os
 import time
-from typing import Any, Union
+from typing import Any, Union, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import openai
@@ -55,6 +55,13 @@ from .config import (
     VLLM_TIMEOUT,
     VLLM_TOP_P,
 )
+# Defining a custom data subclass
+class GenieEmbedDoc(EmbedDoc): 
+    search_start: Optional[str] = None
+    enable_traversal: Optional[str] = None
+    traversal_max_depth: Optional[int] = None
+    traversal_max_returned: Optional[int] = None
+    traversal_score_threshold: Optional[float] = None
 
 logger = CustomLogger("genieai_retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
@@ -475,7 +482,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         """
 
     async def invoke(
-        self, input: Union[ChatCompletionRequest, RetrievalRequest, RetrievalRequestArangoDB, EmbedDoc]
+        self, input: Union[ChatCompletionRequest, RetrievalRequest, RetrievalRequestArangoDB, GenieEmbedDoc]
     ) -> list:
         """Process the retrieval request and return relevant documents."""
         if logflag:

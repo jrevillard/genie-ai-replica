@@ -4,7 +4,7 @@
 
 import os
 import time
-from typing import Union
+from typing import Optional, Union
 
 from integrations.genieai_retriever_arangodb import GenieaiArangoRetriever
 
@@ -49,6 +49,14 @@ from comps.cores.proto.genieai_api_protocol import (
 logger = CustomLogger("genieai_retriever_microservice")
 logflag = os.getenv("LOGFLAG", False)
 
+# Custom data subclass
+class GenieEmbedDoc(EmbedDoc): 
+    search_start: Optional[str] = None
+    enable_traversal: Optional[str] = None
+    traversal_max_depth: Optional[int] = None
+    traversal_max_returned: Optional[int] = None
+    traversal_score_threshold: Optional[float] = None
+
 retriever_component_name = os.getenv("RETRIEVER_COMPONENT_NAME", "GENIE_RETRIEVER_ARANGODB")
 
 # Initialize OpeaComponentLoader
@@ -67,12 +75,12 @@ loader = OpeaComponentLoader(
 )
 @register_statistics(names=["opea_service@retrievers"])
 async def retrieve_docs(
-    input: Union[EmbedDoc, EmbedMultimodalDoc, RetrievalRequest, RetrievalRequestArangoDB, ChatCompletionRequest],
+    input: Union[GenieEmbedDoc, EmbedMultimodalDoc, RetrievalRequest, RetrievalRequestArangoDB, ChatCompletionRequest],
 ) -> Union[SearchedDoc, SearchedMultimodalDoc, RetrievalResponse, ChatCompletionRequest]:
     start = time.time()
 
     if logflag:
-        logger.debug(f"[ retrieval ] input: {input}")
+        logger.info(f"[ retrieval ] input: {input}")
 
     try:
         response = await loader.invoke(input)

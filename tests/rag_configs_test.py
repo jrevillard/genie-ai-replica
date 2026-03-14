@@ -8,12 +8,12 @@ import threading
 import random
 
 # --- Short Test for Testing Logic Validation ---
-SMOKE_TEST_MODE = True #False #True  # Set to False for the full production run
+SMOKE_TEST_MODE = False #True  # Set to False for the full production run
 SAMPLE_SIZE = 1
 
 # Target the Kong gateway serving ChatQnA, or 8888 directly
 TARGET_URL = "http://localhost:8888/v1/chatqna"
-RESULTS_FILE = "genieai_rag_config_test_results_second_run.csv"
+RESULTS_FILE = "genieai_rag_config_test_results_third_run.csv"
 MAX_WORKERS = 8 if not SMOKE_TEST_MODE else 1  # Force 1 worker in test mode for cleaner logs
 
 csv_lock = threading.Lock()
@@ -47,7 +47,7 @@ def generate_configurations():
     for bc in base_ret_combos:
         # Branch 1: Traversal Disabled
         tc_false = bc.copy()
-        tc_false["enable_traversal"] = False
+        tc_false["enable_traversal"] = "false"
         tc_false["traversal_score_threshold"] = 0.5
         traversal_combos.append(tc_false)
         
@@ -131,8 +131,8 @@ def execute_test(config_id, config, q_idx, question):
         print(f"Payload: {payload}")
     
     try:
-        # 120s timeout accounts for peak hardware contention
-        response = requests.post(TARGET_URL, json=payload, timeout=120)
+        # 180s timeout accounts for peak hardware contention
+        response = requests.post(TARGET_URL, json=payload, timeout=180)
         total_latency = time.time() - start_t
         
         if SMOKE_TEST_MODE:
@@ -154,20 +154,32 @@ def execute_test(config_id, config, q_idx, question):
                 print(f"Gateway Error: {response.text}")
             return save_and_return(config_id, q_idx, question, config, response.status_code, total_latency, f"Gateway Error: {response.text}")
             
+    except requests.exceptions.Timeout as e:
+        total_latency = time.time()-start_t
+        if SMOKE_TEST_MODE:
+            print(f"Timeout Error: {str(e)}")
+        return save_and_return(config_id, q_idx, question, config, 504, total_latency, f"TImeout Error: {str(e)}")
+
     except requests.exceptions.RequestException as e:
         if SMOKE_TEST_MODE:
-            print(f"Network/Timeout Error: {str(e)}")
-        return save_and_return(config_id, q_idx, question, config, 500, time.time() - start_t, f"Network/Timeout Error: {str(e)}")
+            print(f"Network Error: {str(e)}")
+        return save_and_return(config_id, q_idx, question, config, 500, time.time() - start_t, f"Network Error: {str(e)}")
 
 def save_and_return(c_id, q_id, q_text, config, status, latency, answer):
+    
+    # re-formatting the LLM response and question text to faciliate parsing later
+    clean_answer = " ".join(answer.split())
+    clean_question = " ".join(q_text.split())
+
     result_row = {
         "config_id": c_id,
         "question_id": q_id,
-        "question": q_text,
+        "question": clean_question,
         **config,
         "status_code": status,
         "latency_sec": round(latency, 2),
-        "answer": answer 
+        "answer_length": len(clean_answer),
+        "answer": clean_answer 
     }
     save_result(result_row)
     return c_id, q_id, status, latency
@@ -190,18 +202,24 @@ def main():
     for i, config in enumerate(configurations):
         for q_idx, question in enumerate(QUESTIONS):
             tasks.append((i + 1, config, q_idx + 1, question))
+    
+    total_tasks = len(tasks)
             
     # Deploy threaded workers
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {executor.submit(execute_test, *t): t for t in tasks}
         
         for count, future in enumerate(concurrent.futures.as_completed(futures), 1):
+
+            task = futures[future]
+            config_id, config, q_id, question = task
+
             try:
-                c_id, q_id, status, latency = future.result()
+                c_id, q_id_result, status, latency = future.result()
                 if status == 200:
-                    print(f"[{count}/{len(tasks)}] Success - Config {c_id}, Q{q_id} ({latency:.2f}s)")
+                    print(f"[{count}/{total_tasks}] Success - Config {c_id}, Q{q_id_result} ({latency:.2f}s)")
                 else:
-                    print(f"[{count}/{len(tasks)}] FAILED (HTTP {status}) - Config {c_id}, Q{q_id} ({latency:.2f}s)")
+                    print(f"[{count}/{len(tasks)}] FAILED (HTTP {status}) - Config {config_id}, Q{q_id} ({latency:.2f}s), VALUES: {config}")
             except Exception as e:
                 print(f"[{count}/{len(tasks)}] Thread crashed: {str(e)}")
 

@@ -6,7 +6,7 @@ import httpx
 import json
 import os
 import re
-import aiohttp # for async http requests
+import aiohttp 
 import requests
 import asyncio
 import copy
@@ -55,13 +55,19 @@ LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
-RETRIEVER_K = os.getenv("RETRIEVER_ARANGO_K", 4)
-RETRIEVER_FETCH_K = os.getenv("RETRIEVER_ARANGO_FETCH_K", 20) 
-RETRIEVER_SCORE_THRESHOLD = os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1) 
-RETRIEVER_DISTANCE_THRESHOLD = os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", None) 
-RETRIEVER_LAMBDA_MULT = os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5) 
+RETRIEVER_K = int(os.getenv("RETRIEVER_ARANGO_K", 4))
+RETRIEVER_FETCH_K = int(os.getenv("RETRIEVER_ARANGO_FETCH_K", 20)) 
+RETRIEVER_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1)) 
+RETRIEVER_DISTANCE_THRESHOLD = int(os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", 1)) 
+RETRIEVER_TRAVERSAL_ENABLED = os.getenv("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", None)
+RETRIEVER_TRAVERSAL_MAX_DEPTH = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH", 2))
+RETRIEVER_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED", 3))
+RETRIEVER_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
+RETRIEVER_LAMBDA_MULT = float(os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5)) 
 
-RERANKER_TOP_N = os.getenv("RERANKER_TOP_N", 2)
+RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "threshold")	# slice | threshold | knee_threshold
+RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 2)) # if RERANKING_STRATEGY set to 'slice'
+RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9)) # if RERANKING_STRATEGY set to 'threshold'
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Frontend backend service URL
@@ -74,6 +80,19 @@ USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
+
+##################################################################################################################################
+# CUSTOM DATA SUBCLASSES
+##################################################################################################################################
+class GenieaiRetrieverParms(RetrieverParms):
+    enable_traversal: str = RETRIEVER_TRAVERSAL_ENABLED 
+    traversal_max_depth: int = RETRIEVER_TRAVERSAL_MAX_DEPTH
+    traversal_max_returned: int = RETRIEVER_TRAVERSAL_MAX_RETURNED
+    traversal_score_threshold: float = RETRIEVER_TRAVERSAL_SCORE_THRESHOLD
+
+class GenieaiRerankerParms(RerankerParms):
+    reranking_strategy: str = RERANKING_STRATEGY
+    reranking_threshold: float = RERANKING_THRESHOLD
 
 
 ##################################################################################################################################
@@ -119,31 +138,6 @@ class GenieUserProfileClient:
         
         # Log initialization
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
-
-    # def _sanitize_data(self, data):
-    #     if isinstance(data, dict):
-    #         try:
-    #             keys_to_remove = [k for k in data.keys() if k in SENSITIVE_KEYS]
-    #         except:
-    #             logger.info(f"Attention: SENSITIVE_KEYS parameter is not defined. Proceeding with default information masking instructions")
-    #             sensitive_keys = [
-    #                 "email", "phone", "address", "ip_address", "full_name", 
-    #                 "ssn", "ssb", "dob", "credit_card", "password", "encPassword", 
-    #                 "salt", "location", "accessToken", "refreshToken", "_rev", "_key"
-    #                 ]
-    #             keys_to_remove = [k for k in data.keys() if k in sensitive_keys]
-
-    #         for k in keys_to_remove:
-    #             del data[k]
-
-    #         for v in data.values():
-    #             self._sanitize_data(v)
-
-    #     elif isinstance(data, list):
-    #         for item in data:
-    #             self._sanitize_data(item)
-            
-    #     return data
 
 
     async def _get_auth_token(self):
@@ -441,13 +435,19 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         retriever_parameters = kwargs.get("retriever_parameters", None)
         if retriever_parameters:
-            inputs.update(retriever_parameters.dict())
+            # inputs.update(retriever_parameters.dict())
+            safe_params = retriever_parameters.dict(exclude_unset=True, exclude_none=True)
+            inputs.update(safe_params)
 
         retrieval_context = kwargs.get('retrieval_context', {})
         if retrieval_context:
             inputs['context'] = retrieval_context
+        
     
     elif self.services[cur_node].service_type == ServiceType.RERANK:
+        reranker_parameters = kwargs.get("reranker_parameters", None)
+        if reranker_parameters:
+            inputs.update(reranker_parameters.dict())
         if logflag:
             logger.debug(f"Aligned input of the reranker: {inputs}")
 
@@ -606,21 +606,22 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                     runtime_graph.delete_node_if_exists(ds)
 
             # handle template
-            prompt = data["initial_query"]
+            received_prompt = data.get("initial_query", inputs.get("text", ""))
+            prompt = received_prompt
             chat_template = llm_parameters_dict["chat_template"]
             if chat_template:
                 prompt_template = PromptTemplate.from_template(chat_template)
                 input_variables = prompt_template.input_variables
                 if sorted(input_variables) == ["context", "question"]:
-                    prompt = prompt_template.format(question=data["initial_query"], context="\n".join(doc_texts)) 
+                    prompt = prompt_template.format(question=received_prompt, context="\n".join(doc_texts)) 
                 elif input_variables == ["question"]:
-                    prompt = prompt_template.format(question=data["initial_query"])
+                    prompt = prompt_template.format(question=received_prompt)
                 else:
                     if logflag:
                         logger.debug(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
-                    prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
+                    prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
             else:
-                prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], doc_texts)
+                prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
 
             next_data["inputs"] = prompt
         
@@ -1186,6 +1187,7 @@ class ChatQnAService:
 
         chat_request = ChatCompletionRequest.parse_obj(data)
         
+
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
         logger.info(f"Parsed chat request: {chat_request}")
         
@@ -1201,6 +1203,7 @@ class ChatQnAService:
 
         if logflag:
             logger.debug(f'Incoming Chat Request: {chat_request}')
+        
         full_chat_history = chat_request.messages
         # Check both context.language and the direct language field
         original_language = None
@@ -1312,24 +1315,27 @@ class ChatQnAService:
             chat_template=chat_request.chat_template if chat_request.chat_template else None,
             model=chat_request.model if chat_request.model else None,
         )
-        retriever_parameters = RetrieverParms(
+        retriever_parameters = GenieaiRetrieverParms(
             # in the current implementation, search_type should always be set to similarity_score_threshold, 
             # otherwise not possible to calculate confidence scores
+            # this is currently enforced by the genieai_api_protocol (ChatCompletionRequest model)
             search_type=chat_request.search_type if chat_request.search_type else "similarity_score_threshold",
-            # k=chat_request.k if chat_request.k else 4,
             k=chat_request.k if chat_request.k is not None else RETRIEVER_K,
-            # distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold else None,
-            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
-            # fetch_k=chat_request.fetch_k if chat_request.fetch_k else 20,
             fetch_k=chat_request.fetch_k if chat_request.fetch_k is not None else RETRIEVER_FETCH_K,
-            # lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult else 0.5,
+            search_start=chat_request.search_start if chat_request.search_start is not None else RETRIEVER_SEARCH_START,
+            enable_traversal=chat_request.enable_traversal if chat_request.enable_traversal is not None else RETRIEVER_TRAVERSAL_ENABLED,
+            traversal_max_depth=chat_request.traversal_max_depth if chat_request.traversal_max_depth is not None else RETRIEVER_TRAVERSAL_MAX_DEPTH,
+            traversal_max_returned=chat_request.traversal_max_returned if chat_request.traversal_max_returned is not None else RETRIEVER_TRAVERSAL_MAX_RETURNED,
+            traversal_score_threshold=chat_request.traversal_score_threshold if chat_request.traversal_score_threshold is not None else RETRIEVER_TRAVERSAL_SCORE_THRESHOLD,
+            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
             lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
-            # score_threshold=chat_request.score_threshold if chat_request.score_threshold else 0.01,
             score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
         )
-        reranker_parameters = RerankerParms(
-            # top_n=chat_request.top_n if chat_request.top_n else 1,
-            top_n=chat_request.top_n if chat_request.top_n is not None else RERANKER_TOP_N,
+
+        reranker_parameters = GenieaiRerankerParms(
+        	reranking_strategy=chat_request.reranking_strategy if chat_request.reranking_strategy is not None else RERANKING_STRATEGY,
+        	top_n=chat_request.top_n if chat_request.top_n is not None else RERANKER_TOP_N,
+        	reranking_threshold=chat_request.reranking_threshold if chat_request.reranking_threshold is not None else RERANKING_THRESHOLD,
         )
 
         result_dict, runtime_graph = await self.megaservice.schedule(

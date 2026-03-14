@@ -4,7 +4,8 @@
 
 import os
 import time
-from typing import Union
+from typing import Union, Optional
+from pydantic import Field
 
 from integrations.ovms import OpeaOVMSReranking
 from integrations.tei import OpeaTEIReranking
@@ -27,6 +28,12 @@ from comps.cores.telemetry.opea_telemetry import opea_telemetry
 logger = CustomLogger("opea_reranking_microservice")
 logflag = os.getenv("LOGFLAG", False)
 
+# Custom data subclass
+class GenieSearchedDoc(SearchedDoc):
+    reranking_strategy: Optional[str] = None
+    reranking_threshold: Optional[float] = None
+    top_n: Optional[int] = None
+
 rerank_component_name = os.getenv("RERANK_COMPONENT_NAME", "GENIE_TEI_RERANKING")
 # Initialize OpeaComponentLoader
 loader = OpeaComponentLoader(rerank_component_name, description=f"OPEA RERANK Component: {rerank_component_name}")
@@ -42,7 +49,7 @@ loader = OpeaComponentLoader(rerank_component_name, description=f"OPEA RERANK Co
 @opea_telemetry
 @register_statistics(names=["opea_service@reranking"])
 async def reranking(
-    input: Union[SearchedMultimodalDoc, SearchedDoc, RerankingRequest, ChatCompletionRequest],
+    input: Union[SearchedMultimodalDoc, GenieSearchedDoc, RerankingRequest, ChatCompletionRequest],
 ) -> Union[RerankedDoc, LLMParamsDoc, RerankingResponse, ChatCompletionRequest, LVMVideoDoc]:
     start = time.time()
 

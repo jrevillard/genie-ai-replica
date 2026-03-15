@@ -6,17 +6,73 @@ from pathlib import Path
 import concurrent.futures
 import threading
 import random
+from datetime import datetime
 
 # --- Short Test for Testing Logic Validation ---
 SMOKE_TEST_MODE = False #True  # Set to False for the full production run
 SAMPLE_SIZE = 1
+TARGET_SMOKE_TEST = False #True
+TARGET_TEST_CONFIGS = [
+    # {
+    # 'k': 20, 
+    # 'fetch_k': 30, 
+    # 'search_start': 'chunk', 
+    # 'enable_traversal': 'true', 
+    # 'traversal_max_depth': 2, 
+    # 'traversal_max_returned': 5, 
+    # 'traversal_score_threshold': 0.7, 
+    # 'reranking_strategy': 'knee_threshold', 
+    # 'reranker_top_n': 5, 
+    # 'reranking_threshold': 0.0
+    # },
+    # {
+    # 'k': 30, 
+    # 'fetch_k': 30, 
+    # 'search_start': 'chunk', 
+    # 'enable_traversal': 'true', 
+    # 'traversal_max_depth': 2, 
+    # 'traversal_max_returned': 5, 
+    # 'traversal_score_threshold': 0.7, 
+    # 'reranking_strategy': 'knee_threshold', 
+    # 'reranker_top_n': 5, 
+    # 'reranking_threshold': 0.0
+    # },
+    {
+    'k': 30, 
+    'fetch_k': 30, 
+    'search_start': 'chunk', 
+    'enable_traversal': 'true', 
+    'traversal_max_depth': 2, 
+    'traversal_max_returned': 5, 
+    'traversal_score_threshold': 0.7, 
+    'reranking_strategy': 'knee_threshold', 
+    'reranker_top_n': 5, 
+    'reranking_threshold': 0.0
+    }
+    ]
 
 # Target the Kong gateway serving ChatQnA, or 8888 directly
 TARGET_URL = "http://localhost:8888/v1/chatqna"
-RESULTS_FILE = "genieai_rag_config_test_results_third_run.csv"
+RESULTS_FILE = "genieai_rag_config_test_results_updated_run.csv"
 MAX_WORKERS = 8 if not SMOKE_TEST_MODE else 1  # Force 1 worker in test mode for cleaner logs
+DEFAULT_CONFIGS = {
+    'k': 10, 
+    'fetch_k': 20, 
+    'search_start': 'chunk', 
+    'enable_traversal': 'true', 
+    'traversal_max_depth': 1, 
+    'traversal_max_returned': 3, 
+    'traversal_score_threshold': 0.7, 
+    'reranking_strategy': 'threshold', 
+    'reranker_top_n': 2, 
+    'reranking_threshold': 0.75
+    }
 
 csv_lock = threading.Lock()
+
+# Helper function to print timestamps 
+def print_time_stamp():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # TEST QUERIES 
 # see parameters_for_testing/methodology for further detail
@@ -27,16 +83,15 @@ QUESTIONS = [
     "What technique is used to prevent the Large Language Model (LLM) from experiencing 'drift' during label assignment, and what is the exact financial cost of running this LLM per 1,000 queries?",
     "Based on the documentation, contrast the specific shortcomings of conventional vector-only RAG pipelines with the corresponding benefits introduced by this hybrid approach. Be sure to address issues of interpretability, precision, and domain adaptability."
 ]
-# QUESTIONS = ["What is GENIE.AI and what approach does it adopt for retrieval?"]
 
 # PARAMETER CONFIGURATIONS FOR TESTING
 # see parameters_for_testing/params_for_testing for further detail
 def generate_configurations():
-    print("Building MASSIVE configuration grid...")
+    print(f"[{print_time_stamp()}] Building MASSIVE configuration grid...")
     
     # Retriever Base Params
     ret_params = {
-        "k": [5, 10, 30],
+        "k": [5, 10, 20],
         "fetch_k": [10, 30],
         "search_start": ['chunk', 'edge', 'node']
     }
@@ -48,7 +103,9 @@ def generate_configurations():
         # Branch 1: Traversal Disabled
         tc_false = bc.copy()
         tc_false["enable_traversal"] = "false"
-        tc_false["traversal_score_threshold"] = 0.5
+        tc_false["traversal_max_depth"] = 1     # Dummy value
+        tc_false["traversal_max_returned"] = 1      # Dummy value
+        tc_false["traversal_score_threshold"] = 0.5     # Dummy value
         traversal_combos.append(tc_false)
         
         # Branch 2: Traversal Enabled
@@ -69,23 +126,23 @@ def generate_configurations():
             fc = tc.copy()
             fc["reranking_strategy"] = "slice"
             fc["top_n"] = top_n
-            fc["reranking_threshold"] = 0.0 
+            fc["reranking_threshold"] = 0.0     # Dummy value 
             final_combos.append(fc)
             
         for thresh in [0.5, 0.7]:
             fc = tc.copy()
             fc["reranking_strategy"] = "threshold"
-            fc["reranker_top_n"] = 5 
+            fc["top_n"] = 1     # Dummy value 
             fc["reranking_threshold"] = thresh
             final_combos.append(fc)
             
         fc = tc.copy()
         fc["reranking_strategy"] = "knee_threshold"
-        fc["reranker_top_n"] = 5 
+        fc["top_n"] = 1     # Dummy value 
         fc["reranking_threshold"] = 0.0 
         final_combos.append(fc)
 
-    print(f"Total configurations generated: {len(final_combos)}")
+    print(f"[{print_time_stamp()}] Total configurations generated: {len(final_combos)}")
     return final_combos
 
 def save_result(data_dict):
@@ -97,26 +154,30 @@ def save_result(data_dict):
             df.to_csv(RESULTS_FILE, sep='|', mode='a', header=False, index=False)
 
 def wait_for_service(url, timeout_sec=180):
-    print(f"Polling mega-service at {url} for readiness...")
+    print(f"[{print_time_stamp()}] Polling mega-service at {url} for readiness...")
+    ping_config = DEFAULT_CONFIGS
     start_t = time.time()
     
     while time.time() - start_t < timeout_sec:
         try:
             response = requests.post(
                 url, 
-                json={"messages": [{"role": "user", "content": "ping"}], "stream": False}, 
+                json={"messages": [{"role": "user", "content": "ping"}], "stream": False, **ping_config}, 
                 timeout=5
             )
             response.raise_for_status()
-            print(f"Service at {url} is UP and accepting queries.")
+            print(f"[{print_time_stamp()}] Service at {url} is UP and accepting queries.")
             return True
         except requests.exceptions.RequestException:
             time.sleep(5)
             
-    raise RuntimeError(f"Service at {url} failed to initialize within {timeout_sec} seconds.")
+    raise RuntimeError(f"[{print_time_stamp()}] Service at {url} failed to initialize within {timeout_sec} seconds.")
 
 def execute_test(config_id, config, q_idx, question):
     start_t = time.time()
+
+    with csv_lock:
+        print(f"[{print_time_stamp()}] Config {config_id}, Q{q_idx} START", end=" ... ", flush=True)
     
     payload = {
         "messages": [{"role": "user", "content": question}],
@@ -127,12 +188,12 @@ def execute_test(config_id, config, q_idx, question):
     }
     
     if SMOKE_TEST_MODE:
-        print(f"\n--- [VERBOSE] Config {config_id}, Q{q_idx} ---")
+        print(f"--- [VERBOSE] Config {config_id}, Q{q_idx} ---")
         print(f"Payload: {payload}")
     
     try:
         # 180s timeout accounts for peak hardware contention
-        response = requests.post(TARGET_URL, json=payload, timeout=180)
+        response = requests.post(TARGET_URL, json=payload, timeout=210)
         total_latency = time.time() - start_t
         
         if SMOKE_TEST_MODE:
@@ -140,6 +201,9 @@ def execute_test(config_id, config, q_idx, question):
         
         if response.status_code == 200:
             resp_json = response.json()
+
+            with csv_lock:
+                print(f"[{print_time_stamp()}] Config {config_id}, Q{q_idx} COMPLETED ({total_latency:.2f}s)")
             
             answer_text = resp_json.get("response", "")
             if not answer_text:
@@ -151,18 +215,22 @@ def execute_test(config_id, config, q_idx, question):
             return save_and_return(config_id, q_idx, question, config, 200, total_latency, answer_text)
         else:
             if SMOKE_TEST_MODE:
-                print(f"Gateway Error: {response.text}")
+                print(f"[{print_time_stamp()}] Config {config_id}, Q{q_idx} Gateway Error: {response.text}")
             return save_and_return(config_id, q_idx, question, config, response.status_code, total_latency, f"Gateway Error: {response.text}")
             
     except requests.exceptions.Timeout as e:
         total_latency = time.time()-start_t
+        with csv_lock:
+            print(f"[{print_time_stamp()}] Config {config_id}, Q{q_idx} FAILED - Timeout Error")
         if SMOKE_TEST_MODE:
-            print(f"Timeout Error: {str(e)}")
-        return save_and_return(config_id, q_idx, question, config, 504, total_latency, f"TImeout Error: {str(e)}")
+            print(f"[{print_time_stamp()}] Config {config_id}, Q{q_idx} Timeout Error: {str(e)}")
+        return save_and_return(config_id, q_idx, question, config, 504, total_latency, f"Timeout Error: {str(e)}")
 
     except requests.exceptions.RequestException as e:
+        with csv_lock:
+            print(f"[{print_time_stamp()}] Config {config_id}, Q{q_idx} FAILED - Network Error")
         if SMOKE_TEST_MODE:
-            print(f"Network Error: {str(e)}")
+            print(f"[{print_time_stamp()}] Config {config_id}, Q{q_idx} Network Error: {str(e)}")
         return save_and_return(config_id, q_idx, question, config, 500, time.time() - start_t, f"Network Error: {str(e)}")
 
 def save_and_return(c_id, q_id, q_text, config, status, latency, answer):
@@ -188,15 +256,20 @@ def main():
     configurations = generate_configurations()
     
     if SMOKE_TEST_MODE:
-        sample_size = min(SAMPLE_SIZE, len(configurations))
-        configurations = random.sample(configurations, sample_size)
-        print(f"\n[!] TEST MODE ENABLED: Randomly sampled {sample_size} configurations.")
+        if TARGET_SMOKE_TEST:
+            configurations = TARGET_TEST_CONFIGS
+            sample_size = len(configurations)
+            print(f"\n[!] TARGETED SMOKE TEST ENABLED: {sample_size} configuration(s).")
+        else:
+            sample_size = min(SAMPLE_SIZE, len(configurations))
+            configurations = random.sample(configurations, sample_size)
+            print(f"\n[!] TEST MODE ENABLED: Randomly sampled {sample_size} configurations.")
         print("[!] Threading reduced to 1 worker for sequential, verbose logging.\n")
     
     # Hold execution until the mega-service responds
     wait_for_service(TARGET_URL)
     
-    print(f"\nInitiating End-to-End ChatQnA Executor with {MAX_WORKERS} workers...")
+    print(f"\n[{print_time_stamp()}] Initiating End-to-End ChatQnA Executor with {MAX_WORKERS} workers...")
     
     tasks = []
     for i, config in enumerate(configurations):
@@ -216,14 +289,18 @@ def main():
 
             try:
                 c_id, q_id_result, status, latency = future.result()
-                if status == 200:
-                    print(f"[{count}/{total_tasks}] Success - Config {c_id}, Q{q_id_result} ({latency:.2f}s)")
-                else:
-                    print(f"[{count}/{len(tasks)}] FAILED (HTTP {status}) - Config {config_id}, Q{q_id} ({latency:.2f}s), VALUES: {config}")
+                with csv_lock:
+                    if status == 200:
+                        print(f"\n[{print_time_stamp()}]          [{count}/{total_tasks}] Success - Config {c_id}, Q{q_id_result} ({latency:.2f}s)")
+                    else:
+                        print(f"\n[{print_time_stamp()}]          [{count}/{len(tasks)}] FAILED (HTTP {status}) - Config {config_id}, Q{q_id} ({latency:.2f}s), VALUES: {config}")
             except Exception as e:
-                print(f"[{count}/{len(tasks)}] Thread crashed: {str(e)}")
+                with csv_lock:
+                    print(f"\n[{print_time_stamp()}]          [{count}/{len(tasks)}] Thread crashed: {str(e)}")
 
-    print("\nEnd-to-End Testing Matrix Complete. \nGENIE.AI answers are ready for review.")
+    print(f"\n[{print_time_stamp()}] End-to-End Testing Matrix Complete. \nGENIE.AI answers are ready for review.")
 
 if __name__ == "__main__":
     main()
+
+

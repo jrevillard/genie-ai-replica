@@ -133,6 +133,14 @@ GENIE.AI requires significant computational resources, particularly for AI model
 
 ## 2.3 Install and Verify Docker on Every Host
 
+### Note: that the specifics of getting this done on any cloud providers Ubuntu images may differ
+#### Most importantly... get the pre-requisites installed and check them
+1. docker
+2. node
+3. npm
+
+#### CRITICAL - pay strict attention to the specifics of 3-node or single-node architecture
+
 Bash
 
 ##### 1\. Update and install prerequisites
@@ -236,10 +244,13 @@ This method deploys all services onto a single host using Docker Compose.
 
 ##### 1\. Clone the Repository
 
+**Note:** if you plan to commit then you must clone the main UNICC repository at https://opensource.unicc.org/un/itu/genie-ai/ and not the replica. Also not that as a 3rd party, you may be required to checkout a specific branch - check with the administrator.
+
 Clone the appropriate repository to your local machine:
 
 * **Public Replica:** https://gitlab.com/fordendk/genie-ai-replica  
-* **Internal UNICC GitLab:** (Check with administrator)
+* **Internal UNICC GitLab:** [(Check with administrator)](https://opensource.unicc.org/un/itu/genie-ai/)
+
 
 Bash
 
@@ -250,7 +261,11 @@ cd genie-ai-replica
 
 The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.
 
-The following tables document all variables found in the .env file, grouped by the service they configure.
+There are 2 templates in the repository to start with:
+1) env - used for modern GPU on single-node deployments (copy env .env to kickstart your config)
+2) env-T4 - used for older GPUs on single node deployments
+
+The following tables document all variables found in the .env file, grouped by the service they configure. You can determin the appropriate configuration and use this table to determin the values that you should use. Note that you will need to create access tokens and API keys yourselves for various services. You will also need to establish email infrastructure services and configure the credentials for that. If you are starting with one of the templates, then you can largely skip the settings section other than tailoring some specifics which should be self-evident when you look at the .env file.
 
 **General & Proxy Settings**  
 These settings control global logging and proxy configurations for environments behind corporate firewalls.
@@ -716,7 +731,7 @@ After launching services and waiting for the service startup: the following is a
 
 #### 4\. Launch Services
 
-Prerequisite: Download OCR Models  
+Prerequisite: Download OCR Models  **CRITICAL**
 Because the framework uses EasyOCR during data prep and model downloads inside containers can be slow or unreliable, you must download these files to the root of your project folder first.
 
 Bash
@@ -724,15 +739,15 @@ Bash
 wget \-O craft\_mlt\_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip  
 wget \-O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zip
 
-Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100)  
-Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (24GB+). This uses the standard docker-compose.yaml.
+Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100 / A40)  
+Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (48GB+). This uses the standard docker-compose.yaml.
 
 Bash
 
 docker compose up \-d \--build
 
-Launch Option B: Legacy Launch (NVIDIA Tesla T4)  
-Use this command only if you are running on a Tesla T4 (16GB). This uses docker-compose-t4.yaml, which applies specific overrides:
+Launch Option B: Legacy Launch (nVIDIA Tesla T4)  
+Use this command only if you are running on a Tesla T4 (16GB). This uses docker-compose-t4.yaml, which applies specific overrides. It must be understood that the environment for the T4 is restrictive due to the VRAM and the configuration shoe-horns multiple models into a small VRAM footprint:
 
 * **Precision:** Forces dtype=half (float16).  
 * **Images:** Uses specific turing tags for TEI containers to ensure CUDA 7.5 compatibility.  
@@ -754,8 +769,8 @@ docker ps
 docker logs \-f vllm-vllm-2
 
 ⚠️ **IMPORTANT: EXPECTED ERRORS**  
-At this stage, while the containers are running, they are not yet configured. If you inspect the backend logs now, you will see errors related to missing databases (ArangoDB) and unconfigured routes (Kong). This is normal. Do NOT attempt to debug these errors yet. Proceed immediately to Step 4 to complete the necessary infrastructure configuration.  
-**This is normal. Do NOT attempt to debug these errors yet.**
+At this stage, while the containers are running, they are not yet configured. If you inspect the backend logs now, you will see errors related to missing databases (ArangoDB) and unconfigured routes (Kong). This is normal. Do NOT attempt to debug these errors yet. Proceed immediately to Step 4 to complete the necessary infrastructure configuration. The primary purpose of booting the containers now is to allow us to continur configuring Kong, NGINX and ArangoDB infrastructure.
+**ERRORS ARE NORMAL. Do NOT attempt to debug these errors.**
 
 Proceed immediately to **Step 4** to complete the necessary infrastructure configuration.
 
@@ -770,22 +785,23 @@ Once the base services are running (Step 3), you must configure the core infrast
 While the arango-vector-db service is running, the specific application databases must be created.
 
 1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).  
-2. Create the necessary databases as defined in your environment variables (default: genie-ai) \- ensure both the frontend and backend services use the same database.
+2. Create the necessary databases as defined in your environment variables (default: genie-ai) \- ensure ALL of the services use the same database (check the .env) - there are multiple ARANGO vars ARANGO_DB and ARANGO_DB_NAME (they msut be the same).
 
-## 4.2 NGINX and Kong API Gateway Configuration
+## 4.2 NGINX and Kong API Gateway Configuration **CRITICAL**
 
-There are Nginx default.conf files available for both three-node and single-node deployments:
+#### There are Nginx default.conf files available for both three-node and single-node deployments:
 
-1. For three-node deployments, use the default default.conf and modify the upstream addresses  
-2. for single-node deployments, use the default.conf-single-node
+1. For three-node deployments, use the default default.conf and modify the upstream addresses (different servers as it is a three-node deployment)
+2. for single-node deployments, use the default.conf-single-node (this uses the container service names)
 
-Kong requires specific initialization and configuration to route traffic correctly.
+#### Kong requires specific initialization and configuration to route traffic correctly.
 
 1. **Initialize Database:** Execute these commands to prepare the Kong postgres database:
 
 Bash
 
-docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"
+\# Note:- the database may have already bean iniitalized
+docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;" 
 
 docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
 
@@ -808,9 +824,9 @@ sudo apt install jq
 
 ./manage-kong-config.sh \-a
 
-\*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
+#### (For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
 
-**Enter the correct hosts and expect the following output**:
+## CRITICAL - Enter the correct hosts and expect the following output:
 
 Bash
 
@@ -841,11 +857,11 @@ Enter 'document-repository' service port \[default: 3001\]:
 
 Nginx acts as the reverse proxy and SSL termination point.
 
-1\. Navigate to api-gateway-solution/nginx.  
-2\. Select the appropriate configuration file:  
+1. Navigate to api-gateway-solution/nginx.  
+2. Select the appropriate configuration file:  
 \* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
 \* For \*\*Three-Node\*\*, use: default.conf.  
-3\. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
+3. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
 
 ## 4.4 Domain & Security Configuration (CSP & CORS)
 
@@ -853,7 +869,7 @@ When deploying GENIE.AI to a specific host domain (e.g., genie.agency.gov) or a 
 
 This configuration involves updates in two locations: the central .env file and the Nginx configuration file.
 
-### 1\. Update Environment Variables (.env)
+### 1. Update Environment Variables (.env)
 
 The frontend and backend services rely on specific environment variables to construct their security headers. Locate the following variables in your root .env file and update them to include your target domain/IP.
 
@@ -881,6 +897,7 @@ CORS\_ALLOWED\_ORIGINS=https://genie.agency.gov,https://genie-ai.itu.int
 * **Protocols:** Ensure you list wss:// (Secure WebSockets) if you are using https://. If you are testing on http://, use ws://.  
 * **Ports:** If your application runs on a non-standard port (e.g., :8443), that port must be appended to the domain in the CSP (e.g., https://genie.agency.gov:8443).  
 * **Quoting:** Verify that 'self' is enclosed in single quotes, and the whole string is enclosed in double quotes.
+* **System Prompts:** These must be single line strings in the environment or docker will not like them.
 
 ### 2\. Update Nginx Configuration
 
@@ -916,7 +933,7 @@ TBD
 
 # Step 5: Knowledge Base Population & User Setup
 
-With the infrastructure configured, you can now instantiate the knowledge hierarchy designed in Step 1 and create the required system accounts.
+You have a choice at this juncture. Assuming you have done all your data analysis and you have a defined knowledge hierarchy, you can move forward with knowledge hierarchy configuration by script, UI or a combination of both. If you want to start with the UI then skip forward to step 6. If you decide to configure with scripts, with the infrastructure now configured, you can now instantiate the knowledge hierarchy designed in Step 1 and create the required system accounts as follows:
 
 ## Method 1: Automated Script Approach (Recommended for Initial Setup)
 
@@ -974,7 +991,7 @@ node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
 ### 5.5 Generate Translations
 
-(Optional) Use `create-translations.js` to auto-generate labels for other supported languages. The script supports **two translation engines**:
+(Optional) Use `create-translations.js` to auto-generate labels for other supported languages. You will need to read the README.md in the scripts folder. The script supports **two translation engines**:
 
 #### **Option A: Internal Translation Service (Recommended)**
 

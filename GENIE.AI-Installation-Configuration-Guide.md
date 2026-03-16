@@ -802,11 +802,13 @@ cp kong\_config.json-single-node kong\_config.json
 
 chmod \+x [manage-kong-config.sh](http://manage-kong-config.sh)
 
-sudo apt update sudo apt install jq
+sudo apt update 
+
+sudo apt install jq
 
 ./manage-kong-config.sh \-a
 
-\*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default).\*
+\*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
 
 **Enter the correct hosts and expect the following output**:
 
@@ -814,7 +816,7 @@ Bash
 
 govstack@bb-ai-gpu-01:\~/genie-ai-replica-single-node/api-gateway-solution/new-config$ ./manage-kong-config.sh \-a  
 This script will configure your Kong instance.  
-Please provide the required connection details.
+Please provide the required connection details - be sure to enter the correct hosts (this depends on whether you are using a 3-node or single-node config - for single-node, use the container service names - for 3-node, use the infrastructure hostname). The example below shows a single-node config.
 
 \--- Kong Admin API Details \---  
 Enter Kong host \[default: localhost\]:  
@@ -905,7 +907,7 @@ Bash
 
 \# For Single Node  
 docker compose down  
-docker compose \-f docker-compose.yaml up –build \-d –force-recreate
+docker compose \-f docker-compose.yaml up --build \-d --force-recreate
 
 \# For Standard/Three-Node  
 TBD
@@ -926,7 +928,9 @@ Bash
 
 cd components/gov-chat-backend/scripts/new-schema-scripts
 
-chmod \+x set-env.sh source set-env.sh
+chmod \+x set-env.sh 
+
+source set-env.sh
 
 5.2 Create Database Schema
 
@@ -935,7 +939,9 @@ Use the arango-schema-creator.js script to generate the collections, indexes, an
 Bash
 
 \# Ensure you are still in the new-schema-scripts directory and environment is set  
-npm install arangojs node arango-schema-creator.js ./arango-schema.json
+npm install arangojs 
+
+node arango-schema-creator.js ./arango-schema.json
 
 ### 5.3 Create Initial User Accounts
 

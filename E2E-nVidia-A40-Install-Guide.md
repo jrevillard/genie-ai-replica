@@ -101,7 +101,9 @@ watch nvidia-smi
 # Install NodeJS and NPM - required for Genie.AI
 
 apt install node
+
 apt get update
+
 apt install npm
 
 # Check it - this installs ancient node and npm so updates are needed
@@ -117,7 +119,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
 cat << 'EOF' >> ~/.bashrc
 
-# NVM Configuration - THIS IS A BIT NUANCED - You must source ~/.bashrc each tim you start a new session
+# NVM Configuration - THIS IS A BIT NUANCED - You must source ~/.bashrc each time you start a new session
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"

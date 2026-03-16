@@ -181,6 +181,12 @@ services:
       dockerfile: document-repository/Dockerfile
     container_name: doc-repo-dev
     environment:
+      # Database config
+      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_PORT=${ARANGO_PORT}
+      - ARANGO_DB=${ARANGO_DB}
+      - ARANGO_USER=${ARANGO_USER}
+      - ARANGO_USERNAME=${ARANGO_USERNAME}
       - PORT=${DOC_REPO_PORT}
     env_file:
       - .env

@@ -6,7 +6,7 @@ import httpx
 import json
 import os
 import re
-import aiohttp 
+import aiohttp # for async http requests
 import requests
 import asyncio
 import copy
@@ -608,20 +608,24 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # handle template
             received_prompt = data.get("initial_query", inputs.get("text", ""))
             prompt = received_prompt
-            chat_template = llm_parameters_dict["chat_template"]
-            if chat_template:
-                prompt_template = PromptTemplate.from_template(chat_template)
-                input_variables = prompt_template.input_variables
-                if sorted(input_variables) == ["context", "question"]:
-                    prompt = prompt_template.format(question=received_prompt, context="\n".join(doc_texts)) 
-                elif input_variables == ["question"]:
-                    prompt = prompt_template.format(question=received_prompt)
-                else:
-                    if logflag:
-                        logger.debug(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
-                    prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
-            else:
-                prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
+
+            # System instructions for integration of retrieved documents are already included in the CHATQNA_SYSTEM_PROMPT
+            # OPTIONAL: 
+            # Re-introduce the below code, to dynamically pass custom instructions or to condition them based on retrieved documents
+            # chat_template = llm_parameters_dict["chat_template"]
+            # if chat_template:
+            #     prompt_template = PromptTemplate.from_template(chat_template)
+            #     input_variables = prompt_template.input_variables
+            #     if sorted(input_variables) == ["context", "question"]:
+            #         prompt = prompt_template.format(question=received_prompt, context="\n".join(doc_texts)) 
+            #     elif input_variables == ["question"]:
+            #         prompt = prompt_template.format(question=received_prompt)
+            #     else:
+            #         if logflag:
+            #             logger.debug(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
+            #         prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
+            # else:
+            #     prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
 
             next_data["inputs"] = prompt
         
@@ -676,21 +680,25 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         # 3. Build the RAG prompt
         initial_query = inputs.get("initial_query", " ") 
-        chat_template = llm_parameters_dict.get("chat_template") if llm_parameters_dict else None
         
-        if chat_template:
-            prompt_template = PromptTemplate.from_template(chat_template)
-            input_variables = prompt_template.input_variables
-            if sorted(input_variables) == ["context", "question"]:
-                prompt = prompt_template.format(question=initial_query, context="\n".join(docs))
-            elif input_variables == ["question"]:
-                prompt = prompt_template.format(question=initial_query)
-            else:
-                prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
-        else:
-            prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
+        # System instructions for integration of retrieved documents are already included in the CHATQNA_SYSTEM_PROMPT
+        # OPTIONAL: 
+        # Re-introduce the below code, to dynamically pass custom instructions or to condition them based on retrieved documents
+        # chat_template = llm_parameters_dict.get("chat_template") if llm_parameters_dict else None
+        
+        # if chat_template:
+        #     prompt_template = PromptTemplate.from_template(chat_template)
+        #     input_variables = prompt_template.input_variables
+        #     if sorted(input_variables) == ["context", "question"]:
+        #         prompt = prompt_template.format(question=initial_query, context="\n".join(docs))
+        #     elif input_variables == ["question"]:
+        #         prompt = prompt_template.format(question=initial_query)
+        #     else:
+        #         prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
+        # else:
+        #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
             
-        next_data["inputs"] = prompt
+        next_data["inputs"] = initial_query + "".join(f"\n[Retrieved Document]: {doc}" for doc in docs) # prompt <- change to 'prompt' if you re-introduce the code above
         next_data["retrieved_docs"] = reranked_docs_with_scores
         
         # 4. Preserve file mappings for citations

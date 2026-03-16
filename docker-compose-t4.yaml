@@ -153,6 +153,12 @@ services:
       redis-cache:
         condition: service_healthy
     environment:
+      # Database config
+      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_PORT=${ARANGO_PORT}
+      - ARANGO_DB=${ARANGO_DB}
+      - ARANGO_USER=${ARANGO_USER}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - SESSION_SECRET=${SESSION_SECRET:-default-session-secret}
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}

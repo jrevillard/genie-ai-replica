@@ -955,7 +955,10 @@ node create-genie-ai-admin-account.js
 \# Create the Manager account  
 node create-genie-ai-manager-account.js
 
-**Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard.
+**Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard. At this point you can bounce the services and login if you want to test the config without establishing any knowledge heirarchy. The UI allows an Admin to establish the hierarchy with a GUI.
+
+### **Skip to Step 6 if you like**
+
 
 ### 5.4 Populate Hierarchy
 
@@ -1105,8 +1108,12 @@ After all configuration steps are complete, you must restart the services to ens
    docker-compose down  
    docker-compose up \-d
 
-2\. Verify Service Health:  
+2. Verify Service Health:  
 Check that all containers are running and healthy.
+
+### ** WAIT FOR ALL THE SERVICES TO FINALIZE WITH ALL 5 MODELS LOADED**
+
+watch nvidia-smi
 
 Bash
 

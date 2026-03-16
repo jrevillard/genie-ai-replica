@@ -104,12 +104,27 @@ apt install node
 apt get update
 apt install npm
 
-# Check it
+# Check it - this installs ancient node and npm so updates are needed
 root@e2e-60-3:~/genie-ai# npm -v
 8.5.1
 root@e2e-60-3:~/genie-ai# node -v
 v12.22.9
 root@e2e-60-3:~/genie-ai# 
+
+# Update using nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+
+cat << 'EOF' >> ~/.bashrc
+
+# NVM Configuration - THIS IS A BIT NUANCED - You must source ~/.bashrc each tim you start a new session
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+EOF
+
+source ~/.bashrc
+
 
 # Update docker and install the compose plugin
 sudo apt update

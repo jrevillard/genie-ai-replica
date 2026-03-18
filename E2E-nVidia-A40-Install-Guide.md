@@ -2,7 +2,7 @@
 
 ## **Guide: NVIDIA Driver Installation on Ubuntu 22.04**
 
-This guide covers the process of installing the server-grade NVIDIA drivers on E2E and resolving DKMS build failures caused by manually installed kernel headers. It outlines the specific steps needed to install NVIDIA drivers for an **NVIDIA A40 GPU** on **Ubuntu 22.04**, including how to bypass the common "Exit Status 10" error caused by rogue kernel headers. This is provided to help challenge perticipants install and configure on the specific images provided for the challenge on E2E Neetworks with A40 GPU
+This guide covers the process of installing the server-grade NVIDIA drivers on E2E and resolving DKMS build failures caused by manually installed kernel headers. It outlines the specific steps needed to install NVIDIA drivers for an **NVIDIA A40 GPU** on **Ubuntu 22.04**, including how to bypass the common "Exit Status 10" error caused by rogue kernel headers. This is provided to help challenge participants install and configure on the specific images provided for the challenge on E2E Neetworks with A40 GPU
 
 ## ---
 
@@ -35,7 +35,7 @@ driver : **nvidia-driver-535-server** \- distro non-free
 
 For the A40 in a server environment, the **535-server** branch is highly recommended for stability and long-term support.
 
-Note that you can uopgrade to CUDA 12.8 later by installing the nvidia-driver-590 driver
+Note that you can upgrade to CUDA 12.8 later by installing the nvidia-driver-590 driver
 
 Bash
 
@@ -104,7 +104,7 @@ apt install node
 apt get update
 apt install npm
 
-# Check it - unfortunately this installs ancient node and npm so updates are needed - feel free to install node and npm 20 but other means if you know how
+# Check it - unfortunately this installs ancient node and npm so updates are needed - feel free to install node and npm 20 by other means if you know how
 root@e2e-60-3:/genie-ai# npm -v
 
 8.5.1
@@ -113,7 +113,7 @@ root@e2e-60-3:/genie-ai# node -v
 
 v12.22.9
 
-# Update using nvm (or another means if yuou see fit)
+# Update using nvm (or another means if you see fit)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
 cat << 'EOF' >> ~/.bashrc

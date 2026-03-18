@@ -827,7 +827,8 @@ While the arango-vector-db service is running, the specific application database
 
 Bash
 
-\# Note:- the database may have already bean iniitalized
+\# Note:- the database may have already bean iniitalized<b>
+
 docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;" 
 
 docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
@@ -851,7 +852,8 @@ sudo apt install jq
 
 ./manage-kong-config.sh \-a
 
-#### (For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
+#### For Three-Node installation: 
+simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
 
 ## CRITICAL - Enter the correct hosts and expect the following output:
 

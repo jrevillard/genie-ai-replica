@@ -56,7 +56,7 @@ Bash
 uname \-r  
 \# Output: 5.15.0-94-generic
 
-### **B. Locate and Remove 6.0 Leftovers**
+### **B. Locate and Remove any/all 6.0 Leftovers**
 
 Search for the offending files that are blocking the driver build:
 
@@ -72,7 +72,7 @@ Bash
 sudo rm \-rf /lib/modules/6.0.0-060000-generic  
 sudo rm \-rf /usr/src/linux-headers-6.0.0-060000-generic
 
-### **C. Repair the Installation**
+### **C. Repair the Installation - this is key**
 
 With the obstacles removed, tell apt and dpkg to finish the configuration:
 
@@ -101,25 +101,28 @@ watch nvidia-smi
 # Install NodeJS and NPM - required for Genie.AI
 
 apt install node
-
 apt get update
-
 apt install npm
 
-# Check it - this installs ancient node and npm so updates are needed
-root@e2e-60-3:~/genie-ai# npm -v
+# Check it - unfortunately this installs ancient node and npm so updates are needed - feel free to install node and npm 20 but other means if you know how
+root@e2e-60-3:/genie-ai# npm -v
+
 8.5.1
-root@e2e-60-3:~/genie-ai# node -v
+
+root@e2e-60-3:/genie-ai# node -v
+
 v12.22.9
-root@e2e-60-3:~/genie-ai# 
 
-# Update using nvm
+# Update using nvm (or another means if yuou see fit)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-
 
 cat << 'EOF' >> ~/.bashrc
 
-# NVM Configuration - THIS IS A BIT NUANCED - You must source ~/.bashrc each time you start a new session
+### the above should be sticky in bashrc
+
+# NVM Configuration - THIS IS A BIT NUANCED
+
+### You must source ~/.bashrc each time you start a new session so if the nvm environment is not in bashrc then export it and source the .bashrc
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
@@ -128,7 +131,7 @@ EOF
 source ~/.bashrc
 
 
-# Update docker and install the compose plugin
+# Update docker and install the docker compose plugin (this is needed for running docker-compose.yaml)
 sudo apt update
 
 sudo apt-get install ca-certificates curl gnupg
@@ -150,32 +153,37 @@ sudo apt-get update
 sudo apt-get install docker-compose-plugin
 
 
-# Us the env template for .env
+# Use the env template for .env
+**you do have the choice to build your own .env but this will likely take a lot of time and experimentation - in the future we will add a configuration builder but for now just copy the template. If you want to be more studious then read the configuration guide in detail. It is likely time well invested now anyway**
 
 cp env .env
 
-# Modify the file to replace the genie-ai.itu.int addresses with <your IP>
+## 1. Modify the file to replace the genie-ai.itu.int addresses with your IP address or host name
 
 
-# Replace the following multi-line system prompts with single line prompts in .env:
+
+## 2. Replace the following multi-line system prompts with single line prompts in .env (feel free to use your own system prompts - we have provided solid examples in the sample config):
 
 LABEL_SELECTOR_SYSTEM_PROMPT="You are a precise semantic labeler for a Retrieval-Augmented Generation (RAG) system.\nYour goal: Assign the 1 to 3 MOST RELEVANT labels from the provided list that best describe the core topic(s) of the text chunk.\nRules:\n- Return ONLY labels that are strongly and directly semantically relevant to the specific chunk.\n- Most chunks should have 1–3 labels. Never exceed 4.\n- Do NOT try to \"maximize\" coverage or use as many labels as possible.\nWe only want the most semantically relevant labels\n- Prefer broader, higher-level labels when appropriate (e.g., \"Wildlife\" over \"Lion\", \"Weather\" over \"Rain\").\n- Do NOT suggest new labels unless the concept is completely absent and critically important.\n- If 2 or more of the provided labels are selected then DO NOT suggest new labels\n- If no label fits well, return a minimal list of suggested labels that are are strongly and directly semantically relevant to the specific chunk.\n- NEVER include labels just because they appear elsewhere in the document.\nExisting labels (use ONLY these are allowed):\n{labels_list}\n\nOutput format (strict JSON, no extra text):\n{\"labels\": [\"Label1\", \"Label2\"]}"
 
 CHATQNA_SYSTEM_PROMPT="<INSTRUCTIONS>\nYou are a friendly and polite information assistant.\nYour task is to answer the user's latest question using only the content provided from the knowledge base.\nDo not invent or assume information; if the answer is not in the provided content, inform the user that the information is unavailable.\nUse the user's name, gender, age, preferences, and chat history to tailor and personalise your responses.\nKeep answers informative but concise; provide detailed explanations only when necessary or explicitly requested.\n</INSTRUCTIONS>\n\nIn line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided."
 
-# Go to Huggingface and create your own access token and replace in .env.
+## 3. Go to Huggingface and create your own access token and replace in .env.
 HUGGINGFACEHUB_API_TOKEN=<your huggingface token>
 HUGGING_FACE_HUB_TOKEN=<your huggingface token>
 
-# Note that the VLLM_API_KEY can be removed unless you are using external services (which you are not)
+** Note that the VLLM_API_KEY can be removed unless you are using external services (which you are not)**
 VLLM_API_KEY=<your vLLM API key>
 
 
-# Start the services (should start pulling images) - there will be some errors
+## 4. Start the services (should start pulling images) - there will be some errors
 docker compose up --build -d
 
-# Check the status of the containers 
+## 5. Check the status of the containers 
 docker ps
 
+docker compose logs -f
+
+**Note that at this point there will be errors in the logs and containers restarting - this is because the configuration is incomplete**
 # PROCEED FROM "Step 4: Infrastructure Configuration" IN THE GENIE.AI-Installation-Configuration-Guide.md 
 

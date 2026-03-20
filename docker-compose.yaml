@@ -149,7 +149,7 @@ services:
         condition: service_healthy
     environment:
       # Database config
-      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_PORT=${ARANGO_PORT}
       - ARANGO_DB=${ARANGO_DB}
       - ARANGO_USER=${ARANGO_USER}
@@ -182,7 +182,7 @@ services:
     container_name: doc-repo-dev
     environment:
       # Database config
-      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_PORT=${ARANGO_PORT}
       - ARANGO_DB=${ARANGO_DB}
       - ARANGO_USER=${ARANGO_USER}

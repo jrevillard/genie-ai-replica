@@ -1,5 +1,5 @@
 # ArangoDB Configuration
-ARANGO_URL=http://arango-vector-db:8529  # Matches Docker service name
+ARANGO_URL=http://arango-vector-db:8529
 ARANGO_DB_NAME=node-services
 ARANGO_USER=root
 ARANGO_PASSWORD=test

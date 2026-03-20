@@ -1498,3 +1498,175 @@
 [2025-09-08 11:37:26] Fetching targets for express-api-servers...
 [2025-09-08 11:37:26] Backup successful: kong_backups/kong_backup_20250908_113726.json
 [2025-09-08 11:37:26] Operation completed successfully
+[2026-03-19 23:02:36] Applying configuration from kong_config.json
+[2026-03-19 23:02:36] Using Kong Admin API at: http://localhost:8001
+[2026-03-19 23:02:36] Setting 'express-api' to: backend:3000
+[2026-03-19 23:02:36] Setting 'document-repository' to: document-repository:3001
+[2026-03-19 23:02:36] Processing service: express-api
+[2026-03-19 23:02:36] Service 'express-api' applied successfully.
+[2026-03-19 23:02:36] Processing service: document-repository
+[2026-03-19 23:02:36] Service 'document-repository' applied successfully.
+[2026-03-19 23:02:36] Processing route: api-fallback
+[2026-03-19 23:02:36] Route 'api-fallback' applied successfully.
+[2026-03-19 23:02:36] Processing plugin 'request-transformer' for route 'api-fallback'
+[2026-03-19 23:02:36] Plugin 'request-transformer' for route 'api-fallback' applied successfully.
+[2026-03-19 23:02:36] Processing plugin 'rate-limiting' for route 'api-fallback'
+[2026-03-19 23:02:36] Plugin 'rate-limiting' for route 'api-fallback' applied successfully.
+[2026-03-19 23:02:36] Processing plugin 'cors' for route 'api-fallback'
+[2026-03-19 23:02:36] Plugin 'cors' for route 'api-fallback' applied successfully.
+[2026-03-19 23:02:36] Processing plugin 'file-log' for route 'api-fallback'
+[2026-03-19 23:02:36] Plugin 'file-log' for route 'api-fallback' applied successfully.
+[2026-03-19 23:02:36] Processing plugin 'response-transformer' for route 'api-fallback'
+[2026-03-19 23:02:37] Plugin 'response-transformer' for route 'api-fallback' applied successfully.
+[2026-03-19 23:02:37] Processing plugin 'request-termination' for route 'api-fallback'
+[2026-03-19 23:02:37] Plugin 'request-termination' for route 'api-fallback' applied successfully.
+[2026-03-19 23:02:37] Processing route: auth-route
+[2026-03-19 23:02:37] Route 'auth-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: auth-refresh-route
+[2026-03-19 23:02:37] Route 'auth-refresh-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: auth-login-route
+[2026-03-19 23:02:37] Route 'auth-login-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: user-route
+[2026-03-19 23:02:37] Route 'user-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: user-admin-route
+[2026-03-19 23:02:37] Route 'user-admin-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: session-route
+[2026-03-19 23:02:37] Route 'session-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: query-route
+[2026-03-19 23:02:37] Route 'query-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: service-route
+[2026-03-19 23:02:37] Route 'service-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: service-category-route
+[2026-03-19 23:02:37] Route 'service-category-route' applied successfully.
+[2026-03-19 23:02:37] Processing route: database-operations-route
+[2026-03-19 23:02:38] Route 'database-operations-route' applied successfully.
+[2026-03-19 23:02:38] Processing route: analytics-route
+[2026-03-19 23:02:38] Route 'analytics-route' applied successfully.
+[2026-03-19 23:02:38] Processing route: logger-route
+[2026-03-19 23:02:38] Route 'logger-route' applied successfully.
+[2026-03-19 23:02:38] Processing route: security-route
+[2026-03-19 23:02:38] Route 'security-route' applied successfully.
+[2026-03-19 23:02:38] Processing route: admin-route
+[2026-03-19 23:02:38] Route 'admin-route' applied successfully.
+[2026-03-19 23:02:38] Processing route: chat-history-route
+[2026-03-19 23:02:38] Route 'chat-history-route' applied successfully.
+[2026-03-19 23:02:38] Processing plugin 'cors' for route 'chat-history-route'
+[2026-03-19 23:02:38] Plugin 'cors' for route 'chat-history-route' applied successfully.
+[2026-03-19 23:02:38] Processing plugin 'rate-limiting' for route 'chat-history-route'
+[2026-03-19 23:02:38] Plugin 'rate-limiting' for route 'chat-history-route' applied successfully.
+[2026-03-19 23:02:38] Processing plugin 'file-log' for route 'chat-history-route'
+[2026-03-19 23:02:38] Plugin 'file-log' for route 'chat-history-route' applied successfully.
+[2026-03-19 23:02:38] Processing route: folder-main-route
+[2026-03-19 23:02:38] Route 'folder-main-route' applied successfully.
+[2026-03-19 23:02:38] Processing route: folder-search-route
+[2026-03-19 23:02:38] Route 'folder-search-route' applied successfully.
+[2026-03-19 23:02:39] Processing route: folder-shared-route
+[2026-03-19 23:02:39] Route 'folder-shared-route' applied successfully.
+[2026-03-19 23:02:39] Processing route: folder-reorder-route
+[2026-03-19 23:02:39] Route 'folder-reorder-route' applied successfully.
+[2026-03-19 23:02:39] Processing route: folder-detail-route
+[2026-03-19 23:02:39] Route 'folder-detail-route' applied successfully.
+[2026-03-19 23:02:39] Processing route: conversation-move-route
+[2026-03-19 23:02:39] Route 'conversation-move-route' applied successfully.
+[2026-03-19 23:02:39] Processing route: conversation-folder-route
+[2026-03-19 23:02:39] Route 'conversation-folder-route' applied successfully.
+[2026-03-19 23:02:39] Processing route: files-route
+[2026-03-19 23:02:39] Route 'files-route' applied successfully.
+[2026-03-19 23:02:39] Processing route: labels-route
+[2026-03-19 23:02:39] Route 'labels-route' applied successfully.
+[2026-03-19 23:02:39] Processing global plugin 'prometheus'
+[2026-03-19 23:02:39] Plugin 'prometheus' applied successfully.
+[2026-03-19 23:02:39] Processing upstream: express-api-servers
+[2026-03-19 23:02:39] Upstream 'express-api-servers' applied successfully.
+[2026-03-19 23:02:39] Overriding target for upstream 'express-api-servers' to 'backend:3000'
+[2026-03-19 23:02:39] Clearing existing targets for upstream 'express-api-servers'...
+[2026-03-19 23:02:40] Adding target 'backend:3000' to upstream 'express-api-servers'
+[2026-03-19 23:02:40] Target 'backend:3000' added successfully.
+[2026-03-19 23:02:40] ✅ Configuration applied successfully.
+[2026-03-19 23:02:40] Operation completed.
+[2026-03-20 05:15:27] Applying configuration from kong_config.json
+[2026-03-20 05:15:27] Using Kong Admin API at: http://localhost:8001
+[2026-03-20 05:15:27] Setting 'express-api' to: backend:3000
+[2026-03-20 05:15:27] Setting 'document-repository' to: document-repository:3001
+[2026-03-20 05:15:27] Processing service: express-api
+[2026-03-20 05:15:27] Service 'express-api' applied successfully.
+[2026-03-20 05:15:27] Processing service: document-repository
+[2026-03-20 05:15:28] Service 'document-repository' applied successfully.
+[2026-03-20 05:15:28] Processing route: api-fallback
+[2026-03-20 05:15:28] Route 'api-fallback' applied successfully.
+[2026-03-20 05:15:28] Processing plugin 'request-transformer' for route 'api-fallback'
+[2026-03-20 05:15:28] Plugin 'request-transformer' for route 'api-fallback' applied successfully.
+[2026-03-20 05:15:28] Processing plugin 'rate-limiting' for route 'api-fallback'
+[2026-03-20 05:15:28] Plugin 'rate-limiting' for route 'api-fallback' applied successfully.
+[2026-03-20 05:15:28] Processing plugin 'cors' for route 'api-fallback'
+[2026-03-20 05:15:28] Plugin 'cors' for route 'api-fallback' applied successfully.
+[2026-03-20 05:15:28] Processing plugin 'file-log' for route 'api-fallback'
+[2026-03-20 05:15:28] Plugin 'file-log' for route 'api-fallback' applied successfully.
+[2026-03-20 05:15:28] Processing plugin 'response-transformer' for route 'api-fallback'
+[2026-03-20 05:15:28] Plugin 'response-transformer' for route 'api-fallback' applied successfully.
+[2026-03-20 05:15:28] Processing plugin 'request-termination' for route 'api-fallback'
+[2026-03-20 05:15:28] Plugin 'request-termination' for route 'api-fallback' applied successfully.
+[2026-03-20 05:15:28] Processing route: auth-route
+[2026-03-20 05:15:28] Route 'auth-route' applied successfully.
+[2026-03-20 05:15:28] Processing route: auth-refresh-route
+[2026-03-20 05:15:28] Route 'auth-refresh-route' applied successfully.
+[2026-03-20 05:15:28] Processing route: auth-login-route
+[2026-03-20 05:15:29] Route 'auth-login-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: user-route
+[2026-03-20 05:15:29] Route 'user-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: user-admin-route
+[2026-03-20 05:15:29] Route 'user-admin-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: session-route
+[2026-03-20 05:15:29] Route 'session-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: query-route
+[2026-03-20 05:15:29] Route 'query-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: service-route
+[2026-03-20 05:15:29] Route 'service-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: service-category-route
+[2026-03-20 05:15:29] Route 'service-category-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: database-operations-route
+[2026-03-20 05:15:29] Route 'database-operations-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: analytics-route
+[2026-03-20 05:15:29] Route 'analytics-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: logger-route
+[2026-03-20 05:15:29] Route 'logger-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: security-route
+[2026-03-20 05:15:29] Route 'security-route' applied successfully.
+[2026-03-20 05:15:29] Processing route: admin-route
+[2026-03-20 05:15:30] Route 'admin-route' applied successfully.
+[2026-03-20 05:15:30] Processing route: chat-history-route
+[2026-03-20 05:15:30] Route 'chat-history-route' applied successfully.
+[2026-03-20 05:15:30] Processing plugin 'cors' for route 'chat-history-route'
+[2026-03-20 05:15:30] Plugin 'cors' for route 'chat-history-route' applied successfully.
+[2026-03-20 05:15:30] Processing plugin 'rate-limiting' for route 'chat-history-route'
+[2026-03-20 05:15:30] Plugin 'rate-limiting' for route 'chat-history-route' applied successfully.
+[2026-03-20 05:15:30] Processing plugin 'file-log' for route 'chat-history-route'
+[2026-03-20 05:15:30] Plugin 'file-log' for route 'chat-history-route' applied successfully.
+[2026-03-20 05:15:30] Processing route: folder-main-route
+[2026-03-20 05:15:30] Route 'folder-main-route' applied successfully.
+[2026-03-20 05:15:30] Processing route: folder-search-route
+[2026-03-20 05:15:30] Route 'folder-search-route' applied successfully.
+[2026-03-20 05:15:30] Processing route: folder-shared-route
+[2026-03-20 05:15:30] Route 'folder-shared-route' applied successfully.
+[2026-03-20 05:15:30] Processing route: folder-reorder-route
+[2026-03-20 05:15:30] Route 'folder-reorder-route' applied successfully.
+[2026-03-20 05:15:30] Processing route: folder-detail-route
+[2026-03-20 05:15:30] Route 'folder-detail-route' applied successfully.
+[2026-03-20 05:15:30] Processing route: conversation-move-route
+[2026-03-20 05:15:30] Route 'conversation-move-route' applied successfully.
+[2026-03-20 05:15:31] Processing route: conversation-folder-route
+[2026-03-20 05:15:31] Route 'conversation-folder-route' applied successfully.
+[2026-03-20 05:15:31] Processing route: files-route
+[2026-03-20 05:15:31] Route 'files-route' applied successfully.
+[2026-03-20 05:15:31] Processing route: labels-route
+[2026-03-20 05:15:31] Route 'labels-route' applied successfully.
+[2026-03-20 05:15:31] Processing global plugin 'prometheus'
+[2026-03-20 05:15:31] Plugin 'prometheus' applied successfully.
+[2026-03-20 05:15:31] Processing upstream: express-api-servers
+[2026-03-20 05:15:31] Upstream 'express-api-servers' applied successfully.
+[2026-03-20 05:15:31] Overriding target for upstream 'express-api-servers' to 'backend:3000'
+[2026-03-20 05:15:31] Clearing existing targets for upstream 'express-api-servers'...
+[2026-03-20 05:15:31] Adding target 'backend:3000' to upstream 'express-api-servers'
+[2026-03-20 05:15:31] Target 'backend:3000' added successfully.
+[2026-03-20 05:15:31] ✅ Configuration applied successfully.
+[2026-03-20 05:15:31] Operation completed.

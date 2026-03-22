@@ -255,24 +255,6 @@
       "quickHelp": {
         "buttons": [
           {
-            "id": "just-chat",
-            "title": "quickhelp.justChat",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/just-chat.svg"
-            },
-            "category": null,
-            "action": {
-              "visibleText": "quickhelp.justChatUserPrompt",
-              "hiddenPrompt": "quickhelp.justChatPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#FFFFFF",
-              "hoverColor": "#E3F2FD",
-              "outlineColor": "#0073AA"
-            }
-          },
-          {
             "id": "plant-basic-grains",
             "title": "quickhelp.plantBasicGrains",
             "icon": {
@@ -414,6 +396,24 @@
               "backgroundColor": "#FFFFFF",
               "hoverColor": "#E0F7FA",
               "outlineColor": "#00838F"
+            }
+          },
+          {
+            "id": "just-chat",
+            "title": "quickhelp.justChat",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/just-chat.svg"
+            },
+            "category": null,
+            "action": {
+              "visibleText": "quickhelp.justChatUserPrompt",
+              "hiddenPrompt": "quickhelp.justChatPrompt"
+            },
+            "styles": {
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#E3F2FD",
+              "outlineColor": "#0073AA"
             }
           }
         ]

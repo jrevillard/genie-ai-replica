@@ -369,50 +369,6 @@
         },
         "buttons": [
           {
-            "id": "just-chat",
-            "category": null,
-            "action": {
-              "visibleText": "quickhelp.justChatUserPrompt",
-              "hiddenPrompt": "quickhelp.justChatPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.justChat",
-                "color": "#1A1C1E"
-              },
-              "icon": {
-                "value": "/config/quickhelp/just-chat.svg",
-                "color": "#0073AA"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#FFFFFF",
-                    "end": "#E3F2FD",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#E2E2E6"
-                },
-                "icon": {
-                  "color": "#4FC3F7"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#1C1F22",
-                      "end": "#0E1113",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
             "id": "plant-basic-grains",
             "category": "1",
             "action": {
@@ -751,6 +707,50 @@
                 },
                 "icon": {
                   "color": "#4DD0E1"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "just-chat",
+            "category": null,
+            "action": {
+              "visibleText": "quickhelp.justChatUserPrompt",
+              "hiddenPrompt": "quickhelp.justChatPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.justChat",
+                "color": "#1A1C1E"
+              },
+              "icon": {
+                "value": "/config/quickhelp/just-chat.svg",
+                "color": "#0073AA"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#FFFFFF",
+                    "end": "#E3F2FD",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#E2E2E6"
+                },
+                "icon": {
+                  "color": "#4FC3F7"
                 },
                 "style": {
                   "background": {

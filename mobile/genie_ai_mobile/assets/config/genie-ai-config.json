@@ -333,14 +333,14 @@
     }
   },
   "theme": {
-    "primaryColor": "#4682B4",
-    "secondaryColor": "#5F9EA0",
-    "backgroundColor": "#D3E0EA",
-    "textColor": "#1C2526",
+    "primaryColor": "#0073AA",
+    "secondaryColor": "#2E7D32",
+    "backgroundColor": "#F8F9FA",
+    "textColor": "#1A1C1E",
     "navbar": {
-      "gradientStart": "#4682B4",
-      "gradientEnd": "#5F9EA0",
-      "textColor": "#F0F8FF"
+      "gradientStart": "#0073AA",
+      "gradientEnd": "#2E7D32",
+      "textColor": "#FFFFFF"
     }
   },
   "features": {
@@ -378,33 +378,33 @@
             "appearance": {
               "label": {
                 "text": "quickhelp.justChat",
-                "color": "#1C2526"
+                "color": "#1A1C1E"
               },
               "icon": {
                 "value": "/config/quickhelp/just-chat.svg",
-                "color": "#4682B4"
+                "color": "#0073AA"
               },
               "style": {
                 "background": {
                   "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
+                    "start": "#FFFFFF",
+                    "end": "#E3F2FD",
                     "direction": "horizontal"
                   }
                 }
               },
               "darkMode": {
                 "label": {
-                  "color": "#FFFFFF"
+                  "color": "#E2E2E6"
                 },
                 "icon": {
-                  "color": "#FFFFFF"
+                  "color": "#4FC3F7"
                 },
                 "style": {
                   "background": {
                     "gradient": {
-                      "start": "#4F4F4F",
-                      "end": "#333333",
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
                       "direction": "horizontal"
                     }
                   }
@@ -413,42 +413,42 @@
             }
           },
           {
-            "id": "identity-civil",
+            "id": "plant-basic-grains",
             "category": "1",
             "action": {
-              "visibleText": "quickhelp.applyForIDUserPrompt",
-              "hiddenPrompt": "quickhelp.applyForIDPrompt"
+              "visibleText": "quickhelp.plantBasicGrainsUserPrompt",
+              "hiddenPrompt": "quickhelp.plantBasicGrainsPrompt"
             },
             "appearance": {
               "label": {
-                "text": "quickhelp.applyForID",
-                "color": "#1C2526"
+                "text": "quickhelp.plantBasicGrains",
+                "color": "#1A1C1E"
               },
               "icon": {
-                "value": "/config/quickhelp/identity-civil.svg",
-                "color": "#4682B4"
+                "value": "/config/quickhelp/plant-basic-grains.svg",
+                "color": "#2E7D32"
               },
               "style": {
                 "background": {
                   "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
+                    "start": "#FFFFFF",
+                    "end": "#E8F5E9",
                     "direction": "horizontal"
                   }
                 }
               },
               "darkMode": {
                 "label": {
-                  "color": "#FFFFFF"
+                  "color": "#E2E2E6"
                 },
                 "icon": {
-                  "color": "#FFFFFF"
+                  "color": "#81C784"
                 },
                 "style": {
                   "background": {
                     "gradient": {
-                      "start": "#2C3E50",
-                      "end": "#1A252F",
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
                       "direction": "horizontal"
                     }
                   }
@@ -457,130 +457,42 @@
             }
           },
           {
-            "id": "taxes-revenue",
-            "category": "5",
-            "action": {
-              "visibleText": "quickhelp.payTaxesUserPrompt",
-              "hiddenPrompt": "quickhelp.payTaxesPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.payTaxes",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/taxes-revenue.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#34495E",
-                      "end": "#2C3E50",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "id": "business-trade",
-            "category": "8",
-            "action": {
-              "visibleText": "quickhelp.startBusinessUserPrompt",
-              "hiddenPrompt": "quickhelp.startBusinessPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.startBusiness",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/business-trade.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#2E4053",
-                      "end": "#212F3D",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "id": "healthcare-social",
+            "id": "diagnose-pest-disease",
             "category": "2",
             "action": {
-              "visibleText": "quickhelp.findHealthcareUserPrompt",
-              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
+              "visibleText": "quickhelp.diagnosePestDiseaseUserPrompt",
+              "hiddenPrompt": "quickhelp.diagnosePestDiseasePrompt"
             },
             "appearance": {
               "label": {
-                "text": "quickhelp.findHealthcare",
-                "color": "#1C2526"
+                "text": "quickhelp.diagnosePestDisease",
+                "color": "#1A1C1E"
               },
               "icon": {
-                "value": "/config/quickhelp/healthcare-social.svg",
-                "color": "#4682B4"
+                "value": "/config/quickhelp/diagnose-pest-disease.svg",
+                "color": "#D84315"
               },
               "style": {
                 "background": {
                   "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
+                    "start": "#FFFFFF",
+                    "end": "#FBE9E7",
                     "direction": "horizontal"
                   }
                 }
               },
               "darkMode": {
                 "label": {
-                  "color": "#FFFFFF"
+                  "color": "#E2E2E6"
                 },
                 "icon": {
-                  "color": "#FFFFFF"
+                  "color": "#FF8A65"
                 },
                 "style": {
                   "background": {
                     "gradient": {
-                      "start": "#2980B9",
-                      "end": "#1F618D",
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
                       "direction": "horizontal"
                     }
                   }
@@ -589,42 +501,42 @@
             }
           },
           {
-            "id": "education-learning",
+            "id": "grow-fruits-veggies",
             "category": "3",
             "action": {
-              "visibleText": "quickhelp.educationServicesUserPrompt",
-              "hiddenPrompt": "quickhelp.educationServicesPrompt"
+              "visibleText": "quickhelp.growFruitsVeggiesUserPrompt",
+              "hiddenPrompt": "quickhelp.growFruitsVeggiesPrompt"
             },
             "appearance": {
               "label": {
-                "text": "quickhelp.educationServices",
-                "color": "#1C2526"
+                "text": "quickhelp.growFruitsVeggies",
+                "color": "#1A1C1E"
               },
               "icon": {
-                "value": "/config/quickhelp/education-learning.svg",
-                "color": "#4682B4"
+                "value": "/config/quickhelp/grow-fruits-veggies.svg",
+                "color": "#558B2F"
               },
               "style": {
                 "background": {
                   "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
+                    "start": "#FFFFFF",
+                    "end": "#F1F8E9",
                     "direction": "horizontal"
                   }
                 }
               },
               "darkMode": {
                 "label": {
-                  "color": "#FFFFFF"
+                  "color": "#E2E2E6"
                 },
                 "icon": {
-                  "color": "#FFFFFF"
+                  "color": "#AED581"
                 },
                 "style": {
                   "background": {
                     "gradient": {
-                      "start": "#1ABC9C",
-                      "end": "#148F77",
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
                       "direction": "horizontal"
                     }
                   }
@@ -633,130 +545,218 @@
             }
           },
           {
-            "id": "transportation-mobility",
-            "category": "7",
-            "action": {
-              "visibleText": "quickhelp.transportLicensesUserPrompt",
-              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.transportLicenses",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/transportation-mobility.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#F39C12",
-                      "end": "#B9770E",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "id": "housing-urban",
-            "category": "9",
-            "action": {
-              "visibleText": "quickhelp.housingProgramsUserPrompt",
-              "hiddenPrompt": "quickhelp.housingProgramsPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.housingPrograms",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/housing-urban.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#D35400",
-                      "end": "#A04000",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "id": "employment-labor",
+            "id": "manage-poultry-pigs",
             "category": "4",
             "action": {
-              "visibleText": "quickhelp.findJobsUserPrompt",
-              "hiddenPrompt": "quickhelp.findJobsPrompt"
+              "visibleText": "quickhelp.managePoultryPigsUserPrompt",
+              "hiddenPrompt": "quickhelp.managePoultryPigsPrompt"
             },
             "appearance": {
               "label": {
-                "text": "quickhelp.findJobs",
-                "color": "#1C2526"
+                "text": "quickhelp.managePoultryPigs",
+                "color": "#1A1C1E"
               },
               "icon": {
-                "value": "/config/quickhelp/employment-labor.svg",
-                "color": "#4682B4"
+                "value": "/config/quickhelp/manage-poultry-pigs.svg",
+                "color": "#8D6E63"
               },
               "style": {
                 "background": {
                   "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
+                    "start": "#FFFFFF",
+                    "end": "#EFEBE9",
                     "direction": "horizontal"
                   }
                 }
               },
               "darkMode": {
                 "label": {
-                  "color": "#FFFFFF"
+                  "color": "#E2E2E6"
                 },
                 "icon": {
-                  "color": "#FFFFFF"
+                  "color": "#BCAAA4"
                 },
                 "style": {
                   "background": {
                     "gradient": {
-                      "start": "#8E44AD",
-                      "end": "#6C3483",
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "fertilizer-soil-advice",
+            "category": "5",
+            "action": {
+              "visibleText": "quickhelp.fertilizerSoilAdviceUserPrompt",
+              "hiddenPrompt": "quickhelp.fertilizerSoilAdvicePrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.fertilizerSoilAdvice",
+                "color": "#1A1C1E"
+              },
+              "icon": {
+                "value": "/config/quickhelp/fertilizer-soil-advice.svg",
+                "color": "#F9A825"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#FFFFFF",
+                    "end": "#FFFDE7",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#E2E2E6"
+                },
+                "icon": {
+                  "color": "#FFF59D"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "start-manage-apiary",
+            "category": "6",
+            "action": {
+              "visibleText": "quickhelp.startManageApiaryUserPrompt",
+              "hiddenPrompt": "quickhelp.startManageApiaryPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.startManageApiary",
+                "color": "#1A1C1E"
+              },
+              "icon": {
+                "value": "/config/quickhelp/start-manage-apiary.svg",
+                "color": "#F57F17"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#FFFFFF",
+                    "end": "#FFF8E1",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#E2E2E6"
+                },
+                "icon": {
+                  "color": "#FFE082"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "tilapia-pond-care",
+            "category": "7",
+            "action": {
+              "visibleText": "quickhelp.tilapiaPondCareUserPrompt",
+              "hiddenPrompt": "quickhelp.tilapiaPondCarePrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.tilapiaPondCare",
+                "color": "#1A1C1E"
+              },
+              "icon": {
+                "value": "/config/quickhelp/tilapia-pond-care.svg",
+                "color": "#0288D1"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#FFFFFF",
+                    "end": "#E1F5FE",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#E2E2E6"
+                },
+                "icon": {
+                  "color": "#4FC3F7"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "harvest-storage",
+            "category": "8",
+            "action": {
+              "visibleText": "quickhelp.harvestStorageUserPrompt",
+              "hiddenPrompt": "quickhelp.harvestStoragePrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.harvestStorage",
+                "color": "#1A1C1E"
+              },
+              "icon": {
+                "value": "/config/quickhelp/harvest-storage.svg",
+                "color": "#00838F"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#FFFFFF",
+                    "end": "#E0F7FA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#E2E2E6"
+                },
+                "icon": {
+                  "color": "#4DD0E1"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#1C1F22",
+                      "end": "#0E1113",
                       "direction": "horizontal"
                     }
                   }

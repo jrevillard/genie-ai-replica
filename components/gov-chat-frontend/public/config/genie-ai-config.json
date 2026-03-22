@@ -238,14 +238,14 @@
     }
   },
   "theme": {
-    "primaryColor": "#4682B4",
-    "secondaryColor": "#5F9EA0",
-    "backgroundColor": "#D3E0EA",
-    "textColor": "#1C2526",
+    "primaryColor": "#0073AA",
+    "secondaryColor": "#2E7D32",
+    "backgroundColor": "#F8F9FA",
+    "textColor": "#1A1C1E",
     "navbar": {
-      "gradientStart": "#4682B4",
-      "gradientEnd": "#5F9EA0",
-      "textColor": "#F0F8FF"
+      "gradientStart": "#0073AA",
+      "gradientEnd": "#2E7D32",
+      "textColor": "#FFFFFF"
     }
   },
   "features": {
@@ -267,153 +267,153 @@
               "hiddenPrompt": "quickhelp.justChatPrompt"
             },
             "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#E3F2FD",
+              "outlineColor": "#0073AA"
             }
           },
           {
-            "id": "identity-civil",
-            "title": "quickhelp.applyForID",
+            "id": "plant-basic-grains",
+            "title": "quickhelp.plantBasicGrains",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/identity-civil.svg"
+              "value": "/config/quickhelp/plant-basic-grains.svg"
             },
             "category": "1",
             "action": {
-              "visibleText": "quickhelp.applyForIDUserPrompt",
-              "hiddenPrompt": "quickhelp.applyForIDPrompt"
+              "visibleText": "quickhelp.plantBasicGrainsUserPrompt",
+              "hiddenPrompt": "quickhelp.plantBasicGrainsPrompt"
             },
             "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#E8F5E9",
+              "outlineColor": "#2E7D32"
             }
           },
           {
-            "id": "taxes-revenue",
-            "title": "quickhelp.payTaxes",
+            "id": "diagnose-pest-disease",
+            "title": "quickhelp.diagnosePestDisease",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/taxes-revenue.svg"
-            },
-            "category": "5",
-            "action": {
-              "visibleText": "quickhelp.payTaxesUserPrompt",
-              "hiddenPrompt": "quickhelp.payTaxesPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "business-trade",
-            "title": "quickhelp.startBusiness",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/business-trade.svg"
-            },
-            "category": "8",
-            "action": {
-              "visibleText": "quickhelp.startBusinessUserPrompt",
-              "hiddenPrompt": "quickhelp.startBusinessPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "healthcare-social",
-            "title": "quickhelp.findHealthcare",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/healthcare-social.svg"
+              "value": "/config/quickhelp/diagnose-pest-disease.svg"
             },
             "category": "2",
             "action": {
-              "visibleText": "quickhelp.findHealthcareUserPrompt",
-              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
+              "visibleText": "quickhelp.diagnosePestDiseaseUserPrompt",
+              "hiddenPrompt": "quickhelp.diagnosePestDiseasePrompt"
             },
             "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#FBE9E7",
+              "outlineColor": "#D84315"
             }
           },
           {
-            "id": "education-learning",
-            "title": "quickhelp.educationServices",
+            "id": "grow-fruits-veggies",
+            "title": "quickhelp.growFruitsVeggies",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/education-learning.svg"
+              "value": "/config/quickhelp/grow-fruits-veggies.svg"
             },
             "category": "3",
             "action": {
-              "visibleText": "quickhelp.educationServicesUserPrompt",
-              "hiddenPrompt": "quickhelp.educationServicesPrompt"
+              "visibleText": "quickhelp.growFruitsVeggiesUserPrompt",
+              "hiddenPrompt": "quickhelp.growFruitsVeggiesPrompt"
             },
             "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#F1F8E9",
+              "outlineColor": "#558B2F"
             }
           },
           {
-            "id": "transportation-mobility",
-            "title": "quickhelp.transportLicenses",
+            "id": "manage-poultry-pigs",
+            "title": "quickhelp.managePoultryPigs",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/transportation-mobility.svg"
-            },
-            "category": "7",
-            "action": {
-              "visibleText": "quickhelp.transportLicensesUserPrompt",
-              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "housing-urban",
-            "title": "quickhelp.housingPrograms",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/housing-urban.svg"
-            },
-            "category": "9",
-            "action": {
-              "visibleText": "quickhelp.housingProgramsUserPrompt",
-              "hiddenPrompt": "quickhelp.housingProgramsPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "employment-labor",
-            "title": "quickhelp.findJobs",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/employment-labor.svg"
+              "value": "/config/quickhelp/manage-poultry-pigs.svg"
             },
             "category": "4",
             "action": {
-              "visibleText": "quickhelp.findJobsUserPrompt",
-              "hiddenPrompt": "quickhelp.findJobsPrompt"
+              "visibleText": "quickhelp.managePoultryPigsUserPrompt",
+              "hiddenPrompt": "quickhelp.managePoultryPigsPrompt"
             },
             "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#EFEBE9",
+              "outlineColor": "#8D6E63"
+            }
+          },
+          {
+            "id": "fertilizer-soil-advice",
+            "title": "quickhelp.fertilizerSoilAdvice",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/fertilizer-soil-advice.svg"
+            },
+            "category": "5",
+            "action": {
+              "visibleText": "quickhelp.fertilizerSoilAdviceUserPrompt",
+              "hiddenPrompt": "quickhelp.fertilizerSoilAdvicePrompt"
+            },
+            "styles": {
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#FFFDE7",
+              "outlineColor": "#F9A825"
+            }
+          },
+          {
+            "id": "start-manage-apiary",
+            "title": "quickhelp.startManageApiary",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/start-manage-apiary.svg"
+            },
+            "category": "6",
+            "action": {
+              "visibleText": "quickhelp.startManageApiaryUserPrompt",
+              "hiddenPrompt": "quickhelp.startManageApiaryPrompt"
+            },
+            "styles": {
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#FFF8E1",
+              "outlineColor": "#F57F17"
+            }
+          },
+          {
+            "id": "tilapia-pond-care",
+            "title": "quickhelp.tilapiaPondCare",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/tilapia-pond-care.svg"
+            },
+            "category": "7",
+            "action": {
+              "visibleText": "quickhelp.tilapiaPondCareUserPrompt",
+              "hiddenPrompt": "quickhelp.tilapiaPondCarePrompt"
+            },
+            "styles": {
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#E1F5FE",
+              "outlineColor": "#0288D1"
+            }
+          },
+          {
+            "id": "harvest-storage",
+            "title": "quickhelp.harvestStorage",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/harvest-storage.svg"
+            },
+            "category": "8",
+            "action": {
+              "visibleText": "quickhelp.harvestStorageUserPrompt",
+              "hiddenPrompt": "quickhelp.harvestStoragePrompt"
+            },
+            "styles": {
+              "backgroundColor": "#FFFFFF",
+              "hoverColor": "#E0F7FA",
+              "outlineColor": "#00838F"
             }
           }
         ]

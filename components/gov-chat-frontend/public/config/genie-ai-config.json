@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework with a darker light blue theme inspired by ITU website banner",
+  "description": "Configuration file for customizing the GENIE.AI chatbot framework with dual-prompt mechanism for quick help buttons",
   "type": "object",
   "properties": {
     "app": {
@@ -114,7 +114,7 @@
             },
             "quickHelp": {
               "type": "object",
-              "description": "Quick Help button configurations",
+              "description": "Quick Help button configurations with dual-prompt mechanism",
               "properties": {
                 "buttons": {
                   "type": "array",
@@ -159,9 +159,23 @@
                         ],
                         "description": "Category ID for the button (null for general)"
                       },
-                      "prompt": {
-                        "type": "string",
-                        "description": "i18n key for the prompt to send when clicked"
+                      "action": {
+                        "type": "object",
+                        "description": "The dual-prompt mechanism: visibleText for user, hiddenPrompt for LLM",
+                        "properties": {
+                          "visibleText": {
+                            "type": "string",
+                            "description": "i18n key for text user sees in chat"
+                          },
+                          "hiddenPrompt": {
+                            "type": "string",
+                            "description": "i18n key for detailed prompt sent to LLM"
+                          }
+                        },
+                        "required": [
+                          "visibleText",
+                          "hiddenPrompt"
+                        ]
                       },
                       "styles": {
                         "type": "object",
@@ -192,7 +206,7 @@
                       "title",
                       "icon",
                       "category",
-                      "prompt",
+                      "action",
                       "styles"
                     ]
                   }
@@ -248,7 +262,10 @@
               "value": "/config/quickhelp/just-chat.svg"
             },
             "category": null,
-            "prompt": "quickhelp.justChatPrompt",
+            "action": {
+              "visibleText": "quickhelp.justChatUserPrompt",
+              "hiddenPrompt": "quickhelp.justChatPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -263,7 +280,10 @@
               "value": "/config/quickhelp/identity-civil.svg"
             },
             "category": "1",
-            "prompt": "quickhelp.applyForIDPrompt",
+            "action": {
+              "visibleText": "quickhelp.applyForIDUserPrompt",
+              "hiddenPrompt": "quickhelp.applyForIDPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -278,7 +298,10 @@
               "value": "/config/quickhelp/taxes-revenue.svg"
             },
             "category": "5",
-            "prompt": "quickhelp.payTaxesPrompt",
+            "action": {
+              "visibleText": "quickhelp.payTaxesUserPrompt",
+              "hiddenPrompt": "quickhelp.payTaxesPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -293,7 +316,10 @@
               "value": "/config/quickhelp/business-trade.svg"
             },
             "category": "8",
-            "prompt": "quickhelp.startBusinessPrompt",
+            "action": {
+              "visibleText": "quickhelp.startBusinessUserPrompt",
+              "hiddenPrompt": "quickhelp.startBusinessPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -308,7 +334,10 @@
               "value": "/config/quickhelp/healthcare-social.svg"
             },
             "category": "2",
-            "prompt": "quickhelp.findHealthcarePrompt",
+            "action": {
+              "visibleText": "quickhelp.findHealthcareUserPrompt",
+              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -323,7 +352,10 @@
               "value": "/config/quickhelp/education-learning.svg"
             },
             "category": "3",
-            "prompt": "quickhelp.educationServicesPrompt",
+            "action": {
+              "visibleText": "quickhelp.educationServicesUserPrompt",
+              "hiddenPrompt": "quickhelp.educationServicesPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -338,7 +370,10 @@
               "value": "/config/quickhelp/transportation-mobility.svg"
             },
             "category": "7",
-            "prompt": "quickhelp.transportLicensesPrompt",
+            "action": {
+              "visibleText": "quickhelp.transportLicensesUserPrompt",
+              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -353,7 +388,10 @@
               "value": "/config/quickhelp/housing-urban.svg"
             },
             "category": "9",
-            "prompt": "quickhelp.housingProgramsPrompt",
+            "action": {
+              "visibleText": "quickhelp.housingProgramsUserPrompt",
+              "hiddenPrompt": "quickhelp.housingProgramsPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",
@@ -368,7 +406,10 @@
               "value": "/config/quickhelp/employment-labor.svg"
             },
             "category": "4",
-            "prompt": "quickhelp.findJobsPrompt",
+            "action": {
+              "visibleText": "quickhelp.findJobsUserPrompt",
+              "hiddenPrompt": "quickhelp.findJobsPrompt"
+            },
             "styles": {
               "backgroundColor": "#D3E0EA",
               "hoverColor": "#A3BFFA",

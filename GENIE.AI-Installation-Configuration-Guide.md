@@ -431,6 +431,8 @@ These variables define the internal wiring and ports for the AI microservices.
 | LLM\_SERVER\_HOST\_IP | Hostname for the vLLM inference engine. | vllm |
 | LLM\_SERVER\_PORT | Port for the vLLM inference engine. | 8000 |
 | CHATQNA\_SYSTEM\_PROMPT | Main ChatQnA system prompt for responding to user queries based on retrieved content. | "You are a friendly and polite information assistant..." |
+| CHATQNA\_ENFORCE\_ABSTENTION | Enables or disables strict abstention behavior by the LLM | true |
+| CHATQNA\_ABSTENTION\_INSTRUCTIONS | Custom instructions to enforce abstention when no relevant info is retrieved | "The knowledge base search did not return relevant or sufficient information. You should clearly inform the user ..." |
 | GUARDRAIL\_SERVICE\_HOST\_IP | Hostname for the guardrail service. | guardrail |
 | GUARDRAIL\_SERVICE\_PORT | Port for the guardrail service. | 9090 |
 | TRANSLATION\_SERVICE\_HOST\_IP | Hostname for the translation service. | translation |

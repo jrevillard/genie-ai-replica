@@ -290,7 +290,10 @@ Keep answers informative but concise; provide detailed explanations only when ne
 
 In line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided. 
 "
+# Enables or disables strict abstention behavior in the RAG pipeline.
 CHATQNA_ENFORCE_ABSTENTION=true
+# Custom instructions appended to the user prompt to guide the LLM's behavior
+# when no relevant documents are retrieved (or when context is insufficient)
 CHATQNA_ABSTENTION_INSTRUCTIONS="
 The knowledge base search did not return relevant or sufficient information. 
 You should clearly inform the user that you do not have enough verified information to answer their query. 

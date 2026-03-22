@@ -1451,24 +1451,46 @@ export default {
     exportError: 'Не удалось экспортировать чат. Пожалуйста, попробуйте снова.'
   },
   quickhelp: {
-    applyForID: "Заявка на удостоверение личности",
+    // Labels (Short for UI)
+    applyForID: "Получить ID",
     payTaxes: "Оплатить налоги",
     startBusiness: "Начать бизнес",
-    findHealthcare: "Услуги здравоохранения",
-    educationServices: "Образовательные услуги",
-    transportLicenses: "Транспорт и лицензии",
-    housingPrograms: "Жилищные программы",
-    findJobs: "Найти работу",
+    findHealthcare: "Здравоохранение",
+    educationServices: "Образование",
+    transportLicenses: "Транспорт",
+    housingPrograms: "Жильё",
+    findJobs: "Работа",
     justChat: "Просто чат",
-    justChatPrompt: "Я хотел бы поболтать о государственных услугах",
-    applyForIDPrompt: "Мне нужна информация о том, как подать заявку на национальное удостоверение личности",
-    payTaxesPrompt: "Каков процесс оплаты налогов онлайн?",
-    startBusinessPrompt: "Проведите меня через шаги регистрации нового бизнеса",
-    findHealthcarePrompt: "Где я могу найти информацию об общественных медицинских услугах?",
-    educationServicesPrompt: "Какие образовательные услуги доступны для моих детей?",
-    transportLicensesPrompt: "Как мне продлить водительские права?",
-    housingProgramsPrompt: "Расскажите о доступных жилищных программах в Кении",
-    findJobsPrompt: "Какие государственные вакансии доступны в настоящее время?"
+
+    // User Prompts (Visible Text - First Person - what user sees in chat)
+    justChatUserPrompt: "Я хотел бы поболтать о государственных услугах",
+    applyForIDUserPrompt: "Мне нужна информация о том, как подать заявку на национальное удостоверение личности",
+    payTaxesUserPrompt: "Каков процесс оплаты налогов онлайн?",
+    startBusinessUserPrompt: "Проведите меня через шаги регистрации нового бизнеса",
+    findHealthcareUserPrompt: "Где я могу найти информацию об общественных медицинских услугах?",
+    educationServicesUserPrompt: "Какие образовательные услуги доступны для моих детей?",
+    transportLicensesUserPrompt: "Как мне продлить водительские права?",
+    housingProgramsUserPrompt: "Расскажите о доступных жилищных программах в Кении",
+    findJobsUserPrompt: "Какие государственные вакансии доступны в настоящее время?",
+
+    // System Prompts (Hidden from User - detailed prompts sent to LLM)
+    applyForIDPrompt: "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+
+    payTaxesPrompt: "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+
+    startBusinessPrompt: "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+
+    findHealthcarePrompt: "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+
+    educationServicesPrompt: "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+
+    transportLicensesPrompt: "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+
+    housingProgramsPrompt: "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+
+    findJobsPrompt: "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+
+    justChatPrompt: "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
   },
   common: {
     cancel: 'Отмена',

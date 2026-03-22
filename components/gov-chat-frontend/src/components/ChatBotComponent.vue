@@ -373,6 +373,7 @@ export default {
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
       relatedDocuments: [], // Holds documents for the right sidebar
+      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
     };
   },
 
@@ -592,7 +593,8 @@ export default {
           return {
             service: this.$t(button.title),
             textKey: button.title,
-            promptKey: button.prompt,
+            visibleTextKey: button.action.visibleText,
+            hiddenPromptKey: button.action.hiddenPrompt,
             icon: button.icon.value,
             category: button.category,
             id: button.id,
@@ -682,9 +684,13 @@ export default {
       }
 
       this.showQuickHelp = false;
-      if (rawOption.promptKey) {
-        const message = this.$t(rawOption.promptKey);
-        this.newMessage = message;
+      if (rawOption.hiddenPromptKey) {
+        // Display the visible text in the chat (what user sees)
+        const visibleMessage = this.$t(rawOption.visibleTextKey);
+        this.newMessage = visibleMessage;
+
+        // Store the hidden prompt to send to backend (what LLM sees)
+        this.hiddenPromptForNextMessage = this.$t(rawOption.hiddenPromptKey);
         this.sendMessage();
       }
     },
@@ -795,15 +801,21 @@ export default {
       const content = this.newMessage.trim();
       if (!content) return;
 
+      // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
+      const messageForBackend = this.hiddenPromptForNextMessage || content;
+      const messageForDisplay = content;
+
       this.chatMessages.push({
         sender: "user",
-        content,
+        content: messageForDisplay,
         timestamp: new Date().toISOString(),
         isSaved: false,
       });
       this.newMessage = "";
       this.showQuickHelp = false;
       this.isLoading = true;
+      // Clear hidden prompt after use
+      this.hiddenPromptForNextMessage = null;
       // Do NOT clear relatedDocuments here. We want to keep previous docs visible.
 
       const startTime = performance.now(); // Start timing
@@ -822,14 +834,23 @@ export default {
           const serviceLabels = this.selectedContextItems.map(
             (item) => item.service
           );
+          // Build messages array, replacing last user message with hidden prompt if available
+          const messagesForQuery = this.chatMessages.map((msg) => ({
+            role: msg.sender === "user" ? "user" : "assistant",
+            content: msg.content,
+          }));
+
+          // Replace the last user message with the hidden prompt (for dual-prompt mechanism)
+          const lastUserMsgIndex = messagesForQuery.map(m => m.role).lastIndexOf('user');
+          if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
+            messagesForQuery[lastUserMsgIndex].content = messageForBackend;
+          }
+
           queryData = {
             conversationId: this.conversationId,
             userId: this.$store.getters.currentUser?._key || "anonymous",
             sessionId: this.currentSessionId || "new-session",
-            messages: this.chatMessages.map((msg) => ({
-              role: msg.sender === "user" ? "user" : "assistant",
-              content: msg.content,
-            })),
+            messages: messagesForQuery,
             context: {
               categoryLabel: categoryLabel,
               serviceLabels: serviceLabels,
@@ -842,7 +863,7 @@ export default {
           queryData = {
             userId: this.$store.getters.currentUser?._key || "anonymous",
             sessionId: this.currentSessionId || "new-session",
-            text: content,
+            text: messageForBackend,
             contextOption: contextOption,
             timestamp: new Date().toISOString(),
           };

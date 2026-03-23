@@ -326,7 +326,7 @@
     "theme"
   ],
   "app": {
-    "title": "Genie AI",
+    "title": "AgroGenio AI",
     "icon": {
       "type": "file",
       "value": "assets/config/genie-ai-icon-light.svg"
@@ -345,8 +345,8 @@
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome to Genie AI, for Global Empowerment, Intelligence and Equity",
-      "botName": "Genie AI",
+      "welcomeMessage": "Welcome to AgroGenio AI - Your CENTA Agricultural Assistant",
+      "botName": "AgroGenio AI",
       "quickHelp": {
         "layout": {
           "columns": 2,

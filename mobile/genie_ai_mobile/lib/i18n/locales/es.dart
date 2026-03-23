@@ -1154,7 +1154,7 @@ const Map<String, dynamic> esLocale = {
     "fileUploadError": "Error al subir archivo.",
     "processingError": "Error al procesar tu solicitud.",
     "welcomeMessage":
-        "¡Bienvenido! ¿Cómo puedo ayudarte con los servicios gubernamentales de Kenia hoy?",
+        "¡Bienvenido! ¿Cómo puedo ayudarle con información sobre CENTA hoy?",
     "attachFile": "Adjuntar archivo",
     "fileTooLarge":
         "El archivo es demasiado grande. El tamaño máximo es {maxSize}.",

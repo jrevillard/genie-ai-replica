@@ -984,6 +984,14 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         fontWeight: FontWeight.bold, color: colors['text']),
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tr('chatbot.quickHelpSubtitle'),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors['text'].withOpacity(0.7),
+                        fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 20),
                   Expanded(
                     child: LayoutBuilder(

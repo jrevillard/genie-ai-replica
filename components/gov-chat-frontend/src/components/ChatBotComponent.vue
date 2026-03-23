@@ -166,6 +166,9 @@
           <h2 class="quick-help-heading">
             {{ translate("chatbot.whatCanIHelp") }}
           </h2>
+          <p class="quick-help-subtitle">
+            {{ translate("chatbot.quickHelpSubtitle") }}
+          </p>
 
           <div class="quick-help-grid">
             <div
@@ -2301,8 +2304,15 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   text-align: center;
   font-size: 1.6rem;
   font-weight: 600;
-  margin-bottom: 24px;
+  margin-bottom: 4px;
   color: var(--text-primary, #333);
+}
+
+.quick-help-subtitle {
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--text-secondary, rgba(51, 51, 51, 0.7));
+  margin-bottom: 24px;
 }
 
 .quick-help-grid {
@@ -2559,6 +2569,11 @@ html[data-theme="dark"] .metric-value {
 [data-theme="dark"] .quick-help-heading,
 html[data-theme="dark"] .quick-help-heading {
   color: white !important;
+}
+
+[data-theme="dark"] .quick-help-subtitle,
+html[data-theme="dark"] .quick-help-subtitle {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 [data-theme="dark"] .quick-help-overlay,

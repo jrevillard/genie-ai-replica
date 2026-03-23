@@ -1168,6 +1168,7 @@ const Map<String, dynamic> esLocale = {
     "unsavedChanges":
         "Tienes cambios sin guardar. ¿Estás seguro de que quieres iniciar un nuevo chat?",
     "whatCanIHelp": "¿Cómo puedo ayudarte hoy?",
+    "quickHelpSubtitle": "Accesos Rápidos - Acceso rápido a tareas agrícolas comunes",
     "justChat": "Solo chatear",
     "queryContext": "Contexto de consulta",
     "contextAdded": "Contexto añadido a tu consulta",

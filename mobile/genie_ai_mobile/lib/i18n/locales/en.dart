@@ -1152,6 +1152,7 @@ const Map<String, dynamic> enLocale = {
     "unsavedChanges":
         "You have unsaved changes. Are you sure you want to start a new chat?",
     "whatCanIHelp": "How can I help you today?",
+    "quickHelpSubtitle": "Fast Actions - Quick access to common agricultural tasks",
     "justChat": "Just Chat",
     "queryContext": "Query Context",
     "contextAdded": "Context added to your query",

@@ -1424,6 +1424,7 @@ export default {
     clearContext: 'Limpiar contexto e iniciar una nueva conversación',
     unsavedChanges: 'Tiene cambios no guardados. ¿Está seguro de que desea iniciar un nuevo chat?',
     whatCanIHelp: "¿Cómo puedo ayudarlo hoy?",
+    quickHelpSubtitle: "Accesos Rápidos - Acceso rápido a tareas agrícolas comunes",
     justChat: "Solo Chatear",
     queryContext: "Contexto de Consulta",
     contextAdded: 'Contexto agregado a su consulta',

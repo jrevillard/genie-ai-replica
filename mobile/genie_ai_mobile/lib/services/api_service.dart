@@ -7,7 +7,8 @@ class ApiService {
   // This allows instance access (_api.baseUrl) while keeping the value constant
   //String get baseUrl => 'https://localhost/api';
   // For production, you can easily switch:
-  String get baseUrl => 'https://genie-ai.itu.int/api';
+  //String get baseUrl => 'https://genie-ai.itu.int/api';
+  String get baseUrl => 'https://ai.assembly.govstack.global/api';
 
   String? _accessToken;
 

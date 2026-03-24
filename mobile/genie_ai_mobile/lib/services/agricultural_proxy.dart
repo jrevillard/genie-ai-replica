@@ -1,21 +1,16 @@
+import 'hdx_ndvi_service.dart';
+import 'usda_rss_service.dart';
+
 /// Agricultural Data Proxy
 ///
 /// Fetches crop health and pest alert data from external APIs:
-/// - NASA Harvest: Crop health (NDVI) data
-/// - Sentinel Hub: Satellite imagery statistics
-/// - USDA APHIS: Pest alerts for Central America
-/// - FAO GIEWS: Backup pest data (requires API key)
+/// - HDX (NASA MODIS via WFP): Crop health (NDVI) data
+/// - USDA APHIS RSS Feeds: Pest alerts for Central America
 ///
 /// All data is cached for 1 hour to reduce API calls.
 class AgriculturalProxy {
   final Map<String, dynamic> _cache = {};
   static const _cacheDuration = Duration(hours: 1);
-
-  // API Endpoints (reserved for future implementation)
-  // static const String _nasaHarvestUrl = 'https://harvest.nasa.gov/api/';
-  // static const String _sentinelHubUrl = 'https://services.sentinel-hub.com/api/v1/statistics';
-  // static const String _usdaAphisUrl = 'https://www.aphis.usda.gov/aphis/api/';
-  // static const String _faoGIEWSUrl = 'https://fenixservices.fao.org/faostat/api/';
 
   /// Get crop health data for a region
   ///
@@ -40,8 +35,12 @@ class AgriculturalProxy {
     }
 
     try {
-      // TODO: Replace with actual NASA Harvest API call when API key is available
-      final data = await _fetchCropHealthFromNASA(region, timeRange);
+      // Use HDX NDVI service (NASA MODIS data via WFP)
+      final hdxService = HdxNdviService();
+      final data = await hdxService.getCropHealthData(
+        region: region,
+        checkForUpdates: false,
+      );
 
       _cache[cacheKey] = {
         'data': data,
@@ -76,9 +75,9 @@ class AgriculturalProxy {
     }
 
     try {
-      // TODO: Replace with actual USDA APHIS API call
-      // Note: USDA provides RSS feeds and web data - may need web scraping
-      final data = await _fetchPestAlertsFromUSDA(region);
+      // Use USDA RSS feed service
+      final usdaService = UsdaRssService();
+      final data = await usdaService.getPestAlerts(region: region);
 
       _cache[cacheKey] = {
         'data': data,
@@ -90,173 +89,6 @@ class AgriculturalProxy {
       print('[AgriculturalProxy] Failed to fetch pest alerts: $e');
       return _getFallbackPestAlertData(region);
     }
-  }
-
-  /// Fetch crop health data from NASA Harvest API
-  ///
-  /// TODO: Implement actual NASA Harvest API integration
-  /// Steps:
-  /// 1. Obtain API key from https://harvest.nasa.gov/
-  /// 2. Setup OAuth authentication
-  /// 3. Query Earth Engine for NDVI statistics
-  /// 4. Parse GeoTIFF or JSON response
-  Future<Map<String, dynamic>> _fetchCropHealthFromNASA(
-    String region,
-    String timeRange,
-  ) async {
-    print('[AgriculturalProxy] Fetching crop health from NASA for $region');
-
-    // Calculate date range
-    final endDate = DateTime.now();
-    final startDate = endDate.subtract(const Duration(days: 30));
-
-    // Return mock data matching El Salvador departments
-    // Replace this with actual API response when available
-    return {
-      'region': region,
-      'timeRange': timeRange,
-      'startDate': startDate.toIso8601String().split('T')[0],
-      'endDate': endDate.toIso8601String().split('T')[0],
-      'dataSource': 'NASA Harvest (mock)',
-      'data': [
-        {
-          'department': 'San Salvador',
-          'ndvi': 0.72,
-          'trend': 'improving',
-          'change': 5.2,
-          'health': 'good',
-        },
-        {
-          'department': 'La Libertad',
-          'ndvi': 0.68,
-          'trend': 'stable',
-          'change': 1.1,
-          'health': 'good',
-        },
-        {
-          'department': 'San Miguel',
-          'ndvi': 0.55,
-          'trend': 'declining',
-          'change': -8.3,
-          'health': 'moderate',
-        },
-        {
-          'department': 'Santa Ana',
-          'ndvi': 0.71,
-          'trend': 'improving',
-          'change': 3.7,
-          'health': 'good',
-        },
-        {
-          'department': 'Usulután',
-          'ndvi': 0.48,
-          'trend': 'declining',
-          'change': -12.1,
-          'health': 'warning',
-        },
-        {
-          'department': 'La Unión',
-          'ndvi': 0.52,
-          'trend': 'stable',
-          'change': -0.5,
-          'health': 'moderate',
-        },
-        {
-          'department': 'Chalatenango',
-          'ndvi': 0.65,
-          'trend': 'improving',
-          'change': 4.2,
-          'health': 'good',
-        },
-      ],
-      'average': {
-        'ndvi': 0.63,
-        'trend': 'stable',
-        'change': -2.1,
-      },
-    };
-  }
-
-  /// Fetch pest alerts from USDA APHIS
-  ///
-  /// TODO: Implement actual USDA APHIS API integration
-  /// Options:
-  /// 1. Use USDA APHIS public RSS feeds
-  /// 2. Web scrape from public pages (check robots.txt)
-  /// 3. Use USDA API Gateway if available
-  /// 4. Fallback to FAO GIEWS with API key
-  Future<Map<String, dynamic>> _fetchPestAlertsFromUSDA(
-    String region,
-  ) async {
-    print('[AgriculturalProxy] Fetching pest alerts from USDA APHIS for $region');
-
-    // Return mock data for Central America
-    // Replace this with actual API response when available
-    return {
-      'region': region,
-      'lastUpdated': DateTime.now().toIso8601String(),
-      'dataSource': 'USDA APHIS (mock)',
-      'alerts': [
-        {
-          'id': 'fall-armyworm-2025',
-          'pest': 'Fall Armyworm',
-          'scientificName': 'Spodoptera frugiperda',
-          'severity': 'high',
-          'affectedCrops': ['Maize', 'Sorghum'],
-          'departments': ['San Miguel', 'Usulután', 'La Unión'],
-          'description':
-              'High populations detected in eastern departments. Monitor whorl damage and frass.',
-          'recommendations':
-              'Monitor fields weekly, apply pheromone traps, consider biological controls (parasitoids)',
-          'firstDetected': '2025-03-15',
-        },
-        {
-          'id': 'coffee-rust-2025',
-          'pest': 'Coffee Leaf Rust',
-          'scientificName': 'Hemileia vastatrix',
-          'severity': 'moderate',
-          'affectedCrops': ['Coffee'],
-          'departments': ['Santa Ana', 'Ahuachapán', 'Sonsonate'],
-          'description':
-              'Moderate incidence in high-altitude coffee zones. Orange-yellow spots on lower leaf surfaces.',
-          'recommendations':
-              'Apply fungicide preventatively, improve air circulation, remove infected leaves, use resistant varieties',
-          'firstDetected': '2025-03-10',
-        },
-        {
-          'id': 'whitefly-2025',
-          'pest': 'Whitefly',
-          'scientificName': 'Bemisia tabaci',
-          'severity': 'low',
-          'affectedCrops': ['Beans', 'Tomatoes', 'Peppers', 'Cucumbers'],
-          'departments': ['San Salvador', 'La Libertad', 'La Paz'],
-          'description':
-              'Low levels detected in valley regions. Check leaf undersides for nymphs and adults.',
-          'recommendations':
-              'Use yellow sticky traps, encourage natural predators (Encarsia formosa), avoid overuse of insecticides',
-          'firstDetected': '2025-03-08',
-        },
-        {
-          'id': 'tomato-late-blight-2025',
-          'pest': 'Late Blight',
-          'scientificName': 'Phytophthora infestans',
-          'severity': 'moderate',
-          'affectedCrops': ['Tomatoes', 'Potatoes'],
-          'departments': ['Chalatenango', 'Cabañas'],
-          'description':
-              'Favorable conditions due to recent humidity. Water-soaked lesions on leaves and stems.',
-          'recommendations':
-              'Ensure good drainage, rotate crops, apply copper-based fungicides preventatively, remove infected plant material',
-          'firstDetected': '2025-03-12',
-        },
-      ],
-      'summary': {
-        'total': 4,
-        'high': 1,
-        'moderate': 2,
-        'low': 1,
-      },
-    };
   }
 
   /// Fallback crop health data when API is unavailable
@@ -306,5 +138,40 @@ class AgriculturalProxy {
       'keys': _cache.keys.toList(),
       'duration': '60 minutes',
     };
+  }
+
+  /// Check for HDX data updates
+  ///
+  /// Returns true if new data is available on HDX, false otherwise
+  Future<bool> checkForDataUpdates() async {
+    try {
+      final hdxService = HdxNdviService();
+      return await hdxService.checkForUpdates();
+    } catch (e) {
+      print('[AgriculturalProxy] Failed to check for updates: $e');
+      return false;
+    }
+  }
+
+  /// Get HDX cache information
+  Future<Map<String, dynamic>> getHdxCacheInfo() async {
+    try {
+      final hdxService = HdxNdviService();
+      return await hdxService.getCacheInfo();
+    } catch (e) {
+      return {
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Clear HDX cached data
+  Future<void> clearHdxCache() async {
+    try {
+      final hdxService = HdxNdviService();
+      await hdxService.clearCache();
+    } catch (e) {
+      print('[AgriculturalProxy] Failed to clear HDX cache: $e');
+    }
   }
 }

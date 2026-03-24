@@ -7,6 +7,8 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
+import 'package:genie_ai_mobile/components/charts/crop_health_summary_card.dart';
+import 'package:genie_ai_mobile/components/charts/pest_alert_map_card.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
@@ -80,6 +82,24 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   // Welcome message
   late String _welcomeMessage;
+
+  /// Public method to send a message programmatically (e.g., from Pest Alerts)
+  void sendPrompt(String prompt) {
+    if (prompt.trim().isEmpty) return;
+
+    // Set the input text (for display)
+    _inputController.text = prompt;
+
+    // Send the message
+    _sendMessage(prompt);
+
+    // Ensure the chatbot is visible
+    if (_showQuickHelpOverlay) {
+      setState(() {
+        _showQuickHelpOverlay = false;
+      });
+    }
+  }
 
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
@@ -972,11 +992,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
           // Quick Help Overlay
           if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-            Container(
-              color: colors['background'].withOpacity(0.98),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            Positioned.fill(
+              child: Container(
+                color: colors['background'].withOpacity(0.98),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     tr('chatbot.whatCanIHelp'),
@@ -984,250 +1005,301 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         fontWeight: FontWeight.bold, color: colors['text']),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tr('chatbot.quickHelpSubtitle'),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colors['text'].withOpacity(0.7),
-                        fontSize: 12),
-                    textAlign: TextAlign.center,
+                  const SizedBox(height: 12),
+
+                  // Insights Section - Side by side charts
+                  Row(
+                    children: [
+                      Icon(Icons.insights_rounded,
+                          size: 16, color: Colors.green),
+                      const SizedBox(width: 6),
+                      Text(
+                        tr('chatbot.insights'),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colors['text'],
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
-                        final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                    ?.toDouble() ??
-                                3.5;
+                  const SizedBox(height: 8),
 
-                        return GridView.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  childAspectRatio: aspectRatio,
-                                  mainAxisSpacing: 10,
-                                  crossAxisSpacing: 10),
-                          itemCount: _quickHelpButtons.length,
-                          itemBuilder: (context, index) {
-                            final button = _quickHelpButtons[index];
-                            // Use safe access with casting to Map to prevent null cast errors
-                            final appearance =
-                                button['appearance'] as Map<String, dynamic>? ??
-                                    {};
-                            final action =
-                                button['action'] as Map<String, dynamic>? ?? {};
-                            final darkMode =
-                                button['darkMode'] as Map<String, dynamic>? ??
-                                    {};
+                  // Summary Cards Side by Side
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CropHealthSummaryCard(region: 'El Salvador'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: PestAlertSummaryCard(region: 'Central America'),
+                      ),
+                    ],
+                  ),
 
-                            // Determine active styles based on Theme
-                            // If in Dark Mode and darkMode overrides exist, merge them
-                            final Map<String, dynamic> activeAppearance;
-                            if (isDark && darkMode.isNotEmpty) {
-                              // Deep merge logic simplified: override top-level keys if present
-                              activeAppearance = {
-                                ...appearance,
-                                'label': {
-                                  ...(appearance['label']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['label']
-                                          as Map<String, dynamic>? ??
-                                      {})
-                                },
-                                'icon': {
-                                  ...(appearance['icon']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['icon']
-                                          as Map<String, dynamic>? ??
-                                      {})
-                                },
-                                'style': {
-                                  ...(appearance['style']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['style']
-                                          as Map<String, dynamic>? ??
-                                      {})
-                                },
-                              };
+                  const SizedBox(height: 12),
 
-                              // Handle nested background style merge if needed
-                              if (darkMode['style'] != null &&
-                                  (darkMode['style'] as Map)['background'] !=
-                                      null) {
-                                final baseStyle = appearance['style']
+                  // QuickHelp/Fast Actions Section
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.bolt_rounded,
+                              size: 16, color: Colors.orange),
+                          const SizedBox(width: 6),
+                          Text(
+                            tr('chatbot.fastActions'),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colors['text'],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Quick Help Buttons Grid
+                      SizedBox(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final int crossAxisCount =
+                                _quickHelpLayout['columns'] as int? ?? 2;
+                            final double aspectRatio =
+                                (_quickHelpLayout['childAspectRatio'] as num?)
+                                        ?.toDouble() ??
+                                    3.5;
+
+                            return GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      childAspectRatio: aspectRatio,
+                                      mainAxisSpacing: 10,
+                                      crossAxisSpacing: 10),
+                              itemCount: _quickHelpButtons.length,
+                              itemBuilder: (context, index) {
+                                final button = _quickHelpButtons[index];
+                                // Use safe access with casting to Map to prevent null cast errors
+                                final appearance =
+                                    button['appearance'] as Map<String, dynamic>? ??
+                                        {};
+                                final action =
+                                    button['action'] as Map<String, dynamic>? ?? {};
+                                final darkMode =
+                                    button['darkMode'] as Map<String, dynamic>? ??
+                                        {};
+
+                                // Determine active styles based on Theme
+                                // If in Dark Mode and darkMode overrides exist, merge them
+                                final Map<String, dynamic> activeAppearance;
+                                if (isDark && darkMode.isNotEmpty) {
+                                  // Deep merge logic simplified: override top-level keys if present
+                                  activeAppearance = {
+                                    ...appearance,
+                                    'label': {
+                                      ...(appearance['label']
+                                                  as Map<String, dynamic>? ??
+                                              {}),
+                                      ...(darkMode['label']
+                                                  as Map<String, dynamic>? ??
+                                              {})
+                                    },
+                                    'icon': {
+                                      ...(appearance['icon']
+                                                  as Map<String, dynamic>? ??
+                                              {}),
+                                      ...(darkMode['icon']
+                                                  as Map<String, dynamic>? ??
+                                              {})
+                                    },
+                                    'style': {
+                                      ...(appearance['style']
+                                                  as Map<String, dynamic>? ??
+                                              {}),
+                                      ...(darkMode['style']
+                                                  as Map<String, dynamic>? ??
+                                              {})
+                                    },
+                                  };
+
+                                  // Handle nested background style merge if needed
+                                  if (darkMode['style'] != null &&
+                                      (darkMode['style'] as Map)['background'] !=
+                                          null) {
+                                    final baseStyle = appearance['style']
+                                          as Map<String, dynamic>? ??
+                                              {};
+                                    final darkStyle = darkMode['style']
+                                        as Map<String, dynamic>? ??
+                                        {};
+
+                                    final baseBg = baseStyle['background']
+                                        as Map<String, dynamic>? ??
+                                            {};
+                                    final darkBg = darkStyle['background']
+                                        as Map<String, dynamic>? ??
+                                        {};
+
+                                    final mergedBg = {...baseBg, ...darkBg};
+
+                                    final mergedStyle = {
+                                      ...(activeAppearance['style']
+                                          as Map<String, dynamic>),
+                                      'background': mergedBg
+                                    };
+                                    activeAppearance['style'] = mergedStyle;
+                                  }
+                                } else {
+                                  activeAppearance = appearance;
+                                }
+
+                                // CORRECTED: Use label text key for button display
+                                final labelMap = activeAppearance['label']
+                                    as Map<String, dynamic>?;
+                                final String titleKey =
+                                    labelMap?['text']?.toString() ?? '';
+                                final String translatedTitle = _t(titleKey);
+                                final String iconAsset =
+                                    button['iconAsset']?.toString() ?? '';
+
+                                // Style Extraction from Active Appearance
+                                final styles = activeAppearance['style']
                                         as Map<String, dynamic>? ??
                                     {};
-                                final darkStyle = darkMode['style']
-                                        as Map<String, dynamic>? ??
-                                    {};
+                                final bg =
+                                    styles['background'] as Map<String, dynamic>? ??
+                                        {};
+                                final gradientConfig =
+                                    bg['gradient'] as Map<String, dynamic>? ?? {};
+                                final borderConfig =
+                                    styles['border'] as Map<String, dynamic>? ?? {};
+                                final shadowConfig =
+                                    styles['shadow'] as Map<String, dynamic>? ?? {};
 
-                                final baseBg = baseStyle['background']
-                                        as Map<String, dynamic>? ??
-                                    {};
-                                final darkBg = darkStyle['background']
-                                        as Map<String, dynamic>? ??
-                                    {};
+                                // Colors
+                                final String startColorHex =
+                                    gradientConfig['start']?.toString() ??
+                                        '#FFFFFF';
+                                final String endColorHex =
+                                    gradientConfig['end']?.toString() ??
+                                        startColorHex;
+                                final String gradientDirection =
+                                    gradientConfig['direction']?.toString() ??
+                                        'horizontal';
 
-                                final mergedBg = {...baseBg, ...darkBg};
+                                final Color startColor = Color(int.parse(
+                                    startColorHex.replaceAll('#', '0xFF')));
+                                final Color endColor = Color(
+                                    int.parse(endColorHex.replaceAll('#', '0xFF')));
 
-                                final mergedStyle = {
-                                  ...(activeAppearance['style']
-                                      as Map<String, dynamic>),
-                                  'background': mergedBg
-                                };
-                                activeAppearance['style'] = mergedStyle;
-                              }
-                            } else {
-                              activeAppearance = appearance;
-                            }
+                                final bool showShadow =
+                                    (_quickHelpDefaults['showShadow'] == true) ||
+                                        (shadowConfig['enabled'] == true);
+                                final bool showBorder =
+                                    (_quickHelpDefaults['showBorder'] == true) ||
+                                        (borderConfig['enabled'] == true);
 
-                            // CORRECTED: Use label text key for button display
-                            final labelMap = activeAppearance['label']
-                                as Map<String, dynamic>?;
-                            final String titleKey =
-                                labelMap?['text']?.toString() ?? '';
-                            final String translatedTitle = _t(titleKey);
-                            final String iconAsset =
-                                button['iconAsset']?.toString() ?? '';
+                                // Label Color
+                                final labelConfig =
+                                    activeAppearance['label'] as Map<String, dynamic>? ?? {};
+                                final String labelColorHex =
+                                    labelConfig['color']?.toString() ??
+                                        (isDark ? '#FFFFFF' : '#000000');
+                                final Color labelColor = Color(int.parse(
+                                    labelColorHex.replaceAll('#', '0xFF')));
 
-                            // Style Extraction from Active Appearance
-                            final styles = activeAppearance['style']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final bg =
-                                styles['background'] as Map<String, dynamic>? ??
-                                    {};
-                            final gradientConfig =
-                                bg['gradient'] as Map<String, dynamic>? ?? {};
-                            final borderConfig =
-                                styles['border'] as Map<String, dynamic>? ?? {};
-                            final shadowConfig =
-                                styles['shadow'] as Map<String, dynamic>? ?? {};
+                                // Icon Color (if you want to tint icons, though SVGs might have own colors)
+                                // final iconConfig = activeAppearance['icon'] as Map<String, dynamic>? ?? {};
+                                // final String iconColorHex = iconConfig['color']?.toString() ?? labelColorHex;
+                                // final Color iconColor = Color(int.parse(iconColorHex.replaceAll('#', '0xFF')));
 
-                            // Colors
-                            final String startColorHex =
-                                gradientConfig['start']?.toString() ??
-                                    '#FFFFFF';
-                            final String endColorHex =
-                                gradientConfig['end']?.toString() ??
-                                    startColorHex;
-                            final String gradientDirection =
-                                gradientConfig['direction']?.toString() ??
-                                    'horizontal';
-
-                            final Color startColor = Color(int.parse(
-                                startColorHex.replaceAll('#', '0xFF')));
-                            final Color endColor = Color(
-                                int.parse(endColorHex.replaceAll('#', '0xFF')));
-
-                            final bool showShadow =
-                                (_quickHelpDefaults['showShadow'] == true) ||
-                                    (shadowConfig['enabled'] == true);
-                            final bool showBorder =
-                                (_quickHelpDefaults['showBorder'] == true) ||
-                                    (borderConfig['enabled'] == true);
-
-                            // Label Color
-                            final labelConfig = activeAppearance['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String labelColorHex =
-                                labelConfig['color']?.toString() ??
-                                    (isDark ? '#FFFFFF' : '#000000');
-                            final Color labelColor = Color(int.parse(
-                                labelColorHex.replaceAll('#', '0xFF')));
-
-                            // Icon Color (if you want to tint icons, though SVGs might have own colors)
-                            // final iconConfig = activeAppearance['icon'] as Map<String, dynamic>? ?? {};
-                            // final String iconColorHex = iconConfig['color']?.toString() ?? labelColorHex;
-                            // final Color iconColor = Color(int.parse(iconColorHex.replaceAll('#', '0xFF')));
-
-                            // Shadow Configuration (Stronger defaults)
-                            final defaultShadow = _quickHelpDefaults['shadow']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final double shadowOpacity =
-                                (defaultShadow['opacity'] as num?)
+                                // Shadow Configuration (Stronger defaults)
+                                final defaultShadow =
+                                    _quickHelpDefaults['shadow'] as Map<String, dynamic>? ?? {};
+                                final double shadowOpacity =
+                                    (defaultShadow['opacity'] as num?)
                                         ?.toDouble() ??
                                     0.25; // Stronger default
-                            final double shadowBlur = _parsePixelValue(
-                                defaultShadow['blur']?.toString() ??
-                                    '8px'); // Stronger default
+                                final double shadowBlur = _parsePixelValue(
+                                    defaultShadow['blur']?.toString() ??
+                                        '8px'); // Stronger default
 
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () => _quickHelpPressed(button),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    // Gradient Fill with Direction
-                                    gradient: LinearGradient(
-                                      colors: [startColor, endColor],
-                                      begin: _getGradientAlignment(
-                                          gradientDirection, true),
-                                      end: _getGradientAlignment(
-                                          gradientDirection, false),
-                                    ),
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
                                     borderRadius: BorderRadius.circular(12),
-                                    // Border
-                                    border: showBorder
-                                        ? Border.all(color: colors['border'])
-                                        : null,
-                                    // Shadow
-                                    boxShadow: showShadow
-                                        ? [
-                                            BoxShadow(
-                                                color: Colors.black
-                                                    .withOpacity(shadowOpacity),
-                                                blurRadius: shadowBlur,
-                                                offset: const Offset(0, 2))
-                                          ]
-                                        : null,
-                                  ),
-                                  child: Row(
-                                    // Changed to Row for Slimline
-                                    children: [
-                                      SvgPicture.asset(iconAsset,
-                                          width:
-                                              18, // Smaller icon for slimline
-                                          height: 18,
-                                          placeholderBuilder: (_) => Icon(
-                                              Icons.help_outline,
-                                              size: 20,
-                                              // Fallback icon color matches text if not specified in SVG
-                                              color: labelColor)),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(translatedTitle,
-                                            style: theme.textTheme.labelMedium
-                                                ?.copyWith(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize:
-                                                        11, // Smaller font
-                                                    color: labelColor),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis),
+                                    onTap: () => _quickHelpPressed(button),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        // Gradient Fill with Direction
+                                        gradient: LinearGradient(
+                                          colors: [startColor, endColor],
+                                          begin: _getGradientAlignment(
+                                              gradientDirection, true),
+                                          end: _getGradientAlignment(
+                                              gradientDirection, false),
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        // Border
+                                        border: showBorder
+                                            ? Border.all(color: colors['border'])
+                                            : null,
+                                        // Shadow
+                                        boxShadow: showShadow
+                                            ? [
+                                                BoxShadow(
+                                                    color: Colors.black
+                                                            .withOpacity(shadowOpacity),
+                                                    blurRadius: shadowBlur,
+                                                    offset: const Offset(0, 2))
+                                                  ]
+                                            : null,
                                       ),
-                                    ],
+                                      child: Row(
+                                        // Changed to Row for Slimline
+                                        children: [
+                                          SvgPicture.asset(iconAsset,
+                                              width:
+                                                  18, // Smaller icon for slimline
+                                              height: 18,
+                                              placeholderBuilder: (_) => Icon(
+                                                  Icons.help_outline,
+                                                  size: 20,
+                                                  // Fallback icon color matches text if not specified in SVG
+                                                  color: labelColor)),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(translatedTitle,
+                                                style: theme.textTheme.labelMedium
+                                                    ?.copyWith(
+                                                        fontWeight: FontWeight.w600,
+                                                        fontSize:
+                                                            11, // Smaller font
+                                                        color: labelColor),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             );
                           },
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ),
               ),
             ),
 

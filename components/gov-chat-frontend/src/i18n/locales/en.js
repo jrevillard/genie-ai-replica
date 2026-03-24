@@ -1426,6 +1426,8 @@ export default {
     whatCanIHelp: "How can I help you today?",
     quickHelpSubtitle: "Fast Actions - Quick access to common agricultural tasks",
     justChat: "Just Chat",
+    insights: "Insights",
+    fastActions: "Fast Actions",
     queryContext: "Query Context",
     contextAdded: 'Context added to your query',
     contextRemoved: 'Context removed from your query',
@@ -1629,5 +1631,72 @@ export default {
       uploadSuccess: 'Successfully uploaded {fileName}',
       uploadFailed: 'Failed to upload {fileName}.'
     }
+  },
+  charts: {
+    loading: 'Loading data...',
+    loadDataError: 'Failed to load data',
+
+    // Section headers
+    insights: 'Insights',
+    fastActions: 'Fast Actions',
+
+    // Crop Health Chart
+    cropHealth: 'Crop Health',
+    cropHealthTitle: 'Crop Health - NDVI Index',
+    cropHealthSubtitle: 'Vegetation health across departments',
+    averageNDVI: 'Average NDVI',
+    improving: 'Improving',
+    stable: 'Stable',
+    declining: 'Declining',
+    overallHealth: 'Overall Health',
+    good: 'Good',
+    moderate: 'Moderate',
+    warning: 'Warning',
+    unknown: 'Unknown',
+    byDepartment: 'By Department',
+    departments: 'departments',
+    lastUpdated: 'Last updated',
+
+    // NDVI Chart
+    ndvi: 'NDVI',
+    ndviValue: 'NDVI Value',
+
+    // Pest Alerts Chart
+    pestAlertTitle: 'Pest Alerts',
+    pestAlertSubtitle: 'Current pest and disease warnings',
+    noPestAlerts: 'No Active Pest Alerts',
+    noPestAlertsDesc: 'No pest alerts for the selected severity level.',
+    activeAlerts: 'Active Alerts',
+    active: 'active',
+    all: 'All',
+    high: 'High',
+    moderate: 'Moderate',
+    low: 'Low',
+    recommendations: 'Recommendations',
+    affectedCrops: 'Affected Crops',
+    areas: 'Affected Areas',
+    firstDetected: 'First Detected',
+    viewMap: 'View on Map',
+    share: 'Share',
+    getAssistance: 'Get Assistance',
+    assistancePrompt: 'Pest alert context is ready. Add your specific situation:',
+    assistanceInstructions: 'Add your specific context below:',
+    assistanceHint: 'Crop size, current treatment, specific questions...',
+    submitQuery: 'Get AI Response',
+    aiResponse: 'AI Response',
+    noResponse: 'No response',
+    errorOccurred: 'Error occurred',
+    responseCopied: 'Response copied',
+    copy: 'Copy',
+    close: 'Close',
+    pest: 'Pest',
+    description: 'Description',
+    source: 'Source',
+    sharedVia: 'Shared via',
+    details: 'Details',
+    pestAlerts: 'Pest Alerts',
+    noLocationData: 'No location data available',
+    mapError: 'Could not open maps',
+    shareError: 'Error sharing'
   }
 }

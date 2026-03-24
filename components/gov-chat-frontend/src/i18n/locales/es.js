@@ -1426,6 +1426,8 @@ export default {
     whatCanIHelp: "¿Cómo puedo ayudarlo hoy?",
     quickHelpSubtitle: "Accesos Rápidos - Acceso rápido a tareas agrícolas comunes",
     justChat: "Solo Chatear",
+    insights: "Insights",
+    fastActions: "Acciones Rápidas",
     queryContext: "Contexto de Consulta",
     contextAdded: 'Contexto agregado a su consulta',
     contextRemoved: 'Contexto eliminado de su consulta',
@@ -1629,5 +1631,72 @@ export default {
       uploadSuccess: '{fileName} subido con éxito',
       uploadFailed: 'Falló la subida de {fileName}.'
     }
+  },
+  charts: {
+    loading: 'Cargando datos...',
+    loadDataError: 'Error al cargar datos',
+
+    // Section headers
+    insights: 'Perspectivas',
+    fastActions: 'Acciones Rápidas',
+
+    // Crop Health Chart
+    cropHealth: 'Salud de Cultivos',
+    cropHealthTitle: 'Salud de Cultivos - Índice NDVI',
+    cropHealthSubtitle: 'Salud de la vegetación en los departamentos',
+    averageNDVI: 'NDVI Promedio',
+    improving: 'Mejorando',
+    stable: 'Estable',
+    declining: 'Declinando',
+    overallHealth: 'Salud General',
+    good: 'Buena',
+    moderate: 'Moderada',
+    warning: 'Advertencia',
+    unknown: 'Desconocido',
+    byDepartment: 'Por Departamento',
+    departments: 'departamentos',
+    lastUpdated: 'Última actualización',
+
+    // NDVI Chart
+    ndvi: 'NDVI',
+    ndviValue: 'Valor NDVI',
+
+    // Pest Alerts Chart
+    pestAlertTitle: 'Alertas de Plagas',
+    pestAlertSubtitle: 'Alertas actuales de plagas y enfermedades',
+    noPestAlerts: 'Sin Alertas de Plagas Activas',
+    noPestAlertsDesc: 'No hay alertas de plagas para el nivel de gravedad seleccionado.',
+    activeAlerts: 'Alertas Activas',
+    active: 'activas',
+    all: 'Todas',
+    high: 'Alta',
+    moderate: 'Moderada',
+    low: 'Baja',
+    recommendations: 'Recomendaciones',
+    affectedCrops: 'Cultivos Afectados',
+    areas: 'Áreas Afectadas',
+    firstDetected: 'Primera Detección',
+    viewMap: 'Ver en Mapa',
+    share: 'Compartir',
+    getAssistance: 'Obtener Asistencia',
+    assistancePrompt: 'El contexto de alerta de plaga está listo. Agrega tu situación específica:',
+    assistanceInstructions: 'Agrega tu contexto específico abajo:',
+    assistanceHint: 'Tamaño de cultivo, tratamiento actual, preguntas específicas...',
+    submitQuery: 'Obtener Respuesta IA',
+    aiResponse: 'Respuesta de IA',
+    noResponse: 'Sin respuesta',
+    errorOccurred: 'Ocurrió un error',
+    responseCopied: 'Respuesta copiada',
+    copy: 'Copiar',
+    close: 'Cerrar',
+    pest: 'Plaga',
+    description: 'Descripción',
+    source: 'Fuente',
+    sharedVia: 'Compartido vía',
+    details: 'Detalles',
+    pestAlerts: 'Alertas de Plagas',
+    noLocationData: 'No hay datos de ubicación disponibles',
+    mapError: 'No se pudo abrir el mapa',
+    shareError: 'Error al compartir'
   }
 }

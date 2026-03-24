@@ -67,6 +67,22 @@
         </template>
       </modal-dialog>
 
+      <!-- Chart Dialog -->
+      <ChartDialog
+        v-if="chartDialog.visible"
+        :title="chartDialog.title"
+        @close="closeChartDialog"
+      >
+        <CropHealthChart
+          v-if="chartDialog.type === 'crop-health'"
+          region="El Salvador"
+        />
+        <PestAlertChart
+          v-if="chartDialog.type === 'pest-alert'"
+          region="Central America"
+        />
+      </ChartDialog>
+
       <!-- System Status Panel -->
       <div class="system-status-panel">
         <div class="status-left">
@@ -162,7 +178,29 @@
         class="quick-help-overlay"
         v-if="showQuickHelp && chatMessages.length <= 1"
       >
-        <div class="quick-help-content">
+        <!-- Insights Section -->
+        <div class="insights-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ t('charts.insights') }}</h3>
+          </div>
+          <div class="insights-cards">
+            <CropHealthSummaryCard
+              region="El Salvador"
+              @open-chart="openChart"
+            />
+            <PestAlertSummaryCard
+              region="Central America"
+              @open-chart="openChart"
+            />
+          </div>
+        </div>
+
+        <!-- Fast Actions Section -->
+        <div class="fast-actions-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ t('charts.fastActions') }}</h3>
+          </div>
+          <div class="quick-help-content">
           <h2 class="quick-help-heading">
             {{ translate("chatbot.whatCanIHelp") }}
           </h2>
@@ -185,6 +223,7 @@
               />
               <div class="quick-help-text">{{ $t(button.textKey) }}</div>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -310,6 +349,11 @@ import analyticsService from "../services/analyticsService";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import jsPDF from "jspdf";
+import CropHealthSummaryCard from "./charts/CropHealthSummaryCard.vue";
+import PestAlertSummaryCard from "./charts/PestAlertSummaryCard.vue";
+import CropHealthChart from "./charts/CropHealthChart.vue";
+import PestAlertChart from "./charts/PestAlertChart.vue";
+import ChartDialog from "./charts/ChartDialog.vue";
 
 export default {
   name: "ChatBotComponent",
@@ -318,6 +362,11 @@ export default {
     ModalDialog,
     RightSideBarComponent,
     ConfirmDialog,
+    CropHealthSummaryCard,
+    PestAlertSummaryCard,
+    CropHealthChart,
+    PestAlertChart,
+    ChartDialog,
   },
 
   data() {
@@ -339,6 +388,11 @@ export default {
       exportDialog: {
         visible: false,
         filename: "",
+      },
+      chartDialog: {
+        visible: false,
+        type: null,
+        title: "",
       },
       currentChatId: null,
       currentChatTitle: "",
@@ -638,6 +692,27 @@ export default {
 
     translate(key) {
       return this.$t(key);
+    },
+
+    t(key) {
+      return this.$t(key);
+    },
+
+    openChart(type) {
+      const titles = {
+        'crop-health': this.t('charts.cropHealth'),
+        'pest-alert': this.t('charts.pestAlertTitle')
+      };
+
+      this.chartDialog.type = type;
+      this.chartDialog.title = titles[type] || 'Chart';
+      this.chartDialog.visible = true;
+    },
+
+    closeChartDialog() {
+      this.chartDialog.visible = false;
+      this.chartDialog.type = null;
+      this.chartDialog.title = "";
     },
 
     selectQuickHelpOption(option) {
@@ -2289,10 +2364,45 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   z-index: 10;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  padding: 20px;
   align-items: center;
   justify-content: center;
   padding: 20px;
   overflow-y: auto;
+}
+
+.insights-section {
+  width: 100%;
+  max-width: 800px;
+  margin-bottom: 24px;
+}
+
+.fast-actions-section {
+  width: 100%;
+  max-width: 800px;
+}
+
+.section-header {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin: 0;
+}
+
+[data-theme="dark"] .section-title {
+  color: var(--text-primary-dark, #f9fafb);
+}
+
+.insights-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .quick-help-content {

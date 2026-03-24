@@ -56,11 +56,12 @@ TRANSLATION_CACHE_HOST=redis-cache
 TRANSLATION_CACHE_PORT=6379
 
 # OPEA Host configuration
-OPEA_HOST=e2e-109-198
-OPEA_PORT=8888
-CONTEXT_OPTION=conversation-with-context-labels
+OPEA_HOST=vllm-vllm-2
+OPEA_PORT=8000
+CONTEXT_OPTION=single-message
 
 #CORS configuration
 CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
 CSP_CONNECT_SRC="'self' http://localhost:3000 http://localhost:8090 ws://localhost:8090 wss://*.ssdcloudindia.net *.ssdcloudindia.net https://api.open-meteo.com https://ipapi.co https://nominatim.openstreetmap.org wss://genie-ai.itu.int:443'"
 
+OPEA_PATH=/v1/chat/completions

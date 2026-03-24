@@ -27,11 +27,18 @@ parentPort.on('message', async (task) => {
     const duration = Date.now() - start;
 
     // Return only the necessary data
+    // Support both vLLM (choices[0].message.content) and legacy OPEA (response) formats
+    const data = response.data;
+    const responseText = (data.choices && data.choices[0] && data.choices[0].message)
+      ? data.choices[0].message.content
+      : data.response;
+    const metadata = data.metadata || null;
+
     parentPort.postMessage({
       status: 'success',
       data: {
-        response: response.data.response,
-        metadata: response.data.metadata,
+        response: responseText,
+        metadata: metadata,
         responseTime: duration
       }
     });

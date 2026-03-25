@@ -43,6 +43,14 @@ class EmailService {
       }
     });
 
+    logger.info('[EMAIL-SERVICE] Transporter created', {
+      host: process.env.EMAIL_HOST || 'in-V3.mailjet.com',
+      port: parseInt(process.env.EMAIL_PORT) || 587,
+      secure: process.env.EMAIL_SECURE === 'true',
+      user: process.env.EMAIL_USER || 'undefined',
+      pass: process.env.EMAIL_PASSWORD ? '[REDACTED]' : 'undefined'
+    });
+
     // Sender email address
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@hud.email';
 
@@ -302,6 +310,15 @@ The ${this.appName} Team
    */
   async sendVerificationEmail(email, token, userName, frontendUrl, verificationUrl) {
     const startTime = Date.now();
+
+    logger.info('[EMAIL-SERVICE] sendVerificationEmail called', {
+      to: email,
+      token: token ? `${token.substring(0, 10)}...` : 'undefined',
+      userName,
+      frontendUrl: frontendUrl || 'undefined',
+      verificationUrl: verificationUrl || 'undefined'
+    });
+
     if (!email) {
       logger.error('EmailService.verification_email_missing_recipient', {
         token: token ? `${token.substring(0, 10)}...` : 'undefined',
@@ -324,6 +341,10 @@ The ${this.appName} Team
 
     // Use provided frontend URL or fall back to default
     const verificationLink = verificationUrl || this.buildUrl(frontendUrl || this.defaultFrontendUrl, `api/auth/verify-email/${token}`); // Modified
+
+    logger.info('[EMAIL-SERVICE] Verification link prepared', {
+      link: verificationLink
+    });
 
     // Email content
     const mailOptions = {
@@ -394,21 +415,40 @@ The ${this.appName} Team
       });
     }
 
+    logger.info('[EMAIL-SERVICE] About to call transporter.sendMail', {
+      from: mailOptions.from,
+      to: mailOptions.to,
+      subject: mailOptions.subject
+    });
+
     // Send email
     try {
+      logger.info('[EMAIL-SERVICE] Calling transporter.sendMail now...');
       const info = await this.transporter.sendMail(mailOptions);
+
+      logger.info('[EMAIL-SERVICE] transporter.sendMail returned successfully', {
+        response: info.response,
+        messageId: info.messageId,
+        accepted: info.accepted,
+        rejected: info.rejected,
+        pending: info.pending
+      });
+
       logger.info('EmailService.verification_email_sent', {
         to: email,
         messageId: info.messageId,
-        verificationLink, // Added
+        verificationLink,
         durationMs: Date.now() - startTime
       });
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      logger.error('EmailService.verification_email_failed', {
+      logger.error('[EMAIL-SERVICE-ERROR] transporter.sendMail FAILED', {
         to: email,
         error: error.message,
         code: error.code,
+        command: error.command,
+        response: error.response,
+        responseCode: error.responseCode,
         stack: error.stack,
         durationMs: Date.now() - startTime
       });

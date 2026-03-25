@@ -152,14 +152,17 @@ class AuthService {
 
       setImmediate(async () => {
         try {
+          logger.info(`[EMAIL-ASYNC] Starting email verification process for user: ${savedUser._key}`);
           const freshUser = await this.getUserById(savedUser._key);
           if (freshUser) {
+            logger.info(`[EMAIL-ASYNC] Fresh user retrieved, calling sendVerificationEmail for: ${freshUser.email}`);
             await this.sendVerificationEmail(freshUser, frontendUrl, backendUrl);
+            logger.info(`[EMAIL-ASYNC] sendVerificationEmail completed for user: ${savedUser._key}`);
           } else {
             logger.error(`Could not retrieve fresh user for email verification: ${savedUser._key}`);
           }
         } catch (emailError) {
-          logger.error(`Email verification failed, but user was registered: ${emailError.message}`, { stack: emailError.stack });
+          logger.error(`[EMAIL-ASYNC-ERROR] Email verification failed, but user was registered: ${emailError.message}`, { stack: emailError.stack });
         }
       });
 
@@ -410,6 +413,12 @@ class AuthService {
       }
 
       try {
+        logger.info(`[EMAIL-SEND] About to call emailService.sendVerificationEmail for: ${user.email}`);
+        logger.info(`[EMAIL-SEND] Token (first 10 chars): ${token.substring(0, 10)}...`);
+        logger.info(`[EMAIL-SEND] UserName: ${user.personalIdentification?.fullName || user.loginName}`);
+        logger.info(`[EMAIL-SEND] FrontendURL: ${finalFrontendUrl}`);
+        logger.info(`[EMAIL-SEND] VerificationURL: ${verificationEndpointUrl}`);
+
         await emailService.sendVerificationEmail(
           user.email,
           token,
@@ -418,6 +427,8 @@ class AuthService {
           verificationEndpointUrl
         );
 
+        logger.info(`[EMAIL-SEND] emailService.sendVerificationEmail returned successfully`);
+
         if (process.env.NODE_ENV === 'development') {
           logger.info(`Email verification token for ${user.email}: ${token}`);
         }
@@ -425,7 +436,11 @@ class AuthService {
         logger.info(`Verification email sent successfully to ${user.email}`);
         return { success: true, message: 'Verification email sent' };
       } catch (emailError) {
-        logger.error(`Error sending verification email for user ${user._key}: ${emailError.message}`, { stack: emailError.stack });
+        logger.error(`[EMAIL-ERROR] Error sending verification email for user ${user._key}: ${emailError.message}`, {
+          stack: emailError.stack,
+          code: emailError.code,
+          command: emailError.command
+        });
 
         const removeTokenQuery = aql`
           FOR t IN verificationTokens

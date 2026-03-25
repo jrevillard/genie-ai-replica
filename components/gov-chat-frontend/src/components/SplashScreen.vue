@@ -3,7 +3,7 @@
   <div class="splash-screen" :class="{ 'fade-out': isFadingOut }">
     <div class="splash-content">
       <img
-        src="/config/splash.png"
+        src="/config/agro-genio-splash.png"
         alt="Splash Screen"
         class="splash-image"
         @error="handleImageError"

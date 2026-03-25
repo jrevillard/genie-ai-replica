@@ -231,30 +231,38 @@ export default {
 
 .card-label {
   font-size: 10px;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.dark-mode .card-label {
+  color: #9ca3af;
+}
+
 .card-value {
   font-size: 14px;
   font-weight: bold;
-  color: var(--text-primary, #111827);
+  color: #111827;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .dark-mode .card-value {
-  color: var(--text-primary-dark, #f9fafb);
+  color: #f9fafb;
 }
 
 .card-arrow {
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   font-size: 14px;
   opacity: 0.6;
+}
+
+.dark-mode .card-arrow {
+  color: #9ca3af;
 }
 
 @media (max-width: 768px) {

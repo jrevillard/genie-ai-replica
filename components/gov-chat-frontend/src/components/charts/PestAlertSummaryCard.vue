@@ -140,11 +140,15 @@ export default {
 
 .card-label {
   font-size: 10px;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.dark-mode .card-label {
+  color: #9ca3af;
 }
 
 .card-value-row {
@@ -156,20 +160,33 @@ export default {
 .card-count {
   font-size: 16px;
   font-weight: bold;
+  color: #111827;
+}
+
+.dark-mode .card-count {
+  color: #f9fafb;
 }
 
 .card-status {
   font-size: 11px;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.dark-mode .card-status {
+  color: #9ca3af;
+}
+
 .card-arrow {
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   font-size: 14px;
   opacity: 0.4;
+}
+
+.dark-mode .card-arrow {
+  color: #9ca3af;
 }
 
 @media (max-width: 768px) {

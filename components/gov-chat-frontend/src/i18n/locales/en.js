@@ -1412,7 +1412,7 @@ export default {
     fileReceived: 'File received successfully.',
     fileUploadError: 'Error uploading file.',
     processingError: 'Error processing your request.',
-    welcomeMessage: 'Welcome! How can I assist you with CENTA knowledge today?',
+    welcomeMessage: 'Welcome! How can I assist you with agricultural information today?',
     attachFile: 'Attach File',
     fileTooLarge: 'File is too large. Maximum size is {maxSize}.',
     saveChat: 'Save Chat',

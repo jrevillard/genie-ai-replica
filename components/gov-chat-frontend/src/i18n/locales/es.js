@@ -1412,7 +1412,7 @@ export default {
     fileReceived: 'Archivo recibido con éxito.',
     fileUploadError: 'Error subiendo archivo.',
     processingError: 'Error procesando su solicitud.',
-    welcomeMessage: '¡Bienvenido! ¿Cómo puedo ayudarle con información sobre CENTA hoy?',
+    welcomeMessage: '¡Bienvenido! ¿Cómo puedo ayudarle con información agrícola hoy?',
     attachFile: 'Adjuntar Archivo',
     fileTooLarge: 'El archivo es demasiado grande. El tamaño máximo es {maxSize}.',
     saveChat: 'Guardar Chat',

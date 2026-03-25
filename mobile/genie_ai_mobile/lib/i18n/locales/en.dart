@@ -1139,7 +1139,7 @@ const Map<String, dynamic> enLocale = {
     "fileUploadError": "Error uploading file.",
     "processingError": "Error processing your request.",
     "welcomeMessage":
-        "Welcome! How can I assist you with Kenya government services today?",
+        "Welcome! How can I assist you with agricultural information today?",
     "attachFile": "Attach File",
     "fileTooLarge": "File is too large. Maximum size is {maxSize}.",
     "saveChat": "Save Chat",

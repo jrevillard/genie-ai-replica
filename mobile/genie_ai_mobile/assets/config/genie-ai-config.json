@@ -329,7 +329,7 @@
     "title": "AgroGenio AI",
     "icon": {
       "type": "file",
-      "value": "assets/config/genie-ai-icon-light.svg"
+      "value": "assets/config/agro-genio-icon.svg"
     }
   },
   "theme": {

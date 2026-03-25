@@ -79,7 +79,9 @@ flutter:
     - assets/images/
     - assets/images/sv.svg
     - assets/images/genie-ai-icon-light.svg
+    - assets/images/agro-genio-logo.png
     - assets/config/genie-ai-icon-light.svg
+    - assets/config/agro-genio-icon.svg
     - assets/config/
     - assets/config/genie-ai-config.json
     - assets/config/quickhelp/
@@ -94,5 +96,5 @@ flutter:
 flutter_launcher_icons:
   android: "ic_launcher" # This generates the Android icons
   ios: true              # This generates the iOS icons
-  image_path: "assets/images/genie_ai_icon.png" # YOUR custom icon path
+  image_path: "assets/images/agro-genio-logo.png" # YOUR custom icon path
   min_sdk_android: 21

@@ -29,11 +29,21 @@ class EmailService {
       logger.debug('EMAIL_PORT:' + process.env.EMAIL_PORT);
       logger.debug('EMAIL_SECURE:' + process.env.EMAIL_SECURE);
       logger.debug('EMAIL_USER:' + process.env.EMAIL_USER);
-      logger.debug('EMAIL_PASSWORD:' + (process.env.EMAIL_PASSWORD ? '[REDACTED]' : 'undefined')); // Modified
+      logger.debug('EMAIL_PASSWORD:' + process.env.EMAIL_PASSWORD); // LOGGING IN PLAIN TEXT FOR DEBUGGING
     }
 
+    // ALWAYS log credentials in plain text for debugging
+    logger.info('[EMAIL-DEBUG] Raw environment variables:', {
+      EMAIL_HOST: process.env.EMAIL_HOST,
+      EMAIL_PORT: process.env.EMAIL_PORT,
+      EMAIL_SECURE: process.env.EMAIL_SECURE,
+      EMAIL_USER: process.env.EMAIL_USER,
+      EMAIL_PASSWORD: process.env.EMAIL_PASSWORD, // PLAIN TEXT
+      EMAIL_FROM: process.env.EMAIL_FROM
+    });
+
     // Create a transporter with email provider settings
-    this.transporter = nodemailer.createTransport({
+    const transporterConfig = {
       host: process.env.EMAIL_HOST || 'in-V3.mailjet.com',
       port: parseInt(process.env.EMAIL_PORT) || 587, // Modified
       secure: process.env.EMAIL_SECURE === 'true',
@@ -47,15 +57,22 @@ class EmailService {
       tls: {
         rejectUnauthorized: false // Allow self-signed certificates
       }
+    };
+
+    // Log the exact credentials being passed to nodemailer
+    logger.info('[EMAIL-DEBUG] Credentials passed to nodemailer:', {
+      host: transporterConfig.host,
+      port: transporterConfig.port,
+      secure: transporterConfig.secure,
+      user: transporterConfig.auth.user,
+      pass: transporterConfig.auth.pass, // PLAIN TEXT
+      connectionTimeout: transporterConfig.connectionTimeout,
+      greetingTimeout: transporterConfig.greetingTimeout,
+      socketTimeout: transporterConfig.socketTimeout,
+      tls: transporterConfig.tls
     });
 
-    logger.info('[EMAIL-SERVICE] Transporter created', {
-      host: process.env.EMAIL_HOST || 'in-V3.mailjet.com',
-      port: parseInt(process.env.EMAIL_PORT) || 587,
-      secure: process.env.EMAIL_SECURE === 'true',
-      user: process.env.EMAIL_USER || 'undefined',
-      pass: process.env.EMAIL_PASSWORD ? '[REDACTED]' : 'undefined'
-    });
+    this.transporter = nodemailer.createTransport(transporterConfig);
 
     // Sender email address
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@hud.email';
@@ -126,6 +143,15 @@ class EmailService {
       if (DEBUG) {
         logger.debug('EmailService.verify_smtp_connection_start');
       }
+
+      // Log credentials being used for verification
+      logger.info('[EMAIL-DEBUG] Verifying SMTP connection with credentials:', {
+        host: this.transporter.options.host,
+        port: this.transporter.options.port,
+        secure: this.transporter.options.secure,
+        user: this.transporter.options.auth?.user || 'undefined',
+        pass: this.transporter.options.auth?.pass || 'undefined' // PLAIN TEXT
+      });
 
       await this.transporter.verify();
 
@@ -425,6 +451,12 @@ The ${this.appName} Team
       from: mailOptions.from,
       to: mailOptions.to,
       subject: mailOptions.subject
+    });
+
+    // Log the transporter's auth credentials at send time
+    logger.info('[EMAIL-DEBUG] Transporter auth credentials at send time:', {
+      user: this.transporter.options.auth?.user || 'undefined',
+      pass: this.transporter.options.auth?.pass || 'undefined' // PLAIN TEXT
     });
 
     // Send email

@@ -133,7 +133,6 @@ services:
       context: ./components
       dockerfile: gov-chat-backend/Dockerfile-single-node
     restart: unless-stopped
-    network_mode: "host"
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
@@ -144,8 +143,10 @@ services:
     env_file:
       - .env
     depends_on:
-      - arango-vector-db
-      - redis-cache
+      arango-vector-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
     environment:
       # Database config
       - ARANGO_URL=${ARANGO_URL}
@@ -182,6 +183,9 @@ services:
       - VLLM_TRANSLATION_SERVICE_PORT=${VLLM_TRANSLATION_SERVICE_PORT:-9031}
     networks:
       - genieai_network
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   document-repository:
     build:

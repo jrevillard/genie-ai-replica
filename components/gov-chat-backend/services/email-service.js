@@ -40,6 +40,12 @@ class EmailService {
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
+      },
+      connectionTimeout: 10000, // 10 seconds to establish connection
+      greetingTimeout: 10000,   // 10 seconds to receive greeting
+      socketTimeout: 10000,     // 10 seconds for socket activity
+      tls: {
+        rejectUnauthorized: false // Allow self-signed certificates
       }
     });
 

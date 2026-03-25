@@ -158,11 +158,13 @@ curl \-fsSL [https://download.docker.com/linux/ubuntu/gpg](https://download.dock
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 ##### 3\. Set up the official Docker repository
-
-echo  
-"deb \[arch="$(dpkg \--print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg\] [https://download.docker.com/linux/ubuntu](https://download.docker.com/linux/ubuntu)  
-"$(. /etc/os-release && echo "$VERSION\_CODENAME")" stable" |  
-sudo tee /etc/apt/sources.list.d/docker.list \> /dev/null
+```
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/debian \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```
 
 ##### 4\. Install Docker Engine
 

@@ -1424,7 +1424,7 @@ export default {
     clearContext: 'Limpiar contexto e iniciar una nueva conversación',
     unsavedChanges: 'Tiene cambios no guardados. ¿Está seguro de que desea iniciar un nuevo chat?',
     whatCanIHelp: "¿Cómo puedo ayudarlo hoy?",
-    quickHelpSubtitle: "Accesos Rápidos - Acceso rápido a tareas agrícolas comunes",
+    quickHelpSubtitle: "Información y compartir para la agricultura, Acciones Rápidas - Acceso rápido a tareas agrícolas comunes",
     justChat: "Solo Chatear",
     insights: "Insights",
     fastActions: "Acciones Rápidas",

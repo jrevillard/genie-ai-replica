@@ -1424,7 +1424,7 @@ export default {
     clearContext: 'Clear context and start a new conversation',
     unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?',
     whatCanIHelp: "How can I help you today?",
-    quickHelpSubtitle: "Fast Actions - Quick access to common agricultural tasks",
+    quickHelpSubtitle: "Insights and sharing for agriculture, Fast Actions - Quick access to common agricultural tasks",
     justChat: "Just Chat",
     insights: "Insights",
     fastActions: "Fast Actions",

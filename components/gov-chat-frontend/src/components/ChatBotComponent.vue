@@ -180,6 +180,15 @@
         class="quick-help-overlay"
         v-if="showQuickHelp && chatMessages.length <= 1"
       >
+        <div class="welcome-header">
+          <h2 class="quick-help-heading">
+            {{ translate("chatbot.whatCanIHelp") }}
+          </h2>
+          <p class="quick-help-subtitle">
+            {{ translate("chatbot.quickHelpSubtitle") }}
+          </p>
+        </div>
+
         <!-- Insights Section -->
         <div class="insights-section">
           <div class="section-header">
@@ -203,13 +212,6 @@
             <h3 class="section-title">{{ t('charts.fastActions') }}</h3>
           </div>
           <div class="quick-help-content">
-          <h2 class="quick-help-heading">
-            {{ translate("chatbot.whatCanIHelp") }}
-          </h2>
-          <p class="quick-help-subtitle">
-            {{ translate("chatbot.quickHelpSubtitle") }}
-          </p>
-
           <div class="quick-help-grid">
             <div
               v-for="button in quickHelpButtons"

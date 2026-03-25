@@ -430,7 +430,7 @@ export default {
 }
 
 .dark-mode .header-text h3 {
-  color: #f9fafb;
+  color: #f9fafb !important;
 }
 
 .chart-subtitle {
@@ -440,7 +440,7 @@ export default {
 }
 
 .dark-mode .chart-subtitle {
-  color: #9ca3af;
+  color: #9ca3af !important;
 }
 
 .chart-controls select {
@@ -615,7 +615,7 @@ export default {
 }
 
 .dark-mode .department-details h4 {
-  color: #f9fafb;
+  color: #f9fafb !important;
 }
 
 .department-list {

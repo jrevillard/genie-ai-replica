@@ -608,7 +608,7 @@ Recommendations: ${recommendations}`;
 }
 
 .dark-mode .header-text h3 {
-  color: #f9fafb;
+  color: #f9fafb !important;
 }
 
 .chart-subtitle {
@@ -618,7 +618,7 @@ Recommendations: ${recommendations}`;
 }
 
 .dark-mode .chart-subtitle {
-  color: #9ca3af;
+  color: #9ca3af !important;
 }
 
 .summary-chips {
@@ -818,27 +818,27 @@ Recommendations: ${recommendations}`;
 }
 
 .alert-card.high {
-  background: linear-gradient(to right, #FFEBEE, var(--bg-card, #ffffff));
+  background: linear-gradient(to right, #FFEBEE, #ffffff);
 }
 
 .alert-card.moderate {
-  background: linear-gradient(to right, #FFF3E0, var(--bg-card, #ffffff));
+  background: linear-gradient(to right, #FFF3E0, #ffffff);
 }
 
 .alert-card.low {
-  background: linear-gradient(to right, #E3F2FD, var(--bg-card, #ffffff));
+  background: linear-gradient(to right, #E3F2FD, #ffffff);
 }
 
 .dark-mode .alert-card.high {
-  background: linear-gradient(to right, rgba(244, 67, 54, 0.2), var(--bg-card-dark, #1f2937));
+  background: linear-gradient(to right, rgba(244, 67, 54, 0.2), #1f2937);
 }
 
 .dark-mode .alert-card.moderate {
-  background: linear-gradient(to right, rgba(255, 152, 0, 0.2), var(--bg-card-dark, #1f2937));
+  background: linear-gradient(to right, rgba(255, 152, 0, 0.2), #1f2937);
 }
 
 .dark-mode .alert-card.low {
-  background: linear-gradient(to right, rgba(33, 150, 243, 0.2), var(--bg-card-dark, #1f2937));
+  background: linear-gradient(to right, rgba(33, 150, 243, 0.2), #1f2937);
 }
 
 .alert-header {
@@ -896,7 +896,7 @@ Recommendations: ${recommendations}`;
 }
 
 .dark-mode .alert-title-content h4 {
-  color: #f9fafb;
+  color: #f9fafb !important;
 }
 
 .scientific-name {
@@ -1214,7 +1214,7 @@ Recommendations: ${recommendations}`;
 }
 
 .dialog-container {
-  background: var(--bg-card, #ffffff);
+  background: #ffffff;
   border-radius: 12px;
   width: 100%;
   max-width: 600px;

@@ -70,7 +70,7 @@ export default {
 }
 
 .chart-dialog-container {
-  background: var(--bg-card, #ffffff);
+  background: #ffffff;
   border-radius: 12px;
   width: 100%;
   max-width: 95vw;
@@ -82,7 +82,7 @@ export default {
 }
 
 .dark-mode .chart-dialog-container {
-  background: var(--bg-card-dark, #1f2937);
+  background: #1f2937;
 }
 
 .chart-dialog-header {
@@ -90,30 +90,30 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
 }
 
 .dark-mode .chart-dialog-header {
-  border-bottom-color: var(--border-color-dark, #374151);
+  border-bottom-color: #374151;
 }
 
 .chart-dialog-header h3 {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: #111827;
 }
 
 .dark-mode .chart-dialog-header h3 {
-  color: var(--text-primary-dark, #f9fafb);
+  color: #f9fafb;
 }
 
 .close-btn {
   background: none;
   border: none;
   font-size: 1.25rem;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -124,13 +124,13 @@ export default {
 }
 
 .close-btn:hover {
-  background: var(--bg-hover, #f3f4f6);
-  color: var(--text-primary, #111827);
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .dark-mode .close-btn:hover {
-  background: var(--bg-hover-dark, #374151);
-  color: var(--text-primary-dark, #f9fafb);
+  background: #374151;
+  color: #f9fafb;
 }
 
 .chart-dialog-body {
@@ -144,25 +144,25 @@ export default {
 }
 
 .chart-dialog-body::-webkit-scrollbar-track {
-  background: var(--bg-secondary, #f9fafb);
+  background: #f9fafb;
   border-radius: 4px;
 }
 
 .dark-mode .chart-dialog-body::-webkit-scrollbar-track {
-  background: var(--bg-secondary-dark, #374151);
+  background: #374151;
 }
 
 .chart-dialog-body::-webkit-scrollbar-thumb {
-  background: var(--border-color, #d1d5db);
+  background: #d1d5db;
   border-radius: 4px;
 }
 
 .dark-mode .chart-dialog-body::-webkit-scrollbar-thumb {
-  background: var(--border-color-dark, #4b5563);
+  background: #4b5563;
 }
 
 .chart-dialog-body::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary, #6b7280);
+  background: #6b7280;
 }
 
 @media (max-width: 768px) {

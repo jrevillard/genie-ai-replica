@@ -99,7 +99,7 @@ export default {
 <style scoped>
 .pest-alert-summary-card {
   padding: 12px;
-  background: var(--bg-card, #ffffff);
+  background: #ffffff;
   border-radius: 8px;
   border: 2px solid transparent;
   cursor: pointer;
@@ -113,7 +113,7 @@ export default {
 }
 
 .dark-mode.pest-alert-summary-card {
-  background: var(--bg-card-dark, #1f2937);
+  background: #1f2937;
 }
 
 .alert-icon {

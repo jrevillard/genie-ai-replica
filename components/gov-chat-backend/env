@@ -37,7 +37,7 @@ EMAIL_HOST=smtp.itu.ch
 EMAIL_PORT=587
 EMAIL_SECURE=false
 EMAIL_USER=genie-ai
-EMAIL_PASSWORD=gLp+Ek)Vf)
+EMAIL_PASSWORD="gLp+Ek)Vf)"
 EMAIL_FROM=noreply@genie-ai.itu.int
 
 # App config

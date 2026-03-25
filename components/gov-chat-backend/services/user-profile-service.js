@@ -667,6 +667,38 @@ class UserProfileService {
     }
   }
 
+  async isUsernameAvailable(username) {
+    const startTime = Date.now();
+    try {
+      logger.info('UserProfileService.check_username_availability_start', { username });
+
+      const query = aql`
+        FOR u IN users
+          FILTER u.loginName == ${username}
+          RETURN u
+      `;
+
+      const cursor = await this.db.query(query);
+      const existingUser = await cursor.next();
+
+      const isAvailable = !existingUser;
+      logger.info('UserProfileService.username_availability_checked', {
+        username,
+        isAvailable,
+        durationMs: Date.now() - startTime
+      });
+      return isAvailable;
+    } catch (error) {
+      logger.error('UserProfileService.check_username_availability_failed', {
+        username,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      return false;
+    }
+  }
+
   async resetUserData(userId) {
     const startTime = Date.now();
     try {

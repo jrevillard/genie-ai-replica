@@ -390,21 +390,76 @@ module.exports = (userService) => {
   router.get('/check-email', async (req, res) => {
     try {
       const email = req.query.email;
-      
+
       logger.info(`Email check request received for: ${email}`);
-      
+
       if (!email) {
         logger.warn('Email check missing email parameter');
         return res.status(400).json({ available: false, message: 'Email parameter is required' });
       }
-      
+
       const isAvailable = await userService.isEmailAvailable(email);
       logger.info(`Email availability check for ${email}: ${isAvailable ? 'available' : 'not available'}`);
-      
+
       res.json({ available: isAvailable });
     } catch (error) {
       logger.error(`Error checking email availability: ${error.message}`, { stack: error.stack });
       res.status(500).json({ available: false, message: 'Error checking email availability' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/users/check-username:
+   *   get:
+   *     summary: Check if username is available
+   *     description: Checks if a username (loginName) is available for registration
+   *     tags: [User]
+   *     parameters:
+   *       - in: query
+   *         name: username
+   *         schema:
+   *           type: string
+   *         required: true
+   *         description: Username to check
+   *         example: johndoe
+   *     responses:
+   *       200:
+   *         description: Username availability check result
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 available:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: Username parameter is required
+   *       400:
+   *         description: Bad request, missing username parameter
+   *       500:
+   *         description: Server error
+   */
+  router.get('/check-username', async (req, res) => {
+    try {
+      const username = req.query.username;
+
+      logger.info(`Username check request received for: ${username}`);
+
+      if (!username) {
+        logger.warn('Username check missing username parameter');
+        return res.status(400).json({ available: false, message: 'Username parameter is required' });
+      }
+
+      const isAvailable = await userService.isUsernameAvailable(username);
+      logger.info(`Username availability check for ${username}: ${isAvailable ? 'available' : 'not available'}`);
+
+      res.json({ available: isAvailable });
+    } catch (error) {
+      logger.error(`Error checking username availability: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ available: false, message: 'Error checking username availability' });
     }
   });
 

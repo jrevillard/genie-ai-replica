@@ -597,7 +597,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     for (final msg in _messages) {
       final bool isUser = msg['role'] == 'user';
-      final String sender = isUser ? "You" : "NAAT";
+      final String sender = isUser ? "You" : "Genie";
       // Export visible content for PDF (user expectation)
       final String content = msg['content'] ?? '';
       final paragraphs = content.split('\n\n');
@@ -664,11 +664,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     final StringBuffer buffer = StringBuffer();
     // Optional header
-    buffer.writeln("Conversation with NAAT (${_conversationTitle}):\n");
+    buffer.writeln("Conversation with Genie (${_conversationTitle}):\n");
 
     for (final msg in _messages) {
       // Skip system/welcome messages if desired, or keep them all
-      final String role = msg['role'] == 'user' ? "Me" : "NAAT";
+      final String role = msg['role'] == 'user' ? "Me" : "Genie";
       // Share visible content
       final String content = msg['content'] ?? "";
 

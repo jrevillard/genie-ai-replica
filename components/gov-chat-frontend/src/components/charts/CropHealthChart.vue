@@ -404,13 +404,9 @@ export default {
 <style scoped>
 .crop-health-chart {
   padding: 24px;
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.crop-health-chart.dark-mode {
-  background: #1f2937;
 }
 
 .chart-header {
@@ -426,42 +422,36 @@ export default {
   margin: 0 0 4px 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .dark-mode .header-text h3 {
-  color: #f9fafb !important;
+  color: var(--text-primary);
 }
 
 .chart-subtitle {
   margin: 0;
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .dark-mode .chart-subtitle {
-  color: #9ca3af !important;
+  color: var(--text-secondary);
 }
 
 .chart-controls select {
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: #ffffff;
-  color: #111827;
+  background: var(--bg-input);
+  color: var(--text-primary);
   font-size: 0.9rem;
   cursor: pointer;
   transition: border-color 0.2s;
 }
 
 .chart-controls select:hover {
-  border-color: #4CAF50;
-}
-
-.dark-mode .chart-controls select {
-  background: #374151;
-  border-color: #4b5563;
-  color: #f9fafb;
+  border-color: var(--primary-color, #4CAF50);
 }
 
 .loading-indicator,
@@ -611,11 +601,11 @@ export default {
 .department-details h4 {
   margin: 0 0 16px 0;
   font-size: 1.1rem;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .dark-mode .department-details h4 {
-  color: #f9fafb !important;
+  color: var(--text-primary);
 }
 
 .department-list {

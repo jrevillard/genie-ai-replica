@@ -587,13 +587,9 @@ Recommendations: ${recommendations}`;
 <style scoped>
 .pest-alert-chart {
   padding: 24px;
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.pest-alert-chart.dark-mode {
-  background: #1f2937;
 }
 
 .chart-header {
@@ -604,21 +600,21 @@ Recommendations: ${recommendations}`;
   margin: 0 0 4px 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .dark-mode .header-text h3 {
-  color: #f9fafb !important;
+  color: var(--text-primary);
 }
 
 .chart-subtitle {
   margin: 0 0 16px 0;
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .dark-mode .chart-subtitle {
-  color: #9ca3af !important;
+  color: var(--text-secondary);
 }
 
 .summary-chips {
@@ -892,11 +888,11 @@ Recommendations: ${recommendations}`;
 .alert-title-content h4 {
   margin: 0;
   font-size: 1.1rem;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .dark-mode .alert-title-content h4 {
-  color: #f9fafb !important;
+  color: var(--text-primary);
 }
 
 .scientific-name {

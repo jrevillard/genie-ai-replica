@@ -99,7 +99,7 @@ export default {
 <style scoped>
 .pest-alert-summary-card {
   padding: 12px;
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 8px;
   border: 2px solid transparent;
   cursor: pointer;
@@ -110,10 +110,6 @@ export default {
 .pest-alert-summary-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
-}
-
-.dark-mode.pest-alert-summary-card {
-  background: #1f2937;
 }
 
 .alert-icon {
@@ -140,15 +136,11 @@ export default {
 
 .card-label {
   font-size: 10px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.dark-mode .card-label {
-  color: #9ca3af;
 }
 
 .card-value-row {
@@ -160,33 +152,21 @@ export default {
 .card-count {
   font-size: 16px;
   font-weight: bold;
-  color: #111827;
-}
-
-.dark-mode .card-count {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .card-status {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.dark-mode .card-status {
-  color: #9ca3af;
-}
-
 .card-arrow {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 14px;
   opacity: 0.4;
-}
-
-.dark-mode .card-arrow {
-  color: #9ca3af;
 }
 
 @media (max-width: 768px) {

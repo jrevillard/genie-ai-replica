@@ -169,7 +169,7 @@ export default {
 <style scoped>
 .crop-health-summary-card {
   padding: 12px;
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 8px;
   border: 2px solid transparent;
   cursor: pointer;
@@ -180,11 +180,6 @@ export default {
 .crop-health-summary-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
-}
-
-.dark-mode.crop-health-summary-card {
-  background: #1f2937;
-  border-color: rgba(76, 175, 80, 0.5);
 }
 
 .card-content {
@@ -217,52 +212,31 @@ export default {
 .health-percentage {
   font-size: 12px;
   font-weight: bold;
-  color: #111827;
-}
-
-.dark-mode .health-percentage {
-  color: #f9fafb;
-}
-
-.card-info {
-  flex: 1;
-  min-width: 0;
+  color: var(--text-primary);
 }
 
 .card-label {
   font-size: 10px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.dark-mode .card-label {
-  color: #9ca3af;
-}
-
 .card-value {
   font-size: 14px;
   font-weight: bold;
-  color: #111827;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.dark-mode .card-value {
-  color: #f9fafb;
-}
-
 .card-arrow {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 14px;
   opacity: 0.6;
-}
-
-.dark-mode .card-arrow {
-  color: #9ca3af;
 }
 
 @media (max-width: 768px) {

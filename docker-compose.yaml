@@ -154,6 +154,7 @@ services:
       - ARANGO_PORT=${ARANGO_PORT}
       - ARANGO_DB_NAME=${ARANGO_DB_NAME}
       - ARANGO_DB=${ARANGO_DB}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME}
       - ARANGO_USER=${ARANGO_USER}
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       # Email service configuration

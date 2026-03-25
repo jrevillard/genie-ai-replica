@@ -216,7 +216,9 @@ class _SidebarComponentState extends State<SidebarComponent>
                         userId: _currentUserId,
                         onOpenChat: (convId) {
                           debugPrint("[SIDEBAR] Opening conversation: $convId");
+                          debugPrint("[SIDEBAR] onConversationSelected callback is null: ${widget.onConversationSelected == null}");
                           widget.onConversationSelected?.call(convId);
+                          debugPrint("[SIDEBAR] Called onConversationSelected callback");
                         },
                       ),
                     ],

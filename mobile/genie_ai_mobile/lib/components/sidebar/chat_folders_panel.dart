@@ -718,6 +718,8 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       ),
       child: ListTile(
         onTap: () {
+          debugPrint("[CHAT_FOLDERS] Chat item clicked: ${chat['_id']}");
+          debugPrint("[CHAT_FOLDERS] Chat title: ${chat['title']}");
           widget.onOpenChat(chat['_id']);
           Scaffold.maybeOf(context)?.closeDrawer();
         },

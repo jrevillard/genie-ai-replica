@@ -275,7 +275,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   void _onConversationSelected(String conversationId) {
     debugPrint("[MAIN] Conversation Selected: $conversationId");
-    _chatBotKey.currentState?.loadConversation(conversationId);
+    debugPrint("[MAIN] _chatBotKey.currentState is null: ${_chatBotKey.currentState == null}");
+    if (_chatBotKey.currentState != null) {
+      debugPrint("[MAIN] Calling loadConversation on chatbot state");
+      _chatBotKey.currentState!.loadConversation(conversationId);
+    } else {
+      debugPrint("[MAIN] ERROR: chatBotKey.currentState is null, cannot load conversation");
+    }
   }
 
   @override

@@ -75,6 +75,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   bool _showExportDialog = false;
   String _exportFilename = "";
   bool _showSaveDialog = false;
+  bool _isSaving = false;
   final TextEditingController _titleController = TextEditingController();
 
   // Quick Help Overlay Visibility
@@ -245,6 +246,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   Future<void> loadConversation(String conversationId) async {
+    debugPrint("[CHATBOT] loadConversation called with ID: $conversationId");
+    debugPrint("[CHATBOT] Current conversation ID: $_currentConversationId");
+    debugPrint("[CHATBOT] Has unsaved changes: $_hasUnsavedChanges");
+    debugPrint("[CHATBOT] Current messages count: ${_messages.length}");
+
     if (_hasUnsavedChanges) {
       _pendingLoadConversationId = conversationId;
       setState(() => _showLoadConfirm = true);
@@ -254,19 +260,24 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   Future<void> _loadConversationDirect(String conversationId) async {
+    debugPrint("[CHATBOT] _loadConversationDirect called with: $conversationId");
     setState(() => _isLoading = true);
-    _resetChat(keepLoading: true);
+    _resetChat(keepLoading: true, addWelcomeMessage: false);
+    debugPrint("[CHATBOT] After _resetChat, messages count: ${_messages.length}");
 
     try {
       final cleanId = conversationId.replaceFirst('conversations/', '');
+      debugPrint("[CHATBOT] Fetching conversation with clean ID: $cleanId");
       final res = await _api.get('chat/conversations/$cleanId',
           params: {'userId': widget.userId});
 
+      debugPrint("[CHATBOT] API response status: ${res.statusCode}");
       if (res.statusCode != 200) {
         throw Exception("Failed to load conversation: ${res.statusCode}");
       }
 
       final Map<String, dynamic> conv = jsonDecode(res.body);
+      debugPrint("[CHATBOT] Parsed conversation, title: ${conv['title']}");
 
       List<Map<String, dynamic>> loadedMessages = [];
       if (conv['messages'] != null && conv['messages'] is List) {
@@ -286,6 +297,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           };
         }).toList();
       }
+      debugPrint("[CHATBOT] Loaded ${loadedMessages.length} messages");
 
       setState(() {
         _currentConversationId = conv['_id'] ?? conv['_key'];
@@ -294,6 +306,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         _messages = loadedMessages;
         _lastSavedMessageCount = loadedMessages.length;
       });
+      debugPrint("[CHATBOT] After setState, messages count in state: ${_messages.length}");
 
       List<dynamic> accumulatedDocs = [];
       for (final msg in loadedMessages.reversed) {
@@ -325,7 +338,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
-  void _resetChat({bool keepLoading = false}) {
+  void _resetChat({bool keepLoading = false, bool addWelcomeMessage = true}) {
     setState(() {
       _currentConversationId = null;
       _conversationTitle = tr('chatbot.newChatTitle');
@@ -333,17 +346,20 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       _messages = [];
       _relatedDocuments = [];
       if (!keepLoading) _isLoading = false;
+
+      // Only add welcome message if requested (not when loading an existing conversation)
+      if (addWelcomeMessage) {
+        _messages.add({
+          'role': 'assistant',
+          'content': _welcomeMessage,
+          'timestamp': DateTime.now().toIso8601String(),
+          'isSaved': true,
+        });
+        _lastSavedMessageCount = 1;
+      }
     });
     widget.onRelatedDocumentsUpdate([]);
     _inputController.clear();
-
-    _messages.add({
-      'role': 'assistant',
-      'content': _welcomeMessage,
-      'timestamp': DateTime.now().toIso8601String(),
-      'isSaved': true,
-    });
-    _lastSavedMessageCount = 1;
     _updateQuickHelpVisibility();
   }
 
@@ -910,13 +926,24 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           tooltip: tr('chatbot.newChatTitle'),
                           onPressed: startNewChat),
                       IconButton(
-                          icon:
-                              Icon(Icons.save_outlined, color: colors['text']),
+                          icon: _isSaving
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        colors['text']),
+                                  ),
+                                )
+                              : Icon(Icons.save_outlined, color: colors['text']),
                           tooltip: tr('chatbot.saveChat'),
-                          onPressed: () {
-                            _titleController.text = _conversationTitle;
-                            setState(() => _showSaveDialog = true);
-                          }),
+                          onPressed: _isSaving
+                              ? null
+                              : () {
+                                  _titleController.text = _conversationTitle;
+                                  setState(() => _showSaveDialog = true);
+                                }),
                       IconButton(
                           icon: Icon(Icons.picture_as_pdf_outlined,
                               color: colors['text']),
@@ -1343,22 +1370,62 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           if (_showSaveDialog)
             AlertDialog(
               title: Text(tr('chatbot.dialogs.saveTitle')),
-              content: TextField(
-                  controller: _titleController,
-                  decoration: InputDecoration(
-                      hintText: tr('chatbot.dialogs.saveHint'),
-                      border: const OutlineInputBorder()),
-                  onChanged: (v) => _conversationTitle = v,
-                  autofocus: true),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                      controller: _titleController,
+                      decoration: InputDecoration(
+                          hintText: tr('chatbot.dialogs.saveHint'),
+                          border: const OutlineInputBorder()),
+                      onChanged: (v) => _conversationTitle = v,
+                      autofocus: true),
+                  if (_isSaving) ...[
+                    const SizedBox(height: 16),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 8),
+                        Text('Saving...'),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
               actions: [
                 TextButton(
-                    onPressed: () => setState(() => _showSaveDialog = false),
+                    onPressed: _isSaving
+                        ? null
+                        : () => setState(() => _showSaveDialog = false),
                     child: Text(tr('common.cancel'))),
                 ElevatedButton(
-                    onPressed: () {
-                      saveConversation().then((_) {});
-                    },
-                    child: Text(tr('common.save')))
+                    onPressed: _isSaving
+                        ? null
+                        : () async {
+                            setState(() => _isSaving = true);
+                            await saveConversation();
+                            if (mounted) {
+                              setState(() {
+                                _isSaving = false;
+                                _showSaveDialog = false;
+                              });
+                            }
+                          },
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(tr('common.save')))
               ],
             ),
           if (_showExportDialog)

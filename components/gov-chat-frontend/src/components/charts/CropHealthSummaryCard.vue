@@ -217,11 +217,11 @@ export default {
 .health-percentage {
   font-size: 12px;
   font-weight: bold;
-  color: var(--text-primary, #111827);
+  color: #111827;
 }
 
 .dark-mode .health-percentage {
-  color: var(--text-primary-dark, #f9fafb);
+  color: #f9fafb;
 }
 
 .card-info {

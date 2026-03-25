@@ -404,13 +404,13 @@ export default {
 <style scoped>
 .crop-health-chart {
   padding: 24px;
-  background: var(--bg-card, #ffffff);
+  background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .crop-health-chart.dark-mode {
-  background: var(--bg-card-dark, #1f2937);
+  background: #1f2937;
 }
 
 .chart-header {
@@ -426,38 +426,42 @@ export default {
   margin: 0 0 4px 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: #111827;
 }
 
 .dark-mode .header-text h3 {
-  color: var(--text-primary-dark, #f9fafb);
+  color: #f9fafb;
 }
 
 .chart-subtitle {
   margin: 0;
   font-size: 0.9rem;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
+}
+
+.dark-mode .chart-subtitle {
+  color: #9ca3af;
 }
 
 .chart-controls select {
   padding: 8px 12px;
-  border: 1px solid var(--border-color, #d1d5db);
+  border: 1px solid #d1d5db;
   border-radius: 6px;
-  background: var(--bg-input, #ffffff);
-  color: var(--text-primary, #111827);
+  background: #ffffff;
+  color: #111827;
   font-size: 0.9rem;
   cursor: pointer;
   transition: border-color 0.2s;
 }
 
 .chart-controls select:hover {
-  border-color: var(--primary-color, #4CAF50);
+  border-color: #4CAF50;
 }
 
 .dark-mode .chart-controls select {
-  background: var(--bg-input-dark, #374151);
-  border-color: var(--border-color-dark, #4b5563);
-  color: var(--text-primary-dark, #f9fafb);
+  background: #374151;
+  border-color: #4b5563;
+  color: #f9fafb;
 }
 
 .loading-indicator,
@@ -467,7 +471,12 @@ export default {
   justify-content: center;
   gap: 12px;
   padding: 60px 20px;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
+}
+
+.dark-mode .loading-indicator,
+.dark-mode .error-message {
+  color: #9ca3af;
 }
 
 .error-message {
@@ -490,14 +499,14 @@ export default {
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: var(--bg-secondary, #f9fafb);
+  background: #f9fafb;
   border-radius: 12px;
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid #e5e7eb;
 }
 
 .dark-mode .summary-card {
-  background: var(--bg-secondary-dark, #374151);
-  border-color: var(--border-color-dark, #4b5563);
+  background: #374151;
+  border-color: #4b5563;
 }
 
 .summary-icon {
@@ -534,18 +543,22 @@ export default {
 
 .summary-label {
   font-size: 0.85rem;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   margin-bottom: 4px;
+}
+
+.dark-mode .summary-label {
+  color: #9ca3af;
 }
 
 .summary-value {
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--text-primary, #111827);
+  color: #111827;
 }
 
 .dark-mode .summary-value {
-  color: var(--text-primary-dark, #f9fafb);
+  color: #f9fafb;
 }
 
 .summary-value.good {
@@ -587,18 +600,22 @@ export default {
 
 .health-details {
   font-size: 0.85rem;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
   margin-top: 4px;
+}
+
+.dark-mode .health-details {
+  color: #9ca3af;
 }
 
 .department-details h4 {
   margin: 0 0 16px 0;
   font-size: 1.1rem;
-  color: var(--text-primary, #111827);
+  color: #111827;
 }
 
 .dark-mode .department-details h4 {
-  color: var(--text-primary-dark, #f9fafb);
+  color: #f9fafb;
 }
 
 .department-list {
@@ -613,9 +630,13 @@ export default {
   gap: 16px;
   align-items: center;
   padding: 16px;
-  background: var(--bg-secondary, #f9fafb);
+  background: #f9fafb;
   border-radius: 8px;
   border-left: 4px solid transparent;
+}
+
+.dark-mode .department-item {
+  background: #374151;
 }
 
 .department-item.good {
@@ -638,16 +659,20 @@ export default {
 
 .dept-name {
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: #111827;
 }
 
 .dark-mode .dept-name {
-  color: var(--text-primary-dark, #f9fafb);
+  color: #f9fafb;
 }
 
 .dept-ndvi {
   font-size: 0.85rem;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
+}
+
+.dark-mode .dept-ndvi {
+  color: #9ca3af;
 }
 
 .dept-trend {
@@ -674,13 +699,13 @@ export default {
 .dept-health-bar {
   width: 100px;
   height: 6px;
-  background: var(--border-color, #e5e7eb);
+  background: #e5e7eb;
   border-radius: 3px;
   overflow: hidden;
 }
 
 .dark-mode .dept-health-bar {
-  background: var(--border-color-dark, #4b5563);
+  background: #4b5563;
 }
 
 .health-bar-fill {
@@ -707,7 +732,11 @@ export default {
   gap: 6px;
   margin-top: 20px;
   font-size: 0.85rem;
-  color: var(--text-secondary, #6b7280);
+  color: #6b7280;
+}
+
+.dark-mode .last-updated {
+  color: #9ca3af;
 }
 
 @media (max-width: 768px) {

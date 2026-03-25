@@ -80,6 +80,8 @@
         <PestAlertChart
           v-if="chartDialog.type === 'pest-alert'"
           region="Central America"
+          :userId="$store.getters.currentUser?._key || 'anonymous'"
+          :sessionId="currentSessionId || 'pest-alert-session'"
         />
       </ChartDialog>
 
@@ -2678,6 +2680,11 @@ html[data-theme="dark"] .metric-value {
 
 [data-theme="dark"] .quick-help-heading,
 html[data-theme="dark"] .quick-help-heading {
+  color: white !important;
+}
+
+[data-theme="dark"] .section-title,
+html[data-theme="dark"] .section-title {
   color: white !important;
 }
 

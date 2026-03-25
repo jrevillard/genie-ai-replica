@@ -9,6 +9,8 @@
  * - FAO GIEWS: Backup pest data (requires API key)
  */
 
+import usdaRssService from './usdaRssService.js';
+
 const API_ENDPOINTS = {
   // NASA Harvest - Crop Health (NDVI)
   // Documentation: https://harvest.nasa.gov/
@@ -188,74 +190,11 @@ class AgriculturalService {
    * @returns {Promise<Object>} Current pest alerts
    */
   async _fetchPestAlertsFromUSDA(region) {
-    // TODO: Implement actual USDA APHIS API integration
-    // Options:
-    // 1. Use USDA APHIS public RSS feeds
-    // 2. Web scrape from public pages (check robots.txt)
-    // 3. Use USDA API Gateway if available
-    // 4. Fallback to FAO GIEWS with API key
+    // Delegate to usdaRssService for enhanced seasonal mock data
+    // This ensures consistency with mobile app and proper seasonal logic
+    console.log(`[AgriculturalService] Delegating pest alerts to usdaRssService for ${region}`);
 
-    console.log(`[AgriculturalService] Fetching pest alerts from USDA APHIS for ${region}`);
-
-    // Return mock data for Central America
-    // Replace this with actual API response when available
-    return {
-      region,
-      lastUpdated: new Date().toISOString(),
-      dataSource: 'USDA APHIS (mock)',
-      alerts: [
-        {
-          id: 'fall-armyworm-2025',
-          pest: 'Fall Armyworm',
-          scientificName: 'Spodoptera frugiperda',
-          severity: 'high',
-          affectedCrops: ['Maize', 'Sorghum'],
-          departments: ['San Miguel', 'Usulután', 'La Unión'],
-          description: 'High populations detected in eastern departments. Monitor whorl damage and frass.',
-          recommendations: 'Monitor fields weekly, apply pheromone traps, consider biological controls (parasitoids)',
-          firstDetected: '2025-03-15'
-        },
-        {
-          id: 'coffee-rust-2025',
-          pest: 'Coffee Leaf Rust',
-          scientificName: 'Hemileia vastatrix',
-          severity: 'moderate',
-          affectedCrops: ['Coffee'],
-          departments: ['Santa Ana', 'Ahuachapán', 'Sonsonate'],
-          description: 'Moderate incidence in high-altitude coffee zones. Orange-yellow spots on lower leaf surfaces.',
-          recommendations: 'Apply fungicide preventatively, improve air circulation, remove infected leaves, use resistant varieties',
-          firstDetected: '2025-03-10'
-        },
-        {
-          id: 'whitefly-2025',
-          pest: 'Whitefly',
-          scientificName: 'Bemisia tabaci',
-          severity: 'low',
-          affectedCrops: ['Beans', 'Tomatoes', 'Peppers', 'Cucumbers'],
-          departments: ['San Salvador', 'La Libertad', 'La Paz'],
-          description: 'Low levels detected in valley regions. Check leaf undersides for nymphs and adults.',
-          recommendations: 'Use yellow sticky traps, encourage natural predators (Encarsia formosa), avoid overuse of insecticides',
-          firstDetected: '2025-03-08'
-        },
-        {
-          id: 'tomato-late-blight-2025',
-          pest: 'Late Blight',
-          scientificName: 'Phytophthora infestans',
-          severity: 'moderate',
-          affectedCrops: ['Tomatoes', 'Potatoes'],
-          departments: ['Chalatenango', 'Cabañas'],
-          description: 'Favorable conditions due to recent humidity. Water-soaked lesions on leaves and stems.',
-          recommendations: 'Ensure good drainage, rotate crops, apply copper-based fungicides preventatively, remove infected plant material',
-          firstDetected: '2025-03-12'
-        }
-      ],
-      summary: {
-        total: 4,
-        high: 1,
-        moderate: 2,
-        low: 1
-      }
-    };
+    return await usdaRssService.getPestAlerts(region);
   }
 
   /**

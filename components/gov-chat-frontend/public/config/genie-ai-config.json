@@ -35,6 +35,29 @@
             "type",
             "value"
           ]
+        },
+        "splash": {
+          "type": "object",
+          "description": "Application splash screen configuration (PNG)",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "file",
+                "inline"
+              ],
+              "description": "Type of splash source",
+              "default": "file"
+            },
+            "value": {
+              "type": "string",
+              "description": "Path to PNG file (for 'file') or inline image content (for 'inline')"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ]
         }
       },
       "required": [
@@ -234,7 +257,11 @@
     "title": "AgroGenio AI",
     "icon": {
       "type": "file",
-      "value": "/config/genie-ai-icon-light.svg"
+      "value": "/config/agro-genio-icon.svg"
+    },
+    "splash": {
+      "type": "file",
+      "value": "/config/agro-genio-splash.png"
     }
   },
   "theme": {

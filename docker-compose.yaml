@@ -131,8 +131,9 @@ services:
   backend:
     build:
       context: ./components
-      dockerfile: gov-chat-backend/Dockerfile-single-node 
+      dockerfile: gov-chat-backend/Dockerfile-single-node
     restart: unless-stopped
+    network_mode: "host"
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
@@ -143,10 +144,8 @@ services:
     env_file:
       - .env
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
-      redis-cache:
-        condition: service_healthy
+      - arango-vector-db
+      - redis-cache
     environment:
       # Database config
       - ARANGO_URL=${ARANGO_URL}

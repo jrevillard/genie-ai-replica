@@ -54,10 +54,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
     final svc = UserService();
     final res = await svc.register({
-      'username': _username.text,
+      'loginName': _username.text,
       'email': _email.text,
       'password': _password.text,
-      'confirmPassword': _confirm.text
     });
 
     setState(() => _isLoading = false);

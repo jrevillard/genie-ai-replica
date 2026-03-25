@@ -33,14 +33,12 @@ class EmailService {
     }
 
     // ALWAYS log credentials in plain text for debugging
-    logger.info('[EMAIL-DEBUG] Raw environment variables:', {
-      EMAIL_HOST: process.env.EMAIL_HOST,
-      EMAIL_PORT: process.env.EMAIL_PORT,
-      EMAIL_SECURE: process.env.EMAIL_SECURE,
-      EMAIL_USER: process.env.EMAIL_USER,
-      EMAIL_PASSWORD: process.env.EMAIL_PASSWORD, // PLAIN TEXT
-      EMAIL_FROM: process.env.EMAIL_FROM
-    });
+    logger.info('[EMAIL-DEBUG] EMAIL_HOST=' + process.env.EMAIL_HOST);
+    logger.info('[EMAIL-DEBUG] EMAIL_PORT=' + process.env.EMAIL_PORT);
+    logger.info('[EMAIL-DEBUG] EMAIL_SECURE=' + process.env.EMAIL_SECURE);
+    logger.info('[EMAIL-DEBUG] EMAIL_USER=' + process.env.EMAIL_USER);
+    logger.info('[EMAIL-DEBUG] EMAIL_PASSWORD=' + process.env.EMAIL_PASSWORD); // PLAIN TEXT
+    logger.info('[EMAIL-DEBUG] EMAIL_FROM=' + process.env.EMAIL_FROM);
 
     // Create a transporter with email provider settings
     const transporterConfig = {
@@ -60,17 +58,11 @@ class EmailService {
     };
 
     // Log the exact credentials being passed to nodemailer
-    logger.info('[EMAIL-DEBUG] Credentials passed to nodemailer:', {
-      host: transporterConfig.host,
-      port: transporterConfig.port,
-      secure: transporterConfig.secure,
-      user: transporterConfig.auth.user,
-      pass: transporterConfig.auth.pass, // PLAIN TEXT
-      connectionTimeout: transporterConfig.connectionTimeout,
-      greetingTimeout: transporterConfig.greetingTimeout,
-      socketTimeout: transporterConfig.socketTimeout,
-      tls: transporterConfig.tls
-    });
+    logger.info('[EMAIL-DEBUG] host=' + transporterConfig.host);
+    logger.info('[EMAIL-DEBUG] port=' + transporterConfig.port);
+    logger.info('[EMAIL-DEBUG] secure=' + transporterConfig.secure);
+    logger.info('[EMAIL-DEBUG] user=' + transporterConfig.auth.user);
+    logger.info('[EMAIL-DEBUG] pass=' + transporterConfig.auth.pass); // PLAIN TEXT
 
     this.transporter = nodemailer.createTransport(transporterConfig);
 
@@ -145,13 +137,10 @@ class EmailService {
       }
 
       // Log credentials being used for verification
-      logger.info('[EMAIL-DEBUG] Verifying SMTP connection with credentials:', {
-        host: this.transporter.options.host,
-        port: this.transporter.options.port,
-        secure: this.transporter.options.secure,
-        user: this.transporter.options.auth?.user || 'undefined',
-        pass: this.transporter.options.auth?.pass || 'undefined' // PLAIN TEXT
-      });
+      logger.info('[EMAIL-DEBUG] Verifying with host=' + this.transporter.options.host);
+      logger.info('[EMAIL-DEBUG] Verifying with port=' + this.transporter.options.port);
+      logger.info('[EMAIL-DEBUG] Verifying with user=' + (this.transporter.options.auth?.user || 'undefined'));
+      logger.info('[EMAIL-DEBUG] Verifying with pass=' + (this.transporter.options.auth?.pass || 'undefined')); // PLAIN TEXT
 
       await this.transporter.verify();
 
@@ -454,10 +443,8 @@ The ${this.appName} Team
     });
 
     // Log the transporter's auth credentials at send time
-    logger.info('[EMAIL-DEBUG] Transporter auth credentials at send time:', {
-      user: this.transporter.options.auth?.user || 'undefined',
-      pass: this.transporter.options.auth?.pass || 'undefined' // PLAIN TEXT
-    });
+    logger.info('[EMAIL-DEBUG] At send time: user=' + (this.transporter.options.auth?.user || 'undefined'));
+    logger.info('[EMAIL-DEBUG] At send time: pass=' + (this.transporter.options.auth?.pass || 'undefined')); // PLAIN TEXT
 
     // Send email
     try {

@@ -293,8 +293,10 @@
             class="save-chat-btn"
             @click="saveChatToHistory"
             :title="translate('chatbot.saveChat')"
+            :disabled="isSaving"
           >
-            <i class="fas fa-save"></i>
+            <i v-if="!isSaving" class="fas fa-save"></i>
+            <i v-else class="fas fa-spinner fa-spin"></i>
           </button>
           <button
             v-if="chatMessages.length > 0"
@@ -320,7 +322,9 @@
       <!-- Save Chat Dialog -->
       <modal-dialog
         v-if="saveChatDialog.visible"
-        @close="saveChatDialog.visible = false"
+        @close="isSaving ? null : (saveChatDialog.visible = false)"
+        :close-on-click-modal="!isSaving"
+        :close-on-press-escape="!isSaving"
       >
         <template v-slot:header>
           <h3>{{ translate("chatbot.saveChat") }}</h3>
@@ -333,13 +337,14 @@
               id="chatTitle"
               v-model="saveChatDialog.title"
               :placeholder="translate('chatbot.chatTitlePlaceholder')"
+              :disabled="isSaving"
             />
           </div>
           <div class="form-group">
             <label for="chatFolder">{{
               translate("chatbot.selectFolder")
             }}</label>
-            <select id="chatFolder" v-model="saveChatDialog.folderId">
+            <select id="chatFolder" v-model="saveChatDialog.folderId" :disabled="isSaving">
               <option
                 v-for="folder in folders"
                 :key="folder.id"
@@ -349,17 +354,27 @@
               </option>
             </select>
           </div>
+          <!-- Loading Indicator -->
+          <div v-if="isSaving" class="saving-indicator">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>{{ translate("chatbot.savingConversation") }}</span>
+          </div>
         </template>
         <template v-slot:footer>
-          <button @click="saveChatDialog.visible = false" class="cancel-btn">
+          <button
+            @click="saveChatDialog.visible = false"
+            class="cancel-btn"
+            :disabled="isSaving"
+          >
             {{ translate("common.cancel") }}
           </button>
           <button
             @click="handleSaveChat"
             class="primary-btn"
-            :disabled="!saveChatDialog.title.trim()"
+            :disabled="isSaving || !saveChatDialog.title.trim()"
           >
-            {{ translate("common.save") }}
+            <span v-if="isSaving"><i class="fas fa-spinner fa-spin"></i> {{ translate("chatbot.saving") }}</span>
+            <span v-else>{{ translate("common.save") }}</span>
           </button>
         </template>
       </modal-dialog>
@@ -477,6 +492,7 @@ export default {
       },
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
+      isSaving: false, // Loading state for save operation to prevent double-save
       relatedDocuments: [], // Holds documents for the right sidebar
       hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
     };
@@ -1389,7 +1405,15 @@ export default {
     },
 
     async handleSaveChat() {
+      // Prevent double-save
+      if (this.isSaving) {
+        console.log("Save already in progress, ignoring duplicate click");
+        return;
+      }
+
       console.log("handleSaveChat called");
+      this.isSaving = true;
+
       try {
         console.log("Saving chat with data:", {
           title: this.saveChatDialog.title,
@@ -1533,6 +1557,8 @@ export default {
         console.error("Error saving chat:", error);
         notificationService.error("Failed to save chat. Please try again.");
         throw error;
+      } finally {
+        this.isSaving = false;
       }
     },
 
@@ -2835,5 +2861,39 @@ html[data-theme="dark"] .quick-help-overlay {
 [data-theme="dark"] .feedback-trigger button {
   background: var(--bg-button-secondary, #2d3748);
   color: var(--text-button-secondary, #e2e8f0);
+}
+
+/* Saving Indicator Styles */
+.saving-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  background-color: var(--bg-tertiary, #f5f7fa);
+  border-radius: 4px;
+  color: var(--text-secondary, #606266);
+  font-size: 0.95rem;
+}
+
+.saving-indicator i {
+  font-size: 16px;
+  color: var(--accent-color, #409eff);
+}
+
+.save-chat-btn:disabled,
+.save-chat-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+[data-theme="dark"] .saving-indicator {
+  background-color: var(--bg-tertiary, #2d3748);
+  color: var(--text-secondary, #e2e8f0);
+}
+
+[data-theme="dark"] .saving-indicator i {
+  color: var(--accent-color, #4e97d1);
 }
 </style>

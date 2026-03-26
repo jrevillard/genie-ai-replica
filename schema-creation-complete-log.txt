@@ -1,0 +1,39 @@
+2026-04-07T20:35:24.729Z: LOG: --- Database Schema Creator ---
+2026-04-07T20:35:24.729Z: LOG: This script will apply a schema to an ArangoDB database.
+2026-04-07T20:35:24.729Z: LOG: 
+Database configuration to be used:
+2026-04-07T20:35:24.729Z: LOG:   URL:      http://localhost:8529
+2026-04-07T20:35:24.729Z: LOG:   Database: genie-ai
+2026-04-07T20:35:24.729Z: LOG:   User:     root
+2026-04-07T20:35:24.735Z: LOG: Creating schema for database: genie-ai
+2026-04-07T20:35:24.735Z: LOG: Creating collections...
+2026-04-07T20:35:24.735Z: LOG:   Processing schema for categoryServices
+2026-04-07T20:35:24.736Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2026-04-07T20:35:24.736Z: LOG:   Adding schema validation to categoryServices
+2026-04-07T20:35:24.746Z: ERROR: Error creating collection categoryServices: connect ECONNREFUSED 127.0.0.1:8529
+2026-04-07T20:35:24.746Z: ERROR: Error details: {
+  "error": true,
+  "errno": -111,
+  "code": "ECONNREFUSED",
+  "syscall": "connect"
+}
+2026-04-07T20:35:24.746Z: ERROR: Error during schema creation: connect ECONNREFUSED 127.0.0.1:8529
+2026-04-07T20:35:24.746Z: ERROR: Error stack: Error: connect ECONNREFUSED 127.0.0.1:8529
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1605:16)

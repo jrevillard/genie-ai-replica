@@ -10,11 +10,7 @@ const retry = require('async-retry');
 class AuthService {
   constructor() {
     this.dbService = dbService;
-    if (!process.env.JWT_SECRET) {
-      logger.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start.');
-      process.exit(1);
-    }
-    this.jwtSecret = process.env.JWT_SECRET;
+    this.jwtSecret = process.env.JWT_SECRET;  // Required - no default for security
     this.jwtExpiresIn = process.env.JWT_EXPIRES_IN || '24h';
     this.tokenExpiryMinutes = 5; // Token expires in 5 minutes
     this.initialized = false;
@@ -87,6 +83,12 @@ class AuthService {
         logger.info('Indexes created for verificationTokens');
       } else {
         logger.info('verificationTokens collection already exists, skipping creation');
+      }
+
+      if (!collectionNames.includes('users')) {
+        logger.info('Creating users collection...');
+        await this.db.createCollection('users');
+        logger.info('Created users collection successfully');
       }
 
       await Promise.all([

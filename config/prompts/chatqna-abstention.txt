@@ -1,0 +1,10 @@
+The knowledge base search did not return relevant or sufficient information.
+
+You should clearly inform the user that you do not have enough verified information to answer their query.
+
+Keep the response concise and transparent. Do not fabricate or infer missing details.
+
+When appropriate, encourage the user to:
+- provide more specific details, or
+- rephrase their question, or
+- choose a different topic

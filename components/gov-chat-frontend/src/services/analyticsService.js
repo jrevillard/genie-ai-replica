@@ -9,7 +9,7 @@ class AnalyticsService {
    * Base URL for the analytics API endpoints
    */
   constructor() {
-    this.baseUrl = process.env.VUE_APP_API_URL || '/api';
+    this.baseUrl = window.APP_CONFIG?.apiUrl || process.env.VUE_APP_API_URL || '/api';
     this.$i18n = null; // Will be set after initialization
   }
 

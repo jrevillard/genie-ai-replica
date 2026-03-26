@@ -10,7 +10,7 @@ const retry = require('async-retry');
 class AuthService {
   constructor() {
     this.dbService = dbService;
-    this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key-here-change-in-production';
+    this.jwtSecret = process.env.JWT_SECRET;  // Required - no default for security
     this.jwtExpiresIn = process.env.JWT_EXPIRES_IN || '24h';
     this.tokenExpiryMinutes = 5; // Token expires in 5 minutes
     this.initialized = false;
@@ -83,6 +83,12 @@ class AuthService {
         logger.info('Indexes created for verificationTokens');
       } else {
         logger.info('verificationTokens collection already exists, skipping creation');
+      }
+
+      if (!collectionNames.includes('users')) {
+        logger.info('Creating users collection...');
+        await this.db.createCollection('users');
+        logger.info('Created users collection successfully');
       }
 
       await Promise.all([

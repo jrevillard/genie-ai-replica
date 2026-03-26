@@ -836,7 +836,7 @@ class AdminDashboardService {
       logger.debug(`Backup file path: ${backupFile}`);
 
       // Simulate backup (actual implementation depends on ArangoDB setup)
-      await exec(`arangodump --output-directory ${backupDir} --server.database ${process.env.ARANGO_DB_NAME}`);
+      await exec(`arangodump --output-directory ${backupDir} --server.database ${process.env.ARANGO_DB}`);
       logger.debug('Backup completed');
 
       const response = {

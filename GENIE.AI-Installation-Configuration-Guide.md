@@ -158,7 +158,8 @@ curl \-fsSL [https://download.docker.com/linux/ubuntu/gpg](https://download.dock
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 ##### 3\. Set up the official Docker repository
-```
+
+```bash
 echo \
 "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/debian \
@@ -356,17 +357,17 @@ Configuration for the translation engine and Redis caching.
 | TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
 | TRANSLATION\_CACHE\_PASSWORD | Password for the Redis cache. | \!@\#$5678 |
 
-**ArangoDB (Knowledge Base)**  
+**ArangoDB (Knowledge Base)**
 Connection settings for the graph and vector database.
+
+**Note:** All GENIE.AI services (backend, frontend, document-repository, and OPEA services) share a single ArangoDB database. The default name is `genie-ai`.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | ARANGO\_URL | Connection URL for ArangoDB. | http://arango-vector-db:8529 |
 | ARANGO\_PORT | Port ArangoDB is listening on. | 8529 |
-| ARANGO\_DB\_NAME | Database name used by the backend. | genie-ai |
-| ARANGO\_DB | Database name used by the frontend/utility scripts. | genie-ai |
+| ARANGO\_DB | Database name shared by all GENIE.AI and OPEA services. | genie-ai |
 | ARANGO\_USER | Database username. | root |
-| ARANGO\_USERNAME | Database username (alias). | root |
 | ARANGO\_PASSWORD | Root password for ArangoDB. | test |
 | MAX\_SOCKETS | Maximum concurrent socket connections. | 100 |
 | MAX\_FREE\_SOCKETS | Maximum free sockets to keep open. | 50 |
@@ -777,16 +778,21 @@ Bash
 
 docker compose up \-d \--build
 
-Launch Option B: Legacy Launch (nVIDIA Tesla T4)  
-Use this command only if you are running on a Tesla T4 (16GB). This uses docker-compose-t4.yaml, which applies specific overrides. It must be understood that the environment for the T4 is restrictive due to the VRAM and the configuration shoe-horns multiple models into a small VRAM footprint:
+Launch Option B: GPU Launch (nVIDIA Tesla T4)
+Use this command for a Tesla T4 (16GB VRAM). This uses env.t4 for GPU-specific overrides:
 
-* **Precision:** Forces dtype=half (float16).  
-* **Images:** Uses specific turing tags for TEI containers to ensure CUDA 7.5 compatibility.  
-* **Memory Safety:** Reduces batch tokens and GPU utilization limits to prevent system crashes.
+* **Precision:** Forces dtype=half (float16)
+* **Memory Safety:** Reduces GPU utilization and model length limits
+
+**Important:** First create your .env file with secrets:
+```bash
+cp env .env
+nano .env  # Add ARANGO_PASSWORD, JWT_SECRET, etc.
+```
 
 Bash
 
-docker compose \-f docker-compose-t4.yaml up \-d \--build
+docker compose --env-file .env --env-file env.t4 up -d --build
 
 5\. Initial Verification  
 After the containers launch, check their status. It may take several minutes for the large AI models (vLLM) to download and initialize.
@@ -813,10 +819,13 @@ Once the base services are running (Step 3), you must configure the core infrast
 
 ## 4.1 ArangoDB Database Initialization
 
-While the arango-vector-db service is running, the specific application databases must be created.
+While the arango-vector-db service is running, the application database must be created.
 
-1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).  
-2. Create the necessary databases as defined in your environment variables (default: genie-ai) \- ensure ALL of the services use the same database (check the .env) - there are multiple ARANGO vars ARANGO_DB and ARANGO_DB_NAME (they msut be the same).
+1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).
+
+2. Create the database defined in your `ARANGO_DB` environment variable (default: **`genie-ai`**).
+
+**Note:** All services share this single database. Only one variable to configure: `ARANGO_DB`.
 
 ## 4.2 NGINX and Kong API Gateway Configuration **CRITICAL**
 

@@ -291,12 +291,21 @@ flutter test
 
 ### Docker Deployment
 
+**Option 1 - Full stack** (GENIE.AI + OPEA infrastructure):
 ```bash
-# Build all services
-docker-compose -f components/docker-compose.yaml build
+# First time: create your .env from template
+cp env .env
+# Edit .env with your secrets
 
-# Deploy all services
-docker-compose -f components/docker-compose.yaml up -d
+docker compose up -d
+# Or with GPU-specific settings:
+docker compose --env-file .env --env-file env.t4 up -d
+```
+
+**Option 2 - GENIE.AI only** (local development):
+```bash
+cd components
+docker compose --env-file ../.env up -d
 ```
 
 ### Kubernetes Deployment

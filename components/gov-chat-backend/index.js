@@ -644,17 +644,28 @@ async function initializeServices() {
   logger.debug('Logger level:', logger.level || 'unknown');
 
   // Validate environment variables
-  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB_NAME', 'ARANGO_USER', 'ARANGO_PASSWORD'];
+  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USER', 'ARANGO_PASSWORD'];
   const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
   if (missingEnvVars.length > 0) {
     logger.error('Missing required environment variables:', { missing: missingEnvVars });
     throw new Error(`Missing environment variables: ${missingEnvVars.join(', ')}`);
   }
 
+  // Validate required secrets in production
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    const requiredSecrets = ['JWT_SECRET', 'SESSION_SECRET', 'TRANSLATION_CACHE_PASSWORD'];
+    const missingSecrets = requiredSecrets.filter(key => !process.env[key] || process.env[key].includes('default') || process.env[key].includes('change'));
+    if (missingSecrets.length > 0) {
+      logger.error('Missing or insecure secrets in production:', { missing: missingSecrets });
+      throw new Error(`Production requires secure values for: ${missingSecrets.join(', ')}`);
+    }
+  }
+
   // Log ArangoDB configuration
   logger.debug('ArangoDB configuration:', {
     ARANGO_URL: process.env.ARANGO_URL,
-    ARANGO_DB_NAME: process.env.ARANGO_DB_NAME,
+    ARANGO_DB: process.env.ARANGO_DB,
     ARANGO_USER: process.env.ARANGO_USER,
     ARANGO_PASSWORD: process.env.ARANGO_PASSWORD ? '***' : 'undefined'
   });

@@ -10,15 +10,15 @@ const config = {
   // Database configuration
   database: {
     url: process.env.ARANGO_URL || 'http://arangodb:8529',
-    username: process.env.ARANGO_USERNAME || 'root',
-    password: process.env.ARANGO_PASSWORD || 'test',
-    databaseName: process.env.ARANGO_DB_NAME || 'node-services'
+    username: process.env.ARANGO_USER || 'root',
+    password: process.env.ARANGO_PASSWORD, // Required - no default for security
+    databaseName: process.env.ARANGO_DB || 'genie-ai'
   },
 
   // Dataprep service configuration
   dataprep: {
-    host: process.env.DATAPREP_HOST || 'http://91.203.132.198', 
-    port: process.env.DATAPREP_PORT || '6007', 
+    host: process.env.DATAPREP_HOST || 'http://dataprep',
+    port: process.env.DATAPREP_PORT || '6007',
 
     // This needs to be changed as it cannot be deployed on Kubernetes like this; David F
     ingestPath: '/v1/dataprep/ingest_file',
@@ -63,7 +63,7 @@ const config = {
 
   // Security configuration
   security: {
-    jwtSecret: process.env.JWT_SECRET || 'default-jwt-secret',
+    jwtSecret: process.env.JWT_SECRET,  // Required - no default for security
     jwtExpiration: process.env.JWT_EXPIRATION || '24h',
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS) || 10,
     rateLimit: {

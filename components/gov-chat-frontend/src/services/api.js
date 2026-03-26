@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Create a base axios instance for API calls
 const api = axios.create({
-  baseURL: process.env.VUE_APP_API_URL || '/api',
+  baseURL: window.APP_CONFIG?.apiUrl || process.env.VUE_APP_API_URL || '/api',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',

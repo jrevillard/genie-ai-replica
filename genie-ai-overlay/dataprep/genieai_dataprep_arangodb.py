@@ -120,7 +120,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" BM25_THRESHOLD       : {BM25_LABEL_THRESHOLD}")
         print(f" EXTRACTION_METHOD    : {CONTENT_EXTRACTION_METHOD}")
         print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
-        print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
+        print(f" ARANGO_DB            : {os.getenv('ARANGO_DB')}")
         print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
         print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
         print("="*60 + "\n")
@@ -367,11 +367,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 while retries < 3:
                     try:
+                        # Replace {labels_list} placeholder with actual labels
+                        system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
                         response = await client.chat.completions.create(
                             model=model,
                             messages=[
-                                {"role": "system", "content": LABEL_SELECTOR_SYSTEM_PROMPT},
-                                {"role": "user", "content": f"Input: {text}\nLabels: {all_labels}"}
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": f"Input: {text}"}
                             ]
                         )
                         parsed = json.loads(response.choices[0].message.content)

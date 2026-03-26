@@ -9,6 +9,7 @@ import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/components/charts/crop_health_summary_card.dart';
 import 'package:genie_ai_mobile/components/charts/pest_alert_map_card.dart';
+import 'package:genie_ai_mobile/components/charts/market_price_summary_card.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
@@ -1034,7 +1035,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Insights Section - Side by side charts
+                  // Scrollable content for smaller screens and landscape
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Insights Section - Side by side charts
                   Row(
                     children: [
                       Icon(Icons.insights_rounded,
@@ -1325,13 +1332,61 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // Market Prices Section
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.show_chart_rounded,
+                              size: 16, color: Colors.blue),
+                          const SizedBox(width: 6),
+                          Text(
+                            tr('market.sectionTitle'),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colors['text'],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Market Price Cards - 4x2 Grid with more vertical space
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 4,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 1.4,
+                        children: const [
+                          MarketPriceSummaryCard(category: 'maize'),
+                          MarketPriceSummaryCard(category: 'cropProtection'),
+                          MarketPriceSummaryCard(category: 'vegetables'),
+                          MarketPriceSummaryCard(category: 'livestock'),
+                          MarketPriceSummaryCard(category: 'fertilizer'),
+                          MarketPriceSummaryCard(category: 'apiary'),
+                          MarketPriceSummaryCard(category: 'aquaculture'),
+                          MarketPriceSummaryCard(category: 'harvestStorage'),
+                        ],
+                      ),
+                    ],
+                  ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              ),
             ),
+          ),
 
-          // Confirm Dialogs & Save/Export Alerts
-          ConfirmDialog(
+      // Confirm Dialogs & Save/Export Alerts
+      ConfirmDialog(
             visible: _showNewChatConfirm,
             title: tr('chatbot.dialogs.newChatTitle'),
             message: tr('chatbot.dialogs.newChatContent'),

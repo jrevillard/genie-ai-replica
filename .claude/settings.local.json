@@ -5,7 +5,9 @@
       "Bash(findstr:*)",
       "Bash(bn)",
       "Bash(st \")",
-      "Bash(flutter clean)"
+      "Bash(flutter clean)",
+      "Bash(dart test/services/verify_world_bank_data.dart)",
+      "Bash(flutter analyze:*)"
     ]
   }
 }

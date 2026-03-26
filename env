@@ -151,11 +151,15 @@ HUGGING_FACE_HUB_TOKEN=
 # Proxy host for frontend (used for CSP configuration)
 # Default: localhost
 # Production: your-domain.com
+# Should match NGINX_PUBLIC_DOMAIN (section 7)
 # VUE_PROXY_HOST=
 
 # Content Security Policy connect sources (allowed WebSocket/API origins)
-# Default: 'self' http://localhost:3000 http://localhost:8090 ws://localhost:3000 ws://localhost:8090
+# Used by: frontend (meta tag, build-time via Vue DefinePlugin)
+# Default: 'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090
 # Production: 'self' https://your-domain.com wss://your-domain.com
+# IMPORTANT: Also set CSP_CONNECT_SRC (section 6) to the same value.
+# They serve the same purpose but at different stages (build-time vs runtime).
 # VUE_APP_CSP_CONNECT_SRC=
 
 # =============================================================================
@@ -164,17 +168,52 @@ HUGGING_FACE_HUB_TOKEN=
 # Override for production deployment.
 
 # CORS allowed origins (which domains can access the API)
+# Used by: backend (response headers)
 # Default: http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090
 # Production: https://your-domain.com,https://*.your-domain.com
 # CORS_ALLOWED_ORIGINS=
 
-# Content Security Policy for backend
-# Default: 'self' http://localhost:3000 http://localhost:8090 ws://localhost:3000 ws://localhost:8090
+# Content Security Policy for backend and nginx
+# Used by: backend (response headers), nginx (via CSP_CONNECT_SRC env var)
+# Note: nginx uses CSP_CONNECT_SRC (set in .env), not CORS_ALLOWED_ORIGINS.
+# Local development example: 'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090
+# NOTE: 'self' must include the single quotes (they are CSP directive syntax, not shell quoting)
 # Production: 'self' https://your-domain.com wss://your-domain.com
+# Runtime default (if unset): same as local development example above
+# IMPORTANT: Also set VUE_APP_CSP_CONNECT_SRC (section 5) to the same value.
+# They serve the same purpose but at different stages (build-time vs runtime).
 # CSP_CONNECT_SRC=
 
 # =============================================================================
-# SECTION 7: LLM PROMPTS (OPTIONAL)
+# SECTION 7: API GATEWAY CONFIGURATION
+# =============================================================================
+# Nginx reverse proxy configuration for cloud-native deployment.
+
+# NGINX public domain (used for HTTPS redirect, Host header, CORS origin)
+# Default: localhost
+# Production: your-domain.com
+# Used by: nginx (reverse proxy)
+# NGINX_PUBLIC_DOMAIN=
+
+# NGINX HTTP port (host port for HTTP redirect)
+# Default: 80
+# NGINX_HTTP_PORT=
+
+# NGINX HTTPS port (host port for HTTPS access)
+# Default: 443
+# NGINX_HTTPS_PORT=
+
+# Internal Docker service names (override ONLY if using custom service names)
+# NGINX_FRONTEND_HOST=frontend
+# NGINX_FRONTEND_PORT=8090
+# KONG_PROXY_HOST=kong
+
+# Kong HTTPS proxy alternate host port (for external Kong HTTPS access)
+# Default: 8443
+# NGINX_HTTPS_PORT_ALT=
+
+# =============================================================================
+# SECTION 8: LLM PROMPTS (OPTIONAL)
 # =============================================================================
 # Default prompts are in config/prompts/ (committed to git)
 # Override here ONLY for production-specific customization.
@@ -194,7 +233,7 @@ HUGGING_FACE_HUB_TOKEN=
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
 
 # =============================================================================
-# SECTION 8: GPU-SPECIFIC CONFIGURATION
+# SECTION 9: GPU-SPECIFIC CONFIGURATION
 # =============================================================================
 # These variables override GPU memory utilization and model settings.
 # See env.t4 (NVIDIA T4 16GB) or env.rtx6000 (RTX 6000 ADA 24GB) for examples.
@@ -247,7 +286,7 @@ When appropriate, encourage the user to:
 "
 
 # =============================================================================
-# SECTION 9: PROXY CONFIGURATION (OPTIONAL)
+# SECTION 10: PROXY CONFIGURATION (OPTIONAL)
 # =============================================================================
 # Uncomment ONLY if behind a corporate firewall that requires proxy.
 # Most deployments do NOT need these.
@@ -258,7 +297,7 @@ When appropriate, encourage the user to:
 >>>>>>> 4095b68 (refactor: Cloud-native deployment stabilization)
 
 # =============================================================================
-# SECTION 10: TELEMETRY & OBSERVABILITY (OPTIONAL)
+# SECTION 11: TELEMETRY & OBSERVABILITY (OPTIONAL)
 # =============================================================================
 # Uncomment to enable observability/tracing for debugging.
 

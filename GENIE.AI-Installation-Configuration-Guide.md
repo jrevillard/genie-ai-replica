@@ -296,7 +296,7 @@ Configuration for the Kong API Gateway and its backing PostgreSQL database.
 | KONG\_ADMIN\_ACCESS\_LOG | Path for admin access logs. | /dev/stdout |
 | KONG\_PROXY\_ERROR\_LOG | Path for proxy error logs. | /dev/stderr |
 | KONG\_ADMIN\_ERROR\_LOG | Path for admin error logs. | /dev/stderr |
-| KONG\_ADMIN\_LISTEN | Kong admin API listen address and ports. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
+| KONG\_ADMIN\_LISTEN | Kong admin API listen address and ports. | 127.0.0.1:8001, 127.0.0.1:8444 ssl |
 | KONG\_DNS\_RESOLVER | DNS resolver for Kong (Docker internal DNS). | 127.0.0.11 |
 | KONG\_DNS\_ORDER | Order of DNS resolution types. | LAST,A,AAAA,CNAME |
 
@@ -827,85 +827,63 @@ While the arango-vector-db service is running, the application database must be 
 
 **Note:** All services share this single database. Only one variable to configure: `ARANGO_DB`.
 
-## 4.2 NGINX and Kong API Gateway Configuration **CRITICAL**
+## 4.2 API Gateway Configuration (NGINX + Kong)
 
-#### There are Nginx default.conf files available for both three-node and single-node deployments:
+The API gateway layer consists of two components: **NGINX** (TLS termination, reverse proxy, security headers) and **Kong** (API routing, rate limiting).
 
-1. For three-node deployments, use the default default.conf and modify the upstream addresses (different servers as it is a three-node deployment)
-2. for single-node deployments, use the default.conf-single-node (this uses the container service names)
+### 4.2.1 NGINX — Fully Automated
 
-#### Kong requires specific initialization and configuration to route traffic correctly.
+NGINX configuration is template-based and auto-rendered at container startup via `entrypoint.sh`. No manual config editing is needed.
 
-1. **Initialize Database:** Execute these commands to prepare the Kong postgres database:
+**Set these variables in your root `.env` file:**
 
-Bash
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `NGINX_PUBLIC_DOMAIN` | Public domain or IP for TLS and CORS | `genie.agency.gov` |
+| `CSP_CONNECT_SRC` | Allowed CSP `connect-src` sources (nginx) | `'self' https://genie.agency.gov wss://genie.agency.gov` |
+| `VUE_APP_CSP_CONNECT_SRC` | Allowed CSP sources baked into Vue frontend at build time | `'self' https://genie.agency.gov wss://genie.agency.gov` |
 
-\# Note:- the database may have already bean iniitalized<b>
+After changing `.env`, restart nginx: `docker compose restart nginx`
 
-docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;" 
+SSL certificates are auto-generated (self-signed) in development. For production, mount your own certificates into `secrets/ssl/`.
 
-docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
+### 4.2.2 Kong — Database Migrations (Automated)
 
-docker compose run \--rm kong kong migrations bootstrap docker compose restart kong
+Kong database migrations are handled automatically by the `kong-migrations` init container defined in `docker-compose.yaml`. This container runs on every `docker compose up` and performs:
 
-2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script (ensure that curl and jq are installed).  
-   For Single-Node installation: 
+- `kong migrations bootstrap` — on first deployment (fresh database)
+- `kong migrations up && finish` — on subsequent deployments (existing schema)
 
-Bash
+**No manual database initialization is required.**
 
+### 4.2.3 Kong — Routes and Plugins (Manual One-Time Setup)
+
+After services are running, you must configure Kong routes and plugins to direct traffic to your backend services.
+
+1. Navigate to the config directory:
+
+```bash
 cd api-gateway-solution/new-config/
+```
 
-cp kong\_config.json-single-node kong\_config.json
+2. Review `kong_config.json` to verify the target service hosts match your Docker service names (default: `backend:3000` and `document-repository:3001`).
 
-chmod \+x [manage-kong-config.sh](http://manage-kong-config.sh)
+3. Run the management script:
 
-sudo apt update 
+```bash
+chmod +x manage-kong-config.sh
+./manage-kong-config.sh -a
+```
 
-sudo apt install jq
+The script will prompt for connection details. For a Docker Compose deployment, use the **container service names** from `docker-compose.yaml`:
 
-./manage-kong-config.sh \-a
+- Kong host: press Enter (defaults to `localhost`)
+- `express-api` service host: `backend`
+- `document-repository` service host: `document-repository`
 
-#### For Three-Node installation: 
-simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
+**Note:** Kong routes only need to be configured once. They persist in the Kong database across container restarts. Re-run the script only if you need to reconfigure services.
 
-## CRITICAL - Enter the correct hosts and expect the following output:
-
-Bash
-
-govstack@bb-ai-gpu-01:\~/genie-ai-replica-single-node/api-gateway-solution/new-config$ ./manage-kong-config.sh \-a  
-This script will configure your Kong instance.  
-Please provide the required connection details - be sure to enter the correct hosts (this depends on whether you are using a 3-node or single-node config - for single-node, use the container service names - for 3-node, use the infrastructure hostname). The example below shows a single-node config.
-
-\--- Kong Admin API Details \---  
-Enter Kong host \[default: localhost\]:  
-Enter Kong admin port \[default: 8001\]:
-
-\--- Backend Service Details \---  
-Enter 'express-api' service host \[default: localhost\]: backend  
-Enter 'express-api' service port \[default: 3000\]:
-
-Enter 'document-repository' service host \[default: localhost\]: document-repository  
-Enter 'document-repository' service port \[default: 3001\]:
-
-\[2025-11-08 14:12:02\] Applying configuration from kong\_config.json  
-\[2025-11-08 14:12:02\] Using Kong Admin API at: [http://localhost:8001](http://localhost:8001)  
-\[2025-11-08 14:12:02\] Setting 'express-api' to: backend:3000  
-\[2025-11-08 14:12:02\] Setting 'document-repository' to: document-repository:3001  
-\[2025-11-08 14:12:02\] Processing service: express-api  
-\[2025-11-08 14:12:02\] Service 'express-api' applied successfully.  
-...
-
-## 4.3 Nginx Configuration
-
-Nginx acts as the reverse proxy and SSL termination point.
-
-1. Navigate to api-gateway-solution/nginx.  
-2. Select the appropriate configuration file:  
-\* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
-\* For \*\*Three-Node\*\*, use: default.conf.  
-3. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
-
-## 4.4 Domain & Security Configuration (CSP & CORS)
+## 4.3 Domain & Security Configuration (CSP & CORS)
 
 When deploying GENIE.AI to a specific host domain (e.g., genie.agency.gov) or a public IP address other than localhost, you must configure the **Content Security Policy (CSP)** and **Cross-Origin Resource Sharing (CORS)** settings. Failure to do this will result in the browser blocking the application from connecting to the backend API or WebSocket services.
 
@@ -941,20 +919,19 @@ CORS\_ALLOWED\_ORIGINS=https://genie.agency.gov,https://genie-ai.itu.int
 * **Quoting:** Verify that 'self' is enclosed in single quotes, and the whole string is enclosed in double quotes.
 * **System Prompts:** These must be single line strings in the environment or docker will not like them.
 
-### 2\. Update Nginx Configuration
+### 2\. Nginx Configuration (Auto-Rendered)
 
-The Nginx reverse proxy also serves a Content-Security-Policy header which acts as the final gatekeeper. You must ensure the default.conf file matches your environment variables.
+The Nginx configuration is now auto-rendered from `default.conf.template` at container startup using environment variables. No manual editing of nginx config files is needed.
 
-1. Open your active Nginx configuration file (e.g., api-gateway-solution/nginx/default.conf or default.conf-single-node).  
-2. Locate the add\_header Content-Security-Policy directive.  
-3. Append your new domain to the connect-src section.
+Set `CSP_CONNECT_SRC` in your `.env` file to include your domain. The template will automatically use this value for the CSP `connect-src` directive.
 
-**Example Nginx Update:**
+**Example `.env` update:**
 
-Nginx
+```bash
+CSP_CONNECT_SRC='self' https://genie.agency.gov wss://genie.agency.gov
+```
 
-\# Ensure this is on a SINGLE line to avoid syntax errors  
-add\_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int;" always;
+Then restart nginx: `docker compose restart nginx`
 
 ### 3\. Rebuild the Frontend
 
@@ -962,14 +939,10 @@ add\_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsa
 
 If you change the CSP or Domain settings, you must force a rebuild of the frontend container:
 
-Bash
-
-\# For Single Node  
-docker compose down  
-docker compose \-f docker-compose.yaml up --build \-d --force-recreate
-
-\# For Standard/Three-Node  
-TBD
+```bash
+docker compose down
+docker compose up --build -d --force-recreate
+```
 
 ---
 

@@ -65,8 +65,27 @@ services:
       timeout: 5s
       retries: 5
 
-  # Note: before starting up kong you need to create the schema with this command:
-  #       docker compose run --rm kong kong migrations bootstrap
+  # Kong database migrations (runs automatically on first start, idempotent)
+  kong-migrations:
+    image: kong:latest
+    restart: "no"
+    networks:
+      - genieai_network
+    environment:
+      - KONG_DATABASE=${KONG_DATABASE:-postgres}
+      - KONG_PG_HOST=${KONG_PG_HOST:-kong-database}
+      - KONG_PG_USER=${KONG_PG_USER:-kong}
+      - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      kong-database:
+        condition: service_healthy
+    command: >
+      bash -c "
+        kong migrations bootstrap 2>/dev/null ||
+        kong migrations up &&
+        kong migrations finish
+      "
+
   kong:
     image: kong:latest
     restart: unless-stopped
@@ -88,6 +107,8 @@ services:
     depends_on:
       kong-database:
         condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
     ports:
       - "${KONG_PROXY_PORT:-8010}:8010"
       - "${NGINX_HTTPS_PORT_ALT:-8443}:8443"
@@ -97,23 +118,6 @@ services:
     volumes:
       - ./api-gateway-solution/kong_logs:/var/log/kong
 
-  # Note: before firing up all the other services, the kong configuration needs to be adapted and loaded
-  #       1) Modify the addresses of the node:
-  #          vi api-gateway-solution/new-config/kong_config.json
-  #            -- modify the "host": "e2e-109-51" for the "express-api" service to "host": "backend"
-  #            -- it still runs on port 3000 so no problem
-  #            -- modify the "host": "e2e-109-51" for the document-repository service to "host": "document-repository"i
-  #            -- it still runs on port 3001 so no problem
-  #       2) Prepare to apply the configuration to Kong
-  #          cd api-gateway-solution/new-config/
-  #          chmod +x manage-kong-config.sh
-  #          vi manage-kong-config.sh
-  #            -- modify the KONG_PUBLIC_URL to match the config change KONG_PUBLIC_URL="http://localhost:8010"
-  #       3) Install jq
-  #          apt update
-  #          apt install jq
-  #       4) Apply the configuration to Kong
-  #          ./manage-kong-config.sh -a
   frontend:
     build:
       context: ./components/gov-chat-frontend
@@ -271,7 +275,14 @@ services:
     container_name: nginx
     restart: unless-stopped
     ports:
+      - "${NGINX_HTTP_PORT:-80}:80" # HTTP public access (redirects to HTTPS)
       - "${NGINX_HTTPS_PORT:-443}:443" # HTTPS public access
+    environment:
+      - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
+      - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
+      - KONG_PROXY_HOST=${KONG_PROXY_HOST:-kong}
+      - NGINX_FRONTEND_HOST=${NGINX_FRONTEND_HOST:-frontend}
+      - NGINX_FRONTEND_PORT=${NGINX_FRONTEND_PORT:-8090}
     volumes:
       - ./api-gateway-solution/nginx/conf:/etc/nginx/conf.d
       - ./api-gateway-solution/nginx/entrypoint.sh:/scripts/entrypoint.sh:ro

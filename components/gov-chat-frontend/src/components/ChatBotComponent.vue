@@ -2454,6 +2454,7 @@ html[data-theme="dark"] .loading-spinner .loading-text {
 .fast-actions-section {
   width: 100%;
   max-width: 800px;
+  margin-bottom: 24px;
 }
 
 .section-header {
@@ -2480,31 +2481,30 @@ html[data-theme="dark"] .loading-spinner .loading-text {
 
 .market-prices-section {
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto 32px auto;
+  max-width: 800px;
 }
 
 .market-cards {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 
 @media (max-width: 1024px) {
   .market-cards {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
 @media (max-width: 768px) {
   .market-cards {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 480px) {
   .market-cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 

@@ -5,10 +5,21 @@ import os
 
 app = FastAPI()
 
+# Required environment variables - no defaults for security
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL")
+AUTH_SERVICE_USERNAME = os.getenv("AUTH_SERVICE_USERNAME")
+AUTH_SERVICE_PASSWORD = os.getenv("AUTH_SERVICE_PASSWORD")
+
+if not all([AUTH_SERVICE_URL, AUTH_SERVICE_USERNAME, AUTH_SERVICE_PASSWORD]):
+    raise ValueError(
+        "Missing required environment variables: AUTH_SERVICE_URL, "
+        "AUTH_SERVICE_USERNAME, AUTH_SERVICE_PASSWORD"
+    )
+
 auth = AuthService(
-    os.getenv("AUTH_SERVICE_URL", "https://genie-ai.itu.int/"),
-    os.getenv("AUTH_SERVICE_USERNAME", "genie-ai-manager"),
-    os.getenv("AUTH_SERVICE_PASSWORD", "1357924680+Manager")
+    AUTH_SERVICE_URL,
+    AUTH_SERVICE_USERNAME,
+    AUTH_SERVICE_PASSWORD
 )
 
 @app.get("/get-token")

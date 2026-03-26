@@ -21,7 +21,7 @@ from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, 
 from comps.cores.proto.genieai_api_protocol import ChatCompletionRequest, RetrievalRequest, RetrievalRequestArangoDB
 
 from .config import (
-    ARANGO_DB_NAME,
+    ARANGO_DB,
     ARANGO_DISTANCE_STRATEGY,
     ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
@@ -120,10 +120,10 @@ class GenieaiArangoRetriever(OpeaComponent):
         self.client = ArangoClient(hosts=ARANGO_URL)
         sys_db = self.client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
-        if not sys_db.has_database(ARANGO_DB_NAME):
-            sys_db.create_database(ARANGO_DB_NAME)
+        if not sys_db.has_database(ARANGO_DB):
+            sys_db.create_database(ARANGO_DB)
 
-        self.db = self.client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+        self.db = self.client.db(name=ARANGO_DB, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
         if logflag:
             logger.debug(f"Connected to ArangoDB {self.db.version()}.")
 

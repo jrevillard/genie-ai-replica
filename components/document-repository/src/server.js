@@ -8,6 +8,25 @@ const { Worker } = require('worker_threads'); // [ADDED] For non-blocking execut
 const app = require('./app');
 const appConfig = require('./config/appConfig');
 const { logger } = require('../shared-lib');
+
+// Validate required environment variables
+const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_PASSWORD', 'JWT_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
+if (missingEnvVars.length > 0) {
+  logger.error('Missing required environment variables:', { missing: missingEnvVars });
+  throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
+}
+
+// Validate required secrets in production
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction) {
+  const requiredSecrets = ['ARANGO_PASSWORD', 'JWT_SECRET'];
+  const missingSecrets = requiredSecrets.filter(key => !process.env[key] || process.env[key].includes('default') || process.env[key].includes('change'));
+  if (missingSecrets.length > 0) {
+    logger.error('Missing or insecure secrets in production:', { missing: missingSecrets });
+    throw new Error(`Production requires secure values for: ${missingSecrets.join(', ')}`);
+  }
+}
 // const crawlWorker = require('./workers/crawlWorker'); // [MODIFIED] Handled via Worker Thread now
 
 // [ADDED] High Concurrency Global Tuning

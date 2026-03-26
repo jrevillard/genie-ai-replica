@@ -23,7 +23,7 @@ The system is designed for a production-like setup with security best practices 
 - Environment variables (optional):
   - `LOGIN_PASSWORD`: For automated testing in `restore-kong-config.sh`.
 - Backup files: Stored in `kong_backups/` directory.
-- Custom files: Ensure `./pg_hba.conf`, `./kong_logs`, `./nginx/conf`, `./nginx/certs` are present or created as needed.
+- Custom files: Ensure `./pg_hba.conf`, `./kong_logs`, `./nginx/conf` are present or created as needed.
 
 ## Docker Compose Setup
 
@@ -70,8 +70,9 @@ The `docker-compose.yaml` file defines a multi-container application stack using
 
 - **nginx**: NGINX reverse proxy.
   - Image: `nginx:latest`.
-  - Ports: `80` (HTTP), `443` (HTTPS).
-  - Volumes: `./nginx/conf` for configs, `./nginx/certs` for SSL certs, `nginx_conf` and `nginx_certs` for additional persistence.
+  - Ports: `443` (HTTPS).
+  - Volumes: `./nginx/conf` for configs, `nginx_conf` for persistence.
+  - Secrets: `server_cert`, `server_key` for SSL (auto-generated in dev if not provided).
   - Depends on: `kong`.
 
 - **zap**: OWASP ZAP for automated security testing.
@@ -83,7 +84,7 @@ The `docker-compose.yaml` file defines a multi-container application stack using
 ### Networks and Volumes
 
 - **Network**: All services connected to `kong-net` (bridge driver) for internal communication.
-- **Volumes**: Persistent storage for databases (`kong_data`, `mongo_data`, `keycloak_data`), NGINX configs/certs (`nginx_conf`, `nginx_certs`), ZAP data (`zap_data`), and Kong logs.
+- **Volumes**: Persistent storage for databases (`kong_data`, `mongo_data`, `keycloak_data`), NGINX configs (`nginx_conf`), ZAP data (`zap_data`), and Kong logs.
 
 ### Usage
 
@@ -201,17 +202,48 @@ Manages the rate-limiting plugin (ID: `13e146bb-0dff-4bfa-a9ca-95b8189ffb03`) on
 
 NGINX handles external traffic, enforces security, and routes requests. Config files: `default.conf` (main server block) and `security-headers.conf` (shared headers).
 
+### SSL Certificates (Cloud-Native with Docker Secrets)
+
+**IMPORTANT**: SSL certificates use Docker secrets for cloud-native deployment.
+
+#### Development (Self-Signed)
+
+The nginx container automatically generates self-signed certificates on startup if no Docker secrets are provided. No manual setup required.
+
+#### Production (Docker Secrets)
+
+For production, provide SSL certificates via Docker secrets:
+
+```yaml
+secrets:
+  server_cert:
+    file: /path/to/production/certs/server.crt
+  server_key:
+    file: /path/to/production/certs/server.key
+```
+
+Or use Docker Swarm secrets:
+```bash
+echo "certificate-content" | docker secret create server_cert -
+echo "private-key-content" | docker secret create server_key -
+```
+
+#### Certificate Sources:
+- Let's Encrypt (certbot)
+- Your organization's PKI
+- Cloud provider SSL services (AWS ACM, GCP Cert Manager, Azure Key Vault)
+
 ### Setup
 
 1. Place `default.conf` in `/etc/nginx/conf.d/` (or include it in `nginx.conf`).
 2. Place `security-headers.conf` in `/etc/nginx/conf.d/`.
-3. Ensure SSL certs are in `/etc/nginx/certs/`.
+3. SSL certs are provided via Docker secrets (auto-generated in development).
 4. Reload NGINX: `nginx -s reload`.
 
 ### Key Configuration Details
 
 - **HTTP to HTTPS Redirect**: All HTTP (port 80) redirects to HTTPS (port 443).
-- **SSL/TLS**: Uses modern ciphers, session caching, and provided certs.
+- **SSL/TLS**: Uses modern ciphers, session caching, and Docker secrets (auto-generated in development if not provided).
 - **Security Headers**: Included via `security-headers.conf`:
   - X-Content-Type-Options, X-Frame-Options, X-XSS-Protection.
   - Strict-Transport-Security (HSTS with preload).

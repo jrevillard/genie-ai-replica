@@ -1,12 +1,3 @@
-# Map for dynamic service resolution (prevents startup failure if services are down)
-map $host $frontend_host {
-    default frontend;
-}
-
-map $host $kong_host {
-    default kong;
-}
-
 server {
     listen 80;
     listen [::]:80;
@@ -16,17 +7,13 @@ server {
     include conf.d/security-headers.conf;
 
     # Redirect all HTTP traffic to HTTPS
-    return 301 https://localhost$request_uri;
+    return 301 https://${NGINX_PUBLIC_DOMAIN}$request_uri;
 }
 
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
     server_name _;
-
-    # Docker DNS resolver for dynamic service discovery
-    resolver 127.0.0.11 valid=30s;
-    resolver_timeout 5s;
 
     # SSL configuration
     ssl_certificate /etc/nginx/certs/server.crt;
@@ -66,7 +53,7 @@ server {
 
         # --- Location-specific headers ---
         add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
-        add_header Access-Control-Allow-Origin "https://localhost" always;
+        add_header Access-Control-Allow-Origin "https://${NGINX_PUBLIC_DOMAIN}" always;
         add_header Cache-Control "public, max-age=86400";
         try_files $uri =404;
     }
@@ -83,7 +70,7 @@ server {
         
         # --- Location-specific headers ---
         add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
-        add_header Access-Control-Allow-Origin "https://localhost" always;
+        add_header Access-Control-Allow-Origin "https://${NGINX_PUBLIC_DOMAIN}" always;
 
         try_files $uri =404;
     }
@@ -100,7 +87,7 @@ server {
         
         # --- Location-specific headers (CORS) ---
         if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' 'https://localhost' always;
+            add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
             add_header 'Access-Control-Allow-Credentials' 'true' always;
@@ -108,13 +95,13 @@ server {
             return 204;
         }
     
-        add_header 'Access-Control-Allow-Origin' 'https://localhost' always;
+        add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
         add_header 'Access-Control-Allow-Credentials' 'true' always;
     
         # --- Proxy settings to KONG ---
-        proxy_pass http://$kong_host:8000/api/;
+        proxy_pass http://${KONG_PROXY_HOST}:8000/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -142,7 +129,7 @@ server {
         add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
 
         # --- Proxy settings to VUE APP ---
-        proxy_pass http://$frontend_host:8090;
+        proxy_pass http://${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -160,12 +147,12 @@ server {
         error_page 404 = @frontend_spa;
 
         # --- Location-specific headers (CSP) ---
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://localhost wss://genie-ai.itu.int:443 ws://localhost:8090 wss://localhost:8090 ws://e2e-g2-109.ssdcloudindia.net:443 wss://e2e-g2-109.ssdcloudindia.net:443; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://${NGINX_PUBLIC_DOMAIN} wss://genie-ai.itu.int:443 ws://localhost:8090 wss://localhost:8090 ws://e2e-g2-109.ssdcloudindia.net:443 wss://e2e-g2-109.ssdcloudindia.net:443; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
     }
 
     # Named location for SPA fallback
     location @frontend_spa {
-        proxy_pass http://$frontend_host:8090;
+        proxy_pass http://${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host genie-ai.itu.int;
         rewrite ^ /index.html break;

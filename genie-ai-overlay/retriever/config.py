@@ -200,8 +200,8 @@ DISTANCE_STRATEGY = os.getenv("DISTANCE_STRATEGY", "IP")
 # ArangoDB Connection configuration
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_USERNAME = os.getenv("ARANGO_USERNAME", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "test")
-ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD")
+ARANGO_DB = os.getenv("ARANGO_DB", "genie-ai")
 
 # ArangoDB Vector configuration
 ARANGO_GRAPH_NAME = os.getenv("RETRIEVER_ARANGO_GRAPH_NAME", "GRAPH")

@@ -191,6 +191,17 @@
           </h2>
         </div>
 
+        <!-- Insights Section -->
+        <div class="insights-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ t('charts.insights') }}</h3>
+          </div>
+          <div class="insights-cards">
+            <CropHealthSummaryCard @click="openChart('crop-health')" />
+            <PestAlertSummaryCard @click="openChart('pest-alert')" />
+          </div>
+        </div>
+
         <!-- Fast Actions Section -->
         <div class="fast-actions-section">
           <div class="section-header">
@@ -2433,6 +2444,13 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   margin-bottom: 24px;
 }
 
+.insights-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 .fast-actions-section {
   width: 100%;
   max-width: 800px;
@@ -2468,25 +2486,25 @@ html[data-theme="dark"] .loading-spinner .loading-text {
 
 .market-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 12px;
 }
 
 @media (max-width: 1024px) {
   .market-cards {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
 @media (max-width: 768px) {
   .market-cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
 @media (max-width: 480px) {
   .market-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

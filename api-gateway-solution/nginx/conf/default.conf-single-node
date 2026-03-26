@@ -9,7 +9,7 @@ server {
     ssl_prefer_server_ciphers on;
 
     # Single, comprehensive CSP for the entire application
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' wss: ws:;" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://api.worldbank.org wss: ws:;" always;
 
     # Other security headers
     add_header X-Content-Type-Options "nosniff" always;

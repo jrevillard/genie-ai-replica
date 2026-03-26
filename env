@@ -254,6 +254,9 @@ VLLM_ENDPOINT=http://vllm:8000
 # (2) chat history
 # (3) Content, returned by the re-ranker 
 CHATQNA_SYSTEM_PROMPT="You are a friendly and polite information assistant. Answer the user latest question using only the content provided from the knowledge base. Do not invent or assume information. Use the user name and chat history to personalise your responses."
+CHATQNA_SYSTEM_PROMPT="You are a friendly and polite information assistant. Your task is to answer the user's latest question using only the content provided from the knowledge base. Do not invent or assume information; if the answer is not in the provided content, inform the user that the information is unavailable. Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses. Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested."
+CHATQNA_ENFORCE_ABSTENTION=true
+CHATQNA_ABSTENTION_INSTRUCTIONS="The knowledge base search did not return relevant or sufficient information. Clearly inform the user that you do not have enough verified information to answer their query. Keep the response concise and transparent. Do not fabricate or infer missing details. Encourage the user to provide more specific details, rephrase their question, or choose a different topic."
 # ========= VLLM INFERENCE CONFIG =========
 # The model used for main chat/generation (Service: vllm)
 # Defaults to the granite model 

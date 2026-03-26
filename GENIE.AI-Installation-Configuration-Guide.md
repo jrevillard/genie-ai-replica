@@ -431,6 +431,8 @@ These variables define the internal wiring and ports for the AI microservices.
 | LLM\_SERVER\_HOST\_IP | Hostname for the vLLM inference engine. | vllm |
 | LLM\_SERVER\_PORT | Port for the vLLM inference engine. | 8000 |
 | CHATQNA\_SYSTEM\_PROMPT | Main ChatQnA system prompt for responding to user queries based on retrieved content. | "You are a friendly and polite information assistant..." |
+| CHATQNA\_ENFORCE\_ABSTENTION | Enables or disables strict abstention behavior by the LLM | true |
+| CHATQNA\_ABSTENTION\_INSTRUCTIONS | Custom instructions to enforce abstention when no relevant info is retrieved | "The knowledge base search did not return relevant or sufficient information. You should clearly inform the user ..." |
 | GUARDRAIL\_SERVICE\_HOST\_IP | Hostname for the guardrail service. | guardrail |
 | GUARDRAIL\_SERVICE\_PORT | Port for the guardrail service. | 9090 |
 | TRANSLATION\_SERVICE\_HOST\_IP | Hostname for the translation service. | translation |
@@ -560,28 +562,55 @@ Configuration for the reranker logic
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker to the ChatQnA workflow. Increasing the number may improve response quality, while decreasing the value may reduce latency. | 3 | 
+| RERANKING\_STRATEGY | Defines how the final subset of chunks is selected after reranking. Possible values are: 'slice', 'threshold', and 'knee_threshold'. | threshold |
+| RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker if RERANKING_STRATEGY is 'slice'. | 3 | 
+| RERANKING\_THRESHOLD | Defines the minimum relevance score required for a chunk to be included if RERANKING_STRATEGY is 'threshold'. | 0.75 |
+
 
 ## The Reranker
 
 The Reranker acts as the final quality filter. It receives the top candidates from the retriever and performs a more computationally intensive **"cross-encoder"** analysis to re-score the relevance of each chunk against the actual user query.
 
-### Key Parameter: `RERANKER_TOP_N`
+### Key Parameters 
+#### `RERANKING_STRATEGY`
+Defines how the final subset of chunks is selected after reranking.
 
-In the context of **GENIE.AI**, `RERANKER_TOP_N` is currently the key configurable high-level reranker parameter. This parameter controls the final number of high-confidence chunks sent to the LLM as context for response generation.
+**slice (default)**
+Selects the top N chunks based on ranking score. → Controlled by RERANKER_TOP_N.
 
-#### Increasing the value of `RERANKER_TOP_N`
+**threshold**
+Selects all chunks whose relevance score exceeds a fixed threshold. → Controlled by RERANKING_THRESHOLD.
+
+**knee_threshold**
+Dynamically determines a cutoff point (“knee” or “elbow”) in the score distribution using the kneed algorithm. → Automatically balances recall and precision based on score drop-off.
+
+#### `RERANKER_TOP_N`
+This parameter controls the final number of high-confidence chunks sent to the LLM as context for response generation.
+
+##### Increasing the value of `RERANKER_TOP_N`
 - **Improves the "Recall"** for the LLM. It is more likely to capture the full answer if the information is spread across multiple documents.
 - Can introduce **"Context Stuffing."** If the extra chunks are only marginally relevant, they can distract the LLM or lead to **"lost in the middle"** phenomena, where the model ignores the most relevant data.
 - **Increases** the time to generate a response. A larger context window requires the LLM to perform more computation during the "prefill" stage, and increased prompt size can lead to higher token costs and slower output.
 
-#### Reducing the value of `RERANKER_TOP_N`
+##### Reducing the value of `RERANKER_TOP_N`
 - Creates a **higher risk of missing the answer.** If reranker's top results are very similar, or if answering requires four specific pieces of information, a low N will result in incomplete or **"I don't know"** responses.
 - Significantly **speeds up** response times. Smaller prompts allow for faster processing by the LLM and reduce memory consumption on inference servers.
 - Forces the LLM to focus only on high-confidence matches, which can reduce hallucinations caused by conflicting or noisy information in lower-ranked chunks.
 
+#### `RERANKING_THRESHOLD`
+Defines the minimum relevance score required for a chunk to be included.
 
-**Crawler Configuration (implemented in the doc repo)**  
+##### Increasing the value of `RERANKING_THRESHOLD`
+- Produces fewer, higher-confidence chunks;
+- Increases the risk of missing information (especially when spread across multiple chunks and mixed with other context);
+
+##### Reducing the value of `RERANKING_THRESHOLD`
+- Produces more context, potentially leading to more comprehensive responses;
+- Increases noise and adds more 'cost' to response generation;
+
+
+
+## Crawler Configuration (implemented in the doc repo) 
 These variables control the specifics of how crawls are done.
 
 | Variable | Description | Example Value |
@@ -800,7 +829,8 @@ While the arango-vector-db service is running, the specific application database
 
 Bash
 
-\# Note:- the database may have already bean iniitalized
+\# Note:- the database may have already bean iniitalized<b>
+
 docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;" 
 
 docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
@@ -824,7 +854,8 @@ sudo apt install jq
 
 ./manage-kong-config.sh \-a
 
-#### (For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
+#### For Three-Node installation: 
+simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
 
 ## CRITICAL - Enter the correct hosts and expect the following output:
 

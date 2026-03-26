@@ -59,6 +59,29 @@ else
     generate_self_signed_cert
 fi
 
+# Pre-flight check: envsubst must be available
+command -v envsubst >/dev/null 2>&1 || { echo "ERROR: envsubst is required but not installed"; exit 1; }
+
+# Set defaults for template variables if not provided
+# NOTE: 'self' below is the CSP keyword (literal), not shell quoting.
+# It must appear as literal 'self' in the rendered nginx config for CSP to work.
+export NGINX_PUBLIC_DOMAIN="${NGINX_PUBLIC_DOMAIN:-localhost}"
+# CSP_CONNECT_SRC format: "'self' https://api.example.com wss://api.example.com"
+export CSP_CONNECT_SRC="${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}"
+export KONG_PROXY_HOST="${KONG_PROXY_HOST:-kong}"
+export NGINX_FRONTEND_HOST="${NGINX_FRONTEND_HOST:-frontend}"
+export NGINX_FRONTEND_PORT="${NGINX_FRONTEND_PORT:-8090}"
+
+# Render nginx config from template
+echo "Rendering nginx config from template..."
+envsubst '${NGINX_PUBLIC_DOMAIN} ${CSP_CONNECT_SRC} ${KONG_PROXY_HOST} ${NGINX_FRONTEND_HOST} ${NGINX_FRONTEND_PORT}' \
+    < /etc/nginx/conf.d/default.conf.template \
+    > /etc/nginx/conf.d/default.conf
+
+# Validate rendered config
+echo "Validating nginx configuration..."
+nginx -t
+
 # Start nginx
-echo "🚀 Starting nginx..."
+echo "Starting nginx..."
 exec nginx -g 'daemon off;'

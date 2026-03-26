@@ -3,9 +3,6 @@ server {
     listen [::]:80;
     server_name _;
 
-    # include the security headers
-    include conf.d/security-headers.conf;
-
     # Redirect all HTTP traffic to HTTPS
     return 301 https://${NGINX_PUBLIC_DOMAIN}$request_uri;
 }
@@ -24,11 +21,12 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 10m;
 
-    # include the security headers. These are the defaults.
-    include conf.d/security-headers.conf;
-
     # set a 50MB file size limit
     client_max_body_size 50m;
+
+    # Hide server info (server context — not allowed inside if blocks)
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Server;
 
     location ~ /\. {
         deny all;
@@ -43,50 +41,30 @@ server {
 
     # For robots.txt, sitemap.xml and other specific text files
     location ~* \.(txt|xml)$ {
-        # --- Copied common headers ---
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
-
-        # --- Location-specific headers ---
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
-        add_header Access-Control-Allow-Origin "https://${NGINX_PUBLIC_DOMAIN}" always;
+        include conf.d/security-headers.conf;
         add_header Cache-Control "public, max-age=86400";
         try_files $uri =404;
     }
 
     # For the /uploads/ location specifically
     location /Uploads/ {
-        # --- Copied common headers ---
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
-        
-        # --- Location-specific headers ---
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
-        add_header Access-Control-Allow-Origin "https://${NGINX_PUBLIC_DOMAIN}" always;
-
+        include conf.d/security-headers.conf;
         try_files $uri =404;
     }
 
-    # Backend API traffic also goes to KONG
+    # Backend API traffic proxied to Kong
+    # CORS Authority: nginx is the single authoritative CORS layer.
+    # If Kong has CORS plugins enabled, they must be disabled to avoid duplicate headers.
+    # Note: CORS origin uses NGINX_PUBLIC_DOMAIN (single origin at TLS termination),
+    # not CORS_ALLOWED_ORIGINS (multi-origin, used by backend only).
     location /api/ {
-        # --- Copied common headers ---
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
-        
-        # --- Location-specific headers (CORS) ---
+        include conf.d/security-headers.conf;
+
+        # CORS headers for API requests
+        # Note: nginx 'if' blocks do NOT inherit add_header from parent context,
+        # so we must re-include security-headers.conf here for OPTIONS responses.
         if ($request_method = 'OPTIONS') {
+            include conf.d/security-headers.conf;
             add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
             add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
@@ -94,13 +72,16 @@ server {
             add_header 'Access-Control-Max-Age' 86400 always;
             return 204;
         }
-    
+
         add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
         add_header 'Access-Control-Allow-Credentials' 'true' always;
-    
-        # --- Proxy settings to KONG ---
+
+        # API-specific CSP
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+
+        # Proxy settings to Kong
         proxy_pass http://${KONG_PROXY_HOST}:8000/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -113,22 +94,16 @@ server {
         proxy_connect_timeout 300s;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
-
-        # --- Location-specific headers (CSP) ---
-        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
     }
 
     # Frontend Vue.js application
     location / {
-        # --- Copied common headers ---
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        include conf.d/security-headers.conf;
 
-        # --- Proxy settings to VUE APP ---
+        # Frontend CSP with parameterized connect-src
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+
+        # Proxy settings to Vue frontend
         proxy_pass http://${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -136,7 +111,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Host genie-ai.itu.int;
+        proxy_set_header Host ${NGINX_PUBLIC_DOMAIN};
         proxy_buffering off;
         proxy_connect_timeout 300s;
         proxy_read_timeout 3600s;
@@ -145,16 +120,21 @@ server {
         # Handle SPA fallback - intercept 404s and serve index.html
         proxy_intercept_errors on;
         error_page 404 = @frontend_spa;
-
-        # --- Location-specific headers (CSP) ---
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://${NGINX_PUBLIC_DOMAIN} wss://genie-ai.itu.int:443 ws://localhost:8090 wss://localhost:8090 ws://e2e-g2-109.ssdcloudindia.net:443 wss://e2e-g2-109.ssdcloudindia.net:443; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
     }
 
     # Named location for SPA fallback
     location @frontend_spa {
+        include conf.d/security-headers.conf;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+
         proxy_pass http://${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
         proxy_http_version 1.1;
-        proxy_set_header Host genie-ai.itu.int;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host ${NGINX_PUBLIC_DOMAIN};
         rewrite ^ /index.html break;
     }
 }

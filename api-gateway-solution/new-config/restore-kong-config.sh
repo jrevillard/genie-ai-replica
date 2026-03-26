@@ -12,8 +12,10 @@
 
 # Constants
 KONG_ADMIN_URL="http://localhost:8001"
-KONG_PUBLIC_URL="http://e2e-82-109.ssdcloudindia.net:8000"
-USER_ID="2133"
+KONG_PUBLIC_URL="${KONG_PUBLIC_URL:-http://localhost:8010}"
+USER_ID="${USER_ID:-1}"
+TARGET_HOST="${TARGET_HOST:-backend}"
+TARGET_PORT="${TARGET_PORT:-3000}"
 LOG_FILE="kong_restore.log"
 
 # Log function
@@ -39,6 +41,10 @@ usage() {
     echo "  -h                Display this help message"
     echo "Environment Variables:"
     echo "  LOGIN_PASSWORD    Password for testing (optional, used if not prompted)"
+    echo "  KONG_PUBLIC_URL   Kong proxy URL (default: http://localhost:8010)"
+    echo "  USER_ID           User ID for force-logout test (default: 1)"
+    echo "  TARGET_HOST       Backend target host (default: backend)"
+    echo "  TARGET_PORT       Backend target port (default: 3000)"
     exit 1
 }
 
@@ -273,29 +279,37 @@ restore_config() {
     done < <(echo "$config_json" | jq -c '.upstreams[]')
 
     # Add upstream target
-    log "Adding target e2e-109-51:3000 for upstream express-api-servers"
+    log "Adding target ${TARGET_HOST}:${TARGET_PORT} for upstream express-api-servers"
     existing_targets=$(curl -s "$KONG_ADMIN_URL/upstreams/express-api-servers/targets")
-    target_exists=$(echo "$existing_targets" | jq -r '.data[] | select(.target == "e2e-109-51:3000" and .weight == 100) | .id')
+    target_exists=$(echo "$existing_targets" | jq -r --arg target "${TARGET_HOST}:${TARGET_PORT}" '.data[] | select(.target == $target and .weight == 100) | .id')
     if [ -z "$target_exists" ]; then
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/upstreams/express-api-servers/targets" \
             -H "Content-Type: application/json" \
-            -d '{"target":"e2e-109-51:3000","weight":100}')
+            -d "{\"target\":\"${TARGET_HOST}:${TARGET_PORT}\",\"weight\":100}")
         http_code=$(echo "$response" | tail -n1)
         body=$(echo "$response" | head -n -1)
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "Target e2e-109-51:3000 added successfully"
+            log "Target ${TARGET_HOST}:${TARGET_PORT} added successfully"
         else
-            log "ERROR: Failed to add target e2e-109-51:3000 with HTTP status $http_code"
+            log "ERROR: Failed to add target ${TARGET_HOST}:${TARGET_PORT} with HTTP status $http_code"
             log "Response: $body"
             errors=$((errors + 1))
         fi
     else
-        log "Target e2e-109-51:3000 already exists, skipping"
+        log "Target ${TARGET_HOST}:${TARGET_PORT} already exists, skipping"
     fi
 
     # Patch rate-limiting
     log "Patching global rate-limiting plugin"
-    response=$(curl -s -w "\n%{http_code}" -X PATCH "$KONG_ADMIN_URL/plugins/13e146bb-0dff-4bfa-a9ca-95b8189ffb03" \
+    RATE_LIMIT_PLUGIN_ID=$(curl -s "$KONG_ADMIN_URL/plugins" | jq -r '.data[] | select(.name == "rate-limiting") | .id' | head -1)
+    if [ -z "$RATE_LIMIT_PLUGIN_ID" ]; then
+        log "WARNING: No rate-limiting plugin found, skipping patch"
+    else
+        plugin_count=$(curl -s "$KONG_ADMIN_URL/plugins" | jq '[.data[] | select(.name == "rate-limiting")] | length')
+        if [ "$plugin_count" -gt 1 ]; then
+            log "WARNING: Multiple rate-limiting plugins found ($plugin_count), using first one: $RATE_LIMIT_PLUGIN_ID"
+        fi
+        response=$(curl -s -w "\n%{http_code}" -X PATCH "$KONG_ADMIN_URL/plugins/$RATE_LIMIT_PLUGIN_ID" \
         -H "Content-Type: application/json" \
         -d '{
             "config": {
@@ -303,14 +317,15 @@ restore_config() {
                 "hour": 10000
             }
         }')
-    http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n -1)
-    if [ "$http_code" -eq 200 ]; then
-        log "Global rate-limiting plugin patched successfully"
-    else
-        log "ERROR: Failed to patch global rate-limiting plugin with HTTP status $http_code"
-        log "Response: $body"
-        errors=$((errors + 1))
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n -1)
+        if [ "$http_code" -eq 200 ]; then
+            log "Global rate-limiting plugin patched successfully"
+        else
+            log "ERROR: Failed to patch global rate-limiting plugin with HTTP status $http_code"
+            log "Response: $body"
+            errors=$((errors + 1))
+        fi
     fi
 
     if [ "$errors" -eq 0 ]; then
@@ -377,7 +392,7 @@ test_endpoints() {
         exit 1
     fi
 
-    # Test 2: POST /api/users/admin/users/2133/force-logout
+    # Test 2: POST /api/users/admin/users/{USER_ID}/force-logout
     log "Testing POST /api/users/admin/users/$USER_ID/force-logout"
     response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/users/admin/users/$USER_ID/force-logout" \
         -H "Authorization: Bearer $jwt_token" \

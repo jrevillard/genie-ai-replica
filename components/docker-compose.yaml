@@ -1,34 +1,47 @@
-version: '3.8'
-
+---
 volumes:
   redis_data:
   doc_repo_uploads: {}
   arango_data:
+    driver: local
+
 services:
+  # Load environment variables from parent directory
+  # This allows running docker compose from components/ directory
   arango-vector-db:
     image: arangodb/arangodb:3.12.4
     container_name: arango-vector-db
-    ports:
-      - "8529:8529"
+    # Internal only - no host port mapping needed
+    # ports:
+    #   - "${ARANGO_PORT:-8529}:8529"
     volumes:
-      - /root/arango_data:/var/lib/arangodb3
+      - arango_data:/var/lib/arangodb3
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
-    # https://docs.arangodb.com/3.12/components/arangodb-server/options/
     command: ["--experimental-vector-index=true"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:${ARANGO_PORT:-8529} --server.username root --server.password \"${ARANGO_PASSWORD}\" --javascript.execute-string \"db._version();\""]
+      interval: 10s
+      timeout: 10s
     networks:
       - chatqna_default
 
   frontend:
-    build: ./gov-chat-frontend
+    build:
+      context: ./gov-chat-frontend
+      dockerfile: Dockerfile
     restart: unless-stopped
+    environment:
+      - PORT=8090
+      - VUE_APP_API_URL=${VUE_APP_API_URL:-http://localhost:3000/api}
+      - VUE_PROXY_HOST=${VUE_PROXY_HOST:-localhost}
+      - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
     ports:
-      - "8090:8090"
-    env_file:
-      - ./gov-chat-frontend/.env
+      - "${FRONTEND_PORT:-8090}:8090"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - chatqna_default
 
@@ -36,13 +49,16 @@ services:
     image: redis:7-alpine
     container_name: redis-cache
     restart: unless-stopped
-    ports:
-      - "6379:6379" # Optional: Expose on host for debugging
-    command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "!@#$$5678"
+    # Port mapping disabled - only needed within Docker network
+    # ports:
+    #   - "${TRANSLATION_CACHE_PORT:-6379}:6379"
+    environment:
+      - REDISCLI_AUTH=${TRANSLATION_CACHE_PASSWORD}
+    command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass ${TRANSLATION_CACHE_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -55,57 +71,81 @@ services:
       dockerfile: gov-chat-backend/Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${BACKEND_PORT:-3000}:3000"
     volumes:
       - ./database_backups:/app/database_backups
       - ./logs:/app/logs
       - ./data:/app/data
       - ./gov-chat-backend/Uploads:/app/Uploads
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     environment:
-      - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
-      # Translation Service Configuration
-      - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-cpu}
-      - TRANSLATION_CPU_MODEL_ID=${TRANSLATION_CPU_MODEL_ID:-Xenova/nllb-200-distilled-600M}
-      - TRANSLATION_THREADS=${TRANSLATION_THREADS:-4}
-      - TRANSLATION_BATCHES=${TRANSLATION_BATCHES:-5}
-      - TRANSLATION_CACHE=${TRANSLATION_CACHE:-on}
-      - TRANSLATION_CACHE_HOST=${TRANSLATION_CACHE_HOST:-redis-cache}
-      - TRANSLATION_CACHE_PORT=${TRANSLATION_CACHE_PORT:-6379}
-      - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD:-!@#$$5678}
-      # GPU Translation Configuration (vLLM)
-      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
-      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
-      - VLLM_TRANSLATION_SERVICE_PORT=${VLLM_TRANSLATION_SERVICE_PORT:-9031}
-    env_file:
-      - ./gov-chat-backend/.env
+      # Secrets (required, no defaults in code)
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      # Translation cache (required, no default in code)
+      - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD}
+      # Email configuration (required)
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_SECURE=${EMAIL_SECURE}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_FROM=${EMAIL_FROM}
+      # OPEA AI/ML service override (code default is deployment-specific: 'e2e-109-198')
+      - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
+      # CORS (deployment-specific, localhost defaults)
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090}
+      - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
+
     depends_on:
+      arango-vector-db:
+        condition: service_healthy
       redis-cache:
         condition: service_healthy
     networks:
       - chatqna_default
-  
+
   document-repository:
     build:
       context: .
       dockerfile: document-repository/Dockerfile
     container_name: doc-repo-dev
-    env_file:
-      - ./document-repository/.env
+    # Internal only - no host port mapping needed
+    # ports:
+    #   - "${DOC_REPO_PORT:-3001}:3001"
+    environment:
+      # Secrets (required, no defaults in code)
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
     depends_on:
-      - clamav
-    ports:
-      - "3001:3001"
+      clamav:
+        condition: service_started
+      arango-vector-db:
+        condition: service_healthy
     networks:
       - chatqna_default
     volumes:
       - ./logs:/app/logs
       - doc_repo_uploads:/app/uploads
-  
+    restart: unless-stopped
+
   clamav:
     image: clamav/clamav
     container_name: clamav
-    ports:
-      - "3310:3310" # ClamAV daemon port
+    restart: unless-stopped
+    # Internal only - no host port mapping needed
+    # ports:
+    #   - "3310:3310"
     networks:
       - chatqna_default
 

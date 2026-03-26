@@ -11,7 +11,7 @@ class DatabaseService {
     const databaseName = process.env.ARANGO_DB || 'node-services';
     //const username = 'root';
     const username = process.env.ARANGO_USER || 'root';
-    const password = process.env.ARANGO_PASSWORD || 'test';
+    const password = process.env.ARANGO_PASSWORD;
 
     logger.info(`Initializing Enhanced DatabaseService with COMPLETE RECOVERY:`);
     // Logging the environment to ensure it is being read

@@ -1,30 +1,26 @@
-# Build stage
 FROM node:22.14.0-alpine AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
 COPY package.json package-lock.json ./
 RUN npm install
 
-# Copy the entire project
 COPY . .
-
-# Build the Vue app for production
 RUN npm run build
 
-# Production stage
 FROM node:22.14.0-alpine
 
-# Set working directory
 WORKDIR /app
 
-COPY --from=build /app/dist /app/dist
-COPY --from=build /app/server.js /app/server.js
+RUN npm install -g http-server
 
-# Expose the port the Vue app runs on
+COPY --from=build /app/dist /app/dist
+
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8090
 
-# Serve the built app with SPA routing support
-CMD ["node", "server.js"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+CMD ["sh", "-c", "http-server /app/dist -p ${PORT:-8090} ${HTTP_SERVER_EXTRA_ARGS:-}"]

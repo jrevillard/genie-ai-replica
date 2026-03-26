@@ -89,6 +89,12 @@ class AuthService {
         logger.info('verificationTokens collection already exists, skipping creation');
       }
 
+      if (!collectionNames.includes('users')) {
+        logger.info('Creating users collection...');
+        await this.db.createCollection('users');
+        logger.info('Created users collection successfully');
+      }
+
       await Promise.all([
         this.users.ensureIndex({ type: 'persistent', fields: ['loginName'], unique: true }),
         this.users.ensureIndex({ type: 'persistent', fields: ['email'], unique: true }),

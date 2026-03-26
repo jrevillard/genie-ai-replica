@@ -189,59 +189,6 @@
           <h2 class="quick-help-heading">
             {{ translate("chatbot.whatCanIHelp") }}
           </h2>
-          <p class="quick-help-subtitle">
-            {{ translate("chatbot.quickHelpSubtitle") }}
-          </p>
-        </div>
-
-        <!-- Insights Section -->
-        <div class="insights-section">
-          <div class="section-header">
-            <h3 class="section-title">{{ t('charts.insights') }}</h3>
-          </div>
-          <div class="insights-cards">
-            <CropHealthSummaryCard
-              region="El Salvador"
-              @open-chart="openChart"
-            />
-            <PestAlertSummaryCard
-              region="Central America"
-              @open-chart="openChart"
-            />
-            <!-- Market Price Cards -->
-            <MarketPriceSummaryCard
-              category="maize"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="cropProtection"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="vegetables"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="livestock"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="fertilizer"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="apiary"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="aquaculture"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="harvestStorage"
-              @open-chart="openChart"
-            />
-          </div>
         </div>
 
         <!-- Fast Actions Section -->
@@ -266,6 +213,49 @@
               <div class="quick-help-text">{{ $t(button.textKey) }}</div>
             </div>
           </div>
+          </div>
+        </div>
+
+        <!-- Market Prices Section -->
+        <div class="market-prices-section">
+          <div class="section-header">
+            <h3 class="section-title">{{ t('charts.market.sectionTitle') }}</h3>
+          </div>
+          <div class="market-cards">
+            <!-- Row 1 -->
+            <MarketPriceSummaryCard
+              category="maize"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="cropProtection"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="vegetables"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="livestock"
+              @open-chart="openChart"
+            />
+            <!-- Row 2 -->
+            <MarketPriceSummaryCard
+              category="fertilizer"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="apiary"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="aquaculture"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="harvestStorage"
+              @open-chart="openChart"
+            />
           </div>
         </div>
       </div>
@@ -2468,6 +2458,36 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
+}
+
+.market-prices-section {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto 32px auto;
+}
+
+.market-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1024px) {
+  .market-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .market-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .market-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .quick-help-content {

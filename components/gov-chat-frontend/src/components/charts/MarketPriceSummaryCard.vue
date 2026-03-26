@@ -2,6 +2,7 @@
   <div
     class="market-price-summary-card"
     :class="{ 'dark-mode': isDarkMode }"
+    :style="{ borderColor: `${categoryColor}80` }"
     @click="openChart"
   >
     <div class="card-content">
@@ -12,16 +13,16 @@
           <circle
             cx="50"
             cy="50"
-            r="45"
+            r="44"
             :stroke="backgroundColor"
-            stroke-width="8"
+            stroke-width="6"
             fill="none"
           />
           <!-- Data Line and Fill (if data available) -->
           <g v-if="!loading && timeSeries.length >= 2">
             <defs>
               <linearGradient :id="gradientId" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" :stop-color="categoryColor" stop-opacity="0.3" />
+                <stop offset="0%" :stop-color="categoryColor" stop-opacity="0.2" />
                 <stop offset="100%" :stop-color="categoryColor" stop-opacity="0.05" />
               </linearGradient>
             </defs>
@@ -35,7 +36,7 @@
             <path
               :d="linePath"
               :stroke="categoryColor"
-              stroke-width="3"
+              stroke-width="4"
               fill="none"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -44,18 +45,14 @@
             <circle
               :cx="endPoint.x"
               :cy="endPoint.y"
-              r="4"
+              r="6"
               :fill="categoryColor"
-              :stroke="isDarkMode ? '#1f2937' : '#ffffff'"
-              stroke-width="2"
             />
           </g>
           <!-- Category Icon -->
-          <foreignObject x="20" y="20" width="60" height="60">
-            <div class="icon-container" :style="{ color: categoryColor }">
-              <i :class="categoryIcon" class="category-icon"></i>
-            </div>
-          </foreignObject>
+          <g v-if="svgPath" :fill="categoryColor" transform="translate(30, 30) scale(0.04)">
+            <path :d="svgPath" />
+          </g>
         </svg>
         <!-- Loading Spinner -->
         <div v-if="loading" class="sparkline-loading">
@@ -76,11 +73,6 @@
             :style="{ color: trendColor }"
           ></i>
         </div>
-      </div>
-
-      <!-- Arrow -->
-      <div class="card-arrow">
-        <i class="fas fa-chevron-right"></i>
       </div>
     </div>
   </div>
@@ -123,47 +115,47 @@ export default {
     gradientId() {
       return `gradient-${this.category}`;
     },
-    // Category configuration
+    // Category configuration - using exact Material Design Icons SVG paths to match Flutter app
     categoryConfig() {
       const configs = {
         maize: {
           i18nKey: 'market.maizeGrains',
-          icon: 'fa-seedling',
+          svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z',
           color: '#2E7D32'
         },
         cropProtection: {
           i18nKey: 'market.cropProtection',
-          icon: 'fa-bug',
+          svgPath: 'M20 8h-2V6c0-1.1-.9-2-2-2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2H6c-1.1 0-2 .9-2 2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2c0 1.1.9 2 2 2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2c1.1 0 2-.9 2-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1zm-4 10H8V8h8v10z',
           color: '#D84315'
         },
         vegetables: {
           i18nKey: 'market.fruitsVeggies',
-          icon: 'fa-carrot',
+          svgPath: 'M17 15.2c0 .9-.6 1.7-1.3 2.2-.3.2-.5.4-.6.7-.1.3-.1.6-.1.9v.2c0 .4-.3.8-.8.8H17c.4 0 .8-.3.8-.8v-.2c0-.3 0-.6-.1-.9-.1-.3-.3-.5-.6-.7-.7-.5-1.3-1.3-1.3-2.2 0-1.5 1.2-2.7 2.7-2.7s2.7 1.2 2.7 2.7c0 .9-.6 1.7-1.3 2.2-.3.2-.5.4-.6.7-.1.3-.1.6-.1.9v.2c0 .4-.3.8-.8.8h2.2c.4 0 .8-.3.8-.8v-.2c0-.3 0-.6-.1-.9-.1-.3-.3-.5-.6-.7-.7-.5-1.3-1.3-1.3-2.2 0-1.5 1.2-2.7 2.7-2.7s2.7 1.2 2.7 2.7zM12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8z M12 6c-.55 0-1 .45-1 1v5c0 .55.45 1 1 1s1-.45 1-1V7c0-.55-.45-1-1-1z',
           color: '#558B2F'
         },
         livestock: {
           i18nKey: 'market.livestock',
-          icon: 'fa-drumstick-bite',
+          svgPath: 'M4.5 11.5c0 1 .6 1.9 1.5 2.2v2.3c0 3.5 2.9 6.4 6.4 6.4h.3c3.5 0 6.4-2.9 6.4-6.4v-2.3c.9-.3 1.5-1.2 1.5-2.2 0-1.4-1.1-2.5-2.5-2.5S15.6 10.1 15.6 11.5v1h-7.2v-1c0-1.4-1.1-2.5-2.5-2.5s-2.5 1.1-2.5 2.5zM12 4c1.1 0 2 .9 2 2v2h-4V6c0-1.1.9-2 2-2zm-6 8.5c0-.6.4-1 1-1s1 .4 1 1v3.5c0 1.4 1.1 2.5 2.5 2.5h3c1.4 0 2.5-1.1 2.5-2.5V12.5c0-.6.4-1 1-1s1 .4 1 1v3.5c0 2.5-2 4.5-4.5 4.5h-3c-2.5 0-4.5-2-4.5-4.5v-3.5z',
           color: '#8D6E63'
         },
         fertilizer: {
           i18nKey: 'market.fertilizer',
-          icon: 'fa-flask',
+          svgPath: 'M19 8h-2V6c0-1.1-.9-2-2-2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2H6c-1.1 0-2 .9-2 2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2c0 1.1.9 2 2 2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2c1.1 0 2-.9 2-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1zm-4 10H8V8h8v10z',
           color: '#F9A825'
         },
         apiary: {
           i18nKey: 'market.apiary',
-          icon: 'fa-hexagon-nodes',
+          svgPath: 'M12 2L2 22h20L12 2zm0 3.5L18.5 20H5.5L12 5.5z',
           color: '#F57F17'
         },
         aquaculture: {
           i18nKey: 'market.aquaculture',
-          icon: 'fa-fish',
+          svgPath: 'M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.41.21.75-.19.6-.6-.33-.89-.55-1.92-.55-2.95 0-2.05 1.05-3.95 2.6-5.35.1-.1.15-.25.1-.4-.05-.15-.2-.2-.35-.25-.6-.15-1.25-.25-1.9-.25-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 11.9 1 13v-7c1.45-1.1 3.55-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.41.21.75-.19.6-.6-.33-.89-.55-1.92-.55-2.95 0-1.45.5-2.8 1.35-3.9.1-.15.05-.35-.1-.45-.1-.05-.25-.05-.35 0-.65.35-1.35.55-2.05.55-1.95 0-4.05-.4-5.5-1.5z',
           color: '#0288D1'
         },
         harvestStorage: {
           i18nKey: 'market.harvestStorage',
-          icon: 'fa-warehouse',
+          svgPath: 'M19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 18H5V4h14v16z M7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z',
           color: '#00838F'
         }
       };
@@ -175,8 +167,8 @@ export default {
     categoryColor() {
       return this.categoryConfig.color || '#3B82F6';
     },
-    categoryIcon() {
-      return `fas ${this.categoryConfig.icon || 'fa-chart-line'}`;
+    svgPath() {
+      return this.categoryConfig.svgPath || '';
     },
     timeSeries() {
       if (!this.priceData?.data) return [];
@@ -337,31 +329,38 @@ export default {
 
 <style scoped>
 .market-price-summary-card {
-  padding: 12px;
-  background: var(--bg-card);
+  padding: 8px;
+  background: #f5f5f5;
   border-radius: 8px;
-  border: 2px solid transparent;
+  border: 2px solid rgba(0, 0, 0, 0.12);
   cursor: pointer;
   transition: all 0.2s;
-  height: 70px;
+  height: 100px;
+  display: flex;
+  align-items: center;
 }
 
 .market-price-summary-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.dark-mode.market-price-summary-card {
+  background: #424242;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .card-content {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 100%;
+  gap: 6px;
+  width: 100%;
 }
 
 /* Sparkline */
 .sparkline-container {
-  width: 45px;
-  height: 45px;
+  width: 36px;
+  height: 36px;
   position: relative;
   flex-shrink: 0;
 }
@@ -371,25 +370,12 @@ export default {
   height: 100%;
 }
 
-.icon-container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-.category-icon {
-  opacity: 0.8;
-}
-
 .sparkline-loading {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 14px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -400,22 +386,23 @@ export default {
 }
 
 .card-label {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-secondary);
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0.7;
 }
 
 .card-value-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .card-value {
-  font-size: 14px;
+  font-size: 10px;
   font-weight: bold;
   color: var(--text-primary);
   white-space: nowrap;
@@ -424,45 +411,37 @@ export default {
 }
 
 .trend-icon {
-  font-size: 11px;
+  font-size: 9px;
   flex-shrink: 0;
 }
 
-/* Arrow */
+/* Arrow - REMOVED to match Flutter */
 .card-arrow {
-  color: var(--text-secondary);
-  font-size: 14px;
-  opacity: 0.5;
-  flex-shrink: 0;
-}
-
-/* Dark Mode */
-.dark-mode.market-price-summary-card {
-  border-color: rgba(255, 255, 255, 0.1);
+  display: none;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .market-price-summary-card {
-    padding: 10px;
-    height: 65px;
+    padding: 8px;
+    height: 100px;
   }
 
   .sparkline-container {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
 
-  .icon-container {
-    font-size: 14px;
+  .card-label {
+    font-size: 9px;
   }
 
   .card-value {
-    font-size: 13px;
+    font-size: 10px;
   }
 
   .trend-icon {
-    font-size: 10px;
+    font-size: 9px;
   }
 }
 </style>

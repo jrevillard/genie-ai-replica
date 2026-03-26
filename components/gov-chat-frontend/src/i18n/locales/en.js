@@ -1507,7 +1507,8 @@ export default {
     ingest: 'Ingest',
     retract: 'Retract',
     loading: 'Loading...',
-    refresh: 'Refresh'
+    refresh: 'Refresh',
+    submit: 'Submit'
   },
   feedback: {
     title: 'Feedback',
@@ -1697,6 +1698,60 @@ export default {
     pestAlerts: 'Pest Alerts',
     noLocationData: 'No location data available',
     mapError: 'Could not open maps',
-    shareError: 'Error sharing'
+    shareError: 'Error sharing',
+
+    // Market Price Charts
+    market: {
+      sectionTitle: 'Market Prices',
+      maizeGrains: 'Maize & Grains',
+      cropProtection: 'Crop Protection',
+      fruitsVeggies: 'Fruits & Veggies',
+      livestock: 'Livestock',
+      fertilizer: 'Fertilizer',
+      apiary: 'Apiary & Honey',
+      aquaculture: 'Aquaculture',
+      harvestStorage: 'Harvest & Storage',
+
+      // Trend labels
+      trendUp: 'Rising',
+      trendDown: 'Falling',
+      trendStable: 'Stable',
+      trendUnknown: 'Unknown',
+
+      // Summary card labels
+      latest: 'Latest',
+      trend: 'Trend',
+      priceHistory: 'Price History',
+      dataTable: 'Data Table',
+      lastUpdated: 'Last updated',
+      noData: 'No data available',
+      year: 'Year',
+      value: 'Value',
+
+      // AI Predictions
+      getPredictions: 'Get AI Predictions',
+      predictionFor: 'Prediction for',
+      selectTimeFrame: 'Select Prediction Time Frame',
+      timeFrame3Months: '3 months',
+      timeFrame6Months: '6 months',
+      timeFrame1Year: '1 year',
+      timeFrame2Years: '2 years',
+      worldNewsFactors: 'World News Factors (Optional)',
+      worldNewsHint: 'E.g., Global supply chain issues, trade policies, etc.',
+      localNewsFactors: 'El Salvador News Factors (Optional)',
+      localNewsHint: 'E.g., Local regulations, weather events, policies, etc.',
+      analyzing: 'Analyzing market data...',
+      error: 'Error',
+      predictionsFor: 'AI Predictions',
+      noResponse: 'No response received',
+      errorOccurred: 'An error occurred',
+      responseCopied: 'Response copied to clipboard',
+      copy: 'Copy',
+      close: 'Close',
+      share: 'Share',
+      shareViaEmail: 'Email',
+      sharedVia: 'Shared via AgroGenio AI',
+      shareError: 'Error sharing'
+    }
   }
 }

@@ -83,6 +83,11 @@
           :userId="$store.getters.currentUser?._key || 'anonymous'"
           :sessionId="currentSessionId || 'pest-alert-session'"
         />
+        <MarketPriceChart
+          v-if="chartDialog.type === 'market-price'"
+          :category="chartDialog.category"
+          :autoRefresh="false"
+        />
       </ChartDialog>
 
       <!-- System Status Panel -->
@@ -201,6 +206,39 @@
             />
             <PestAlertSummaryCard
               region="Central America"
+              @open-chart="openChart"
+            />
+            <!-- Market Price Cards -->
+            <MarketPriceSummaryCard
+              category="maize"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="cropProtection"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="vegetables"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="livestock"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="fertilizer"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="apiary"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="aquaculture"
+              @open-chart="openChart"
+            />
+            <MarketPriceSummaryCard
+              category="harvestStorage"
               @open-chart="openChart"
             />
           </div>
@@ -355,8 +393,10 @@ import DOMPurify from "dompurify";
 import jsPDF from "jspdf";
 import CropHealthSummaryCard from "./charts/CropHealthSummaryCard.vue";
 import PestAlertSummaryCard from "./charts/PestAlertSummaryCard.vue";
+import MarketPriceSummaryCard from "./charts/MarketPriceSummaryCard.vue";
 import CropHealthChart from "./charts/CropHealthChart.vue";
 import PestAlertChart from "./charts/PestAlertChart.vue";
+import MarketPriceChart from "./charts/MarketPriceChart.vue";
 import ChartDialog from "./charts/ChartDialog.vue";
 
 export default {
@@ -368,8 +408,10 @@ export default {
     ConfirmDialog,
     CropHealthSummaryCard,
     PestAlertSummaryCard,
+    MarketPriceSummaryCard,
     CropHealthChart,
     PestAlertChart,
+    MarketPriceChart,
     ChartDialog,
   },
 
@@ -397,6 +439,7 @@ export default {
         visible: false,
         type: null,
         title: "",
+        category: null,
       },
       currentChatId: null,
       currentChatTitle: "",
@@ -702,20 +745,38 @@ export default {
       return this.$t(key);
     },
 
-    openChart(type) {
+    openChart(type, category = null) {
       const titles = {
         'crop-health': this.t('charts.cropHealth'),
         'pest-alert': this.t('charts.pestAlertTitle')
       };
 
+      // For market prices, use category-specific title
+      if (type === 'market-price' && category) {
+        const categoryTitles = {
+          maize: this.t('charts.market.maizeGrains'),
+          cropProtection: this.t('charts.market.cropProtection'),
+          vegetables: this.t('charts.market.fruitsVeggies'),
+          livestock: this.t('charts.market.livestock'),
+          fertilizer: this.t('charts.market.fertilizer'),
+          apiary: this.t('charts.market.apiary'),
+          aquaculture: this.t('charts.market.aquaculture'),
+          harvestStorage: this.t('charts.market.harvestStorage')
+        };
+        this.chartDialog.title = categoryTitles[category] || 'Market Price';
+      } else {
+        this.chartDialog.title = titles[type] || 'Chart';
+      }
+
       this.chartDialog.type = type;
-      this.chartDialog.title = titles[type] || 'Chart';
+      this.chartDialog.category = category;
       this.chartDialog.visible = true;
     },
 
     closeChartDialog() {
       this.chartDialog.visible = false;
       this.chartDialog.type = null;
+      this.chartDialog.category = null;
       this.chartDialog.title = "";
     },
 

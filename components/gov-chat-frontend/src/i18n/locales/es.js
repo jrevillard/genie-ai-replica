@@ -1507,7 +1507,8 @@ export default {
     ingest: 'Ingerir',
     retract: 'Retractar',
     loading: 'Cargando...',
-    refresh: 'Actualizar'
+    refresh: 'Actualizar',
+    submit: 'Enviar'
   },
   feedback: {
     title: 'Retroalimentación',
@@ -1697,6 +1698,60 @@ export default {
     pestAlerts: 'Alertas de Plagas',
     noLocationData: 'No hay datos de ubicación disponibles',
     mapError: 'No se pudo abrir el mapa',
-    shareError: 'Error al compartir'
+    shareError: 'Error al compartir',
+
+    // Market Price Charts
+    market: {
+      sectionTitle: 'Precios del Mercado',
+      maizeGrains: 'Maíz y Granos',
+      cropProtection: 'Protección de Cultivos',
+      fruitsVeggies: 'Frutas y Verduras',
+      livestock: 'Ganadería',
+      fertilizer: 'Fertilizantes',
+      apiary: 'Apicultura y Miel',
+      aquaculture: 'Acuicultura',
+      harvestStorage: 'Cosecha y Almacenamiento',
+
+      // Trend labels
+      trendUp: 'En aumento',
+      trendDown: 'En descenso',
+      trendStable: 'Estable',
+      trendUnknown: 'Desconocido',
+
+      // Summary card labels
+      latest: 'Último',
+      trend: 'Tendencia',
+      priceHistory: 'Historial de Precios',
+      dataTable: 'Tabla de Datos',
+      lastUpdated: 'Última actualización',
+      noData: 'No hay datos disponibles',
+      year: 'Año',
+      value: 'Valor',
+
+      // AI Predictions
+      getPredictions: 'Obtener Predicciones de IA',
+      predictionFor: 'Predicción para',
+      selectTimeFrame: 'Seleccionar Marco Temporal',
+      timeFrame3Months: '3 meses',
+      timeFrame6Months: '6 meses',
+      timeFrame1Year: '1 año',
+      timeFrame2Years: '2 años',
+      worldNewsFactors: 'Factores de Noticias Mundiales (Opcional)',
+      worldNewsHint: 'Ej., Problemas de cadena de suministro, políticas comerciales, etc.',
+      localNewsFactors: 'Factores de Noticias Locales (Opcional)',
+      localNewsHint: 'Ej., Regulaciones locales, eventos climáticos, políticas, etc.',
+      analyzing: 'Analizando datos del mercado...',
+      error: 'Error',
+      predictionsFor: 'Predicciones de IA',
+      noResponse: 'No se recibió respuesta',
+      errorOccurred: 'Ocurrió un error',
+      responseCopied: 'Respuesta copiada al portapapeles',
+      copy: 'Copiar',
+      close: 'Cerrar',
+      share: 'Compartir',
+      shareViaEmail: 'Correo electrónico',
+      sharedVia: 'Compartido vía AgroGenio AI',
+      shareError: 'Error al compartir'
+    }
   }
 }

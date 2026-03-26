@@ -10,6 +10,9 @@ secrets/*.key
 secrets/*.pem
 api-gateway-solution/nginx/certs/
 
+# Auto-generated nginx config (rendered from template at container start)
+api-gateway-solution/nginx/conf/default.conf
+
 # Node modules
 node_modules/
 
@@ -27,6 +30,9 @@ yarn-error.log*
 
 # Database backups
 database_backups/
+
+# Kong config backups (runtime artifact)
+api-gateway-solution/new-config/kong_backups/
 
 # Runtime data
 pids

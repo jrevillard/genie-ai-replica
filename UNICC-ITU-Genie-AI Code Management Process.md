@@ -26,12 +26,10 @@ The repository is organized to support modularity, shared libraries, and third-p
 
 ```plaintext
 /unicc-itu-genie-ai
-├── api-gateway-solution/        # API gateway configs (nginx, Kong, Keycloak)
-│   ├── nginx/                   # Nginx configuration files
-│   ├── kong-backups/            # Kong gateway backups
-│   ├── kong-postgres-backups/   # Kong PostgreSQL backups
-│   ├── new-config/              # New configuration files
-│   └── old-config/              # Legacy configuration files
+├── api-gateway-solution/        # API gateway configs (nginx, Kong)
+│   ├── nginx/                   # Nginx configuration (template-based, auto-rendered)
+│   ├── new-config/              # Kong configuration files and scripts
+│   └── scripts/                 # Kong management utilities
 ├── components/                  # Core applications
 │   ├── gov-chat-backend/        # Node.js backend
 │   │   ├── controllers/         # Request handlers

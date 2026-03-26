@@ -366,7 +366,8 @@ services:
 
 4. **Enable Health Checks**:
    ```bash
-   ./journal-check.sh
+   docker-compose ps
+   curl http://localhost:8000/health
    ```
 
 ### Development Deployment
@@ -458,9 +459,6 @@ docker stats
 ### Health Checks
 
 ```bash
-# Run health check script
-./journal-check.sh
-
 # Manual health check
 curl http://localhost:8000/health
 curl http://localhost:7000/health

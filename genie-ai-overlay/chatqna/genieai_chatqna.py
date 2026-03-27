@@ -478,6 +478,14 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ##################################
         system_instructions = CHATQNA_SYSTEM_PROMPT
 
+        # CRITICAL: Inject explicit English language instructions when language is EN
+        # This overrides model bias toward Spanish responses
+        original_language = kwargs.get("original_language", None)
+        if original_language and original_language.strip() == "EN":
+            system_instructions = "\n\nMANDATORY: You MUST respond ONLY in English. Do NOT respond in Spanish or any other language. All responses must be in English regardless of the content language.\n\n" + system_instructions
+            if logflag:
+                logger.info(f"[LANGUAGE DEBUG] Injected ENGLISH instruction into system prompt (original_language={original_language})")
+
         # DEBUG: Log the system prompt to verify it's loaded correctly
         if logflag:
             logger.info(f'\n[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT loaded: {"YES" if system_instructions else "NO"}')
@@ -1308,14 +1316,6 @@ class ChatQnAService:
             # Fallback to English if detection fails
             if not original_language:
                 original_language = "EN"
-
-        # CRITICAL: Inject explicit English language instructions when language is EN
-        # This overrides model bias toward Spanish responses
-        if original_language and original_language.strip() == "EN":
-            # Inject at beginning of system prompt
-            system_instructions = "\n\nMANDATORY: You MUST respond ONLY in English. Do NOT respond in Spanish or any other language. All responses must be in English regardless of the content language.\n\n" + system_instructions
-            if logflag:
-                logger.info(f"[LANGUAGE DEBUG] Injected ENGLISH instruction into system prompt")
 
         translated_history_string = ""
         if original_language and original_language.strip() != "EN":

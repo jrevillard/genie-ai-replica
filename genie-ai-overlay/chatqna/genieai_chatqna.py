@@ -477,7 +477,16 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ###### Token limit handling ######
         ##################################
         system_instructions = CHATQNA_SYSTEM_PROMPT
-    
+
+        # DEBUG: Log the system prompt to verify it's loaded correctly
+        if logflag:
+            logger.info(f'\n[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT loaded: {"YES" if system_instructions else "NO"}')
+            if system_instructions:
+                logger.info(f'[SYSTEM PROMPT DEBUG] System prompt length: {len(system_instructions)} chars')
+                logger.info(f'[SYSTEM PROMPT DEBUG] System prompt preview: {system_instructions[:500]}...')
+            else:
+                logger.error('[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT IS NONE OR EMPTY!')
+
         prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}")
@@ -529,6 +538,12 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         inputs = next_inputs
         if logflag:
             logger.debug(f'Raw input of the llm\n {inputs}\n')
+            # DEBUG: Log the messages array being sent to LLM
+            logger.info(f'\n[LLM DEBUG] Messages being sent to LLM:')
+            for i, msg in enumerate(inputs["messages"]):
+                logger.info(f'  Message {i}: role={msg["role"]}, content_length={len(msg["content"])} chars')
+                logger.info(f'  Message {i} content preview: {msg["content"][:200]}...')
+            logger.info(f'\n[LLM DEBUG] Full messages array: {inputs["messages"]}\n')
 
     return inputs
 

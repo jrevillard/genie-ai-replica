@@ -18,6 +18,9 @@ node_modules/
 
 # Build outputs
 dist/
+
+# Git worktrees
+.worktrees/
 build/
 
 # Logs

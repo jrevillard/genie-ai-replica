@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## AI Agent Context
+
+**Before implementing code, read `_bmad-output/project-context.md`** — it contains critical rules, conventions, and anti-patterns that AI agents must follow. This file covers unobvious details that are not duplicated here.
+
 ## Project Overview
 
 GENIE.AI is an open-source generative AI framework for the public sector, providing a sovereign, DPG-compliant RAG (Retrieval-Augmented Generation) system with multilingual support. It integrates with [OPEA (Open Platform for Enterprise AI)](https://opea.dev) for AI/ML services.
@@ -122,9 +126,9 @@ User Query → Backend (BFF) → ChatQnA Service → Embedding → Retriever (Ar
 
 - Use `const` by default, `let` for reassignments, avoid `var`
 - 2-space indentation, single quotes, mandatory semicolons
-- Vue 3: Use Composition API with `<script setup>` syntax
-- Component structure: `<script setup>`, `<template>`, `<style scoped>`
-- Props: Use `defineProps` with detailed type definitions
+- Vue 3: Use **Options API** (existing codebase convention)
+- Component structure: `<script>`, `<template>`, `<style scoped>`
+- Props: Use `props` option with Object definition
 - State: Vuex (existing) or Pinia (new projects)
 - i18n: Use `vue-i18n` with `translate('key.path', 'default text')`
 

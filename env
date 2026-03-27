@@ -209,9 +209,9 @@ HUGGING_FACE_HUB_TOKEN=
 # NGINX_FRONTEND_PORT=8090
 # KONG_PROXY_HOST=kong
 
-# Kong HTTPS proxy alternate host port (for external Kong HTTPS access)
-# Default: 8443
-# NGINX_HTTPS_PORT_ALT=
+# Kong proxy ports are NOT exposed to the host by default.
+# All external traffic routes through nginx (80/443).
+# To expose Kong directly for debugging, uncomment in docker-compose.yaml.
 
 # =============================================================================
 # SECTION 8: LLM PROMPTS (OPTIONAL)

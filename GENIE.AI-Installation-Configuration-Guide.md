@@ -315,7 +315,7 @@ Configuration for the user-facing web application.
 | APP\_NAME | The display name of the application. | Genie AI |
 | FRONTEND\_PORT | The port the Vue 3 app runs on locally. | 8090 |
 | VUE\_APP\_API\_URL | Public URL for the frontend to reach the backend API. | https://\<your-proxy\>/api |
-| VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
+| VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8000 |
 | VUE\_APP\_CSP\_CONNECT\_SRC | Allowed connection sources for CSP (Vue build). | 'self' https://genie-ai.itu.int |
 | CSP\_CONNECT\_SRC | Allowed connection sources for CSP (Backend Helmet config). | 'self' wss://localhost:8090 |
 | CORS\_ALLOWED\_ORIGINS | Comma-separated list of allowed CORS origins. | http://localhost,https://genie.ai |

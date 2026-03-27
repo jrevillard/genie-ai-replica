@@ -109,12 +109,14 @@ services:
         condition: service_healthy
       kong-migrations:
         condition: service_completed_successfully
-    ports:
-      - "${KONG_PROXY_PORT:-8010}:8010"
-      - "${NGINX_HTTPS_PORT_ALT:-8443}:8443"
-      # Kong admin API - Comment out in production (localhost only for management)
-      # ports:
-      #   - "8001:8001"
+    # Kong proxy - internal only. All external traffic routes through nginx:80/443.
+    # Uncomment for debugging direct Kong access (bypasses nginx security):
+    # ports:
+    #   - "${KONG_PROXY_PORT:-8000}:8000"
+    #   - "${KONG_HTTPS_PORT:-8443}:8443"
+    # Kong admin API - internal only (accessible via kong-config container sharing network)
+    # ports:
+    #   - "8001:8001"
     volumes:
       - ./api-gateway-solution/kong_logs:/var/log/kong
 
@@ -128,7 +130,7 @@ services:
       - VUE_APP_API_URL=${VUE_APP_API_URL:-/api}
       - VUE_PROXY_HOST=${VUE_PROXY_HOST:-localhost}
       - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
-      - PROXY_TARGET=http://kong:8010
+      - PROXY_TARGET=http://kong:8000
     # Port 8090 is internal only — outer nginx on 80/443 is the public entry point
     # ports:
     #   - "${FRONTEND_PORT:-8090}:8090"

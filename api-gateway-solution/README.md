@@ -1,6 +1,6 @@
 # Kong and NGINX Configuration Guide
 
-This README provides documentation on using the provided scripts to manage and configure Kong (an API gateway) for a Node.js Express backend, and how to set up NGINX as a reverse proxy to route requests correctly between a Vue 3 frontend application and the Express server. The setup assumes a containerized or local environment where Kong is running with Admin API on `localhost:8001`, the Vue app is served on port 8090, and the Express API is on port 3000.
+This README provides documentation on using the provided scripts to manage and configure Kong (an API gateway) for a Node.js Express backend, and how to set up NGINX as a reverse proxy to route requests correctly between a Vue 3 frontend application and the Express server. The setup assumes a containerized environment where Kong is internal-only (not exposed to host), the Vue app is served on port 8090, and the Express API is on port 3000.
 
 The API gateway services (Kong, NGINX, Kong database) are defined in the root `docker-compose.yaml` as part of the full GENIE.AI stack.
 
@@ -45,7 +45,7 @@ docker compose up -d
   - Image: `kong:latest`.
   - Depends on: `kong-database` (healthy).
   - Environment: Connects to Postgres via `POSTGRES_PASSWORD`; logs to stdout/stderr.
-  - Ports: `8010` (proxy), `8443` (HTTPS proxy). Admin API on `127.0.0.1:8001` (internal only).
+  - Ports: Internal only (not exposed to host). Proxy listens on `8000` (HTTP) / `8443` (HTTPS) within Docker network. Admin API on `127.0.0.1:8001` (internal only).
   - Volume: `./kong_logs` for logs.
   - Config applied from `new-config/kong_config.json` via `restore-kong-config.sh`.
 
@@ -84,8 +84,8 @@ docker compose up -d
 4. **Access Points**:
    - NGINX (HTTPS): `https://localhost` or `https://${NGINX_PUBLIC_DOMAIN}`
    - NGINX (HTTP): `http://localhost` (redirects to HTTPS)
-   - Kong Proxy: `http://localhost:8010`
-   - Kong Admin API: `http://localhost:8001` (localhost only)
+   - Kong Proxy: Internal only (`kong:8000` within Docker network)
+   - Kong Admin API: Internal only (accessible via kong-config init container)
 
 5. **Configuration Notes**:
    - Customize environment variables in `.env` (see `env` template, Section 7).
@@ -99,7 +99,7 @@ docker compose up -d
 
 ## Kong Configuration Scripts
 
-These scripts interact with Kong's Admin API (`http://localhost:8001`). They handle backups, applies, restores, and plugin management. Kong configs are in declarative JSON format (e.g., `kong_config.json`).
+These scripts interact with Kong's Admin API (`http://localhost:8001`) from within the Docker network. They handle backups, applies, restores, and plugin management. Kong configs are in declarative JSON format (e.g., `kong_config.json`).
 
 ### 1. manage-kong-config.sh
 

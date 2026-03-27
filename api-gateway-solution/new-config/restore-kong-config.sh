@@ -12,7 +12,7 @@
 
 # Constants
 KONG_ADMIN_URL="http://localhost:8001"
-KONG_PUBLIC_URL="${KONG_PUBLIC_URL:-http://localhost:8010}"
+KONG_PUBLIC_URL="${KONG_PUBLIC_URL:-http://localhost:8000}"
 USER_ID="${USER_ID:-1}"
 TARGET_HOST="${TARGET_HOST:-backend}"
 TARGET_PORT="${TARGET_PORT:-3000}"
@@ -41,7 +41,7 @@ usage() {
     echo "  -h                Display this help message"
     echo "Environment Variables:"
     echo "  LOGIN_PASSWORD    Password for testing (optional, used if not prompted)"
-    echo "  KONG_PUBLIC_URL   Kong proxy URL (default: http://localhost:8010)"
+    echo "  KONG_PUBLIC_URL   Kong proxy URL (default: http://localhost:8000)"
     echo "  USER_ID           User ID for force-logout test (default: 1)"
     echo "  TARGET_HOST       Backend target host (default: backend)"
     echo "  TARGET_PORT       Backend target port (default: 3000)"

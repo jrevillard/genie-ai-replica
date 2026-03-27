@@ -231,3 +231,4 @@ Manual verification in both compose modes:
 - Findings: 12 total, 7 fixed (F1, F4, F5, F7, F10, F11, F12), 5 skipped (noise/out-of-scope)
 - Resolution approach: auto-fix
 - Additional changes beyond spec: `.dockerignore` created, healthcheck added to both compose files, security headers repeated in all location blocks, source maps excluded from long cache, `client_max_body_size 50m` added
+- Post-implementation note (2026-03-27): The `PROXY_TARGET` env var and frontend nginx `/api/` proxy block described in this spec were removed as dead code. See `tech-spec-cleanup-frontend-nginx-dead-code.md`.

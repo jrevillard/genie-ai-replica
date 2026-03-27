@@ -949,28 +949,26 @@ Kong database migrations are handled automatically by the `kong-migrations` init
 
 After services are running, you must configure Kong routes and plugins to direct traffic to your backend services.
 
-1. Navigate to the config directory:
+The Kong Admin API listens on `127.0.0.1:8001` inside the container (see `KONG_ADMIN_LISTEN` in `docker-compose.yaml`), so it is not accessible from the host. You must run the configuration from a container that shares Kong's network namespace.
+
+Run the management script from an Alpine container that shares Kong's network namespace and mounts the config directory:
 
 ```bash
-cd api-gateway-solution/new-config/
+docker run --rm --network container:genieai_mvp-kong-1 \
+  -v "$(pwd)/api-gateway-solution/new-config:/tmp/config:ro" \
+  alpine:latest sh -c 'apk add --no-cache curl jq > /dev/null 2>&1 && cd /tmp/config && sh manage-kong-config.sh -a -f'
 ```
 
-2. Review `kong_config.json` to verify the target service hosts match your Docker service names (default: `backend:3000` and `document-repository:3001`).
-
-3. Run the management script:
+Since stdin is not a terminal in this context, the script uses environment variable defaults. To override service hosts for your Docker Compose deployment:
 
 ```bash
-chmod +x manage-kong-config.sh
-./manage-kong-config.sh -a
+docker run --rm --network container:genieai_mvp-kong-1 \
+  -v "$(pwd)/api-gateway-solution/new-config:/tmp/config:ro" \
+  -e EXPRESS_API_HOST=backend -e DOC_REPO_HOST=document-repository \
+  alpine:latest sh -c 'apk add --no-cache curl jq > /dev/null 2>&1 && cd /tmp/config && sh manage-kong-config.sh -a -f'
 ```
 
-The script will prompt for connection details. For a Docker Compose deployment, use the **container service names** from `docker-compose.yaml`:
-
-- Kong host: press Enter (defaults to `localhost`)
-- `express-api` service host: `backend`
-- `document-repository` service host: `document-repository`
-
-**Note:** Kong routes only need to be configured once. They persist in the Kong database across container restarts. Re-run the script only if you need to reconfigure services.
+**Note:** Kong routes only need to be configured once. They persist in the Kong database across container restarts. Re-run the setup only if you wipe the Kong database volumes or need to reconfigure services.
 
 ## 4.3 Domain & Security Configuration (CSP & CORS)
 

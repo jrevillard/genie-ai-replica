@@ -28,6 +28,14 @@ function getFrontendUrl(req) {
       logger.warn(`Could not parse referer URL: ${referer}`, { stack: error.stack });
     }
   }
+  // Derive from forwarded headers (proxy deployments)
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  if (host) {
+    const forwardedUrl = `${protocol}://${host}`;
+    logger.info(`Using forwarded headers for frontend URL: ${forwardedUrl}`);
+    return forwardedUrl;
+  }
   const fallbackUrl = 'http://localhost:8090';
   logger.info(`Using fallback URL: ${fallbackUrl}`);
   return fallbackUrl;
@@ -146,7 +154,7 @@ class AuthController {
   
       if (!token) {
         logger.warn('Token is required for email verification');
-        return res.redirect(`${frontendUrl}/registration-success?status=error&message=${encodeURIComponent('Token is required')}`);
+        return res.redirect(`${frontendUrl}/verify-email-success?status=error&reason=invalid`);
       }
   
       const result = await this.authService.verifyEmail(token);
@@ -161,24 +169,23 @@ class AuthController {
   
       if (result.success) {
         logger.info('Email verified successfully');
-        return res.redirect(`${frontendUrl}/registration-success?email=${encodeURIComponent(userEmail)}`);
+        return res.redirect(`${frontendUrl}/verify-email-success?status=success`);
       } else {
-        let errorMessage = result.message || 'Email verification failed';
+        let reason = 'invalid';
         if (result.expired) {
           logger.warn('Email verification failed: Token expired');
-          errorMessage = 'Token has expired';
+          reason = 'expired';
         } else if (result.used) {
           logger.warn('Email verification failed: Token already used');
-          errorMessage = 'Token has already been used';
+          reason = 'used';
         } else {
           logger.warn('Email verification failed: Invalid token');
-          errorMessage = 'Invalid token';
         }
-        return res.redirect(`${frontendUrl}/registration-success?status=error&message=${encodeURIComponent(errorMessage)}&email=${encodeURIComponent(userEmail)}`);
+        return res.redirect(`${frontendUrl}/verify-email-success?status=error&reason=${reason}`);
       }
     } catch (error) {
       logger.error(`Email verification error: ${error.message}`, { stack: error.stack });
-      return res.redirect(`${getFrontendUrl(req)}/registration-success?status=error&message=${encodeURIComponent('An unexpected error occurred')}`);
+      return res.redirect(`${getFrontendUrl(req)}/verify-email-success?status=error&reason=invalid`);
     }
   }
 

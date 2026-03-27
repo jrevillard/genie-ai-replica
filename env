@@ -135,7 +135,8 @@ HUGGING_FACE_HUB_TOKEN=
 # Defaults are set for local development (localhost).
 
 # Vue.js frontend API URL
-# Default: http://localhost:3000/api
+# Default: /api (relative, works with Kong/nginx reverse proxy)
+# Direct backend access: http://localhost:3000/api
 # Production: https://your-domain.com/api
 # VUE_APP_API_URL=
 
@@ -160,7 +161,7 @@ HUGGING_FACE_HUB_TOKEN=
 
 # CORS allowed origins (which domains can access the API)
 # Used by: backend (response headers)
-# Default: http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090
+# Default: http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost
 # Production: https://your-domain.com,https://*.your-domain.com
 # CORS_ALLOWED_ORIGINS=
 

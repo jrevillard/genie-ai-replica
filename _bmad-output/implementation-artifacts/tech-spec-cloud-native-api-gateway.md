@@ -3,6 +3,7 @@ title: 'Cloud-Native API Gateway Configuration'
 slug: 'cloud-native-api-gateway'
 created: '2026-03-26'
 status: 'completed'
+
 stepsCompleted: [1, 2, 3, 4]
 tech_stack:
   - Nginx (reverse proxy, SSL termination, envsubst for template rendering)
@@ -304,7 +305,7 @@ Parameterize all domain/URL values via environment variables, refactor nginx hea
    - `curl -fsk https://localhost/api/auth/login` proxies to Kong
    - Response headers contain the expected CSP and CORS values
 4. **Variable override test**: Set `NGINX_PUBLIC_DOMAIN=test.example.com` in `.env`, restart nginx, verify `curl -I` shows `test.example.com` in CORS and redirect headers
-5. **Restore script test**: Run `KONG_PUBLIC_URL=http://localhost:8010 USER_ID=1 TARGET_HOST=backend TARGET_PORT=3000 restore-kong-config.sh -h` to verify it parses without errors
+5. **Restore script test**: Run `KONG_PUBLIC_URL=http://localhost:8000 USER_ID=1 TARGET_HOST=backend TARGET_PORT=3000 restore-kong-config.sh -h` to verify it parses without errors
 
 ### Notes
 
@@ -326,3 +327,17 @@ Parameterize all domain/URL values via environment variables, refactor nginx hea
   - `configure-kong.sh` was deleted (spec said "keep as utility" but it produced incorrect configs missing `CSP_CONNECT_SRC`)
   - `NGINX_PUBLIC_DOMAIN` was placed in Section 7 (not 8 as spec said) to maintain logical ordering
   - CSP_CONNECT_SRC default aligned with backend/frontend defaults for consistent local dev experience
+
+### Walk-Through Review (2026-03-27)
+
+- Findings: 22 total (adversarial scan of all modified files)
+- Fixed: 1 (F4 — Kong proxy ports internalized)
+- Skipped: 21 (noise, low-priority, or dead code)
+- Resolution approach: walk-through with selective fixes
+- Key fix:
+  - **F4 (Kong ports)**: Kong proxy ports (8000/8443) commented out in `docker-compose.yaml`. All external traffic must route through nginx:80/443. Kong is internal-only within the Docker network. Also fixed `PROXY_TARGET` from `kong:8010` to `kong:8000` (Kong default proxy port is 8000, not 8010). Updated `restore-kong-config.sh` default URL to port 8000. Updated all documentation (README.md, Installation Guide, env template).
+- Skipped findings rationale:
+  - F5 (config.js): False positive — loaded correctly
+  - F7/F11 (frontend nginx `/api/` proxy, `PROXY_TARGET`): Dead code — not used in either dev or prod mode
+  - F9 (Kong CORS plugins): Already addressed — Kong is now internal-only, so duplicate CORS headers never reach the browser
+  - Remaining 15: Noise/low-priority, no functional impact

@@ -478,6 +478,14 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ##################################
         system_instructions = CHATQNA_SYSTEM_PROMPT
 
+        # CRITICAL: Inject language instruction at the beginning of system prompt
+        # This overrides any model bias toward specific languages
+        if original_language and original_language.strip() == "EN":
+            language_instruction = "\n\nMANDATORY: You MUST respond ONLY in English. Do NOT respond in Spanish or any other language. All responses must be in English regardless of the content language.\n\n"
+            system_instructions = language_instruction + system_instructions
+            if logflag:
+                logger.info(f"[LANGUAGE DEBUG] Injected ENGLISH instruction into system prompt")
+
         # DEBUG: Log the system prompt to verify it's loaded correctly
         if logflag:
             logger.info(f'\n[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT loaded: {"YES" if system_instructions else "NO"}')
@@ -490,6 +498,12 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}")
+
+        # CRITICAL: Add language instruction to user prompt as well for reinforcement
+        if original_language and original_language.strip() == "EN":
+            prompt_add_context = f"\n\nLANGUAGE REQUIREMENT: Respond ONLY in English.\n\n{prompt_add_context}"
+            if logflag:
+                logger.info(f"[LANGUAGE DEBUG] Injected ENGLISH instruction into user prompt")
 
         # FIX: Separate system and user content for proper chat template handling
         user_content = prompt_add_context

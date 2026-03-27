@@ -17,6 +17,11 @@ class ChatbotProxy {
     // DEBUG: Log the incoming language parameter
     print("[CHATBOT_PROXY] submitQuery called with language: '$language'");
 
+    // CRITICAL FIX: Clean userId to remove 'users/' prefix
+    // This ensures backend profile lookup succeeds and avoids "User profile not found" warnings
+    final cleanUserId = userId.startsWith('users/') ? userId.substring(7) : userId;
+    print("[CHATBOT_PROXY] Cleaned userId: '$cleanUserId' (original: '$userId')");
+
     // Build context object first (like Vue does)
     // Backend checks context.language FIRST (line 1238 of genieai_chatqna.py)
     final Map<String, dynamic> context = {};
@@ -34,7 +39,7 @@ class ChatbotProxy {
     final Map<String, dynamic> payload = {
       'sessionId': sessionId,
       'messages': messages,
-      'userId': userId,
+      'userId': cleanUserId,  // Use cleaned userId
       'timestamp': DateTime.now().toIso8601String(),
     };
 

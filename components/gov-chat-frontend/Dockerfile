@@ -8,14 +8,14 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-FROM node:22.14.0-alpine
+FROM nginx:alpine
 
 WORKDIR /app
 
-RUN npm install -g http-server
-
 COPY --from=build /app/dist /app/dist
+RUN chmod -R a+r /app/dist
 
+COPY nginx.conf /etc/nginx/nginx.conf.template
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
@@ -23,4 +23,4 @@ EXPOSE 8090
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-CMD ["sh", "-c", "http-server /app/dist -p ${PORT:-8090} ${HTTP_SERVER_EXTRA_ARGS:-}"]
+CMD ["sh", "-c", "envsubst '$NGINX_PROXY_TARGET $NGINX_PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]

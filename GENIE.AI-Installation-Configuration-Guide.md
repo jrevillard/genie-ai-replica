@@ -139,7 +139,7 @@ GENIE.AI requires significant computational resources, particularly for AI model
 2. node
 3. npm
 
-#### CRITICAL - pay strict attention to the specifics of 3-node or single-node architecture
+#### CRITICAL - pay strict attention to the prerequisites — all services deploy on a single host
 
 Bash
 
@@ -211,37 +211,27 @@ npm \-v
 
 # Step 3: Base Installation
 
-You must complete one of these base docker compose based installations before configuring the application services (single node or three node) \- Kubernetes will be added later. The way that the 2 docker compose based deployent options are organized in the repository is as follows:
+You must complete the base docker compose based installation before configuring the application services. The way the docker compose deployment is organized in the repository is as follows:
 
 Plaintext
 
-repository-root/  
-├── docker-compose.yaml           \# Single-node docker compose deployment model  
-├── env                           \# .env file for the single-node docker compose  
-├── components/  
-│   ├── docker-compose.yaml       \# Docker compose for infrastructure tier (three node model)  
-│   ├── gov-chat-backend/  
-│   │   └── env                   \# .env file for the node.js backend service  
-│   ├── gov-chat-frontend/  
-│   │   └── env                   \# .env file for the Vue 3 application  
-│   └── document-repository/  
-│       └── env                   \# .env file for the document repository service  
-├── api-gateway-solution/  
-│   ├── docker-compose.yaml       \# Docker compose for bastion host tier  
-│   └── env                       \# .env file for the bastion tier  
-└── genie-ai-overlay/       \# This is the folder where all the build overlay files exist  
-│   ├── build-patches       \# Shell scripts to patch the build  
-│   ├── chatqna                \# Overlay files for the chatqna server extensions  
-│   ├── core                      \# Overlay files for the OPEA core extensions  
-│   ├── dataprep              \# Overlay files for the dataprep service extensions  
-│   ├── http-service          \# Overlay files for the http-service service extensions  
-     └── retriever                \# Overlay files for the retriever service extensions  
-├── docker-compose.yaml       \# Docker compose for customized GENIE.AI OPEA  
-└── env                       \# .env file for the OPEA tier
+repository-root/
+├── docker-compose.yaml           # Full-stack deployment (single source of truth)
+├── env                           # Configuration template (copy to .env)
+├── env.t4                        # GPU overrides for NVIDIA T4 (16GB VRAM)
+├── env.rtx6000                   # GPU overrides for RTX 6000 ADA (24GB VRAM)
+├── components/
+│   └── docker-compose.yaml       # Development subset (GENIE.AI only, no OPEA)
+├── api-gateway-solution/
+│   └── new-config/               # Kong API gateway configuration
+├── config/prompts/               # LLM system prompts (committed to git)
+│   ├── chatqna-system.txt       # Main system prompt for chat responses
+│   ├── chatqna-abstention.txt   # Instructions for handling out-of-scope queries
+│   └── label-selector.txt       # Rules for automatic document labeling
+├── secrets/ssl/                  # SSL/TLS certificates (NOT committed)
+└── genie-ai-overlay/             # OPEA microservices build overlays
 
-Following are the details for configuring both the single-node deployment model and the three node deployment model (Options A and B):
-
-## Option A: Single-Node Installation (MVP/Dev)
+## Single-Node Installation
 
 This method deploys all services onto a single host using Docker Compose.
 
@@ -264,9 +254,26 @@ cd genie-ai-replica
 
 The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.
 
-There are 2 templates in the repository to start with:
-1) env - used for modern GPU on single-node deployments (copy env .env to kickstart your config)
-2) env-T4 - used for older GPUs on single node deployments
+There are 3 templates in the repository to start with:
+1) `env` - used for default deployments (copy env .env to kickstart your config)
+2) `env.t4` - used for NVIDIA T4 GPU (16GB VRAM) — load with `--env-file env.t4`
+3) `env.rtx6000` - used for RTX 6000 ADA GPU (24GB VRAM) — load with `--env-file env.rtx6000`
+
+**Customizing LLM Prompts**
+
+The `config/prompts/` directory contains the system prompts that control how the AI responds. GENIE.AI uses a 3-tier priority system:
+
+1. **ENV VAR** (highest): Override directly in `.env` by setting `CHATQNA_SYSTEM_PROMPT`, `CHATQNA_ABSTENTION_INSTRUCTIONS`, or `LABEL_SELECTOR_SYSTEM_PROMPT`
+2. **FILE** (medium): Edit the files in `config/prompts/` — changes are committed to git and shared across the team
+3. **DEFAULT** (lowest): Built-in defaults in the code — used if neither env var nor file is provided
+
+| File | Purpose |
+| :---- | :---- |
+| `chatqna-system.txt` | Main system prompt defining the AI's behavior and response style |
+| `chatqna-abstention.txt` | Instructions for handling queries outside the knowledge base scope |
+| `label-selector.txt` | Rules for automatic document labeling during ingestion |
+
+To customize: either edit the files directly, or override in `.env` without touching the code.
 
 The following tables document all variables found in the .env file, grouped by the service they configure. You can determin the appropriate configuration and use this table to determin the values that you should use. Note that you will need to create access tokens and API keys yourselves for various services. You will also need to establish email infrastructure services and configure the credentials for that. If you are starting with one of the templates, then you can largely skip the settings section other than tailoring some specifics which should be self-evident when you look at the .env file.
 
@@ -771,18 +778,22 @@ Bash
 wget \-O craft\_mlt\_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip  
 wget \-O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zip
 
-Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100 / A40)  
-Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (48GB+). This uses the standard docker-compose.yaml.
+Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100 / A40)
+Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (24GB+). This uses `env.rtx6000` for GPU-specific overrides:
 
 Bash
 
-docker compose up \-d \--build
+docker compose --env-file .env --env-file env.rtx6000 up -d --build
 
 Launch Option B: GPU Launch (nVIDIA Tesla T4)
-Use this command for a Tesla T4 (16GB VRAM). This uses env.t4 for GPU-specific overrides:
+Use this command for a Tesla T4 (16GB VRAM). This uses `env.t4` for GPU-specific overrides:
 
 * **Precision:** Forces dtype=half (float16)
 * **Memory Safety:** Reduces GPU utilization and model length limits
+
+Bash
+
+docker compose --env-file .env --env-file env.t4 up -d --build
 
 **Important:** First create your .env file and generate the required secrets:
 
@@ -870,7 +881,7 @@ cp /path/to/your/private-key.key secrets/ssl/server.key
 
 Bash
 
-docker compose --env-file .env --env-file env.t4 up -d --build
+docker compose up -d --build
 
 5\. Initial Verification  
 After the containers launch, check their status. It may take several minutes for the large AI models (vLLM) to download and initialize.

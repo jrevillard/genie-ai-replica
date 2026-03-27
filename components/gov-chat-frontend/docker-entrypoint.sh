@@ -22,10 +22,10 @@ window.APP_CONFIG = {
 };
 EOF
 
-# Map user-facing env vars to nginx-safe names (avoid collision with nginx built-in vars)
-# IMPORTANT: Any new template variable in nginx.conf must also be added to the
-# envsubst filter list in CMD (Dockerfile) to avoid nginx built-in var collision.
-export NGINX_PROXY_TARGET=${PROXY_TARGET:-http://127.0.0.1:9999}
+# Map user-facing env var to nginx-safe name (avoid collision with nginx built-in vars)
+# IMPORTANT: Any new template variable in nginx.conf must:
+#   1. Be exported here with NGINX_ prefix (e.g., NGINX_PORT)
+#   2. Be added to the envsubst filter list in CMD (Dockerfile)
 export NGINX_PORT=${PORT:-8090}
 
 exec "$@"

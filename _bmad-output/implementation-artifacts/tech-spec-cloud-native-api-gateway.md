@@ -338,6 +338,6 @@ Parameterize all domain/URL values via environment variables, refactor nginx hea
   - **F4 (Kong ports)**: Kong proxy ports (8000/8443) commented out in `docker-compose.yaml`. All external traffic must route through nginx:80/443. Kong is internal-only within the Docker network. Also fixed `PROXY_TARGET` from `kong:8010` to `kong:8000` (Kong default proxy port is 8000, not 8010). Updated `restore-kong-config.sh` default URL to port 8000. Updated all documentation (README.md, Installation Guide, env template).
 - Skipped findings rationale:
   - F5 (config.js): False positive — loaded correctly
-  - F7/F11 (frontend nginx `/api/` proxy, `PROXY_TARGET`): Dead code — not used in either dev or prod mode
+  - F7/F11 (frontend nginx `/api/` proxy, `PROXY_TARGET`): Dead code — not used in either dev or prod mode. Resolved in `tech-spec-cleanup-frontend-nginx-dead-code.md`.
   - F9 (Kong CORS plugins): Already addressed — Kong is now internal-only, so duplicate CORS headers never reach the browser
   - Remaining 15: Noise/low-priority, no functional impact

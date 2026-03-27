@@ -784,11 +784,89 @@ Use this command for a Tesla T4 (16GB VRAM). This uses env.t4 for GPU-specific o
 * **Precision:** Forces dtype=half (float16)
 * **Memory Safety:** Reduces GPU utilization and model length limits
 
-**Important:** First create your .env file with secrets:
+**Important:** First create your .env file and generate the required secrets:
+
 ```bash
 cp env .env
-nano .env  # Add ARANGO_PASSWORD, JWT_SECRET, etc.
 ```
+
+#### Generate Required Secrets
+
+All secrets **must** be set in `.env` before launching. There are no defaults — the services will fail to start without them.
+
+Generate strong random values for each secret:
+
+```bash
+# Generate a random secret (use a different one for each variable)
+openssl rand -base64 32
+```
+
+| Variable | Purpose | How to Generate |
+|----------|---------|-----------------|
+| `ARANGO_PASSWORD` | Root password for ArangoDB | `openssl rand -base64 32` |
+| `JWT_SECRET` | Signs JSON Web Tokens (user sessions) | `openssl rand -base64 32` |
+| `SESSION_SECRET` | Encrypts session cookies | `openssl rand -base64 32` |
+| `TRANSLATION_CACHE_PASSWORD` | Redis cache password | `openssl rand -base64 32` |
+| `POSTGRES_PASSWORD` | Kong PostgreSQL password | `openssl rand -base64 32` |
+| `AUTH_SERVICE_USERNAME` | Internal microservice auth username | Any string (e.g., `genie-ai-manager`) |
+| `AUTH_SERVICE_PASSWORD` | Internal microservice auth password | `openssl rand -base64 32` |
+
+**Example — set all secrets in one pass:**
+
+```bash
+sed -i "s/^ARANGO_PASSWORD=.*/ARANGO_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -base64 32)/" .env
+sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -base64 32)/" .env
+sed -i "s/^TRANSLATION_CACHE_PASSWORD=.*/TRANSLATION_CACHE_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^AUTH_SERVICE_USERNAME=.*/AUTH_SERVICE_USERNAME=genie-ai-manager/" .env
+sed -i "s/^AUTH_SERVICE_PASSWORD=.*/AUTH_SERVICE_PASSWORD=$(openssl rand -base64 32)/" .env
+```
+
+After running the commands above, review your `.env` to verify all values are set:
+
+```bash
+grep -E '^(ARANGO_PASSWORD|JWT_SECRET|SESSION_SECRET|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|AUTH_SERVICE)' .env
+```
+
+#### Additional Required Configuration
+
+The following are not secrets but **must** also be configured before launch:
+
+| Variable | Purpose | How to Obtain |
+|----------|---------|---------------|
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASSWORD` / `EMAIL_FROM` | SMTP for user verification emails | Your email provider's SMTP settings (Gmail App Password, SendGrid, AWS SES, etc.) |
+| `HUGGING_FACE_HUB_TOKEN` | Required for downloading AI models | Create at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) ("Read" permission sufficient) |
+
+Edit your `.env` to add these values:
+
+```bash
+nano .env
+```
+
+#### SSL/TLS Certificates
+
+NGINX terminates TLS and serves the application over HTTPS. Certificates are managed via Docker secrets.
+
+**Development (auto-generated):**
+No action needed — a self-signed certificate is generated automatically on first start. Your browser will show a security warning, which is expected.
+
+**Production (your own certificates):**
+
+1. Create the secrets directory and place your certificates:
+
+```bash
+mkdir -p secrets/ssl
+cp /path/to/your/certificate.crt secrets/ssl/server.crt
+cp /path/to/your/private-key.key secrets/ssl/server.key
+```
+
+2. Obtain a certificate from one of these sources:
+   - **Let's Encrypt** (free): `certbot certonly --standalone -d your-domain.gov`
+   - **Your organization's PKI** (internal CA)
+   - **Cloud provider:** AWS ACM, GCP Certificate Manager, Azure Key Vault
+
+**Important:** These files are listed in `.gitignore` and must never be committed. The docker-compose.yaml mounts them as Docker secrets to NGINX.
 
 Bash
 

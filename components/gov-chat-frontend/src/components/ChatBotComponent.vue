@@ -2446,9 +2446,13 @@ html[data-theme="dark"] .loading-spinner .loading-text {
 
 .insights-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   margin-bottom: 24px;
+}
+
+.insights-cards > * {
+  grid-column: span 2;
 }
 
 .fast-actions-section {
@@ -2472,16 +2476,10 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   color: var(--text-primary-dark, #f9fafb);
 }
 
-.insights-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
 .market-prices-section {
   width: 100%;
   max-width: 800px;
+  margin-bottom: 24px;
 }
 
 .market-cards {
@@ -2490,26 +2488,44 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   gap: 12px;
 }
 
+/* Responsive breakpoints - consistent across all grids */
 @media (max-width: 1024px) {
+  .insights-cards,
+  .quick-help-grid,
   .market-cards {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .insights-cards > * {
+    grid-column: span 3;
   }
 }
 
 @media (max-width: 768px) {
+  .insights-cards,
+  .quick-help-grid,
   .market-cards {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .insights-cards > * {
+    grid-column: span 2;
   }
 }
 
 @media (max-width: 480px) {
+  .insights-cards,
+  .quick-help-grid,
   .market-cards {
     grid-template-columns: 1fr;
+  }
+
+  .insights-cards > * {
+    grid-column: span 1;
   }
 }
 
 .quick-help-content {
-  max-width: 600px;
   width: 100%;
 }
 
@@ -2530,7 +2546,7 @@ html[data-theme="dark"] .loading-spinner .loading-text {
 
 .quick-help-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 
@@ -2736,16 +2752,6 @@ html[data-theme="dark"] .loading-spinner .loading-text {
     margin-right: 8px;
     flex: 1;
   }
-
-  .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .quick-help-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 }
 
 @media (max-width: 768px) {
@@ -2762,10 +2768,6 @@ html[data-theme="dark"] .loading-spinner .loading-text {
 }
 
 @media (max-width: 480px) {
-  .quick-help-grid {
-    grid-template-columns: 1fr;
-  }
-
   .quick-help-heading {
     font-size: 1.4rem;
   }

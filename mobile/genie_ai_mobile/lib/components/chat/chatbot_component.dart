@@ -388,7 +388,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       final String sessionId =
           _currentConversationId ?? 'session_${widget.userId}';
 
-      final List<Map<String, dynamic>> messagesForApi = _messages.map((m) {
+      // Exclude the initial welcome message from being sent to the API
+      // The welcome message is just for UI display and shouldn't be part of the conversation context
+      final List<Map<String, dynamic>> messagesForApi = _messages
+          .where((m) => !(m['role'] == 'assistant' &&
+                         m['content'] == _welcomeMessage &&
+                         m['isSaved'] == true))
+          .map((m) {
         return {
           'role': m['role'],
           // Send actualContent (hidden prompt) to the LLM if it exists, else content
@@ -397,6 +403,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       }).toList();
 
       final String currentLanguage = I18nService().currentLocale.languageCode;
+
+      // DEBUG: Log the language being sent to the API
+      print("[CHATBOT] Language from I18nService: '$currentLanguage'");
+      print("[CHATBOT] Full locale: ${I18nService().currentLocale.toString()}");
 
       final response = await _chatBotProxy.submitQuery(
         sessionId: sessionId,

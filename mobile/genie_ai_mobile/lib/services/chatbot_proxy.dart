@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
+import 'dart:convert' as convert;
 
 class ChatbotProxy {
   final ApiService _api = ApiService();
@@ -13,6 +14,23 @@ class ChatbotProxy {
     String? contextLabels,
     String? language,
   }) async {
+    // DEBUG: Log the incoming language parameter
+    print("[CHATBOT_PROXY] submitQuery called with language: '$language'");
+
+    // Build context object first (like Vue does)
+    // Backend checks context.language FIRST (line 1238 of genieai_chatqna.py)
+    final Map<String, dynamic> context = {};
+
+    // Always include language in context (UPPERCASE like Vue)
+    context['language'] = (language ?? 'en').toUpperCase();
+
+    if (categoryId != null && categoryId.isNotEmpty) {
+      context['categoryLabel'] = categoryId;  // Vue uses 'categoryLabel', not 'categoryId'
+    }
+    if (contextLabels != null && contextLabels.isNotEmpty) {
+      context['serviceLabels'] = contextLabels;  // Vue uses 'serviceLabels', not 'labels'
+    }
+
     final Map<String, dynamic> payload = {
       'sessionId': sessionId,
       'messages': messages,
@@ -20,21 +38,24 @@ class ChatbotProxy {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    if (language != null && language.isNotEmpty) {
-      payload['language'] = language;
+    // Add context if it has content (it should always have at least language)
+    if (context.isNotEmpty) {
+      payload['context'] = context;
     }
 
-    if ((categoryId != null && categoryId.isNotEmpty) ||
-        (contextLabels != null && contextLabels.isNotEmpty)) {
-      payload['context'] = {
-        if (categoryId != null) 'categoryId': categoryId,
-        if (contextLabels != null) 'labels': contextLabels,
-      };
-      if (categoryId != null) payload['categoryId'] = categoryId;
+    // Add contextOption like Vue does
+    if (categoryId != null && categoryId.isNotEmpty) {
+      payload['contextOption'] = 'conversation-with-context-labels';
     }
+
+    print("[CHATBOT_PROXY] Context object: $context");
+    print("[CHATBOT_PROXY] Payload keys: ${payload.keys.toList()}");
+    print("[CHATBOT_PROXY] Context in JSON: ${jsonEncode(context)}");
+    print("[CHATBOT_PROXY] Full payload with context: ${jsonEncode(payload)}");
 
     try {
-      debugPrint("[CHATBOT_PROXY] Submitting query to /queries: $payload");
+      print("[CHATBOT_PROXY] Submitting query to /queries");
+      print("[CHATBOT_PROXY] Payload as JSON: ${jsonEncode(payload)}");
 
       final response = await _api.post('queries', payload);
 

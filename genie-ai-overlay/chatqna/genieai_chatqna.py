@@ -481,16 +481,17 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}")
-        
-        final_llm_prompt = f"{system_instructions}{prompt_add_context}"
+
+        # FIX: Separate system and user content for proper chat template handling
+        user_content = prompt_add_context
 
         tokenizer = get_tokenizer()
         max_model_tokens = MAX_MODEL_LEN_TEXTGEN
         max_answer_tokens = llm_parameters_dict["max_tokens"]  # Typically 1024
-        # Count tokens in prompt
-        prompt_tokens = len(tokenizer.encode(final_llm_prompt))
+        # Count tokens in full prompt (system + user combined for token limit check)
+        full_prompt_tokens = len(tokenizer.encode(system_instructions + user_content))
         # Check if the total token count exceeds the model's limit
-        if prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
+        if full_prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
             # Calculate maximum tokens for history
             prompt_add_context_tokens = len(tokenizer.encode(prompt_add_context))
             translated_history_tokens = len(tokenizer.encode(translated_history_string))
@@ -509,14 +510,17 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 current_tokens += segment_tokens
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
-            # Reconstruct final prompt
-            prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
+            # Reconstruct user content (system instructions stay the same)
+            user_content = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
-            final_llm_prompt = f"{system_instructions}{prompt_add_context}"
-        
 
-        next_inputs["messages"] = [{"role": "user", "content": final_llm_prompt}]
+
+        # FIX: Send system and user as separate messages for proper chat template handling
+        next_inputs["messages"] = [
+            {"role": "system", "content": system_instructions},
+            {"role": "user", "content": user_content}
+        ]
         next_inputs["max_tokens"] = llm_parameters_dict["max_tokens"]
         next_inputs["top_p"] = llm_parameters_dict["top_p"]
         next_inputs["stream"] = inputs["stream"]

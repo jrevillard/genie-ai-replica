@@ -6,6 +6,9 @@ node_modules/
 logs
 *.log.gz
 dist/
+
+# Git worktrees
+.worktrees/
 build/
 *.backup
 .claude/

@@ -1,0 +1,37 @@
+# Core service
+fastapi==0.110.0
+uvicorn==0.29.0
+python-multipart==0.0.6
+
+# LLM / agent
+google-genai==0.8.0
+
+# MCP protocol
+mcp>=1.0.0
+
+# Geo / spatial
+shapely==2.0.3
+pyproj==3.6.1
+geojson==3.1.0
+
+# Web scraping (BMD BAMIS)
+requests==2.31.0
+beautifulsoup4==4.12.3
+
+# Schema validation
+pydantic>=2.11.0
+
+# Early warning system — storage
+python-arango==7.9.4
+
+# Early warning system — scheduler
+APScheduler==3.10.4
+
+# Optional — long-term ingestion (install if COPERNICUS_API_KEY is set):
+# cdsapi==0.7.2
+# xarray==2024.2.0
+# scipy==1.12.0
+# numpy>=1.26.0
+
+# Optional — Twilio SMS / voice (install if TWILIO_ACCOUNT_SID is set):
+# twilio==9.0.0

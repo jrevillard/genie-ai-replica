@@ -1,0 +1,11 @@
+services:
+  weather-mcp-standalone:
+    build: .
+    container_name: weather-mcp-standalone
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Set these before running:
+      # - GOOGLE_API_KEY=your_google_api_key
+      # - MAPBOX_ACCESS_TOKEN=your_mapbox_token

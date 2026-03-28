@@ -945,30 +945,25 @@ Kong database migrations are handled automatically by the `kong-migrations` init
 
 **No manual database initialization is required.**
 
-### 4.2.3 Kong — Routes and Plugins (Manual One-Time Setup)
+### 4.2.3 Kong — Routes and Plugins (Automated)
 
-After services are running, you must configure Kong routes and plugins to direct traffic to your backend services.
+Kong routes and plugins are applied automatically by the `kong-config` init service on every `docker compose up`. No manual configuration is required. The init service waits for Kong to be healthy, then applies `kong_config.json` via the Admin API.
 
-The Kong Admin API listens on `127.0.0.1:8001` inside the container (see `KONG_ADMIN_LISTEN` in `docker-compose.yaml`), so it is not accessible from the host. You must run the configuration from a container that shares Kong's network namespace.
+**Note:** Kong routes persist in the Kong database across container restarts. The init service is idempotent — it is safe to re-run (e.g., after a `docker compose down -v`).
 
-Run the management script from an Alpine container that shares Kong's network namespace and mounts the config directory:
+**DNS cache:** Kong is configured with `KONG_DNS_STALE_TTL=5` by default. If you recreate a backend container and see 502 errors, wait up to 5 seconds for DNS re-resolution, or run `docker exec <kong-container> kong reload` for immediate flush.
 
-```bash
-docker run --rm --network container:genieai_mvp-kong-1 \
-  -v "$(pwd)/api-gateway-solution/new-config:/tmp/config:ro" \
-  alpine:latest sh -c 'apk add --no-cache curl jq > /dev/null 2>&1 && cd /tmp/config && sh manage-kong-config.sh -a -f'
-```
-
-Since stdin is not a terminal in this context, the script uses environment variable defaults. To override service hosts for your Docker Compose deployment:
+To re-run the init service manually (e.g., after modifying `kong_config.json`):
 
 ```bash
-docker run --rm --network container:genieai_mvp-kong-1 \
-  -v "$(pwd)/api-gateway-solution/new-config:/tmp/config:ro" \
-  -e EXPRESS_API_HOST=backend -e DOC_REPO_HOST=document-repository \
-  alpine:latest sh -c 'apk add --no-cache curl jq > /dev/null 2>&1 && cd /tmp/config && sh manage-kong-config.sh -a -f'
+docker compose run kong-config
 ```
 
-**Note:** Kong routes only need to be configured once. They persist in the Kong database across container restarts. Re-run the setup only if you wipe the Kong database volumes or need to reconfigure services.
+To inspect init service logs:
+
+```bash
+docker compose logs kong-config
+```
 
 ## 4.3 Domain & Security Configuration (CSP & CORS)
 

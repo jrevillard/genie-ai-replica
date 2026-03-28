@@ -204,6 +204,12 @@ HUGGING_FACE_HUB_TOKEN=
 # All external traffic routes through nginx (80/443).
 # To expose Kong directly for debugging, uncomment in docker-compose.yaml.
 
+# Kong DNS stale TTL in seconds (default: 5)
+# Lower values reduce 502 errors after backend container recreate
+# Range: 1-3600. Set to 1 for immediate re-resolution (higher CPU).
+# Use "docker exec <kong-container> kong reload" for immediate DNS flush.
+# KONG_DNS_STALE_TTL=
+
 # =============================================================================
 # SECTION 8: LLM PROMPTS (OPTIONAL)
 # =============================================================================

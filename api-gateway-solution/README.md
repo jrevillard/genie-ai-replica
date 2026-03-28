@@ -43,11 +43,19 @@ docker compose up -d
 
 - **kong**: Kong API gateway.
   - Image: `kong:latest`.
-  - Depends on: `kong-database` (healthy).
-  - Environment: Connects to Postgres via `POSTGRES_PASSWORD`; logs to stdout/stderr.
+  - Depends on: `kong-database` (healthy), `kong-migrations` (completed).
+  - Environment: Connects to Postgres via `POSTGRES_PASSWORD`; logs to stdout/stderr; `KONG_DNS_STALE_TTL=5` for DNS cache mitigation.
+  - Healthcheck: `kong health` (built-in CLI, checks DB and internal services).
   - Ports: Internal only (not exposed to host). Proxy listens on `8000` (HTTP) / `8443` (HTTPS) within Docker network. Admin API on `127.0.0.1:8001` (internal only).
   - Volume: `./kong_logs` for logs.
-  - Config applied from `new-config/kong_config.json` via `restore-kong-config.sh`.
+  - Config applied automatically by the `kong-config` init service on startup.
+
+- **kong-config**: Init container that applies Kong configuration.
+  - Image: Built from `new-config/Dockerfile` (Alpine + curl + jq).
+  - Depends on: `kong` (healthy).
+  - Runs once on startup (`restart: "no"`), applies `kong_config.json` via Kong Admin API.
+  - Idempotent — safe to re-run with `docker compose run kong-config`.
+  - Logs: `docker compose logs kong-config`.
 
 - **nginx**: NGINX reverse proxy.
   - Image: `nginx:latest`.
@@ -126,26 +134,35 @@ This script backs up, applies, or fixes Kong configurations.
 
 ### 2. restore-kong-config.sh
 
-Restores Kong config from a backup JSON file and optionally tests endpoints.
+Restores Kong config from a backup JSON file and optionally tests endpoints. Used by the `kong-config` init service for automatic configuration on startup.
 
+- **POSIX-compliant** (`#!/bin/sh`) — runs under busybox ash (Alpine).
+- **Default `-b` path**: `/opt/kong-config/kong_config.json` (inside the init container).
+- **Wait/retry**: Waits up to 60 seconds for Kong Admin API to respond before applying config.
 - **Usage**: `./restore-kong-config.sh [-b <backup_file>] [-t [jwt_token]] [-h]`
-  - `-b <backup_file>`: Path to backup JSON (required for restore).
+  - `-b <backup_file>`: Path to backup JSON (optional, default: `/opt/kong-config/kong_config.json`).
   - `-t [jwt_token]`: Test endpoints (prompts for credentials if no token; uses `LOGIN_PASSWORD` env if set).
   - `-h`: Show help.
 
 - **How it works**:
+  - Waits for Kong Admin API readiness (60s timeout with 2s retries).
   - Cleans up existing JWT plugins/credentials.
   - Restores services, routes, plugins, upstreams from backup.
   - Patches global rate-limiting plugin.
   - Tests (if `-t`): Logs in (if needed), tests `/api/auth/logout`, `/api/users/admin/users/$USER_ID/force-logout` (default: 1), `/api/service-categories?locale=en`.
-  - Logs to `kong_restore.log`.
+  - Logs to stdout (captured by Docker via `docker compose logs kong-config`).
 
 - **Example**:
   ```bash
   ./restore-kong-config.sh -b <path-to-backup.json>  # Restore from backup
+  ./restore-kong-config.sh                             # Uses default path
   ./restore-kong-config.sh -t eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...  # Test with JWT token
   ./restore-kong-config.sh -t  # Test and prompt for credentials
   ```
+
+### 3. manage-kong-config.sh (standalone interactive tool)
+
+This script is a standalone interactive utility for managing Kong configurations. It is **not used** in the automated deployment (the `kong-config` init service uses `restore-kong-config.sh` instead).
 
 ## NGINX Configuration
 
@@ -255,7 +272,10 @@ server {
 
 ## Logs
 
-- Kong scripts log to `kong_config.log` and `kong_restore.log`.
+- Kong scripts output to stdout/stderr (captured by Docker).
+- `docker compose logs kong-config` — init service configuration logs.
+- `docker compose logs kong` — Kong proxy and admin API logs.
+- `docker compose logs nginx` — NGINX access and error logs.
 - Review for errors (e.g., HTTP 400/404 during apply/restore).
 
 ## Troubleshooting
@@ -265,6 +285,7 @@ server {
 - **JWT/Auth Issues**: Use `-f` in `manage-kong-config.sh` to bypass for login routes.
 - **Timeouts**: Adjust proxy timeouts if requests hang.
 - **CORS/CSP Blocks**: Inspect browser console; adjust origins/sources in configs.
+- **502 after backend recreate**: Wait up to 5 seconds (DNS stale TTL) or run `docker exec <kong-container> kong reload` for immediate DNS flush.
 - **Docker Issues**: Check `docker-compose logs` for startup errors; ensure ports are free; verify volume mounts.
 
 For questions, refer to Kong docs (konghq.com) or NGINX docs (nginx.org).

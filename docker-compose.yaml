@@ -101,7 +101,14 @@ services:
       - KONG_ADMIN_LISTEN=${KONG_ADMIN_LISTEN:-127.0.0.1:8001, 127.0.0.1:8444 ssl}
       - KONG_DNS_RESOLVER=${KONG_DNS_RESOLVER:-127.0.0.11}
       - KONG_DNS_ORDER=${KONG_DNS_ORDER:-LAST,A,AAAA,CNAME}
+      - KONG_DNS_STALE_TTL=${KONG_DNS_STALE_TTL:-5}
       - KONG_NGINX_DAEMON=off
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - genieai_network
     depends_on:
@@ -119,6 +126,23 @@ services:
     #   - "8001:8001"
     volumes:
       - ./api-gateway-solution/kong_logs:/var/log/kong
+
+  # Init service that applies Kong configuration on startup (runs once)
+  kong-config:
+    build:
+      context: ./api-gateway-solution/new-config
+      dockerfile: Dockerfile
+    restart: "no"
+    network_mode: "service:kong"
+    environment:
+      - KONG_ADMIN_URL=${KONG_ADMIN_URL:-http://127.0.0.1:8001}
+      - KONG_PUBLIC_URL=${KONG_PUBLIC_URL:-http://127.0.0.1:8000}
+      - USER_ID=${USER_ID:-1}
+      - TARGET_HOST=${TARGET_HOST:-backend}
+      - TARGET_PORT=${TARGET_PORT:-3000}
+    depends_on:
+      kong:
+        condition: service_healthy
 
   frontend:
     build:
@@ -309,7 +333,8 @@ services:
     networks:
       - genieai_network
     depends_on:
-      - kong
+      kong-config:
+        condition: service_completed_successfully
 
   http-service:
     build:

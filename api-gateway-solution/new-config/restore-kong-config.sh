@@ -1,26 +1,29 @@
-#!/bin/bash
+#!/bin/sh
 
 # restore-kong-config.sh
 # Shell script to restore Kong configuration from a specified backup file
 # Usage: ./restore-kong-config.sh [-b <backup_file>] [-t [jwt_token]] [-h]
 # Switches:
-#   -b <backup_file>  Path to Kong configuration backup file (required for restoration)
+#   -b <backup_file>  Path to Kong configuration backup file (optional, default: /opt/kong-config/kong_config.json)
 #   -t [jwt_token]    Test endpoints with provided JWT token or prompt for credentials if no token
 #   -h                Display help message
 # Environment Variables:
 #   LOGIN_PASSWORD    Password for testing (optional, used if not prompted)
+#   KONG_ADMIN_URL    Kong Admin API URL (default: http://localhost:8001)
 
 # Constants
-KONG_ADMIN_URL="http://localhost:8001"
+KONG_ADMIN_URL="${KONG_ADMIN_URL:-http://localhost:8001}"
 KONG_PUBLIC_URL="${KONG_PUBLIC_URL:-http://localhost:8000}"
 USER_ID="${USER_ID:-1}"
 TARGET_HOST="${TARGET_HOST:-backend}"
 TARGET_PORT="${TARGET_PORT:-3000}"
-LOG_FILE="kong_restore.log"
 
-# Log function
+# Temp files (PID-based to avoid race conditions)
+_TMP_PREFIX="/tmp/_kong_$$"
+
+# Log function - output to stdout for Docker capture
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
 # Check dependencies
@@ -33,18 +36,46 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+# Cleanup temp files on exit
+cleanup() {
+    rm -f "${_TMP_PREFIX}_routes.tmp" "${_TMP_PREFIX}_route_plugins.tmp" \
+          "${_TMP_PREFIX}_svc_plugins.tmp" "${_TMP_PREFIX}_global_plugins.tmp" \
+          "${_TMP_PREFIX}_upstreams.tmp"
+}
+trap cleanup EXIT
+
+# Wait for Kong Admin API to be ready (for init service use)
+wait_for_kong() {
+    log "Waiting for Kong Admin API at $KONG_ADMIN_URL..."
+    max_retries=30
+    retry=0
+    while [ "$retry" -lt "$max_retries" ]; do
+        http_code=$(curl -s -o /dev/null -w '%{http_code}' "$KONG_ADMIN_URL" 2>/dev/null)
+        if [ "$http_code" = "200" ]; then
+            log "Kong Admin API is ready"
+            return 0
+        fi
+        retry=$((retry + 1))
+        log "Kong Admin API not ready (attempt $retry/$max_retries), retrying in 2s..."
+        sleep 2
+    done
+    log "ERROR: Kong Admin API not available after $((max_retries * 2)) seconds"
+    return 1
+}
+
 # Usage function
 usage() {
     echo "Usage: $0 [-b <backup_file>] [-t [jwt_token]] [-h]"
-    echo "  -b <backup_file>  Path to Kong configuration backup file (required for restoration)"
+    echo "  -b <backup_file>  Path to Kong configuration backup file (default: /opt/kong-config/kong_config.json)"
     echo "  -t [jwt_token]    Test endpoints with provided JWT token or prompt for credentials if no token"
     echo "  -h                Display this help message"
     echo "Environment Variables:"
-    echo "  LOGIN_PASSWORD    Password for testing (optional, used if not prompted)"
+    echo "  KONG_ADMIN_URL    Kong Admin API URL (default: http://localhost:8001)"
     echo "  KONG_PUBLIC_URL   Kong proxy URL (default: http://localhost:8000)"
     echo "  USER_ID           User ID for force-logout test (default: 1)"
     echo "  TARGET_HOST       Backend target host (default: backend)"
     echo "  TARGET_PORT       Backend target port (default: 3000)"
+    echo "  LOGIN_PASSWORD    Password for testing (optional, used if not prompted)"
     exit 1
 }
 
@@ -59,7 +90,7 @@ cleanup_jwt() {
         for plugin_id in $plugins; do
             log "Deleting JWT plugin $plugin_id from route $route_id"
             response=$(curl -s -w "\n%{http_code}" -X DELETE "$KONG_ADMIN_URL/routes/$route_id/plugins/$plugin_id")
-            http_code=$(echo "$response" | tail -n1)
+            http_code=$(echo "$response" | sed -n '$p')
             if [ "$http_code" -eq 204 ]; then
                 log "JWT plugin $plugin_id deleted successfully"
             else
@@ -75,7 +106,7 @@ cleanup_jwt() {
         for jwt_id in $jwts; do
             log "Deleting JWT credential $jwt_id for consumer $consumer_id"
             response=$(curl -s -w "\n%{http_code}" -X DELETE "$KONG_ADMIN_URL/consumers/$consumer_id/jwt/$jwt_id")
-            http_code=$(echo "$response" | tail -n1)
+            http_code=$(echo "$response" | sed -n '$p')
             if [ "$http_code" -eq 204 ]; then
                 log "JWT credential $jwt_id deleted successfully"
             else
@@ -89,11 +120,14 @@ cleanup_jwt() {
 restore_config() {
     local backup_file="$1"
     if [ ! -f "$backup_file" ]; then
-        log "ERROR: Backup file $backup_file not found"
-        exit 1
+        log "ERROR: Config file not found: $backup_file"
+        return 1
     fi
 
     log "Restoring Kong configuration from $backup_file"
+
+    # Wait for Kong Admin API to be ready
+    wait_for_kong || return 1
 
     # Clean up existing JWT plugins and credentials
     cleanup_jwt
@@ -110,8 +144,8 @@ restore_config() {
     response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/services/$service_name" \
         -H "Content-Type: application/json" \
         -d "$(echo "$service" | jq 'del(.id, .routes, .plugins, .created_at, .updated_at)')")
-    http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n -1)
+    http_code=$(echo "$response" | sed -n '$p')
+    body=$(echo "$response" | sed '$d')
     if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
         log "Service $service_name processed successfully"
         service_id=$(curl -s "$KONG_ADMIN_URL/services/$service_name" | jq -r '.id')
@@ -119,10 +153,11 @@ restore_config() {
         log "ERROR: Failed to process service $service_name with HTTP status $http_code"
         log "Response: $body"
         errors=$((errors + 1))
-        exit 1
+        return 1
     fi
 
     # Update or create routes
+    echo "$config_json" | jq -c '.routes[]' > ${_TMP_PREFIX}_routes.tmp
     while IFS= read -r route; do
         route_name=$(echo "$route" | jq -r '.name')
         log "Processing route $route_name"
@@ -137,8 +172,8 @@ restore_config() {
                 -H "Content-Type: application/json" \
                 -d "$route_payload")
         fi
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Route $route_name processed successfully"
         else
@@ -153,6 +188,7 @@ restore_config() {
         if [ "$plugins_count" -eq 0 ]; then
             log "No plugins found for route $route_name"
         else
+            echo "$route" | jq -c '.plugins[]?' > ${_TMP_PREFIX}_route_plugins.tmp
             while IFS= read -r plugin; do
                 plugin_name=$(echo "$plugin" | jq -r '.name')
                 log "Processing plugin $plugin_name for route $route_name"
@@ -166,8 +202,8 @@ restore_config() {
                 response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/$route_name/plugins" \
                     -H "Content-Type: application/json" \
                     -d "$plugin_payload")
-                http_code=$(echo "$response" | tail -n1)
-                body=$(echo "$response" | head -n -1)
+                http_code=$(echo "$response" | sed -n '$p')
+                body=$(echo "$response" | sed '$d')
                 if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
                     log "Plugin $plugin_name for route $route_name processed successfully"
                 else
@@ -176,9 +212,11 @@ restore_config() {
                     errors=$((errors + 1))
                     continue
                 fi
-            done < <(echo "$route" | jq -c '.plugins[]?')
+            done < ${_TMP_PREFIX}_route_plugins.tmp
+            rm -f ${_TMP_PREFIX}_route_plugins.tmp
         fi
-    done < <(echo "$config_json" | jq -c '.routes[]')
+    done < ${_TMP_PREFIX}_routes.tmp
+    rm -f ${_TMP_PREFIX}_routes.tmp
 
     # Add user-admin-route
     log "Adding user-admin-route"
@@ -193,8 +231,8 @@ restore_config() {
                 "preserve_host": true,
                 "protocols": ["http", "https"]
             }')
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Route user-admin-route added successfully"
         else
@@ -207,6 +245,7 @@ restore_config() {
     fi
 
     # Update or create service plugins
+    echo "$config_json" | jq -c '.plugins[] | select(.service?)' > ${_TMP_PREFIX}_svc_plugins.tmp
     while IFS= read -r plugin; do
         plugin_name=$(echo "$plugin" | jq -r '.name')
         log "Processing service plugin $plugin_name"
@@ -220,8 +259,8 @@ restore_config() {
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$service_name/plugins" \
             -H "Content-Type: application/json" \
             -d "$plugin_payload")
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Service plugin $plugin_name processed successfully"
         else
@@ -230,14 +269,17 @@ restore_config() {
             errors=$((errors + 1))
             continue
         fi
-    done < <(echo "$config_json" | jq -c '.plugins[] | select(.service?)')
+    done < ${_TMP_PREFIX}_svc_plugins.tmp
+    rm -f ${_TMP_PREFIX}_svc_plugins.tmp
 
     # Update or create global plugins
+    echo "$config_json" | jq -c '.plugins[] | select(.service? | not)' > ${_TMP_PREFIX}_global_plugins.tmp
     while IFS= read -r plugin; do
         plugin_name=$(echo "$plugin" | jq -r '.name')
         log "Processing global plugin $plugin_name"
         existing_plugins=$(curl -s "$KONG_ADMIN_URL/plugins")
-        plugin_exists=$(echo "$existing_plugins" | jq -r --arg name "$plugin_name" '.data[] | select(.name == $name and .service == null and (.route == null or .route.id == "'$(echo "$plugin" | jq -r '.route.id // empty')'")) | .id')
+        plugin_route_id=$(echo "$plugin" | jq -r '.route.id // empty')
+        plugin_exists=$(echo "$existing_plugins" | jq -r --arg name "$plugin_name" --arg rid "$plugin_route_id" '.data[] | select(.name == $name and .service == null and ((.route == null and ($rid == "")) or (.route != null and .route.id == $rid))) | .id')
         if [ -n "$plugin_exists" ]; then
             log "Global plugin $plugin_name already exists, skipping"
             continue
@@ -246,8 +288,8 @@ restore_config() {
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/plugins" \
             -H "Content-Type: application/json" \
             -d "$plugin_payload")
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Global plugin $plugin_name processed successfully"
         else
@@ -256,9 +298,11 @@ restore_config() {
             errors=$((errors + 1))
             continue
         fi
-    done < <(echo "$config_json" | jq -c '.plugins[] | select(.service? | not)')
+    done < ${_TMP_PREFIX}_global_plugins.tmp
+    rm -f ${_TMP_PREFIX}_global_plugins.tmp
 
     # Update or create upstreams
+    echo "$config_json" | jq -c '.upstreams[]' > ${_TMP_PREFIX}_upstreams.tmp
     while IFS= read -r upstream; do
         upstream_name=$(echo "$upstream" | jq -r '.name')
         log "Processing upstream $upstream_name"
@@ -266,8 +310,8 @@ restore_config() {
         response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/upstreams/$upstream_name" \
             -H "Content-Type: application/json" \
             -d "$upstream_payload")
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Upstream $upstream_name processed successfully"
         else
@@ -276,7 +320,8 @@ restore_config() {
             errors=$((errors + 1))
             continue
         fi
-    done < <(echo "$config_json" | jq -c '.upstreams[]')
+    done < ${_TMP_PREFIX}_upstreams.tmp
+    rm -f ${_TMP_PREFIX}_upstreams.tmp
 
     # Add upstream target
     log "Adding target ${TARGET_HOST}:${TARGET_PORT} for upstream express-api-servers"
@@ -286,8 +331,8 @@ restore_config() {
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/upstreams/express-api-servers/targets" \
             -H "Content-Type: application/json" \
             -d "{\"target\":\"${TARGET_HOST}:${TARGET_PORT}\",\"weight\":100}")
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Target ${TARGET_HOST}:${TARGET_PORT} added successfully"
         else
@@ -301,7 +346,7 @@ restore_config() {
 
     # Patch rate-limiting
     log "Patching global rate-limiting plugin"
-    RATE_LIMIT_PLUGIN_ID=$(curl -s "$KONG_ADMIN_URL/plugins" | jq -r '.data[] | select(.name == "rate-limiting") | .id' | head -1)
+    RATE_LIMIT_PLUGIN_ID=$(curl -s "$KONG_ADMIN_URL/plugins" | jq -r '.data[] | select(.name == "rate-limiting") | .id' | sed -n '1p')
     if [ -z "$RATE_LIMIT_PLUGIN_ID" ]; then
         log "WARNING: No rate-limiting plugin found, skipping patch"
     else
@@ -317,8 +362,8 @@ restore_config() {
                 "hour": 10000
             }
         }')
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ]; then
             log "Global rate-limiting plugin patched successfully"
         else
@@ -330,8 +375,10 @@ restore_config() {
 
     if [ "$errors" -eq 0 ]; then
         log "Configuration restored successfully"
+        return 0
     else
         log "Configuration restored with $errors warnings/errors, but continuing"
+        return 1
     fi
 }
 
@@ -340,13 +387,17 @@ test_endpoints() {
     local jwt_token="$1"
     if [ -z "$jwt_token" ]; then
         log "No JWT token provided, prompting for username and password"
-        read -p "Enter username (email): " username
+        printf "Enter username (email): "
+        read -r username
         if [ -z "$username" ]; then
             log "ERROR: Username is required"
             exit 1
         fi
-        read -s -p "Enter password: " password
-        echo
+        if [ -t 0 ]; then
+            printf "Enter password: " && stty -echo && read -r password && stty echo && printf '\n'
+        else
+            printf "Enter password: " && read -r password && printf '\n'
+        fi
         if [ -z "$password" ]; then
             if [ -n "$LOGIN_PASSWORD" ]; then
                 log "Using LOGIN_PASSWORD from environment variable"
@@ -361,18 +412,18 @@ test_endpoints() {
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/auth/login" \
             -H "Content-Type: application/json" \
             -d "{\"email\": \"$username\", \"password\": \"$password\"}")
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
+        http_code=$(echo "$response" | sed -n '$p')
+        body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ]; then
             jwt_token=$(echo "$body" | jq -r '.accessToken')
-            log "SUCCESS: Obtained JWT token (first 10 chars: ${jwt_token:0:10}...)"
+            log "SUCCESS: Obtained JWT token (first 10 chars: $(printf '%.10s' "$jwt_token")...)"
         else
             log "ERROR: Failed to obtain JWT token with HTTP status $http_code"
             log "Response: $body"
             exit 1
         fi
     else
-        log "Using provided JWT token (first 10 chars: ${jwt_token:0:10}...)"
+        log "Using provided JWT token (first 10 chars: $(printf '%.10s' "$jwt_token")...)"
     fi
 
     # Test 1: POST /api/auth/logout
@@ -381,8 +432,8 @@ test_endpoints() {
         -H "Authorization: Bearer $jwt_token" \
         -H "Content-Type: application/json" \
         -d '{}')
-    http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n -1)
+    http_code=$(echo "$response" | sed -n '$p')
+    body=$(echo "$response" | sed '$d')
     if [ "$http_code" -eq 200 ]; then
         log "SUCCESS: /api/auth/logout returned 200"
         log "Response: $body"
@@ -398,8 +449,8 @@ test_endpoints() {
         -H "Authorization: Bearer $jwt_token" \
         -H "Content-Type: application/json" \
         -d '{}')
-    http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n -1)
+    http_code=$(echo "$response" | sed -n '$p')
+    body=$(echo "$response" | sed '$d')
     if [ "$http_code" -eq 200 ]; then
         log "SUCCESS: /api/users/admin/users/$USER_ID/force-logout returned 200"
         log "Response: $body"
@@ -413,8 +464,8 @@ test_endpoints() {
     log "Testing GET /api/service-categories?locale=en"
     response=$(curl -s -w "\n%{http_code}" "$KONG_PUBLIC_URL/api/service-categories?locale=en" \
         -H "Authorization: Bearer $jwt_token")
-    http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n -1)
+    http_code=$(echo "$response" | sed -n '$p')
+    body=$(echo "$response" | sed '$d')
     if [ "$http_code" -eq 200 ]; then
         log "SUCCESS: /api/service-categories returned 200"
         log "Response: $body"
@@ -426,7 +477,7 @@ test_endpoints() {
 }
 
 # Parse command-line options
-BACKUP_FILE=""
+BACKUP_FILE="${BACKUP_FILE:-/opt/kong-config/kong_config.json}"
 TEST_TOKEN=""
 TEST_MODE=false
 while getopts "b:t::h" opt; do
@@ -458,14 +509,17 @@ while getopts "b:t::h" opt; do
 done
 
 # Execute operations
-if [ "$TEST_MODE" = false ] && [ -z "$BACKUP_FILE" ]; then
-    log "ERROR: Backup file is required. Use -b <backup_file>"
-    usage
-elif [ "$TEST_MODE" = true ]; then
+if [ "$TEST_MODE" = true ]; then
     test_endpoints "$TEST_TOKEN"
 elif [ -n "$BACKUP_FILE" ]; then
     restore_config "$BACKUP_FILE"
+    _restore_rc=$?
+else
+    log "ERROR: No action specified. Use -b <backup_file> or -t [jwt_token]"
+    usage
 fi
 
-log "Operation completed successfully"
-exit 0
+if [ "$_restore_rc" -eq 0 ] 2>/dev/null; then
+    log "Operation completed successfully"
+fi
+exit ${_restore_rc:-0}

@@ -669,115 +669,99 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
-  /// Parse inline markdown (**bold** and *italic*) into pw.TextSpan children.
   pw.TextSpan _buildInlineSpans(String text, pw.Font? font,
       {double fontSize = 14, PdfColor? color}) {
-    final baseStyle =
-        pw.TextStyle(font: font, fontSize: fontSize, color: color);
-    final spans = <pw.TextSpan>[];
+    final baseStyle = pw.TextStyle(
+      font: font,
+      fontSize: fontSize,
+      color: color,
+    );
+    final boldStyle = pw.TextStyle(
+      font: font,
+      fontSize: fontSize,
+      fontWeight: pw.FontWeight.bold,
+      color: color,
+    );
+    final italicStyle = pw.TextStyle(
+      font: font,
+      fontSize: fontSize,
+      fontStyle: pw.FontStyle.italic,
+      color: color,
+    );
 
-    // Matches **bold** (group 1) or *italic* (group 2)
-    final regex = RegExp(r'\*\*(.+?)\*\*|\*([^*]+?)\*');
+    final pattern = RegExp(r'\*\*(.+?)\*\*|\*([^*]+?)\*');
+    final spans = <pw.TextSpan>[];
     int lastEnd = 0;
 
-    for (final match in regex.allMatches(text)) {
+    for (final match in pattern.allMatches(text)) {
       if (match.start > lastEnd) {
-        spans.add(pw.TextSpan(
-            text: text.substring(lastEnd, match.start), style: baseStyle));
+        spans.add(pw.TextSpan(text: text.substring(lastEnd, match.start), style: baseStyle));
       }
       if (match.group(1) != null) {
-        spans.add(pw.TextSpan(
-            text: match.group(1),
-            style: pw.TextStyle(
-                font: font,
-                fontSize: fontSize,
-                fontWeight: pw.FontWeight.bold,
-                color: color)));
+        spans.add(pw.TextSpan(text: match.group(1), style: boldStyle));
       } else if (match.group(2) != null) {
-        spans.add(pw.TextSpan(
-            text: match.group(2),
-            style: pw.TextStyle(
-                font: font,
-                fontSize: fontSize,
-                fontStyle: pw.FontStyle.italic,
-                color: color)));
+        spans.add(pw.TextSpan(text: match.group(2), style: italicStyle));
       }
       lastEnd = match.end;
     }
 
     if (lastEnd < text.length) {
-      spans.add(pw.TextSpan(
-          text: text.substring(lastEnd), style: baseStyle));
+      spans.add(pw.TextSpan(text: text.substring(lastEnd), style: baseStyle));
     }
 
-    if (spans.isEmpty) return pw.TextSpan(text: text, style: baseStyle);
-    return pw.TextSpan(children: spans, style: baseStyle);
+    if (spans.isEmpty) {
+      return pw.TextSpan(text: text, style: baseStyle);
+    }
+    return pw.TextSpan(children: spans);
   }
 
-  /// Parse a markdown block (header, bullet list, or paragraph) into a PDF widget.
   pw.Widget _parseMarkdownBlock(String block, pw.Font? font, PdfColor textColor) {
     final trimmed = block.trim();
+    if (trimmed.isEmpty) return pw.SizedBox.shrink();
 
-    // Header detection: # or ## or ###
-    if (trimmed.startsWith('### ')) {
+    // Headers: # text → 18, ## text → 16, ### text → 15
+    final headerMatch = RegExp(r'^(#{1,3})\s+(.*)').firstMatch(trimmed);
+    if (headerMatch != null) {
+      final level = headerMatch.group(1)!.length;
+      final headerText = headerMatch.group(2)!;
+      final headerSize = level == 1 ? 18.0 : level == 2 ? 16.0 : 15.0;
       return pw.RichText(
-          text: _buildInlineSpans(trimmed.substring(4).trim(), font,
-              fontSize: 15, color: textColor));
-    }
-    if (trimmed.startsWith('## ')) {
-      return pw.RichText(
-          text: _buildInlineSpans(trimmed.substring(3).trim(), font,
-              fontSize: 16, color: textColor));
-    }
-    if (trimmed.startsWith('# ')) {
-      return pw.RichText(
-          text: _buildInlineSpans(trimmed.substring(2).trim(), font,
-              fontSize: 18, color: textColor));
+        text: _buildInlineSpans(headerText, font,
+            fontSize: headerSize, color: textColor),
+      );
     }
 
-    // Bullet list detection
+    // Bullet list: lines starting with - or *
     final lines = trimmed.split('\n');
-    final isBulletList =
-        lines.any((l) => l.trimLeft().startsWith('- ') || l.trimLeft().startsWith('* '));
+    final isBulletList = lines.every((l) => l.trimLeft().startsWith('- ') || l.trimLeft().startsWith('* ') || l.trimLeft().isEmpty);
 
     if (isBulletList) {
-      final bulletWidgets = <pw.Widget>[];
-      for (final line in lines) {
-        final stripped = line.trimLeft();
-        if (stripped.startsWith('- ') || stripped.startsWith('* ')) {
-          final bulletText = stripped.substring(2).trim();
-          bulletWidgets.add(pw.Row(
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: lines
+            .where((l) => l.trimLeft().isNotEmpty)
+            .map((line) {
+          final bulletText = RegExp(r'^[-*]\s+(.*)').firstMatch(line.trimLeft())?.group(1) ?? line.trimLeft();
+          return pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.SizedBox(width: 8),
-              pw.Text('• ',
-                  style:
-                      pw.TextStyle(font: font, fontSize: 14, color: textColor)),
+              pw.Text('•  ', style: pw.TextStyle(font: font, fontSize: 14, color: textColor)),
               pw.Expanded(
                 child: pw.RichText(
-                    text: _buildInlineSpans(bulletText, font,
-                        fontSize: 14, color: textColor)),
+                  text: _buildInlineSpans(bulletText, font,
+                      fontSize: 14, color: textColor),
+                ),
               ),
             ],
-          ));
-        } else if (stripped.isNotEmpty) {
-          bulletWidgets.add(pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 16),
-            child: pw.RichText(
-                text: _buildInlineSpans(stripped, font,
-                    fontSize: 14, color: textColor)),
-          ));
-        }
-      }
-      return pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: bulletWidgets);
+          );
+        }).toList(),
+      );
     }
 
-    // Regular paragraph with inline formatting
+    // Default: paragraph with inline formatting
     return pw.RichText(
-        text: _buildInlineSpans(trimmed, font,
-            fontSize: 14, color: textColor));
+      text: _buildInlineSpans(trimmed, font, fontSize: 14, color: textColor),
+    );
   }
 
   Future<void> exportChatToPDF() async {
@@ -802,36 +786,34 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     for (final msg in _messages) {
       final bool isUser = msg['role'] == 'user';
       final String sender = isUser ? "You" : "Don Chepe";
-      // Export visible content for PDF (user expectation)
       final String content = msg['content'] ?? '';
       if (content.trim().isEmpty) continue;
 
-      final textColor = isUser ? PdfColors.blue800 : PdfColors.black;
-      final accentColor = isUser ? PdfColors.blue600 : PdfColors.green700;
-      final bgColor = isUser ? PdfColors.blue50 : PdfColors.grey100;
+      final PdfColor bgColor = isUser ? PdfColors.blue50 : PdfColors.grey100;
+      final PdfColor accentColor = isUser ? PdfColors.blue400 : PdfColors.green400;
+      final PdfColor textColor = isUser ? PdfColors.blue900 : PdfColors.grey800;
 
-      // Split into blocks for markdown parsing, but render as one visual block.
-      // Each block is a breakable pw.RichText — no decorated Container wrapper
-      // so the PDF library can split across pages without TooManyPagesException.
-      final blocks = content.split('\n\n').where((b) => b.trim().isNotEmpty).toList();
-
-      // Sender label
+      // One sender label per message
       pages.add(pw.Text(sender,
           style: pw.TextStyle(
               font: customFont,
               fontSize: 12,
               fontWeight: pw.FontWeight.bold,
               color: isUser ? PdfColors.blue800 : PdfColors.grey800)));
-      pages.add(pw.SizedBox(height: 4));
+      pages.add(pw.SizedBox(height: 2));
 
-      // Render each block with left accent bar + background
+      // Split by \n\n into blocks for markdown parsing
+      final blocks = content.split('\n\n');
       for (final block in blocks) {
+        if (block.trim().isEmpty) continue;
         pages.add(pw.Container(
+          width: double.infinity,
           margin: const pw.EdgeInsets.only(bottom: 2),
           padding: const pw.EdgeInsets.only(left: 10, top: 6, bottom: 6, right: 12),
           decoration: pw.BoxDecoration(
-              color: bgColor,
-              border: pw.Border(left: pw.BorderSide(color: accentColor, width: 3))),
+            color: bgColor,
+            border: pw.Border(left: pw.BorderSide(color: accentColor, width: 3)),
+          ),
           child: _parseMarkdownBlock(block, customFont, textColor),
         ));
       }

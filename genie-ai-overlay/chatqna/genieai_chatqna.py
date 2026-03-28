@@ -1413,6 +1413,13 @@ class ChatQnAService:
                 return response
         
         llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get("text", "Sorry, I could not generate a response.")
+
+        # Strip leaked conversation markers from LLM response.
+        # The LLM sometimes echoes back the |<-MSG->| delimiters and
+        # USER:/ASSISTANT: role markers that are used internally to
+        # format chat history in the prompt.
+        llm_response = re.sub(r'\s*\|<-MSG->\|\s*', '\n', llm_response)
+        llm_response = re.sub(r'^(USER|ASSISTANT):\s*', '', llm_response, flags=re.MULTILINE)
         
         if original_language and original_language.strip() != "EN":
             if logflag:

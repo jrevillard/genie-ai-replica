@@ -477,20 +477,38 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ###### Token limit handling ######
         ##################################
         system_instructions = CHATQNA_SYSTEM_PROMPT
-    
+
+        # CRITICAL: Inject explicit English language instructions when language is EN
+        # This overrides model bias toward Spanish responses
+        original_language = kwargs.get("original_language", None)
+        if original_language and original_language.strip() == "EN":
+            system_instructions = "\n\nMANDATORY: You MUST respond ONLY in English. Do NOT respond in Spanish or any other language. All responses must be in English regardless of the content language.\n\n" + system_instructions
+            if logflag:
+                logger.info(f"[LANGUAGE DEBUG] Injected ENGLISH instruction into system prompt (original_language={original_language})")
+
+        # DEBUG: Log the system prompt to verify it's loaded correctly
+        if logflag:
+            logger.info(f'\n[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT loaded: {"YES" if system_instructions else "NO"}')
+            if system_instructions:
+                logger.info(f'[SYSTEM PROMPT DEBUG] System prompt length: {len(system_instructions)} chars')
+                logger.info(f'[SYSTEM PROMPT DEBUG] System prompt preview: {system_instructions[:500]}...')
+            else:
+                logger.error('[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT IS NONE OR EMPTY!')
+
         prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}")
-        
-        final_llm_prompt = f"{system_instructions}{prompt_add_context}"
+
+        # FIX: Separate system and user content for proper chat template handling
+        user_content = prompt_add_context
 
         tokenizer = get_tokenizer()
         max_model_tokens = MAX_MODEL_LEN_TEXTGEN
         max_answer_tokens = llm_parameters_dict["max_tokens"]  # Typically 1024
-        # Count tokens in prompt
-        prompt_tokens = len(tokenizer.encode(final_llm_prompt))
+        # Count tokens in full prompt (system + user combined for token limit check)
+        full_prompt_tokens = len(tokenizer.encode(system_instructions + user_content))
         # Check if the total token count exceeds the model's limit
-        if prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
+        if full_prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
             # Calculate maximum tokens for history
             prompt_add_context_tokens = len(tokenizer.encode(prompt_add_context))
             translated_history_tokens = len(tokenizer.encode(translated_history_string))
@@ -509,14 +527,17 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 current_tokens += segment_tokens
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
-            # Reconstruct final prompt
-            prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
+            # Reconstruct user content (system instructions stay the same)
+            user_content = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
                          f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
-            final_llm_prompt = f"{system_instructions}{prompt_add_context}"
-        
 
-        next_inputs["messages"] = [{"role": "user", "content": final_llm_prompt}]
+
+        # FIX: Send system and user as separate messages for proper chat template handling
+        next_inputs["messages"] = [
+            {"role": "system", "content": system_instructions},
+            {"role": "user", "content": user_content}
+        ]
         next_inputs["max_tokens"] = llm_parameters_dict["max_tokens"]
         next_inputs["top_p"] = llm_parameters_dict["top_p"]
         next_inputs["stream"] = inputs["stream"]
@@ -525,6 +546,12 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         inputs = next_inputs
         if logflag:
             logger.debug(f'Raw input of the llm\n {inputs}\n')
+            # DEBUG: Log the messages array being sent to LLM
+            logger.info(f'\n[LLM DEBUG] Messages being sent to LLM:')
+            for i, msg in enumerate(inputs["messages"]):
+                logger.info(f'  Message {i}: role={msg["role"]}, content_length={len(msg["content"])} chars')
+                logger.info(f'  Message {i} content preview: {msg["content"][:200]}...')
+            logger.info(f'\n[LLM DEBUG] Full messages array: {inputs["messages"]}\n')
 
     return inputs
 
@@ -1386,6 +1413,13 @@ class ChatQnAService:
                 return response
         
         llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get("text", "Sorry, I could not generate a response.")
+
+        # Strip leaked conversation markers from LLM response.
+        # The LLM sometimes echoes back the |<-MSG->| delimiters and
+        # USER:/ASSISTANT: role markers that are used internally to
+        # format chat history in the prompt.
+        llm_response = re.sub(r'\s*\|<-MSG->\|\s*', '\n', llm_response)
+        llm_response = re.sub(r'^(USER|ASSISTANT):\s*', '', llm_response, flags=re.MULTILINE)
         
         if original_language and original_language.strip() != "EN":
             if logflag:

@@ -4,6 +4,7 @@
 **Project:** GENIE.AI
 **Framework:** Vue 3 (Web) / Flutter 3.5.1+ (Mobile) / Node.js & Python (Backend)
 
+
 ---
 
 ## 1. CORE PRINCIPLES - READ FIRST BEFORE ANY CHANGES

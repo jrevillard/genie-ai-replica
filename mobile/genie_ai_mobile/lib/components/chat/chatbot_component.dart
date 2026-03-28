@@ -623,6 +623,117 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
+  /// Parse inline markdown (**bold** and *italic*) into pw.TextSpan children.
+  pw.TextSpan _buildInlineSpans(String text, pw.Font? font,
+      {double fontSize = 14, PdfColor? color}) {
+    final baseStyle =
+        pw.TextStyle(font: font, fontSize: fontSize, color: color);
+    final spans = <pw.TextSpan>[];
+
+    // Matches **bold** (group 1) or *italic* (group 2)
+    final regex = RegExp(r'\*\*(.+?)\*\*|\*([^*]+?)\*');
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(pw.TextSpan(
+            text: text.substring(lastEnd, match.start), style: baseStyle));
+      }
+      if (match.group(1) != null) {
+        spans.add(pw.TextSpan(
+            text: match.group(1),
+            style: pw.TextStyle(
+                font: font,
+                fontSize: fontSize,
+                fontWeight: pw.FontWeight.bold,
+                color: color)));
+      } else if (match.group(2) != null) {
+        spans.add(pw.TextSpan(
+            text: match.group(2),
+            style: pw.TextStyle(
+                font: font,
+                fontSize: fontSize,
+                fontStyle: pw.FontStyle.italic,
+                color: color)));
+      }
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(pw.TextSpan(
+          text: text.substring(lastEnd), style: baseStyle));
+    }
+
+    if (spans.isEmpty) return pw.TextSpan(text: text, style: baseStyle);
+    return pw.TextSpan(children: spans, style: baseStyle);
+  }
+
+  /// Parse a markdown block (header, bullet list, or paragraph) into a PDF widget.
+  pw.Widget _parseMarkdownBlock(String block, pw.Font? font, PdfColor textColor) {
+    final trimmed = block.trim();
+
+    // Header detection: # or ## or ###
+    if (trimmed.startsWith('### ')) {
+      return pw.RichText(
+          text: _buildInlineSpans(trimmed.substring(4).trim(), font,
+              fontSize: 15, color: textColor));
+    }
+    if (trimmed.startsWith('## ')) {
+      return pw.RichText(
+          text: _buildInlineSpans(trimmed.substring(3).trim(), font,
+              fontSize: 16, color: textColor));
+    }
+    if (trimmed.startsWith('# ')) {
+      return pw.RichText(
+          text: _buildInlineSpans(trimmed.substring(2).trim(), font,
+              fontSize: 18, color: textColor));
+    }
+
+    // Bullet list detection
+    final lines = trimmed.split('\n');
+    final isBulletList =
+        lines.any((l) => l.trimLeft().startsWith('- ') || l.trimLeft().startsWith('* '));
+
+    if (isBulletList) {
+      final bulletWidgets = <pw.Widget>[];
+      for (final line in lines) {
+        final stripped = line.trimLeft();
+        if (stripped.startsWith('- ') || stripped.startsWith('* ')) {
+          final bulletText = stripped.substring(2).trim();
+          bulletWidgets.add(pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.SizedBox(width: 8),
+              pw.Text('• ',
+                  style:
+                      pw.TextStyle(font: font, fontSize: 14, color: textColor)),
+              pw.Expanded(
+                child: pw.RichText(
+                    text: _buildInlineSpans(bulletText, font,
+                        fontSize: 14, color: textColor)),
+              ),
+            ],
+          ));
+        } else if (stripped.isNotEmpty) {
+          bulletWidgets.add(pw.Padding(
+            padding: const pw.EdgeInsets.only(left: 16),
+            child: pw.RichText(
+                text: _buildInlineSpans(stripped, font,
+                    fontSize: 14, color: textColor)),
+          ));
+        }
+      }
+      return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: bulletWidgets);
+    }
+
+    // Regular paragraph with inline formatting
+    return pw.RichText(
+        text: _buildInlineSpans(trimmed, font,
+            fontSize: 14, color: textColor));
+  }
+
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
     pw.Font? customFont;
@@ -647,40 +758,39 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       final String sender = isUser ? "You" : "Don Chepe";
       // Export visible content for PDF (user expectation)
       final String content = msg['content'] ?? '';
-      final paragraphs = content.split('\n\n');
+      if (content.trim().isEmpty) continue;
 
-      for (final paragraph in paragraphs) {
-        if (paragraph.trim().isEmpty) continue;
+      final textColor = isUser ? PdfColors.blue800 : PdfColors.black;
+      final accentColor = isUser ? PdfColors.blue600 : PdfColors.green700;
+      final bgColor = isUser ? PdfColors.blue50 : PdfColors.grey100;
+
+      // Split into blocks for markdown parsing, but render as one visual block.
+      // Each block is a breakable pw.RichText — no decorated Container wrapper
+      // so the PDF library can split across pages without TooManyPagesException.
+      final blocks = content.split('\n\n').where((b) => b.trim().isNotEmpty).toList();
+
+      // Sender label
+      pages.add(pw.Text(sender,
+          style: pw.TextStyle(
+              font: customFont,
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: isUser ? PdfColors.blue800 : PdfColors.grey800)));
+      pages.add(pw.SizedBox(height: 4));
+
+      // Render each block with left accent bar + background
+      for (final block in blocks) {
         pages.add(pw.Container(
-          margin: const pw.EdgeInsets.symmetric(vertical: 8),
-          child: pw.Column(
-            crossAxisAlignment: isUser
-                ? pw.CrossAxisAlignment.end
-                : pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(sender,
-                  style: pw.TextStyle(
-                      font: customFont,
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                      color: isUser ? PdfColors.blue800 : PdfColors.grey800)),
-              pw.SizedBox(height: 4),
-              pw.Container(
-                constraints: const pw.BoxConstraints(maxWidth: 500),
-                padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                    color: isUser ? PdfColors.blue50 : PdfColors.grey100,
-                    borderRadius: pw.BorderRadius.circular(12),
-                    border: pw.Border.all(color: PdfColors.grey300)),
-                child: pw.Text(paragraph.trim(),
-                    style: pw.TextStyle(
-                        font: customFont, fontSize: 14, height: 1.4)),
-              ),
-            ],
-          ),
+          margin: const pw.EdgeInsets.only(bottom: 2),
+          padding: const pw.EdgeInsets.only(left: 10, top: 6, bottom: 6, right: 12),
+          decoration: pw.BoxDecoration(
+              color: bgColor,
+              border: pw.Border(left: pw.BorderSide(color: accentColor, width: 3))),
+          child: _parseMarkdownBlock(block, customFont, textColor),
         ));
-        pages.add(pw.SizedBox(height: 8));
       }
+
+      pages.add(pw.SizedBox(height: 12));
     }
 
     try {
@@ -699,6 +809,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       NotificationService.success(tr('chatbot.exportSuccess'));
       setState(() => _showExportDialog = false);
     } catch (e) {
+      debugPrint("[PDF EXPORT] ERROR: $e");
       NotificationService.error(tr('chatbot.exportError'));
     }
   }

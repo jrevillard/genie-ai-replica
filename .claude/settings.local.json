@@ -5,7 +5,9 @@
       "Bash(findstr:*)",
       "Bash(bn)",
       "Bash(st \")",
-      "Bash(flutter clean)"
+      "Bash(flutter clean)",
+      "Bash(ls /home/athena/mewa/components/weather-mcp-service/*.py)",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

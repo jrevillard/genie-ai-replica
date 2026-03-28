@@ -5,6 +5,8 @@ const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
+const toolRegistry = require('./tool-registry');
+const { runWithTools } = require('./tool-orchestrator');
 
 class QueryService {
   constructor() {
@@ -387,60 +389,135 @@ class QueryService {
         await this.queries.update(queryId, updateData);
 
       } else {
-        // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
-        const opeaPort = process.env.OPEA_PORT || '8888';
-        const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
-        let opeaPayload;
-        if (backendMode === 'single-message') {
-          logger.info('[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.');
-          const lastMessage = queryData.messages[queryData.messages.length - 1];
-          const queryText = lastMessage ? lastMessage.content : '';
+        // ── Level 1: Weather keyword router ────────────────────────────────────
+        // Detects weather intent by keyword — routes to Python service, bypasses OPEA.
+        // OPEA port 9000 does not support tool_choice: "auto"; see implementation guide §3.
+        const weatherEnabled = process.env.WEATHER_ENABLED === 'true';
+        const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://localhost:8000';
 
-          if (!queryText) {
-            throw new Error('Could not extract last message content for single-message mode.');
+        const lastUserMsg = [...(queryData.messages || [])]
+          .reverse()
+          .find(m => m.role === 'user')?.content || queryText;
+
+        const WEATHER_KW = ['weather', 'forecast', 'rain', 'rainfall', 'temperature',
+                            'humid', 'storm', 'flood', 'cyclone', 'monsoon', 'climate'];
+        const isWeatherQuery = weatherEnabled &&
+          WEATHER_KW.some(kw => lastUserMsg.toLowerCase().includes(kw));
+
+        if (isWeatherQuery) {
+          logger.info(`[WEATHER] Routing to weather-mcp-service: "${lastUserMsg}"`);
+          try {
+            const wResp = await axios.post(
+              `${weatherMcpUrl}/query`,
+              { query: lastUserMsg },
+              { timeout: 30000 }
+            );
+            opeaResponseContent = wResp.data.answer;
+            opeaMetadata = {
+              source_documents: [],
+              confidence_score: 1.0,
+              weather:    true,
+              location:   wResp.data.location,
+              forecast:   wResp.data.forecast,
+              risk_tier:  wResp.data.risk_tier  ?? 0,
+              risk_label: wResp.data.risk_label ?? 'Normal',
+              triggers:   wResp.data.triggers   ?? [],
+              advisory:   wResp.data.advisory   ?? null,
+            };
+          } catch (wErr) {
+            logger.error(`[WEATHER] Service call failed: ${wErr.message}`);
+            opeaResponseContent = "I'm sorry, I couldn't fetch the weather right now. Please try again.";
+            opeaMetadata = { source_documents: [], confidence_score: 0, weather: true };
+          }
+          opeaResponseTime = Date.now() - opeaStartTime;
+          await this.queries.update(queryId, {
+            response: opeaResponseContent,
+            responseTime: opeaResponseTime,
+            isAnswered: true,
+            metadata: opeaMetadata
+          });
+
+        } else {
+
+          // ── Level 2: vLLM tool-calling loop (TOOLS_ENABLED=true) ───────────────
+          // Only works with a raw vLLM instance — NOT port 9000 on the OPEA server.
+          // Currently disabled (TOOLS_ENABLED=false).
+          const toolsEnabled = process.env.TOOLS_ENABLED === 'true';
+          const availableTools = toolsEnabled ? toolRegistry.getDefinitions() : [];
+
+          // Build OPEA/vLLM payload (shared by L2 tool loop and L3 OPEA fallback)
+          const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+          const opeaPort = process.env.OPEA_PORT || '8888';
+          const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+
+          let opeaPayload;
+          if (backendMode === 'single-message') {
+            logger.info('[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.');
+            const lastMessage = queryData.messages[queryData.messages.length - 1];
+            const msgText = lastMessage ? lastMessage.content : '';
+
+            if (!msgText) {
+              throw new Error('Could not extract last message content for single-message mode.');
+            }
+
+            opeaPayload = {
+              messages: msgText,
+              stream: false
+            };
+          } else {
+            logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
+            opeaPayload = {
+              messages: queryData.messages,
+              context: {
+                categoryLabel: queryData.context.categoryLabel,
+                serviceLabels: queryData.context.serviceLabels,
+                language: queryData.context.language
+              },
+              user_id: queryData.userId,
+              stream: false
+            };
           }
 
-          opeaPayload = {
-            messages: queryText,
-            stream: false
-          };
-        } else {
-          logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
-          opeaPayload = {
-            messages: queryData.messages,
-            context: {
-              categoryLabel: queryData.context.categoryLabel,
-              serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
-            },
-            user_id: queryData.userId,
-            stream: false
-          };
+          if (toolsEnabled && availableTools.length > 0) {
+            const vllmUrl = process.env.VLLM_URL;
+            const vllmModel = process.env.VLLM_MODEL || 'ibm-granite/granite-3.3-2b-instruct';
+            const llmClient = {
+              chat: async ({ messages, tools, tool_choice }) => {
+                const r = await axios.post(vllmUrl, { model: vllmModel, messages, tools, tool_choice, stream: false });
+                return r.data;
+              }
+            };
+            const result = await runWithTools(llmClient, queryData.messages, availableTools, toolRegistry);
+            opeaResponseContent = result.content;
+            opeaMetadata = { toolsUsedCount: result.toolsUsed, source_documents: [], confidence_score: 1.0, orchestrator: true };
+
+          } else {
+
+            // ── Level 3: OPEA ChatQnA (RAG pipeline) ─────────────────────────────
+            // Default path. Calls port 8888 ChatQnA megaservice (embedding → retrieval → LLM).
+            logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
+            logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
+
+            const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
+
+            opeaResponseTime = workerResult.responseTime;
+            opeaResponseContent = workerResult.response;
+            opeaMetadata = workerResult.metadata;
+
+            logger.info(`[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`);
+            logger.info(`[DEBUG] OPEA Response Content: ${opeaResponseContent}`);
+            logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
+          }
+
+          opeaResponseTime = opeaResponseTime || (Date.now() - opeaStartTime);
+          await this.queries.update(queryId, {
+            response: opeaResponseContent,
+            responseTime: opeaResponseTime,
+            isAnswered: true,
+            metadata: opeaMetadata
+          });
         }
-
-        logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
-        logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
-
-        // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
-
-        opeaResponseTime = workerResult.responseTime;
-        opeaResponseContent = workerResult.response;
-        opeaMetadata = workerResult.metadata;
-
-        logger.info(`[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`);
-        logger.info(`[DEBUG] OPEA Response Content: ${opeaResponseContent}`);
-        logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
-
-        const updateData = {
-          response: opeaResponseContent,
-          responseTime: opeaResponseTime,
-          isAnswered: true,
-          metadata: opeaMetadata
-        };
-        await this.queries.update(queryId, updateData);
       }
 
       // Record the query in analytics

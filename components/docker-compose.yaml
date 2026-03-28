@@ -76,14 +76,40 @@ services:
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - VLLM_TRANSLATION_SERVICE_PORT=${VLLM_TRANSLATION_SERVICE_PORT:-9031}
+      # Weather MCP Service
+      - WEATHER_ENABLED=${WEATHER_ENABLED:-true}
+      - WEATHER_MCP_URL=${WEATHER_MCP_URL:-http://weather-mcp-service:8000}
+      - TOOLS_ENABLED=${TOOLS_ENABLED:-false}
+      - VLLM_URL=${VLLM_URL}
+      - VLLM_MODEL=${VLLM_MODEL:-ibm-granite/granite-3.3-2b-instruct}
+      - MAX_TOOL_ROUNDS=${MAX_TOOL_ROUNDS:-5}
     env_file:
       - ./gov-chat-backend/.env
     depends_on:
       redis-cache:
         condition: service_healthy
+      weather-mcp-service:
+        condition: service_healthy
     networks:
       - chatqna_default
   
+  weather-mcp-service:
+    build: ./weather-mcp-service
+    container_name: weather-mcp-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./weather-mcp-service/.env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; exit(0) if requests.get('http://localhost:8000/health', timeout=5).status_code == 200 else exit(1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+    networks:
+      - chatqna_default
+
   document-repository:
     build:
       context: .

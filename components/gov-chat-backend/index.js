@@ -955,6 +955,19 @@ async function startApp() {
     throw error;
   }
 
+  // Register MCP tools — non-fatal if weather service is unavailable at startup
+  try {
+    logger.info('Initializing MCP Tool Registry...');
+    const toolRegistry = require('./services/tool-registry');
+    const weatherMcpBridge = require('./tools/weather-mcp-bridge');
+    toolRegistry.register(weatherMcpBridge.definition, weatherMcpBridge.handler);
+    logger.info(`MCP Tool Registry ready. Available tools: ${toolRegistry.list().join(', ')}`);
+  } catch (toolError) {
+    logger.warn('Failed to initialize MCP Tool Registry (continuing without tools):', {
+      error: toolError.message
+    });
+  }
+
   // Define routes with paths and services
   const routeConfigs = [
     { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService },

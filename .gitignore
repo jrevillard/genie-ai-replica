@@ -13,3 +13,4 @@ data/models--cross-encoder--ms-marco-MiniLM-L-6-v2/blobs/**
 data/models--BAAI--bge-base-en-v1.5/blobs/**
 data/models--*/*/blobs/**data/models--cross-encoder--ms-marco-MiniLM-L-6-v2/blobs/**
 data/models--BAAI--bge-base-en-v1.5/blobs/**
+data/models--*/blobs/**

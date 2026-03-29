@@ -1,51 +1,29 @@
 # MCP Weather Forecast — Full Implementation Guide
 
-> **What this covers**: A complete walkthrough of how weather forecast is implemented in
-> MEWA — from the Python microservice that scrapes official Bangladesh Meteorological
-> Department data, through the Node.js keyword router, to the Gemini-powered explanation
-> that appears in the chatbot. Includes a detailed explanation of why the OPEA vLLM wrapper
-> (port 9000) could not be used for OpenAI-style tool calling, and how OPEA's architecture
-> differs from a standard LLM API.
+This document explains how weather forecasting is implemented in MEWA, from the Python
+weather service (BMD scraping + MCP tools) to backend routing and chatbot responses.
+It also documents the OPEA port `9000` compatibility limits for OpenAI-style tool calling.
 
 ---
 
 ## Table of Contents
 
-1. [Concept: What Is MCP Tool Calling?](#1-concept-what-is-mcp-tool-calling)
-2. [Architecture Overview — Final Working Design](#2-architecture-overview--final-working-design)
-3. [Why OPEA Port 9000 Cannot Do Tool Calling](#3-why-opea-port-9000-cannot-do-tool-calling)
-   - 3.1 [What OPEA Actually Is](#31-what-opea-actually-is)
-   - 3.2 [The Validation Error Dissected](#32-the-validation-error-dissected)
-   - 3.3 [OPEA's Internal Request Schema](#33-opeas-internal-request-schema)
-   - 3.4 [The ChatQnA Megaservice at Port 8888](#34-the-chatqna-megaservice-at-port-8888)
-   - 3.5 [What a Real Tool-Capable vLLM Looks Like](#35-what-a-real-tool-capable-vllm-looks-like)
-4. [Component Map — All Relevant Files](#4-component-map--all-relevant-files)
-5. [Python Service: weather-mcp-service](#5-python-service-weather-mcp-service)
-   - 5.1 [Directory Structure](#51-directory-structure)
-   - 5.2 [requirements.txt](#52-requirementstxt)
-   - 5.3 [Dockerfile](#53-dockerfile)
-   - 5.4 [main.py — FastAPI Entry-Point](#54-mainpy--fastapi-entry-point)
-   - 5.5 [mcp_client.py — MCPClientManager](#55-mcp_clientpy--mcpclientmanager)
-   - 5.6 [agent.py — WeatherAgent (with Mapbox fallback)](#56-agentpy--weatheragent-with-mapbox-fallback)
-   - 5.7 [mcp_weather/main.py — FastMCP stdio Server](#57-mcp_weathermainpy--fastmcp-stdio-server)
-   - 5.8 [mcp_weather/tools/weather_forecast.py — BMD Scraper](#58-mcp_weathertoolsweather_forecastpy--bmd-scraper)
-   - 5.9 [mcp_weather/tools/buffer_point.py — Geodesic Buffer](#59-mcp_weathertoolsbuffer_pointpy--geodesic-buffer)
-6. [Node.js Backend: Keyword Router + Tool Infrastructure](#6-nodejs-backend-keyword-router--tool-infrastructure)
-   - 6.1 [services/tool-registry.js — Singleton Registry](#61-servicestool-registryjs--singleton-registry)
-   - 6.2 [services/tool-orchestrator.js — Agentic Loop](#62-servicestool-orchestratorjs--agentic-loop)
-   - 6.3 [tools/weather-mcp-bridge.js — HTTP Adapter](#63-toolsweather-mcp-bridgejs--http-adapter)
-7. [Wiring Into the Backend](#7-wiring-into-the-backend)
-   - 7.1 [index.js — Tool Registration on Startup](#71-indexjs--tool-registration-on-startup)
-   - 7.2 [services/query-service.js — The Keyword Router](#72-servicesquery-servicejs--the-keyword-router)
-8. [Environment Variables Reference](#8-environment-variables-reference)
-9. [Running the Full Stack](#9-running-the-full-stack)
-10. [Testing the Integration](#10-testing-the-integration)
-11. [How to Add a New MCP Tool](#11-how-to-add-a-new-mcp-tool)
-12. [Troubleshooting](#12-troubleshooting)
+- [Concept: MCP Tool Calling](#1-concept-mcp-tool-calling)
+- [Architecture Overview](#2-architecture-overview)
+- [OPEA Port 9000 Limitations](#3-opea-port-9000-limitations)
+- [Component Map](#4-component-map)
+- [Python Service: `weather-mcp-service`](#5-python-service-weather-mcp-service)
+- [Node.js Backend: Keyword Router and Tool Infrastructure](#6-nodejs-backend-keyword-router-and-tool-infrastructure)
+- [Backend Integration](#7-backend-integration)
+- [Environment Variables Reference](#8-environment-variables-reference)
+- [Running the Full Stack](#9-running-the-full-stack)
+- [Testing the Integration](#10-testing-the-integration)
+- [Adding a New MCP Tool](#11-adding-a-new-mcp-tool)
+- [Troubleshooting](#12-troubleshooting)
 
 ---
 
-## 1. Concept: What Is MCP Tool Calling?
+## 1. Concept: MCP Tool Calling
 
 **MCP (Model Context Protocol)** is a standard for exposing callable functions to LLMs.
 Instead of the LLM guessing an answer, it can request data from external services at runtime.
@@ -72,14 +50,14 @@ servers (stdio transport) or HTTP servers. This codebase uses both:
 - The Python weather tools run as **stdio subprocesses** (MCP stdio protocol, inside the container)
 - The Node.js backend calls the Python service over **HTTP** (simpler, no MCP SDK in Node)
 
-> **Important**: In the final working implementation, the Node.js backend does **not** use
+> **Important**: In the current implementation, the Node.js backend does **not** use
 > the OpenAI tool-calling loop. Instead it detects weather keywords and routes directly to
 > the Python `/query` endpoint, which runs its own internal pipeline using Gemini + MCP.
-> See [Section 3](#3-why-opea-port-9000-cannot-do-tool-calling) for why.
+> See [Section 3](#3-opea-port-9000-limitations) for details.
 
 ---
 
-## 2. Architecture Overview — Final Working Design
+## 2. Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -138,15 +116,13 @@ ChatBotComponent.vue: result.response → displayed in chat bubble
 
 ---
 
-## 3. Why OPEA Port 9000 Cannot Do Tool Calling
+## 3. OPEA Port 9000 Limitations
 
-This is the most important section for understanding the architecture. The original design
-called for using `TOOLS_ENABLED=true` to send tool definitions to vLLM (port 9000) and run
-the multi-round tool-calling loop. That design had to be replaced because **port 9000 is not
-a raw vLLM instance** — it is an OPEA-wrapped LLM microservice with a custom request schema
-that rejects standard OpenAI tool-calling parameters.
+`TOOLS_ENABLED=true` with OpenAI-style autonomous tool calling (`tool_choice: "auto"`) does not
+work against OPEA port `9000`. The endpoint is an OPEA-wrapped LLM microservice with a custom
+schema, not a raw vLLM OpenAI-compatible endpoint.
 
-### 3.1 What OPEA Actually Is
+### 3.1 OPEA Service Model
 
 OPEA (Open Platform for Enterprise AI) is a microservice framework from Intel for building
 RAG pipelines. It works by chaining "megaservices" and "microservices" together, each running
@@ -179,7 +155,7 @@ external clients. OPEA exposes it externally only for debugging. It validates re
 against a union of three internal schemas, and does not implement the full OpenAI
 `tool_choice: "auto"` behaviour.
 
-### 3.2 The Validation Error Dissected
+### 3.2 Validation Error Breakdown
 
 When we sent a standard OpenAI tool-calling request to port 9000:
 
@@ -222,7 +198,7 @@ The response was a validation error with four distinct failures:
 ]}
 ```
 
-**Reading this error:**
+What this error indicates:
 
 OPEA port 9000 uses a Pydantic **union validator** — it tries to parse the request body
 against three different schemas simultaneously and reports a failure for each one that
@@ -239,7 +215,7 @@ The critical line is `"literal['none']"` — OPEA's `ChatCompletionRequest` only
 (force a specific named tool). The value `"auto"` — which tells the LLM to decide itself
 whether to call a tool — is simply not in the validator.
 
-### 3.3 OPEA's Internal Request Schema
+### 3.3 OPEA Internal Request Schema
 
 OPEA defines its own Pydantic models in `comps/llms/src/` of the GenAIComps repository.
 These are the three schema types the union validator tries:
@@ -290,7 +266,7 @@ The simple `POST` without tools **did** work (first test returned a chat complet
 the request with just `model`, `messages`, and `max_tokens` successfully matched
 `ChatCompletionRequest` with `tool_choice` defaulting to `"none"`.
 
-### 3.4 The ChatQnA Megaservice at Port 8888
+### 3.4 ChatQnA Megaservice at Port 8888
 
 Port 8888 is what the Node.js backend actually uses. It is the **megaservice gateway** that
 orchestrates the complete RAG pipeline. When a query arrives:
@@ -335,7 +311,7 @@ This is why the RAG system answers with "the provided content does not include w
 forecasts" — the retriever found no weather documents in ArangoDB, sent an empty
 `retrieved_docs` list to the LLM, and the LLM correctly reported it had no data.
 
-### 3.5 What a Real Tool-Capable vLLM Looks Like
+### 3.5 Example: Raw Tool-Capable vLLM
 
 A standard vLLM deployment (without OPEA wrapping) exposes the bare OpenAI API:
 
@@ -361,7 +337,7 @@ union type. To use vLLM tool calling with this infrastructure you would need to 
 run a separate raw vLLM instance, or bypass the OPEA wrapper and call the underlying
 model server directly.
 
-**Summary — why the keyword router was built instead:**
+Routing outcome summary:
 
 | Approach | Status | Reason |
 |----------|--------|--------|
@@ -372,7 +348,7 @@ model server directly.
 
 ---
 
-## 4. Component Map — All Relevant Files
+## 4. Component Map
 
 | File | Language | Role |
 |------|----------|------|
@@ -912,7 +888,7 @@ the agent skips buffer creation and returns `"buffer": null`.
 
 ---
 
-## 6. Node.js Backend: Keyword Router + Tool Infrastructure
+## 6. Node.js Backend: Keyword Router and Tool Infrastructure
 
 ### 6.1 services/tool-registry.js — Singleton Registry
 
@@ -938,10 +914,10 @@ class ToolRegistry {
 module.exports = new ToolRegistry(); // singleton
 ```
 
-### 6.2 services/tool-orchestrator.js — Agentic Loop
+### 6.2 services/tool-orchestrator.js — Tool-Calling Loop
 
-Present in the codebase for when a proper OpenAI-compatible vLLM is available.
-Currently unused because port 9000 on the OPEA server rejects `tool_choice: "auto"`.
+Present for deployments that use a raw OpenAI-compatible vLLM endpoint.
+Not active in the current OPEA `9000` setup.
 
 ```javascript
 // components/gov-chat-backend/services/tool-orchestrator.js
@@ -1022,7 +998,7 @@ module.exports = { definition, handler };
 
 ---
 
-## 7. Wiring Into the Backend
+## 7. Backend Integration
 
 ### 7.1 index.js — Tool Registration on Startup
 
@@ -1043,9 +1019,9 @@ try {
 }
 ```
 
-### 7.2 services/query-service.js — The Keyword Router
+### 7.2 services/query-service.js — Keyword Router
 
-The final working routing logic. Reads the `backendMode` from `CONTEXT_OPTION` env var,
+Current routing logic. Reads the `backendMode` from `CONTEXT_OPTION` env var,
 then applies three-level routing:
 
 ```javascript
@@ -1305,7 +1281,7 @@ Expected:
 
 ---
 
-## 11. How to Add a New MCP Tool
+## 11. Adding a New MCP Tool
 
 ### Step 1 — Create the bridge file
 
@@ -1459,7 +1435,7 @@ node -e "
 
 ### `tool_choice: "auto"` error from vLLM endpoint
 
-This is expected when using OPEA port 9000. See [Section 3](#3-why-opea-port-9000-cannot-do-tool-calling).
+This is expected when using OPEA port 9000. See [Section 3](#3-opea-port-9000-limitations).
 
 To use `TOOLS_ENABLED=true`, you need a raw vLLM instance:
 ```bash

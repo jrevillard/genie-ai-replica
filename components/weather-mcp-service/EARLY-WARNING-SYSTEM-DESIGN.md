@@ -1,40 +1,40 @@
 # Weather Intelligence + Early Warning System
 ### Design, Implementation & Reference Guide
 
-> **Status: Implemented.**  All modules described in this document exist as production
-> code in `components/weather-mcp-service/`.  This document is the authoritative reference
-> for the system — it covers architecture, every implemented file with real code excerpts,
-> API contracts, storage schema, and the trade-offs behind each design decision.
->
-> **Build on, do not replace**: the new modules are additive.  The existing keyword router,
-> `WeatherAgent`, MCP stdio servers, and Gemini explanation pipeline remain the on-demand
-> query path.  The early warning layer runs in parallel and enriches every response.
+This document describes the architecture and runtime flow of the weather intelligence
+and early warning layer in `components/weather-mcp-service/`.
 
 ---
 
 ## Table of Contents
 
-1. [System Overview](#1-system-overview)
-2. [Full Architecture Diagram](#2-full-architecture-diagram)
-3. [File Inventory](#3-file-inventory)
-4. [Unified Weather Schema — `models.py`](#4-unified-weather-schema--modelspy)
-5. [Risk Classification Engine — `risk_engine.py`](#5-risk-classification-engine--risk_enginepy)
-6. [Storage Layer — `storage.py`](#6-storage-layer--storagepy)
-7. [Notification Dispatch — `notifier.py`](#7-notification-dispatch--notifierpy)
-8. [Data Ingestion — `data_ingestor.py`](#8-data-ingestion--data_ingestorpy)
-9. [Background Scheduler — `scheduler.py`](#9-background-scheduler--schedulerpy)
-10. [Extended WeatherAgent — `agent.py`](#10-extended-weatheragent--agentpy)
-11. [FastAPI Service — `main.py`](#11-fastapi-service--mainpy)
-12. [Node.js Integration — `query-service.js`](#12-nodejs-integration--query-servicejs)
-13. [Daily Pipeline — End-to-End Flow](#13-daily-pipeline--end-to-end-flow)
-14. [On-Demand Query Flow — Enhanced](#14-on-demand-query-flow--enhanced)
-15. [Risk Classification Logic](#15-risk-classification-logic)
-16. [ArangoDB Storage Schema](#16-arangodb-storage-schema)
-17. [API Reference](#17-api-reference)
-18. [Environment Variables](#18-environment-variables)
-19. [Requirements & Dockerfile](#19-requirements--dockerfile)
-20. [Trade-offs & Design Decisions](#20-trade-offs--design-decisions)
-21. [Extension Path: Agriculture / Crop Baseline](#21-extension-path-agriculture--crop-baseline)
+- [System Overview](#1-system-overview)
+- [Full Architecture Diagram](#2-full-architecture-diagram)
+- [Implementation Scope](#3-implementation-scope)
+- [Unified Weather Schema — `models.py`](#4-unified-weather-schema--modelspy)
+- [Risk Classification Engine — `risk_engine.py`](#5-risk-classification-engine--risk_enginepy)
+- [Storage Layer — `storage.py`](#6-storage-layer--storagepy)
+- [Notification Dispatch — `notifier.py`](#7-notification-dispatch--notifierpy)
+- [Data Ingestion — `data_ingestor.py`](#8-data-ingestion--data_ingestorpy)
+- [Background Scheduler — `scheduler.py`](#9-background-scheduler--schedulerpy)
+- [Extended WeatherAgent — `agent.py`](#10-extended-weatheragent--agentpy)
+- [FastAPI Service — `main.py`](#11-fastapi-service--mainpy)
+- [Node.js Integration — `query-service.js`](#12-nodejs-integration--query-servicejs)
+- [Daily Pipeline — End-to-End Flow](#13-daily-pipeline--end-to-end-flow)
+- [On-Demand Query Flow — Enhanced](#14-on-demand-query-flow--enhanced)
+- [Risk Classification Logic](#15-risk-classification-logic)
+- [ArangoDB Storage Schema](#16-arangodb-storage-schema)
+- [API Reference](#17-api-reference)
+- [Environment Variables](#18-environment-variables)
+- [Requirements & Dockerfile](#19-requirements--dockerfile)
+- [Appendix A: Storage Behavior Notes](#appendix-a-storage-behavior-notes)
+- [Appendix B: Data Flow Summary](#appendix-b-data-flow-summary)
+- [Appendix C: Cache vs Live Fetch Logic](#appendix-c-cache-vs-live-fetch-logic)
+- [Appendix D: Open-Meteo Normalisation Example](#appendix-d-open-meteo-normalisation-example)
+- [Appendix E: Pipeline Comparison](#appendix-e-pipeline-comparison)
+- [Appendix F: Horizon Rules](#appendix-f-horizon-rules)
+- [Appendix G: Critical Constraint](#appendix-g-critical-constraint)
+- [Appendix H: Why Long-Term Pipeline Still Matters](#appendix-h-why-long-term-pipeline-still-matters)
 
 ---
 
@@ -88,19 +88,19 @@ platform** with three operational modes:
 ║                                 ▼                                                 ║
 ║  ┌───────────────────────────────────────────────────────────────────────────┐   ║
 ║  │  main.py ── routes                                                        │   ║
-║  │  POST /query              — on-demand (existing + enhanced)               │   ║
+║  │  POST /query              — on-demand weather query path                  │   ║
 ║  │  GET  /risk/latest        — lookup stored risk assessment                 │   ║
 ║  │  POST /internal/run-daily-pipeline — manual trigger / cron hook          │   ║
 ║  │  POST /mcp/tools/call     — direct BMD scrape                             │   ║
 ║  │                                                                           │   ║
 ║  │  ┌──────────────────────────────────────────────────────────────────────┐ │   ║
-║  │  │  WeatherAgent (agent.py)  [EXTENDED]                                 │ │   ║
+║  │  │  WeatherAgent (agent.py)                                              │ │   ║
 ║  │  │  1. Gemini intent extraction                                         │ │   ║
 ║  │  │  2. Mapbox geocode (→ BMD fallback)                                  │ │   ║
-║  │  │  3. StorageLayer.get_latest_forecast()  ← NEW                        │ │   ║
+║  │  │  3. StorageLayer.get_latest_forecast()                               │ │   ║
 ║  │  │       hit  → use stored (< 6h)                                       │ │   ║
 ║  │  │       miss → MCPClientManager.call_weather_tool("retrieve_...")      │ │   ║
-║  │  │  4. RiskEngine.classify(unified_forecast)  ← NEW                    │ │   ║
+║  │  │  4. RiskEngine.classify(unified_forecast)                            │ │   ║
 ║  │  │  5. Gemini explanation (tier-aware prompt)                           │ │   ║
 ║  │  │  → { answer, risk_tier, risk_label, advisory, triggers, ... }       │ │   ║
 ║  │  └──────────────────────────────────────────────────────────────────────┘ │   ║
@@ -142,36 +142,17 @@ platform** with three operational modes:
 
 ---
 
-## 3. File Inventory
+## 3. Implementation Scope
 
-### Existing files (unchanged)
+This guide covers:
 
-| File | Lines | Role |
-|------|-------|------|
-| `mcp_client.py` | 120 | MCPClientManager — Mapbox + BMD stdio MCP sessions |
-| `mcp_weather/main.py` | 40 | FastMCP stdio server — `buffer_point`, `retrieve_weather_forecast` |
-| `mcp_weather/tools/weather_forecast.py` | 160 | BMD BAMIS WRF scraper, Bengali→English district map |
-| `mcp_weather/tools/buffer_point.py` | 25 | Geodesic buffer (pyproj WGS84) |
+- the end-to-end architecture and request/data flows
+- the shared weather and risk schemas
+- risk classification behavior and thresholds
+- persistence structure in ArangoDB
+- API contracts, scheduling behavior, and notification routing
 
-### New files
-
-| File | Lines | Role |
-|------|-------|------|
-| `models.py` | 98 | Pydantic schemas: `UnifiedForecast`, `RiskAssessment`, `DayForecast`, tier maps |
-| `risk_engine.py` | 223 | Stateless Tier 0–4 classifier — per-day thresholds + heatwave/drought patterns |
-| `storage.py` | 232 | ArangoDB upsert/query — forecasts, risk assessments, alert dedup |
-| `notifier.py` | 237 | Tier-keyed dispatch — FCM, Twilio SMS, voice, broadcast webhook |
-| `data_ingestor.py` | 518 | Open-Meteo, BMD, Copernicus, WeatherNext; 64-district coordinate table |
-| `scheduler.py` | 187 | APScheduler async daily + weekly pipeline jobs |
-
-### Modified files
-
-| File | Change summary |
-|------|---------------|
-| `agent.py` | 314 lines — extended with `StorageLayer` injection, `RiskEngine` call, `_bmd_to_unified()`, tier-aware Gemini prompt |
-| `main.py` | 290 lines — new lifespan (infra init + scheduler), `/risk/latest`, `/internal/run-daily-pipeline`, health reports storage/scheduler state |
-| `requirements.txt` | Added `python-arango==7.9.4`, `APScheduler==3.10.4` |
-| `query-service.js` | Weather metadata now includes `risk_tier`, `risk_label`, `triggers`, `advisory` |
+It intentionally focuses on runtime behavior and interfaces rather than file-by-file change logs.
 
 ---
 
@@ -833,7 +814,7 @@ async def run(self, query: str) -> dict:
         geo["district"], intent.forecast_days
     )
 
-    # Step 5 NEW: Risk classification
+    # Step 5: Risk classification
     risk_assessment = self._classify(unified_forecast, forecast_data, geo["district"])
 
     # Step 6: Explanation — Gemini now receives tier context
@@ -843,10 +824,10 @@ async def run(self, query: str) -> dict:
 
     return {
         "answer":     answer,
-        "risk_tier":  risk_assessment.tier,       # NEW
-        "risk_label": risk_assessment.tier_label,  # NEW
-        "advisory":   risk_assessment.reasoning,   # NEW
-        "triggers":   risk_assessment.triggers,    # NEW
+        "risk_tier":  risk_assessment.tier,
+        "risk_label": risk_assessment.tier_label,
+        "advisory":   risk_assessment.reasoning,
+        "triggers":   risk_assessment.triggers,
         "buffer":     ...,
         "location":   geo.get("display_name", intent.location),
         "forecast":   forecast_data,
@@ -1018,7 +999,7 @@ opeaMetadata = {
   weather:    true,
   location:   wResp.data.location,
   forecast:   wResp.data.forecast,
-  // NEW — early warning fields
+  // Early warning fields
   risk_tier:  wResp.data.risk_tier  ?? 0,
   risk_label: wResp.data.risk_label ?? 'Normal',
   triggers:   wResp.data.triggers   ?? [],
@@ -1429,433 +1410,221 @@ the image rebuilt.
 
 ---
 
-## 20. Trade-offs & Design Decisions
+---
 
-### Why keyword routing instead of OpenAI tool-calling
+## Appendix A: Storage Behavior Notes
 
-OPEA port 9000 (`ChatCompletionRequest`) accepts only `tool_choice: "none"` or a named
-tool — not `"auto"`.  Sending `"auto"` returns a Pydantic validation error on all three
-of OPEA's union schemas (`LLMParamsDoc`, `ChatCompletionRequest`, `SearchedDoc`).
-The keyword router achieves the same routing goal deterministically, with zero LLM
-latency overhead.  See `MCP-WEATHER-IMPLEMENTATION-GUIDE.md §3` for full technical
-dissection.
+### `weather_forecasts`
 
-### Why a stateless RiskEngine
+Raw ingested data from Open-Meteo, BMD, or Copernicus, normalised into `UnifiedForecast`.
 
-`RiskEngine.classify()` has no side-effects, no database calls, and no async I/O.
-This means it can be:
-- called from the async request path without `await`
-- unit-tested without a database fixture
-- replaced later with a trained ML classifier by swapping one method
-- run inline in `WeatherAgent._classify()` without infrastructure
+- **Document key:** `{location}__{source}__{horizon}` (example: `dhaka__open_meteo__short`)
+- **Write strategy:** upsert (replace if key exists, insert otherwise)
+- **Guarantee:** one current document per `location + source + horizon`
+- **Freshness window:** 6 hours (`get_latest_forecast()` returns `None` if stale)
 
-### Why ArangoDB instead of a separate time-series DB
+Example fields stored:
+- `location`
+- `source`
+- `horizon`
+- `ingested_at`
+- `days[]` with:
+  - `date`
+  - `temp_max`
+  - `temp_min`
+  - `precip_mm`
+  - `wind_kph`
+  - `extreme_flags`
 
-ArangoDB is already running in the `chatqna_default` Docker network and used by the
-Node.js backend.  The two new collections (`weather_forecasts`, `risk_assessments`)
-fit naturally alongside the existing `queries`, `sessions`, and `weatherRequests`
-collections.  The AQL `COLLECT ... INTO groups` pattern handles the "latest per
-location" query cleanly.  Adding a second database (InfluxDB, TimescaleDB) would
-require new infrastructure, new credentials, and another Docker service.
+### `risk_assessments`
 
-### Why APScheduler in-process
+Output of `RiskEngine.classify()` after evaluating a `UnifiedForecast`.
 
-Running the scheduler inside the FastAPI process avoids the operational complexity
-of a separate cron container (`docker run --rm weather-mcp python run_pipeline.py`).
-The `AsyncIOScheduler` shares the event loop, so all pipeline tasks use the same
-thread pool and do not require separate connection pools.  The
-`POST /internal/run-daily-pipeline` endpoint provides a manual override without
-shell access.  If independent scheduling is needed for scale or retry logic, the
-`run_daily_pipeline` function is importable and callable from any external runner.
+- **Document key:** `{location}__{horizon}` (example: `dhaka__short`)
+- **Write strategy:** upsert on each pipeline run
+- **Primary consumers:** `GET /risk/latest` and `WeatherAgent` response enrichment
 
-### Why Open-Meteo as primary short-term source
+Example fields:
+- `location`
+- `horizon`
+- `tier (0-4)`
+- `label`
+- `triggers[]`
+- `advisory`
+- `assessed_at`
 
-| Source | Free | No key | BD coverage | Resolution | Daily limit |
-|--------|------|--------|-------------|------------|-------------|
-| Open-Meteo | ✓ | ✓ | Good | 1 km / hourly | Generous |
-| OpenWeatherMap | Free tier | ✗ | Good | City-level | 60 req/min |
-| BMD BAMIS scraper | ✓ | ✓ | Authoritative | District | 1/scrape |
+### `alerts_sent`
 
-Open-Meteo requires no registration and provides hourly data for the full Bangladesh
-bounding box at 1 km resolution, aggregatable to daily statistics.  BMD BAMIS remains
-the authoritative source for official district figures and is retained as the fallback.
+Append-only deduplication log for dispatched notifications (FCM, SMS, voice, broadcast).
 
-### Why pipeline I/O runs in `run_in_executor`
+- **Write strategy:** append-only (no upsert)
+- **Deduplication function:** `was_alert_sent(location, tier, within_hours=12)`
 
-`APScheduler`'s `AsyncIOScheduler` runs jobs on the asyncio event loop.  The ingestion
-and storage operations are blocking (HTTP requests, ArangoDB TCP calls).  Running them
-in `run_in_executor(None, ...)` delegates to the default `ThreadPoolExecutor`, keeping
-the event loop free for FastAPI request handling during a pipeline run.  This avoids
-`event loop blocked` warnings and ensures `/query` stays responsive during a 64-district
-ingestion sweep.
+Fields:
+- `location`
+- `tier`
+- `channel` (`fcm` / `sms` / `voice` / `broadcast`)
+- `sent_at`
 
 ---
 
-## 21. Extension Path: Agriculture / Crop Baseline
+## Appendix B: Data Flow Summary
 
-The `RiskEngine` is designed to be subclassed.  A future `AgricultureRiskEngine`
-would accept a `CropBaseline` model alongside `UnifiedForecast` and escalate the
-tier when forecast conditions deviate from crop-specific optima:
+```mermaid
+flowchart TD
+    A[Open-Meteo API (daily @ 06:00 UTC)]
+    B[DataIngestor._from_open_meteo()]
+    C[UnifiedForecast]
+    D[storage.upsert_forecast()]
+    E[weather_forecasts]
+
+    F[RiskEngine.classify()]
+    G[RiskAssessment]
+    H[storage.upsert_risk_assessment()]
+    I[risk_assessments]
+
+    J[Notifier.dispatch()]
+    K[storage.record_alert_sent()]
+    L[alerts_sent]
+
+    A --> B --> C --> D --> E
+    C --> F --> G --> H --> I
+    G --> J --> K --> L
+```
+
+---
+
+## Appendix C: Cache vs Live Fetch Logic
+
+### On-demand decision tree
+
+```text
+Is storage initialised?
+|
+|-- NO -> Live BMD scrape
+|
+`-- YES -> Query weather_forecasts:
+            FILTER location == district
+              AND horizon == "short"
+              AND ingested_at >= (now - 6h)
+            SORT ingested_at DESC LIMIT 1
+            |
+            |-- Found -> Return cached -> Skip BMD
+            |
+            `-- Not found / stale / error -> Live BMD scrape
+```
+
+### Freshness definition
+
+A document is considered fresh when:
+
+```text
+ingested_at >= now - 6 hours
+```
+
+Hardcoded as:
 
 ```python
-class CropBaseline(BaseModel):
-    crop_type:    str          # "rice" | "wheat" | "jute" | "potato"
-    growth_stage: str          # "planting" | "vegetative" | "flowering" | "harvest"
-    district:     str
-    optimal_temp_range: tuple[float, float]   # (min, max) °C
-    water_req_mm_per_week: float
-
-class AgricultureRiskEngine(RiskEngine):
-    def classify_with_crop(
-        self,
-        forecast: UnifiedForecast,
-        baseline: CropBaseline,
-    ) -> RiskAssessment:
-        base = self.classify(forecast)
-        crop_tier, crop_triggers = self._evaluate_crop(forecast, baseline)
-        final_tier = max(base.tier, crop_tier)
-        return RiskAssessment(
-            **{**base.model_dump(),
-               "tier":     final_tier,
-               "tier_label": TIER_LABELS[final_tier],
-               "triggers": base.triggers + crop_triggers}
-        )
-
-    def _evaluate_crop(self, forecast, baseline):
-        # Example: rice flowering stage is highly sensitive to max_temp > 35°C
-        # Example: wheat harvest fails below 10mm/week water
-        ...
+max_age_hours = 6
 ```
 
-`POST /query` would accept an optional `crop_context` field; `WeatherAgent.run()`
-would pass it to `AgricultureRiskEngine.classify_with_crop()` when present.
-The `UnifiedForecast` schema requires no changes.
+### Design implications
+
+- Cache skip logic depends on document age, not source.
+- If Open-Meteo data is fresh, BMD is not called.
+- If the pipeline has not run, queries fall back to BMD.
+- Storage failures are non-fatal; fallback path is live BMD scrape.
 
 ---
 
-## Summary — Implemented File Structure
+## Appendix D: Open-Meteo Normalisation Example
 
-```
-components/weather-mcp-service/
-├── Dockerfile                       unchanged (python-arango + APScheduler are pure Python)
-├── docker-compose.yml               unchanged
-├── requirements.txt                 + python-arango==7.9.4, APScheduler==3.10.4
-├── .env                             + ARANGO_*, FCM_*, TWILIO_*, COPERNICUS_*, WEATHERNEXT_*
-│
-├── main.py              290 lines   MODIFIED: extended lifespan, /risk/latest, /internal/run-daily-pipeline
-├── agent.py             314 lines   MODIFIED: StorageLayer injection, RiskEngine, tier-aware prompt
-├── mcp_client.py                    UNCHANGED
-│
-├── models.py             98 lines   NEW — UnifiedForecast, RiskAssessment, DayForecast, tier maps
-├── risk_engine.py       223 lines   NEW — stateless Tier 0–4 classifier
-├── storage.py           232 lines   NEW — ArangoDB persistence (3 collections)
-├── notifier.py          237 lines   NEW — tier-keyed dispatch (FCM, Twilio, broadcast)
-├── data_ingestor.py     518 lines   NEW — Open-Meteo, BMD, Copernicus, WeatherNext; 64 district coords
-├── scheduler.py         187 lines   NEW — APScheduler daily + weekly pipeline jobs
-│
-├── mcp_weather/
-│   ├── main.py                      UNCHANGED
-│   └── tools/
-│       ├── weather_forecast.py      UNCHANGED
-│       └── buffer_point.py          UNCHANGED
-│
-├── MCP-WEATHER-IMPLEMENTATION-GUIDE.md   original system guide
-└── EARLY-WARNING-SYSTEM-DESIGN.md        THIS FILE
+### Request
+
+```http
+GET https://api.open-meteo.com/v1/forecast
+  ?latitude=23.8103&longitude=90.4125
+  &daily=temperature_2m_max,temperature_2m_min,precipitation_sum,
+         precipitation_probability_max,windspeed_10m_max,
+         winddirection_10m_dominant,relative_humidity_2m_max
+  &timezone=Asia/Dhaka
+  &forecast_days=7
 ```
 
-**Total new/modified Python**: ~1 900 lines across 8 files.
-**Syntax-verified**: all 8 files pass `ast.parse()` with no errors.
+### Response (simplified)
 
-
-
-FURTHER EXPLANATION:
-weather_forecasts
-
-  Raw ingested data from Open-Meteo, BMD, or Copernicus — normalised into the UnifiedForecast schema.
-
-  - Document key: {location}__{source}__{horizon} (e.g. dhaka__open_meteo__short)
-  - Upserted (replaced if key exists, inserted if not) — so each district/source combo always holds exactly one current document
-  - Freshness window: 6 hours — get_latest_forecast() returns None if the stored doc is older than that, forcing a live re-fetch
-
-  Example fields stored: location, source, horizon, ingested_at, days[] (each with date, temp_max/min, precip_mm, wind_kph, extreme_flags).
-
-  ---
-  risk_assessments
-
-  Output of the RiskEngine after it classifies a UnifiedForecast.
-
-  - Document key: {location}__{horizon} (e.g. dhaka__short)
-  - Upserted on every pipeline run — always the latest classification
-  - Queried by GET /risk/latest?location=Dhaka and by WeatherAgent to enrich on-demand chat responses
-
-  Example fields: location, horizon, tier (0–4), label, triggers[], advisory, assessed_at.
-
-  ---
-  alerts_sent
-
-  Deduplication log — records every notification that was dispatched (FCM, SMS, voice).
-
-  - No upsert — append-only, one doc per dispatch event
-  - was_alert_sent(location, tier, within_hours=12) checks this before sending, preventing repeat alerts within 12 hours for the same
-  location/tier
-  - Fields: location, tier, channel (fcm/sms/voice/broadcast), sent_at
-
-  ---
-  Data flow summary
-
-  Open-Meteo API (daily@06:00 UTC)
-    └─ DataIngestor._from_open_meteo()
-         └─ UnifiedForecast  →  storage.upsert_forecast()  →  weather_forecasts
-              └─ RiskEngine.classify()
-                   └─ RiskAssessment  →  storage.upsert_risk_assessment()  →  risk_assessments
-                        └─ Notifier.dispatch()  →  storage.record_alert_sent()  →  alerts_sent
-
-  On-demand chat queries hit get_latest_forecast() first — if the stored doc is ≤6h old, the live BMD scrape is skipped entirely.
-
-❯ WHEN ARE YOU SKIPPING THE BMD? or what is the logic for that, based on what                                                               
-
-  Read 1 file (ctrl+o to expand)
-
-● The logic is in _get_forecast() at line 124. Here's exactly what happens:
-
-  Decision tree on every on-demand query:
-
-  Is storage initialised?  (i.e. ArangoDB connected at startup)
-    │
-    ├── NO  → go straight to live BMD scrape
-    │
-    └── YES → query weather_forecasts collection:
-                FILTER location == district
-                  AND horizon == "short"
-                  AND ingested_at >= (now - 6h)
-                SORT ingested_at DESC LIMIT 1
-                │
-                ├── doc found  → return it, SKIP BMD
-                │
-                └── no doc / stale / storage error → live BMD scrape
-
-  What "fresh" means: the ingested_at timestamp on the stored document must be within the last 6 hours. That's hardcoded as max_age_hours=6
-  in the call on line 138.
-
-  Why 6 hours specifically? The daily pipeline runs at 06:00 UTC and ingests all 64 districts. BMD typically updates once or twice a day. A
-  6h window means any query after the morning pipeline run will hit the cache for the rest of the business day. A second pipeline run at
-  12:00 or 18:00 (if configured) would refresh it again.
-
-  The key consequence: the skip is based purely on age of the stored document, not on the data source. If the daily pipeline stored an
-  Open-Meteo forecast for Dhaka at 06:05 UTC, then a user asking about Dhaka at 10:00 UTC will get that Open-Meteo data served from ArangoDB
-   — BMD is never called. If no pipeline has run (e.g. first boot, or pipeline failed), every query falls through to the live BMD scrape
-  exactly as before.
-
-  Storage failure is non-fatal (line 142–143): if ArangoDB is down, the except block silently falls through to the live BMD scrape, so the
-  query still works.
-
-❯ what is the output from open-meteo give me an example what is the output which parameters, and how also the router is determining if      
-using short term or long term                                                                                                               
-
-  Read 2 files (ctrl+o to expand)
-
-● Two separate questions, answered in order:
-
-  ---
-  1. What does Open-Meteo actually return?
-
-  The URL we build is (line 125–131):
-  GET https://api.open-meteo.com/v1/forecast
-    ?latitude=23.8103&longitude=90.4125
-    &daily=temperature_2m_max,temperature_2m_min,precipitation_sum,
-           precipitation_probability_max,windspeed_10m_max,
-           winddirection_10m_dominant,relative_humidity_2m_max
-    &timezone=Asia/Dhaka
-    &forecast_days=7
-
-  The raw JSON response looks like this:
-  {
-    "latitude": 23.8,
-    "longitude": 90.4,
-    "timezone": "Asia/Dhaka",
-    "daily": {
-      "time":                          ["2026-03-29", "2026-03-30", "2026-03-31", ...],
-      "temperature_2m_max":            [34.2, 35.1, 33.8, 36.0, 35.5, 34.9, 33.2],
-      "temperature_2m_min":            [22.1, 22.8, 21.9, 23.4, 22.7, 21.5, 21.0],
-      "precipitation_sum":             [0.0,  2.4,  0.0, 18.7, 55.3,  3.1,  0.0],
-      "precipitation_probability_max": [5,   20,    0,   60,   90,   25,    5],
-      "windspeed_10m_max":             [18.2, 21.4, 15.0, 30.1, 45.3, 22.8, 17.0],
-      "winddirection_10m_dominant":    [180, 195, 170, 200, 215, 185, 175],
-      "relative_humidity_2m_max":      [72, 75, 68, 82, 95, 78, 70]
-    }
+```json
+{
+  "daily": {
+    "time": ["2026-03-29", "2026-03-30"],
+    "temperature_2m_max": [34.2, 35.1],
+    "temperature_2m_min": [22.1, 22.8],
+    "precipitation_sum": [0.0, 2.4],
+    "precipitation_probability_max": [5, 20],
+    "windspeed_10m_max": [18.2, 21.4],
+    "winddirection_10m_dominant": [180, 195],
+    "relative_humidity_2m_max": [72, 75]
   }
+}
+```
 
-  We only use data["daily"]. The 7 parallel arrays are indexed position-by-position (i). After normalisation into UnifiedForecast, day index
-   4 from the example above becomes:
-  DayForecast(
-      date="2026-04-02",
-      temperature=TemperatureData(min=22.7, max=35.5),
-      precipitation=PrecipitationData(value=55.3, probability=0.90),
-      wind=WindData(speed=45.3, direction=215),
-      humidity=95.0,
-      extreme_flags=ExtremeFlags(
-          heavy_rain=True,    # 55.3 >= 50
-          heatwave=False,     # 35.5 < 40
-          cyclone_risk=False  # 45.3 < 88
-      )
-  )
+### Normalised output (`DayForecast`)
 
-  ---
-  2. How is short-term vs long-term decided?
+```python
+DayForecast(
+    date="2026-04-02",
+    temperature=TemperatureData(min=22.7, max=35.5),
+    precipitation=PrecipitationData(value=55.3, probability=0.90),
+    wind=WindData(speed=45.3, direction=215),
+    humidity=95.0,
+    extreme_flags=ExtremeFlags(
+        heavy_rain=True,
+        heatwave=False,
+        cyclone_risk=False
+    )
+)
+```
 
-  There is no runtime logic that picks between them — they are entirely separate pipelines with fixed schedules, never a branch:
+---
 
-  ┌────────────┬───────────────────────────┬─────────────────────────┬───────────────────────────────────┬───────────────┐
-  │  Pipeline  │          Trigger          │        Function         │              Source               │ horizon field │
-  ├────────────┼───────────────────────────┼─────────────────────────┼───────────────────────────────────┼───────────────┤
-  │ Short-term │ every day at 06:00 UTC    │ run_daily_pipeline()    │ Open-Meteo → BMD fallback         │ "short"       │
-  ├────────────┼───────────────────────────┼─────────────────────────┼───────────────────────────────────┼───────────────┤
-  │ Long-term  │ every Monday at 00:00 UTC │ run_longterm_pipeline() │ Copernicus → WeatherNext fallback │ "long"        │
-  └────────────┴───────────────────────────┴─────────────────────────┴───────────────────────────────────┴───────────────┘
+## Appendix E: Pipeline Comparison
 
-  The horizon string is baked into the UnifiedForecast at ingestion time (source="open_meteo", horizon="short" vs horizon="long"). ArangoDB
-  keys include it: dhaka__open_meteo__short and dhaka__copernicus__long are separate documents.
+| Pipeline | Trigger | Function | Source | Horizon |
+|----------|---------|----------|--------|---------|
+| Short-term | Daily @ 06:00 UTC | `run_daily_pipeline()` | Open-Meteo -> BMD fallback | `short` |
+| Long-term | Monday @ 00:00 UTC | `run_longterm_pipeline()` | Copernicus -> WeatherNext fallback | `long` |
 
-  When _get_forecast() in agent.py queries storage it always asks for horizon="short" (line 138) — it never looks at long-term data. The
-  long-term pipeline exists purely for the risk engine and notifications, not for on-demand chat responses (long-range seasonal data doesn't
-   answer "what's the weather tomorrow in Dhaka").
+---
 
-✻ Sautéed for 30s
+## Appendix F: Horizon Rules
 
-❯ make a diagram about that, how the long term influence the tier engine or classification one as long with the short term                  
+- Horizon is fixed at ingestion time.
+- Horizon is stored in:
+  - `UnifiedForecast.horizon`
+  - the ArangoDB key suffix
 
-  Read 1 file (ctrl+o to expand)    
-                                                  
-● Here's the full diagram as a Mermaid flowchart — paste it into any Mermaid renderer (e.g. mermaid.live):
-                     
-  flowchart TD
-      subgraph SCHEDULE["Scheduled Pipelines"]                                                                                              
-          direction TB                                                                                                                      
-          DAILY["Daily @ 06:00 UTC\nrun_daily_pipeline()"]                                                                                  
-          WEEKLY["Weekly Mon @ 00:00 UTC\nrun_longterm_pipeline()"]                                                                         
-      end                                                                                                                                   
-                                                                                                                                            
-      subgraph SHORT["Short-Term Sources  (0–7 days)"]                                                                                      
-          OM["Open-Meteo API\nfree · no key · 1km grid\n7 daily variables"]
-          BMD["BMD BAMIS Scraper\n(MCP stdio tool)\nfallback if Open-Meteo fails"]                                                          
-      end                                                                                                                                   
-                                                                                                                                            
-      subgraph LONG["Long-Term Sources  (8–30 days)"]                                                                                       
-          COP["Copernicus C3S\nECMWF seasonal ensemble\nrequires COPERNICUS_API_KEY"]
-          WN["WeatherNext REST\n15-day commercial API\nrequires WEATHERNEXT_API_KEY"]                                                       
-          NONE["No key set →\nreturns empty list\npipeline skips gracefully"]                                                               
-      end                                                                                                                                   
-                                                                                                                                            
-      subgraph UNIFIED["Normalisation Layer"]                                                                                               
-          UF_S["UnifiedForecast\nsource='open_meteo' or 'bmd'\nhorizon='short'"]
-          UF_L["UnifiedForecast\nsource='copernicus' or 'weathernext'\nhorizon='long'"]                                                     
-      end                                                                                                                                   
-                                                                                                                                            
-      subgraph RISK["RiskEngine.classify()  — same code for both horizons"]                                                                 
-          direction TB
-          DAY["Per-day scoring\n_score_day()\nfor each day in forecast[]"]                                                                  
-          PAT["Multi-day pattern scoring\n_score_patterns()\nacross all days in window"]                                                    
-                                                                                                                                            
-          subgraph DAY_DETAIL["Single-day checks  (worst day wins)"]                                                                        
-              RAIN["Rain ≥50mm → T1\n≥100mm → T2\n≥200mm → T3"]                                                                             
-              HEAT["Heat ≥38°C → T1\n≥40°C → T2\n≥43°C → T3"]                                                                               
-              WIND["Wind ≥62km/h → T1\n≥88km/h → T2\n≥118km/h → T3"]                                                                        
-              MH["2+ independent T2 triggers\n→ IPC escalation +1 tier"]                                                                    
-          end                                                                                                                               
-                                                                                                                                            
-          subgraph PAT_DETAIL["Pattern checks  (span entire window)"]                                                                       
-              HW["3+ consecutive days ≥40°C\n→ Tier 2 heatwave"]                                                                            
-              DR["14+ consecutive days <1mm\n→ Tier 1 drought indicator"]                                                                   
-          end                                                                                                                               
-                                                                                                                                            
-          FINAL["Final tier = max(worst_day_tier, pattern_tier)\ncapped at 4"]                                                              
-      end         
-                                                                                                                                            
-      subgraph OUT["Output: RiskAssessment"]                                                                                                
-          RA["tier 0–4\ntier_label\ntriggers[]\nreasoning\nhorizon='short' or 'long'\nforecast_source\nassessed_at"]
-      end                                                                                                                                   
-                  
-      subgraph STORE["ArangoDB  (node-services db)"]                                                                                        
-          WF["weather_forecasts\nkey: location__source__horizon\nupserted · 6h freshness"]
-          RA_COL["risk_assessments\nkey: location__horizon\nupserted · always latest"]                                                      
-          AS["alerts_sent\nappend-only dedup log\n12h window"]                                                                              
-      end                                                                                                                                   
-                                                                                                                                            
-      subgraph NOTIFY["Notification Dispatch  (tier ≥ 2 only)"]                                                                             
-          T2["Tier 2 — Warning\nFCM push notification"]
-          T3["Tier 3 — Severe\n+ Twilio SMS"]                                                                                               
-          T4["Tier 4 — Emergency\n+ Voice call + Broadcast webhook"]                                                                        
-      end                                                                                                                                   
-                                                                                                                                            
-      subgraph ONDEMAND["On-Demand Chat Query"]                                                                                             
-          USER["User message\n(keyword router → WeatherAgent)"]
-          CACHE{"ArangoDB cache\nhorizon='short'\nage ≤ 6h?"}                                                                               
-          LIVE["Live BMD scrape\nvia MCP stdio"]
-          GEM["Gemini explanation\n+ risk tier context injected\nif tier ≥ 1"]                                                              
-      end                                                                                                                                   
-                                                                                                                                            
-      %% Schedule → sources                                                                                                                 
-      DAILY --> OM
-      DAILY --> BMD                                                                                                                         
-      WEEKLY --> COP
-      WEEKLY --> WN
-      WEEKLY --> NONE
+Examples:
+- `dhaka__open_meteo__short`
+- `dhaka__copernicus__long`
 
-      %% Sources → normalisation                                                                                                            
-      OM -->|primary| UF_S
-      BMD -->|fallback| UF_S                                                                                                                
-      COP -->|primary| UF_L
-      WN -->|fallback| UF_L
-                                                                                                                                            
-      %% Normalisation → risk engine
-      UF_S --> DAY                                                                                                                          
-      UF_L --> DAY
-      UF_S --> PAT
-      UF_L --> PAT                                                                                                                          
-   
-      %% Day scoring internals                                                                                                              
-      DAY --> RAIN & HEAT & WIND
-      RAIN & HEAT & WIND --> MH
-      PAT --> HW & DR                                                                                                                       
-   
-      %% Risk engine → final tier                                                                                                           
-      MH --> FINAL
-      HW & DR --> FINAL
-                                                                                                                                            
-      %% Risk engine → output
-      FINAL --> RA                                                                                                                          
-                  
-      %% Output → storage
-      UF_S -->|upsert| WF
-      UF_L -->|upsert| WF                                                                                                                   
-      RA -->|upsert| RA_COL
-                                                                                                                                            
-      %% Notify path                                                                                                                        
-      RA -->|tier ≥ 2| NOTIFY
-      T2 --> T3 --> T4                                                                                                                      
-      NOTIFY -->|record| AS                                                                                                                 
-   
-      %% On-demand path                                                                                                                     
-      USER --> CACHE
-      CACHE -->|hit → serve stored| UF_S                                                                                                    
-      CACHE -->|miss / stale| LIVE
-      LIVE --> UF_S                                                                                                                         
-      UF_S --> GEM
-      RA_COL -->|latest risk injected| GEM                                                                                                  
-                  
-      %% Key difference callout                                                                                                             
-      NOTE["⚠ Long-term (horizon='long') forecasts\nare stored and classified but NEVER\nserved to on-demand chat queries.\nOnly
-  horizon='short' enters the chat path."]                                                                                                   
-      UF_L -.->|stored only| NOTE
-                                                                                                                                            
-  ---                                                                                                                                       
-  Key things the diagram shows:
-                                                                                                                                            
-  - The RiskEngine is the same code for both horizons — it just iterates over whatever forecast[] days it receives, whether that's 7 days
-  from Open-Meteo or 30 days from Copernicus                                                                                                
-  - Long-term has more days in the window, so pattern detection (heatwave_days, drought_days) is far more meaningful there — a 30-day
-  Copernicus window can actually trigger the 14-day drought indicator; a 7-day short window usually can't                                   
-  - The horizon field flows through everything — UnifiedForecast.horizon → RiskAssessment.horizon → ArangoDB key suffix — so dhaka__short
-  and dhaka__long are always separate assessments that never overwrite each other                                                           
-  - Long-term never reaches the chat user — the on-demand path hard-codes horizon="short" in the cache query; long-term is purely for
-  background alerts                               
+---
+
+## Appendix G: Critical Constraint
+
+> On-demand chat queries only use `horizon = "short"`.
+
+Long-term forecasts are:
+- stored
+- classified
+- used for alerts
+- not used in chat responses
+
+---
+
+## Appendix H: Why Long-Term Pipeline Still Matters
+
+- Uses the same `RiskEngine`.
+- Covers a longer evaluation window (up to 30 days).
+- Improves pattern-based risk detection:
+  - heatwave runs (3+ consecutive days >= 40 C)
+  - drought runs (14+ consecutive days < 1 mm/day)

@@ -12,6 +12,11 @@ server {
     listen [::]:443 ssl;
     server_name _;
 
+    # Docker DNS resolver — enables lazy hostname resolution so nginx starts
+    # even when upstream containers (frontend, kong) are not yet running.
+    # NGINX re-resolves on each request, so containers can start in any order.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
     # SSL configuration
     ssl_certificate /etc/nginx/certs/server.crt;
     ssl_certificate_key /etc/nginx/certs/server.key;
@@ -82,7 +87,8 @@ server {
         add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
         # Proxy settings to Kong
-        proxy_pass http://${KONG_PROXY_HOST}:8000/api/;
+        set $kong_addr ${KONG_PROXY_HOST}:8000;
+        proxy_pass http://$kong_addr/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -97,6 +103,9 @@ server {
     }
 
     # Frontend Vue.js application
+    # Uses a variable for proxy_pass so nginx resolves the hostname at request time
+    # via the Docker DNS resolver, instead of failing at startup if frontend is down.
+    set $frontend_addr ${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
     location / {
         include conf.d/security-headers.conf;
 
@@ -104,7 +113,7 @@ server {
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
         # Proxy settings to Vue frontend
-        proxy_pass http://${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
+        proxy_pass http://$frontend_addr;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -127,7 +136,7 @@ server {
         include conf.d/security-headers.conf;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
-        proxy_pass http://${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
+        proxy_pass http://$frontend_addr;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

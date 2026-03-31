@@ -7,3 +7,6 @@ logs
 *.log.gz
 dist/
 build/
+.claude/
+.roo/
+_bmad/

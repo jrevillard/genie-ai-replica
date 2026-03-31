@@ -140,7 +140,7 @@ docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
 docker build -t genieai_mvp_document-repository:latest components/document-repository/
 
 # HTTP Service
-docker build -t genieai_mvp_http-service:latest components/http-service/
+docker build -t genieai_mvp_http-service:latest genie-ai-overlay/http-service/
 
 # Nginx (API gateway reverse proxy)
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
@@ -149,10 +149,10 @@ docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 
 # OPEA services (if DEPLOY_OPEA=1)
-docker build -t genie-ai-dataprep-arango:latest genie-ai-overlay/dataprep/
-docker build -t genie-ai-retriever-arango:latest genie-ai-overlay/retriever/
-docker build -t genie-ai-chatqna-server:latest genie-ai-overlay/chatqna/
-docker build -t genie-ai-reranker:latest genie-ai-overlay/reranker/
+docker build -f Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest genie-ai-overlay/dataprep/
+docker build -f Dockerfile-retriever_genie-ai -t genie-ai-retriever-arango:latest genie-ai-overlay/retriever/
+docker build -f Dockerfile-chatqna_genie-ai -t genie-ai-chatqna-server:latest genie-ai-overlay/chatqna/
+docker build -f Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest genie-ai-overlay/reranker/
 ```
 
 This builds 10 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
@@ -483,7 +483,7 @@ sed -i 's|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=https://10.0.0.110|' .en
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
 docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
 docker build -t genieai_mvp_document-repository:latest components/document-repository/
-docker build -t genieai_mvp_http-service:latest components/http-service/
+docker build -t genieai_mvp_http-service:latest genie-ai-overlay/http-service/
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 

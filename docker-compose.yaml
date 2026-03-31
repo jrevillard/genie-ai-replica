@@ -24,6 +24,8 @@
 # Prerequisites:
 #   1. Swarm initialized: docker swarm init
 #   2. Node labels: docker node update --label-add gpu=true <gpu-node>
+#                docker node update --label-add gateway=true <gateway-node>
+#                docker node update --label-add genieai=true <genieai-node>
 #   3. Local registry: docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
 #   4. Images pre-built and pushed (see docs/docker-swarm-setup.md)
 #   5. .env configured (see env template)
@@ -33,7 +35,7 @@
 
 # Required directories on each target node (create before deploy):
 #
-# Gateway node (manager):
+# Gateway node (gateway=true label):
 #   ./api-gateway-solution/kong_logs
 #   ./secrets/ssl/          (server.crt, server.key)
 #
@@ -66,7 +68,7 @@ secrets:
 services:
 
   # ===========================================================================
-  # API Gateway Stack (node.role == manager)
+  # API Gateway Stack (node.labels.gateway == true)
   # ===========================================================================
 
   kong-database:
@@ -91,7 +93,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.gateway == true
       restart_policy:
         condition: any
         delay: 5s
@@ -117,7 +119,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.gateway == true
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -138,7 +140,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.gateway == true
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -182,7 +184,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.gateway == true
       restart_policy:
         condition: any
         delay: 5s
@@ -220,7 +222,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.gateway == true
       restart_policy:
         condition: any
         delay: 5s

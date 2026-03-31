@@ -297,7 +297,7 @@ HUGGING_FACE_HUB_TOKEN=
 #
 # NGINX_PUBLIC_DOMAIN=<gateway-node-fqdn>
 #   Docker: localhost
-#   Swarm:  FQDN of the gateway/manager node (e.g., gateway.example.com)
+#   Swarm:  FQDN of the gateway node (gateway=true label, e.g., gateway.example.com)
 #
 # VUE_APP_API_URL=https://<gateway-node-fqdn>/api
 #   Docker: /api (relative, works with local proxy)

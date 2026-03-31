@@ -5,10 +5,7 @@ This directory contains SSL/TLS certificates for secure HTTPS connections.
 ## Quick Start
 
 ### Development (Auto-Generated)
-```bash
-docker compose up -d
-# Certificates are auto-generated on first start - no action needed!
-```
+No action needed — certificates are auto-generated on first start.
 
 ### Production
 ```bash
@@ -16,8 +13,8 @@ docker compose up -d
 cp /path/to/your/certificate.crt ./secrets/ssl/server.crt
 cp /path/to/your/private-key.key ./secrets/ssl/server.key
 
-# 2. Start the services
-docker compose up -d
+# 2. Deploy (Swarm)
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 ```
 
 ## File Formats

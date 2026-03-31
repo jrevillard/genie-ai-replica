@@ -252,7 +252,7 @@ HUGGING_FACE_HUB_TOKEN=
 # - VLLM_DTYPE: Data type (half, float32, etc.)
 #
 # To use GPU-specific configuration:
-#   docker compose --env-file .env --env-file env.t4 up -d
+#   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # ========= VLLM SERVICE =========
 VLLM_ENDPOINT=http://vllm:8000

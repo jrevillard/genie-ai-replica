@@ -14,15 +14,35 @@ GENIE.AI uses a single Swarm-compatible `docker-compose.yaml` at the project roo
 
 ## Architecture Overview
 
-A 3-node Swarm deployment distributes services across specialized nodes:
+GENIE.AI services are placed on nodes using two mechanisms:
 
-| Node | Role | Services |
-|------|------|----------|
-| **Gateway** (manager) | API Gateway | Kong, NGINX, PostgreSQL |
-| **GENIE.AI** (worker) | Application | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, HTTP Service |
-| **GPU** (worker) | OPEA AI/ML | vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, Translation, Guardrail |
+| Placement | Constraint | Services |
+|-----------|------------|----------|
+| **Manager** (automatic) | `node.role == manager` | Kong, NGINX, PostgreSQL |
+| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, HTTP Service |
+| **GPU** (label) | `node.labels.gpu == true` | vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, Translation, Guardrail |
 
-**Single-node Swarm** is also supported: all services run on one node with the `gpu=true` label applied.
+The manager node constraint is automatic — no label needed. The two labels (`genieai=true`, `gpu=true`) must be applied manually to the target nodes.
+
+### Deployment topologies
+
+**Single node** — all services on one node (manager + both labels):
+```
+Manager (gpu=true, genieai=true) → Gateway + GENIE.AI + GPU services
+```
+
+**Two nodes** — gateway + app on manager, GPU on worker:
+```
+Manager (genieai=true)              → Gateway + GENIE.AI services
+Worker  (gpu=true)                 → GPU services
+```
+
+**Three nodes** — each role on a dedicated node (production):
+```
+Manager                              → Gateway only (Kong, NGINX, PostgreSQL)
+Worker  (genieai=true)              → GENIE.AI services
+Worker  (gpu=true)                 → GPU services
+```
 
 ## Step 1: Initialize Swarm
 
@@ -46,23 +66,49 @@ docker node ls
 
 ## Step 2: Label Nodes
 
-```bash
-# GPU node — required for OPEA services
-docker node update --label-add gpu=true <gpu-node-hostname>
+The manager node needs **no labels** — gateway services (Kong, NGINX, PostgreSQL) are placed automatically via `node.role == manager`.
 
+```bash
 # GENIE.AI node — required for application services
 docker node update --label-add genieai=true <genieai-node-hostname>
 
-# Verify labels
-docker node inspect <gpu-node-hostname> --format '{{.Spec.Labels}}'
-docker node inspect <genieai-node-hostname> --format '{{.Spec.Labels}}'
+# GPU node — required for OPEA services
+docker node update --label-add gpu=true <gpu-node-hostname>
 ```
 
-For **single-node Swarm**, label the single node with both labels:
+### Single-node Swarm
+
+Label the manager with both labels (all services run locally):
 
 ```bash
 docker node update --label-add gpu=true $(hostname)
 docker node update --label-add genieai=true $(hostname)
+```
+
+### Two-node Swarm
+
+Label the manager with `genieai=true` (gateway + app services run there), the worker with `gpu=true`:
+
+```bash
+# On manager
+docker node update --label-add genieai=true $(hostname)
+
+# On GPU worker
+docker node update --label-add gpu=true <gpu-worker-hostname>
+```
+
+### Three-node Swarm (production)
+
+Each role on a dedicated node:
+
+```bash
+# On GPU worker
+docker node update --label-add gpu=true <gpu-worker-hostname>
+
+# On GENIE.AI worker
+docker node update --label-add genieai=true <genieai-worker-hostname>
+
+# Manager: no labels needed
 ```
 
 ## Step 3: Start Local Registry

@@ -36,7 +36,28 @@ cp env .env
 
 **Note:** The per-service `env` files in `components/` are deprecated - use the root `env` file.
 
-### Docker Deployment
+### Ansible Deployment (Recommended)
+
+Automated Docker Swarm deployment via Ansible with per-environment secrets. See `deploy/ansible/README.md` for full documentation.
+
+```bash
+cd deploy/ansible
+ansible-galaxy collection install -r requirements.yml
+cp inventory.example inventory/test.ini          # edit with host IP
+cp group_vars/test.vault.example group_vars/test.vault
+ansible-vault edit --vault-id test@prompt group_vars/test.vault  # set secrets
+# Place SSL certs in files/certificates/test/
+ansible-playbook -i inventory/test.ini deploy.yml --vault-id test@prompt
+```
+
+Tagged re-runs:
+```bash
+ansible-playbook -i inventory/test.ini deploy.yml --tags build,deploy --vault-id test@prompt
+ansible-playbook -i inventory/test.ini deploy.yml --tags deploy --vault-id test@prompt
+ansible-playbook -i inventory/test.ini teardown.yml --vault-id test@prompt
+```
+
+### Docker Deployment (Manual)
 
 **Option 1 - Full stack** (GENIE.AI + OPEA infrastructure):
 ```bash
@@ -61,6 +82,15 @@ docker compose --env-file .env -f components/docker-compose.yaml up -d
 cd components
 docker compose --env-file ../.env up -d
 ```
+
+**Important notes:**
+- All images must be pre-built and pushed to a registry before deploying (`docker stack deploy` cannot build)
+- `depends_on` removed; services use healthchecks + Swarm restart policy for startup ordering
+- Node labels control service placement (`gateway=true` for API gateway, `gpu=true` for OPEA/GPU services, `genieai=true` for GENIE.AI core services)
+- Only nginx ports (80, 443) are exposed; all other services are internal
+- Kong config is applied via `kong-config` one-shot Swarm service (auto-runs after deploy)
+- To skip OPEA services: set `DEPLOY_OPEA=0` in `.env`
+- See `env` template Section 12 for multi-node variable overrides
 
 ### Docker Commands
 

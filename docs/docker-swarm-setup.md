@@ -196,6 +196,11 @@ If worker nodes do not have internet access, pull and push all external images t
 
 ```bash
 # Pull external images
+docker pull postgres:13
+docker pull kong:latest
+docker pull redis:7-alpine
+docker pull clamav/clamav
+docker pull arangodb/arangodb:3.12.4
 docker pull vllm/vllm-openai:latest
 docker pull opea/llm-textgen:latest
 docker pull opea/translation:latest
@@ -204,12 +209,7 @@ docker pull opea/embedding:latest
 docker pull opea/chatqna-ui:latest
 docker pull opea/nginx:latest
 docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
-docker pull postgres:13
-docker pull kong:latest
-docker pull nginx:latest
-docker pull redis:7-alpine
-docker pull clamav/clamav
-docker pull arangodb/arangodb:3.12.4
+docker pull nginx:alpine
 
 # Tag and push (example for each)
 docker tag vllm/vllm-openai:latest localhost:5000/vllm/vllm-openai:latest

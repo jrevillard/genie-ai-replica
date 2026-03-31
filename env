@@ -13,7 +13,7 @@
 # Configuration Priority:
 #   1. Environment variables in .env (highest priority - overrides all)
 #   2. Docker secrets (for sensitive files like SSL certificates, prompts)
-#   3. Default values in docker-compose.yaml
+#   3. Default values in code/docker-compose
 #   4. Default values in application code (lowest priority)
 #
 # Documentation: https://github.com/your-org/genie-ai/docs/deployment.md
@@ -98,9 +98,19 @@ HUGGING_FACE_HUB_TOKEN=
 # VLLM_API_KEY=
 
 # =============================================================================
+# SECTION 3b: DEPLOYMENT OPTIONS
+# =============================================================================
+# Control whether OPEA/AI services are deployed (vllm, tei, embedding, reranker,
+# retriever, dataprep, chatqna, guardrail, translation).
+# DEPLOY_OPEA=1  -> OPEA services deployed (default, requires GPU)
+# DEPLOY_OPEA=0  -> OPEA services skipped (core services only, no GPU needed)
+#
+# DEPLOY_OPEA=1
+
+# =============================================================================
 # SECTION 4: AI/ML MODEL CONFIGURATION
 # =============================================================================
-# All models have sensible defaults in docker-compose.yaml.
+# All models have sensible defaults in code/docker-compose.
 # Override here ONLY if you need different models for your deployment.
 #
 # Model Selection Guidelines:
@@ -263,4 +273,51 @@ HUGGING_FACE_HUB_TOKEN=
 # JAEGER_IP=127.0.0.1
 # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=grpc://127.0.0.1:4317
 # TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
+
+# =============================================================================
+# SECTION 12: DOCKER SWARM MULTI-NODE (OPTIONAL)
+# =============================================================================
+# Override these variables when deploying with Docker Swarm (docker stack deploy).
+# Default values are for single-node Docker deployment (localhost).
+#
+# See docs/docker-swarm-setup.md for the full Swarm deployment guide.
+#
+# IMPORTANT: In Swarm, .env variables are resolved once at deploy time on the
+# manager node. Changing a variable requires redeploying the entire stack:
+#   docker stack deploy -c docker-compose.yaml genieai
+#
+# Variables that differ between Docker and Swarm:
+#
+# SWARM_REGISTRY_URL=<manager-node-ip>:5000
+#   Docker: N/A (images built locally)
+#   Swarm:  URL of the Docker registry accessible from all nodes.
+#           Default localhost:5000 works for single-node only.
+#           For multi-node, use the manager node's IP or hostname.
+#           Example: 192.168.1.10:5000
+#
+# NGINX_PUBLIC_DOMAIN=<gateway-node-fqdn>
+#   Docker: localhost
+#   Swarm:  FQDN of the gateway/manager node (e.g., gateway.example.com)
+#
+# VUE_APP_API_URL=https://<gateway-node-fqdn>/api
+#   Docker: /api (relative, works with local proxy)
+#   Swarm:  Full HTTPS URL pointing to the gateway node
+#
+# CSP_CONNECT_SRC='self' https://<gateway-node-fqdn> wss://<gateway-node-fqdn>
+#   Docker: 'self' http://localhost:3000 http://localhost:8090 ...
+#   Swarm:  'self' https://<gateway-node-fqdn> wss://<gateway-node-fqdn>
+#
+# CORS_ALLOWED_ORIGINS=https://<gateway-node-fqdn>
+#   Docker: http://localhost:3000,http://localhost:8090,...
+#   Swarm:  https://<gateway-node-fqdn>
+#
+# Variables that MUST be identical across all nodes:
+#   ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, TRANSLATION_CACHE_PASSWORD,
+#   POSTGRES_PASSWORD, AUTH_SERVICE_USERNAME, AUTH_SERVICE_PASSWORD
+#
+# Variables that MUST be identical (AI model IDs):
+#   EMBEDDING_MODEL_ID, RERANKER_MODEL_ID, VLLM_LLM_MODEL_ID
+#
+# GPU-specific overrides work the same as Docker:
+#   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 

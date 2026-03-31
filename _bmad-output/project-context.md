@@ -144,10 +144,11 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - LLM prompts: 3-tier priority — ENV VAR > FILE (`config/prompts/`) > DEFAULT (code)
 
 #### Docker
-- Full stack: `docker compose --env-file .env up -d` (from root)
-- GENIE.AI only: `docker compose --env-file ../.env up -d` (from components/)
-- GPU: add `--env-file env.t4` or `--env-file env.rtx6000`
-- Rebuild: `docker compose build [service_name]`
+- Deploy: `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
+- GPU: `set -a && source .env && source env.t4 && docker stack deploy -c docker-compose.yaml genieai`
+- Remove: `docker stack rm genieai`
+- Build images: `docker build -t <tag> <context>` (see docs/docker-swarm-setup.md Step 5)
+- Validate: `set -a && source .env && set +a && docker compose config > /dev/null`
 
 #### Git
 - Main branch: `main` (use for PRs)

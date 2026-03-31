@@ -126,7 +126,7 @@ GENIE.AI requires significant computational resources, particularly for AI model
 ## 2.2 Software Prerequisites
 
 * **Ubuntu Linux 22.04:** Everything has been tested on Ubuntu 22.04. It is OK to use variant Linux distributions but that is something you need to resolve.  
-* **Docker & Docker Compose:** Required for orchestrating the containerized services.  
+* **Docker & Docker Swarm:** Required for orchestrating the containerized services. Ensure Swarm is initialized: `docker swarm init`.
 * **NVIDIA Drivers & CUDA:** Required for GPU acceleration of the AI services (vLLM, TEI).  
   * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.  
 * **Node.js:** Required for the JavaScript components
@@ -211,17 +211,15 @@ npm \-v
 
 # Step 3: Base Installation
 
-You must complete the base docker compose based installation before configuring the application services. The way the docker compose deployment is organized in the repository is as follows:
+You must complete the base installation before configuring the application services. The deployment is organized in the repository as follows:
 
 Plaintext
 
 repository-root/
-├── docker-compose.yaml           # Full-stack deployment (single source of truth)
+├── docker-compose.yaml           # Swarm-compatible deployment (single source of truth)
 ├── env                           # Configuration template (copy to .env)
 ├── env.t4                        # GPU overrides for NVIDIA T4 (16GB VRAM)
 ├── env.rtx6000                   # GPU overrides for RTX 6000 ADA (24GB VRAM)
-├── components/
-│   └── docker-compose.yaml       # Development subset (GENIE.AI only, no OPEA)
 ├── api-gateway-solution/
 │   └── new-config/               # Kong API gateway configuration
 ├── config/prompts/               # LLM system prompts (committed to git)
@@ -233,7 +231,7 @@ repository-root/
 
 ## Single-Node Installation
 
-This method deploys all services onto a single host using Docker Compose.
+This method deploys all services onto a single host using Docker Swarm.
 
 ##### 1\. Clone the Repository
 
@@ -256,8 +254,8 @@ The docker-compose.yaml file sources its configuration from an .env file located
 
 There are 3 templates in the repository to start with:
 1) `env` - used for default deployments (copy env .env to kickstart your config)
-2) `env.t4` - used for NVIDIA T4 GPU (16GB VRAM) — load with `--env-file env.t4`
-3) `env.rtx6000` - used for RTX 6000 ADA GPU (24GB VRAM) — load with `--env-file env.rtx6000`
+2) `env.t4` - used for NVIDIA T4 GPU (16GB VRAM) — source after .env before deploying
+3) `env.rtx6000` - used for RTX 6000 ADA GPU (24GB VRAM) — source after .env before deploying
 
 **Customizing LLM Prompts**
 
@@ -634,8 +632,7 @@ These variables control the specific AI models used for generation, guardrails, 
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| HUGGINGFACEHUB\_API\_TOKEN | API key for Hugging Face (Required for gated models). | hf\_... |
-| HUGGING\_FACE\_HUB\_TOKEN | Alias for the Hugging Face Token. | hf\_... |
+| HUGGING\_FACE\_HUB\_TOKEN | API key for Hugging Face (Required for gated models). | hf\_... |
 | VLLM\_API\_KEY | API key for the VLLM service. | eyJhb... |
 | VLLM\_ENDPOINT | URL for the VLLM inference server. | http://vllm:8000 |
 | TEXTGEN\_PORT | Port for the text generation service. | 9000 |
@@ -783,7 +780,7 @@ Use this command if you are running on modern Ampere or Ada generation hardware 
 
 Bash
 
-docker compose --env-file .env --env-file env.rtx6000 up -d --build
+set -a && source .env && source env.rtx6000 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 Launch Option B: GPU Launch (nVIDIA Tesla T4)
 Use this command for a Tesla T4 (16GB VRAM). This uses `env.t4` for GPU-specific overrides:
@@ -793,7 +790,7 @@ Use this command for a Tesla T4 (16GB VRAM). This uses `env.t4` for GPU-specific
 
 Bash
 
-docker compose --env-file .env --env-file env.t4 up -d --build
+set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 **Important:** First create your .env file and generate the required secrets:
 
@@ -881,18 +878,19 @@ cp /path/to/your/private-key.key secrets/ssl/server.key
 
 Bash
 
-docker compose up -d --build
+set -a && source .env && set +a
+docker stack deploy -c docker-compose.yaml genieai
 
 5\. Initial Verification  
 After the containers launch, check their status. It may take several minutes for the large AI models (vLLM) to download and initialize.
 
 Bash
 
-\# Check container status  
-docker ps
+\# Check service status
+docker service ls
 
-\# Monitor the vLLM initialization (wait for "Application startup complete")  
-docker logs \-f vllm-vllm-2
+\# Monitor the vLLM initialization (wait for "Application startup complete")
+docker service logs genieai_vllm \-f
 
 ⚠️ **IMPORTANT: EXPECTED ERRORS**  
 At this stage, while the containers are running, they are not yet configured. If you inspect the backend logs now, you will see errors related to missing databases (ArangoDB) and unconfigured routes (Kong). This is normal. Do NOT attempt to debug these errors yet. Proceed immediately to Step 4 to complete the necessary infrastructure configuration. The primary purpose of booting the containers now is to allow us to continur configuring Kong, NGINX and ArangoDB infrastructure.
@@ -910,7 +908,23 @@ Once the base services are running (Step 3), you must configure the core infrast
 
 While the arango-vector-db service is running, the application database must be created.
 
-1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).
+1. Create the database using the ArangoDB shell inside the container (the port is not exposed in Swarm). Run the following command, replacing `genie-ai` with your `ARANGO_DB` value if different:
+
+```bash
+docker exec -it $(docker ps --filter "name=arango-vector-db" --format "{{.ID}}") arangosh --server.password "$ARANGO_PASSWORD" --javascript.execute-stdout "db._createDatabase('genie-ai')"
+```
+
+   Alternatively, you can access the ArangoDB web interface by temporarily exposing the port:
+
+```bash
+docker service update --publish-add 8529:8529 genieai_arango-vector-db
+```
+
+   Then open [http://localhost:8529](http://localhost:8529) in your browser (login with root and the password defined in your .env). Afterward, remove the port publish for security:
+
+```bash
+docker service update --publish-rm 8529:8529 genieai_arango-vector-db
+```
 
 2. Create the database defined in your `ARANGO_DB` environment variable (default: **`genie-ai`**).
 
@@ -930,15 +944,15 @@ NGINX configuration is template-based and auto-rendered at container startup via
 |----------|---------|---------|
 | `NGINX_PUBLIC_DOMAIN` | Public domain or IP for TLS and CORS | `genie.agency.gov` |
 | `CSP_CONNECT_SRC` | Allowed CSP `connect-src` sources (nginx) | `'self' https://genie.agency.gov wss://genie.agency.gov` |
-| `VUE_APP_CSP_CONNECT_SRC` | Allowed CSP sources baked into Vue frontend at build time | `'self' https://genie.agency.gov wss://genie.agency.gov` |
+| `VUE_APP_CSP_CONNECT_SRC` | Allowed CSP sources (runtime config via `window.APP_CONFIG`) | `'self' https://genie.agency.gov wss://genie.agency.gov` |
 
-After changing `.env`, restart nginx: `docker compose restart nginx`
+After changing `.env`, redeploy the stack: `docker stack deploy -c docker-compose.yaml genieai`
 
 SSL certificates are auto-generated (self-signed) in development. For production, mount your own certificates into `secrets/ssl/`.
 
 ### 4.2.2 Kong — Database Migrations (Automated)
 
-Kong database migrations are handled automatically by the `kong-migrations` init container defined in `docker-compose.yaml`. This container runs on every `docker compose up` and performs:
+Kong database migrations are handled automatically by the `kong-migrations` init container defined in `docker-compose.yaml`. This container runs on every deployment and performs:
 
 - `kong migrations bootstrap` — on first deployment (fresh database)
 - `kong migrations up && finish` — on subsequent deployments (existing schema)
@@ -947,23 +961,13 @@ Kong database migrations are handled automatically by the `kong-migrations` init
 
 ### 4.2.3 Kong — Routes and Plugins (Automated)
 
-Kong routes and plugins are applied automatically by the `kong-config` init service on every `docker compose up`. No manual configuration is required. The init service waits for Kong to be healthy, then applies `kong_config.json` via the Admin API.
+Kong routes and plugins are applied automatically via the `kong-config` one-shot Swarm service after the stack is deployed. No manual configuration is required. The service waits for Kong to be healthy, then applies `kong_config.json` via the Admin API.
 
-**Note:** Kong routes persist in the Kong database across container restarts. The init service is idempotent — it is safe to re-run (e.g., after a `docker compose down -v`).
+**Note:** Kong routes persist in the Kong database across container restarts. The post-deploy script is idempotent — it is safe to re-run.
 
 **DNS cache:** Kong is configured with `KONG_DNS_STALE_TTL=5` by default. If you recreate a backend container and see 502 errors, wait up to 5 seconds for DNS re-resolution, or run `docker exec <kong-container> kong reload` for immediate flush.
 
-To re-run the init service manually (e.g., after modifying `kong_config.json`):
-
-```bash
-docker compose run kong-config
-```
-
-To inspect init service logs:
-
-```bash
-docker compose logs kong-config
-```
+See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) Step 9 for the post-deploy Kong configuration procedure.
 
 ## 4.3 Domain & Security Configuration (CSP & CORS)
 
@@ -1013,17 +1017,26 @@ Set `CSP_CONNECT_SRC` in your `.env` file to include your domain. The template w
 CSP_CONNECT_SRC='self' https://genie.agency.gov wss://genie.agency.gov
 ```
 
-Then restart nginx: `docker compose restart nginx`
+Then redeploy the stack to pick up the changes: `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
 
-### 3\. Rebuild the Frontend
+Alternatively, to force-restart just the NGINX service: `docker service update --force genieai_nginx`
 
-**Crucial Step:** The Vue.js frontend "bakes" the VUE\_APP\_ environment variables into the static HTML/JS files at **build time**. Simply restarting the container is not enough.
+### 3\. Update Frontend Configuration (No Rebuild Needed)
 
-If you change the CSP or Domain settings, you must force a rebuild of the frontend container:
+**The frontend image is generic.** It reads its configuration at runtime via `window.APP_CONFIG` (generated from environment variables at container startup by `docker-entrypoint.sh`).
+
+If you change the CSP or Domain settings, simply update `.env` and redeploy — no image rebuild required:
 
 ```bash
-docker compose down
-docker compose up --build -d --force-recreate
+# Update variables in .env (or edit with nano)
+# Then redeploy the stack
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
+```
+
+The frontend container will generate `/config.js` with the new values on startup. If you want to force an immediate restart of the frontend service:
+
+```bash
+docker service update --force genieai_frontend
 ```
 
 ---
@@ -1095,7 +1108,7 @@ node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 Uses the built-in NLLB-200 translation model running in the GENIE.AI stack. No external API keys required.
 
 **Prerequisites:**
-- GENIE.AI services must be running (`docker-compose up -d`)
+- GENIE.AI services must be running (`docker service ls` to verify)
 - Valid user account with login credentials
 
 **Usage:**
@@ -1195,7 +1208,7 @@ node create-translations.js FR --translation-engine=google
 
 | Error | Solution |
 |-------|----------|
-| `404 Not Found` | Ensure backend services are running: `docker-compose ps` |
+| `404 Not Found` | Ensure backend services are running: `docker service ls` |
 | `401 Unauthorized` | Verify credentials are correct. Password is hashed via SHA-256 before sending. |
 | `500 Unsupported language code` | Check that the language code is supported by NLLB-200 model (see list above). |
 | `Connection refused` | Ensure the backend is accessible at `http://localhost:3000` |
@@ -1218,9 +1231,11 @@ This method is ideal for users who prefer a visual interface, or for making incr
 
 After all configuration steps are complete, you must restart the services to ensure they pick up the new configurations and verify the system is healthy.
 
-1. Restart Services: \`\`\`bash  
-   docker-compose down  
-   docker-compose up \-d
+1. Restart Services: \`\`\`bash
+   docker stack rm genieai
+   sleep 30
+   set -a && source .env && set +a
+   docker stack deploy -c docker-compose.yaml genieai
 
 2. Verify Service Health:  
 Check that all containers are running and healthy.
@@ -1231,15 +1246,15 @@ watch nvidia-smi
 
 Bash
 
-docker ps
+docker service ls
 
-*Look for (healthy) status next to critical services like kong, kong-database, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
+*Look for (healthy) replicas next to critical services like kong, kong-database, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
 
 Inspect the logs again to ensure no new critical errors have appeared after the restart.
 
 Bash
 
-docker-compose logs \-f
+docker service logs genieai_backend \-f
 
 4. Initial Login:  
    Access the application in your browser (e.g., [https://localhost](https://localhost) or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
@@ -1321,7 +1336,7 @@ We recommend following this three-phase approach to build and mature your Knowle
 
 ## 3\. Configuration Reference
 
-Add or modify the following variables in your .env file to control the behavior. You must restart the dataprep-arango-service container for changes to take effect.
+Add or modify the following variables in your .env file to control the behavior. You must force-update the dataprep service for changes to take effect: `docker service update --force genieai_dataprep-arango-service`
 
 ### Option A: LLM Strategy (Default / Discovery)
 

@@ -190,7 +190,7 @@ This service handles document uploads, validation, and ingestion.
 | DOCUMENT\_INGESTION\_LANGUAGE | Default language for document ingestion. | en |
 | **Data Prep Service** |  |  |
 | DATAPREP\_HOST | Hostname of the data preparation service. | http://91.203.132.198 |
-| DATAPREP\_PORT | Port of the data preparation service. | 6007 |
+| DATAPREP\_PORT | Port of the data preparation service. | 5000 |
 | **File Uploads** |  |  |
 | MAX\_FILES\_UPLOAD | Maximum number of files in a single upload. | 10 |
 | MAX\_FILE\_SIZE | Maximum file size (50 MB). | 52428800 |

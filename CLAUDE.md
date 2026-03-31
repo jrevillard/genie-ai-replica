@@ -34,45 +34,45 @@ cp env .env
 # Then edit .env with your local values (API keys, passwords, etc.)
 ```
 
-**Note:** The per-service `env` files in `components/` are deprecated - use the root `env` file.
-
 ### Docker Deployment
 
-**Option 1 - Full stack** (GENIE.AI + OPEA infrastructure):
+All deployments use Docker Swarm. The single `docker-compose.yaml` at the project root is Swarm-compatible and is the only compose file.
+
 ```bash
 # First time: create your .env from template
 cp env .env
 # Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
 
-# Deploy with default settings
-docker compose up -d
+# Deploy (single-node or multi-node Swarm)
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 
-# Or with GPU-specific settings:
-docker compose --env-file .env --env-file env.t4 up -d
-docker compose --env-file .env --env-file env.rtx6000 up -d
+# With GPU-specific settings (source GPU env file after .env)
+set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+
+# Remove stack
+docker stack rm genieai
 ```
 
-**Option 2 - GENIE.AI only** (frontend, backend, arango, redis):
-```bash
-# From project root:
-docker compose --env-file .env -f components/docker-compose.yaml up -d
-
-# OR from components/ directory:
-cd components
-docker compose --env-file ../.env up -d
-```
+**Important notes:**
+- All images must be pre-built and pushed to a registry before deploying (`docker stack deploy` cannot build)
+- `depends_on` removed; services use healthchecks + Swarm restart policy for startup ordering
+- Node labels control service placement (`gpu=true` for OPEA/GPU services)
+- Only nginx ports (80, 443) are exposed; all other services are internal
+- Kong config is applied via `kong-config` one-shot Swarm service (auto-runs after deploy)
+- To skip OPEA services: set `DEPLOY_OPEA=0` in `.env`
+- See `env` template Section 12 for multi-node variable overrides
 
 ### Docker Commands
 
 ```bash
-# Rebuild after code changes
-docker compose build [service_name]
-
 # View logs
-docker compose logs -f [service_name]
+docker service logs genieai_<service> -f
 
-# Stop all services
-docker compose down
+# Scale a service
+docker service scale genieai_<service>=<replicas>
+
+# List services
+docker service ls
 ```
 
 ## Architecture
@@ -208,7 +208,7 @@ secrets/ssl/              # SSL certificates (NOT committed)
 ```bash
 # Edit the default prompt files
 nano config/prompts/chatqna-system.txt
-docker compose restart chatqna-xeon-backend-server
+docker service update --force genieai_chatqna-xeon-backend-server
 ```
 
 **Power users:** Override inline in `.env`:
@@ -235,25 +235,24 @@ CHATQNA_SYSTEM_PROMPT="Custom prompt here..."
 
 ## Docker Compose Structure
 
-### Project Docker Compose Files
+### Project Docker Compose File
 
 | File | Scope | Contains | Use Case |
 |------|-------|----------|----------|
-| `docker-compose.yaml` (root) | **Full stack** | OPEA + GENIE.AI + API Gateway | Complete deployment (use `--env-file env.t4` or `env.rtx6000` for GPU) |
-| `components/docker-compose.yaml` | **GENIE.AI only** | frontend, backend, arango, redis, doc-repo | Local development without OPEA |
+| `docker-compose.yaml` (root) | **Full stack (Swarm-compatible)** | OPEA + GENIE.AI + API Gateway | All deployments (single-node or multi-node Swarm) |
 
-**GPU Configuration**: Use GPU-specific env files with your .env:
+**GPU Configuration**: Source GPU-specific env file before deploying:
 ```bash
-docker compose --env-file .env --env-file env.t4 up -d        # NVIDIA T4 (16GB VRAM)
-docker compose --env-file .env --env-file env.rtx6000 up -d   # RTX 6000 ADA (24GB VRAM)
+set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai        # NVIDIA T4 (16GB VRAM)
+set -a && source .env && source env.rtx6000 && set +a && docker stack deploy -c docker-compose.yaml genieai   # RTX 6000 ADA (24GB VRAM)
 ```
 
 ### Deployment Architecture
 
-All services are defined in the root `docker-compose.yaml` with cloud-native configuration:
+All services are defined in the root `docker-compose.yaml`:
 
 ```
-docker-compose.yaml (root - single source of truth)
+docker-compose.yaml (single source of truth, Swarm-compatible)
 ├── Layer 1: OPEA AI/ML Infrastructure
 │   ├── vLLM (LLM inference)
 │   ├── TEI (embeddings/reranking)
@@ -269,23 +268,6 @@ docker-compose.yaml (root - single source of truth)
 └── Layer 3: API Gateway
     ├── Kong
     └── NGINX
-
-components/docker-compose.yaml (development subset)
-└── Layer 2 only: GENIE.AI Services (for local dev)
-```
-
-### Usage
-
-```bash
-# Full production deployment
-docker compose up -d
-
-# With GPU-specific configuration
-docker compose --env-file .env --env-file env.t4 up -d
-
-# GENIE.AI only (local development)
-cd components
-docker compose --env-file ../.env up -d
 ```
 
 ## Database Schema (ArangoDB)

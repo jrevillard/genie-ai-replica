@@ -767,12 +767,14 @@ nano /public/config/genie-ai-config.json
 
 ### 2. Docker Quick Start
 ```bash
-# To deploy the full stack (frontend and backend) using Docker Compose
-# Ensure docker-compose.yaml is in the parent directory containing gov-chat-frontend and gov-chat-backend
+# To deploy the full stack using Docker Swarm from the project root
+# The root docker-compose.yaml (Swarm-compatible) contains all services
+# All images must be pre-built and pushed to a registry before deploying
 
-cd ..
-docker-compose build
-docker-compose up -d
+cd /path/to/project/root
+cp env .env
+# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # Access the application
 open http://localhost:8090
@@ -881,52 +883,29 @@ npm run serve
 # Production build (frontend only)
 npm run build
 
-# Full stack deployment with Docker Compose
-docker-compose up -d --build
+# Full stack deployment with Docker Swarm (from project root)
+# All images must be pre-built and pushed to a registry before deploying
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # Access the frontend at http://localhost:8090
 # The backend is available at http://localhost:3000
 
 # Required Configurations
-# Update the docker-compose.yaml file with the following environment variables.
-# For sensitive values, use a .env file or set them directly.
+# Set environment variables in the root .env file.
+# Copy from the env template: cp env .env
 
-# Frontend environment variables (under services.frontend.environment):
+# Frontend environment variables:
 - NODE_ENV=production
 - VUE_APP_API_URL=https://e2e-82-109.ssdcloudindia.net:443/api  # Or your backend API URL
 
-# Backend environment variables (under services.backend.environment):
-- NODE_ENV=production
-- PORT=3000
-- API_PREFIX=/api
-- UPLOAD_DIR=./Uploads
-- MAX_FILE_SIZE=5242880
-- SESSION_SECRET=${SESSION_SECRET:-default-session-secret}  # Replace with a secure secret
-- SESSION_EXPIRATION_TIME=1800000
-- CORS_ORIGIN=https://e2e-82-109.ssdcloudindia.net/  # Set to your frontend URL
-- EMAIL_HOST=in-V3.mailjet.com
-- EMAIL_PORT=587
-- EMAIL_SECURE=false
-- EMAIL_USER=187ad3288090609e6e282b07f359acd4  # Replace with your email user
-- EMAIL_PASSWORD=6615d81ddd46faab7e69eb6710ac364a  # Replace with your email password
-- EMAIL_FROM=fordendk@gmail.com  # Replace with your from email
-- APP_NAME=Huduma AI
-- FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net/  # Set to your frontend URL
-- ARANGO_URL=http://arango-vector-db:8529
-- ARANGO_DB=node-services
-- ARANGO_USER=root
-- ARANGO_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}  # Replace with secure password
-- BACKUP_DIR=./database_backups
-- MAX_BACKUPS=5
-- BACKUP_FORMAT=json
-- JWT_SECRET=${JWT_SECRET:-default-jwt-secret}  # Replace with a secure secret
-- JWT_EXPIRES_IN=24h
-- LOG_LEVEL=debug
-- OPEA_HOST=e2e-109-198
-- OPEA_PORT=8888
-- CONTEXT_OPTION=single-message
+# Backend environment variables are configured in the root .env file.
+# See the env template for all available options and required secrets.
 
-# The backend also loads additional variables from ./gov-chat-backend/.env
+# Useful commands:
+# docker service ls                          # List running services
+# docker service logs genieai_frontend -f    # View frontend logs
+# docker service update --force genieai_frontend  # Force restart frontend
+# docker stack rm genieai                    # Remove the stack
 ```
 
 ### RAG Integration Points
@@ -973,11 +952,11 @@ class ChatbotService {
 
 #### Docker Environment Variables
 
-The Docker Compose configuration supports environment-specific API endpoints for the frontend. Update the docker-compose.yaml under services.frontend.environment:
+The Docker Compose configuration supports environment-specific API endpoints for the frontend. Set VUE_APP_API_URL in the root `.env` file:
 
 - VUE_APP_API_URL=https://your-api-url.com/api
 
-Examples for different environments (modify in docker-compose.yaml):
+Examples for different environments (set in .env):
 
 # Development
 - VUE_APP_API_URL=https://dev-api.example.com/api

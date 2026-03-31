@@ -7,21 +7,20 @@ This guide explains how to deploy GENIE.AI on different NVIDIA GPUs.
 - NVIDIA Driver installed
 - NVIDIA Container Toolkit installed
 - Docker with NVIDIA support
+- Docker Swarm initialized: `docker swarm init`
+- GPU node labeled: `docker node update --label-add gpu=true $(hostname)`
 - Created `.env` file from `env` template with your secrets
 
-## Important Note on Environment Files
+## Environment File Loading
 
-When using `--env-file`, Docker Compose **does not** automatically load the default `.env` file. Therefore, you must specify **both** files:
-
-- `.env` - Contains required secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
-- `env.t4` / `env.rtx6000` - Contains GPU-specific overrides
+Docker Swarm (`docker stack deploy`) does NOT support `--env-file`. Instead, source the files before deploying:
 
 ```bash
-# CORRECT - loads both files
-docker compose --env-file .env --env-file env.t4 up
+# CORRECT - loads both .env and GPU overrides
+set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
-# WRONG - only loads GPU settings, missing secrets!
-docker compose --env-file env.t4 up
+# WRONG - docker stack deploy ignores --env-file
+docker stack deploy --env-file .env -c docker-compose.yaml genieai
 ```
 
 ## Available GPU Deployments
@@ -37,7 +36,7 @@ cp env .env
 # Edit .env with your secrets
 
 # Deploy with T4 GPU settings
-docker compose --env-file .env --env-file env.t4 up
+set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 ```
 
 **Characteristics:**
@@ -54,7 +53,7 @@ docker compose --env-file .env --env-file env.t4 up
 
 ```bash
 # Deploy with RTX6000 GPU settings
-docker compose --env-file .env --env-file env.rtx6000 up
+set -a && source .env && source env.rtx6000 && set +a && docker stack deploy -c docker-compose.yaml genieai
 ```
 
 **Characteristics:**
@@ -64,9 +63,9 @@ docker compose --env-file .env --env-file env.rtx6000 up
 - dtype: auto (optimized by framework)
 - TEI images: v1.9.3 (unified for all GPUs)
 
-### 3. Default Configuration (T4 Compatible)
+### 3. Default Configuration (No GPU Overrides)
 
-**Profile:** Local development without specific GPU
+**Profile:** Local development without specific GPU settings
 
 ```bash
 # First time: create your .env from template
@@ -74,7 +73,7 @@ cp env .env
 # Edit .env with your secrets
 
 # Deploy with default settings
-docker compose up
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 ```
 
 Uses default values from your `.env` file.
@@ -128,7 +127,7 @@ To adapt to your GPU:
    nano env.my-gpu
 
    # 4. Deploy with your custom configuration
-   docker compose --env-file .env --env-file env.my-gpu up
+   set -a && source .env && source env.my-gpu && set +a && docker stack deploy -c docker-compose.yaml genieai
    ```
 
 2. **Calculate available VRAM:**

@@ -1,10 +1,10 @@
-# **GENIE.AI Components - Docker Compose Setup**
+# **GENIE.AI Components**
 
-This document provides a detailed guide to the docker-compose.yaml file used for deploying the GENIE.AI application components. This setup defines a multi-container application consisting of a frontend, backend, document repository, database, cache, and virus scanning services.
+This directory contains the source code for the core GENIE.AI application components. All services are deployed via the root `docker-compose.yaml` (Swarm-compatible) located in the project root. There is no separate docker-compose file in this directory.
 
 ## **1\. Overview**
 
-The docker-compose.yaml file orchestrates the build and deployment of the core GENIE.AI services:
+The core GENIE.AI services are:
 
 * **frontend**: The user-facing web application (Vue.js), built from the ./gov-chat-frontend directory.
 * **backend**: The server-side application (Node.js) that handles business logic, API requests, and database connections, built from ./gov-chat-backend.
@@ -15,65 +15,65 @@ The docker-compose.yaml file orchestrates the build and deployment of the core G
 
 ### Integration with OPEA Services
 
-These core components integrate with the OPEA microservices infrastructure deployed separately in `../configs/opea-config/`. The OPEA services provide:
+These core components integrate with the OPEA microservices infrastructure defined in the same root `docker-compose.yaml`. The OPEA services provide:
 
 * **LLM Inference** (vLLM): Text generation via port 8000
 * **Embedding Service** (TEI): Vector embeddings via port 7000
 * **Reranking Service** (TEI Reranker): Result optimization via port 7100
 * **Wrapper Services**: Standardized interfaces for GENIE.AI integration
 
-For complete OPEA deployment instructions, see [OPEA Configuration](../configs/opea-config/README.md).
-
-All services are designed to connect to an external Docker network named chatqna\_default for inter-service communication with OPEA services.
-
 ## **2\. Prerequisites**
 
-Before running this setup, ensure the following prerequisites are met:
+Before deploying, ensure the following prerequisites are met:
 
-1. **Docker and Docker Compose**: Must be installed on your system.  
-2. **Source Code**: The necessary source code directories must be present relative to the docker-compose.yaml file:  
-   * ./gov-chat-frontend/  
-   * ./gov-chat-backend/Dockerfile  
-   * ./document-repository/Dockerfile  
-3. **External Docker Network**: The services rely on a pre-existing network. Create it with the following command:  
-   Bash  
-   docker network create chatqna\_default
+1. **Docker and Docker Compose**: Must be installed on your system.
+2. **Source Code**: The necessary source code directories must be present relative to the project root:
+   * components/gov-chat-frontend/
+   * components/gov-chat-backend/Dockerfile
+   * components/document-repository/Dockerfile
+3. **Environment File**: Copy the root `env` template to `.env` and fill in required secrets:
+   ```bash
+   cp env .env
+   ```
+4. See `env` template for required secrets (ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, etc.).
 
-4. **Environment Files**: The services require environment files for configuration and secrets. Create the following files with their respective content:  
-   * ./gov-chat-frontend/.env  
-   * ./gov-chat-backend/.env  
-   * ./document-repository/.env  
-5. **Host Environment Variable**: The arango-vector-db service requires the ARANGO\_PASSWORD variable to be set in your host shell environment before running docker-compose up. This password should match the ARANGO\_PASSWORD variable in the ./gov-chat-backend/.env file.  
-   Bash  
-   export ARANGO\_PASSWORD=test \# Or your chosen password
+## **3\. Deployment**
 
-## **3\. Usage**
+All services are deployed via Docker Swarm from the project root using the root `docker-compose.yaml` (Swarm-compatible).
 
-### **Starting the Services**
+### **Deploying the Stack**
 
-To build and start all services in detached mode, run the following command from the same directory as the docker-compose.yaml file:
+```bash
+# From project root
+cp env .env   # First time: create your .env
+# Then edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
 
-Bash
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
+```
 
-docker-compose up \-d \--build
+See `docs/docker-swarm-setup.md` for the full Swarm deployment guide.
 
-### **Stopping the Services**
+### **Removing the Stack**
 
-To stop and remove the containers, run:
+```bash
+docker stack rm genieai
+```
 
-Bash
+### **Rebuilding After Code Changes**
 
-docker-compose down
+Images must be built and pushed to a registry before deploying (`docker stack deploy` cannot build):
+
+```bash
+docker compose build [service_name]
+# Push to your registry, then redeploy:
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
+```
 
 ### **Viewing Logs**
 
-To view the real-time logs for all services, run:
-
-Bash
-
-docker-compose logs \-f
-
-To view logs for a specific service, add the service name (e.g., docker-compose logs \-f backend).
+```bash
+docker service logs -f genieai_<service_name>
+```
 
 ## **4\. Service Details**
 
@@ -81,18 +81,16 @@ To view logs for a specific service, add the service name (e.g., docker-compose 
 
 This service runs the user interface of the application.
 
-* **Build**: The container image is built using the Dockerfile located in the ./gov-chat-frontend directory.  
-* **Restart Policy**: The service is configured to restart automatically unless it is explicitly stopped (restart: unless-stopped).  
-* **Ports**: The frontend is accessible on the host machine at port **8090**. This maps to port 8090 inside the container.  
-* **Dependencies**: The frontend service will only start after the backend service has started successfully (depends\_on: \- backend).  
-* **Environment File**: Loads configuration from ./gov-chat-frontend/.env.
+* **Build**: The container image is built using the Dockerfile located in the ./gov-chat-frontend directory.
+* **Ports**: The frontend is accessible on the host machine at port **8090**.
+* **Environment File**: Loads configuration from the root `.env`.
 
 #### **Frontend Configuration Parameters**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | NODE\_ENV | Sets the Node.js environment. | development |
-| VUE\_APP\_API\_URL | The public-facing URL of the backend API. | https/e2e-82-109.ssdcloudindia.net:443/api |
+| VUE\_APP\_API\_URL | The public-facing URL of the backend API. | https://e2e-82-109.ssdcloudindia.net:443/api |
 | VUE\_APP\_CSP\_CONNECT\_SRC | Content Security Policy connect-src directive for the Vue app. | "self http://localhost:3000..." |
 | CSP\_CONNECT\_SRC | Content Security Policy connect-src directive (likely for the server). | "'self' http://locahost..." |
 | CORS\_ALLOWED\_ORIGINS | Comma-separated list of allowed origins for CORS. | "http://localhost,https://localhost..." |
@@ -101,16 +99,14 @@ This service runs the user interface of the application.
 
 This service runs the Node.js server that provides the application's API and business logic.
 
-* **Build**: The image is built using the Dockerfile located in the ./gov-chat-backend/ directory.  
-* **Restart Policy**: Configured to restart automatically unless explicitly stopped (restart: unless-stopped).  
-* **Ports**: The backend API is accessible on the host machine at port **3000**.  
-* **Dependencies**: The backend service will only start after the redis-cache service is healthy (depends\_on: redis-cache).  
-* **Volumes**: The service uses several bind mounts to persist data:  
-  * ./database\_backups:/app/database\_backups: Persists automated database backups.  
-  * ./logs:/app/logs: Persists application logs.  
-  * ./data:/app/data: A volume for general application data persistence.  
-  * ./gov-chat-backend/Uploads:/app/Uploads: Persists user-uploaded files.  
-* **Environment File**: It loads additional environment variables from ./gov-chat-backend/.env.
+* **Build**: The image is built using the Dockerfile located in the ./gov-chat-backend/ directory.
+* **Ports**: The backend API is accessible on the host machine at port **3000**.
+* **Volumes**: The service uses several bind mounts to persist data:
+  * ./database\_backups:/app/database\_backups: Persists automated database backups.
+  * ./logs:/app/logs: Persists application logs.
+  * ./data:/app/data: A volume for general application data persistence.
+  * ./gov-chat-backend/Uploads:/app/Uploads: Persists user-uploaded files.
+* **Environment File**: Loads configuration from the root `.env`.
 
 #### **Backend Configuration Parameters**
 
@@ -158,7 +154,7 @@ This service runs the Node.js server that provides the application's API and bus
 | TRANSLATION\_BATCHES | Number of translation batches. | 5 |
 | TRANSLATION\_CACHE | Enable/disable translation cache. | on |
 | TRANSLATION\_CACHE\_PATH | Path for cache. | /cache/translations |
-| TRANSLATION\_CACHE\_PASSWORD | **(Secret)** Password for the Redis cache. | \!@\#$$5678 |
+| TRANSLATION\_CACHE\_PASSWORD | **(Secret)** Password for the Redis cache. | !@\#$$5678 |
 | TRANSLATION\_CACHE\_HOST | Hostname of the Redis service. | redis-cache |
 | TRANSLATION\_CACHE\_PORT | Port of the Redis service. | 6379 |
 | **OPEA Integration** |  |  |
@@ -170,14 +166,12 @@ This service runs the Node.js server that provides the application's API and bus
 
 This service handles document uploads, validation, and ingestion.
 
-* **Build**: The image is built using the Dockerfile located in the ./document-repository/ directory.  
-* **Restart Policy**: Configured to restart automatically unless explicitly stopped (restart: unless-stopped).  
-* **Ports**: The service is accessible on the host machine at port **3001**.  
-* **Dependencies**: This service will only start after the clamav service has started (depends\_on: \- clamav).  
-* **Volumes**:  
-  * ./logs:/app/logs: Persists application logs.  
-  * doc\_repo\_uploads:/app/uploads: Uses a named volume to persist file uploads.  
-* **Environment File**: Loads configuration from ./document-repository/.env.
+* **Build**: The image is built using the Dockerfile located in the ./document-repository/ directory.
+* **Ports**: The service is accessible on the host machine at port **3001**.
+* **Volumes**:
+  * ./logs:/app/logs: Persists application logs.
+  * doc\_repo\_uploads:/app/uploads: Uses a named volume to persist file uploads.
+* **Environment File**: Loads configuration from the root `.env`.
 
 #### **Document Repository Configuration Parameters**
 
@@ -219,40 +213,35 @@ This service handles document uploads, validation, and ingestion.
 
 This service runs the ArangoDB database.
 
-* **Image**: arangodb/arangodb:3.12.4  
-* **Restart Policy**: restart: unless-stopped  
-* **Ports**: Exposes the ArangoDB interface on the host at port **8529**.  
-* **Volumes**: Persists database data to /root/arango\_data on the host machine.  
-* **Environment**:  
-  * ARANGO\_ROOT\_PASSWORD: **(Secret)** This is set using the ${ARANGO\_PASSWORD} variable from the host's shell environment.  
-* **Command**: Starts ArangoDB with the \--experimental-vector-index=true flag to enable vector search capabilities.
+* **Image**: arangodb/arangodb:3.12.4
+* **Ports**: Exposes the ArangoDB interface on the host at port **8529**.
+* **Volumes**: Persists database data to /root/arango\_data on the host machine.
+* **Environment**:
+  * ARANGO\_ROOT\_PASSWORD: **(Secret)** Set via the ARANGO\_PASSWORD variable in `.env`.
+* **Command**: Starts ArangoDB with the --experimental-vector-index=true flag to enable vector search capabilities.
 
 ### **4.5. redis-cache Service**
 
 This service provides a Redis cache, primarily for the backend's translation service.
 
-* **Image**: redis:7-alpine  
-* **Restart Policy**: restart: unless-stopped  
-* **Ports**: Exposes Redis on the host at port **6379** (optional, for debugging).  
-* **Volumes**: Persists Redis data using the named volume redis\_data.  
-* **Command**:  
-  * redis-server \--appendonly yes \--maxmemory-policy noeviction \--requirepass "\!@\#$$5678"  
-  * This command starts Redis with AOF persistence, no eviction, and a **hardcoded password**.  
-  * **Note**: The password \!@\#$$5678 must match the TRANSLATION\_CACHE\_PASSWORD in the backend service's .env file.  
+* **Image**: redis:7-alpine
+* **Ports**: Exposes Redis on the host at port **6379** (optional, for debugging).
+* **Volumes**: Persists Redis data using the named volume redis\_data.
+* **Command**:
+  * redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "${TRANSLATION_CACHE_PASSWORD}"
+  * This command starts Redis with AOF persistence, no eviction, and a password set via `.env`.
 * **Healthcheck**: Includes a healthcheck to ensure Redis is responsive before dependent services (like backend) are started.
 
 ### **4.6. clamav Service**
 
 This service provides on-demand antivirus scanning.
 
-* **Image**: clamav/clamav  
+* **Image**: clamav/clamav
 * **Ports**: Exposes the ClamAV daemon on the host at port **3310**. This port is used by the document-repository service.
 
 ## **5\. Networking**
 
-* **chatqna\_default**: This file defines a single network named chatqna\_default.  
-* **External Network**: It is configured as external: true, which means Docker Compose will not create this network. You must create it manually (see Prerequisites). This setup is useful when integrating these services into a larger system with a shared network.  
-* **Service Communication**: Services can communicate with each other on this network using their service names as hostnames (e.g., backend can reach the database at http://arango-vector-db:8529).
+All services communicate via the Docker network defined in the root `docker-compose.yaml`. Services can communicate with each other using their service names as hostnames (e.g., backend can reach the database at http://arango-vector-db:8529).
 
 ## **6\. Additional Documentation**
 
@@ -288,7 +277,7 @@ For detailed documentation on each component, see:
 | redis-cache | 6379 | 6379 | Cache |
 | clamav | 3310 | 3310 | Virus Scanner |
 
-### OPEA Service Integration (deployed separately)
+### OPEA Service Integration (defined in root docker-compose.yaml)
 
 | OPEA Service | Port | Purpose |
 |--------------|------|---------|
@@ -317,13 +306,10 @@ For detailed documentation on each component, see:
 Check service health:
 ```bash
 # All services
-docker-compose ps
-
-# Specific service
-docker-compose ps backend
+docker service ls
 
 # Service logs
-docker-compose logs -f backend
+docker service logs -f genieai_backend
 ```
 
 ## **9\. Troubleshooting**
@@ -331,28 +317,27 @@ docker-compose logs -f backend
 ### Common Issues
 
 **Services won't start**:
-1. Ensure external network exists: `docker network ls | grep chatqna_default`
-2. Check environment files exist in each service directory
-3. Verify ARANGO_PASSWORD is set in host environment
+1. Check environment file exists at project root: `ls -la .env`
+2. Verify required secrets are set in `.env`
 
 **Backend can't connect to database**:
-1. Ensure arango-vector-db is running: `docker-compose ps arango-vector-db`
+1. Ensure arango-vector-db is running: `docker service ls | grep arango`
 2. Check ARANGO_URL, ARANGO_USERNAME, and ARANGO_PASSWORD in .env
 3. Verify database is accessible: `curl http://localhost:8529/_api/version`
 
 **Document uploads fail**:
-1. Verify clamav service is running: `docker-compose ps clamav`
-2. Check file size limits in document-repository .env
+1. Verify clamav service is running: `docker service ls | grep clamav`
+2. Check file size limits in document-repository configuration
 3. Ensure sufficient disk space
 
 **OPEA integration issues**:
-1. Verify OPEA services are deployed: `cd ../configs/opea-config && docker-compose ps`
-2. Check OPEA_HOST and OPEA_PORT in backend .env
-3. Ensure all services are on chatqna_default network
+1. Verify OPEA services are deployed: `docker service ls`
+2. Check OPEA_HOST and OPEA_PORT in `.env`
+3. Ensure all services are on the same Docker network
 
 ### Getting Help
 
 - **Component Documentation**: See individual component READMEs
-- **OPEA Integration**: [OPEA Configuration](../configs/opea-config/README.md)
 - **Backend Issues**: [Backend Documentation](gov-chat-backend/README.md)
 - **Frontend Issues**: [Frontend Documentation](gov-chat-frontend/README.md)
+- **Swarm Deployment**: [Docker Swarm Setup](../docs/docker-swarm-setup.md)

@@ -87,8 +87,10 @@ server {
         add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
 
         # Proxy settings to Kong
+        # Note: when proxy_pass uses a variable, nginx does NOT perform
+        # path prefix substitution — the full request URI is forwarded as-is.
         set $kong_addr ${KONG_PROXY_HOST}:8000;
-        proxy_pass http://$kong_addr/api/;
+        proxy_pass http://$kong_addr;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';

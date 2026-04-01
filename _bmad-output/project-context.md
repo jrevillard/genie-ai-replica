@@ -116,7 +116,15 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **No existing tests** — follow the conventions above when writing new ones
 
 #### Frontend (Vue)
-- No test framework configured yet — do not write tests until one is added
+- **Framework**: Jest with jsdom environment
+- **Module system**: ES modules — test files use `require()`/`module.exports` (Jest CommonJS interop)
+- **File location**: `src/__tests__/` directory (mirrors src structure)
+- **Naming**: `*.test.js` (e.g., `keycloakAuthService.test.js`)
+- **Structure**: `describe()` / `it()` / `expect()`
+- **Vue SFC**: `@vue/vue3-jest` transformer, `babel-jest` for JS
+- **Mocks**: `jest.mock()` for services and external libraries (`oidc-client-ts`)
+- **Config**: `jest.config.js` at service root, `setup.js` for global test setup
+- **Path alias**: `moduleNameMapper` maps `@/` to `<rootDir>/src/`
 
 ### Code Quality & Style Rules
 

@@ -435,41 +435,14 @@ export default {
       }
     },
     
-    //Logout handler that properly handles backend and frontend
+    //Logout handler — delegates to Vuex store (keycloakAuthService handles Keycloak redirect)
     async handleLogout() {
       try {
-        console.log('Logout started');
-
-        // Import userService
-        const userService = require('../services/userService').default;
-
-        // Call the userService logout method which handles the API call
-        try {
-          console.log('Calling userService.logout()');
-          await userService.logout();
-          console.log('Logout API called successfully via userService');
-        } catch (apiError) {
-          console.error('Error calling logout API:', apiError);
-        }
-
-        // Clear local storage (even though userService should do this as well)
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-
-        // Emit the event before navigation
         this.$emit('logout');
-
-        // Navigate using window.location
-        console.log('Redirecting to login page');
-        window.location.href = '/login';
-
+        await this.$store.dispatch('logout');
       } catch (error) {
-        console.error('Logout error:', error);
-
-        // Still clear storage and redirect on error
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+        console.error('Logout error:', error.message);
+        this.$emit('logout');
       }
     },
     toggleSidebar() {

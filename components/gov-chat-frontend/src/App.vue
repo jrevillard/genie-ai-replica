@@ -63,13 +63,6 @@
       />
     </template>
 
-    <!-- Login screen for unauthenticated users on auth-required routes -->
-    <login-screen
-      v-else-if="!isLoading && !isAuthenticated && $route.meta.requiresAuth !== false"
-      @login-success="handleLoginSuccess"
-      :theme="theme"
-    />
-
     <!-- Global notification component -->
     <div
       v-if="notification.visible"
@@ -91,13 +84,11 @@ import SideBarComponent from "./components/SideBarComponent.vue";
 import UnifiedAnalyticsComponent from "./components/UnifiedAnalytics.vue";
 import UserProfileComponent from "./components/UserProfileComponent.vue";
 import SettingsComponent from "./components/SettingsComponent.vue";
-import LoginScreen from "./components/LoginScreen.vue";
 import AdminDashboard from "./components/AdminDashboard.vue";
 import SplashScreen from "./components/SplashScreen.vue";
 import { mapGetters } from "vuex";
 import { eventBus } from "./eventBus.js";
 import chatHistoryService from "./services/chatHistoryService";
-import userService from "./services/userService";
 
 export default {
   name: "App",
@@ -107,7 +98,6 @@ export default {
     UnifiedAnalyticsComponent,
     UserProfileComponent,
     SettingsComponent,
-    LoginScreen,
     AdminDashboard,
     SplashScreen,
   },
@@ -349,13 +339,6 @@ export default {
           duration: 5000,
         });
       }
-    },
-
-    handleLoginSuccess(userData) {
-      console.log("handleLoginSuccess: Received userData:", userData);
-      document.documentElement.setAttribute("data-theme", this.theme);
-      document.body.setAttribute("data-theme", this.theme);
-      this.loadFoldersOnAuth();
     },
 
     async handleLogout() {

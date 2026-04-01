@@ -612,6 +612,7 @@
       "service": {"name": "keycloak"},
       "paths": ["/auth"],
       "strip_path": true,
+      "_comment": "strip_path: true removes /auth prefix before forwarding to Keycloak root (unlike other routes which preserve path)",
       "preserve_host": true,
       "regex_priority": 0,
       "path_handling": "v0",

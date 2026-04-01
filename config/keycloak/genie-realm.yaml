@@ -1,4 +1,4 @@
-realm: $(env:KC_REALM)
+realm: ${env:KC_REALM}
 enabled: true
 sslRequired: none
 
@@ -11,7 +11,7 @@ users:
     lastName: GENIE
     credentials:
       - type: password
-        value: $(env:KC_ADMIN_PASSWORD)
+        value: ${env:KC_ADMIN_PASSWORD}
         temporary: false
     realmRoles:
       - admin
@@ -19,10 +19,10 @@ users:
 
 # OIDC client configuration
 clients:
-  - clientId: $(env:KC_CLIENT_ID)
+  - clientId: ${env:KC_CLIENT_ID}
     enabled: true
     publicClient: false
-    secret: $(env:KC_CLIENT_SECRET)
+    secret: ${env:KC_CLIENT_SECRET}
     standardFlowEnabled: true
     directAccessGrantsEnabled: false
     implicitFlowEnabled: false
@@ -33,9 +33,9 @@ clients:
       client.credentials.use.refresh.token: false
       require.pushed.authorization.requests: false
     redirectUris:
-      - $(env:KC_VALID_REDIRECT_URIS)
+      - ${env:KC_VALID_REDIRECT_URIS}
     webOrigins:
-      - $(env:KC_WEB_ORIGINS)
+      - ${env:KC_WEB_ORIGINS}
     defaultClientScopes:
       - profile
       - email

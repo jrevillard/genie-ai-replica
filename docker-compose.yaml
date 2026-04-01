@@ -934,9 +934,10 @@ services:
       - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
       - KC_PROXY_HEADERS=xforwarded
       - KC_HOSTNAME=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      # Enable HTTP — NGINX handles TLS termination, Keycloak only needs HTTP internally
       - KC_HTTP_ENABLED=true
     healthcheck:
-      test: ["CMD-SHELL", "/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password $$KC_BOOTSTRAP_ADMIN_PASSWORD >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -962,7 +963,7 @@ services:
       - KEYCLOAK_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
       - IMPORT_FILES=/config/genie-realm.yaml
       - IMPORT_VARSUBSTITUTION_ENABLED=true
-      # Variables referenced in genie-realm.yaml via $(env:VAR)
+      # Variables referenced in genie-realm.yaml via ${env:VAR} substitution
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - KC_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
@@ -979,7 +980,7 @@ services:
       restart_policy:
         condition: on-failure
         delay: 10s
-        max_attempts: 5
+        max_attempts: 8
 
 networks:
   genieai_network:

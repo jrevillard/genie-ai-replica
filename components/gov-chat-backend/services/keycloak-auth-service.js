@@ -70,7 +70,7 @@ const keycloakAuthService = {
     if (!payload.iss || !payload.iss.startsWith(expectedOrigin)) {
       throw new TokenVerificationError(
         'TOKEN_INVALID',
-        `Token issuer not from trusted Keycloak: ${payload.iss || 'missing'}`
+        'Token issuer validation failed'
       );
     }
 
@@ -92,7 +92,7 @@ const keycloakAuthService = {
       if (!audienceList.includes(KEYCLOAK_CLIENT_ID)) {
         throw new TokenVerificationError(
           'TOKEN_INVALID',
-          `Token audience mismatch: expected ${KEYCLOAK_CLIENT_ID}, got ${JSON.stringify(verifiedPayload.aud)}`
+          'Token audience validation failed'
         );
       }
 

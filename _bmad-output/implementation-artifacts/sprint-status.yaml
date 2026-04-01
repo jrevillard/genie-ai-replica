@@ -49,7 +49,7 @@ development_status:
   1-5-frontend-login-redirect-and-auth-guard: done
   1-6-jit-user-provisioning-in-arangodb: review
   1-7-transparent-re-authentication-on-session-expiry: done
-  1-8-token-validation-failure-handling-backend-response-format: backlog
+  1-8-token-validation-failure-handling-backend-response-format: done
   1-9-external-idp-connection-via-keycloak-only: backlog
   1-10-offline-air-gapped-deployment-validation: backlog
   1-11-remove-legacy-authentication-service: backlog

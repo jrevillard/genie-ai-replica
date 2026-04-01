@@ -43,13 +43,6 @@
       <AdminDashboard v-if="showAdminDashboard" @close="showAdminDashboard = false" />
     </template>
 
-    <!-- Login screen for unauthenticated users on auth-required routes -->
-    <login-screen
-      v-else-if="!isLoading && !isAuthenticated && $route.meta.requiresAuth !== false"
-      :theme="theme"
-      @login-success="handleLoginSuccess"
-    />
-
     <!-- Global notification component -->
     <div v-if="notification.visible" class="notification" :class="notification.type" @click="hideNotification">
       {{ notification.message }}
@@ -61,18 +54,16 @@
 </template>
 
 <script>
-import NavBarComponent from './components/NavBarComponent.vue'
-import SideBarComponent from './components/SideBarComponent.vue'
-import UnifiedAnalyticsComponent from './components/UnifiedAnalytics.vue'
-import UserProfileComponent from './components/UserProfileComponent.vue'
-import SettingsComponent from './components/SettingsComponent.vue'
-import LoginScreen from './components/LoginScreen.vue'
-import AdminDashboard from './components/AdminDashboard.vue'
-import SplashScreen from './components/SplashScreen.vue'
-import { mapGetters } from 'vuex'
-import { eventBus } from './eventBus.js'
-import chatHistoryService from './services/chatHistoryService'
-import { themeManager } from './utils/ThemeManager'
+import NavBarComponent from "./components/NavBarComponent.vue";
+import SideBarComponent from "./components/SideBarComponent.vue";
+import UnifiedAnalyticsComponent from "./components/UnifiedAnalytics.vue";
+import UserProfileComponent from "./components/UserProfileComponent.vue";
+import SettingsComponent from "./components/SettingsComponent.vue";
+import AdminDashboard from "./components/AdminDashboard.vue";
+import SplashScreen from "./components/SplashScreen.vue";
+import { mapGetters } from "vuex";
+import { eventBus } from "./eventBus.js";
+import chatHistoryService from "./services/chatHistoryService";
 
 export default {
   name: 'App',
@@ -82,7 +73,6 @@ export default {
     UnifiedAnalyticsComponent,
     UserProfileComponent,
     SettingsComponent,
-    LoginScreen,
     AdminDashboard,
     SplashScreen,
   },
@@ -311,11 +301,6 @@ export default {
           duration: 5000,
         })
       }
-    },
-
-    handleLoginSuccess(userData) {
-      console.log('handleLoginSuccess: Received userData:', userData)
-      this.loadFoldersOnAuth()
     },
 
     async handleLogout() {

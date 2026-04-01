@@ -537,9 +537,15 @@ export default {
         console.error('Error parsing user from localStorage:', error)
       }
     },
-
-    handleLogout() {
-      this.$emit('logout')
+    //Logout handler — delegates to Vuex store (keycloakAuthService handles Keycloak redirect)
+    async handleLogout() {
+      try {
+        this.$emit('logout');
+        await this.$store.dispatch('logout');
+      } catch (error) {
+        console.error('Logout error:', error.message);
+        this.$emit('logout');
+      }
     },
     toggleSidebar() {
       this.$emit('toggleSidebar')

@@ -96,16 +96,15 @@ class HttpService {
       const status = error.response.status;
       const originalRequest = error.config;
 
-      // Handle 401/403 — attempt token refresh then retry once
-      if ([401, 403].includes(status) && !originalRequest._retryCount) {
+      // Handle 401 — attempt silent token refresh then retry once
+      if (status === 401 && !originalRequest._retryCount) {
         originalRequest._retryCount = 1;
 
         try {
-          const user = await keycloakAuthService.getUser();
-          const newToken = user?.access_token;
+          const refreshedUser = await keycloakAuthService.signinSilent();
 
-          if (newToken) {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          if (refreshedUser?.access_token) {
+            originalRequest.headers.Authorization = `Bearer ${refreshedUser.access_token}`;
             return this.axios(originalRequest);
           }
         } catch (refreshError) {
@@ -114,7 +113,7 @@ class HttpService {
 
         // Refresh failed or no token — redirect to Keycloak login
         if (typeof window !== 'undefined') {
-          keycloakAuthService.login();
+          await keycloakAuthService.login();
         }
 
         return Promise.reject({

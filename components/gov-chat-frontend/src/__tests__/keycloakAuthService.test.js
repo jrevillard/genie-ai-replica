@@ -5,11 +5,19 @@ const mockGetUser = jest.fn();
 const mockSigninRedirect = jest.fn();
 const mockSigninRedirectCallback = jest.fn();
 const mockSignoutRedirect = jest.fn();
+const mockSigninSilent = jest.fn();
+const mockAddUserLoaded = jest.fn(() => jest.fn());
+const mockAddSilentRenewError = jest.fn(() => jest.fn());
 const MockUserManager = jest.fn().mockImplementation(() => ({
   getUser: mockGetUser,
   signinRedirect: mockSigninRedirect,
   signinRedirectCallback: mockSigninRedirectCallback,
-  signoutRedirect: mockSignoutRedirect
+  signoutRedirect: mockSignoutRedirect,
+  signinSilent: mockSigninSilent,
+  events: {
+    addUserLoaded: mockAddUserLoaded,
+    addSilentRenewError: mockAddSilentRenewError
+  }
 }));
 
 jest.mock('oidc-client-ts', () => ({
@@ -89,6 +97,24 @@ describe('keycloakAuthService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('should register addUserLoaded event listener', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+
+      await keycloakAuthService.initialize();
+
+      expect(mockAddUserLoaded).toHaveBeenCalledTimes(1);
+      expect(typeof mockAddUserLoaded.mock.calls[0][0]).toBe('function');
+    });
+
+    it('should register addSilentRenewError event listener', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+
+      await keycloakAuthService.initialize();
+
+      expect(mockAddSilentRenewError).toHaveBeenCalledTimes(1);
+      expect(typeof mockAddSilentRenewError.mock.calls[0][0]).toBe('function');
+    });
   });
 
   describe('login', () => {
@@ -162,6 +188,19 @@ describe('keycloakAuthService', () => {
       );
 
       consoleSpy.mockRestore();
+    });
+
+    it('should remove event listeners on logout', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+
+      const unsubUserLoaded = mockAddUserLoaded.mock.results[0].value;
+      const unsubSilentRenewError = mockAddSilentRenewError.mock.results[0].value;
+
+      await keycloakAuthService.logout();
+
+      expect(unsubUserLoaded).toHaveBeenCalled();
+      expect(unsubSilentRenewError).toHaveBeenCalled();
     });
   });
 
@@ -249,6 +288,112 @@ describe('keycloakAuthService', () => {
 
       expect(manager).toBeDefined();
       expect(manager.getUser).toBeDefined();
+    });
+  });
+
+  describe('silent renew events', () => {
+    it('should update currentUser when addUserLoaded fires', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+
+      const refreshedUser = createMockUser({ access_token: 'refreshed-token-789' });
+      const addUserLoadedCb = mockAddUserLoaded.mock.calls[0][0];
+      addUserLoadedCb(refreshedUser);
+
+      expect(keycloakAuthService.getAccessToken()).toBe('refreshed-token-789');
+    });
+
+    it('should redirect to login when addSilentRenewError fires', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+      mockSigninRedirect.mockResolvedValue(undefined);
+
+      const addSilentRenewErrorCb = mockAddSilentRenewError.mock.calls[0][0];
+      addSilentRenewErrorCb(new Error('Refresh token expired'));
+
+      expect(mockSigninRedirect).toHaveBeenCalledWith({ state: undefined });
+    });
+  });
+
+  describe('onAccessTokenUpdated', () => {
+    it('should invoke registered callback when addUserLoaded fires', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+
+      const callback = jest.fn();
+      keycloakAuthService.onAccessTokenUpdated(callback);
+
+      const refreshedUser = createMockUser({ access_token: 'new-token-999' });
+      const addUserLoadedCb = mockAddUserLoaded.mock.calls[0][0];
+      addUserLoadedCb(refreshedUser);
+
+      expect(callback).toHaveBeenCalledWith(refreshedUser);
+    });
+
+    it('should invoke multiple registered callbacks', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+
+      const callback1 = jest.fn();
+      const callback2 = jest.fn();
+      keycloakAuthService.onAccessTokenUpdated(callback1);
+      keycloakAuthService.onAccessTokenUpdated(callback2);
+
+      const refreshedUser = createMockUser({ access_token: 'new-token-999' });
+      const addUserLoadedCb = mockAddUserLoaded.mock.calls[0][0];
+      addUserLoadedCb(refreshedUser);
+
+      expect(callback1).toHaveBeenCalledWith(refreshedUser);
+      expect(callback2).toHaveBeenCalledWith(refreshedUser);
+    });
+
+    it('should remove callback via removeAccessTokenUpdatedCallback', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+
+      const callback = jest.fn();
+      keycloakAuthService.onAccessTokenUpdated(callback);
+      keycloakAuthService.removeAccessTokenUpdatedCallback(callback);
+
+      const refreshedUser = createMockUser({ access_token: 'new-token-999' });
+      const addUserLoadedCb = mockAddUserLoaded.mock.calls[0][0];
+      addUserLoadedCb(refreshedUser);
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('signinSilent', () => {
+    it('should call UserManager.signinSilent and return refreshed user', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+
+      const refreshedUser = createMockUser({ access_token: 'silent-token-456' });
+      mockSigninSilent.mockResolvedValue(refreshedUser);
+
+      const result = await keycloakAuthService.signinSilent();
+
+      expect(mockSigninSilent).toHaveBeenCalled();
+      expect(result).toEqual(refreshedUser);
+      expect(keycloakAuthService.getAccessToken()).toBe('silent-token-456');
+    });
+
+    it('should return null when signinSilent fails', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+      mockSigninSilent.mockResolvedValue(null);
+
+      const result = await keycloakAuthService.signinSilent();
+
+      expect(result).toBeNull();
+    });
+
+    it('should throw when signinSilent rejects', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      await keycloakAuthService.initialize();
+      mockSigninSilent.mockRejectedValue(new Error('Silent renew failed'));
+
+      await expect(keycloakAuthService.signinSilent()).rejects.toThrow('Silent renew failed');
     });
   });
 });

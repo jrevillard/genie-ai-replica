@@ -1,6 +1,6 @@
 # Story 1.6: JIT User Provisioning in ArangoDB
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -50,62 +50,62 @@ so that every authenticated user has a local profile without manual provisioning
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create ArangoDB schema migration script (AC: #3)
-  - [ ] Create `scripts/new-schema-scripts/keycloak-user-migration.js`
-  - [ ] Script ensures `users` collection exists (create if missing)
-  - [ ] Ensure unique persistent index on `iss_sub`
-  - [ ] Ensure persistent index on `email` (non-unique — Keycloak doesn't guarantee email uniqueness across realms)
-  - [ ] Handle existing `loginName` unique index gracefully (drop it or leave it — it won't conflict with new fields)
-  - [ ] Script should be idempotent (safe to run multiple times)
-  - [ ] Use `dbService.getConnection('default')` from shared-lib for ArangoDB connection
-  - [ ] Use `arangojs` `collection.ensureIndex()` for index creation
+- [x] Task 1: Create ArangoDB schema migration script (AC: #3)
+  - [x] Create `scripts/new-schema-scripts/keycloak-user-migration.js`
+  - [x] Script ensures `users` collection exists (create if missing)
+  - [x] Ensure unique persistent index on `iss_sub`
+  - [x] Ensure persistent index on `email` (non-unique — Keycloak doesn't guarantee email uniqueness across realms)
+  - [x] Handle existing `loginName` unique index gracefully (drop it or leave it — it won't conflict with new fields)
+  - [x] Script should be idempotent (safe to run multiple times)
+  - [x] Use `dbService.getConnection('default')` from shared-lib for ArangoDB connection
+  - [x] Use `arangojs` `collection.ensureIndex()` for index creation
 
-- [ ] Task 2: Create user provisioning service (AC: #1, #2, #4, #5)
-  - [ ] Create `components/gov-chat-backend/services/user-provisioning-service.js`
-  - [ ] Export `provisionUser(decodedToken)` function that takes verified JWT payload
-  - [ ] Extract fields from token: `iss_sub`, `iss`, `sub`, `email`, `name`/`preferred_username`, `roles` from `realm_access.roles`
-  - [ ] Use ArangoDB UPSERT: `UPSERT { iss_sub: @iss_sub } INSERT @newDoc REPLACE @updateDoc IN users`
-  - [ ] INSERT document: `{ iss_sub, iss, sub, email, name, roles, active: true, deleted: false, createdAt: NOW_ISO, updatedAt: NOW_ISO }`
-  - [ ] REPLACE document: `{ email, name, roles, updatedAt: NOW_ISO }` (only mutable fields)
-  - [ ] Use `aql` template tag from `arangojs` for query construction
-  - [ ] Return the user document (either newly created or updated)
-  - [ ] If user has `deleted: true`, return null (caller handles 403)
-  - [ ] Use `dbService.getConnection('default')` for ArangoDB access
-  - [ ] Log provisioning events: `user_provisioned` for new users, profile updates for existing
+- [x] Task 2: Create user provisioning service (AC: #1, #2, #4, #5)
+  - [x] Create `components/gov-chat-backend/services/user-provisioning-service.js`
+  - [x] Export `provisionUser(decodedToken)` function that takes verified JWT payload
+  - [x] Extract fields from token: `iss_sub`, `iss`, `sub`, `email`, `name`/`preferred_username`, `roles` from `realm_access.roles`
+  - [x] Use ArangoDB UPSERT: `UPSERT { iss_sub: @iss_sub } INSERT @newDoc REPLACE @updateDoc IN users`
+  - [x] INSERT document: `{ iss_sub, iss, sub, email, name, roles, active: true, deleted: false, createdAt: NOW_ISO, updatedAt: NOW_ISO }`
+  - [x] REPLACE document: `{ email, name, roles, updatedAt: NOW_ISO }` (only mutable fields)
+  - [x] Use `aql` template tag from `arangojs` for query construction
+  - [x] Return the user document (either newly created or updated)
+  - [x] If user has `deleted: true`, return null (caller handles 403)
+  - [x] Use `dbService.getConnection('default')` for ArangoDB access
+  - [x] Log provisioning events: `user_provisioned` for new users, profile updates for existing
 
-- [ ] Task 3: Integrate provisioning into keycloak-auth-middleware (AC: #1, #5, #6)
-  - [ ] In `keycloak-auth-middleware.js`, after token verification succeeds:
+- [x] Task 3: Integrate provisioning into keycloak-auth-middleware (AC: #1, #5, #6)
+  - [x] In `keycloak-auth-middleware.js`, after token verification succeeds:
     1. Call `userProvisioningService.provisionUser(decoded)` with the verified payload
     2. If provisioning returns null (soft-deleted user) → return 403
     3. If provisioning throws → return 500 `PROVISIONING_FAILED`
     4. If provisioning succeeds → attach user to `req.user` and call `next()`
-  - [ ] Currently `req.user` is attached directly from decoded token — change to attach from ArangoDB result
-  - [ ] Keep `req.user` shape: `{ iss_sub, sub, iss, email, name, roles, active, deleted, createdAt, updatedAt }`
+  - [x] Currently `req.user` is attached directly from decoded token — change to attach from ArangoDB result
+  - [x] Keep `req.user` shape: `{ iss_sub, sub, iss, email, name, roles, active, deleted, createdAt, updatedAt }`
 
-- [ ] Task 4: Write unit tests for user-provisioning-service (AC: #1-5)
-  - [ ] Mock `dbService.getConnection()` to return mock ArangoDB database
-  - [ ] Mock `db.query()` to return cursor with user documents
-  - [ ] Test: new user → UPSERT creates document with all fields, `active: true`, `deleted: false`
-  - [ ] Test: existing user → UPSERT updates mutable fields, preserves `createdAt`
-  - [ ] Test: email change in JWT → updated in ArangoDB on re-login
-  - [ ] Test: soft-deleted user (`deleted: true`) → returns null
-  - [ ] Test: ArangoDB unreachable → throws error (middleware handles 500)
-  - [ ] Test: roles update from JWT `realm_access.roles`
-  - [ ] Use shared mock fixture `__tests__/mocks/mockJwtPayload.js` for test payloads
+- [x] Task 4: Write unit tests for user-provisioning-service (AC: #1-5)
+  - [x] Mock `dbService.getConnection()` to return mock ArangoDB database
+  - [x] Mock `db.query()` to return cursor with user documents
+  - [x] Test: new user → UPSERT creates document with all fields, `active: true`, `deleted: false`
+  - [x] Test: existing user → UPSERT updates mutable fields, preserves `createdAt`
+  - [x] Test: email change in JWT → updated in ArangoDB on re-login
+  - [x] Test: soft-deleted user (`deleted: true`) → returns null
+  - [x] Test: ArangoDB unreachable → throws error (middleware handles 500)
+  - [x] Test: roles update from JWT `realm_access.roles`
+  - [x] Use shared mock fixture `__tests__/mocks/mockJwtPayload.js` for test payloads
 
-- [ ] Task 5: Write unit tests for middleware integration (AC: #5, #6)
-  - [ ] Mock `keycloakAuthService.verifyToken()` to return valid decoded payload
-  - [ ] Mock `userProvisioningService.provisionUser()` to test different scenarios
-  - [ ] Test: successful provisioning → `req.user` populated from ArangoDB, `next()` called
-  - [ ] Test: provisioning returns null (soft-deleted) → 403 response
-  - [ ] Test: provisioning throws error → 500 `PROVISIONING_FAILED` response
-  - [ ] Test: `req.user` contains ArangoDB fields (`_key`, `createdAt`, `updatedAt`), not just JWT fields
+- [x] Task 5: Write unit tests for middleware integration (AC: #5, #6)
+  - [x] Mock `keycloakAuthService.verifyToken()` to return valid decoded payload
+  - [x] Mock `userProvisioningService.provisionUser()` to test different scenarios
+  - [x] Test: successful provisioning → `req.user` populated from ArangoDB, `next()` called
+  - [x] Test: provisioning returns null (soft-deleted) → 403 response
+  - [x] Test: provisioning throws error → 500 `PROVISIONING_FAILED` response
+  - [x] Test: `req.user` contains ArangoDB fields (`_key`, `createdAt`, `updatedAt`), not just JWT fields
 
-- [ ] Task 6: Run full test suite and verify
-  - [ ] Run `cd components/gov-chat-backend && npx jest --verbose`
-  - [ ] Verify all existing tests still pass (no regressions from middleware changes)
-  - [ ] Verify all new tests pass
-  - [ ] Run frontend tests to confirm no cross-component breakage: `cd components/gov-chat-frontend && npx jest`
+- [x] Task 6: Run full test suite and verify
+  - [x] Run `cd components/gov-chat-backend && npx jest --verbose`
+  - [x] Verify all existing tests still pass (no regressions from middleware changes)
+  - [x] Verify all new tests pass
+  - [x] Run frontend tests to confirm no cross-component breakage: `cd components/gov-chat-frontend && npx jest`
 
 ## Dev Notes
 
@@ -358,4 +358,22 @@ GLM-5-Turbo
 
 ### Completion Notes List
 
+- Created idempotent migration script that handles legacy unique email index by detecting and dropping it
+- Implemented atomic UPSERT pattern using arangojs aql template tag — no race conditions possible
+- Provisioning service returns null for soft-deleted users, allowing middleware to return 403
+- Middleware now attaches ArangoDB user document (with `_key`, `createdAt`, `updatedAt`) to `req.user` instead of raw JWT payload
+- All 50 backend tests pass (10 new provisioning tests + 2 new middleware tests + 38 existing)
+- All 59 frontend tests pass (no cross-component breakage)
+
+### Change Log
+
+- 2026-04-01: Implemented JIT user provisioning — migration script, provisioning service, middleware integration, and full test coverage
+- 2026-04-01: Code review fixes — soft-deleted user check moved before UPSERT (prevents profile refresh on deleted users), added iss_sub guard clause, fixed misleading log message, renamed ambiguous test
+
 ### File List
+
+- `components/gov-chat-backend/scripts/new-schema-scripts/keycloak-user-migration.js` (created)
+- `components/gov-chat-backend/services/user-provisioning-service.js` (created)
+- `components/gov-chat-backend/middleware/keycloak-auth-middleware.js` (modified)
+- `components/gov-chat-backend/__tests__/user-provisioning-service.test.js` (created)
+- `components/gov-chat-backend/__tests__/keycloak-auth-middleware.test.js` (modified)

@@ -1,0 +1,85 @@
+'use strict';
+
+const { aql } = require('arangojs');
+const { logger, dbService } = require('../shared-lib');
+
+/**
+ * User Provisioning Service — JIT user provisioning via ArangoDB UPSERT
+ *
+ * Creates or updates a user record in ArangoDB on each successful
+ * Keycloak authentication. Uses atomic UPSERT to prevent duplicates.
+ */
+const userProvisioningService = {
+
+  /**
+   * Provision or update a user from a verified JWT payload
+   * @param {Object} decodedToken - Verified JWT payload (with iss_sub added by keycloak-auth-service)
+   * @returns {Promise<Object|null>} User document from ArangoDB, or null if soft-deleted
+   * @throws {Error} On ArangoDB connection or query failure
+   */
+  async provisionUser(decodedToken) {
+    const issSub = decodedToken.iss_sub;
+    if (!issSub) {
+      throw new Error('Missing iss_sub in decoded token');
+    }
+
+    const now = new Date().toISOString();
+
+    // Check if user exists and is soft-deleted before upserting
+    const db = await dbService.getConnection('default');
+    const checkCursor = await db.query(
+      aql`
+        FOR u IN users
+          FILTER u.iss_sub == @iss_sub AND u.deleted == true
+          RETURN u
+      `,
+      { iss_sub: issSub }
+    );
+    const deletedUser = await checkCursor.next();
+    if (deletedUser) {
+      logger.warn(`[UserProvisioning] Soft-deleted user attempted login: ${issSub}`);
+      return null;
+    }
+
+    const newDoc = {
+      iss_sub: issSub,
+      iss: decodedToken.iss,
+      sub: decodedToken.sub,
+      email: decodedToken.email || null,
+      name: decodedToken.name || decodedToken.preferred_username || null,
+      roles: decodedToken.realm_access?.roles || [],
+      active: true,
+      deleted: false,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const updateDoc = {
+      email: decodedToken.email || null,
+      name: decodedToken.name || decodedToken.preferred_username || null,
+      roles: decodedToken.realm_access?.roles || [],
+      updatedAt: now
+    };
+
+    const cursor = await db.query(
+      aql`
+        UPSERT { iss_sub: @iss_sub }
+        INSERT @newDoc
+        REPLACE @updateDoc IN users
+        RETURN NEW
+      `,
+      { iss_sub: issSub, newDoc, updateDoc }
+    );
+
+    const user = await cursor.next();
+
+    if (!user) {
+      throw new Error('User provisioning returned no result');
+    }
+
+    logger.info(`[UserProvisioning] User upserted: ${issSub}`);
+    return user;
+  }
+};
+
+module.exports = userProvisioningService;

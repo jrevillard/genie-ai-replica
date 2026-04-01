@@ -16,6 +16,12 @@ jest.mock('../services/keycloak-auth-service', () => ({
   verifyToken: (...args) => mockVerifyToken(...args)
 }));
 
+// Mock user-provisioning-service
+const mockProvisionUser = jest.fn();
+jest.mock('../services/user-provisioning-service', () => ({
+  provisionUser: (...args) => mockProvisionUser(...args)
+}));
+
 const { keycloakAuthMiddleware, isPublicRoute, PUBLIC_PATHS } = require('../middleware/keycloak-auth-middleware');
 
 describe('isPublicRoute', () => {
@@ -88,6 +94,7 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     };
     next = jest.fn();
     mockVerifyToken.mockReset();
+    mockProvisionUser.mockReset();
   });
 
   it('should return 401 TOKEN_INVALID when no Authorization header is present', async () => {
@@ -164,7 +171,7 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('should call next() and set req.user with valid token', async () => {
+  it('should call next() and set req.user from ArangoDB provisioning result', async () => {
     req.headers.authorization = 'Bearer valid-token';
     const decodedPayload = {
       iss_sub: 'http://localhost:8080/realms/genie#12345678',
@@ -180,19 +187,32 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     };
     mockVerifyToken.mockResolvedValue(decodedPayload);
 
+    const arangoDbUser = {
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'test@example.com',
+      name: 'Test User',
+      roles: ['user', 'admin'],
+      active: true,
+      deleted: false,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z'
+    };
+    mockProvisionUser.mockResolvedValue(arangoDbUser);
+
     await keycloakAuthMiddleware.authenticate(req, res, next);
 
+    expect(mockProvisionUser).toHaveBeenCalledWith(decodedPayload);
     expect(next).toHaveBeenCalled();
-    expect(req.user).toBeDefined();
-    expect(req.user.iss_sub).toBe('http://localhost:8080/realms/genie#12345678');
-    expect(req.user.sub).toBe('12345678');
-    expect(req.user.email).toBe('test@example.com');
-    expect(req.user.name).toBe('Test User');
-    expect(req.user.roles).toEqual(['user', 'admin']);
+    expect(req.user).toEqual(arangoDbUser);
+    expect(req.user._key).toBe('users/123');
+    expect(req.user.createdAt).toBe('2026-03-01T00:00:00.000Z');
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('should handle missing name field by falling back to preferred_username', async () => {
+  it('should pass through provisioning result when user has no name (uses preferred_username from ArangoDB)', async () => {
     req.headers.authorization = 'Bearer valid-token';
     const decodedPayload = {
       iss_sub: 'http://localhost:8080/realms/genie#12345678',
@@ -206,6 +226,19 @@ describe('keycloakAuthMiddleware.authenticate', () => {
       iat: Math.floor(Date.now() / 1000)
     };
     mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'test@example.com',
+      name: 'testuser',
+      roles: ['user'],
+      active: true,
+      deleted: false,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z'
+    });
 
     await keycloakAuthMiddleware.authenticate(req, res, next);
 
@@ -224,10 +257,73 @@ describe('keycloakAuthMiddleware.authenticate', () => {
       iat: Math.floor(Date.now() / 1000)
     };
     mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'test@example.com',
+      name: null,
+      roles: [],
+      active: true,
+      deleted: false,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z'
+    });
 
     await keycloakAuthMiddleware.authenticate(req, res, next);
 
     expect(req.user.roles).toEqual([]);
+  });
+
+  it('should return 403 when provisioning returns null (soft-deleted user)', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'deleted@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue(null);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'User account is deactivated',
+      details: {}
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should return 500 PROVISIONING_FAILED when provisioning throws error', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'test@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockRejectedValue(new Error('ArangoDB connection refused'));
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'PROVISIONING_FAILED',
+      message: 'User provisioning failed',
+      details: {}
+    });
+    expect(next).not.toHaveBeenCalled();
   });
 });
 

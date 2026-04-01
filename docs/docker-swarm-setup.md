@@ -193,6 +193,15 @@ docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 # Kong Config (one-shot init service)
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 
+# PostgreSQL Init (one-shot — creates dedicated kong/keycloak users)
+docker build -t genie-ai-postgres-init:latest config/postgres/
+
+# Keycloak (Identity Provider)
+docker build -t genie-ai-keycloak:latest config/keycloak/
+
+# Keycloak Config CLI (one-shot — applies realm configuration)
+docker build -f config/keycloak/Dockerfile.config-cli -t genie-ai-keycloak-config:latest config/keycloak/
+
 # OPEA services (if DEPLOY_OPEA=1)
 docker build -f Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest genie-ai-overlay/dataprep/
 docker build -f Dockerfile-retriever_genie-ai -t genie-ai-retriever-arango:latest genie-ai-overlay/retriever/
@@ -200,7 +209,7 @@ docker build -f Dockerfile-chatqna_genie-ai -t genie-ai-chatqna-server:latest ge
 docker build -f Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest genie-ai-overlay/reranker/
 ```
 
-This builds 10 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
+This builds 13 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
 
 ### 5b. Tag images for local registry
 
@@ -212,6 +221,9 @@ docker tag genie-ai-chatqna-server:latest localhost:5000/genie-ai-chatqna-server
 docker tag genie-ai-reranker:latest localhost:5000/genie-ai-reranker:latest
 docker tag genie-ai-nginx:latest localhost:5000/genie-ai-nginx:latest
 docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:latest
+docker tag genie-ai-postgres-init:latest localhost:5000/genie-ai-postgres-init:latest
+docker tag genie-ai-keycloak:latest localhost:5000/genie-ai-keycloak:latest
+docker tag genie-ai-keycloak-config:latest localhost:5000/genie-ai-keycloak-config:latest
 
 # Services tagged by Compose project name (genieai_mvp)
 docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
@@ -233,6 +245,9 @@ docker push localhost:5000/genie-ai-chatqna-server:latest
 docker push localhost:5000/genie-ai-reranker:latest
 docker push localhost:5000/genie-ai-nginx:latest
 docker push localhost:5000/genie-ai-kong-config:latest
+docker push localhost:5000/genie-ai-postgres-init:latest
+docker push localhost:5000/genie-ai-keycloak:latest
+docker push localhost:5000/genie-ai-keycloak-config:latest
 ```
 
 ### 5d. (Optional) Pre-pull external images for air-gapped deployments
@@ -255,6 +270,8 @@ docker pull opea/chatqna-ui:latest
 docker pull opea/nginx:latest
 docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
 docker pull nginx:alpine
+docker pull quay.io/keycloak/keycloak:26.5.6
+docker pull adorsys/keycloak-config-cli:6.5.0-26
 
 # Tag and push (example for each)
 docker tag vllm/vllm-openai:latest localhost:5000/vllm/vllm-openai:latest

@@ -11,6 +11,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const { Server: SocketIOServer } = require('socket.io');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
+const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middleware');
 
 // Initialize Express app
 const app = express();
@@ -967,20 +968,21 @@ async function startApp() {
   }
 
   // Define routes with paths and services
+  // keycloakAuth: true means the route group is protected by Keycloak JWT middleware
   const routeConfigs = [
-    { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService },
-    { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService },
-    { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService },
-    { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService },
-    { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService },
-    { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService },
-    { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService },
+    { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService, keycloakAuth: true },
+    { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService, keycloakAuth: true },
+    { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService, keycloakAuth: true },
+    { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService, keycloakAuth: true },
+    { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService, keycloakAuth: true },
+    { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService, keycloakAuth: true },
+    { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService, keycloakAuth: true },
     { file: 'auth-routes', paths: ['/api/auth'], service: services.authService },
-    { file: 'logger-routes', paths: ['/api/logger'], service: null },
-    { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
-    { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService },
-    { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService },
-    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService }
+    { file: 'logger-routes', paths: ['/api/logger'], service: null, keycloakAuth: true },
+    { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService, keycloakAuth: true },
+    { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService, keycloakAuth: true },
+    { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService, keycloakAuth: true },
+    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService, keycloakAuth: true }
   ];
 
   // Log route configurations
@@ -1078,7 +1080,11 @@ async function startApp() {
     for (const path of config.paths) {
       try {
         logger.info(`Mounting ${config.file} at ${path}`);
-        app.use(path, routeInstance);
+        if (config.keycloakAuth) {
+          app.use(path, keycloakAuthMiddleware.authenticate, routeInstance);
+        } else {
+          app.use(path, routeInstance);
+        }
         logger.info(`${config.file.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Module: LOADED`);
         logger.debug(`Route ${config.file} mounted at ${path} with service: ${config.service ? config.service.constructor.name : 'no service'}`);
         logger.info('Total routes in stack:', app._router.stack.length);

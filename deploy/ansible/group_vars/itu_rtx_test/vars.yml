@@ -1,0 +1,38 @@
+---
+# GENIE.AI - ITU RTX Test environment configuration
+# Non-secret settings specific to this environment.
+
+# =============================================================================
+# DEPLOYMENT OPTIONS
+# =============================================================================
+gpu_env_file: env.rtx6000
+repo_branch: deployment-stabilization
+
+# =============================================================================
+# API GATEWAY
+# =============================================================================
+nginx_public_domain: "10.0.0.110"
+nginx_http_port: "1080"
+nginx_https_port: "1443"
+registry_port: "5001"
+
+# =============================================================================
+# FRONTEND
+# =============================================================================
+vue_app_api_url: "https://10.0.0.110:1443/api"
+vue_app_csp_connect_src: "'self' https://10.0.0.110:1443 wss://10.0.0.110:1443 http://localhost:1080 http://localhost:1443"
+
+# =============================================================================
+# BACKEND
+# =============================================================================
+cors_allowed_origins: "https://10.0.0.110:1443,http://localhost:1080,http://localhost:1443"
+csp_connect_src: "'self' https://10.0.0.110:1443 wss://10.0.0.110:1443 http://localhost:1080 http://localhost:1443"
+
+# =============================================================================
+# EMAIL (non-secret)
+# =============================================================================
+email_host: "smtp.itu.ch"
+email_port: "587"
+email_secure: "false"
+email_user: "genie-ai"
+email_from: "noreply@genie-ai.itu.int"

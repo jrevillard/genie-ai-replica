@@ -16,7 +16,14 @@ const config = {
         '/api/auth/me'
       ]
     },
-    
+
+    // Keycloak configuration
+    keycloak: {
+      url: process.env.KEYCLOAK_URL || 'http://keycloak:8080',
+      realm: process.env.KEYCLOAK_REALM || 'genie',
+      clientId: process.env.KEYCLOAK_CLIENT_ID || 'genie-app'
+    },
+
     // Security scan configuration
     security: {
       hiddenFiles: [
@@ -28,5 +35,5 @@ const config = {
       ]
     }
   };
-  
+
   module.exports = config;

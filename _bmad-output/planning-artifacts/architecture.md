@@ -389,6 +389,8 @@ flowchart TD
     O --> P[next]
 ```
 
+> For the full set of integration diagrams (C4 context, C4 container, OIDC sequence, JWKS validation sequence), see [keycloak-idp-integration-diagrams.md](keycloak-idp-integration-diagrams.md).
+
 ### Test Patterns
 
 **Shared Mock Fixture (mandatory for all auth tests):**

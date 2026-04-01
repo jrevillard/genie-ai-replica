@@ -10,13 +10,27 @@ import oidcConfig from '@/config/oidcConfig';
 
 let userManager = null;
 let currentUser = null;
+let accessTokenCallbacks = new Set();
+let unsubscribeUserLoaded = null;
+let unsubscribeSilentRenewError = null;
 
 /**
- * Initialize the OIDC service — creates UserManager and checks for existing session
+ * Initialize the OIDC service — creates UserManager, checks for existing session,
+ * and registers silent renew event listeners.
  * @returns {Promise<Object|null>} Existing user or null
  */
 async function initialize() {
   userManager = new UserManager(oidcConfig);
+
+  // Register silent renew event listeners
+  unsubscribeUserLoaded = userManager.events.addUserLoaded((user) => {
+    currentUser = user;
+    accessTokenCallbacks.forEach((cb) => cb(user));
+  });
+
+  unsubscribeSilentRenewError = userManager.events.addSilentRenewError(() => {
+    login();
+  });
 
   try {
     currentUser = await userManager.getUser();
@@ -70,6 +84,16 @@ async function handleCallback() {
  * Redirect to Keycloak logout
  */
 async function logout() {
+  // Remove event listeners before clearing state
+  if (unsubscribeUserLoaded) {
+    unsubscribeUserLoaded();
+    unsubscribeUserLoaded = null;
+  }
+  if (unsubscribeSilentRenewError) {
+    unsubscribeSilentRenewError();
+    unsubscribeSilentRenewError = null;
+  }
+
   const manager = getUserManager();
   try {
     await manager.signoutRedirect();
@@ -107,6 +131,40 @@ function isAuthenticated() {
 }
 
 /**
+ * Manually trigger a silent token refresh via iframe
+ * @returns {Promise<Object|null>} Refreshed user or null if refresh failed
+ */
+async function signinSilent() {
+  const manager = getUserManager();
+  try {
+    const user = await manager.signinSilent();
+    if (user) {
+      currentUser = user;
+    }
+    return user;
+  } catch (error) {
+    console.error('[KeycloakAuth] Error during silent renew:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Register a callback to be invoked when the access token is silently refreshed
+ * @param {Function} callback - Function called with the updated User object
+ */
+function onAccessTokenUpdated(callback) {
+  accessTokenCallbacks.add(callback);
+}
+
+/**
+ * Remove a previously registered access token update callback
+ * @param {Function} callback - The callback to remove
+ */
+function removeAccessTokenUpdatedCallback(callback) {
+  accessTokenCallbacks.delete(callback);
+}
+
+/**
  * Get the internal UserManager (for advanced usage)
  * @returns {UserManager}
  */
@@ -122,5 +180,8 @@ export default {
   getUser,
   getAccessToken,
   isAuthenticated,
+  signinSilent,
+  onAccessTokenUpdated,
+  removeAccessTokenUpdatedCallback,
   getUserManager: getInternalUserManager
 };

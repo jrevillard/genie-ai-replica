@@ -5,6 +5,8 @@ const mockInitialize = jest.fn();
 const mockLogin = jest.fn();
 const mockHandleCallback = jest.fn();
 const mockLogout = jest.fn();
+const mockOnAccessTokenUpdated = jest.fn();
+const mockRemoveAccessTokenUpdatedCallback = jest.fn();
 
 jest.mock('@/services/keycloakAuthService', () => ({
   __esModule: true,
@@ -15,7 +17,9 @@ jest.mock('@/services/keycloakAuthService', () => ({
     logout: mockLogout,
     getAccessToken: jest.fn(),
     isAuthenticated: jest.fn(),
-    getUser: jest.fn()
+    getUser: jest.fn(),
+    onAccessTokenUpdated: mockOnAccessTokenUpdated,
+    removeAccessTokenUpdatedCallback: mockRemoveAccessTokenUpdatedCallback
   }
 }));
 
@@ -148,6 +152,17 @@ describe('Vuex Auth Module', () => {
       authModule.mutations.setInitialized(state);
       expect(state.isInitialized).toBe(true);
     });
+
+    it('updateAccessToken updates only accessToken', () => {
+      const state = createState();
+      state.isAuthenticated = true;
+      state.user = { name: 'Test', iss_sub: 'iss#sub' };
+      state.accessToken = 'old-token';
+      authModule.mutations.updateAccessToken(state, { accessToken: 'new-token' });
+      expect(state.accessToken).toBe('new-token');
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.user).toEqual({ name: 'Test', iss_sub: 'iss#sub' });
+    });
   });
 
   describe('actions', () => {
@@ -199,6 +214,65 @@ describe('Vuex Auth Module', () => {
         expect(state.error).toBe('Authentication initialization failed');
         expect(state.isInitialized).toBe(true);
       });
+
+      it('registers onAccessTokenUpdated callback when user exists', async () => {
+        mockInitialize.mockResolvedValue(createMockOidcUser());
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.initialize({ commit });
+
+        expect(mockOnAccessTokenUpdated).toHaveBeenCalledTimes(1);
+        expect(typeof mockOnAccessTokenUpdated.mock.calls[0][0]).toBe('function');
+      });
+
+      it('does NOT register callback when no user', async () => {
+        mockInitialize.mockResolvedValue(null);
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.initialize({ commit });
+
+        expect(mockOnAccessTokenUpdated).not.toHaveBeenCalled();
+      });
+
+      it('callback updates accessToken and user on silent renew', async () => {
+        mockInitialize.mockResolvedValue(createMockOidcUser());
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.initialize({ commit });
+
+        // Simulate silent renew callback
+        const refreshedUser = createMockOidcUser({
+          access_token: 'refreshed-token',
+          profile: { ...createMockOidcUser().profile, email: 'updated@example.com' }
+        });
+        const callback = mockOnAccessTokenUpdated.mock.calls[0][0];
+        callback(refreshedUser);
+
+        expect(state.accessToken).toBe('refreshed-token');
+        expect(state.user.email).toBe('updated@example.com');
+        expect(state.isAuthenticated).toBe(true);
+      });
+
+      it('cleans up existing callback before registering new one on re-initialize', async () => {
+        mockInitialize.mockResolvedValue(createMockOidcUser());
+        const state = createState();
+        const commit = createCommit(state);
+
+        // First initialize
+        await authModule.actions.initialize({ commit });
+        expect(mockOnAccessTokenUpdated).toHaveBeenCalledTimes(1);
+        const firstCallback = mockOnAccessTokenUpdated.mock.calls[0][0];
+
+        // Second initialize (simulates re-login after logout)
+        await authModule.actions.initialize({ commit });
+
+        // Should have removed the old callback before adding new one
+        expect(mockRemoveAccessTokenUpdatedCallback).toHaveBeenCalledWith(firstCallback);
+        expect(mockOnAccessTokenUpdated).toHaveBeenCalledTimes(2);
+      });
     });
 
     describe('login', () => {
@@ -240,6 +314,52 @@ describe('Vuex Auth Module', () => {
         expect(result).toEqual(mockUser);
       });
 
+      it('registers onAccessTokenUpdated callback after successful callback', async () => {
+        const mockUser = createMockOidcUser();
+        mockHandleCallback.mockResolvedValue(mockUser);
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.handleCallback({ commit });
+
+        expect(mockOnAccessTokenUpdated).toHaveBeenCalledTimes(1);
+        expect(typeof mockOnAccessTokenUpdated.mock.calls[0][0]).toBe('function');
+      });
+
+      it('callback from handleCallback updates accessToken on silent renew', async () => {
+        const mockUser = createMockOidcUser();
+        mockHandleCallback.mockResolvedValue(mockUser);
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.handleCallback({ commit });
+
+        const refreshedUser = createMockOidcUser({
+          access_token: 'post-callback-refreshed-token',
+          profile: { ...createMockOidcUser().profile, name: 'Updated Name' }
+        });
+        const callback = mockOnAccessTokenUpdated.mock.calls[0][0];
+        callback(refreshedUser);
+
+        expect(state.accessToken).toBe('post-callback-refreshed-token');
+        expect(state.user.name).toBe('Updated Name');
+        expect(state.isAuthenticated).toBe(true);
+      });
+
+      it('does NOT register callback when user profile is null', async () => {
+        mockHandleCallback.mockResolvedValue({
+          access_token: 'token',
+          expired: false,
+          profile: null
+        });
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.handleCallback({ commit });
+
+        expect(mockOnAccessTokenUpdated).not.toHaveBeenCalled();
+      });
+
       it('sets error on callback failure', async () => {
         mockHandleCallback.mockRejectedValue(new Error('Callback failed'));
         const state = createState();
@@ -279,6 +399,22 @@ describe('Vuex Auth Module', () => {
 
         expect(state.isAuthenticated).toBe(false);
         expect(state.user).toBeNull();
+      });
+
+      it('removes accessTokenUpdatedCallback on logout', async () => {
+        mockInitialize.mockResolvedValue(createMockOidcUser());
+        mockLogout.mockResolvedValue(undefined);
+        const state = createState();
+        const commit = createCommit(state);
+
+        // Initialize first (registers callback)
+        await authModule.actions.initialize({ commit });
+        // Mock removeAccessTokenUpdatedCallback to return the registered callback
+        mockRemoveAccessTokenUpdatedCallback.mockImplementation(() => {});
+
+        await authModule.actions.logout({ commit });
+
+        expect(mockRemoveAccessTokenUpdatedCallback).toHaveBeenCalledTimes(1);
       });
     });
 

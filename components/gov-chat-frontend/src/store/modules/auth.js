@@ -25,6 +25,26 @@ function mapOidcUserToState(oidcUser) {
   };
 }
 
+let silentRenewCallback = null;
+
+function registerSilentRenewCallback(commit) {
+  // Clean up any existing callback from a previous session
+  if (silentRenewCallback) {
+    keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
+  }
+
+  silentRenewCallback = (refreshedUser) => {
+    const updatedUser = mapOidcUserToState(refreshedUser);
+    if (updatedUser) {
+      commit('updateAccessToken', {
+        accessToken: refreshedUser.access_token,
+        user: updatedUser
+      });
+    }
+  };
+  keycloakAuthService.onAccessTokenUpdated(silentRenewCallback);
+}
+
 const state = {
   isAuthenticated: false,
   user: null,
@@ -43,7 +63,8 @@ const getters = {
 
 const actions = {
   /**
-   * Initialize OIDC service and restore session if available
+   * Initialize OIDC service and restore session if available.
+   * Registers callback for silent token renew updates.
    */
   async initialize({ commit }) {
     try {
@@ -57,6 +78,9 @@ const actions = {
             user: stateUser,
             accessToken: user.access_token
           });
+
+          // Register callback for silent token renew
+          registerSilentRenewCallback(commit);
         } else {
           commit('clearAuth');
         }
@@ -103,6 +127,8 @@ const actions = {
             user: stateUser,
             accessToken: user.access_token
           });
+
+          registerSilentRenewCallback(commit);
         }
       }
 
@@ -126,6 +152,12 @@ const actions = {
       console.error('[Auth Store] Logout error:', error.message);
       // Always clear local state even if Keycloak redirect fails
       commit('clearAuth');
+    } finally {
+      // Always clean up silent renew callback
+      if (silentRenewCallback) {
+        keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
+        silentRenewCallback = null;
+      }
     }
   },
 
@@ -162,6 +194,13 @@ const mutations = {
 
   setInitialized(state) {
     state.isInitialized = true;
+  },
+
+  updateAccessToken(state, { accessToken, user }) {
+    state.accessToken = accessToken;
+    if (user) {
+      state.user = user;
+    }
   }
 };
 

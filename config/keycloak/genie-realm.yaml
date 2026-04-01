@@ -1,0 +1,54 @@
+realm: $(env:KC_REALM)
+enabled: true
+sslRequired: none
+
+# Default admin user
+users:
+  - username: admin
+    enabled: true
+    email: admin@genie.local
+    firstName: Admin
+    lastName: GENIE
+    credentials:
+      - type: password
+        value: $(env:KC_ADMIN_PASSWORD)
+        temporary: false
+    realmRoles:
+      - admin
+      - user
+
+# OIDC client configuration
+clients:
+  - clientId: $(env:KC_CLIENT_ID)
+    enabled: true
+    publicClient: false
+    secret: $(env:KC_CLIENT_SECRET)
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: false
+      client.credentials.use.refresh.token: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_VALID_REDIRECT_URIS)
+    webOrigins:
+      - $(env:KC_WEB_ORIGINS)
+    defaultClientScopes:
+      - profile
+      - email
+      - roles
+    optionalClientScopes:
+      - address
+      - phone
+      - offline_access
+
+# Realm roles
+roles:
+  realm:
+    - name: admin
+      description: Administrator role with full access
+    - name: user
+      description: Standard user role

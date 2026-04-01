@@ -47,17 +47,21 @@ SESSION_SECRET=
 # Used by: redis-cache, translation service
 TRANSLATION_CACHE_PASSWORD=
 
-# Kong PostgreSQL passwords (API gateway)
-# Used by: kong-database, kong
-#
-# Configuration with POSTGRES_USER=kong (default):
-#
-# - PostgreSQL creates 'kong' user with POSTGRES_PASSWORD
-# - The 'postgres' super-admin exists but has no password set
-# - Kong connects as 'kong' user with POSTGRES_PASSWORD
-#
-# Only one password needed for Kong deployment:
+# PostgreSQL shared instance (API gateway + Keycloak)
+# The shared PostgreSQL (kong-database) uses a superuser + dedicated users:
+# - Superuser 'genieai' (POSTGRES_USER) with POSTGRES_PASSWORD — created by PostgreSQL init
+# - Dedicated user 'kong' with KONG_DB_PASSWORD — created by postgres-init
+# - Dedicated user 'keycloak' with KEYCLOAK_DB_PASSWORD — created by postgres-init (see Section 9)
+# Each service MUST have its own unique password.
+
+# PostgreSQL superuser password
+# Used by: kong-database (init), postgres-init (superuser auth)
 POSTGRES_PASSWORD=
+
+# Kong dedicated database user password (MUST differ from POSTGRES_PASSWORD)
+# Used by: postgres-init (creates 'kong' user), kong, kong-migrations
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KONG_DB_PASSWORD=
 
 # Internal microservice authentication (HTTP service)
 # Used by: http-service (auth token retrieval for microservices)
@@ -78,7 +82,7 @@ AUTH_SERVICE_PASSWORD=
 
 EMAIL_HOST=
 EMAIL_PORT=
-EMAIL_SECURE=false
+# EMAIL_SECURE=false
 EMAIL_USER=
 EMAIL_PASSWORD=
 EMAIL_FROM=
@@ -241,7 +245,64 @@ HUGGING_FACE_HUB_TOKEN=
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
 
 # =============================================================================
-# SECTION 9: GPU-SPECIFIC CONFIGURATION
+# SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)
+# =============================================================================
+# Keycloak is the identity provider for OIDC authentication.
+# All passwords below MUST be set in your .env before deployment.
+
+# Keycloak internal URL (for backend OIDC token validation)
+# Used by: backend (future — not yet implemented)
+# Note: keycloak-config service uses its own hardcoded KEYCLOAK_URL env var
+# Default: http://keycloak:8080 (Docker internal network)
+# KEYCLOAK_URL=http://keycloak:8080
+
+# Keycloak realm name
+# Default: genie
+# KEYCLOAK_REALM=genie
+
+# OIDC client ID for the GENIE.AI application
+# Default: genie-app
+# KEYCLOAK_CLIENT_ID=genie-app
+
+# OIDC client secret (REQUIRED — generate a strong value)
+# Used by: backend (token validation), keycloak-config-cli (realm setup)
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_CLIENT_SECRET=
+
+# Keycloak admin password (REQUIRED — set a strong value)
+# Used by: keycloak-config-cli (realm setup), admin console access
+# WARNING: This is the master admin account password
+KEYCLOAK_ADMIN_PASSWORD=
+
+# Keycloak PostgreSQL password (REQUIRED — must differ from POSTGRES_PASSWORD)
+# Used by: postgres-init (creates dedicated 'keycloak' DB user), keycloak service
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_DB_PASSWORD=
+
+# Keycloak database configuration
+# Uses the shared PostgreSQL instance with a dedicated 'keycloak' database and user
+# Used by: keycloak service
+# KC_DB=postgres
+
+# Keycloak PostgreSQL JDBC URL
+# Points to the shared PostgreSQL instance, 'keycloak' database
+# KC_DB_URL=jdbc:postgresql://kong-database:5432/keycloak
+
+# Keycloak PostgreSQL username (dedicated user, created by postgres-init)
+# KC_DB_USERNAME=keycloak
+
+# Valid redirect URIs for the OIDC client
+# Default: http://localhost:8090/* (frontend dev URL)
+# Production: https://your-domain.com/*
+# KEYCLOAK_VALID_REDIRECT_URIS=http://localhost:8090/*
+
+# Web origins for CORS
+# Default: http://localhost:8090 (frontend dev URL)
+# Production: https://your-domain.com
+# KEYCLOAK_WEB_ORIGINS=http://localhost:8090
+
+# =============================================================================
+# SECTION 10: GPU-SPECIFIC CONFIGURATION
 # =============================================================================
 # These variables override GPU memory utilization and model settings.
 # See env.t4 (NVIDIA T4 16GB) or env.rtx6000 (RTX 6000 ADA 24GB) for examples.
@@ -256,7 +317,7 @@ HUGGING_FACE_HUB_TOKEN=
 #   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # =============================================================================
-# SECTION 10: PROXY CONFIGURATION (OPTIONAL)
+# SECTION 11: PROXY CONFIGURATION (OPTIONAL)
 # =============================================================================
 # Uncomment ONLY if behind a corporate firewall that requires proxy.
 # Most deployments do NOT need these.
@@ -266,7 +327,7 @@ HUGGING_FACE_HUB_TOKEN=
 # https_proxy=http://your-proxy:port
 
 # =============================================================================
-# SECTION 11: TELEMETRY & OBSERVABILITY (OPTIONAL)
+# SECTION 12: TELEMETRY & OBSERVABILITY (OPTIONAL)
 # =============================================================================
 # Uncomment to enable observability/tracing for debugging.
 
@@ -275,7 +336,7 @@ HUGGING_FACE_HUB_TOKEN=
 # TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
 
 # =============================================================================
-# SECTION 12: DOCKER SWARM MULTI-NODE (OPTIONAL)
+# SECTION 13: DOCKER SWARM MULTI-NODE (OPTIONAL)
 # =============================================================================
 # Override these variables when deploying with Docker Swarm (docker stack deploy).
 # Default values are for single-node Docker deployment (localhost).

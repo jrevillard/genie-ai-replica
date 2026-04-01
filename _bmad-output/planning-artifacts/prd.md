@@ -357,7 +357,7 @@ Compliance requirements are specified in functional requirements (FR31-FR36) and
 ### Reliability & Availability
 
 - NFR8: The backend remains operational when Kong is unavailable (Kong is optional by design)
-- NFR9: When Keycloak is unavailable, the system returns an HTTP 503 response with a clear service degradation message — not an unhandled error
+- NFR9: When Keycloak is unavailable, the system returns an HTTP 503 response with a clear service degradation message for authenticated API requests (`/api/*` protected routes) — not an unhandled error. The `/health` endpoint follows a separate pattern: it always returns HTTP 200 with `{ status: "degraded", keycloak: "unreachable" }` to enable monitoring without triggering HTTP-level alerts
 - NFR10: JWKS public keys are cached at the backend level with a TTL shorter than Keycloak's key rotation interval — on token validation failure (401), the system force-refreshes the JWKS cache before rejecting the token
 - NFR11: A health check endpoint (`/health`) is available without authentication and verifies that the Keycloak OIDC discovery endpoint (`/.well-known/openid-configuration`) is reachable
 

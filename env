@@ -58,6 +58,10 @@ TRANSLATION_CACHE_PASSWORD=
 # - Dedicated user 'keycloak' with KEYCLOAK_DB_PASSWORD — created by postgres-init (see Section 9)
 # Each service MUST have its own unique password.
 
+# PostgreSQL superuser username (created by PostgreSQL init on first start)
+# Default: genieai (set in docker-compose.yaml)
+# POSTGRES_USER=genieai
+
 # PostgreSQL superuser password
 # Used by: kong-database (init), postgres-init (superuser auth)
 POSTGRES_PASSWORD=

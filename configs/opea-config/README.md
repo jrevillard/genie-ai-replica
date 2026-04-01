@@ -162,7 +162,7 @@ export HUGGING_FACE_HUB_TOKEN=your_token_here
 ### 2. Set Data Path
 
 ```bash
-export DATA_PATH=/path/to/data/storage
+export DATA_DIR=/path/to/data/storage
 ```
 
 ### 3. Start All Services
@@ -226,7 +226,7 @@ Contains VLLM-specific configurations and model settings.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `HUGGING_FACE_HUB_TOKEN` | Yes | - | Hugging Face API token |
-| `DATA_PATH` | Yes | - | Data storage path |
+| `DATA_DIR` | Yes | - | Base data directory for bind mounts |
 | `LOGLEVEL` | No | INFO | Logging verbosity |
 
 ### VLLM Variables
@@ -350,7 +350,7 @@ services:
 1. **Configure Environment**:
    ```bash
    export HUGGING_FACE_HUB_TOKEN=your_production_token
-   export DATA_PATH=/mnt/data/opea
+   export DATA_DIR=/mnt/data/opea
    export LOGLEVEL=WARNING
    ```
 
@@ -603,15 +603,15 @@ docker-compose logs > logs.txt
 
 ### Model Caching
 
-Models are cached in `${DATA_PATH}/models`. To backup:
+Models are cached in `${DATA_DIR}/huggingface`. To backup:
 
 ```bash
 # Backup models
-tar -czf models-backup.tar.gz ${DATA_PATH}/models
+tar -czf models-backup.tar.gz ${DATA_DIR}/huggingface
 
 # Restore
-mkdir -p ${DATA_PATH}/models
-tar -xzf models-backup.tar.gz -C ${DATA_PATH}/models
+mkdir -p ${DATA_DIR}/huggingface
+tar -xzf models-backup.tar.gz -C ${DATA_DIR}/huggingface
 ```
 
 ### Configuration Backup

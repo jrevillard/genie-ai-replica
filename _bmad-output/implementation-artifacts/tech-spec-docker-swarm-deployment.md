@@ -247,9 +247,9 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
   - Action:
     1. Add a comment header in the compose listing which directories must exist on each target node
     2. In the Swarm setup guide, add a directory creation script per node:
-       - Gateway node: `mkdir -p api-gateway-solution/{kong_logs,nginx/conf} secrets/ssl`
-       - GENIE.AI node: `mkdir -p database_backups logs data components/gov-chat-backend/Uploads`
-       - OPEA/GPU node: `mkdir -p /root/.cache/huggingface data`
+       - Gateway node: `mkdir -p data/logs/kong secrets/ssl`
+       - GENIE.AI node: `mkdir -p data/logs/backend data/logs/doc-repo data/database_backups`
+       - OPEA/GPU node: `mkdir -p data/huggingface`
     3. Note that relative bind mount paths (`./`) resolve relative to where `docker stack deploy` is run, on the manager node. For multi-node, ensure the same directory structure exists at the same relative path on each node.
   - Notes: Bind mounts in Swarm must exist on the node where the service is scheduled. The setup guide must include directory preparation as a prerequisite step.
 

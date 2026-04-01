@@ -3,12 +3,7 @@ inventory/*.ini
 inventory/*.yml
 !inventory.example
 
-# Vault encrypted files (secrets)
-**/*.vault
-**/*.vault.yml
-!**/*.vault.example
-
-# Vault unencrypted files
+# Vault unencrypted files (never commit unencrypted secrets)
 *.vault.unencrypted
 
 # Vault password files

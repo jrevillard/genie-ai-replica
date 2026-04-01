@@ -139,7 +139,7 @@ describe('keycloakAuthMiddleware.authenticate', () => {
 
   it('should return 401 TOKEN_EXPIRED when token is expired', async () => {
     req.headers.authorization = 'Bearer valid-token';
-    const err = new Error('Token has expired');
+    const err = new Error('some-internal-detail-exposed');
     err.code = 'TOKEN_EXPIRED';
     mockVerifyToken.mockRejectedValue(err);
 
@@ -156,18 +156,18 @@ describe('keycloakAuthMiddleware.authenticate', () => {
 
   it('should return 401 TOKEN_INVALID when token verification fails', async () => {
     req.headers.authorization = 'Bearer invalid-token';
-    const err = new Error('Token verification failed');
+    const err = new Error('internal-jose-error-details');
     err.code = 'TOKEN_INVALID';
     mockVerifyToken.mockRejectedValue(err);
 
     await keycloakAuthMiddleware.authenticate(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: 'TOKEN_INVALID'
-      })
-    );
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -324,6 +324,52 @@ describe('keycloakAuthMiddleware.authenticate', () => {
       details: {}
     });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should return 401 TOKEN_INVALID with generic message when TokenVerificationError has internal details', async () => {
+    req.headers.authorization = 'Bearer token-with-internal-details';
+    const err = new Error('http://keycloak:8080/realms/genie exposed URL');
+    err.code = 'TOKEN_INVALID';
+    mockVerifyToken.mockRejectedValue(err);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
+  });
+
+  it('should return 401 TOKEN_EXPIRED with hardcoded message when TokenVerificationError has internal details', async () => {
+    req.headers.authorization = 'Bearer expired-with-internal-details';
+    const err = new Error('JWTExpired at epoch 1714435200 for client genie-app');
+    err.code = 'TOKEN_EXPIRED';
+    mockVerifyToken.mockRejectedValue(err);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_EXPIRED',
+      message: 'Token has expired',
+      details: {}
+    });
+  });
+
+  it('should return 401 TOKEN_INVALID with generic message for unknown error type (non-TokenVerificationError)', async () => {
+    req.headers.authorization = 'Bearer unexpected-error';
+    mockVerifyToken.mockRejectedValue(new TypeError('Cannot read properties of undefined'));
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
   });
 });
 

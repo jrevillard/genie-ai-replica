@@ -111,14 +111,14 @@ const keycloakAuthMiddleware = {
         if (err.code === 'TOKEN_EXPIRED') {
           return res.status(401).json({
             error: 'TOKEN_EXPIRED',
-            message: err.message,
+            message: 'Token has expired',
             details: {}
           });
         }
 
         return res.status(401).json({
           error: 'TOKEN_INVALID',
-          message: err.message || 'Token verification failed',
+          message: 'Token verification failed',
           details: {}
         });
       }

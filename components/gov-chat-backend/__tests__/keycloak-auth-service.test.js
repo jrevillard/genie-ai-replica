@@ -88,7 +88,8 @@ describe('keycloakAuthService', () => {
       const token = createTokenWithPayload(mockWrongAudPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID'
+        code: 'TOKEN_INVALID',
+        message: 'Token audience validation failed'
       });
     });
 
@@ -102,7 +103,8 @@ describe('keycloakAuthService', () => {
       const token = createTokenWithPayload(arrayAudPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID'
+        code: 'TOKEN_INVALID',
+        message: 'Token audience validation failed'
       });
     });
 
@@ -194,6 +196,55 @@ describe('keycloakAuthService', () => {
 
       expect(result.realm_access).toBeDefined();
       expect(result.realm_access.roles).toEqual(['user', 'admin']);
+    });
+
+    it('should throw TOKEN_INVALID with generic message for issuer mismatch (no Keycloak URL exposed)', async () => {
+      const wrongIssPayload = {
+        ...mockJwtPayload,
+        iss: 'http://evil.com/realms/fake',
+        exp: Math.floor(Date.now() / 1000) + 3600
+      };
+
+      const token = createTokenWithPayload(wrongIssPayload);
+
+      const error = await keycloakAuthService.verifyToken(token).catch(e => e);
+      expect(error).toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token issuer validation failed'
+      });
+      expect(error.message).not.toContain('evil.com');
+    });
+
+    it('should throw TOKEN_INVALID with generic message for audience mismatch (no client ID exposed)', async () => {
+      const wrongAudPayload = {
+        ...mockJwtPayload,
+        aud: 'wrong-client-id'
+      };
+      mockJwtVerify.mockResolvedValue({
+        payload: wrongAudPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      const token = createTokenWithPayload(wrongAudPayload);
+
+      const error = await keycloakAuthService.verifyToken(token).catch(e => e);
+      expect(error).toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token audience validation failed'
+      });
+      expect(error.message).not.toContain('genie-app');
+      expect(error.message).not.toContain('wrong-client-id');
+    });
+
+    it('should throw TOKEN_INVALID for jwtVerify signature failure (revoked token scenario)', async () => {
+      mockJwtVerify.mockRejectedValue(new Error('JWT signature verification failed: no matching key'));
+
+      const token = createTokenWithPayload(mockJwtPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
     });
   });
 

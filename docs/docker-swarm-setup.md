@@ -139,12 +139,20 @@ For production, replace with a proper registry (Harbor, ECR, etc.).
 
 Create required directories on **each target node** before deployment.
 
-### Gateway node (`gateway=true` label):
+All bind mounts are centralized under `./data/`. Create the full structure:
 
 ```bash
-mkdir -p api-gateway-solution/kong_logs
-mkdir -p secrets/ssl
+mkdir -p data/logs/kong data/logs/backend data/logs/doc-repo data/database_backups data/huggingface secrets/ssl
 ```
+
+| Directory | Purpose | Node |
+|-----------|---------|------|
+| `data/logs/kong` | Kong gateway logs | gateway (`gateway=true`) |
+| `data/logs/backend` | Backend API logs | genieai |
+| `data/logs/doc-repo` | Document Repository logs | genieai |
+| `data/database_backups` | Backend DB dumps | genieai |
+| `data/huggingface` | TEI model cache | GPU (`gpu=true`) |
+| `secrets/ssl` | SSL certificates | gateway |
 
 Copy SSL certificates:
 
@@ -152,21 +160,6 @@ Copy SSL certificates:
 # Copy from your management machine
 scp secrets/ssl/server.crt gateway-node:/path/to/project/secrets/ssl/
 scp secrets/ssl/server.key gateway-node:/path/to/project/secrets/ssl/
-```
-
-### GENIE.AI node (`genieai=true` label):
-
-```bash
-mkdir -p database_backups
-mkdir -p logs
-mkdir -p data
-mkdir -p components/gov-chat-backend/Uploads
-```
-
-### OPEA/GPU node:
-
-```bash
-mkdir -p data
 ```
 
 **Important:** Bind mount paths in Swarm are resolved relative to where `docker stack deploy` is run, on the manager node. For multi-node deployments, ensure the same directory structure exists at the same relative path on each node. Copy the entire project directory to each node.

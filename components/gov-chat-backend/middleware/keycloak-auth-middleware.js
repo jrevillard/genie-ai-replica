@@ -1,6 +1,7 @@
 'use strict';
 
 const keycloakAuthService = require('../services/keycloak-auth-service');
+const userProvisioningService = require('../services/user-provisioning-service');
 const { logger } = require('../shared-lib');
 
 /**
@@ -80,19 +81,30 @@ const keycloakAuthMiddleware = {
       try {
         const decoded = await keycloakAuthService.verifyToken(token);
 
-        // Attach decoded user info to request
-        req.user = {
-          iss_sub: decoded.iss_sub,
-          sub: decoded.sub,
-          iss: decoded.iss,
-          aud: decoded.aud,
-          email: decoded.email,
-          name: decoded.name || decoded.preferred_username,
-          preferred_username: decoded.preferred_username,
-          roles: decoded.realm_access?.roles || [],
-          exp: decoded.exp,
-          iat: decoded.iat
-        };
+        // Provision or update user in ArangoDB
+        let user;
+        try {
+          user = await userProvisioningService.provisionUser(decoded);
+        } catch (provisioningErr) {
+          logger.error(`[KeycloakAuth Middleware] Provisioning failed: ${provisioningErr.message}`);
+          return res.status(500).json({
+            error: 'PROVISIONING_FAILED',
+            message: 'User provisioning failed',
+            details: {}
+          });
+        }
+
+        // Soft-deleted users are blocked
+        if (user === null) {
+          return res.status(403).json({
+            error: 'FORBIDDEN',
+            message: 'User account is deactivated',
+            details: {}
+          });
+        }
+
+        // Attach ArangoDB user document to request
+        req.user = user;
 
         next();
       } catch (err) {

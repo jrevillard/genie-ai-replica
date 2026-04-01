@@ -1,5 +1,6 @@
 realm: ${env:KC_REALM}
 enabled: true
+# TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
 sslRequired: none
 
 # Default admin user

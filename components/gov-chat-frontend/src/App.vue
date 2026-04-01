@@ -135,9 +135,9 @@ export default {
     console.log('App.vue mounted')
 
     try {
-      // Wait for the auth state to be determined
-      await this.$store.dispatch('initAuth')
-      console.log('initAuth completed, isAuthenticated:', this.isAuthenticated)
+      // Wait for the auth state to be determined (OIDC initialization)
+      await this.$store.dispatch("initialize");
+      console.log("initAuth completed, isAuthenticated:", this.isAuthenticated);
 
       // If authenticated, ALSO wait for critical data to load
       // This "await" is critical

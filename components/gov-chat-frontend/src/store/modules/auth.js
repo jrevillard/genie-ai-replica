@@ -1,80 +1,173 @@
-// src/store/modules/auth.js
-// Update your Vuex store auth module to integrate with userService
+/**
+ * Vuex Auth Module — Keycloak OIDC integration
+ *
+ * Replaces the existing auth module entirely (no coexistence).
+ * Consumes keycloakAuthService for all OIDC operations.
+ * Tokens are stored in-memory only via the service layer.
+ */
 
-import userService from '@/services/userService'
+import keycloakAuthService from '@/services/keycloakAuthService';
+
+function mapOidcUserToState(oidcUser) {
+  if (!oidcUser || !oidcUser.profile) {
+    return null;
+  }
+
+  const profile = oidcUser.profile;
+  return {
+    iss_sub: `${profile.iss}#${profile.sub}`,
+    sub: profile.sub,
+    iss: profile.iss,
+    email: profile.email || null,
+    name: profile.name || profile.preferred_username || null,
+    preferred_username: profile.preferred_username || null,
+    roles: profile.realm_access?.roles || []
+  };
+}
 
 const state = {
+  isAuthenticated: false,
   user: null,
+  accessToken: null,
+  error: null,
   isInitialized: false
-}
+};
 
 const getters = {
-  isAuthenticated: state => !!state.user,
-  currentUser: state => state.user
-}
+  isAuthenticated: (state) => state.isAuthenticated,
+  currentUser: (state) => state.user,
+  accessToken: (state) => state.accessToken,
+  authError: (state) => state.error,
+  isAuthInitialized: (state) => state.isInitialized
+};
 
 const actions = {
-  // Initialize authentication state from localStorage
-  initAuth({ commit }) {
-    const user = userService.getCurrentUser()
-    
-    if (user) {
-      commit('setUser', user)
-    } else {
-      commit('clearUser')
-    }
-    
-    commit('setInitialized')
-  },
-  
-  // Perform login
-  async login({ commit }, { username, password }) {
+  /**
+   * Initialize OIDC service and restore session if available
+   */
+  async initialize({ commit }) {
     try {
-      const userData = await userService.login(username, password)
-      commit('setUser', userData)
-      return userData
+      const user = await keycloakAuthService.initialize();
+
+      if (user && !user.expired) {
+        const stateUser = mapOidcUserToState(user);
+        if (stateUser) {
+          commit('setAuth', {
+            isAuthenticated: true,
+            user: stateUser,
+            accessToken: user.access_token
+          });
+        } else {
+          commit('clearAuth');
+        }
+      } else {
+        commit('clearAuth');
+      }
     } catch (error) {
-      console.error('Login error:', error)
-      throw error
+      console.error('[Auth Store] Initialization error:', error.message);
+      commit('setError', 'Authentication initialization failed');
+    } finally {
+      commit('setInitialized');
     }
   },
-  
-  // Perform logout
+
+  /**
+   * Redirect to Keycloak login
+   * @param {Object} [options] - Optional login options
+   * @param {string} [options.returnUrl] - URL to return to after login
+   */
+  async login({ commit }, options = {}) {
+    try {
+      commit('clearError');
+      await keycloakAuthService.login(options);
+    } catch (error) {
+      console.error('[Auth Store] Login error:', error.message);
+      commit('setError', 'Login redirect failed');
+      throw error;
+    }
+  },
+
+  /**
+   * Process OIDC callback and set authenticated state
+   */
+  async handleCallback({ commit }) {
+    try {
+      commit('clearError');
+      const user = await keycloakAuthService.handleCallback();
+
+      if (user) {
+        const stateUser = mapOidcUserToState(user);
+        if (stateUser) {
+          commit('setAuth', {
+            isAuthenticated: true,
+            user: stateUser,
+            accessToken: user.access_token
+          });
+        }
+      }
+
+      return user;
+    } catch (error) {
+      console.error('[Auth Store] Callback error:', error.message);
+      commit('setError', 'Authentication callback failed');
+      throw error;
+    }
+  },
+
+  /**
+   * Logout and clear auth state
+   */
   async logout({ commit }) {
     try {
-      await userService.logout()
-      commit('clearUser')
+      commit('clearError');
+      await keycloakAuthService.logout();
+      commit('clearAuth');
     } catch (error) {
-      console.error('Logout error:', error)
-      // Still clear the user from the store even if the API call fails
-      commit('clearUser')
-      throw error
+      console.error('[Auth Store] Logout error:', error.message);
+      // Always clear local state even if Keycloak redirect fails
+      commit('clearAuth');
     }
   },
-  
-  // Update user profile
-  updateUser({ commit }, userData) {
-    commit('setUser', userData)
+
+  /**
+   * Clear the current auth error
+   */
+  clearError({ commit }) {
+    commit('clearError');
   }
-}
+};
 
 const mutations = {
-  setUser(state, user) {
-    state.user = user
+  setAuth(state, { isAuthenticated, user, accessToken }) {
+    state.isAuthenticated = isAuthenticated;
+    state.user = user;
+    state.accessToken = accessToken;
+    state.error = null;
   },
-  
-  clearUser(state) {
-    state.user = null
+
+  clearAuth(state) {
+    state.isAuthenticated = false;
+    state.user = null;
+    state.accessToken = null;
+    state.error = null;
   },
-  
+
+  setError(state, message) {
+    state.error = message;
+  },
+
+  clearError(state) {
+    state.error = null;
+  },
+
   setInitialized(state) {
-    state.isInitialized = true
+    state.isInitialized = true;
   }
-}
+};
 
 export default {
   state,
   getters,
   actions,
   mutations
-}
+};

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AuthService from './authService';
+import keycloakAuthService from './keycloakAuthService';
 
 /**
  * Base service for handling HTTP requests
@@ -19,12 +19,6 @@ class HttpService {
     // Configure axios
     this.axios.defaults.headers.common['Content-Type'] = 'application/json';
 
-    // Token refresh state
-    this.isRefreshing = false;
-    this.refreshSubscribers = [];
-    this.maxRetries = 2; // Limit interceptor retries to avoid overlap with authService
-    this.retryDelay = 2000; // Delay for 401/403 retries in ms
-
     // Add request interceptor
     this.axios.interceptors.request.use(
       this.handleRequest.bind(this),
@@ -36,20 +30,6 @@ class HttpService {
       this.handleResponse.bind(this),
       this.handleResponseError.bind(this)
     );
-  }
-
-  /**
-   * Refresh token with retry handling delegated to AuthService
-   * @returns {Promise} Token refresh response
-   */
-  async refreshToken() {
-    try {
-      const response = await AuthService.refreshToken();
-      return response;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      throw error;
-    }
   }
 
   /**
@@ -80,17 +60,9 @@ class HttpService {
    * @returns {Object} Modified request configuration
    */
   handleRequest(config) {
-    const user = localStorage.getItem('user');
-    if (user) {
-      try {
-        const userData = JSON.parse(user);
-        if (userData.accessToken) {
-          config.headers.Authorization = `Bearer ${userData.accessToken}`;
-          console.debug(`[HttpService] Added Authorization header for ${config.url}`);
-        }
-      } catch (e) {
-        console.error('Error parsing user data:', e);
-      }
+    const token = keycloakAuthService.getAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   }
@@ -115,51 +87,34 @@ class HttpService {
   }
 
   /**
-   * Subscribe to token refresh
-   * @param {Function} callback - Function to call after token refresh
-   */
-  subscribeTokenRefresh(callback) {
-    this.refreshSubscribers.push(callback);
-  }
-
-  /**
-   * Notify subscribers about token refresh completion
-   * @param {string} token - New access token
-   */
-  onTokenRefreshed(token) {
-    this.refreshSubscribers.forEach(callback => callback(token));
-    this.refreshSubscribers = [];
-  }
-
-  /**
-   * Handle response error interceptor with token refresh and login redirect
+   * Handle response error interceptor with token refresh and Keycloak redirect
    * @param {Error} error - Response error
    * @returns {Promise} Rejected promise with error or retried request
    */
   async handleResponseError(error) {
-    console.debug(`[HttpService] Handling response error for ${error.config?.url}:`, {
-      status: error.response?.status,
-      data: error.response?.data
-    });
-
     if (error.response) {
       const status = error.response.status;
       const originalRequest = error.config;
 
-      // Handle all 401/403 responses immediately
-      if ([401, 403].includes(status)) {
-        console.debug(`[HttpService] Unauthorized request detected for ${originalRequest.url} (status: ${status})`);
+      // Handle 401/403 — attempt token refresh then retry once
+      if ([401, 403].includes(status) && !originalRequest._retryCount) {
+        originalRequest._retryCount = 1;
 
-        // Clear all user-related localStorage data
-        localStorage.removeItem('user');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        console.debug('[HttpService] Cleared localStorage user data');
+        try {
+          const user = await keycloakAuthService.getUser();
+          const newToken = user?.access_token;
 
-        // Redirect to login if not already there
-        if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
-          console.log(`[HttpService] Redirecting to /login?error=unauthorized from ${originalRequest.url}`);
-          window.location.href = '/login?error=unauthorized';
+          if (newToken) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return this.axios(originalRequest);
+          }
+        } catch (refreshError) {
+          console.error('[HttpService] Token refresh failed:', refreshError.message);
+        }
+
+        // Refresh failed or no token — redirect to Keycloak login
+        if (typeof window !== 'undefined') {
+          keycloakAuthService.login();
         }
 
         return Promise.reject({
@@ -170,77 +125,7 @@ class HttpService {
         });
       }
 
-      // Retry logic for 401/403 with refresh token
-      if ([401, 403].includes(status) && !originalRequest._retryCount) {
-        originalRequest._retryCount = originalRequest._retryCount || 0;
-
-        if (originalRequest._retryCount >= this.maxRetries) {
-          console.error(`[HttpService] Max retries (${this.maxRetries}) reached for ${originalRequest.url}`);
-          AuthService.clearUserData();
-          if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
-            console.log('[HttpService] Redirecting to login due to max retries');
-            window.location.href = '/login?error=session_expired';
-          }
-          return Promise.reject(error);
-        }
-
-        originalRequest._retryCount += 1;
-        console.debug(`[HttpService] Retry attempt ${originalRequest._retryCount} for ${originalRequest.url} (status: ${status})`);
-
-        if (this.isRefreshing) {
-          return new Promise((resolve) => {
-            this.subscribeTokenRefresh(token => {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-              resolve(this.axios(originalRequest));
-            });
-          });
-        }
-
-        this.isRefreshing = true;
-
-        try {
-          const response = await this.refreshToken();
-          const newToken = response.data.accessToken;
-
-          const userStr = localStorage.getItem('user');
-          if (userStr) {
-            try {
-              const userData = JSON.parse(userStr);
-              userData.accessToken = newToken;
-              userData.refreshToken = response.data.refreshToken || userData.refreshToken;
-              localStorage.setItem('user', JSON.stringify(userData));
-
-              this.axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-
-              this.onTokenRefreshed(newToken);
-              this.isRefreshing = false;
-
-              await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-              return this.axios(originalRequest);
-            } catch (e) {
-              console.error('Error parsing user data during token refresh:', e);
-            }
-          }
-
-          throw new Error('No user data available');
-        } catch (refreshError) {
-          console.error('Token refresh error:', refreshError);
-          this.isRefreshing = false;
-          AuthService.clearUserData();
-          localStorage.removeItem('user');
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          console.debug('[HttpService] Cleared localStorage after refresh failure');
-
-          if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
-            console.log('[HttpService] Redirecting to login due to refresh failure');
-            window.location.href = '/login?error=refresh_failed';
-          }
-          return Promise.reject(refreshError);
-        }
-      }
-
+      // Non-auth errors or already retried
       const errorData = {
         status,
         statusText: error.response.statusText,

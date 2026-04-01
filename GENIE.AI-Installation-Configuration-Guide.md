@@ -343,7 +343,7 @@ Configuration for core logic, sessions, email, backups, and OPEA integration.
 | EMAIL\_PASSWORD | SMTP password. | \<your-smtp-password\> |
 | EMAIL\_FROM | Noreply email address. | noreply@\<your-domain\> |
 | FRONTEND\_URL | Base URL of the frontend (for email links). | https://localhost/ |
-| BACKUP\_DIR | Directory to store database backups. | ./database\_backups |
+| BACKUP\_DIR | Directory to store database backups. | ./data/database\_backups |
 | MAX\_BACKUPS | Number of backups to retain. | 5 |
 | BACKUP\_FORMAT | Format for backups (e.g., json, dump). | json |
 | COMPRESS\_BACKUPS | Enable gzip compression for backups. | true |
@@ -386,7 +386,7 @@ Configuration for file ingestion, storage, and security scanning.
 | :---- | :---- | :---- |
 | DOC\_REPO\_PORT | Internal port for the document service. | 3001 |
 | DOC\_REPO\_URL | URL for the backend to access the doc repo. | http://localhost:3001 |
-| UPLOAD\_DIR | Local directory path for file uploads. | ./uploads |
+| UPLOAD\_DIR | Local directory path for file uploads. | backend\_uploads (named volume) |
 | MAX\_FILES\_UPLOAD | Max number of files allowed per upload. | 10 |
 | MAX\_FILE\_SIZE | Maximum file upload size in bytes (approx 50MB). | 52428800 |
 | DOCUMENT\_INGESTION\_LANGUAGE | Language code for document ingestion. | en |

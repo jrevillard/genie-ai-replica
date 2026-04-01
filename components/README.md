@@ -101,16 +101,14 @@ This service runs the user interface of the application.
 
 This service runs the Node.js server that provides the application's API and business logic.
 
-* **Build**: The image is built using the Dockerfile located in the ./gov-chat-backend/ directory.  
-* **Restart Policy**: Configured to restart automatically unless explicitly stopped (restart: unless-stopped).  
-* **Ports**: The backend API is accessible on the host machine at port **3000**.  
-* **Dependencies**: The backend service will only start after the redis-cache service is healthy (depends\_on: redis-cache).  
-* **Volumes**: The service uses several bind mounts to persist data:  
-  * ./database\_backups:/app/database\_backups: Persists automated database backups.  
-  * ./logs:/app/logs: Persists application logs.  
-  * ./data:/app/data: A volume for general application data persistence.  
-  * ./gov-chat-backend/Uploads:/app/Uploads: Persists user-uploaded files.  
-* **Environment File**: It loads additional environment variables from ./gov-chat-backend/.env.
+* **Build**: The image is built using the Dockerfile located in the ./gov-chat-backend/ directory.
+* **Ports**: The backend API is accessible on the host machine at port **3000**.
+* **Volumes**: The service uses bind mounts and named volumes to persist data:
+  * ./data/database\_backups:/app/database\_backups: Persists automated database backups.
+  * ./data/logs/backend:/app/logs: Persists application logs.
+  * backend\_data:/app/data: Named volume for application data persistence.
+  * backend\_uploads:/app/Uploads: Named volume for user-uploaded files.
+* **Environment File**: Loads configuration from the root `.env`.
 
 #### **Backend Configuration Parameters**
 
@@ -170,14 +168,12 @@ This service runs the Node.js server that provides the application's API and bus
 
 This service handles document uploads, validation, and ingestion.
 
-* **Build**: The image is built using the Dockerfile located in the ./document-repository/ directory.  
-* **Restart Policy**: Configured to restart automatically unless explicitly stopped (restart: unless-stopped).  
-* **Ports**: The service is accessible on the host machine at port **3001**.  
-* **Dependencies**: This service will only start after the clamav service has started (depends\_on: \- clamav).  
-* **Volumes**:  
-  * ./logs:/app/logs: Persists application logs.  
-  * doc\_repo\_uploads:/app/uploads: Uses a named volume to persist file uploads.  
-* **Environment File**: Loads configuration from ./document-repository/.env.
+* **Build**: The image is built using the Dockerfile located in the ./document-repository/ directory.
+* **Ports**: The service is accessible on the host machine at port **3001**.
+* **Volumes**:
+  * ./data/logs/doc-repo:/app/logs: Persists application logs.
+  * doc\_repo\_uploads:/app/uploads: Uses a named volume to persist file uploads.
+* **Environment File**: Loads configuration from the root `.env`.
 
 #### **Document Repository Configuration Parameters**
 
@@ -303,11 +299,11 @@ For detailed documentation on each component, see:
 
 | Service | Volume | Purpose |
 |---------|--------|---------|
-| backend | ./database_backups | Database backups |
-| backend | ./logs | Application logs |
-| backend | ./data | Application data |
-| backend | ./gov-chat-backend/Uploads | User uploads |
-| document-repository | ./logs | Service logs |
+| backend | ./data/database_backups | Database backups |
+| backend | ./data/logs/backend | Application logs |
+| backend | backend_data | Application data (named volume) |
+| backend | backend_uploads | User uploads (named volume) |
+| document-repository | ./data/logs/doc-repo | Service logs |
 | document-repository | doc_repo_uploads | File uploads |
 | arango-vector-db | /root/arango_data | Database persistence |
 | redis-cache | redis_data | Cache persistence |

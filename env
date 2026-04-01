@@ -288,6 +288,14 @@ HUGGING_FACE_HUB_TOKEN=
 #
 # Variables that differ between Docker and Swarm:
 #
+# DATA_DIR=./data
+#   Base directory for all bind mounts (logs, backups, model cache).
+#   Subdirectories are auto-created by the deploy playbook:
+#     data/logs/kong, data/logs/backend, data/logs/doc-repo,
+#     data/database_backups, data/huggingface
+#   Docker: ./data (default, no override needed)
+#   Swarm:  override only if storing data on a different mount point
+#
 # SWARM_REGISTRY_URL=<manager-node-ip>:5000
 #   Docker: N/A (images built locally)
 #   Swarm:  URL of the Docker registry accessible from all nodes.

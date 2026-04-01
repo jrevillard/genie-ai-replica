@@ -1,0 +1,3 @@
+FROM adorsys/keycloak-config-cli:6.5.0-26
+
+COPY genie-realm.yaml /config/genie-realm.yaml

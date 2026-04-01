@@ -300,13 +300,13 @@ Configuration for the Kong API Gateway and its backing PostgreSQL database.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| POSTGRES\_USER | Username for the Kong database. | kong |
-| POSTGRES\_DB | Name of the Kong database. | kong |
-| POSTGRES\_PASSWORD | Password for the Kong database. | k1ngk0ng |
+| POSTGRES\_USER | PostgreSQL superuser username. | genieai |
+| POSTGRES\_DB | Default database created on init. | kong |
+| POSTGRES\_PASSWORD | PostgreSQL superuser password. | sup3rus3r |
 | KONG\_DATABASE | Tells Kong which database type to use. | postgres |
-| KONG\_PG\_HOST | Hostname for the Kong database service. | kong-database |
-| KONG\_PG\_USER | Kong service user (usually matches POSTGRES\_USER). | kong |
-| KONG\_PG\_PASSWORD | Kong service password. | k1ngk0ng |
+| KONG\_PG\_HOST | Hostname for the PostgreSQL service. | kong-database |
+| KONG\_PG\_USER | Kong dedicated database user. | kong |
+| KONG\_PG\_PASSWORD | Kong dedicated database user password (KONG\_DB\_PASSWORD). | k0ngus3r |
 | KONG\_PROXY\_ACCESS\_LOG | Path for proxy access logs. | /dev/stdout |
 | KONG\_ADMIN\_ACCESS\_LOG | Path for admin access logs. | /dev/stdout |
 | KONG\_PROXY\_ERROR\_LOG | Path for proxy error logs. | /dev/stderr |
@@ -825,7 +825,11 @@ openssl rand -base64 32
 | `JWT_SECRET` | Signs JSON Web Tokens (user sessions) | `openssl rand -base64 32` |
 | `SESSION_SECRET` | Encrypts session cookies | `openssl rand -base64 32` |
 | `TRANSLATION_CACHE_PASSWORD` | Redis cache password | `openssl rand -base64 32` |
-| `POSTGRES_PASSWORD` | Kong PostgreSQL password | `openssl rand -base64 32` |
+| `POSTGRES_PASSWORD` | PostgreSQL superuser password | `openssl rand -base64 32` |
+| `KONG_DB_PASSWORD` | Kong dedicated database user password | `openssl rand -base64 32` |
+| `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password | `openssl rand -base64 32` |
+| `KEYCLOAK_DB_PASSWORD` | Keycloak dedicated database user password | `openssl rand -base64 32` |
+| `KEYCLOAK_CLIENT_SECRET` | OIDC client secret for GENIE.AI app | `openssl rand -base64 32` |
 | `AUTH_SERVICE_USERNAME` | Internal microservice auth username | Any string (e.g., `genie-ai-manager`) |
 | `AUTH_SERVICE_PASSWORD` | Internal microservice auth password | `openssl rand -base64 32` |
 
@@ -837,6 +841,10 @@ sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -base64 32)/" .env
 sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -base64 32)/" .env
 sed -i "s/^TRANSLATION_CACHE_PASSWORD=.*/TRANSLATION_CACHE_PASSWORD=$(openssl rand -base64 32)/" .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KONG_DB_PASSWORD=.*/KONG_DB_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KEYCLOAK_ADMIN_PASSWORD=.*/KEYCLOAK_ADMIN_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KEYCLOAK_DB_PASSWORD=.*/KEYCLOAK_DB_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KEYCLOAK_CLIENT_SECRET=.*/KEYCLOAK_CLIENT_SECRET=$(openssl rand -base64 32)/" .env
 sed -i "s/^AUTH_SERVICE_USERNAME=.*/AUTH_SERVICE_USERNAME=genie-ai-manager/" .env
 sed -i "s/^AUTH_SERVICE_PASSWORD=.*/AUTH_SERVICE_PASSWORD=$(openssl rand -base64 32)/" .env
 ```
@@ -844,7 +852,7 @@ sed -i "s/^AUTH_SERVICE_PASSWORD=.*/AUTH_SERVICE_PASSWORD=$(openssl rand -base64
 After running the commands above, review your `.env` to verify all values are set:
 
 ```bash
-grep -E '^(ARANGO_PASSWORD|JWT_SECRET|SESSION_SECRET|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|AUTH_SERVICE)' .env
+grep -E '^(ARANGO_PASSWORD|JWT_SECRET|SESSION_SECRET|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|KONG_DB_PASSWORD|KEYCLOAK_ADMIN_PASSWORD|KEYCLOAK_DB_PASSWORD|KEYCLOAK_CLIENT_SECRET|AUTH_SERVICE)' .env
 ```
 
 #### Additional Required Configuration

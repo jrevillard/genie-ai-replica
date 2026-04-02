@@ -94,8 +94,8 @@ const keycloakAuthMiddleware = {
           });
         }
 
-        // Soft-deleted users are blocked
-        if (user === null) {
+        // Soft-deleted users are blocked (defense-in-depth)
+        if (user === null || user.deleted === true) {
           return res.status(403).json({
             error: 'FORBIDDEN',
             message: 'User account is deactivated',

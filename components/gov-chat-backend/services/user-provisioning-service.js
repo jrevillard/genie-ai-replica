@@ -66,18 +66,26 @@ const userProvisioningService = {
         UPSERT { iss_sub: @iss_sub }
         INSERT @newDoc
         REPLACE @updateDoc IN users
-        RETURN NEW
+        RETURN { new: NEW, old: OLD }
       `,
       { iss_sub: issSub, newDoc, updateDoc }
     );
 
-    const user = await cursor.next();
+    const result = await cursor.next();
 
-    if (!user) {
+    if (!result || !result.new) {
       throw new Error('User provisioning returned no result');
     }
 
-    logger.info(`[UserProvisioning] User upserted: ${issSub}`);
+    const user = result.new;
+
+    // Log differentiated events
+    if (!result.old) {
+      logger.info(`[UserProvisioning] User provisioned: ${issSub}`);
+    } else {
+      logger.info(`[UserProvisioning] User profile updated: ${issSub}`);
+    }
+
     return user;
   }
 };

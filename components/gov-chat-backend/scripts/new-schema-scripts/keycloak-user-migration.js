@@ -86,12 +86,13 @@ async function migrateUsersCollection() {
       // Non-fatal — continue with migration
     }
 
-    // --- Create iss_sub unique index ---
+    // --- Create iss_sub unique index (sparse: skip legacy users without iss_sub) ---
     console.log('Ensuring "iss_sub" unique index exists...');
     await collection.ensureIndex({
       type: 'persistent',
       fields: ['iss_sub'],
       unique: true,
+      sparse: true,
       name: 'idx_users_iss_sub_unique'
     });
     console.log('"iss_sub" unique index is in place.');

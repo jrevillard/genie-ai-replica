@@ -1,6 +1,6 @@
 # Story 1.6: JIT User Provisioning in ArangoDB
 
-Status: review
+Status: done
 
 ## Story
 
@@ -369,6 +369,7 @@ GLM-5-Turbo
 
 - 2026-04-01: Implemented JIT user provisioning — migration script, provisioning service, middleware integration, and full test coverage
 - 2026-04-01: Code review fixes — soft-deleted user check moved before UPSERT (prevents profile refresh on deleted users), added iss_sub guard clause, fixed misleading log message, renamed ambiguous test
+- 2026-04-02: Code review #2 — added `sparse: true` on iss_sub index (migration safety for legacy users), added `user.deleted` defense-in-depth in middleware, differentiated provisioning logs via `RETURN { new: NEW, old: OLD }`, added tests for getConnection failure, missing realm_access, and UPSERT result format edge cases
 
 ### File List
 

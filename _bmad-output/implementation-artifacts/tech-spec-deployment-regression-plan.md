@@ -23,9 +23,9 @@ files_to_modify:
   - api-gateway-solution/new-config/kong_config.json
   - api-gateway-solution/new-config/restore-kong-config.sh
   - api-gateway-solution/new-config/manage-kong-config.sh
-  - config/prompts/chatqna-system.txt
-  - config/prompts/chatqna-abstention.txt
-  - config/prompts/label-selector.txt
+  - configs/prompts/chatqna-system.txt
+  - configs/prompts/chatqna-abstention.txt
+  - configs/prompts/label-selector.txt
   - secrets/README.md
   - components/gov-chat-backend/routes/user-routes.js
   - components/gov-chat-frontend/src/components/ChatBotComponent.vue
@@ -37,7 +37,7 @@ code_patterns:
   - Kong Admin API via curl + jq for runtime configuration
   - Single .env file at project root for all configuration
   - GPU-specific env overrides (env.t4, env.rtx6000)
-  - 3-tier LLM prompt priority: ENV VAR > FILE (config/prompts/) > DEFAULT (in code)
+  - 3-tier LLM prompt priority: ENV VAR > FILE (configs/prompts/) > DEFAULT (in code)
   - 20+ services in root docker-compose with health check dependencies
   - JWT-based auth with access + refresh tokens, email verification flow
   - Chat RAG via /api/queries with category filtering and document context
@@ -86,7 +86,7 @@ A manual validation checklist structured in 2 sequential phases:
 - GPU-specific overrides via `env.t4` and `env.rtx6000` (loaded with `--env-file`)
 - NGINX uses `envsubst` template rendering via container-side `entrypoint.sh`
 - Kong configuration managed through `kong_config.json` + `restore-kong-config.sh`
-- LLM prompts follow 3-tier priority: ENV VAR > FILE (`config/prompts/`) > DEFAULT (code)
+- LLM prompts follow 3-tier priority: ENV VAR > FILE (`configs/prompts/`) > DEFAULT (code)
 - SSL certs stored in `secrets/ssl/` (gitignored), README contains generation instructions
 - `docker-compose.yaml` at root is the single source of truth for full-stack deployment
 - `components/docker-compose.yaml` is the dev subset (GENIE.AI only, no OPEA)
@@ -104,9 +104,9 @@ A manual validation checklist structured in 2 sequential phases:
 | `api-gateway-solution/nginx/conf/default.conf.template` | NGINX template |
 | `api-gateway-solution/nginx/entrypoint.sh` | NGINX container entrypoint |
 | `api-gateway-solution/new-config/kong_config.json` | Kong API configuration |
-| `config/prompts/chatqna-system.txt` | LLM system prompt |
-| `config/prompts/chatqna-abstention.txt` | LLM abstention instructions |
-| `config/prompts/label-selector.txt` | Document labeling prompt |
+| `configs/prompts/chatqna-system.txt` | LLM system prompt |
+| `configs/prompts/chatqna-abstention.txt` | LLM abstention instructions |
+| `configs/prompts/label-selector.txt` | Document labeling prompt |
 | `secrets/README.md` | SSL certificate generation instructions |
 | `CLAUDE.md` | Project architecture and conventions reference |
 
@@ -175,7 +175,7 @@ A manual validation checklist structured in 2 sequential phases:
 - Line ~269: References `env-T4` — deleted, replaced by `env.t4`
 - Missing instructions for `env.rtx6000` usage
 - Missing documentation for `secrets/` directory and SSL cert generation workflow
-- Missing documentation for `config/prompts/` directory (chatqna-system.txt, chatqna-abstention.txt, label-selector.txt)
+- Missing documentation for `configs/prompts/` directory (chatqna-system.txt, chatqna-abstention.txt, label-selector.txt)
 - Missing explanation of new nginx template-based configuration system
 
 **Correct references (no changes needed):**
@@ -230,8 +230,8 @@ Since the branch only touches infrastructure, Phase 2 is a lightweight smoke tes
   - Severity: HIGH
   - PASS/FAIL: PASS (verified — secrets/ssl/ path, gitignore, auto-generation mentioned)
 
-- [ ] **Task 1.1.5:** Verify `config/prompts/` directory is documented
-  - Files: `config/prompts/chatqna-system.txt`, `chatqna-abstention.txt`, `label-selector.txt`
+- [ ] **Task 1.1.5:** Verify `configs/prompts/` directory is documented
+  - Files: `configs/prompts/chatqna-system.txt`, `chatqna-abstention.txt`, `label-selector.txt`
   - Action: Check that the guide explains the 3-tier prompt priority (ENV VAR > FILE > DEFAULT) and the purpose of each prompt file.
   - Severity: MEDIUM
   - PASS/FAIL: PASS (verified — guide now includes "Customizing LLM Prompts" section with 3-tier explanation and file table)

@@ -222,7 +222,7 @@ repository-root/
 ├── env.rtx6000                   # GPU overrides for RTX 6000 ADA (24GB VRAM)
 ├── api-gateway-solution/
 │   └── new-config/               # Kong API gateway configuration
-├── config/prompts/               # LLM system prompts (committed to git)
+├── configs/prompts/               # LLM system prompts (committed to git)
 │   ├── chatqna-system.txt       # Main system prompt for chat responses
 │   ├── chatqna-abstention.txt   # Instructions for handling out-of-scope queries
 │   └── label-selector.txt       # Rules for automatic document labeling
@@ -259,10 +259,10 @@ There are 3 templates in the repository to start with:
 
 **Customizing LLM Prompts**
 
-The `config/prompts/` directory contains the system prompts that control how the AI responds. GENIE.AI uses a 3-tier priority system:
+The `configs/prompts/` directory contains the system prompts that control how the AI responds. GENIE.AI uses a 3-tier priority system:
 
 1. **ENV VAR** (highest): Override directly in `.env` by setting `CHATQNA_SYSTEM_PROMPT`, `CHATQNA_ABSTENTION_INSTRUCTIONS`, or `LABEL_SELECTOR_SYSTEM_PROMPT`
-2. **FILE** (medium): Edit the files in `config/prompts/` — changes are committed to git and shared across the team
+2. **FILE** (medium): Edit the files in `configs/prompts/` — changes are committed to git and shared across the team
 3. **DEFAULT** (lowest): Built-in defaults in the code — used if neither env var nor file is provided
 
 | File | Purpose |

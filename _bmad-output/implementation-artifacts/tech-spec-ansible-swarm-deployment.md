@@ -131,7 +131,7 @@ Create an Ansible project (`deploy/ansible/`) that automates the full deployment
 | `api-gateway-solution/nginx/Dockerfile` | Custom nginx image build |
 | `api-gateway-solution/new-config/Dockerfile` | Kong config image build |
 | `secrets/ssl/server.crt`, `secrets/ssl/server.key` | SSL certificates (managed via Ansible files/) |
-| `config/prompts/*.txt` | LLM prompt files (committed to git, not secrets) |
+| `configs/prompts/*.txt` | LLM prompt files (committed to git, not secrets) |
 | `~/git_projects/EduLift/edulift/deploy/ansible/` | Reference Ansible structure pattern |
 
 ### Technical Decisions
@@ -236,7 +236,7 @@ Create an Ansible project (`deploy/ansible/`) that automates the full deployment
   - File: `deploy/ansible/deploy.yml` (append)
   - Action: Add plays:
     1. **Clone project repo** (target `swarm_managers`): `git clone {{ repo_url }} --branch {{ repo_branch }} {{ deploy_dir }}` (idempotent: check if `{{ deploy_dir }}/.git` exists, then `git pull`).
-    2. **Verify Docker Secrets files** (target `swarm_managers`): Assert that `{{ deploy_dir }}/secrets/ssl/server.crt`, `{{ deploy_dir }}/secrets/ssl/server.key`, `{{ deploy_dir }}/config/prompts/chatqna-system.txt`, `{{ deploy_dir }}/config/prompts/chatqna-abstention.txt`, `{{ deploy_dir }}/config/prompts/label-selector.txt` all exist. Fail immediately with clear message if any is missing.
+    2. **Verify Docker Secrets files** (target `swarm_managers`): Assert that `{{ deploy_dir }}/secrets/ssl/server.crt`, `{{ deploy_dir }}/secrets/ssl/server.key`, `{{ deploy_dir }}/configs/prompts/chatqna-system.txt`, `{{ deploy_dir }}/configs/prompts/chatqna-abstention.txt`, `{{ deploy_dir }}/configs/prompts/label-selector.txt` all exist. Fail immediately with clear message if any is missing.
     3. **Create required directories** (target `swarm_managers`): `data/logs/kong`, `data/logs/backend`, `data/logs/doc-repo`, `data/database_backups`, `data/huggingface`, `secrets/ssl`.
     4. **Copy SSL certificates**: From `files/certificates/` to `{{ deploy_dir }}/secrets/ssl/` with `mode: 0600`. Only copy if source files exist.
   - Notes: All on manager (single-node). Git clone is preferred over synchronize — idempotent, no large file copies of data/ volumes. If `deploy_dir` exists but is not a git repository, the playbook will fail on `git pull` — manual cleanup required. Docker Secrets verification is critical: `docker compose config` does NOT check file existence.

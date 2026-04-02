@@ -9,7 +9,7 @@ const {
   mockJwtPayload,
   mockExpiredPayload,
   mockWrongAudPayload,
-  mockMissingClaimsPayload
+  generateMockJwtString
 } = require('./mocks/mockJwtPayload');
 
 // Mock shared-lib
@@ -23,69 +23,86 @@ jest.mock('../shared-lib', () => ({
 }), { virtual: true });
 
 // Store references to mock functions
-let mockJwtVerify;
-let mockCreateRemoteJWKS;
+// Use var so jest.mock factory (hoisted above) can access them via closures
+var mockJwtVerify;
+var mockCreateRemoteJWKSet;
+var mockFetch;
 
 // Mock jose completely to avoid ESM issues
 jest.mock('jose', () => ({
   jwtVerify: (...args) => mockJwtVerify(...args),
-  createRemoteJWKS: (...args) => mockCreateRemoteJWKS(...args)
+  createRemoteJWKSet: (...args) => mockCreateRemoteJWKSet(...args)
 }));
+
+// Mock global fetch for OIDC discovery
+global.fetch = jest.fn();
 
 const keycloakAuthService = require('../services/keycloak-auth-service');
 
+// Discovery response matching KEYCLOAK_URL + KEYCLOAK_REALM
+const mockDiscovery = {
+  issuer: 'http://localhost:8080/realms/genie',
+  jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
+};
+
 describe('keycloakAuthService', () => {
   beforeEach(() => {
-    // Default: createRemoteJWKS returns a function (as jose does)
-    mockCreateRemoteJWKS = jest.fn().mockReturnValue(jest.fn());
+    keycloakAuthService._resetForTesting();
+    mockCreateRemoteJWKSet = jest.fn().mockReturnValue(jest.fn());
     mockJwtVerify = jest.fn();
+    mockFetch = global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockDiscovery
+    });
   });
 
   describe('verifyToken', () => {
-    it('should return decoded payload with iss_sub composite key for a valid token', async () => {
+    it('should lazily initialize and return decoded payload with iss_sub', async () => {
       mockJwtVerify.mockResolvedValue({
         payload: mockJwtPayload,
         protectedHeader: { alg: 'RS256' }
       });
 
-      const token = createTokenWithPayload(mockJwtPayload);
+      const token = generateMockJwtString(mockJwtPayload);
       const result = await keycloakAuthService.verifyToken(token);
 
       expect(result).toBeDefined();
-      expect(result.sub).toBe(mockJwtPayload.sub);
-      expect(result.iss).toBe(mockJwtPayload.iss);
-      expect(result.aud).toBe(mockJwtPayload.aud);
       expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
+      // Discovery was called lazily
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8080/realms/genie/.well-known/openid-configuration'
+      );
       expect(mockJwtVerify).toHaveBeenCalledWith(
         token,
         expect.any(Function),
         expect.objectContaining({
+          issuer: mockJwtPayload.iss,
           algorithms: ['RS256'],
-          requiredClaims: ['iss', 'aud', 'exp', 'sub']
+          requiredClaims: ['iss', 'exp']
         })
       );
     });
 
-    it('should throw TOKEN_EXPIRED when token exp is in the past', async () => {
-      // The service checks exp BEFORE calling jwtVerify
-      const expiredToken = createTokenWithPayload(mockExpiredPayload);
+    it('should throw TOKEN_EXPIRED when jose reports JWTExpired', async () => {
+      const jwtExpiredError = new Error('exp check failed');
+      jwtExpiredError.name = 'JWTExpired';
+      mockJwtVerify.mockRejectedValue(jwtExpiredError);
 
-      await expect(keycloakAuthService.verifyToken(expiredToken)).rejects.toMatchObject({
+      const token = generateMockJwtString(mockExpiredPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_EXPIRED',
         message: 'Token has expired'
       });
-
-      // jwtVerify should NOT be called for expired tokens (early return)
-      expect(mockJwtVerify).not.toHaveBeenCalled();
     });
 
-    it('should throw TOKEN_INVALID for wrong audience', async () => {
+    it('should throw TOKEN_INVALID for wrong azp (client ID mismatch)', async () => {
       mockJwtVerify.mockResolvedValue({
-        payload: mockWrongAudPayload,
+        payload: { ...mockJwtPayload, azp: 'wrong-client-id' },
         protectedHeader: { alg: 'RS256' }
       });
 
-      const token = createTokenWithPayload(mockWrongAudPayload);
+      const token = generateMockJwtString(mockJwtPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
@@ -93,14 +110,29 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('should throw TOKEN_INVALID for array aud that does not include client ID', async () => {
-      const arrayAudPayload = { ...mockJwtPayload, aud: ['other-client', 'another-client'] };
+    it('should throw TOKEN_INVALID for issuer not in discovery map (no Keycloak URL exposed)', async () => {
+      const wrongIssPayload = {
+        ...mockJwtPayload,
+        iss: 'http://evil.com/realms/genie',
+        exp: Math.floor(Date.now() / 1000) + 3600
+      };
+      const token = generateMockJwtString(wrongIssPayload);
+
+      const error = await keycloakAuthService.verifyToken(token).catch(e => e);
+      expect(error).toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Unknown issuer'
+      });
+      expect(error.message).not.toContain('evil.com');
+    });
+
+    it('should throw TOKEN_INVALID when azp does not match client ID', async () => {
       mockJwtVerify.mockResolvedValue({
-        payload: arrayAudPayload,
+        payload: { ...mockJwtPayload, azp: 'wrong-client-id' },
         protectedHeader: { alg: 'RS256' }
       });
 
-      const token = createTokenWithPayload(arrayAudPayload);
+      const token = generateMockJwtString(mockJwtPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
@@ -108,17 +140,16 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('should accept array aud that includes client ID', async () => {
-      const arrayAudPayload = { ...mockJwtPayload, aud: ['other-client', 'genie-app'] };
+    it('should accept token with correct azp', async () => {
       mockJwtVerify.mockResolvedValue({
-        payload: arrayAudPayload,
+        payload: mockJwtPayload,
         protectedHeader: { alg: 'RS256' }
       });
 
-      const token = createTokenWithPayload(arrayAudPayload);
+      const token = generateMockJwtString(mockJwtPayload);
       const result = await keycloakAuthService.verifyToken(token);
 
-      expect(result.aud).toEqual(['other-client', 'genie-app']);
+      expect(result.azp).toBe('genie-app');
     });
 
     it('should throw TOKEN_INVALID for malformed JWT (not 3 parts)', async () => {
@@ -142,43 +173,24 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('should throw TOKEN_INVALID when token has no iss claim', async () => {
-      const noIssPayload = { ...mockJwtPayload, exp: Math.floor(Date.now() / 1000) + 3600, iss: undefined };
-      const token = createTokenWithPayload(noIssPayload);
+    it('should throw TOKEN_INVALID for unknown issuer (not in discovery map)', async () => {
+      const unknownIssPayload = {
+        ...mockJwtPayload,
+        iss: 'https://unknown-idp.example.com/realms/genie',
+        exp: Math.floor(Date.now() / 1000) + 3600
+      };
+      const token = generateMockJwtString(unknownIssPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
-        message: 'Token missing required iss claim'
+        message: 'Unknown issuer'
       });
     });
 
-    it('should throw TOKEN_INVALID when token has no exp claim', async () => {
-      const noExpPayload = { ...mockJwtPayload, exp: undefined };
-      const token = createTokenWithPayload(noExpPayload);
-
-      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID',
-        message: 'Token missing required exp claim'
-      });
-    });
-
-    it('should pass JWKS URI from iss claim to createRemoteJWKS', async () => {
-      mockJwtVerify.mockResolvedValue({
-        payload: mockJwtPayload,
-        protectedHeader: { alg: 'RS256' }
-      });
-
-      await keycloakAuthService.verifyToken(createTokenWithPayload(mockJwtPayload));
-
-      expect(mockCreateRemoteJWKS).toHaveBeenCalledWith({
-        url: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
-      });
-    });
-
-    it('should throw TOKEN_INVALID when jwtVerify throws', async () => {
+    it('should throw TOKEN_INVALID when jwtVerify throws generic error (signature failure)', async () => {
       mockJwtVerify.mockRejectedValue(new Error('Signature verification failed'));
 
-      const token = createTokenWithPayload(mockJwtPayload);
+      const token = generateMockJwtString(mockJwtPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
@@ -192,40 +204,32 @@ describe('keycloakAuthService', () => {
         protectedHeader: { alg: 'RS256' }
       });
 
-      const result = await keycloakAuthService.verifyToken(createTokenWithPayload(mockJwtPayload));
+      const result = await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
 
       expect(result.realm_access).toBeDefined();
       expect(result.realm_access.roles).toEqual(['user', 'admin']);
     });
 
-    it('should throw TOKEN_INVALID with generic message for issuer mismatch (no Keycloak URL exposed)', async () => {
-      const wrongIssPayload = {
-        ...mockJwtPayload,
-        iss: 'http://evil.com/realms/fake',
-        exp: Math.floor(Date.now() / 1000) + 3600
-      };
-
-      const token = createTokenWithPayload(wrongIssPayload);
-
-      const error = await keycloakAuthService.verifyToken(token).catch(e => e);
-      expect(error).toMatchObject({
-        code: 'TOKEN_INVALID',
-        message: 'Token issuer validation failed'
-      });
-      expect(error.message).not.toContain('evil.com');
-    });
-
-    it('should throw TOKEN_INVALID with generic message for audience mismatch (no client ID exposed)', async () => {
-      const wrongAudPayload = {
-        ...mockJwtPayload,
-        aud: 'wrong-client-id'
-      };
+    it('should pass JWKS URI from discovery to createRemoteJWKSet', async () => {
       mockJwtVerify.mockResolvedValue({
-        payload: wrongAudPayload,
+        payload: mockJwtPayload,
         protectedHeader: { alg: 'RS256' }
       });
 
-      const token = createTokenWithPayload(wrongAudPayload);
+      await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
+
+      expect(mockCreateRemoteJWKSet).toHaveBeenCalledWith(
+        expect.objectContaining({ href: mockDiscovery.jwks_uri })
+      );
+    });
+
+    it('should throw TOKEN_INVALID with generic message for azp mismatch (no client ID exposed)', async () => {
+      mockJwtVerify.mockResolvedValue({
+        payload: { ...mockJwtPayload, azp: 'wrong-client-id' },
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      const token = generateMockJwtString(mockJwtPayload);
 
       const error = await keycloakAuthService.verifyToken(token).catch(e => e);
       expect(error).toMatchObject({
@@ -239,28 +243,141 @@ describe('keycloakAuthService', () => {
     it('should throw TOKEN_INVALID for jwtVerify signature failure (revoked token scenario)', async () => {
       mockJwtVerify.mockRejectedValue(new Error('JWT signature verification failed: no matching key'));
 
-      const token = createTokenWithPayload(mockJwtPayload);
+      const token = generateMockJwtString(mockJwtPayload);
 
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
         message: 'Token verification failed'
       });
     });
+
+    it('should not re-fetch discovery on subsequent calls after successful init', async () => {
+      mockJwtVerify.mockResolvedValue({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
+      await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
+
+      // fetch called only once (lazy init)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('lazy init with retry cooldown', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should return temporarily unavailable after init failure', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Authentication service is temporarily unavailable'
+      });
+    });
+
+    it('should not retry init within cooldown period', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      // First call fails and sets cooldown
+      await keycloakAuthService.verifyToken(token).catch(() => {});
+      const fetchCountAfterFirst = mockFetch.mock.calls.length;
+
+      // Second call within cooldown — should NOT call fetch again
+      await keycloakAuthService.verifyToken(token).catch(() => {});
+      expect(mockFetch.mock.calls.length).toBe(fetchCountAfterFirst);
+    });
+
+    it('should retry init after cooldown expires', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      // First call fails
+      await keycloakAuthService.verifyToken(token).catch(() => {});
+
+      // Advance past cooldown (30s)
+      const nowSpy = jest.spyOn(Date, 'now');
+      nowSpy.mockReturnValue(Date.now() + 31000);
+
+      // Now fetch should be called again
+      await keycloakAuthService.verifyToken(token).catch(() => {});
+      expect(mockFetch.mock.calls.length).toBe(2);
+
+      nowSpy.mockRestore();
+    });
+
+    it('should recover after successful init following failure', async () => {
+      // First call: discovery fails
+      mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
+      const token = generateMockJwtString(mockJwtPayload);
+      await keycloakAuthService.verifyToken(token).catch(() => {});
+
+      // Advance past cooldown
+      const nowSpy = jest.spyOn(Date, 'now');
+      nowSpy.mockReturnValue(Date.now() + 31000);
+
+      // Second call: discovery succeeds
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockDiscovery
+      });
+      mockJwtVerify.mockResolvedValue({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      const result = await keycloakAuthService.verifyToken(token);
+      expect(result.sub).toBe(mockJwtPayload.sub);
+
+      nowSpy.mockRestore();
+    });
+  });
+
+  describe('init', () => {
+    it('should populate issuerMap from discovery document', async () => {
+      await keycloakAuthService.init();
+      const issuers = keycloakAuthService.getConfiguredIssuers();
+      expect(issuers).toContain('http://localhost:8080/realms/genie');
+    });
+
+    it('should throw if discovery fetch fails', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
+
+      await expect(keycloakAuthService.init()).rejects.toThrow('OIDC discovery failed');
+    });
+
+    it('should throw if discovery document is missing required fields', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ issuer: 'http://localhost:8080/realms/genie' })
+      });
+
+      await expect(keycloakAuthService.init()).rejects.toThrow('missing required fields');
+    });
   });
 
   describe('getExpectedIssuer', () => {
-    it('should return the expected issuer URL from env vars', () => {
-      const issuer = keycloakAuthService.getExpectedIssuer();
-      expect(issuer).toContain('localhost:8080');
-      expect(issuer).toContain('genie');
-      expect(issuer).toMatch(/^https?:\/\/.+\/realms\/.+/);
+    it('should return undefined when not initialized', () => {
+      expect(keycloakAuthService.getExpectedIssuer()).toBeUndefined();
+    });
+
+    it('should return the issuer from discovery after init', async () => {
+      await keycloakAuthService.init();
+      expect(keycloakAuthService.getExpectedIssuer()).toBe('http://localhost:8080/realms/genie');
     });
   });
 
   describe('getClientId', () => {
     it('should return the configured client ID', () => {
-      const clientId = keycloakAuthService.getClientId();
-      expect(clientId).toBe('genie-app');
+      expect(keycloakAuthService.getClientId()).toBe('genie-app');
     });
   });
 
@@ -275,13 +392,3 @@ describe('keycloakAuthService', () => {
     });
   });
 });
-
-/**
- * Helper: create a JWT-like string with given payload for testing
- */
-function createTokenWithPayload(payload) {
-  const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key-id', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = Buffer.from('mock-signature').toString('base64url');
-  return `${header}.${body}.${sig}`;
-}

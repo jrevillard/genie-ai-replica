@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const path = require('path');
 const { logger } = require('../shared-lib');
 const authController = require('../controllers/authController');
@@ -182,7 +183,7 @@ module.exports = (authService) => {
    *       500:
    *         description: Logout failed
    */
-  router.post('/logout', authMiddleware.authenticate, async (req, res, next) => {
+  router.post('/logout', keycloakAuthMiddleware.authenticate, async (req, res, next) => {
     try {
       logger.info(`Logout request for user: ${req.user?.loginName || 'unknown'}`);
       await controller.logout(req, res);
@@ -211,7 +212,7 @@ module.exports = (authService) => {
    *       500:
    *         description: Failed to retrieve user information
    */
-  router.get('/me', authMiddleware.authenticate, async (req, res, next) => {
+  router.get('/me', keycloakAuthMiddleware.authenticate, async (req, res, next) => {
     try {
       logger.info(`Fetching current user info for: ${req.user?.loginName || 'unknown'}`);
       await controller.getCurrentUser(req, res);

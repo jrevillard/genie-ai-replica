@@ -43,7 +43,7 @@
 #   ./secrets/ssl/              (server.crt, server.key)
 
 volumes:
-  kong_data:
+  postgres_data:
   redis_data:
   doc_repo_uploads:
   arango_data: {}
@@ -59,7 +59,7 @@ services:
   # API Gateway Stack (node.labels.gateway == true)
   # ===========================================================================
 
-  kong-database:
+  postgres:
     image: postgres:13
     networks:
       - genieai_network
@@ -71,7 +71,7 @@ services:
     # ports:
     #   - "5432:5432"
     volumes:
-      - kong_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-genieai}"]
       interval: 5s
@@ -98,7 +98,7 @@ services:
       - genieai_network
     environment:
       - KONG_DATABASE=${KONG_DATABASE:-postgres}
-      - KONG_PG_HOST=${KONG_PG_HOST:-kong-database}
+      - KONG_PG_HOST=${KONG_PG_HOST:-postgres}
       - KONG_PG_USER=${KONG_PG_USER:-kong}
       - KONG_PG_PASSWORD=${KONG_DB_PASSWORD}
     command: >
@@ -149,7 +149,7 @@ services:
     image: kong:latest
     environment:
       - KONG_DATABASE=${KONG_DATABASE:-postgres}
-      - KONG_PG_HOST=${KONG_PG_HOST:-kong-database}
+      - KONG_PG_HOST=${KONG_PG_HOST:-postgres}
       - KONG_PG_USER=${KONG_PG_USER:-kong}
       - KONG_PG_PASSWORD=${KONG_DB_PASSWORD}
       - KONG_PROXY_ACCESS_LOG=/dev/stdout
@@ -345,6 +345,10 @@ services:
       - "${DATA_DIR:-./data}/logs/backend:/app/logs"
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
+    # Allow backend to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the Docker host,
+    # so OIDC discovery and JWKS fetches reach NGINX (which publishes 80/443 via mode: host).
+    extra_hosts:
+      - "${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 10s
@@ -359,6 +363,12 @@ services:
       - ARANGO_USER=${ARANGO_USER:-root}
       - JWT_SECRET=${JWT_SECRET}
       - SESSION_SECRET=${SESSION_SECRET}
+      # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
+      # not the internal Docker URL, so the issuer matches the JWT's iss claim.
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      # TLS verification for backend → NGINX OIDC discovery/JWKS fetches.
+      # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
       # Translation cache (required, no default in code)
       - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD}
       # Email configuration (required)
@@ -1059,7 +1069,7 @@ services:
   postgres-init:
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-postgres-init:latest
     environment:
-      - PGHOST=kong-database
+      - PGHOST=postgres
       - PGUSER=${POSTGRES_USER:-genieai}
       - PGDATABASE=${PGDATABASE:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -1085,7 +1095,7 @@ services:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin
       - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
       - KC_DB=${KC_DB:-postgres}
-      - KC_DB_URL=${KC_DB_URL:-jdbc:postgresql://kong-database:5432/keycloak}
+      - KC_DB_URL=${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak}
       - KC_DB_USERNAME=${KC_DB_USERNAME:-keycloak}
       - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
       - KC_PROXY_HEADERS=xforwarded
@@ -1119,7 +1129,7 @@ services:
       - KEYCLOAK_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
       - IMPORT_FILES=/config/genie-realm.yaml
       - IMPORT_VARSUBSTITUTION_ENABLED=true
-      # Variables referenced in genie-realm.yaml via ${env:VAR} substitution
+      # Variables referenced in genie-realm.yaml via $(env:VAR) substitution
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - KC_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}

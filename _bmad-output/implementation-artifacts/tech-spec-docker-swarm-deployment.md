@@ -272,7 +272,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
     5. Directory preparation per node (script from Task 8)
     6. Image build + push (`docker compose build && docker compose push`)
     7. Environment configuration (`.env` with multi-node values, note about one-time resolution)
-    8. File prerequisites on manager node: `secrets/ssl/server.crt`, `secrets/ssl/server.key`, `config/prompts/*.txt` (Swarm distributes these as secrets to nodes that need them)
+    8. File prerequisites on manager node: `secrets/ssl/server.crt`, `secrets/ssl/server.key`, `configs/prompts/*.txt` (Swarm distributes these as secrets to nodes that need them)
     9. Deployment (`docker stack deploy --env-file .env -c docker-compose.swarm.yaml genieai`)
     10. Post-deploy Kong config restore (from Task 3)
     11. GPU overrides (`--env-file env.t4`)
@@ -317,7 +317,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
 - Local Docker registry running on manager (or external registry configured)
 - Bind mount directories created on each target node before deployment
 - `.env` file present on the manager node (Swarm distributes env vars to services at deploy time)
-- SSL certificates (`secrets/ssl/`) and prompt files (`config/prompts/`) present on the manager node (Swarm distributes these as secrets to nodes that need them)
+- SSL certificates (`secrets/ssl/`) and prompt files (`configs/prompts/`) present on the manager node (Swarm distributes these as secrets to nodes that need them)
 - Hugging Face cache pre-populated on GPU node for faster model loading
 - All images pre-built and pushed to registry
 

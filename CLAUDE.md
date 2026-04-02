@@ -126,7 +126,7 @@ User Query → Backend (BFF) → ChatQnA Service → Embedding → Retriever (Ar
 | `genie-ai-overlay/core/` | Shared types, protocols, constants |
 | `api-gateway-solution/` | Kong/NGINX configuration and scripts |
 | `secrets/` | **Secrets** (SSL certificates - NOT committed) |
-| `config/` | **Configuration** (LLM prompts - committed) |
+| `configs/` | **Configuration** (LLM prompts - committed) |
 | `tests/` | Integration tests for RAG pipeline |
 
 ## Technology Stack
@@ -205,12 +205,12 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 LLM prompts use a three-tier priority system:
 
 1. **ENV VAR** (highest): Override inline in `.env`
-2. **FILE** (medium): Custom files in `config/prompts/` (committed to git)
+2. **FILE** (medium): Custom files in `configs/prompts/` (committed to git)
 3. **DEFAULT** (lowest): Built-in prompts in code (most deployments)
 
 **Directory Structure:**
 ```
-config/prompts/           # LLM behavior prompts (committed to git)
+configs/prompts/           # LLM behavior prompts (committed to git)
 ├── chatqna-system.txt
 └── chatqna-abstention.txt
 
@@ -228,7 +228,7 @@ secrets/ssl/              # SSL certificates (NOT committed)
 
 ```bash
 # Edit the default prompt files
-nano config/prompts/chatqna-system.txt
+nano configs/prompts/chatqna-system.txt
 docker service update --force genieai_chatqna-xeon-backend-server
 ```
 

@@ -301,6 +301,43 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('should return 403 when provisioning returns a soft-deleted user (defense-in-depth)', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'deleted@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'deleted@example.com',
+      name: 'Deleted User',
+      roles: [],
+      active: false,
+      deleted: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-15T00:00:00.000Z'
+    });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'User account is deactivated',
+      details: {}
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('should return 500 PROVISIONING_FAILED when provisioning throws error', async () => {
     req.headers.authorization = 'Bearer valid-token';
     const decodedPayload = {

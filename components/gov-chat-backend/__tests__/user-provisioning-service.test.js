@@ -29,6 +29,7 @@ const userProvisioningService = require('../services/user-provisioning-service')
 
 describe('userProvisioningService', () => {
   let mockCursor;
+  const ISS_SUB = 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012';
 
   beforeEach(() => {
     mockCursor = {
@@ -40,14 +41,14 @@ describe('userProvisioningService', () => {
     // Default: first query (soft-delete check) returns empty, second (upsert) returns user
     mockQuery
       .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
-      .mockResolvedValue(mockCursor); // upsert: returns user
+      .mockResolvedValue(mockCursor); // upsert: returns { new, old }
   });
 
   describe('provisionUser', () => {
     it('should create a new user with all required fields', async () => {
       const newUser = {
         _key: 'users/123',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
+        iss_sub: ISS_SUB,
         iss: 'http://localhost:8080/realms/genie',
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'testuser@example.com',
@@ -58,11 +59,11 @@ describe('userProvisioningService', () => {
         createdAt: expect.any(String),
         updatedAt: expect.any(String)
       };
-      mockCursor.next.mockResolvedValue(newUser);
+      mockCursor.next.mockResolvedValue({ new: newUser, old: null });
 
       const decoded = {
         ...mockJwtPayload,
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
       };
 
       const result = await userProvisioningService.provisionUser(decoded);
@@ -75,7 +76,7 @@ describe('userProvisioningService', () => {
     it('should update mutable fields and preserve createdAt for existing user', async () => {
       const existingUser = {
         _key: 'users/456',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
+        iss_sub: ISS_SUB,
         iss: 'http://localhost:8080/realms/genie',
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'updated@example.com',
@@ -86,11 +87,11 @@ describe('userProvisioningService', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: expect.any(String)
       };
-      mockCursor.next.mockResolvedValue(existingUser);
+      mockCursor.next.mockResolvedValue({ new: existingUser, old: { _key: 'users/456' } });
 
       const decoded = {
         ...mockJwtPayload,
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
       };
 
       const result = await userProvisioningService.provisionUser(decoded);
@@ -106,7 +107,7 @@ describe('userProvisioningService', () => {
     it('should update email when it changes in JWT on re-login', async () => {
       const updatedUser = {
         _key: 'users/456',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
+        iss_sub: ISS_SUB,
         iss: 'http://localhost:8080/realms/genie',
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'newemail@example.com',
@@ -117,12 +118,12 @@ describe('userProvisioningService', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: expect.any(String)
       };
-      mockCursor.next.mockResolvedValue(updatedUser);
+      mockCursor.next.mockResolvedValue({ new: updatedUser, old: { _key: 'users/456' } });
 
       const decoded = {
         ...mockJwtPayload,
         email: 'newemail@example.com',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
       };
 
       const result = await userProvisioningService.provisionUser(decoded);
@@ -135,7 +136,7 @@ describe('userProvisioningService', () => {
     it('should return null for soft-deleted user without running UPSERT', async () => {
       const deletedUser = {
         _key: 'users/789',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
+        iss_sub: ISS_SUB,
         iss: 'http://localhost:8080/realms/genie',
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'testuser@example.com',
@@ -153,7 +154,7 @@ describe('userProvisioningService', () => {
 
       const decoded = {
         ...mockJwtPayload,
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
       };
 
       const result = await userProvisioningService.provisionUser(decoded);
@@ -163,22 +164,34 @@ describe('userProvisioningService', () => {
       expect(mockQuery).toHaveBeenCalledTimes(1);
     });
 
-    it('should throw error when ArangoDB is unreachable', async () => {
+    it('should throw error when ArangoDB query fails', async () => {
       mockQuery.mockRejectedValue(new Error('Connection refused'));
 
       const decoded = {
         ...mockJwtPayload,
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
       };
 
       await expect(userProvisioningService.provisionUser(decoded))
         .rejects.toThrow('Connection refused');
     });
 
+    it('should throw error when dbService.getConnection() fails', async () => {
+      mockGetConnection.mockRejectedValue(new Error('ArangoDB unreachable'));
+
+      const decoded = {
+        ...mockJwtPayload,
+        iss_sub: ISS_SUB
+      };
+
+      await expect(userProvisioningService.provisionUser(decoded))
+        .rejects.toThrow('ArangoDB unreachable');
+    });
+
     it('should update roles from JWT realm_access.roles', async () => {
       const userWithNewRoles = {
         _key: 'users/456',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
+        iss_sub: ISS_SUB,
         iss: 'http://localhost:8080/realms/genie',
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'testuser@example.com',
@@ -189,15 +202,15 @@ describe('userProvisioningService', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: expect.any(String)
       };
-      mockCursor.next.mockResolvedValue(userWithNewRoles);
+      mockCursor.next.mockResolvedValue({ new: userWithNewRoles, old: { _key: 'users/456' } });
 
       const decoded = {
         ...mockJwtPayload,
         realm_access: { roles: ['super-admin'] },
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
       };
 
-      const result = await userProvisioningService.provisionUser(decoded);
+      await userProvisioningService.provisionUser(decoded);
 
       const upsertCallArgs = mockQuery.mock.calls[1];
       expect(upsertCallArgs[1].updateDoc.roles).toEqual(['super-admin']);
@@ -207,7 +220,7 @@ describe('userProvisioningService', () => {
     it('should use preferred_username when name is not in JWT', async () => {
       const user = {
         _key: 'users/123',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
+        iss_sub: ISS_SUB,
         iss: 'http://localhost:8080/realms/genie',
         sub: '12345678-1234-1234-1234-123456789012',
         email: 'testuser@example.com',
@@ -218,13 +231,13 @@ describe('userProvisioningService', () => {
         createdAt: expect.any(String),
         updatedAt: expect.any(String)
       };
-      mockCursor.next.mockResolvedValue(user);
+      mockCursor.next.mockResolvedValue({ new: user, old: null });
 
       const decoded = {
         ...mockJwtPayload,
         name: undefined,
         preferred_username: 'testuser',
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
       };
 
       await userProvisioningService.provisionUser(decoded);
@@ -236,7 +249,7 @@ describe('userProvisioningService', () => {
     it('should set email and name to null when not in JWT', async () => {
       const user = {
         _key: 'users/123',
-        iss_sub: 'http://localhost:8080/realms/genie#no-email-user',
+        iss_sub: ISS_SUB,
         iss: 'http://localhost:8080/realms/genie',
         sub: 'no-email-user',
         email: null,
@@ -247,12 +260,12 @@ describe('userProvisioningService', () => {
         createdAt: expect.any(String),
         updatedAt: expect.any(String)
       };
-      mockCursor.next.mockResolvedValue(user);
+      mockCursor.next.mockResolvedValue({ new: user, old: null });
 
       const decoded = {
         sub: 'no-email-user',
         iss: 'http://localhost:8080/realms/genie',
-        iss_sub: 'http://localhost:8080/realms/genie#no-email-user',
+        iss_sub: ISS_SUB,
         realm_access: { roles: [] }
       };
 
@@ -264,12 +277,54 @@ describe('userProvisioningService', () => {
       expect(upsertCallArgs[1].newDoc.roles).toEqual([]);
     });
 
+    it('should set roles to empty array when realm_access is missing', async () => {
+      const user = {
+        _key: 'users/123',
+        iss_sub: ISS_SUB,
+        iss: 'http://localhost:8080/realms/genie',
+        sub: '12345678-1234-1234-1234-123456789012',
+        email: 'testuser@example.com',
+        name: 'Test User',
+        roles: [],
+        active: true,
+        deleted: false,
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String)
+      };
+      mockCursor.next.mockResolvedValue({ new: user, old: null });
+
+      const decoded = {
+        sub: '12345678-1234-1234-1234-123456789012',
+        iss: 'http://localhost:8080/realms/genie',
+        iss_sub: ISS_SUB
+        // no realm_access
+      };
+
+      await userProvisioningService.provisionUser(decoded);
+
+      const upsertCallArgs = mockQuery.mock.calls[1];
+      expect(upsertCallArgs[1].newDoc.roles).toEqual([]);
+      expect(upsertCallArgs[1].updateDoc.roles).toEqual([]);
+    });
+
     it('should throw when UPSERT returns no result', async () => {
       mockCursor.next.mockResolvedValue(undefined);
 
       const decoded = {
         ...mockJwtPayload,
-        iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012'
+        iss_sub: ISS_SUB
+      };
+
+      await expect(userProvisioningService.provisionUser(decoded))
+        .rejects.toThrow('User provisioning returned no result');
+    });
+
+    it('should throw when UPSERT returns result without new', async () => {
+      mockCursor.next.mockResolvedValue({ old: { _key: 'users/123' } });
+
+      const decoded = {
+        ...mockJwtPayload,
+        iss_sub: ISS_SUB
       };
 
       await expect(userProvisioningService.provisionUser(decoded))
@@ -284,6 +339,42 @@ describe('userProvisioningService', () => {
 
       await expect(userProvisioningService.provisionUser(decoded))
         .rejects.toThrow('Missing iss_sub in decoded token');
+    });
+
+    it('should log "User provisioned" for new users', async () => {
+      const newUser = {
+        _key: 'users/123',
+        iss_sub: ISS_SUB,
+        deleted: false
+      };
+      mockCursor.next.mockResolvedValue({ new: newUser, old: null });
+
+      const decoded = { ...mockJwtPayload, iss_sub: ISS_SUB };
+      const { logger } = require('../shared-lib');
+
+      await userProvisioningService.provisionUser(decoded);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('User provisioned')
+      );
+    });
+
+    it('should log "User profile updated" for existing users', async () => {
+      const existingUser = {
+        _key: 'users/456',
+        iss_sub: ISS_SUB,
+        deleted: false
+      };
+      mockCursor.next.mockResolvedValue({ new: existingUser, old: { _key: 'users/456' } });
+
+      const decoded = { ...mockJwtPayload, iss_sub: ISS_SUB };
+      const { logger } = require('../shared-lib');
+
+      await userProvisioningService.provisionUser(decoded);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('User profile updated')
+      );
     });
   });
 });

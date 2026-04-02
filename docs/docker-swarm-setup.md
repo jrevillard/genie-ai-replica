@@ -318,9 +318,9 @@ On the **manager node**, ensure these files exist:
 ls secrets/ssl/server.crt secrets/ssl/server.key
 
 # LLM prompt files (required by chatqna-xeon-backend-server)
-ls config/prompts/chatqna-system.txt
-ls config/prompts/chatqna-abstention.txt
-ls config/prompts/label-selector.txt
+ls configs/prompts/chatqna-system.txt
+ls configs/prompts/chatqna-abstention.txt
+ls configs/prompts/label-selector.txt
 ```
 
 ## Step 8: Deploy

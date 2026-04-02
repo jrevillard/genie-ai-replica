@@ -58,9 +58,9 @@ secrets:
   server_key:
     file: ./secrets/ssl/server.key
   chatqna_system_prompt:
-    file: ./config/prompts/chatqna-system.txt
+    file: ./configs/prompts/chatqna-system.txt
   chatqna_abstention_instructions:
-    file: ./config/prompts/chatqna-abstention.txt
+    file: ./configs/prompts/chatqna-abstention.txt
 
 services:
 

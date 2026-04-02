@@ -410,7 +410,7 @@
 
     - name: Verify LLM prompt files exist
       ansible.builtin.stat:
-        path: "{{ deploy_dir }}/config/prompts/{{ item }}"
+        path: "{{ deploy_dir }}/configs/prompts/{{ item }}"
       register: prompt_files
       loop:
         - chatqna-system.txt
@@ -424,7 +424,7 @@
           - item.stat.exists
         fail_msg: >-
           Missing prompt file: {{ item.item }}.
-          Ensure it exists in the repository at config/prompts/{{ item.item }}.
+          Ensure it exists in the repository at configs/prompts/{{ item.item }}.
         quiet: true
       loop: "{{ prompt_files.results }}"
       loop_control:

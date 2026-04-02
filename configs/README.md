@@ -9,7 +9,7 @@ Prompts are loaded via Docker secrets mechanism, providing cloud-native configur
 ## Three-Tier Priority System
 
 1. **ENV VAR** (highest) - Override inline in `.env`
-2. **FILE** (medium) - Custom files in `config/prompts/`
+2. **FILE** (medium) - Custom files in `configs/prompts/`
 3. **DEFAULT** (lowest) - Built-in prompts in code
 
 ## Available Prompts
@@ -32,11 +32,11 @@ The files in this directory are the defaults. No action needed.
 **Option 1 - Edit files directly:**
 ```bash
 # For ChatQnA prompts
-nano config/prompts/chatqna-system.txt
+nano configs/prompts/chatqna-system.txt
 docker compose restart chatqna-xeon-backend-server
 
 # For label selector
-nano config/prompts/label-selector.txt
+nano configs/prompts/label-selector.txt
 docker compose restart dataprep-arango-service
 ```
 

@@ -39,7 +39,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Python/FastAPI, `CustomLogger` from `comps` library
 - Config via `os.getenv()` with defaults
 - **Copyright headers required** (ITU, or Intel+ITU for OPEA adaptations)
-- LLM prompts use 3-tier priority: ENV VAR > FILE (`config/prompts/`) > DEFAULT (in code)
+- LLM prompts use 3-tier priority: ENV VAR > FILE (`configs/prompts/`) > DEFAULT (in code)
 
 ### Mobile
 - Flutter 3.10+, Dart
@@ -141,7 +141,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 #### Environment & Config
 - Single `.env` at project root (copy from `env` template). Per-service `env` files are deprecated.
 - Secrets in `.env` are gitignored; `env` (no dot) is committed as template
-- LLM prompts: 3-tier priority — ENV VAR > FILE (`config/prompts/`) > DEFAULT (code)
+- LLM prompts: 3-tier priority — ENV VAR > FILE (`configs/prompts/`) > DEFAULT (code)
 
 #### Docker
 - Full stack: `docker compose --env-file .env up -d` (from root)

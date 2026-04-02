@@ -689,16 +689,18 @@
       ansible.builtin.shell: >
         docker service ls
         --filter label=com.docker.stack.namespace={{ stack_name }}
-        --format '{{.Name}} {{.Replicas}}'
+        --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Replicas{{ "}}" }}'
       register: replica_check
-      changed_when: false
-      failed_when: >
+      until: >
         replica_check.stdout_lines
         | reject('search', 'kong-config')
         | reject('search', 'kong-migrations')
         | reject('search', '0/0')
         | select('search', '0/')
-        | length > 0
+        | length == 0
+      retries: "{{ (deploy_stabilization_timeout | int) // 30 }}"
+      delay: 30
+      changed_when: false
 
     - name: Smoke test - backend health
       ansible.builtin.uri:

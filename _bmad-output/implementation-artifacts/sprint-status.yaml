@@ -118,7 +118,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # Epic 1: Keycloak Foundation & User Authentication
   # Worktree: keycloak-idp (current)
-  epic-1: in-progress
+  epic-1: done
   1-1-keycloak-container-with-pre-configured-realm-and-oidc-client: done
   1-2-environment-driven-keycloak-configuration-via-env: done
   1-3-backend-auth-middleware-protected-and-public-routes: done
@@ -130,7 +130,7 @@ development_status:
   1-9-external-idp-connection-via-keycloak-only: done
   1-10-offline-air-gapped-deployment-validation: done
   1-11-remove-legacy-authentication-service: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2: Secure API Access & Resilient Authentication
   # Worktrees: epic2-backend | epic2-frontend (parallel after Epic 1 merged)

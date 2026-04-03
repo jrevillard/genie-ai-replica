@@ -137,11 +137,11 @@ development_status:
   epic-2: backlog
   # Story 2.1 removed — fully implemented during Story 1.9 refactor (OIDC discovery pattern)
   # See sprint-change-proposal-2026-04-02.md Section 6
-  2-2-jwks-force-refresh-on-validation-failure: backlog # worktree: epic2-backend
+  2-2-jwks-force-refresh-on-validation-failure: ready-for-dev # worktree: epic2-backend
   2-3-token-passthrough-headers-injection-to-upstream: backlog # worktree: epic2-backend
   2-4-kong-optional-deployment-with-without-kong-compose-files: deferred # YAGNI — Kong optional not requested
   2-5-kong-multi-issuer-token-validation-and-identity-headers: deferred # depends on 2-4
-  2-6-auth-and-authorization-error-display-frontend: backlog # worktree: epic2-frontend
+  2-6-auth-and-authorization-error-display-frontend: ready-for-dev # worktree: epic2-frontend
   2-7-keycloak-unavailable-detection-and-health-check: backlog # worktree: epic2-backend
   2-8-swagger-ui-with-keycloak-oidc-authorize-button: backlog # worktree: epic2-frontend
   2-9-multi-realm-configuration-support: backlog # worktree: epic2-backend (after 2-2)

@@ -306,6 +306,14 @@ KEYCLOAK_CLIENT_ID=genie-app
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KEYCLOAK_CLIENT_SECRET=
 
+# Additional Keycloak realms for backend token validation (JSON map: realm-name -> client-id)
+# Each additional realm must have a corresponding OIDC client configured in Keycloak admin console
+# with Authorization Code Flow + PKCE enabled and Valid Redirect URIs set to the frontend URL.
+# The frontend only authenticates against the primary realm (KEYCLOAK_REALM).
+# Users from additional realms authenticate via their own Keycloak login URL.
+# Example: KEYCLOAK_ADDITIONAL_REALMS={"partner-org":"partner-app","contractor":"contractor-app"}
+# KEYCLOAK_ADDITIONAL_REALMS=
+
 # Keycloak admin password (REQUIRED — set a strong value)
 # Used by: keycloak-config-cli (realm setup), admin console access
 # WARNING: This is the master admin account password

@@ -20,8 +20,12 @@ const config = {
     // Keycloak configuration
     keycloak: {
       url: process.env.KEYCLOAK_URL,
-      realm: process.env.KEYCLOAK_REALM,
-      clientId: process.env.KEYCLOAK_CLIENT_ID
+      realm: process.env.KEYCLOAK_REALM || 'genie',
+      clientId: process.env.KEYCLOAK_CLIENT_ID || 'genie-app',
+      additionalRealms: (() => {
+        try { return JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || '{}'); }
+        catch (e) { return {}; }
+      })()
     },
 
     // Security scan configuration

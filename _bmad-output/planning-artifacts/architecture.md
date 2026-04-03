@@ -191,14 +191,26 @@ JIT provisioning creates ArangoDB user records on first Keycloak login using `{i
 - **Affects:** Backend auth middleware only
 - **Alternative rejected:** `jsonwebtoken` + `jwks-rsa` — additional dependency, older API, designed for both emission and verification (we only verify)
 
-**Decision D3 — JWKS caching strategy:**
+**Decision D3 — JWKS resolution and caching strategy:**
 
 | Parameter | Value | Rationale |
 |---|---|---|
-| Cache key | `{iss}` (issuer URL) | Enables multi-issuer without collision |
-| TTL | 5 minutes | Below Keycloak key rotation interval (~10 min) |
-| Force-refresh trigger | HTTP 401 + valid `exp` | Detects key rotation without performance penalty |
-| Force-refresh logic | 1. Token verification fails → 2. Check `exp` still valid → 3. Force-refresh JWKS for this issuer → 4. Re-verify token → 5. If fail again, reject with 401 | Two-attempt pattern prevents user disruption during key rotation |
+| Discovery | OIDC `/.well-known/openid-configuration` | Standard OIDC discovery — resolves canonical issuer and JWKS URI from Keycloak |
+| Init pattern | Lazy singleton with 30s retry cooldown | First authenticated request triggers discovery; failures cooldown 30s before retry |
+| Issuer trust | Whitelist map (`Map<issuer, JWKS>`) | Token's unverified `iss` used only for map lookup — prevents issuer confusion attacks |
+| Cache | jose `createRemoteJWKS()` built-in HTTP caching | Uses `Cache-Control` / `JWKS-TTL` headers from Keycloak JWKS response |
+| Force-refresh | Two-attempt pattern (Story 2.2) | On 401 with valid `exp`: force-refresh JWKS → re-verify → if fail again, reject |
+| Multi-issuer | `init(url)` callable multiple times | Supports multiple Keycloak realms or external IdPs |
+
+**Implementation status (as of Story 1.9):**
+- [x] OIDC discovery with lazy singleton
+- [x] Issuer whitelist map
+- [x] jose built-in JWKS HTTP caching
+- [x] 30s retry cooldown on init failure
+- [x] Multi-issuer `init(url)` support
+- [ ] Two-attempt force-refresh on 401 (deferred to Story 2.2)
+
+**Caching behavior note (for Story 2.2 dev):** jose's `createRemoteJWKS()` uses HTTP caching based on `Cache-Control` / `JWKS-TTL` headers from the JWKS response. Keycloak 26.x may not always return explicit cache headers — in that case, jose may refetch JWKS on every verification call. Story 2.2 should verify Keycloak's actual caching headers and, if absent, implement an explicit TTL wrapper (5 minutes, per original D3 rationale) around `createRemoteJWKS()`.
 
 **Decision D4 — Multi-realm `user_id` for OPEA: `{iss}#{sub}`**
 
@@ -229,7 +241,7 @@ JIT provisioning creates ArangoDB user records on first Keycloak login using `{i
 **Decision D6 — Keycloak realm initialization: Custom image with `keycloak-config-cli`**
 
 - **Approach:** Custom Docker image (`genie-keycloak-config`) based on `bitnami/keycloak-config-cli` with YAML config baked in. Deployed as init container alongside Keycloak.
-- **Rationale:** No bind mounts (not cloud-native). Config is version-controlled in git and baked into the image. Secrets injected via environment variables at runtime (`${env:KEYCLOAK_CLIENT_SECRET}`, `${env:KEYCLOAK_ADMIN_PASSWORD}`). 100% cloud-native.
+- **Rationale:** No bind mounts (not cloud-native). Config is version-controlled in git and baked into the image. Secrets injected via environment variables at runtime (`$(env:KEYCLOAK_CLIENT_SECRET)`, `$(env:KEYCLOAK_ADMIN_PASSWORD)`). 100% cloud-native.
 - **Config location:** `config/keycloak/genie-realm.yaml` (consistent with existing `config/prompts/` convention)
 - **Dockerfile:** `FROM bitnami/keycloak-config-cli:latest` + `COPY config/keycloak/genie-realm.yaml /config/`
 - **Docker:** Init container in Keycloak service definition, secrets via env vars from `.env`
@@ -357,10 +369,12 @@ state: {
 
 **Auth Middleware Flow:**
 1. Extract Bearer token from Authorization header
-2. Verify JWT signature via JWKS (with force-refresh logic above)
-3. Validate claims: `iss`, `aud`, `exp`
-4. Lookup user in ArangoDB by `iss_sub`
-5. If user not found → JIT provision (atomic upsert)
+2. Ensure OIDC discovery initialized (lazy singleton, 30s cooldown)
+3. Lookup token's `iss` in trusted issuer map (whitelist)
+4. Verify JWT signature + claims via jose `jwtVerify()` (iss, aud, exp, sub, alg=RS256)
+5. [Story 2.2] On 401 with valid `exp`: force-refresh JWKS → re-verify → if fail, reject
+6. Lookup user in ArangoDB by `iss_sub`
+7. If user not found → JIT provision (atomic upsert)
 6. If JIT provisioning fails → 500 `PROVISIONING_FAILED`
 7. If user `deleted == true` → 403
 8. Inject user identity into request object

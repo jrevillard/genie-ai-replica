@@ -3,13 +3,27 @@
 # Runs as superuser (POSTGRES_USER), creates dedicated users per service
 set -e
 
-PGHOST="${PGHOST:-kong-database}"
+PGHOST="${PGHOST:-postgres}"
 PGUSER="${PGUSER:-genieai}"
 PGDATABASE="${PGDATABASE:-postgres}"
 SERVICES="${SERVICES:-kong keycloak}"
 
 # Authenticate as superuser via PGPASSWORD (not in command line)
 export PGPASSWORD="${POSTGRES_PASSWORD}"
+
+# Wait for PostgreSQL to be ready (Swarm has no depends_on)
+echo "Waiting for PostgreSQL at ${PGHOST}..."
+MAX_RETRIES=30
+RETRY=0
+until pg_isready -h "${PGHOST}" -U "${PGUSER}" -q 2>/dev/null; do
+  RETRY=$((RETRY + 1))
+  if [ "${RETRY}" -ge "${MAX_RETRIES}" ]; then
+    echo "ERROR: PostgreSQL not ready after ${MAX_RETRIES} attempts" >&2
+    exit 1
+  fi
+  sleep 2
+done
+echo "PostgreSQL is ready."
 
 echo "Initializing PostgreSQL databases and users..."
 

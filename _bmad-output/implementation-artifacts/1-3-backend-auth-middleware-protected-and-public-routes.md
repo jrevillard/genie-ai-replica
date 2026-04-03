@@ -31,7 +31,7 @@ So that API endpoints are secured by default.
 - [x] Create `keycloak-auth-service.js` — JWKS token verification service (AC: #1, #3, #4)
   - [x] Create `components/gov-chat-backend/services/keycloak-auth-service.js`
   - [x] Implement `verifyToken(token)` using `jose.jwtVerify()` with `createRemoteJWKS()`
-  - [x] JWKS endpoint resolved from token's `iss` claim: `${iss}/.well-known/jwks.json`
+  - [x] OIDC discovery: fetch `/.well-known/openid-configuration` from Keycloak to resolve `issuer` and `jwks_uri` (lazy singleton, triggered on first token verification)
   - [x] Validate claims: `iss` (must match expected issuer), `aud` (must match `KEYCLOAK_CLIENT_ID`), `exp` (must not be expired)
   - [x] Return decoded payload on success, throw structured error on failure
   - [x] Use CommonJS (`require`/`module.exports`) — no ES imports
@@ -231,12 +231,14 @@ const { jwtVerify, createRemoteJWKS, SignJWT } = require('jose');
 ```
 1. Extract Bearer token from Authorization header
 2. If missing/malformed → 401 TOKEN_INVALID
-3. Verify JWT signature via JWKS from ${iss}/.well-known/jwks.json
-4. Validate claims: iss, aud (KEYCLOAK_CLIENT_ID), exp
-5. If expired → 401 TOKEN_EXPIRED
-6. If invalid → 401 TOKEN_INVALID
-7. Attach decoded payload to req.user with iss_sub composite key
-8. Call next()
+3. Ensure OIDC discovery initialized (lazy singleton with 30s retry cooldown)
+4. Extract unverified `iss` from token payload → lookup in trusted issuer map
+5. If issuer not in map → 401 TOKEN_INVALID ("Unknown issuer")
+6. Verify JWT signature + claims via jose jwtVerify() (iss, aud, exp, sub, alg=RS256)
+7. If expired → 401 TOKEN_EXPIRED
+8. If signature/claims invalid → 401 TOKEN_INVALID
+9. Attach decoded payload to req.user with iss_sub composite key
+10. Call next()
 ```
 
 **Note:** Full JWKS caching with force-refresh (D3 two-attempt pattern) is Story 2.2. This story uses direct `createRemoteJWKS()` without caching.
@@ -272,7 +274,7 @@ Claude Opus 4.6 (GLM-5-Turbo)
 
 ### Completion Notes List
 
-1. **keycloak-auth-service.js**: Implements `verifyToken(token)` using `jose.jwtVerify()` with `createRemoteJWKS()`. JWKS endpoint is derived from token's `iss` claim (`${iss}/protocol/openid-connect/certs` — Keycloak's standard JWKS path). Validates `iss`, `aud`, `exp`, `sub` claims. Returns decoded payload with `iss_sub` composite key. Structured errors via `TokenVerificationError` class.
+1. **keycloak-auth-service.js**: Implements `verifyToken(token)` using OIDC discovery pattern. On first call, fetches `/.well-known/openid-configuration` from Keycloak to resolve canonical `issuer` and `jwks_uri`. Stores trusted issuers in an `issuerMap` (Map<issuer, JWKS>). Token's unverified `iss` is used only for map lookup (whitelist pattern). All validation (signature, iss, aud, exp, sub, alg) delegated to `jose.jwtVerify()`. Lazy singleton with 30-second retry cooldown on init failure. Multi-IdP ready via `init(url)`. Returns decoded payload with `iss_sub` composite key. Structured errors via `TokenVerificationError` class.
 
 2. **keycloak-auth-middleware.js**: Express middleware with `authenticate(req, res, next)`. Extracts Bearer token, calls service, attaches decoded user to `req.user` with `iss_sub`, `sub`, `iss`, `email`, `name`, `roles`. Returns standardized error format `{ error, message, details }`. Exports `PUBLIC_PATHS` and `isPublicRoute()` helper.
 

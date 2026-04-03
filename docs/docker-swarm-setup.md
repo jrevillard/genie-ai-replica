@@ -178,14 +178,14 @@ The frontend image is **generic** — it reads its configuration at runtime via 
 # Frontend (Vue 3) — generic image, no build args needed
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
 
-# Backend (Node.js)
-docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
+# Backend (Node.js) — Dockerfile COPYs from parent dir, so context is components/
+docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
 
-# Document Repository
-docker build -t genieai_mvp_document-repository:latest components/document-repository/
+# Document Repository — Dockerfile COPYs from parent dir, so context is components/
+docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
 
-# HTTP Service
-docker build -t genieai_mvp_http-service:latest genie-ai-overlay/http-service/
+# HTTP Service — Dockerfile COPYs from project root, so context is .
+docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
 
 # Nginx (API gateway reverse proxy)
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
@@ -479,7 +479,7 @@ echo "Waiting for services to stop..."
 sleep 30
 
 # Named volumes persist after stack removal. To remove:
-docker volume rm genieai_kong_data
+docker volume rm genieai_postgres_data
 docker volume rm genieai_redis_data
 docker volume rm genieai_doc_repo_uploads
 docker volume rm genieai_arango_data
@@ -510,7 +510,7 @@ docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
 
 # Build and push images (see Step 5a for explicit commands)
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
+docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
 # ... tag and push (see Step 5b-5c)
 
 # Configure .env (use localhost defaults)
@@ -549,9 +549,9 @@ sed -i 's|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=https://10.0.0.110|' .en
 
 # 3. Build all images (same as localhost — frontend is generic)
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
-docker build -t genieai_mvp_document-repository:latest components/document-repository/
-docker build -t genieai_mvp_http-service:latest genie-ai-overlay/http-service/
+docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
+docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
+docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 
@@ -578,6 +578,18 @@ docker stack deploy -c docker-compose.yaml genieai
 docker service ls
 # Access https://10.0.0.110/ in your browser (self-signed cert warning is expected)
 ```
+
+## External Identity Provider Support
+
+GENIE.AI supports connecting external identity providers (Google, Microsoft Entra ID, institutional IdPs, any standard OIDC/SAML provider) through Keycloak. No GENIE.AI code or configuration changes are required.
+
+See [External IdP Integration Guide](external-idp-integration-guide.md) for step-by-step instructions.
+
+**Key points:**
+- External IdPs are configured entirely within Keycloak (admin console or keycloak-config-cli)
+- The Keycloak container must have network connectivity to the external IdP endpoints
+- NGINX does not proxy external IdP traffic; Keycloak makes direct outbound connections
+- External IdPs are **not available** in air-gapped deployments — only local Keycloak credentials work without internet connectivity
 
 ## Known Limitations
 

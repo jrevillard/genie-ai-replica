@@ -146,6 +146,14 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ### Development Workflow Rules
 
+#### Keycloak Config CLI — Variable Substitution Syntax
+
+- keycloak-config-cli uses `$(env:VARIABLE)` syntax — NOT `${env:VARIABLE}`
+- The prefix `$(env:` and suffix `)` are configurable via `IMPORT_VARSUBSTITUTION_PREFIX`/`IMPORT_VARSUBSTITUTION_SUFFIX`
+- `IMPORT_VARSUBSTITUTION_ENABLED=true` must be set in the keycloak-config service environment
+- Never change `$(env:VAR)` to `${env:VAR}` in `genie-realm.yaml` — this breaks variable substitution at runtime
+- When reviewing `genie-realm.yaml`, preserve the `$(env:...)` syntax exactly as-is
+
 #### Environment & Config
 - Single `.env` at project root (copy from `env` template). Per-service `env` files are deprecated.
 - Secrets in `.env` are gitignored; `env` (no dot) is committed as template

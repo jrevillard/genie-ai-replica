@@ -294,7 +294,7 @@ Configuration for the Kong API Gateway and its backing PostgreSQL database.
 | POSTGRES\_DB | Default database created on init. | kong |
 | POSTGRES\_PASSWORD | PostgreSQL superuser password. | sup3rus3r |
 | KONG\_DATABASE | Tells Kong which database type to use. | postgres |
-| KONG\_PG\_HOST | Hostname for the PostgreSQL service. | kong-database |
+| KONG\_PG\_HOST | Hostname for the PostgreSQL service. | postgres |
 | KONG\_PG\_USER | Kong dedicated database user. | kong |
 | KONG\_PG\_PASSWORD | Kong dedicated database user password (KONG\_DB\_PASSWORD). | k0ngus3r |
 | KONG\_PROXY\_ACCESS\_LOG | Path for proxy access logs. | /dev/stdout |
@@ -1256,7 +1256,7 @@ Bash
 
 docker service ls
 
-*Look for (healthy) replicas next to critical services like kong, kong-database, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
+*Look for (healthy) replicas next to critical services like kong, postgres, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
 
 Inspect the logs again to ensure no new critical errors have appeared after the restart.
 

@@ -108,6 +108,8 @@ services:
       - KONG_PG_PASSWORD=${KONG_DB_PASSWORD}
     command: >
       bash -c "
+        echo 'Waiting for PostgreSQL...' &&
+        for i in $$(seq 1 30); do pg_isready -h ${KONG_PG_HOST:-postgres} -U ${KONG_PG_USER:-kong} -q 2>/dev/null && break; sleep 2; done &&
         kong migrations bootstrap 2>/dev/null ||
         kong migrations up &&
         kong migrations finish
@@ -976,10 +978,7 @@ services:
       # Variables referenced in genie-realm.yaml via $(env:VAR) substitution
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
-      - KC_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
       - KC_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
-      - KC_VALID_REDIRECT_URIS=${KEYCLOAK_VALID_REDIRECT_URIS:-http://localhost:8090/*}
-      - KC_WEB_ORIGINS=${KEYCLOAK_WEB_ORIGINS:-http://localhost:8090}
     networks:
       - genieai_network
     deploy:

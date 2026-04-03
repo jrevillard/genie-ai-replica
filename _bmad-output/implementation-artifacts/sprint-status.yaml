@@ -39,8 +39,32 @@ project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
+# WORKTREE STRATEGY
+# ==================
+# Stories are grouped into worktrees by file overlap to avoid merge conflicts.
+# Each worktree branch is created from main after the previous epic is fully merged.
+# The SM agent must include the worktree assignment in each story's Dev Notes.
+#
+# Naming convention: .worktrees/<worktree-name> → branch feature/<worktree-name>
+#
+# Epic 1: Single worktree (current)
+#   keycloak-idp ← all stories 1-1 through 1-11
+#
+# Epic 2: Three parallel worktrees
+#   epic2-backend   ← 2-2 → 2-3 → 2-7 → 2-9 → 2-10 (all touch keycloak-auth-service/middleware)
+#   epic2-frontend  ← 2-6 → 2-8 (frontend only, no backend overlap)
+#   epic2-infra     ← 2-4 → 2-5 + 2-1 Swagger (Kong + docker-compose)
+#
+# Epic 3: Two parallel worktrees (after Epic 2 merged)
+#   epic3-sessions  ← 3-1 → 3-2 → 3-7 (session lifecycle)
+#   epic3-keycloak  ← 3-3 → 3-4 → 3-5 → 3-6 (Keycloak admin + ArangoDB user lifecycle)
+#
+# Epic 4: Single worktree (after Epic 3 merged)
+#   epic4-logging   ← 4-1 → 4-2 (audit logging + retention)
+
 development_status:
   # Epic 1: Keycloak Foundation & User Authentication
+  # Worktree: keycloak-idp (current)
   epic-1: in-progress
   1-1-keycloak-container-with-pre-configured-realm-and-oidc-client: done
   1-2-environment-driven-keycloak-configuration-via-env: done
@@ -51,38 +75,41 @@ development_status:
   1-7-transparent-re-authentication-on-session-expiry: done
   1-8-token-validation-failure-handling-backend-response-format: done
   1-9-external-idp-connection-via-keycloak-only: done
-  1-10-offline-air-gapped-deployment-validation: backlog
-  1-11-remove-legacy-authentication-service: backlog
+  1-10-offline-air-gapped-deployment-validation: done
+  1-11-remove-legacy-authentication-service: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Secure API Access & Resilient Authentication
+  # Worktrees: epic2-backend | epic2-frontend | epic2-infra (parallel after Epic 1 merged)
   epic-2: backlog
   # Story 2.1 removed — fully implemented during Story 1.9 refactor (OIDC discovery pattern)
   # See sprint-change-proposal-2026-04-02.md Section 6
-  2-2-jwks-force-refresh-on-validation-failure: backlog
-  2-3-token-passthrough-headers-injection-to-upstream: backlog
-  2-4-kong-optional-deployment-with-without-kong-compose-files: backlog
-  2-5-kong-multi-issuer-token-validation-and-identity-headers: backlog
-  2-6-auth-and-authorization-error-display-frontend: backlog
-  2-7-keycloak-unavailable-detection-and-health-check: backlog
-  2-8-swagger-ui-with-keycloak-oidc-authorize-button: backlog
-  2-9-multi-realm-configuration-support: backlog
-  2-10-opea-continuity-keycloak-agnostic-downstream: backlog
+  2-2-jwks-force-refresh-on-validation-failure: backlog # worktree: epic2-backend
+  2-3-token-passthrough-headers-injection-to-upstream: backlog # worktree: epic2-backend
+  2-4-kong-optional-deployment-with-without-kong-compose-files: backlog # worktree: epic2-infra
+  2-5-kong-multi-issuer-token-validation-and-identity-headers: backlog # worktree: epic2-infra (after 2-4)
+  2-6-auth-and-authorization-error-display-frontend: backlog # worktree: epic2-frontend
+  2-7-keycloak-unavailable-detection-and-health-check: backlog # worktree: epic2-backend
+  2-8-swagger-ui-with-keycloak-oidc-authorize-button: backlog # worktree: epic2-frontend
+  2-9-multi-realm-configuration-support: backlog # worktree: epic2-backend (after 2-2)
+  2-10-opea-continuity-keycloak-agnostic-downstream: backlog # worktree: epic2-backend (after 2-3)
   epic-2-retrospective: optional
 
   # Epic 3: Session Management, User Lifecycle & GDPR
+  # Worktrees: epic3-sessions | epic3-keycloak (parallel after Epic 2 merged)
   epic-3: backlog
-  3-1-user-logout-and-session-termination-across-application: backlog
-  3-2-session-invalidation-on-user-disable-delete: backlog
-  3-3-role-and-group-management-via-keycloak: backlog
-  3-4-external-idp-attribute-to-role-mapping-via-keycloak: backlog
-  3-5-jit-provisioning-user-profile-updates-on-re-login: backlog
-  3-6-right-to-erasure-user-identity-data-deletion: backlog
-  3-7-session-data-automatic-purging: backlog
+  3-1-user-logout-and-session-termination-across-application: backlog # worktree: epic3-sessions
+  3-2-session-invalidation-on-user-disable-delete: backlog # worktree: epic3-sessions (after 3-1)
+  3-3-role-and-group-management-via-keycloak: backlog # worktree: epic3-keycloak
+  3-4-external-idp-attribute-to-role-mapping-via-keycloak: backlog # worktree: epic3-keycloak
+  3-5-jit-provisioning-user-profile-updates-on-re-login: backlog # worktree: epic3-keycloak
+  3-6-right-to-erasure-user-identity-data-deletion: backlog # worktree: epic3-keycloak
+  3-7-session-data-automatic-purging: backlog # worktree: epic3-sessions (after 3-1)
   epic-3-retrospective: optional
 
   # Epic 4: Audit Logging & Compliance Reporting
+  # Worktree: epic4-logging (after Epic 3 merged)
   epic-4: backlog
-  4-1-structured-authentication-audit-logging: backlog
-  4-2-configurable-log-retention-policies: backlog
+  4-1-structured-authentication-audit-logging: backlog # worktree: epic4-logging
+  4-2-configurable-log-retention-policies: backlog # worktree: epic4-logging (after 4-1)
   epic-4-retrospective: optional

@@ -780,6 +780,114 @@ curl -sk -X DELETE "https://localhost/auth/admin/realms/external-idp" \
   -H "Authorization: Bearer $TOKEN" -w "\nHTTP: %{http_code}\n"
 ```
 
+## Phase E: Air-Gapped Deployment Validation
+
+Validates that the entire authentication system functions without external network calls, meeting FR10 (offline/sovereign deployment) and FR36/NFR16 (data residency within deployment boundary).
+
+> **Note**: Phase E tests are split into automated verification (dev agent executes grep/code audit) and manual verification (user executes network isolation). The automated tests below can run on any deployed stack. The manual test (E.5) requires a controlled network environment.
+
+### Test E.1 — Backend Auth Code: No External Calls (AC #1)
+
+Verify that all outbound HTTP calls in backend authentication code target only local services (`KEYCLOAK_URL` / internal).
+
+```bash
+# Grep for outbound HTTP patterns in auth-related backend code
+grep -rn 'fetch\|axios\.|http\.get\|https\.get' \
+  components/gov-chat-backend/services/keycloak-auth-service.js \
+  components/gov-chat-backend/services/user-provisioning-service.js \
+  components/gov-chat-backend/middleware/keycloak-auth-middleware.js \
+  components/gov-chat-backend/routes/auth-routes.js
+```
+
+**Expected**:
+- `keycloak-auth-service.js`: only `fetch()` calls targeting `KEYCLOAK_URL` (OIDC discovery + JWKS)
+- `user-provisioning-service.js`: no outbound HTTP calls (only ArangoDB)
+- `keycloak-auth-middleware.js`: no outbound HTTP calls
+- `auth-routes.js`: no outbound HTTP calls
+
+### Test E.2 — Keycloak Realm: No External URLs (AC #3)
+
+Verify the Keycloak realm configuration contains no external URLs.
+
+```bash
+grep -rn 'http[s]\?://' config/keycloak/genie-realm.yaml
+```
+
+**Expected**: Only `localhost` URLs in `redirectUris` and `webOrigins` fields. Zero external URLs.
+
+### Test E.3 — Frontend OIDC: All Endpoints Local (AC #4)
+
+Verify that all OIDC endpoints in the frontend resolve within the deployment boundary.
+
+```bash
+grep -rn 'authority\|redirect_uri\|post_logout' \
+  components/gov-chat-frontend/src/config/oidcConfig.js \
+  components/gov-chat-frontend/src/services/keycloakAuthService.js
+```
+
+**Expected**:
+- `authority`: `${keycloakUrl}/realms/${realm}` where `keycloakUrl` defaults to `${origin}/auth`
+- `redirect_uri`: `${origin}/callback` (same origin)
+- `post_logout_redirect_uri`: `origin` (same origin)
+
+### Test E.4 — Image List: All External Images Documented (AC #2)
+
+Verify that all external images referenced in `docker-compose.yaml` have a corresponding pre-pull entry in `docs/docker-swarm-setup.md` Step 5d.
+
+```bash
+# Extract unique external images from docker-compose.yaml (non-registry-prefixed)
+grep -oP 'image:\s*\K(?!.*\$\{)[^\s]+' docker-compose.yaml | sort -u
+
+# Compare against Step 5d list
+grep 'docker pull' docs/docker-swarm-setup.md | awk '{print $3}'
+```
+
+**Expected**: All 16 external images (12 runtime + 4 build-time Dockerfiles) appear in both lists. No gaps.
+
+### Test E.5 — Network Isolation: Full Auth Cycle (AC #5)
+
+Validate data residency by running a complete authentication cycle with external network connectivity blocked. **This test requires a deployed stack and must be executed manually.**
+
+#### Method A: iptables (Linux, non-destructive toggle)
+
+```bash
+# 1. Block all outbound traffic from Docker except internal subnet
+#    Replace <internal-subnet> with your Docker network (e.g., 10.0.0.0/8 or 172.17.0.0/16)
+sudo iptables -I DOCKER-USER -o eth0 -d ! <internal-subnet> -j DROP
+
+# 2. Verify stack is still running
+docker service ls --filter label=com.docker.stack.namespace=genieai
+
+# 3. Run full authentication cycle:
+#    - Open browser to https://<your-domain>
+#    - Complete login with Keycloak credentials
+#    - Verify dashboard loads
+#    - Navigate between pages
+#    - Log out
+
+# 4. Remove the iptables rule (restore connectivity)
+sudo iptables -D DOCKER-USER -o eth0 -d ! <internal-subnet> -j DROP
+```
+
+#### Method B: Physical Disconnect (universal)
+
+```bash
+# 1. Disconnect from external network (WiFi off / Ethernet unplugged)
+
+# 2. Verify stack is still running
+docker service ls --filter label=com.docker.stack.namespace=genieai
+
+# 3. Run full authentication cycle (same as Method A step 3)
+
+# 4. Reconnect network
+```
+
+**Expected**: Authentication, dashboard loading, page navigation, and logout all function normally with zero external connectivity. Any failure indicates an external dependency in the auth flow.
+
+**Document results in the verification table below (Phase E rows).**
+
+---
+
 ## Test Results Summary
 
 | Phase | Test | Result | Notes |
@@ -808,6 +916,11 @@ curl -sk -X DELETE "https://localhost/auth/admin/realms/external-idp" \
 | D.7a | External IdP button visible | | |
 | D.7b | External IdP login flow | | |
 | 8 | Cleanup completed | | |
+| E.1 | Backend auth code: no external calls | PASS | grep audit — all HTTP calls target KEYCLOAK_URL or internal services only |
+| E.2 | Keycloak realm: no external URLs | PASS | Only localhost URLs in redirectUris/webOrigins |
+| E.3 | Frontend OIDC: all endpoints local | PASS | authority, redirect_uri, post_logout all resolve to ${origin}/auth |
+| E.4 | Image list: all external images documented | PASS | 16/16 external images match between docker-compose.yaml and Step 5d (13 runtime + 3 build-time) |
+| E.5 | Network isolation: full auth cycle | | Manual — requires deployed stack + network disconnect |
 
 ## Full Test Run (Autonomous Execution)
 
@@ -820,6 +933,7 @@ Phase B  → JIT user provisioning (API + ArangoDB)
 Phase C  → Token validation errors (API)
 Phase D  → External IdP connection (API + browser)
 Step 8   → Cleanup (always run, even if tests fail)
+Phase E  → Air-gapped deployment validation (grep audit + manual network isolation)
 ```
 
 **Stop condition**: If any test in a phase fails, do not proceed to the next phase. Diagnose the failure using the Troubleshooting section, fix the issue, and re-run the failing phase.
@@ -835,6 +949,12 @@ Step 8   → Cleanup (always run, even if tests fail)
 | AC#3: Same OIDC redirect pattern | Phase D | Broker redirects to external IdP; token issuer is genie realm |
 | AC#4: Any OIDC IdP works | Phase D | Generic OIDC provider works (Keycloak-to-Keycloak brokering) |
 | AC#5: Role mapping deferred | Phase D | User receives default realm roles (no custom mapping) |
+| **Story 1.10** | | |
+| AC#1: Local token validation only | Phase E (E.1) | Backend auth code only targets KEYCLOAK_URL (local) |
+| AC#2: All images from local registry | Phase E (E.4) | 16/16 external images documented for pre-pull |
+| AC#3: Keycloak offline operation | Phase E (E.2) | Realm YAML has zero external URLs |
+| AC#4: Frontend OIDC within boundary | Phase E (E.3) | All OIDC endpoints resolve to ${origin}/auth |
+| AC#5: Data residency within boundary | Phase E (E.5) | Full auth cycle with network isolation (manual) |
 
 ## Troubleshooting
 

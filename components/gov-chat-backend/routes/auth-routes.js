@@ -12,7 +12,7 @@ const authController = require('../controllers/authController');
  *     description: Return information about the current authenticated Keycloak user
  *     tags: [Authentication]
  *     security:
- *       - bearerAuth: []
+ *       - KeycloakOAuth2: ['openid']
  *     responses:
  *       200:
  *         description: User information retrieved successfully
@@ -41,7 +41,7 @@ router.get('/me', keycloakAuthMiddleware.authenticate, async (req, res, next) =>
  *     description: Logout endpoint (Keycloak handles session invalidation server-side)
  *     tags: [Authentication]
  *     security:
- *       - bearerAuth: []
+ *       - KeycloakOAuth2: ['openid']
  *     responses:
  *       200:
  *         description: Logout successful

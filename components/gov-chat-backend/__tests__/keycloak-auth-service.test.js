@@ -10,7 +10,7 @@ const {
   mockExpiredPayload,
   mockWrongAudPayload,
   generateMockJwtString
-} = require('./mocks/mockJwtPayload');
+} = require('../test-fixtures/mockJwtPayload');
 
 // Mock shared-lib
 jest.mock('../shared-lib', () => ({

@@ -12,7 +12,7 @@ module.exports = () => {
    *     description: Updates the application's logging configuration with new settings.
    *     tags: [Logger]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -145,7 +145,7 @@ module.exports = () => {
    *     description: Forces an immediate log rotation regardless of current file sizes
    *     tags: [Logger]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Log rollover triggered successfully

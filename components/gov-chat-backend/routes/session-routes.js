@@ -68,6 +68,8 @@ module.exports = (sessionService) => {
    *     summary: Get session by ID
    *     description: Retrieves a session by its unique identifier
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: sessionId
@@ -105,6 +107,8 @@ module.exports = (sessionService) => {
    *     summary: End a session
    *     description: Marks a session as ended
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: sessionId
@@ -142,6 +146,8 @@ module.exports = (sessionService) => {
    *     summary: Keep a session alive
    *     description: Updates the last activity time of a session to prevent expiration
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: sessionId
@@ -179,6 +185,8 @@ module.exports = (sessionService) => {
    *     summary: Get user's sessions
    *     description: Retrieves all sessions for a specific user
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: userId

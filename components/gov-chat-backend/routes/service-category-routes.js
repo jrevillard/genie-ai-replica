@@ -19,6 +19,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Get all categories with services
    *     description: Retrieves all service categories with their associated services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: locale
@@ -68,6 +70,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Get all categories with detailed services for admin
    *     description: Retrieves all categories with their associated services as objects (including keys)
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: locale
@@ -102,6 +106,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Get category with services
    *     description: Retrieves a specific service category with its associated services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -157,6 +163,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Get all translations for a category
    *     description: Retrieves all available translations for a specific service category
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -204,6 +212,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Get all translations for a service
    *     description: Retrieves all available translations for a specific service
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: serviceId
@@ -238,6 +248,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Search categories and services
    *     description: Searches for categories and services based on a query string
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: query
@@ -315,6 +327,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Create a new category
    *     description: Creates a new service category with translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -356,6 +370,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Delete a category
    *     description: Deletes a service category and its associated services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -396,6 +412,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Delete a service
    *     description: Deletes a service and its associated translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: serviceId
@@ -437,6 +455,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Initialize default categories
    *     description: Initializes the system with default categories and services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       '200':
    *         description: Default categories initialized successfully
@@ -472,6 +492,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Create a new service for a category
    *     description: Creates a new service with translations under a specific category
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -520,6 +542,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Update an existing category
    *     description: Updates a category's name and translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -568,6 +592,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Update an existing service
    *     description: Updates a service's name and its associated translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: serviceId

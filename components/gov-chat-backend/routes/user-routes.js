@@ -15,11 +15,6 @@ const { logger } = require('../shared-lib');
  *     description: Admin-specific user management operations
  * 
  * components:
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
  *   schemas:
  *     User:
  *       type: object
@@ -142,7 +137,7 @@ module.exports = (userService) => {
    *     description: Initiates the process to update a user's email address with verification
    *     tags: [User]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -411,7 +406,7 @@ module.exports = (userService) => {
    *     description: Resets a user profile data while preserving essential account information
    *     tags: [User]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: User profile data reset successfully
@@ -493,7 +488,7 @@ module.exports = (userService) => {
    *     description: Permanently deletes a user account with password verification
    *     tags: [User]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -574,7 +569,7 @@ module.exports = (userService) => {
    *     description: Updates a user's profile data or role (admin only for role updates)
    *     tags: [User]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: userId
@@ -748,7 +743,7 @@ module.exports = (userService) => {
    *     description: Updates a user's role (admin only)
    *     tags: [User Administration]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: userId
@@ -870,7 +865,7 @@ module.exports = (userService) => {
  *     description: Admin only endpoint to resend verification email to a user
  *     tags: [User Administration]
  *     security:
- *       - bearerAuth: []
+ *       - KeycloakOAuth2: ['openid']
  *     parameters:
  *       - in: path
  *         name: userId
@@ -970,7 +965,7 @@ router.post('/admin/users/:userId/resend-verification', keycloakAuthMiddleware.a
  *     description: Admin-only endpoint to force logout a user by invalidating their tokens and ending all active sessions
  *     tags: [User Administration]
  *     security:
- *       - bearerAuth: []
+ *       - KeycloakOAuth2: ['openid']
  *     parameters:
  *       - in: path
  *         name: userId

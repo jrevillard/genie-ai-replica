@@ -48,7 +48,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get system health metrics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: System health metrics retrieved successfully
@@ -80,7 +80,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get database statistics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database statistics retrieved successfully
@@ -108,7 +108,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get system logs
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: limit
@@ -153,7 +153,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Trigger log rollover
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Logs rolled over successfully
@@ -181,7 +181,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get user statistics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: User statistics retrieved successfully
@@ -210,7 +210,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get security metrics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Security metrics retrieved successfully
@@ -251,7 +251,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Run security scan
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Security scan completed successfully
@@ -285,7 +285,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Retrieve the last security scan details
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Last security scan details retrieved successfully
@@ -318,7 +318,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Run system diagnostics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Diagnostics completed successfully
@@ -346,7 +346,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get logs summary by type and service
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: date
@@ -386,7 +386,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Search logs with filtering
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: term
@@ -447,7 +447,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Debug logs for yesterday to diagnose issues
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Debug information retrieved successfully
@@ -475,7 +475,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Reindex database
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database reindexed successfully
@@ -503,7 +503,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Backup database
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database backed up successfully
@@ -531,7 +531,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Optimize database
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database optimized successfully
@@ -559,7 +559,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Search users with filtering
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: term

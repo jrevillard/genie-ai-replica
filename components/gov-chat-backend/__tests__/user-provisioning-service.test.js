@@ -24,7 +24,7 @@ jest.mock('arangojs', () => ({
   aql: jest.fn((strings, ...values) => ({ _aql: true, strings, values }))
 }));
 
-const { mockJwtPayload } = require('./mocks/mockJwtPayload');
+const { mockJwtPayload } = require('../test-fixtures/mockJwtPayload');
 const userProvisioningService = require('../services/user-provisioning-service');
 
 describe('userProvisioningService', () => {

@@ -290,15 +290,16 @@ HUGGING_FACE_HUB_TOKEN=
 # In docker-compose, this is auto-derived from NGINX_PUBLIC_DOMAIN:
 #   KEYCLOAK_URL=https://<NGINX_PUBLIC_DOMAIN>/auth
 # Note: keycloak-config service uses its own internal KEYCLOAK_URL (http://keycloak:8080)
-# KEYCLOAK_URL=https://localhost/auth
+# REQUIRED — app will not start without this value
+KEYCLOAK_URL=https://localhost/auth
 
 # Keycloak realm name
-# Default: genie
-# KEYCLOAK_REALM=genie
+# REQUIRED — app will not start without this value
+KEYCLOAK_REALM=genie
 
 # OIDC client ID for the GENIE.AI application
-# Default: genie-app
-# KEYCLOAK_CLIENT_ID=genie-app
+# REQUIRED — app will not start without this value
+KEYCLOAK_CLIENT_ID=genie-app
 
 # OIDC client secret (REQUIRED — generate a strong value)
 # Used by: backend (token validation), keycloak-config-cli (realm setup)

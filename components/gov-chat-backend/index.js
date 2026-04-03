@@ -405,15 +405,25 @@ const swaggerOptions = {
         }
       },
       securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT'
+        KeycloakOAuth2: {
+          type: 'oauth2',
+          description: 'Keycloak OAuth2 authentication (Authorization Code + PKCE)',
+          flows: {
+            authorizationCode: {
+              authorizationUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
+              tokenUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
+              scopes: {
+                openid: 'OpenID Connect scope',
+                profile: 'User profile information',
+                email: 'User email address'
+              }
+            }
+          }
         }
       }
     },
     security: [
-      { bearerAuth: [] }
+      { KeycloakOAuth2: ['openid', 'profile'] }
     ],
     tags: [
       {
@@ -438,7 +448,14 @@ try {
   logger.info('Swagger specification generated successfully');
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }'
+    customCss: '.swagger-ui .topbar { display: none }',
+    swaggerOptions: {
+      oauth: {
+        clientId: process.env.KEYCLOAK_CLIENT_ID,
+        usePkceWithAuthorizationCodeGrant: true,
+        scopes: 'openid profile email'
+      }
+    }
   }));
   app.get('/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -454,7 +471,7 @@ try {
 }
 
 // --- HELMET CSP ---
-const connectSrcUrls = (process.env.CSP_CONNECT_SRC || "'self' http://localhost:3000 ws://localhost:3000").split(' ');
+const connectSrcUrls = (process.env.CSP_CONNECT_SRC || `'self' http://localhost:3000 ws://localhost:3000 ${process.env.KEYCLOAK_URL}`).split(' ');
 
 const cspOptions = {
   directives: {
@@ -645,7 +662,7 @@ async function initializeServices() {
   logger.debug('Logger level:', logger.level || 'unknown');
 
   // Validate environment variables
-  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USER', 'ARANGO_PASSWORD'];
+  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USER', 'ARANGO_PASSWORD', 'KEYCLOAK_URL', 'KEYCLOAK_REALM', 'KEYCLOAK_CLIENT_ID'];
   const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
   if (missingEnvVars.length > 0) {
     logger.error('Missing required environment variables:', { missing: missingEnvVars });

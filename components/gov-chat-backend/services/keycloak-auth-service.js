@@ -4,8 +4,8 @@ const { jwtVerify, createRemoteJWKSet } = require('jose');
 const { logger } = require('../shared-lib');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
-const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM || 'genie';
-const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID || 'genie-app';
+const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
+const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID;
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
 
 /**

@@ -884,22 +884,9 @@ export default {
         this.isEditingEmail = false
         return
       }
-      try {
-        console.log(`[SETTINGS] Checking availability for ${this.userData.email}`)
-        const isAvailable = await userService.checkEmailAvailability(this.userData.email)
-        console.log('[SETTINGS] Email availability check result:', isAvailable)
-        if (!isAvailable) {
-          console.log('[SETTINGS] Email already in use:', this.userData.email)
-          notificationService.error(this.translate('settings.emailAlreadyInUse'))
-          return
-        }
-        console.log('[SETTINGS] Email available, proceeding with change...')
-        this.newEmail = this.userData.email
-        this.showEmailConfirmModal = true
-      } catch (error) {
-        console.error('[SETTINGS] Error checking email availability:', error)
-        notificationService.error(this.translate('settings.unableToVerifyEmail'))
-      }
+      // Email change is handled by Keycloak - skip availability check
+      this.newEmail = this.userData.email
+      this.showEmailConfirmModal = true
     },
     async confirmEmailChange() {
       console.log('[SETTINGS] Confirming email change...')

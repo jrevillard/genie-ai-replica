@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('./email-service');

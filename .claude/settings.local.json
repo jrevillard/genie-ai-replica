@@ -5,7 +5,8 @@
       "Bash(findstr:*)",
       "Bash(bn)",
       "Bash(st \")",
-      "Bash(flutter clean)"
+      "Bash(flutter clean)",
+      "Read(//c/Dev/builds/main/**)"
     ]
   }
 }

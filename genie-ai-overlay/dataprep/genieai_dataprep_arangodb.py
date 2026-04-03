@@ -357,7 +357,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             async with semaphore:
                 retries = 0
                 suggested_labels = []
-                
+
+                # Validate that all labels are plain strings (not dicts/objects)
+                def _validate_labels(labels):
+                    non_string = [l for l in labels if not isinstance(l, str)]
+                    if non_string:
+                        return False, non_string
+                    return True, []
+
                 while retries < 3:
                     try:
                         response = await client.chat.completions.create(
@@ -369,13 +376,27 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         parsed = json.loads(response.choices[0].message.content)
                         suggested_labels = parsed.get("labels", [])
-                        break 
+
+                        # Validate label format — retry if LLM returned objects instead of strings
+                        valid, bad_items = _validate_labels(suggested_labels)
+                        if not valid:
+                            retries += 1
+                            await self._write_ingestion_log(
+                                file_id, "WARN", "Labeling",
+                                f"Chunk {i}: LLM returned non-string labels: {bad_items}. Retrying ({retries}/3)..."
+                            )
+                            continue
+
+                        break
                     except Exception as e:
                         retries += 1
-            
+
                 if retries == 3:
-                    await self._write_ingestion_log(file_id, "WARN", "Labeling", f"Chunk {i}: LLM failed to provide valid labels after 3 attempts.")
-                    suggested_labels = []
+                    await self._write_ingestion_log(
+                        file_id, "WARN", "Labeling",
+                        f"Chunk {i}: LLM failed to return valid labels after 3 attempts. Falling back to file metadata labels: {file_labels}"
+                    )
+                    suggested_labels = list(file_labels) if file_labels else []
 
                 final_labels = set()
 

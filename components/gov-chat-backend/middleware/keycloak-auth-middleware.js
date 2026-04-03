@@ -49,6 +49,20 @@ function extractBearerToken(req) {
 }
 
 /**
+ * Build user identity headers for OPEA services
+ * @param {Object} claims - Verified JWT claims
+ * @returns {Object} Headers object with X-User-Id, X-User-Roles, X-Issuer
+ */
+function buildUserHeaders(claims) {
+  const roles = claims.realm_access?.roles || [];
+  return {
+    'X-User-Id': `${claims.iss}#${claims.sub}`,
+    'X-User-Roles': Array.isArray(roles) ? roles.join(',') : '',
+    'X-Issuer': claims.iss
+  };
+}
+
+/**
  * Keycloak Auth Middleware — validates Keycloak tokens on protected routes
  */
 const keycloakAuthMiddleware = {
@@ -103,6 +117,12 @@ const keycloakAuthMiddleware = {
 
         // Attach ArangoDB user document to request
         req.user = user;
+
+        // Preserve JWT claims for header construction
+        req.claims = decoded;
+
+        // Build and attach OPEA headers for upstream services
+        req.user.opeaHeaders = buildUserHeaders(req.claims);
 
         next();
       } catch (err) {

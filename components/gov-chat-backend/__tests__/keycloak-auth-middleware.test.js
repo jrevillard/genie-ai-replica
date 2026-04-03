@@ -411,6 +411,145 @@ describe('keycloakAuthMiddleware.authenticate', () => {
       details: {}
     });
   });
+
+  it('should attach JWT claims to req.claims for header construction', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'test@example.com',
+      name: 'Test User',
+      preferred_username: 'testuser',
+      realm_access: { roles: ['user', 'admin'] },
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'test@example.com',
+      name: 'Test User',
+      roles: ['user', 'admin'],
+      active: true,
+      deleted: false,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z'
+    });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(req.claims).toBeDefined();
+    expect(req.claims.iss).toBe('http://localhost:8080/realms/genie');
+    expect(req.claims.sub).toBe('12345678');
+    expect(req.claims.realm_access).toEqual({ roles: ['user', 'admin'] });
+  });
+
+  it('should build and attach opeaHeaders to req.user with X-User-Id, X-User-Roles, X-Issuer', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'test@example.com',
+      name: 'Test User',
+      preferred_username: 'testuser',
+      realm_access: { roles: ['user', 'admin'] },
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'test@example.com',
+      name: 'Test User',
+      roles: ['user', 'admin'],
+      active: true,
+      deleted: false,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z'
+    });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(req.user.opeaHeaders).toBeDefined();
+    expect(req.user.opeaHeaders['X-User-Id']).toBe('http://localhost:8080/realms/genie#12345678');
+    expect(req.user.opeaHeaders['X-User-Roles']).toBe('user,admin');
+    expect(req.user.opeaHeaders['X-Issuer']).toBe('http://localhost:8080/realms/genie');
+  });
+
+  it('should handle missing realm_access.roles by setting X-User-Roles to empty string', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'test@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'test@example.com',
+      name: null,
+      roles: [],
+      active: true,
+      deleted: false,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z'
+    });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(req.user.opeaHeaders).toBeDefined();
+    expect(req.user.opeaHeaders['X-User-Roles']).toBe('');
+  });
+
+  it('should handle empty roles array by setting X-User-Roles to empty string', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'test@example.com',
+      realm_access: { roles: [] },
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'test@example.com',
+      name: null,
+      roles: [],
+      active: true,
+      deleted: false,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-30T00:00:00.000Z'
+    });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(req.user.opeaHeaders).toBeDefined();
+    expect(req.user.opeaHeaders['X-User-Roles']).toBe('');
+  });
 });
 
 describe('requireAdmin', () => {

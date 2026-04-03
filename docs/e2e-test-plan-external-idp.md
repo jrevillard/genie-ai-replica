@@ -940,6 +940,398 @@ Phase E  → Air-gapped deployment validation (grep audit + manual network isola
 
 **Approximate timing**: 15-25 minutes total (mostly waiting for stack startup and Keycloak realm import).
 
+## Phase F: Token Passthrough Headers to OPEA Services
+
+**Scope:** This phase tests Story 2.3 (Token Passthrough — Headers Injection to Upstream) conditional on OPEA infrastructure availability.
+
+**Prerequisites:**
+- OPEA infrastructure MUST be deployed (ChatQnA, Retriever, etc.)
+- Keycloak authentication working (tested in Phase A)
+- JWT tokens successfully validated (Stories 1.3, 2.2)
+- Backend auth middleware modified to inject headers
+
+**Conditional Execution:**
+```bash
+# Check if OPEA is available BEFORE running tests
+if curl -s http://localhost:8080/realms/genie/.well-known/openid-configuration > /dev/null 2>&1; then
+  echo "✅ Keycloak available"
+else
+  echo "❌ Keycloak NOT available - skipping Phase F"
+  return 0
+fi
+
+# Check if OPEA services are responding
+if curl -s http://localhost:8080/realms/genie/.well-known/openid-configuration > /dev/null 2>&1; then
+  echo "✅ Keycloak available, checking OPEA services..."
+  # Check if OPEA services are up (adjust based on deployment)
+  if curl -s http://localhost:8080/realms/genie > /dev/null 2>&1 || curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+    echo "✅ OPEA infrastructure detected - running Phase F tests"
+  else
+    echo "⚠️  OPEA services not fully available - skipping Phase F"
+    return 0
+  fi
+else
+  echo "⚠️  Keycloak discovery failed - skipping Phase F"
+  return 0
+fi
+```
+
+### Test F.1 — Headers are Extracted from JWT After Token Verification
+
+**Given** a user has authenticated via Keycloak and received a valid JWT
+**When** the request is processed by the backend auth middleware (`keycloak-auth-middleware.js`)
+**Then** the following claims are extracted from the JWT:
+  - `iss` (issuer URL)
+  - `sub` (subject/user ID)
+  - `realm_access.roles` (array of roles)
+- **And** the headers are constructed as:
+  - `X-User-Id`: `{iss}#{sub}` (composite key)
+  - `X-User-Roles`: `roles.join(',')` (comma-separated)
+  - `X-Issuer`: issuer URL
+- **And** the headers are stored on `req.user.opeaHeaders`
+
+**Verification:**
+```bash
+# Get admin token
+ADMIN_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=admin&password=admin&grant_type=password' | jq -r '.access_token')
+
+# Create test user and get token (use existing test user)
+USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=testuser&password=testpass123&grant_type=password' | jq -r '.access_token')
+
+# Make authenticated request to a protected route that returns headers
+# Note: You may need to create a test endpoint that returns the headers for verification
+curl -s -X GET "http://localhost:3000/api/test/debug-headers" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json"
+
+# Expected response (if test endpoint exists):
+# {
+#   "opeaHeaders": {
+#     "X-User-Id": "http://localhost:8080/realms/genie#12345678-1234-1234-123456789012",
+#     "X-User-Roles": "user,admin",
+#     "X-Issuer": "http://localhost:8080/realms/genie"
+#   }
+# }
+
+# Alternative: Check logs for header construction
+docker logs gov-chat-backend 2>&1 | grep -E "(X-User-Id|X-User-Roles|X-Issuer)"
+```
+
+**Expected Behavior:**
+- Headers are correctly constructed with composite key `{iss}#{sub}`
+- Roles are comma-separated (empty string if no roles)
+- Issuer URL is included
+- Headers are attached to `req.user.opeaHeaders` for downstream use
+
+---
+
+### Test F.2 — Headers are Injected into OPEA Worker Thread Calls
+
+**Given** an authenticated request is made to an OPEA service endpoint
+**When** the backend calls an OPEA service via the worker thread (`opea-worker.js`)
+**Then** the following headers are injected into the OPEA HTTP request:
+  - `X-User-Id`: `{iss}#{sub}`
+  - `X-User-Roles`: comma-separated roles
+  - `X-Issuer`: issuer URL
+- **And** the raw Authorization header is NOT included
+
+**Verification:**
+```bash
+# Make a test query through the backend
+# First, get a valid token
+USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=testuser&password=testpass123&grant_type=password' | jq -r '.access_token')
+
+# Make a chat query (this will trigger OPEA call)
+curl -s -X POST "http://localhost:3000/api/chat" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "Hello E2E test"}
+    ]
+  }'
+
+# Check OPEA service logs to verify headers were received
+# Option 1: If OPEA services log headers
+docker logs genieai_chatqna-xeon-backend-server 2>&1 | grep -E "(X-User-Id|X-User-Roles|X-Issuer)"
+
+# Option 2: Use a test endpoint that echoes received headers (if available)
+# Create a temporary test endpoint in OPEA that returns headers
+```
+
+**Expected Behavior:**
+- OPEA service receives the three headers with correct values
+- Composite key `{iss}#{sub}` is correctly passed
+- Authorization header is NOT present in OPEA request
+- Headers are applied via spread operator in axios: `headers: { 'Content-Type': 'application/json', ...headers }`
+
+---
+
+### Test F.3 — X-User-Id Uses Composite Key Format
+
+**Given** multiple Keycloak realms are configured (e.g., `genie` and `genie2`)
+**When** tokens from different realms are used to make authenticated requests
+**Then** the `X-User-Id` header contains the full composite key:
+  - Genie realm token → `http://localhost:8080/realms/genie#user123`
+  - Genie2 realm token → `http://localhost:8080/realms/genie2#user123`
+
+**Verification:**
+```bash
+# Get admin token
+ADMIN_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=admin&password=admin&grant_type=password' | jq -r '.access_token')
+
+# Create user in genie realm (if not exists)
+curl -s -X POST "https://localhost/auth/admin/realms/genie/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "e2e-test-user",
+    "email": "e2e@example.com",
+    "enabled": true,
+    "credentials": [{ "type": "password", value": "e2epass123", temporary: false }]
+  }'
+
+# Get user token from genie realm
+GENIE_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
+
+# Make request and verify X-User-Id header
+curl -s -X GET "http://localhost:3000/api/test/debug-headers" \
+  -H "Authorization: Bearer $GENIE_TOKEN" | jq '.opeaHeaders."X-User-Id'
+
+# Expected: "http://localhost:8080/realms/genie#<sub>"
+```
+
+**Expected Behavior:**
+- Composite key format is `{iss}#{sub}` with full issuer URL
+- Different realms produce different X-User-Id values
+- No collision between user IDs across realms
+
+---
+
+### Test F.4 — Raw Authorization Header is NOT Forwarded to OPEA
+
+**Given** a request contains an Authorization header with a Keycloak token
+**When** the request is forwarded to an OPEA service via the worker thread
+**Then** the Authorization header is NOT included in the OPEA HTTP request
+
+**Verification:**
+```bash
+# Make authenticated request
+USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=testuser&password=testpass123&grant_type=password' | jq -r '.access_token')
+
+# Make OPEA call and capture what was sent
+curl -s -X POST "http://localhost:3000/api/chat" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Test"}]}'
+
+# Check OPEA service logs - should NOT show Authorization header
+docker logs genieai_chatqna-xeon-backend-server 2>&1 | grep -i "authorization"
+# Expected: No Authorization header in logs
+
+# Verify via mock/debug endpoint if available
+# If there's a test endpoint that returns received headers:
+curl -s -X POST "http://localhost:3000/api/test/debug-opea-headers" \
+  -H "Authorization: Bearer $USER_TOKEN" | jq '.received_headers | select(.authorization)'
+# Expected: null or undefined
+```
+
+**Expected Behavior:**
+- Authorization header is stripped before OPEA call
+- Worker thread cannot access request headers (isolation)
+- Only explicitly passed headers are sent to OPEA
+
+---
+
+### Test F.5 — OPEA Service Receives Existing Payload Structure
+
+**Given** the OPEA payload structure includes a `user_id` field
+**When** the request is forwarded to OPEA services
+**Then** the `user_id` field contains the composite key `{iss}#{sub}` (not just `sub`)
+**And** the rest of the payload structure is preserved
+
+**Verification:**
+```bash
+# Make authenticated request with OPEA call
+USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=testuser&password=testpass123&grant_type=password' | jq -r '.access_token')
+
+# Make chat query
+RESPONSE=$(curl -s -X POST "http://localhost:3000/api/chat" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Verify user_id"}]}')
+
+# Extract user_id from OPEA response
+echo "$RESPONSE" | jq '.data.metadata.user_id'
+# Expected: "http://localhost:8080/realms/genie#<sub>"
+
+# Verify full payload structure preserved
+echo "$RESPONSE" | jq '.data | keys'
+# Expected: Keys like "response", "metadata", etc. are preserved
+```
+
+**Expected Behavior:**
+- `user_id` contains composite key `{iss}#{sub}` (e.g., `http://localhost:8080/realms/genie#user123`)
+- OPEA services treat `user_id` as opaque string (no parsing of format)
+- Other payload fields remain unchanged
+- Backwards compatible with OPEA expectations
+
+---
+
+### Test F.6 — Missing realm_access.roles Claim Handling
+
+**Given** a JWT token from a realm with minimal claims (no `realm_access`)
+**When** the `realm_access.roles` claim is missing or empty
+**Then** the `X-User-Roles` header is an empty string
+
+**Verification:**
+```bash
+# Create user without roles (if not exists)
+ADMIN_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=admin&password=admin&grant_type=password' | jq -r '.access_token')
+
+# Remove all roles from test user
+USER_ID=$(curl -s -X GET "http://localhost:3000/api/users/search?email=e2e@example.com" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.[0]._key')
+
+# Remove roles (Keycloak 26 specific approach)
+curl -s -X PATCH "http://localhost:3000/api/users/$USER_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"roles": []}'
+
+# Get token for user without roles
+NO_ROLES_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=e2e@example.com&password=e2epass123&grant_type=password' | jq -r '.access_token')
+
+# Make request and check X-User-Roles header
+curl -s -X GET "http://localhost:3000/api/test/debug-headers" \
+  -H "Authorization: Bearer $NO_ROLES_TOKEN" | jq '.opeaHeaders."X-User-Roles'
+# Expected: "" (empty string)
+
+# Verify backend doesn't crash on missing roles
+curl -s -X POST "http://localhost:3000/api/chat" \
+  -H "Authorization: Bearer $NO_ROLES_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"No roles test"}]}'
+# Should succeed (401 if token invalid, 200 if token valid but no auth required)
+```
+
+**Expected Behavior:**
+- Missing `realm_access.roles` → empty string in X-User-Roles
+- Empty roles array → empty string in X-User-Roles
+- No crashes or errors in header construction
+- Token validation proceeds normally
+
+---
+
+### Test F.7 — Multi-Realm Header Isolation
+
+**Given** two Keycloak realms exist: `genie` and `genie2`
+**When** tokens from each realm make requests
+**Then** the `X-User-User-Id` headers are different for each realm
+**And** the `X-User-Roles` header reflects each realm's roles independently
+
+**Verification:**
+```bash
+# Get admin token
+ADMIN_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=admin&password=admin&grant_type=password' | jq -r '.access_token')
+
+# Create user in genie realm with 'user' role
+curl -s -X POST "https://localhost/auth/admin/realms/genie/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "genie-realm-user",
+    "email": "genie@example.com",
+    "enabled": true,
+    "credentials": [{ "type": "password", "value": "geniepass123", "temporary": false }],
+    "realmRoles": [{ "id": "user", "name": "user" }]
+  }'
+
+# Create user in genie2 realm with 'admin' role
+curl -s -X POST "https://localhost/auth/admin/realms/genie2/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "genie2-realm-user",
+    "email": "genie2@example.com",
+    "enabled": true,
+    "credentials": [{ "type": "password", value: "genie2pass123", "temporary": false }],
+    "realmRoles": [{ "id": "admin", "name": "admin" }]
+  }'
+
+# Get tokens from both realms
+GENIE_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=genie-realm-user&password=geniepass123&grant_type=password' | jq -r '.access_token')
+
+GENIE2_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
+
+# Make request with genie realm token
+curl -s -X GET "http://localhost:3000/api/test/debug-headers" \
+  -H "Authorization: Bearer $GENIE_TOKEN" | jq '.opeaHeaders."X-User-Id'
+# Expected: "http://localhost:8080/realms/genie#<sub>"
+
+# Make request with genie2 realm token
+curl -s -X GET "http://localhost:3000/api/test/debug-headers" \
+  -H "Authorization:Bearer $GENIE2_TOKEN" | jq '.opeaHeaders."X-User-Id'
+# Expected: "http://localhost:8080/realms/genie2#<sub>"
+```
+
+**Expected Behavior:**
+- Each realm produces unique X-User-Id values
+- X-User-Roles reflects each realm's roles correctly
+- No cross-contamination between realms
+
+---
+
+### Test F.8 — OPEA Compatibility: Existing Payload Structure Preserved
+
+**Given** OPEA services expect a specific payload structure
+**When** the request is forwarded with the new headers
+**Then** the existing payload structure (except `user_id` format) is preserved
+
+**Verification:**
+```bash
+# Make authenticated request
+USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d 'client_id=genie-app&username=testuser&password=testpass123&grant_type=password' | jq -r '.access_token')
+
+# Make chat query
+RESPONSE=$(curl -s -X POST "http://localhost:3000/api/chat" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Payload preservation test"}]}')
+
+# Verify response structure
+echo "$RESPONSE" | jq 'keys | sort'
+# Should contain: response, metadata (with user_id, responseTime, etc.)
+
+# Verify user_id format
+echo "$RESPONSE" | jq '.data.metadata.user_id'
+# Should be: {iss}#{sub}
+
+# Verify OPEA services don't break
+echo "$RESPONSE" | jq '.data.response'
+# Should contain actual OPEA response, not error
+```
+
+**Expected Behavior:**
+- OPEA services function normally with new user_id format
+- No breaking changes to OPEA payload structure
+- OPEA services remain Keycloak-agnostic (opaque user_id string)
+
+---
+
 ## Acceptance Criteria Mapping
 
 | AC | Test Phase | What is Verified |

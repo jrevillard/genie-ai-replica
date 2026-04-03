@@ -66,6 +66,11 @@ KONG_DB_PASSWORD=
 AUTH_SERVICE_USERNAME=
 AUTH_SERVICE_PASSWORD=
 
+# Service-to-service shared secret (OPEA → Backend)
+# Used by: OPEA chatqna callback to GET /api/users/:userId/context
+# Must be identical in backend and OPEA chatqna service environment
+SERVICE_AUTH_TOKEN=
+
 # =============================================================================
 # SECTION 2: EMAIL CONFIGURATION (REQUIRED)
 # =============================================================================

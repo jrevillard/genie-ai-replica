@@ -23,12 +23,24 @@ const PUBLIC_PATHS = [
  * @returns {boolean} True if path is public
  */
 function isPublicRoute(path) {
-  return PUBLIC_PATHS.some(publicPath => {
+  // Check static public paths
+  const isStaticPublic = PUBLIC_PATHS.some(publicPath => {
     if (publicPath.endsWith('/')) {
       return path === publicPath || path.startsWith(publicPath);
     }
     return path === publicPath || path.startsWith(publicPath + '/');
   });
+  if (isStaticPublic) return true;
+
+  // OPEA user context endpoint: /users/:userId/context
+  // Protected by X-Service-Token in route handler, not Keycloak JWT
+  // Precise match: exactly 3 segments (/users/X/context) to avoid matching future routes
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 3 && segments[0] === 'users' && segments[2] === 'context') {
+    return true;
+  }
+
+  return false;
 }
 
 /**

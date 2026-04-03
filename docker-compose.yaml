@@ -984,7 +984,8 @@ services:
       TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
       TRANSLATION_SERVICE_PORT: 9031
       DOC_REPO_URL: http://document-repository:3001
-      GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
+      BACKEND_SERVICE_URL: http://backend:3000
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
     networks:

@@ -4,6 +4,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 const emailService = require('../services/email-service');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const serviceTokenService = require('../services/service-token-service');
 const { logger } = require('../shared-lib');
 
 /**
@@ -365,17 +366,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/:userId', (req, res, next) => {
-    if (!req.headers.authorization) {
-      logger.warn(`Authentication required for fetching user profile ${req.params.userId}`);
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Not authorized'
-      });
-    }
-
-    keycloakAuthMiddleware.authenticate(req, res, next);
-  }, async (req, res) => {
+  router.get('/:userId', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
       logger.info(`Getting user profile for ID: ${req.params.userId}`);
       const user = await userService.getUserProfile(req.params.userId);
@@ -387,10 +378,50 @@ module.exports = (userService) => {
     }
   });
 
+  /**
+   * @swagger
+   * /api/users/{userId}/context:
+   *   get:
+   *     summary: Get safe user context for AI enrichment
+   *     description: Returns a sanitized subset of user data for OPEA AI context enrichment. Protected by X-Service-Token (shared secret), not Keycloak JWT.
+   *     tags: [User]
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: ArangoDB _key of the user (URL-safe)
+   *     responses:
+   *       200:
+   *         description: Sanitized user context for AI
+   *       401:
+   *         description: Missing or invalid X-Service-Token
+   *       404:
+   *         description: User not found
+   *       500:
+   *         description: Server error
+   */
+  router.get('/:userId/context', async (req, res) => {
+    // Validate service shared secret
+    const tokenError = serviceTokenService.validateServiceToken(req.headers['x-service-token']);
+    if (tokenError) {
+      return res.status(tokenError.status).json(tokenError.body);
+    }
 
+    try {
+      const user = await userService.getUserProfile(req.params.userId);
 
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
 
-  
+      res.json(serviceTokenService.buildUserContext(user));
+    } catch (error) {
+      logger.error(`Error getting user context ${req.params.userId}: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
 
 
 

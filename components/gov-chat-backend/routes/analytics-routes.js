@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const AnalyticsController = require('../controllers/analyticsController');
 const { logger } = require('../shared-lib');
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 
 module.exports = (analyticsService) => {
   try {
@@ -16,7 +16,7 @@ module.exports = (analyticsService) => {
     // Instantiate controller with singleton analyticsService
     const analyticsController = new AnalyticsController(analyticsService);
 
-    router.use(authMiddleware.authenticate);
+    router.use(keycloakAuthMiddleware.authenticate);
 
     /**
      * @swagger

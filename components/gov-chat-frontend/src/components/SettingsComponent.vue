@@ -150,12 +150,6 @@
                 <p v-if="emailError" class="error-text">{{ emailError }}</p>
               </div>
 
-              <div class="management-col">
-                <label class="section-label">{{ translate('settings.password', 'Password') }}</label>
-                <button class="btn-secondary full-width" @click="initiatePasswordChange">
-                  {{ translate('settings.changePassword', 'Change Password') }}
-                </button>
-              </div>
             </div>
 
             <div class="management-row">
@@ -245,15 +239,6 @@
         </div>
       </div>
 
-      <div v-if="showPasswordReset" class="modal">
-        <PasswordResetInitiateScreen
-          :prefilledEmail="userData.email"
-          :isEmbedded="true"
-          :theme="settings.theme"
-          @reset-initiated="handlePasswordResetInitiated"
-          @cancel="cancelPasswordReset"
-        />
-      </div>
     </div>
   </div>
 
@@ -339,9 +324,6 @@
 // Import the user service to handle user-related API calls and data management
 import userService from '@/services/userService'
 
-// Import the PasswordResetInitiateScreen component for initiating password reset flows
-import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScreen.vue'
-
 // Import the notifications service to display user feedback messages (success, error, info)
 import notificationService from '@/services/notificationService'
 
@@ -357,7 +339,6 @@ import LanguageSelector from '@/components/LanguageSelector.vue'
 export default {
   name: 'SettingsComponent',
   components: {
-    PasswordResetInitiateScreen,
     ConfirmDialog,
     LanguageSelector,
   },
@@ -390,7 +371,6 @@ export default {
       showEmailConfirmModal: false,
       emailChangePassword: '',
       emailChangeError: null,
-      showPasswordReset: false,
       showDeleteAccountModal: false,
       deleteAccountPassword: '',
       deleteAccountReason: '',
@@ -856,12 +836,15 @@ export default {
         await userService.deleteAccount(this.deleteAccountPassword, this.deleteAccountReason)
         console.log('[SETTINGS] Account deletion successful')
         notificationService.success(
-          this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.')
+          this.translate(
+            'settings.accountDeletedSuccess',
+            'Your account has been deleted successfully.'
+          )
         )
         console.log('[SETTINGS] Closing delete account modal...')
         this.showDeleteAccountModal = false
         console.log('[SETTINGS] Redirecting to login page...')
-        window.location.href = '/login'
+        window.location.href = '/'
       } catch (error) {
         console.error('[SETTINGS] Error deleting account:', error)
         if (error.response && error.response.status === 403) {
@@ -885,27 +868,6 @@ export default {
       this.deleteAccountReason = ''
       this.deleteAccountError = null
       console.log('[SETTINGS] Account deletion cancelled, state reset')
-    },
-    initiatePasswordChange() {
-      console.log('[SETTINGS] Initiating password change...')
-      this.showPasswordReset = true
-    },
-    handlePasswordResetInitiated(email) {
-      console.log('[SETTINGS] Password reset initiated for:', email)
-      setTimeout(() => {
-        console.log('[SETTINGS] Closing password reset modal...')
-        this.showPasswordReset = false
-        notificationService.success(
-          this.translate(
-            'settings.passwordResetInitiated',
-            'A password reset link has been sent to your email address.'
-          )
-        )
-      }, 1500)
-    },
-    cancelPasswordReset() {
-      console.log('[SETTINGS] Cancelling password reset...')
-      this.showPasswordReset = false
     },
     async prepareEmailChange() {
       console.log('[SETTINGS] Preparing email change...')
@@ -968,13 +930,13 @@ export default {
           userService
             .logout()
             .then(() => {
-              console.log('[SETTINGS] Logout successful, redirecting to login...')
-              window.location.href = '/login'
+              console.log('[SETTINGS] Logout successful, redirecting...')
+              window.location.href = '/'
             })
             .catch((err) => {
               console.error('[SETTINGS] Logout error:', err)
-              console.log('[SETTINGS] Redirecting to login despite error...')
-              window.location.href = '/login'
+              console.log('[SETTINGS] Redirecting despite error...')
+              window.location.href = '/'
             })
         }, 1500)
       } catch (error) {

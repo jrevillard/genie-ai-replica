@@ -37,16 +37,6 @@
 # Used by: backend, document-repository, dataprep, retriever
 ARANGO_PASSWORD=
 
-# JWT token signing secret (backend authentication)
-# Used by: backend
-# Security: Must be kept secret, used to sign JWT tokens
-JWT_SECRET=
-
-# Session encryption secret (user sessions)
-# Used by: backend
-# Security: Encrypts session data in cookies/storage
-SESSION_SECRET=
-
 # Redis cache password (translation service caching)
 # Used by: redis-cache, translation service
 TRANSLATION_CACHE_PASSWORD=
@@ -448,7 +438,7 @@ KEYCLOAK_DB_PASSWORD=
 #   Swarm:  https://<gateway-node-fqdn>
 #
 # Variables that MUST be identical across all nodes:
-#   ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, TRANSLATION_CACHE_PASSWORD,
+#   ARANGO_PASSWORD, TRANSLATION_CACHE_PASSWORD,
 #   POSTGRES_PASSWORD, AUTH_SERVICE_USERNAME, AUTH_SERVICE_PASSWORD
 #
 # Variables that MUST be identical (AI model IDs):

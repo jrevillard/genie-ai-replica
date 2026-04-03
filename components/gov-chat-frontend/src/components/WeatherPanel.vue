@@ -59,8 +59,6 @@
 <script>
 import { mapGetters } from 'vuex'; // FIX: Import Vuex getters
 import weatherService from '@/services/weatherService'; // Adjust path as needed
-// FIX: No longer need authService, will get user from Vuex store
-// import authService from '@/services/authService'; 
 
 export default {
   name: 'WeatherPanel',

@@ -129,7 +129,7 @@ development_status:
   1-8-token-validation-failure-handling-backend-response-format: done
   1-9-external-idp-connection-via-keycloak-only: done
   1-10-offline-air-gapped-deployment-validation: done
-  1-11-remove-legacy-authentication-service: review
+  1-11-remove-legacy-authentication-service: done
   epic-1-retrospective: optional
 
   # Epic 2: Secure API Access & Resilient Authentication

@@ -44,7 +44,7 @@
                     translate("admin.userEdit.loginName", "Login Name")
                   }}:</span
                 >
-                <span class="info-value">{{ userData.loginName }}</span>
+                <span class="info-value">{{ userData.name || userData.loginName || '-' }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label"
@@ -215,18 +215,6 @@
                   :disabled="isSaving"
                 >
                   {{ translate("admin.userEdit.verifyEmail", "Verify Email") }}
-                </button>
-                <button
-                  class="action-button reset-password-button"
-                  @click="resetPassword"
-                  :disabled="!userData.email || isSaving"
-                >
-                  {{
-                    translate(
-                      "admin.userEdit.resetPassword",
-                      "Send Password Reset"
-                    )
-                  }}
                 </button>
                 <button
                   class="action-button force-logout-button"
@@ -429,7 +417,7 @@ export default {
 
           // Initialize settings based on user data
           this.userSettings.enabled = !this.userData.disabled;
-          this.userSettings.isAdmin = this.userData.role === "Admin";
+          this.userSettings.isAdmin = Array.isArray(this.userData.roles) && this.userData.roles.includes('admin');
 
           // Save original settings for comparison
           this.originalSettings.enabled = this.userSettings.enabled;
@@ -485,7 +473,7 @@ export default {
         const updateData = {};
 
         if (roleChanged) {
-          updateData.role = this.userSettings.isAdmin ? "Admin" : "User";
+          updateData.roles = this.userSettings.isAdmin ? ['admin'] : ['user'];
         }
 
         if (enabledChanged) {
@@ -608,48 +596,6 @@ export default {
           this.translate(
             "admin.userEdit.errorVerifyingEmail",
             "Error sending verification email"
-          ),
-          false
-        );
-      } finally {
-        this.isSaving = false;
-      }
-    },
-
-    // Send password reset email
-    async resetPassword() {
-      try {
-        this.isSaving = true;
-        this.operationMessage = "";
-
-        // Call service to send password reset email - using existing method
-        const response = await userService.initiatePasswordReset(
-          this.userData.email
-        );
-
-        if (response && response.success) {
-          this.showMessage(
-            this.translate(
-              "admin.userEdit.passwordResetSent",
-              "Password reset email sent"
-            ),
-            true
-          );
-        } else {
-          this.showMessage(
-            this.translate(
-              "admin.userEdit.passwordResetFailed",
-              "Failed to send password reset"
-            ),
-            false
-          );
-        }
-      } catch (error) {
-        console.error("Error sending password reset:", error);
-        this.showMessage(
-          this.translate(
-            "admin.userEdit.errorSendingReset",
-            "Error sending password reset"
           ),
           false
         );

@@ -655,7 +655,7 @@ async function initializeServices() {
   // Validate required secrets in production
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction) {
-    const requiredSecrets = ['JWT_SECRET', 'SESSION_SECRET', 'TRANSLATION_CACHE_PASSWORD'];
+    const requiredSecrets = ['TRANSLATION_CACHE_PASSWORD'];
     const missingSecrets = requiredSecrets.filter(key => !process.env[key] || process.env[key].includes('default') || process.env[key].includes('change'));
     if (missingSecrets.length > 0) {
       logger.error('Missing or insecure secrets in production:', { missing: missingSecrets });
@@ -704,7 +704,7 @@ async function initializeServices() {
   const services = {};
 
   // Import services individually with error handling
-  let authService, userProfileService, adminDashboardService, analyticsService, queryService;
+  let userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, sessionService, logsService;
   let databaseOperationsService, weatherService, securityScanService, translationService;
 
@@ -726,7 +726,6 @@ async function initializeServices() {
   };
 
   try {
-    authService = await importService('AuthService', './services/auth-service');
     userProfileService = await importService('UserProfileService', './services/user-profile-service');
     adminDashboardService = await importService('AdminDashboardService', './services/admin-dashboard-service');
     analyticsService = await importService('AnalyticsService', './services/analytics-service');
@@ -742,7 +741,6 @@ async function initializeServices() {
 
     logger.info('Constructing service map');
     const serviceMap = {
-      authService: { instance: authService, name: 'AuthService' },
       serviceCategoryService: { instance: serviceCategoryService, name: 'ServiceCategoryService' },
       userProfileService: { instance: userProfileService, name: 'UserProfileService' },
       adminDashboardService: { instance: adminDashboardService, name: 'AdminDashboardService' },
@@ -792,7 +790,6 @@ async function initializeServices() {
     logger.info('Initializing services');
     const initPromises = [
       { service: services.sessionService, name: 'SessionService' },
-      { service: services.authService, name: 'AuthService', preInit: () => services.authService.setSessionService(services.sessionService) },
       { service: services.serviceCategoryService, name: 'ServiceCategoryService' },
       { service: services.userProfileService, name: 'UserProfileService' },
       { service: services.adminDashboardService, name: 'AdminDashboardService' },
@@ -977,7 +974,7 @@ async function startApp() {
     { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService, keycloakAuth: true },
     { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService, keycloakAuth: true },
     { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService, keycloakAuth: true },
-    { file: 'auth-routes', paths: ['/api/auth'], service: services.authService },
+    { file: 'auth-routes', paths: ['/api/auth'], service: null },
     { file: 'logger-routes', paths: ['/api/logger'], service: null, keycloakAuth: true },
     { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService, keycloakAuth: true },
     { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService, keycloakAuth: true },
@@ -1052,6 +1049,9 @@ async function startApp() {
         routeInstance = routeModule(config.service, analyticsController);
       } else if (config.file === 'admin-routes') {
         routeInstance = routeModule(config.service, config.extraService);
+      } else if (config.file === 'auth-routes') {
+        // auth-routes exports a plain router (no factory function)
+        routeInstance = routeModule;
       } else {
         routeInstance = routeModule(config.service);
       }
@@ -1106,22 +1106,6 @@ async function startApp() {
     }
   }
 
-  // Email verification redirect
-  app.get('/verify-email/:token', (req, res) => {
-    try {
-      logger.debug(`Redirecting to /api/auth/verify-email/${req.params.token}`);
-      res.redirect(`/api/auth/verify-email/${req.params.token}`);
-    } catch (error) {
-      logger.error('Email verification redirect error:', {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      res.status(500).json({ message: 'Failed to process email verification redirect' });
-    }
-  });
-
   // Root route
   app.get('/', (req, res) => {
     try {
@@ -1139,22 +1123,6 @@ async function startApp() {
         errorType: error?.constructor?.name || 'Unknown'
       });
       res.status(500).json({ message: 'Failed to serve root endpoint' });
-    }
-  });
-
-  // Verification success redirect
-  app.get('/verify-email-success', (req, res) => {
-    try {
-      logger.debug('Serving verify-email-success page');
-      res.sendFile(path.join(__dirname, 'dist/index.html'));
-    } catch (error) {
-      logger.error('Verify email success endpoint error:', {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      res.status(500).json({ message: 'Failed to serve verification success page' });
     }
   });
 

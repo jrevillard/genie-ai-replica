@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
@@ -10,7 +10,7 @@ module.exports = (serviceCategoryService) => {
   }
   logger.debug('serviceCategory-routes initialized with serviceCategoryService');
 
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger

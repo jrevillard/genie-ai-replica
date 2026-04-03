@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const crypto = require('crypto');
 const emailService = require('../services/email-service');
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 /**
@@ -189,7 +189,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.put('/email', authMiddleware.authenticate, async (req, res) => {
+  router.put('/email', keycloakAuthMiddleware.authenticate, async (req, res) => {
     logger.info('\n=======================================================');
     logger.info(`[EMAIL ROUTE DEBUG] ${new Date().toISOString()} - Email Update Route Entered (After Auth Middleware)`);
     logger.info('=======================================================');
@@ -244,7 +244,7 @@ module.exports = (userService) => {
       logger.info('[EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:', JSON.stringify(req.user));
       
       // Get user ID from the authenticated user object
-      const authenticatedUserId = req.user._key || req.user.id || req.user._id || req.user.userId;
+      const authenticatedUserId = req.user._key || req.user.id || req.user._id || req.user.iss_sub;
       
       if (!authenticatedUserId) {
         logger.error('[EMAIL ROUTE DEBUG] Could not determine user ID from authenticated user data');
@@ -252,24 +252,14 @@ module.exports = (userService) => {
         return res.status(401).json({ error: 'Could not determine user ID from authentication data' });
       }
       
-      logger.info(`[EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: ${authenticatedUserId}`);
-      
+      logger.info(`[EMAIL ROUTE DEBUG] Using authenticated user ID: ${authenticatedUserId}`);
+
       // If userId provided in body, check it matches the authenticated user
       if (userId && userId !== authenticatedUserId) {
         logger.warn(`[EMAIL ROUTE DEBUG] UserId in body (${userId}) does not match authenticated userId (${authenticatedUserId})`);
+        return res.status(403).json({ success: false, message: 'Cannot modify a different user' });
       }
-      
-      // Validate that password is correct
-      logger.info('[EMAIL ROUTE DEBUG] 🔍 Verifying password...');
-      const isPasswordValid = await userService.verifyPassword(authenticatedUserId, password);
-      
-      if (!isPasswordValid) {
-        logger.warn('[EMAIL ROUTE DEBUG] Password verification failed');
-        return res.status(401).json({ error: 'Invalid password' });
-      }
-      
-      logger.info('[EMAIL ROUTE DEBUG] ✅ Password verified successfully');
-      
+
       // Generate verification token for the email change
       logger.info('[EMAIL ROUTE DEBUG] 🔑 Generating verification token');
       let token;
@@ -491,7 +481,17 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/:userId', authMiddleware.authenticate, async (req, res) => {
+  router.get('/:userId', (req, res, next) => {
+    if (!req.headers.authorization) {
+      logger.warn(`Authentication required for fetching user profile ${req.params.userId}`);
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Not authorized'
+      });
+    }
+
+    keycloakAuthMiddleware.authenticate(req, res, next);
+  }, async (req, res) => {
     try {
       logger.info(`Getting user profile for ID: ${req.params.userId}`);
       const user = await userService.getUserProfile(req.params.userId);
@@ -521,7 +521,14 @@ module.exports = (userService) => {
    *       200:
    *         description: Safe user context
    */
-  router.get('/:userId/context', authMiddleware.authenticate, async (req, res) => {
+  router.get('/:userId/context', (req, res, next) => {
+    // 1. Enforce Authentication
+    if (!req.headers.authorization) {
+      logger.warn(`Authentication required for fetching user context ${req.params.userId}`);
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    keycloakAuthMiddleware.authenticate(req, res, next);
+  }, async (req, res) => {
     try {
       logger.info(`Getting AI context for user ID: ${req.params.userId}`);
       
@@ -712,7 +719,17 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/', authMiddleware.authenticate, async (req, res) => {
+  router.get('/', (req, res, next) => {
+    if (!req.headers.authorization) {
+      logger.warn('Authentication required for searching users');
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Not authorized'
+      });
+    }
+
+    keycloakAuthMiddleware.authenticate(req, res, next);
+  }, async (req, res) => {
     try {
       const { limit = 20, offset = 0, ...criteria } = req.query;
       logger.info("Search criteria:", JSON.stringify(criteria));
@@ -756,7 +773,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
+  router.post('/reset-data', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
       logger.info('[RESET DATA] Request received to reset user data');
       const safeBody = maskSensitiveFields(req.body);
@@ -766,27 +783,27 @@ module.exports = (userService) => {
       logger.info('[RESET DATA] Complete req.user object:', JSON.stringify(req.user, null, 2));
       
       // Try all possible ways to get the user ID
-      const possibleIdFields = ['_key', 'id', '_id', 'userId'];
+      const possibleIdFields = ['_key', 'id', '_id', 'iss_sub'];
       logger.info('[RESET DATA] Checking all possible ID fields:');
       possibleIdFields.forEach(field => {
         logger.info(`  - ${field}: ${req.user ? req.user[field] : 'undefined'}`);
       });
-      
+
       // If the user object has a different structure, check its properties
       if (req.user && typeof req.user === 'object') {
         logger.info('[RESET DATA] All properties of req.user:', Object.keys(req.user));
       }
-      
+
       // Try getting the ID directly from the token verification result
-      logger.info('[RESET DATA] Token userId:', req.user ? req.user.userId : 'undefined');
-      
+      logger.info('[RESET DATA] Token userId:', req.user ? req.user.iss_sub : 'undefined');
+
       // Get user ID from authenticated user object
       const userId = req.user && (
-        req.user._key || 
-        req.user.id || 
-        req.user._id || 
-        req.user.userId || 
-        (req.user.user && req.user.user._key) || 
+        req.user._key ||
+        req.user.id ||
+        req.user._id ||
+        req.user.iss_sub ||
+        (req.user.user && req.user.user._key) ||
         (req.user.user && req.user.user.id) ||
         (req.user.user && req.user.user._id)
       );
@@ -870,17 +887,17 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/delete', authMiddleware.authenticate, async (req, res) => {
+  router.post('/delete', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
       const safeBody = maskSensitiveFields(req.body);
       logger.info('Delete account request body:', JSON.stringify(safeBody, null, 2));
       
       const userId = req.user && (
-        req.user._key || req.user.id || req.user._id || req.user.userId || 
+        req.user._key || req.user.id || req.user._id || req.user.iss_sub ||
         (req.user.user && req.user.user._key) || (req.user.user && req.user.user.id) ||
         (req.user.user && req.user.user._id)
       );
-      
+
       if (!userId) {
         logger.error('Delete account failed: Could not determine user ID from auth data');
         return res.status(401).json({ success: false, message: 'Authentication required' });
@@ -899,13 +916,7 @@ module.exports = (userService) => {
         logger.error(`User ${userId} not found for deletion`);
         return res.status(404).json({ success: false, message: 'User not found' });
       }
-      
-      const isPasswordValid = await userService.verifyPassword(userId, password);
-      if (!isPasswordValid) {
-        logger.warn('Delete account failed: Incorrect password');
-        return res.status(403).json({ success: false, message: 'Incorrect password' });
-      }
-      
+
       const result = await userService.deleteUserAccountPermanently(userId);
       logger.info(`Account deleted successfully for user ID: ${userId}`);
       
@@ -1124,7 +1135,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.put('/:userId', upload.any(), authMiddleware.authenticate, async (req, res) => {
+  router.put('/:userId', upload.any(), keycloakAuthMiddleware.authenticate, async (req, res) => {
     logger.info('\n=======================================================');
     logger.info('========= PUT USER ROUTE ACCESSED =========');
     logger.info(`Method: ${req.method}`);
@@ -1132,14 +1143,14 @@ module.exports = (userService) => {
     logger.info(`User ID from params: ${req.params.userId}`);
     logger.info(`Request body: ${JSON.stringify(req.body)}`);
     logger.info(`Is authenticated: ${!!req.user}`);
-    logger.info(`User role: ${req.user?.role}`);
+    logger.info(`User role: ${req.user?.roles}`);
     logger.info(`Content-Type: ${req.get('Content-Type')}`);
     logger.info(`Files: ${req.files ? JSON.stringify(req.files.map(f => f.fieldname)) : 'none'}`);
     logger.info('=======================================');
 
     try {
       if (req.body.role) {
-        const isAdmin = req.user && req.user.role === 'Admin';
+        const isAdmin = req.user && req.user.roles && req.user.roles.includes('admin');
         if (!isAdmin) {
           logger.warn(`Non-admin attempt to change role for user ${req.params.userId}`);
           return res.status(403).json({ 
@@ -1280,7 +1291,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.put('/:userId/role', authMiddleware.authenticate, async (req, res) => {
+  router.put('/:userId/role', keycloakAuthMiddleware.authenticate, async (req, res) => {
     logger.info('\n=======================================================');
     logger.info('========= PUT USER/ROLE ROUTE ACCESSED =========');
     logger.info(`Method: ${req.method}`);
@@ -1288,17 +1299,17 @@ module.exports = (userService) => {
     logger.info(`User ID from params: ${req.params.userId}`);
     logger.info(`Request body: ${JSON.stringify(req.body)}`);
     logger.info(`Is authenticated: ${!!req.user}`);
-    logger.info(`User role: ${req.user?.role}`);
+    logger.info(`User role: ${req.user?.roles}`);
     logger.info(`Content-Type: ${req.get('Content-Type')}`);
     logger.info('=======================================');
 
     try {
-      const isAdmin = req.user && req.user.role === 'Admin';
+      const isAdmin = req.user && req.user.roles && req.user.roles.includes('admin');
       if (!isAdmin) {
         logger.warn(`Non-admin attempt to change role for user ${req.params.userId}`);
-        return res.status(403).json({ 
-          success: false, 
-          message: 'Admin privileges required to update user roles' 
+        return res.status(403).json({
+          success: false,
+          message: 'Admin privileges required to update user roles'
         });
       }
 
@@ -1384,18 +1395,18 @@ module.exports = (userService) => {
  *       500:
  *         description: Server error
  */
-router.post('/admin/users/:userId/resend-verification', authMiddleware.authenticate, async (req, res) => {
+router.post('/admin/users/:userId/resend-verification', keycloakAuthMiddleware.authenticate, async (req, res) => {
   logger.info('\n=======================================================');
   logger.info('========= POST ADMIN/USERS/:userId/RESEND-VERIFICATION ROUTE ACCESSED =========');
   logger.info(`Method: ${req.method}`);
   logger.info(`Full URL: ${req.originalUrl}`);
   logger.info(`User ID from params: ${req.params.userId}`);
   logger.info(`Is authenticated: ${!!req.user}`);
-  logger.info(`User role: ${req.user?.role}`);
+  logger.info(`User role: ${req.user?.roles}`);
   logger.info('=======================================');
 
   try {
-    const isAdmin = req.user && req.user.role === 'Admin';
+    const isAdmin = req.user && req.user.roles && req.user.roles.includes('admin');
     if (!isAdmin) {
       logger.warn(`Non-admin attempt to resend verification email for user ${req.params.userId}`);
       return res.status(403).json({
@@ -1484,7 +1495,7 @@ router.post('/admin/users/:userId/resend-verification', authMiddleware.authentic
  *       500:
  *         description: Server error
  */
-router.post('/admin/users/:userId/force-logout', authMiddleware.authenticate, authMiddleware.isAdmin, async (req, res) => {
+router.post('/admin/users/:userId/force-logout', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, async (req, res) => {
   logger.info('\n=======================================================');
   logger.info('========= POST ADMIN/USERS/:userId/FORCE-LOGOUT ROUTE ACCESSED =========');
   logger.info(`Method: ${req.method}`);

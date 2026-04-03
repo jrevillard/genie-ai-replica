@@ -14,9 +14,7 @@ const PUBLIC_PATHS = [
   '/api-docs/',
   '/docs',
   '/api/auth/callback',
-  '/api/auth/logout/callback',
-  '/api/auth/login',
-  '/api/auth/register'
+  '/api/auth/logout/callback'
 ];
 
 /**
@@ -130,6 +128,24 @@ const keycloakAuthMiddleware = {
         details: {}
       });
     }
+  },
+
+  /**
+   * Require admin role — must be used after authenticate
+   * @param {Object} req - Express request
+   * @param {Object} res - Express response
+   * @param {Function} next - Express next middleware
+   */
+  requireAdmin(req, res, next) {
+    const roles = req.user && req.user.roles;
+    if (!roles || !Array.isArray(roles) || !roles.includes('admin')) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Admin access required',
+        details: {}
+      });
+    }
+    next();
   }
 };
 

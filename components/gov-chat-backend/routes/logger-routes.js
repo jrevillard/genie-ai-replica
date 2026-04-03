@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { reconfigureLogger, triggerLogRollover } = require('../shared-lib');
 
 module.exports = () => {
@@ -94,7 +94,7 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/configure', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  router.post('/configure', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
     try {
       const { level, errorMaxSize, combinedMaxSize, errorMaxFiles, combinedMaxFiles, zippedArchive } = req.body;
 
@@ -180,7 +180,7 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/rollover', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  router.post('/rollover', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
     try {
       triggerLogRollover();
       res.json({ success: true, message: 'Log rollover triggered successfully' });

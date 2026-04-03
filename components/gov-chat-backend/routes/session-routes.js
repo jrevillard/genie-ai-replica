@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (sessionService) => {
@@ -59,7 +59,7 @@ module.exports = (sessionService) => {
   });
 
   // Apply authentication middleware to all remaining routes
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger

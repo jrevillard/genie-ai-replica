@@ -1,6 +1,6 @@
 # Story 2.8: Swagger UI with Keycloak OIDC Authorize Button
 
-Status: review
+Status: done
 
 ## Story
 
@@ -407,39 +407,57 @@ glm-5-turbo
 - Replaced `bearerAuth` with `KeycloakOAuth2` OAuth2 security scheme using Authorization Code + PKCE flow in `index.js`
 - Added `swaggerOptions.oauth` config to `swaggerUi.setup()` with PKCE enabled (`usePkceWithAuthorizationCodeGrant: true`)
 - Updated CSP default `connectSrc` to include `KEYCLOAK_URL` for OAuth2 token exchange
-- Replaced `bearerAuth` with `KeycloakOAuth2` in JSDoc `@security` annotations across 5 route files (admin, auth, logger, translation, user)
+- Replaced `bearerAuth` with `KeycloakOAuth2` in JSDoc `@security` annotations across 10 route files (admin, auth, analytics, logger, query, service-category, service, session, translation, user)
 - Removed stale local `securitySchemes` definition from `user-routes.js` (now uses global definition from `index.js`)
 - Deleted obsolete `swaggerConfig.js` (not imported anywhere) and generated `swagger.json`
 - Added `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID` to required env vars validation at startup
 - Removed fallback defaults for Keycloak env vars in `config.js`, `keycloak-auth-service.js`, and `index.js` (now mandatory)
+- Updated `env` template to uncomment KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID with REQUIRED annotations
 - Moved `__tests__/mocks/` to `test-fixtures/` to prevent Jest from detecting mock files as failing test suites
 - Added jest config to `package.json` with `testMatch` and `testPathIgnorePatterns`, removed standalone `jest.config.js`
+- Added 12 unit tests for Swagger OAuth2/PKCE configuration in `swagger-config.test.js`
+- All 82 unit tests pass (keycloak-auth-service, user-provisioning-service, keycloak-auth-middleware, swagger-config)
+- Passed two adversarial code reviews and fixed all real issues
 - Task 4 (browser/manual verification) and E2E tests (F.1-F.6) require a deployed environment — deferred to integration testing
 - E2E tests (Phase F.1-F.6) are documented in `docs/e2e-test-plan-external-idp.md` and will be executed during post-deployment integration testing
+
+**Code Review Follow-ups Addressed:**
+- Fixed env template: KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID now uncommented with REQUIRED annotations
+- Added @security annotations to remaining protected routes (analytics, query, service-category, service, session)
+- Verified all env vars are mandatory at startup (no fallback defaults)
 
 ### File List
 
 | File | Action |
 |------|--------|
+| `env` | Modified — uncommented KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID with REQUIRED annotations |
 | `components/gov-chat-backend/index.js` | Modified — replaced bearerAuth with KeycloakOAuth2, added OAuth2/PKCE config, updated CSP defaults, added Keycloak vars to required env validation |
 | `components/gov-chat-backend/config.js` | Modified — removed fallback defaults for KEYCLOAK_REALM and KEYCLOAK_CLIENT_ID |
 | `components/gov-chat-backend/services/keycloak-auth-service.js` | Modified — removed fallback defaults for KEYCLOAK_REALM and KEYCLOAK_CLIENT_ID |
 | `components/gov-chat-backend/routes/admin-routes.js` | Modified — replaced bearerAuth with KeycloakOAuth2 in @security annotations |
+| `components/gov-chat-backend/routes/analytics-routes.js` | Modified — added KeycloakOAuth2 @security annotations to all protected endpoints |
 | `components/gov-chat-backend/routes/auth-routes.js` | Modified — replaced bearerAuth with KeycloakOAuth2 in @security annotations |
 | `components/gov-chat-backend/routes/logger-routes.js` | Modified — replaced bearerAuth with KeycloakOAuth2 in @security annotations |
+| `components/gov-chat-backend/routes/query-routes.js` | Modified — added KeycloakOAuth2 @security annotations to all protected endpoints |
+| `components/gov-chat-backend/routes/service-category-routes.js` | Modified — added KeycloakOAuth2 @security annotations to all protected endpoints |
+| `components/gov-chat-backend/routes/service-routes.js` | Modified — added KeycloakOAuth2 @security annotations to all protected endpoints |
+| `components/gov-chat-backend/routes/session-routes.js` | Modified — added KeycloakOAuth2 @security annotations to protected endpoints (POST /sessions excluded) |
 | `components/gov-chat-backend/routes/translation-routes.js` | Modified — replaced bearerAuth with KeycloakOAuth2 in @security annotations |
 | `components/gov-chat-backend/routes/user-routes.js` | Modified — replaced bearerAuth with KeycloakOAuth2, removed local securitySchemes definition |
 | `components/gov-chat-backend/package.json` | Modified — added jest config (testMatch, testPathIgnorePatterns) |
 | `components/gov-chat-backend/__tests__/swagger-config.test.js` | Created — 12 unit tests for Swagger OAuth2/PKCE configuration |
 | `components/gov-chat-backend/__tests__/keycloak-auth-service.test.js` | Modified — updated mock require path |
 | `components/gov-chat-backend/__tests__/user-provisioning-service.test.js` | Modified — updated mock require path |
+| `components/gov-chat-backend/test-fixtures/mockJwtPayload.js` | Moved from __tests__/mocks/ |
 | `components/gov-chat-backend/swaggerConfig.js` | Deleted — obsolete, not imported anywhere |
 | `components/gov-chat-backend/swagger.json` | Deleted — generated artifact, no longer needed |
 | `components/gov-chat-backend/jest.config.js` | Deleted — config moved to package.json |
-| `components/gov-chat-backend/__tests__/mocks/` | Moved to `test-fixtures/` |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | Modified — updated story 2-8 status to "done" |
+| `_bmad-output/implementation-artifacts/2-8-swagger-ui-with-keycloak-oidc-authorize-button.md` | Created — story documentation |
 
 ## Change Log
 
 | Date | Change |
 |------|--------|
 | 2026-04-03 | Story 2-8 implemented: Swagger UI with Keycloak OIDC Authorize button (Authorization Code + PKCE flow) |
+| 2026-04-03 | Passed two adversarial code reviews, fixed all real issues, added @security annotations to remaining routes |

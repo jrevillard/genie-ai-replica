@@ -56,17 +56,15 @@ story_location: _bmad-output/implementation-artifacts
 # ─── Epic 1 (single worktree: keycloak-idp, current) ───
 #   Sequential: 1-10 [done] → 1-11 [ready-for-dev]
 #
-# ─── Epic 2 (3 parallel worktrees, after Epic 1 merged) ───
+# ─── Epic 2 (2 parallel worktrees, after Epic 1 merged) ───
 #
 #   Round 1 (parallel):
 #     epic2-backend:  2-2  JWKS force-refresh
 #     epic2-frontend: 2-6  Error display frontend
-#     epic2-infra:    2-4  Kong optional deployment
 #
 #   Round 2 (parallel):
 #     epic2-backend:  2-3  Headers injection
 #     epic2-frontend: 2-8  Swagger OIDC
-#     epic2-infra:    2-5  Kong multi-issuer (needs 2-4 merged)
 #
 #   Round 3:
 #     epic2-backend:  2-7  Health check
@@ -74,6 +72,10 @@ story_location: _bmad-output/implementation-artifacts
 #   Round 4 (same worktree → sequential):
 #     epic2-backend:  2-9  Multi-realm (needs 2-2 merged)
 #     epic2-backend:  2-10 OPEA continuity (needs 2-3 merged)
+#
+#   Deferred (YAGNI — Kong optional deployment not requested):
+#     2-4  Kong optional deployment
+#     2-5  Kong multi-issuer (depends on 2-4)
 #
 # ─── Epic 3 (2 parallel worktrees, after Epic 2 merged) ───
 #
@@ -104,7 +106,7 @@ story_location: _bmad-output/implementation-artifacts
 # Epic 2:
 #   epic2-backend   ← 2-2 → 2-3 → 2-7 → 2-9 → 2-10 (touch keycloak-auth-service/middleware)
 #   epic2-frontend  ← 2-6 → 2-8 (frontend only, no backend file overlap)
-#   epic2-infra     ← 2-4 → 2-5 (Kong + docker-compose)
+#   epic2-infra     ← 2-4 → 2-5 (DEFERRED — Kong optional deployment not requested)
 #
 # Epic 3:
 #   epic3-sessions  ← 3-1 → 3-2 → 3-7 (session lifecycle, frontend + backend)
@@ -127,18 +129,18 @@ development_status:
   1-8-token-validation-failure-handling-backend-response-format: done
   1-9-external-idp-connection-via-keycloak-only: done
   1-10-offline-air-gapped-deployment-validation: done
-  1-11-remove-legacy-authentication-service: ready-for-dev
+  1-11-remove-legacy-authentication-service: review
   epic-1-retrospective: optional
 
   # Epic 2: Secure API Access & Resilient Authentication
-  # Worktrees: epic2-backend | epic2-frontend | epic2-infra (parallel after Epic 1 merged)
+  # Worktrees: epic2-backend | epic2-frontend (parallel after Epic 1 merged)
   epic-2: backlog
   # Story 2.1 removed — fully implemented during Story 1.9 refactor (OIDC discovery pattern)
   # See sprint-change-proposal-2026-04-02.md Section 6
   2-2-jwks-force-refresh-on-validation-failure: backlog # worktree: epic2-backend
   2-3-token-passthrough-headers-injection-to-upstream: backlog # worktree: epic2-backend
-  2-4-kong-optional-deployment-with-without-kong-compose-files: backlog # worktree: epic2-infra
-  2-5-kong-multi-issuer-token-validation-and-identity-headers: backlog # worktree: epic2-infra (after 2-4)
+  2-4-kong-optional-deployment-with-without-kong-compose-files: deferred # YAGNI — Kong optional not requested
+  2-5-kong-multi-issuer-token-validation-and-identity-headers: deferred # depends on 2-4
   2-6-auth-and-authorization-error-display-frontend: backlog # worktree: epic2-frontend
   2-7-keycloak-unavailable-detection-and-health-check: backlog # worktree: epic2-backend
   2-8-swagger-ui-with-keycloak-oidc-authorize-button: backlog # worktree: epic2-frontend

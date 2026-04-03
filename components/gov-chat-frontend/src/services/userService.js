@@ -515,9 +515,9 @@ class UserService {
     try {
       const response = await httpService.post('users/deactivate', {
         reason,
-        password,
-      })
-      return response.data
+        password
+      });
+      return response.data;
     } catch (error) {
       console.error('Error deactivating account:', error)
       throw error
@@ -550,8 +550,8 @@ class UserService {
       })
       return response.data.available
     } catch (error) {
-      console.error('Error checking username availability:', error)
-      return false
+      console.error('Error checking username availability:', error);
+      return false;
     }
   }
 
@@ -650,7 +650,7 @@ class UserService {
    * @returns {boolean} True if passwords match
    */
   doPasswordsMatch(password, confirmPassword) {
-    return password === confirmPassword
+    return password === confirmPassword;
   }
 
   /**
@@ -700,7 +700,37 @@ class UserService {
         console.error('Error response data:', error.response.data)
       }
 
-      throw error
+      throw error;
+    }
+  }
+
+  /**
+   * Verify user email (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+  async verifyUserEmail(userId) {
+    try {
+      const response = await httpService.post(`admin/users/${userId}/resend-verification`);
+      return response;
+    } catch (error) {
+      console.error('Error verifying user email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a list of all users (admin only)
+   * @param {Object} options - Query options (limit, offset, sort)
+   * @returns {Promise} List of users
+   */
+  async getAllUsers(options = {}) {
+    try {
+      const response = await httpService.get('admin/users', { params: options });
+      return response;
+    } catch (error) {
+      console.error('Error fetching users list:', error);
+      throw error;
     }
   }
 
@@ -715,8 +745,8 @@ class UserService {
         params: { admin: true },
       })
     } catch (error) {
-      console.error('Error fetching user profile:', error)
-      throw error
+      console.error('Error fetching user profile:', error);
+      throw error;
     }
   }
 
@@ -754,10 +784,12 @@ class UserService {
       const response = await httpService.post(`users/admin/users/${userId}/resend-verification`)
       return response.data
     } catch (error) {
-      console.error('Verification email resend error:', error.response || error)
-      throw error
+      console.error('Verification email resend error:', error.response || error);
+      throw error;
     }
   }
+
+
 }
 
 export default new UserService()

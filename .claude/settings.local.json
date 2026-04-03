@@ -7,7 +7,8 @@
       "Bash(st \")",
       "Bash(flutter clean)",
       "Bash(dart test/services/verify_world_bank_data.dart)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Read(//c/Dev/builds/main/**)"
     ]
   }
 }

@@ -214,25 +214,19 @@ module.exports = (userService) => {
     logger.info('[EMAIL ROUTE DEBUG] Request body:', JSON.stringify(safePrintBody, null, 2));
     
     try {
-      const { email, password, userId } = req.body;
-      
+      const { email, userId } = req.body;
+
       logger.info(`[EMAIL ROUTE DEBUG] 📧 Email update request details:`);
       logger.info(`  - New email: ${email || 'undefined'}`);
-      logger.info(`  - Password provided: ${password ? 'Yes' : 'No'}`);
       logger.info(`  - UserId from body: ${userId || 'undefined'}`);
-      
+
       // Critical check - has the auth middleware run properly?
       logger.info('[EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):', req.user ? 'PRESENT' : 'MISSING');
-      
+
       // Check if we have all required fields
       if (!email) {
         logger.warn('[EMAIL ROUTE DEBUG] Missing email in request');
         return res.status(400).json({ error: 'Email is required' });
-      }
-      
-      if (!password) {
-        logger.warn('[EMAIL ROUTE DEBUG] Missing password in request');
-        return res.status(400).json({ error: 'Password is required for email change verification' });
       }
       
       // At this point, req.user should be populated by the auth middleware
@@ -242,9 +236,9 @@ module.exports = (userService) => {
       }
       
       logger.info('[EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:', JSON.stringify(req.user));
-      
-      // Get user ID from the authenticated user object
-      const authenticatedUserId = req.user._key || req.user.id || req.user._id || req.user.iss_sub;
+
+      // Get user ID from the authenticated user object (Keycloak sets iss_sub)
+      const authenticatedUserId = req.user.iss_sub;
       
       if (!authenticatedUserId) {
         logger.error('[EMAIL ROUTE DEBUG] Could not determine user ID from authenticated user data');
@@ -892,23 +886,15 @@ module.exports = (userService) => {
       const safeBody = maskSensitiveFields(req.body);
       logger.info('Delete account request body:', JSON.stringify(safeBody, null, 2));
       
-      const userId = req.user && (
-        req.user._key || req.user.id || req.user._id || req.user.iss_sub ||
-        (req.user.user && req.user.user._key) || (req.user.user && req.user.user.id) ||
-        (req.user.user && req.user.user._id)
-      );
+      const userId = req.user && req.user.iss_sub;
 
       if (!userId) {
         logger.error('Delete account failed: Could not determine user ID from auth data');
         return res.status(401).json({ success: false, message: 'Authentication required' });
       }
-      
-      const { password, reason } = req.body;
-      if (!password) {
-        logger.warn('Delete account failed: Password is required');
-        return res.status(400).json({ success: false, message: 'Password is required' });
-      }
-      
+
+      const { reason } = req.body;
+
       logger.info(`Processing account deletion for user ID: ${userId}, Reason: ${reason || 'Not provided'}`);
       
       const user = await userService.getUserProfile(userId);
@@ -924,139 +910,6 @@ module.exports = (userService) => {
     } catch (error) {
       logger.error(`Error deleting account: ${error.message}`, { stack: error.stack });
       res.status(500).json({ success: false, message: error.message || 'Failed to delete account' });
-    }
-  });
-
-  /**
-   * @swagger
-   * /api/users/deactivate:
-   *   post:
-   *     summary: Deactivate user account
-   *     description: Deactivates the authenticated user's account. Requires password confirmation.
-   *     tags: [User]
-   *     security:
-   *       - bearerAuth: []
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - password
-   *             properties:
-   *               password:
-   *                 type: string
-   *                 description: User's current password for confirmation
-   *               reason:
-   *                 type: string
-   *                 description: Optional reason for deactivation
-   *     responses:
-   *       200:
-   *         description: Account deactivated successfully
-   *       400:
-   *         description: Password is required
-   *       401:
-   *         description: Authentication required
-   *       403:
-   *         description: Incorrect password
-   *       404:
-   *         description: User not found
-   *       500:
-   *         description: Server error
-   */
-  router.post('/deactivate', authMiddleware.authenticate, async (req, res) => {
-    try {
-      const userId = req.user && (
-        req.user._key || req.user.id || req.user._id || req.user.userId ||
-        (req.user.user && req.user.user._key) || (req.user.user && req.user.user.id) ||
-        (req.user.user && req.user.user._id)
-      );
-
-      if (!userId) {
-        logger.error('Deactivate account failed: Could not determine user ID from auth data');
-        return res.status(401).json({ success: false, message: 'Authentication required' });
-      }
-
-      const { password, reason } = req.body;
-      if (!password) {
-        logger.warn('Deactivate account failed: Password is required');
-        return res.status(400).json({ success: false, message: 'Password is required' });
-      }
-
-      logger.info(`Processing account deactivation for user ID: ${userId}, Reason: ${reason || 'Not provided'}`);
-
-      const user = await userService.getUserProfile(userId);
-      if (!user) {
-        logger.error(`User ${userId} not found for deactivation`);
-        return res.status(404).json({ success: false, message: 'User not found' });
-      }
-
-      const isPasswordValid = await userService.verifyPassword(userId, password);
-      if (!isPasswordValid) {
-        logger.warn('Deactivate account failed: Incorrect password');
-        return res.status(403).json({ success: false, message: 'Incorrect password' });
-      }
-
-      const result = await userService.deactivateAccount(userId, reason);
-      logger.info(`Account deactivated successfully for user ID: ${userId}`);
-
-      res.json({ success: true, message: 'Account deactivated successfully', ...result });
-    } catch (error) {
-      logger.error(`Error deactivating account: ${error.message}`, { stack: error.stack });
-      if (error.message === 'Account is already deactivated') {
-        return res.status(409).json({ success: false, message: error.message });
-      }
-      res.status(500).json({ success: false, message: error.message || 'Failed to deactivate account' });
-    }
-  });
-
-  /**
-   * @swagger
-   * /api/users/reactivate:
-   *   post:
-   *     summary: Reactivate user account
-   *     description: Reactivates a previously deactivated account. User must re-authenticate.
-   *     tags: [User]
-   *     security:
-   *       - bearerAuth: []
-   *     responses:
-   *       200:
-   *         description: Account reactivated successfully
-   *       401:
-   *         description: Authentication required
-   *       404:
-   *         description: User not found
-   *       409:
-   *         description: Account is not deactivated
-   *       500:
-   *         description: Server error
-   */
-  router.post('/reactivate', authMiddleware.authenticate, async (req, res) => {
-    try {
-      const userId = req.user && (
-        req.user._key || req.user.id || req.user._id || req.user.userId ||
-        (req.user.user && req.user.user._key) || (req.user.user && req.user.user.id) ||
-        (req.user.user && req.user.user._id)
-      );
-
-      if (!userId) {
-        logger.error('Reactivate account failed: Could not determine user ID from auth data');
-        return res.status(401).json({ success: false, message: 'Authentication required' });
-      }
-
-      logger.info(`Processing account reactivation for user ID: ${userId}`);
-
-      const result = await userService.reactivateAccount(userId);
-      logger.info(`Account reactivated successfully for user ID: ${userId}`);
-
-      res.json({ success: true, message: 'Account reactivated successfully', ...result });
-    } catch (error) {
-      logger.error(`Error reactivating account: ${error.message}`, { stack: error.stack });
-      if (error.message === 'Account is not deactivated') {
-        return res.status(409).json({ success: false, message: error.message });
-      }
-      res.status(500).json({ success: false, message: error.message || 'Failed to reactivate account' });
     }
   });
 

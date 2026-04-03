@@ -391,4 +391,271 @@ describe('keycloakAuthService', () => {
       expect(err.details).toEqual({ key: 'value' });
     });
   });
+
+  describe('JWKS cache with TTL', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should reuse cached JWKS within TTL (no re-fetch)', async () => {
+      const mockJwksFunction = jest.fn().mockResolvedValue({ key: 'cached-key' });
+      mockCreateRemoteJWKSet.mockReturnValue(mockJwksFunction);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockDiscovery
+      });
+      mockJwtVerify.mockResolvedValue({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      // First call: initializes and caches JWKS
+      await keycloakAuthService.init();
+      const createRemoteCallCount = mockCreateRemoteJWKSet.mock.calls.length;
+
+      // Second call within TTL: should reuse cache
+      await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
+
+      // createRemoteJWKSet should NOT be called again
+      expect(mockCreateRemoteJWKSet.mock.calls.length).toBe(createRemoteCallCount);
+    });
+
+    it('should re-fetch JWKS after TTL expires (5 minutes)', async () => {
+      // Test createJwksCache directly to verify TTL behavior
+      const nowSpy = jest.spyOn(Date, 'now');
+      const now = 1000000;
+      nowSpy.mockReturnValue(now);
+
+      let createRemoteCallCount = 0;
+      mockCreateRemoteJWKSet.mockImplementation(() => {
+        createRemoteCallCount++;
+        return jest.fn().mockResolvedValue({ key: `key-${createRemoteCallCount}` });
+      });
+
+      // Create a JWKS cache - calls createRemoteJWKSet once during creation
+      const jwksCache = keycloakAuthService.createJwksCache('http://example.com/jwks');
+      expect(createRemoteCallCount).toBe(1);
+
+      // Call within TTL - should reuse cached inner function (no additional createRemoteJWKSet call)
+      await jwksCache({ alg: 'RS256' }, 'token');
+      expect(createRemoteCallCount).toBe(1);
+
+      // Advance time past TTL (5 minutes + 1 second)
+      nowSpy.mockReturnValue(now + 301000);
+
+      // Call after TTL - should trigger re-fetch (createRemoteJWKSet called again)
+      await jwksCache({ alg: 'RS256' }, 'token');
+      expect(createRemoteCallCount).toBe(2);
+
+      nowSpy.mockRestore();
+    });
+
+    it('should force refresh JWKS when forceRefresh() is called', async () => {
+      // Test createJwksCache directly to verify forceRefresh behavior
+      const nowSpy = jest.spyOn(Date, 'now');
+      const now = 1000000;
+      nowSpy.mockReturnValue(now);
+
+      let createRemoteCallCount = 0;
+      mockCreateRemoteJWKSet.mockImplementation(() => {
+        createRemoteCallCount++;
+        return jest.fn().mockResolvedValue({ key: `key-${createRemoteCallCount}` });
+      });
+
+      // Create a JWKS cache - calls createRemoteJWKSet once during creation
+      const jwksCache = keycloakAuthService.createJwksCache('http://example.com/jwks');
+      expect(createRemoteCallCount).toBe(1);
+
+      // Call within TTL - should reuse
+      await jwksCache({ alg: 'RS256' }, 'token');
+      expect(createRemoteCallCount).toBe(1);
+
+      // Force refresh by calling forceRefresh() method
+      jwksCache.forceRefresh();
+
+      // Next call should re-fetch (createRemoteJWKSet called again)
+      await jwksCache({ alg: 'RS256' }, 'token');
+      expect(createRemoteCallCount).toBe(2);
+
+      nowSpy.mockRestore();
+    });
+
+    it('should maintain independent cache per issuer', async () => {
+      const discovery1 = {
+        issuer: 'http://localhost:8080/realms/genie',
+        jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
+      };
+      const discovery2 = {
+        issuer: 'http://localhost:8080/realms/genie2',
+        jwks_uri: 'http://localhost:8080/realms/genie2/protocol/openid-connect/certs'
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => discovery1 })
+        .mockResolvedValueOnce({ ok: true, json: async () => discovery2 });
+
+      mockJwtVerify.mockResolvedValue({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      // Initialize first issuer
+      await keycloakAuthService.init('http://localhost:8080/realms/genie');
+
+      // Initialize second issuer
+      await keycloakAuthService.init('http://localhost:8080/realms/genie2');
+
+      const issuers = keycloakAuthService.getConfiguredIssuers();
+      expect(issuers).toHaveLength(2);
+
+      // Each issuer should have its own cache
+      const cache1 = keycloakAuthService._getJwksCache(discovery1.issuer);
+      const cache2 = keycloakAuthService._getJwksCache(discovery2.issuer);
+
+      expect(cache1).not.toBe(cache2);
+    });
+  });
+
+  describe('verifyToken with force-refresh on signature failure', () => {
+    beforeEach(() => {
+      // Reset mocks
+      mockCreateRemoteJWKSet = jest.fn().mockReturnValue(jest.fn());
+      mockJwtVerify = jest.fn();
+      mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockDiscovery
+      });
+    });
+
+    it('should force-refresh JWKS on signature failure with valid exp and retry once', async () => {
+      const signatureError = new Error('Signature verification failed');
+      mockJwtVerify
+        .mockRejectedValueOnce(signatureError) // First call: signature fails
+        .mockResolvedValueOnce({ // Second call: succeeds after refresh
+          payload: mockJwtPayload,
+          protectedHeader: { alg: 'RS256' }
+        });
+
+      mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
+
+      const token = generateMockJwtString(mockJwtPayload);
+      const result = await keycloakAuthService.verifyToken(token);
+
+      // Should have succeeded on retry
+      expect(result).toBeDefined();
+      expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
+
+      // jwtVerify should be called twice (initial + retry)
+      expect(mockJwtVerify).toHaveBeenCalledTimes(2);
+    });
+
+    it('should reject with TOKEN_INVALID when retry also fails', async () => {
+      const signatureError = new Error('Signature verification failed');
+      mockJwtVerify
+        .mockRejectedValueOnce(signatureError) // First call: fails
+        .mockRejectedValueOnce(signatureError); // Retry: also fails
+
+      mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      // jwtVerify should be called twice (initial + retry)
+      expect(mockJwtVerify).toHaveBeenCalledTimes(2);
+    });
+
+    it('should reject immediately with TOKEN_EXPIRED for expired token (no refresh)', async () => {
+      const jwtExpiredError = new Error('exp check failed');
+      jwtExpiredError.name = 'JWTExpired';
+      mockJwtVerify.mockRejectedValue(jwtExpiredError);
+
+      const token = generateMockJwtString(mockExpiredPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_EXPIRED',
+        message: 'Token has expired'
+      });
+
+      // jwtVerify should be called only once (no retry)
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not force-refresh for expired token even on signature error', async () => {
+      const signatureError = new Error('Signature verification failed');
+      mockJwtVerify.mockRejectedValue(signatureError);
+
+      // Token with exp in the past
+      const expiredPayload = {
+        ...mockJwtPayload,
+        exp: Math.floor(Date.now() / 1000) - 3600
+      };
+      const token = generateMockJwtString(expiredPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_EXPIRED',
+        message: 'Token has expired'
+      });
+
+      // jwtVerify should be called only once (no retry for expired tokens)
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject with TOKEN_INVALID on JWTClaimValidationFailed (iss mismatch)', async () => {
+      const claimError = new Error('iss claim validation failed');
+      claimError.name = 'JWTClaimValidationFailed';
+      claimError.claim = 'iss';
+      mockJwtVerify.mockRejectedValue(claimError);
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token issuer validation failed'
+      });
+
+      // jwtVerify should be called only once (claim errors don't trigger refresh)
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('should succeed on retry after force-refresh', async () => {
+      const signatureError = new Error('Signature verification failed');
+      mockJwtVerify
+        .mockRejectedValueOnce(signatureError)
+        .mockResolvedValueOnce({
+          payload: mockJwtPayload,
+          protectedHeader: { alg: 'RS256' }
+        });
+
+      mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
+
+      const token = generateMockJwtString(mockJwtPayload);
+      const result = await keycloakAuthService.verifyToken(token);
+
+      expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
+      expect(mockJwtVerify).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle forceRefresh errors gracefully', async () => {
+      const signatureError = new Error('Signature verification failed');
+      mockJwtVerify.mockRejectedValue(signatureError);
+
+      // Mock forceRefresh to throw (network error scenario)
+      mockCreateRemoteJWKSet.mockImplementation(() => {
+        const fn = jest.fn().mockRejectedValue(new Error('Network error'));
+        fn.forceRefresh = () => { throw new Error('Network error'); };
+        return fn;
+      });
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+    });
+  });
 });

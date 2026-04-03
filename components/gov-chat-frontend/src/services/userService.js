@@ -355,40 +355,6 @@ class UserService {
   }
 
   /**
-   * Check if username is available
-   * @param {string} username - Username to check
-   * @returns {Promise<boolean>} True if username is available
-   */
-  async checkUsernameAvailability(username) {
-    try {
-      const response = await httpService.get('users/check-username', {
-        params: { username }
-      });
-      return response.data.available;
-    } catch (error) {
-      console.error('Error checking username availability:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Check if email is available
-   * @param {string} email - Email to check
-   * @returns {Promise<boolean>} True if email is available
-   */
-  async checkEmailAvailability(email) {
-    try {
-      const response = await httpService.get('users/check-email', {
-        params: { email }
-      });
-      return response.data.available;
-    } catch (error) {
-      console.error('Error checking email availability:', error);
-      return false;
-    }
-  }
-
-  /**
    * Validate password strength
    * @param {string} password Password to validate
    * @returns {Object} Validation result with strength score and feedback

@@ -44,69 +44,6 @@ class UserProfileService {
     }
   }
 
-  async createUserProfile(profileData, files = {}) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.create_user_profile_start', { dataLength: JSON.stringify(profileData).length });
-
-      if (typeof profileData === 'string') {
-        try {
-          profileData = JSON.parse(profileData);
-        } catch (error) {
-          logger.error('UserProfileService.parse_profile_data_failed', { error: error.message });
-          profileData = {};
-        }
-      }
-
-      // Create basic user document with timestamps
-      const basicDoc = {
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      logger.debug('UserProfileService.creating_basic_user_doc', { basicDoc });
-      const user = await this.users.save(basicDoc);
-      const userId = user._key;
-      logger.info('UserProfileService.user_created', { userId });
-
-      // Process all profile data (including custom sections like muslimPreferences, christianPreferences, etc.)
-      const processedData = await this.process(userId, profileData, files);
-
-      delete processedData._key;
-
-      // Update user with all processed data
-      if (Object.keys(processedData).length > 0) {
-        logger.debug('UserProfileService.updating_user_with_full_data', { userId, processedKeys: Object.keys(processedData) });
-        await this.users.update(userId, processedData);
-
-        // Fetch the complete user document after update to ensure all fields are returned
-        const completeUser = await this.users.document(userId);
-
-        logger.info('UserProfileService.user_profile_created', {
-          userId,
-          returnedKeys: Object.keys(completeUser),
-          hasPersonalIdentification: !!completeUser.personalIdentification,
-          hasCustomSettings: !!completeUser.customSettings,
-          durationMs: Date.now() - startTime
-        });
-        return completeUser;
-      }
-
-      logger.info('UserProfileService.user_profile_created', {
-        userId,
-        durationMs: Date.now() - startTime
-      });
-      return user;
-    } catch (error) {
-      logger.error('UserProfileService.create_user_profile_failed', {
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      throw error;
-    }
-  }
-
   async updateUserProfile(userId, profileData, files = {}) {
     const startTime = Date.now();
     try {

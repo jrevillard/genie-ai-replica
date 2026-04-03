@@ -1014,8 +1014,8 @@ sequenceDiagram
 - **OPEA Access Control**: Secure API access to OPEA endpoints
 
 #### Data Protection
-- **Password Encryption**: bcrypt password hashing
-- **Token Security**: Secure token generation and validation
+- **Authentication**: Keycloak OIDC with token passthrough architecture
+- **Token Security**: JWT validation via JWKS (RS256)
 - **File Upload Security**: Validated file uploads
 - **Database Security**: Parameterized queries and access controls
 

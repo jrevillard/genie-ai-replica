@@ -61,7 +61,7 @@ module.exports = (adminService, logsService) => {
    */
   router.get('/system-health', async (req, res, next) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/system-health route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       const result = await adminService.getSystemHealth();
@@ -264,7 +264,7 @@ module.exports = (adminService, logsService) => {
    */
   router.post('/security-scan', async (req, res, next) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security-scan route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       logger.info(`[ADMIN-ROUTES] Initiating security scan by user: ${req.user?.email || 'unknown'}`);
@@ -298,7 +298,7 @@ module.exports = (adminService, logsService) => {
    */
   router.get('/security/last-scan', async (req, res, next) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security/last-scan route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       logger.info(`[ADMIN-ROUTES] Fetching last security scan details for user: ${req.user?.email || 'unknown'}`);

@@ -132,7 +132,7 @@
 </template>
 
 <script>
-import authService from "@/services/authService";
+import userService from "@/services/userService";
 import LanguageSelector from "@/components/LanguageSelector.vue";
 
 export default {
@@ -353,7 +353,7 @@ export default {
           email: this.email,
           password: this.password,
         };
-        const response = await authService.register(userData);
+        const response = await userService.register(userData);
         console.log("[REGISTER] User registered successfully:", response);
         this.$router.push({
           path: "/registration-success",

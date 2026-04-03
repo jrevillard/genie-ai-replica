@@ -88,7 +88,7 @@
 </template>
 
 <script>
-import authService from "@//services/authService";
+import userService from "@/services/userService";
 
 export default {
   name: "EmailVerificationScreen",
@@ -243,7 +243,7 @@ export default {
       }
       this.verificationAttempted = true;
       try {
-        await authService.verifyEmail(this.token);
+        await userService.verifyEmail(this.token);
         this.isVerified = true;
       } catch (error) {
         console.error("[VERIFY] Email verification error:", error);

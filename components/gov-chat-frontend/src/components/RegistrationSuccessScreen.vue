@@ -73,7 +73,7 @@
 </template>
 
 <script>
-import authService from "@/services/authService";
+import userService from "@/services/userService";
 
 export default {
   name: "RegistrationSuccessScreen",
@@ -186,7 +186,7 @@ export default {
       if (this.isResending || !this.email) return;
       this.isResending = true;
       try {
-        await authService.resendVerificationEmail(this.email);
+        await userService.resendVerificationEmail(this.email);
         alert(this.$t("register.verificationResent"));
       } catch (error) {
         console.error("[REG_SUCCESS] Error resending verification:", error);

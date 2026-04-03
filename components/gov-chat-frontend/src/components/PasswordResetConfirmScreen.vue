@@ -248,7 +248,6 @@
 </template>
 
 <script>
-import authService from "@/services/authService";
 import passwordService from "@/services/passwordService";
 
 export default {

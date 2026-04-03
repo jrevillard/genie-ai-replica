@@ -194,6 +194,39 @@ This story will be implemented in the `epic2-backend` worktree.
 - [Source: components/gov-chat-backend/__tests__/keycloak-auth-service.test.js — existing test patterns]
 - [Source: components/gov-chat-backend/__tests__/mocks/mockJwtPayload.js — shared mock fixture]
 
+### E2E Testing (Conditional - Keycloak Infrastructure Required)
+
+**IMPORTANT:** This story includes conditional E2E tests that require Keycloak deployment.
+
+**E2E Test File:** `docs/e2e-test-plan-external-idp.md`
+
+**Execution Conditions:**
+- E2E tests should ONLY run if Keycloak infrastructure is available
+- Tests are automated and precise - follow the test plan exactly, NO improvisation
+- Use environment variable or config flag to conditionally enable E2E tests
+
+**How to Run E2E Tests:**
+```bash
+# Check if Keycloak is available
+if curl -s http://localhost:8080/health > /dev/null 2>&1; then
+  echo "Keycloak infrastructure detected - running E2E tests"
+  npm run test:e2e
+else
+  echo "Keycloak infrastructure NOT available - skipping E2E tests"
+  echo "Run unit tests instead: npm test"
+fi
+```
+
+**E2E Tests for Story 2.2:**
+- Verify JWKS cache re-fetches after TTL expires (5 minutes)
+- Verify JWKS force-refresh on signature failure with valid exp
+- Verify force-refresh retry on second attempt
+- Verify multi-issuer cache isolation
+- Verify expired token immediate rejection (no refresh)
+
+**Note:** Story 2.2 was completed without E2E tests - this is a retrospective lesson learned for Epic 2.
+
+
 ## Dev Agent Record
 
 ### Agent Model Used

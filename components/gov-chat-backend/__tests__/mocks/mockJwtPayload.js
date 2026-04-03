@@ -4,6 +4,7 @@
 const mockJwtPayload = {
   sub: '12345678-1234-1234-1234-123456789012',
   iss: 'http://localhost:8080/realms/genie',
+  iss_sub: 'http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012',
   aud: 'genie-app',
   exp: Math.floor(Date.now() / 1000) + 3600,
   iat: Math.floor(Date.now() / 1000),

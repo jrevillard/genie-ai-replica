@@ -119,7 +119,8 @@ development_status:
   # Epic 1: Keycloak Foundation & User Authentication
   # Worktree: keycloak-idp (current)
   epic-1: done
-  qa-audit-epic-1-tests: ready-for-dev # QA audit for Epic 1 test quality
+  qa-audit-epic-1-tests: done # QA audit for Epic 1 test quality
+  qa-epic-1-important-corrections: done # Phase 2 (Important) corrections complete
   1-1-keycloak-container-with-pre-configured-realm-and-oidc-client: done
   1-2-environment-driven-keycloak-configuration-via-env: done
   1-3-backend-auth-middleware-protected-and-public-routes: done
@@ -135,11 +136,11 @@ development_status:
 
   # Epic 2: Secure API Access & Resilient Authentication
   # Worktrees: epic2-backend | epic2-frontend (parallel after Epic 1 merged)
-  epic-2: backlog
+  epic-2: in-progress
   # Story 2.1 removed — fully implemented during Story 1.9 refactor (OIDC discovery pattern)
   # See sprint-change-proposal-2026-04-02.md Section 6
   2-2-jwks-force-refresh-on-validation-failure: done # worktree: epic2-backend
-  2-3-token-passthrough-headers-injection-to-upstream: backlog # worktree: epic2-backend
+  2-3-token-passthrough-headers-injection-to-upstream: done # worktree: epic2-backend
   2-4-kong-optional-deployment-with-without-kong-compose-files: deferred # YAGNI — Kong optional not requested
   2-5-kong-multi-issuer-token-validation-and-identity-headers: deferred # depends on 2-4
   2-6-auth-and-authorization-error-display-frontend: ready-for-dev # worktree: epic2-frontend

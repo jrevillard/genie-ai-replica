@@ -206,9 +206,12 @@ describe('keycloakAuthMiddleware.authenticate', () => {
 
     expect(mockProvisionUser).toHaveBeenCalledWith(decodedPayload);
     expect(next).toHaveBeenCalled();
-    expect(req.user).toEqual(arangoDbUser);
-    expect(req.user._key).toBe('users/123');
-    expect(req.user.createdAt).toBe('2026-03-01T00:00:00.000Z');
+    // Verify JWT authentication fields, NOT ArangoDB internal fields
+    expect(req.user.iss_sub).toBe('http://localhost:8080/realms/genie#12345678');
+    expect(req.user.sub).toBe('12345678');
+    expect(req.user.email).toBe('test@example.com');
+    expect(req.user.roles).toEqual(['user', 'admin']);
+    // Do NOT verify req.user._key (ArangoDB internal field)
     expect(res.status).not.toHaveBeenCalled();
   });
 
@@ -405,6 +408,133 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(res.json).toHaveBeenCalledWith({
       error: 'TOKEN_INVALID',
       message: 'Token verification failed',
+      details: {}
+    });
+  });
+});
+
+describe('requireAdmin', () => {
+  let req, res, next;
+
+  beforeEach(() => {
+    req = {
+      user: undefined,
+      path: '/api/admin/something',
+      originalUrl: '/api/admin/something'
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis()
+    };
+    next = jest.fn();
+  });
+
+  it('should allow access when user has admin role', async () => {
+    req.user = {
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      email: 'admin@example.com',
+      name: 'Admin User',
+      roles: ['user', 'admin']
+    };
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
+  it('should return 403 when user lacks admin role', async () => {
+    req.user = {
+      _key: 'users/456',
+      iss_sub: 'http://localhost:8080/realms/genie#456789',
+      email: 'user@example.com',
+      name: 'Regular User',
+      roles: ['user']
+    };
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Admin access required',
+      details: {}
+    });
+  });
+
+  it('should return 403 when user.roles is missing', async () => {
+    req.user = {
+      _key: 'users/789',
+      iss_sub: 'http://localhost:8080/realms/genie#789',
+      email: 'no-roles@example.com',
+      name: 'No Roles User'
+      // No roles field
+    };
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Admin access required',
+      details: {}
+    });
+  });
+
+  it('should return 403 when user.roles is not an array', async () => {
+    req.user = {
+      _key: 'users/999',
+      iss_sub: 'http://localhost:8080/realms/genie#999',
+      email: 'invalid-roles@example.com',
+      name: 'Invalid Roles User',
+      roles: 'not-an-array' // String instead of array
+    };
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Admin access required',
+      details: {}
+    });
+  });
+
+  it('should return 403 when user is undefined', async () => {
+    req.user = undefined;
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Admin access required',
+      details: {}
+    });
+  });
+
+  it('should return 403 when roles array is empty', async () => {
+    req.user = {
+      _key: 'users/000',
+      iss_sub: 'http://localhost:8080/realms/genie#000',
+      email: 'empty-roles@example.com',
+      name: 'Empty Roles User',
+      roles: []
+    };
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'Admin access required',
       details: {}
     });
   });

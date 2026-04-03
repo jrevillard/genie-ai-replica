@@ -110,10 +110,11 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Framework**: Jest (in devDependencies, CommonJS mode)
 - **Module system**: CommonJS — test files use `require()`/`module.exports`
 - **File location**: `__tests__/` directory alongside code, or `.test.js` co-located
-- **Naming**: `*.test.js` (e.g., `authController.test.js`)
+- **Naming**: `*.test.js` (e.g., `keycloak-auth-middleware.test.js`)
 - **Structure**: `describe()` / `it()` / `expect()`
 - **Mocks**: Mock external services (ArangoDB, Redis, external APIs) at module level
-- **No existing tests** — follow the conventions above when writing new ones
+- **Shared fixtures**: `__tests__/mocks/mockJwtPayload.js` for JWT token fixtures
+- **Error format tests**: Verify `{ error, message, details }` structure, not raw errors
 
 #### Frontend (Vue)
 - **Framework**: Jest with jsdom environment
@@ -125,6 +126,20 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Mocks**: `jest.mock()` for services and external libraries (`oidc-client-ts`)
 - **Config**: `jest.config.js` at service root, `setup.js` for global test setup
 - **Path alias**: `moduleNameMapper` maps `@/` to `<rootDir>/src/`
+
+#### Test File Location Convention
+
+| Component | Test Directory | Example |
+|-----------|---------------|---------|
+| Backend (gov-chat-backend) | `__tests__/` | `__tests__/keycloak-auth-middleware.test.js` |
+| Frontend (gov-chat-frontend) | `src/__tests__/` | `src/__tests__/userService.test.js` |
+| Backend mock fixtures | `__tests__/mocks/` | `__tests__/mocks/mockJwtPayload.js` |
+
+#### Authentication Test Conventions
+
+- **JWT auth fields**: Always verify `iss_sub`, `sub`, `iss` (JWT claims), NOT `_key` (ArangoDB internal)
+- **Error codes**: All auth errors use `{ error, message, details }` format
+- **Error codes to test**: TOKEN_INVALID, TOKEN_EXPIRED, FORBIDDEN, PROVISIONING_FAILED, AUTH_SERVICE_UNAVAILABLE
 
 ### Code Quality & Style Rules
 

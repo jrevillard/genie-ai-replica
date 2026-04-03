@@ -222,12 +222,8 @@ class HttpService {
       // Parse error for structured handling
       const parsedError = parseAuthError(error.response.data);
 
-      // Emit user-facing error notifications (but NOT for 401 — redirect handles that)
-      // Recognized error codes get specific handling, others get generic notification
-      const recognizedErrorCodes = ['TOKEN_INVALID', 'TOKEN_EXPIRED', 'FORBIDDEN', 'INSUFFICIENT_ROLES', 'AUTH_SERVICE_UNAVAILABLE', 'PROVISIONING_FAILED'];
-      const isRecognizedCode = recognizedErrorCodes.includes(parsedError.code);
-
-      // Emit notification for all non-401 errors
+      // Emit user-facing error notification for all non-401 errors
+      // (401 errors redirect to Keycloak login — the redirect IS the user feedback)
       notificationService.error(parsedError.message);
 
       // Log only safe information (status, statusText, message) — NOT raw data or details

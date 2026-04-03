@@ -955,6 +955,330 @@ Phase E  → Air-gapped deployment validation (grep audit + manual network isola
 | AC#3: Keycloak offline operation | Phase E (E.2) | Realm YAML has zero external URLs |
 | AC#4: Frontend OIDC within boundary | Phase E (E.3) | All OIDC endpoints resolve to ${origin}/auth |
 | AC#5: Data residency within boundary | Phase E (E.5) | Full auth cycle with network isolation (manual) |
+| **Story 2.8** | | |
+| AC#1: Swagger UI OIDC Authorize button | Phase F (F.1-F.6) | Swagger spec has OAuth2 scheme, browser auth flow works |
+
+---
+
+## Phase F: Swagger UI OAuth2 Authentication
+
+Validates that the Swagger UI includes a Keycloak OIDC "Authorize" button, allowing developers to test protected endpoints with an authenticated session directly from the API documentation interface (FR25).
+
+> **Note**: This phase validates the Swagger UI OAuth2 integration implemented in Story 2.8. Tests cover both the Swagger specification configuration and the complete browser-based authentication flow.
+
+### Prerequisites
+
+- Stack is deployed and healthy (from Phase 0)
+- Test user exists with `GENIE.AI_USER` role (from Phase 1, Step 1)
+- Swagger UI is accessible at `/api-docs` as a public route
+- Keycloak client `genie-app` is configured with correct redirect URIs
+
+### Test F.1 — Swagger Spec Contains OAuth2 Security Scheme
+
+Verify that the generated OpenAPI specification includes the Keycloak OIDC security scheme.
+
+```bash
+# Fetch the Swagger specification
+curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes'
+```
+
+**Expected**: The output includes `KeycloakOIDC` with OAuth2 implicit flow configuration:
+
+```json
+{
+  "KeycloakOIDC": {
+    "type": "oauth2",
+    "description": "Keycloak OAuth2 authentication",
+    "flows": {
+      "implicit": {
+        "authorizationUrl": "https://localhost/auth/realms/genie/protocol/openid-connect/auth",
+        "scopes": {
+          "openid": "OpenID Connect scope",
+          "profile": "User profile information"
+        }
+      }
+    }
+  }
+}
+```
+
+**On failure**:
+- Check `components/gov-chat-backend/index.js` for `securitySchemes` configuration
+- Verify environment variables `KEYCLOAK_URL` and `KEYCLOAK_REALM` are set
+- Restart the backend service after configuration changes
+
+### Test F.2 — Swagger UI is Public (No Auth Required)
+
+Verify that `/api-docs` is accessible without authentication.
+
+```bash
+curl -sk https://localhost/api-docs -o /dev/null -w "HTTP %{http_code}\n"
+```
+
+**Expected**: `HTTP 200`
+
+**On failure**: Check that `/api-docs` is in `PUBLIC_PATHS` in `keycloak-auth-middleware.js`.
+
+### Test F.3 — Verify Keycloak Client Redirect URIs
+
+The `genie-app` client must include the Swagger UI URL in its redirect URIs for the OAuth2 flow to work.
+
+```bash
+source .env
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+  -d "grant_type=password" | jq -r '.access_token')
+
+# Check client configuration
+curl -sk "https://localhost/auth/admin/realms/genie/clients?clientId=genie-app" \
+  -H "Authorization: Bearer $TOKEN" | jq '.[0] | {
+    redirectUris,
+    webOrigins,
+    standardFlowEnabled
+  }'
+```
+
+**Expected**: The output includes:
+```json
+{
+  "redirectUris": [
+    "https://localhost/api-docs*",  // ← Required for Swagger UI
+    "http://localhost:3000/api-docs*",  // ← For local dev
+    // ... other redirect URIs
+  ],
+  "webOrigins": [
+    "https://localhost",
+    "http://localhost:3000",
+    // ... other origins
+  ],
+  "standardFlowEnabled": true
+}
+```
+
+**On failure** — Add the redirect URIs:
+
+```bash
+GENIE_APP_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/clients?clientId=genie-app" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+
+curl -sk -X PUT "https://localhost/auth/admin/realms/genie/clients/${GENIE_APP_ID}" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "redirectUris": [
+      "https://localhost/api-docs*",
+      "http://localhost:3000/api-docs*"
+    ],
+    "webOrigins": ["https://localhost", "http://localhost:3000"],
+    "standardFlowEnabled": true
+  }' -w "\nHTTP: %{http_code}\n"
+```
+
+**Expected**: `HTTP 204` (no content = success)
+
+### Test F.4 — Browser Test: Authorize Button Visible and Functional
+
+This test requires Playwright with HTTPS context (see Phase 0, Test Tools).
+
+```bash
+playwright-cli open --browser=chromium
+playwright-cli run-code "
+async (page) => {
+  const browser = page.context().browser();
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+  const newPage = await context.newPage();
+
+  try {
+    // Navigate to Swagger UI
+    await newPage.goto('https://localhost/api-docs');
+    await newPage.waitForLoadState('networkidle');
+
+    // Check that Swagger UI loaded
+    const swaggerContainer = await newPage.locator('#swagger-ui').count();
+    console.log('Swagger UI container found:', swaggerContainer === 1);
+
+    // Check for authorize button
+    const authorizeBtn = newPage.locator('button.btn.authorize');
+    const isVisible = await authorizeBtn.isVisible();
+    console.log('Authorize button visible:', isVisible);
+
+    // Click authorize button
+    await authorizeBtn.click();
+    
+    // Wait for authorization modal
+    await newPage.waitForSelector('.auth-container', { timeout: 5000 });
+    console.log('Authorization modal opened');
+
+    // Check for Keycloak authorization link
+    const keycloakLink = newPage.locator('a[href*=\"protocol/openid-connect/auth\"]');
+    const hasLink = await keycloakLink.isVisible();
+    console.log('Keycloak OAuth2 link visible:', hasLink);
+
+    // Verify the link parameters
+    const href = await keycloakLink.getAttribute('href');
+    console.log('Authorization URL:', href);
+    console.log('Contains correct realm:', href.includes('realms/genie'));
+    console.log('Contains correct client_id:', href.includes('client_id=genie-app'));
+
+    console.log('PASS: All UI elements present');
+
+  } catch (error) {
+    console.log('FAIL:', error.message);
+    console.log('URL:', newPage.url());
+  }
+}
+"
+playwright-cli close
+```
+
+**Expected**:
+- `Swagger UI container found: true`
+- `Authorize button visible: true`
+- `Authorization modal opened`
+- `Keycloak OAuth2 link visible: true`
+- `Contains correct realm: true`
+- `Contains correct client_id: true`
+- `PASS: All UI elements present`
+
+**On failure**: See Troubleshooting section below.
+
+### Test F.5 — Browser Test: Complete OAuth2 Authentication Flow
+
+Validate the end-to-end flow: click authorize → login to Keycloak → token returned to Swagger UI.
+
+```bash
+playwright-cli open --browser=chromium
+playwright-cli run-code "
+async (page) => {
+  const browser = page.context().browser();
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+  const newPage = await context.newPage();
+
+  try {
+    // Navigate to Swagger UI and click authorize
+    await newPage.goto('https://localhost/api-docs');
+    await newPage.waitForLoadState('networkidle');
+    await newPage.click('button.btn.authorize');
+    await newPage.waitForSelector('.auth-container');
+
+    // Wait for Keycloak popup (new page)
+    const popupPromise = context.waitForEvent('page');
+    await newPage.click('a[href*=\"protocol/openid-connect/auth\"]');
+
+    // Wait for popup and fill in login form
+    const popup = await popupPromise;
+    await popup.waitForLoadState('networkidle');
+    
+    console.log('Popup URL:', popup.url());
+
+    // Verify we're on Keycloak login page
+    if (!popup.url().includes('/auth/realms/genie/protocol/openid-connect/auth')) {
+      throw new Error('Not on Keycloak login page: ' + popup.url());
+    }
+
+    // Fill in test user credentials
+    const testUser = process.env.E2E_TEST_USERNAME || 'testuser';
+    const testPass = process.env.E2E_TEST_PASSWORD || 'testpass';
+
+    await popup.fill('#username', testUser);
+    await popup.fill('#password', testPass);
+    await popup.click('input[type=\"submit\"]');
+
+    // Wait for popup to close (token returned to Swagger UI)
+    await popup.waitForState('closed');
+    console.log('Popup closed - token returned to Swagger UI');
+
+    // Verify authorize button changed state (shows locked/authorized)
+    await newPage.waitForSelector('button.btn.authorize.locked', { timeout: 10000 });
+    console.log('Authorize button locked - user authenticated');
+
+    console.log('PASS: OAuth2 flow completed');
+
+  } catch (error) {
+    console.log('FAIL:', error.message);
+    console.log('Main page URL:', newPage.url());
+  }
+}
+"
+playwright-cli close
+```
+
+**Expected**:
+- Popup URL contains Keycloak authorization endpoint
+- Login form is present
+- After login, popup closes
+- Authorize button shows locked/authorized state
+- `PASS: OAuth2 flow completed`
+
+**On failure**: See Troubleshooting section below.
+
+### Test F.6 — Browser Test: Authenticated API Call
+
+Verify that after authentication, Swagger UI can successfully call protected endpoints.
+
+```bash
+playwright-cli open --browser=chromium
+playwright-cli run-code "
+async (page) => {
+  const browser = page.context().browser();
+  const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+  const newPage = await context.newPage();
+
+  try {
+    // Complete authentication flow (from Test F.5)
+    await newPage.goto('https://localhost/api-docs');
+    await newPage.click('button.btn.authorize');
+    await newPage.waitForSelector('.auth-container');
+    
+    const popupPromise = context.waitForEvent('page');
+    await newPage.click('a[href*=\"protocol/openid-connect/auth\"]');
+    
+    const popup = await popupPromise;
+    await popup.waitForLoadState('networkidle');
+    
+    const testUser = process.env.E2E_TEST_USERNAME || 'testuser';
+    const testPass = process.env.E2E_TEST_PASSWORD || 'testpass';
+    
+    await popup.fill('#username', testUser);
+    await popup.fill('#password', testPass);
+    await popup.click('input[type=\"submit\"]');
+    await popup.waitForState('closed');
+    await newPage.waitForSelector('button.btn.authorize.locked', { timeout: 10000 });
+
+    // Now test a protected endpoint
+    await newPage.click('[data-path=\"/api/users/me\"] .opblock-summary');
+    await newPage.waitForSelector('.try-out__btn');
+    await newPage.click('.try-out__btn');
+    await newPage.click('.execute');
+    
+    // Wait for response
+    await newPage.waitForSelector('.responses-table .response', { timeout: 5000 });
+    
+    // Check response code
+    const responseCode = await newPage.locator('.responses-table .response .response-col_status').textContent();
+    console.log('Response code:', responseCode.trim());
+    
+    if (responseCode.includes('401')) {
+      throw new Error('Got 401 - authentication did not work');
+    }
+    
+    console.log('PASS: Protected endpoint accessible with OAuth2 token');
+
+  } catch (error) {
+    console.log('FAIL:', error.message);
+  }
+}
+"
+playwright-cli close
+```
+
+**Expected**:
+- Response code is NOT 401
+- Protected endpoint returns data
+- `PASS: Protected endpoint accessible with OAuth2 token`
+
+**On failure**: Check that the test user has the `GENIE.AI_USER` role in Keycloak.
+
+---
 
 ## Troubleshooting
 
@@ -1202,4 +1526,118 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/external-idp/clients/${BROK
     ],
     "webOrigins": ["http://localhost:8080", "https://localhost"]
   }'
+```
+
+---
+
+### Swagger UI OAuth2: Common Issues
+
+#### Issue: "Authorize button not found"
+
+**Symptoms**: Playwright test cannot locate the authorize button.
+
+**Root causes**:
+1. Swagger UI did not load (check for 404 or 500 errors)
+2. Swagger UI version different from expected (button selector changed)
+3. Custom CSS hid the authorize button
+
+**Fix**:
+```bash
+# Verify Swagger UI HTML is served
+curl -sk https://localhost/api-docs | grep -o '<title>.*</title>'
+
+# Check for swagger-ui-express version
+grep 'swagger-ui-express' components/gov-chat-backend/package.json
+```
+
+#### Issue: "Keycloak authorization link not found in modal"
+
+**Symptoms**: Authorization modal opens but no link to Keycloak.
+
+**Root causes**:
+1. `securitySchemes` not configured in Swagger options
+2. OAuth2 flow type mismatch (implicit vs authorization code)
+
+**Fix**:
+```bash
+# Verify the spec contains OAuth2 scheme
+curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes'
+
+# Check that implicit flow is configured (not authorization code)
+curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes.KeycloakOIDC.flows'
+```
+
+#### Issue: "invalid_redirect_uri" after clicking authorize link
+
+**Symptoms**: Keycloak returns "Invalid redirect URI" error in the popup.
+
+**Root causes**:
+1. `genie-app` client redirect URIs do not include the Swagger UI URL
+2. Wrong protocol (http vs https)
+
+**Fix**: See Phase F, Test F.3 above for adding redirect URIs to the Keycloak client.
+
+#### Issue: "CSP violation" when clicking authorize
+
+**Symptoms**: Browser console shows CSP violations; Keycloak redirect blocked.
+
+**Root causes**:
+1. CSP `connect-src` does not include Keycloak URL
+2. Keycloak URL is different from Swagger UI origin
+
+**Fix**:
+```bash
+# Check current CSP configuration
+grep CSP_CONNECT_SRC .env
+
+# Add Keycloak URL to CSP (if different from origin)
+export CSP_CONNECT_SRC="'self' https://localhost http://localhost:8080"
+
+# Restart backend after change
+docker service update genieai_backend --force
+```
+
+#### Issue: "Authorization code flow not supported"
+
+**Symptoms**: Error message about PKCE or authorization code flow.
+
+**Root causes**:
+1. Swagger UI trying to use authorization code flow instead of implicit
+2. swagger-ui-express version incompatible with implicit flow
+
+**Fix**: Verify that the Swagger configuration explicitly sets `implicit` flow (not `authorizationCode`):
+
+```javascript
+// In components/gov-chat-backend/index.js
+components: {
+  securitySchemes: {
+    KeycloakOIDC: {
+      type: 'oauth2',
+      flows: {
+        implicit: {  // ← Must be implicit, not authorizationCode
+          authorizationUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
+          scopes: { openid: '...', profile: '...' }
+        }
+      }
+    }
+  }
+}
+```
+
+#### Issue: "401 Unauthorized" on protected endpoint after OAuth2 auth
+
+**Symptoms**: OAuth2 flow completes but API calls still return 401.
+
+**Root causes**:
+1. Swagger UI not including the Authorization header in requests
+2. Token expired or invalid
+3. Test user lacks required role
+
+**Fix**:
+1. Open browser DevTools Network tab while executing a request
+2. Check if `Authorization: Bearer <token>` header is present
+3. Verify the test user has the `GENIE.AI_USER` role in Keycloak:
+```bash
+curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser" \
+  -H "Authorization: Bearer $TOKEN" | jq '.[0].realmRoles'
 ```

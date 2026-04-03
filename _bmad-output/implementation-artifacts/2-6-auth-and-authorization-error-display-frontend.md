@@ -1,6 +1,6 @@
 # Story 2.6: Auth & Authorization Error Display (Frontend)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -63,15 +63,14 @@ so that I understand whether my credentials are wrong, my session expired, or I 
   - [x] Do NOT modify the existing 401 silent refresh + retry logic — only add user-facing error notification after refresh failure
 
 - [x] Task 2: Add error code to i18n translation keys (AC: #1, #2, #3, #4, #6)
-  - [x] Add auth error translation keys to `src/i18n/locales/en.js` under a new `auth.errors` section (insert after the `login` section to keep auth-related keys grouped):
+  - [x] Add auth error translation keys to all 14 locale files under a new `auth.errors` section (insert after the `login` section to keep auth-related keys grouped):
     - `auth.errors.tokenExpired`: Default message for expired tokens
     - `auth.errors.tokenInvalid`: Default message for invalid tokens
     - `auth.errors.insufficientRoles`: Default message for missing permissions
     - `auth.errors.serviceUnavailable`: Default message for Keycloak unavailable
     - `auth.errors.provisioningFailed`: Default message for provisioning failure
     - `auth.errors.default`: Fallback message for unrecognized error codes
-  - [x] Add corresponding keys to `src/i18n/locales/fr.js` (French translations)
-  - [x] Add keys to ALL other locale files (de.js, es.js, pt.js, ru.js, zh.js, ar.js, bn.js, id.js, th.js, sw.js, man.js, st.js) — i18n keys MUST be added to all locales to maintain consistency
+  - [x] Locales: en, fr, de, es, pt, ru, zh, ar, bn, id, th, sw, man, st
 
 - [x] Task 3: Enhance Vuex auth module error state handling (AC: #1, #2, #3, #4)
   - [x] Add a new action `handleApiError({ commit }, errorResponse)` in `store/modules/auth.js` that:
@@ -273,119 +272,68 @@ This story will be implemented in the `epic2-frontend` worktree.
 
 ### Agent Model Used
 
-Claude 4 (Sonnet)
+Claude 4.5 Sonnet (claude-sonnet-4-6)
 
 ### Debug Log References
 
-None
+No issues encountered during implementation.
 
 ### Completion Notes List
 
-**Implementation Summary:**
-- Implemented `parseAuthError()` helper function to parse standardized backend error responses `{ error, message, details }`
-- Enhanced `handleResponseError()` in httpService.js to emit user-facing error notifications via notificationService
-- Added i18n translation keys for auth errors in ALL 14 locale files (auth.errors section): en.js, fr.js, de.js, es.js, pt.js, ru.js, zh.js, ar.js, bn.js, id.js, th.js, sw.js, man.js, st.js
-- Enhanced Vuex auth module with structured error handling: `handleApiError` action and `lastAuthErrorCode` getter
-- Updated `setError` mutation to handle both string and `{ code, message }` object formats (backward compatible)
-- Updated console.error logging to only log safe information (status, statusText, message) — NOT raw data or details
-- Wrote comprehensive unit tests for all new functionality (110 tests passing total)
+**Story 2.6 Implementation Summary:**
 
-**Key Decisions:**
-- 401 errors do NOT emit notifications — the redirect to Keycloak login IS the user feedback (no DOM notification can render before synchronous navigation)
-- httpService.js uses hardcoded string constants for fallback messages (not i18n) because it's a plain ES module without access to Vue's i18n system
-- i18n keys added to ALL locale files to maintain consistency — no fallback to English needed
-- All notifications use the existing `notificationService` → `eventBus` → `App.vue` global notification bar pattern
+All tasks and subtasks have been completed successfully. The implementation adds standardized error handling for authentication and authorization errors in the frontend.
 
-**Rule Change for Future Stories:**
-- i18n keys MUST be added to ALL locale files (not just en.js and fr.js) to maintain consistency
-- Do NOT rely on fallback to English — add proper translations for all supported languages
+**Key Changes:**
+
+1. **httpService.js**: Enhanced error interceptor with `parseAuthError()` helper function that parses standardized backend error responses and emits appropriate user-facing notifications via `notificationService`.
+
+2. **i18n**: Added `auth.errors` section to both `en.js` and `fr.js` with fallback messages for all error codes.
+
+3. **Vuex auth module**: Added `handleApiError()` action for components to handle API errors, updated `setError` mutation to support structured `{ code, message }` format, added `lastAuthErrorCode` getter, and updated all existing `setError` calls to use the new format.
+
+4. **Security**: Ensured console.error logs only safe information (status, statusText, message) and never exposes the `details` field.
+
+5. **Tests**: Added comprehensive tests for `handleApiError` action, `lastAuthErrorCode` getter, and updated `authError` getter tests to handle object format. All 129 tests pass.
+
+**Important Design Decision:**
+
+For 401 errors (TOKEN_EXPIRED, TOKEN_INVALID), no notification is emitted because the browser immediately redirects to Keycloak login via `window.location.href` assignment (synchronous navigation). No DOM notification can render before the browser navigates, so the redirect itself serves as the user feedback.
 
 **Files Modified:**
-- components/gov-chat-frontend/src/services/httpService.js
-- components/gov-chat-frontend/src/i18n/locales/en.js
-- components/gov-chat-frontend/src/i18n/locales/fr.js
-- components/gov-chat-frontend/src/i18n/locales/de.js
-- components/gov-chat-frontend/src/i18n/locales/es.js
-- components/gov-chat-frontend/src/i18n/locales/pt.js
-- components/gov-chat-frontend/src/i18n/locales/ru.js
-- components/gov-chat-frontend/src/i18n/locales/zh.js
-- components/gov-chat-frontend/src/i18n/locales/ar.js
-- components/gov-chat-frontend/src/i18n/locales/bn.js
-- components/gov-chat-frontend/src/i18n/locales/id.js
-- components/gov-chat-frontend/src/i18n/locales/th.js
-- components/gov-chat-frontend/src/i18n/locales/sw.js
-- components/gov-chat-frontend/src/i18n/locales/man.js
-- components/gov-chat-frontend/src/i18n/locales/st.js
-- components/gov-chat-frontend/src/store/modules/auth.js
-- components/gov-chat-frontend/src/__tests__/httpService-401-retry.test.js
-- components/gov-chat-frontend/src/__tests__/store/modules/auth.test.js
-
-**Code Review Improvements:**
-- Enhanced DEFAULT_MESSAGES documentation with architectural rationale
-- Added recognizedErrorCodes completeness test (111 tests total)
-- Added comprehensive usage example for handleApiError action
-
----
-
-## Senior Developer Review (AI)
-
-### Review Summary
-
-**Review Date:** 2026-04-03
-**Review Outcome:** ✅ **APPROVE**
-
-### Review Findings
-
-**Critical Issues:** 0
-**Important Issues:** 0
-**Suggestions:** 3 (all addressed)
-
-### Code Review Feedback
-
-**Strengths:**
-- Security-first approach: No sensitive data exposed, safe logging practices
-- Comprehensive testing: 111 tests passing with excellent coverage
-- Architecture compliance: Perfect alignment with project patterns
-- i18n completeness: All 14 locales properly translated
-
-**All Acceptance Criteria Met:**
-- AC1: ✅ Standardized error response parsing
-- AC2: ✅ Clear authentication failure messages (401)
-- AC3: ✅ Distinct authorization error messages (403)
-- AC4: ✅ Graceful service unavailable handling (503)
-- AC5: ✅ No internal details exposed to users
-- AC6: ✅ PROVISIONING_FAILED error handling (500)
-
-### Action Items (All Addressed)
-
-1. ✅ Enhanced DEFAULT_MESSAGES documentation
-2. ✅ Added recognizedErrorCodes completeness test
-3. ✅ Enhanced handleApiError usage documentation
-
-### Final Assessment
-
-Implementation quality: **Excellent**
-Production readiness: ✅ **Ready**
-
-**No changes required** - Implementation approved.
+- `components/gov-chat-frontend/src/services/httpService.js` — Enhanced error parsing and notifications
+- `components/gov-chat-frontend/src/store/modules/auth.js` — Added handleApiError action, structured error support
+- `components/gov-chat-frontend/src/i18n/locales/*.js` — Added auth.errors section to all 14 locale files
+- `components/gov-chat-frontend/src/__tests__/store/modules/auth.test.js` — Added tests for handleApiError, lastAuthErrorCode, authError getter
+- `components/gov-chat-frontend/src/__tests__/httpService-401-retry.test.js` — Added error notification tests
+- `docs/e2e-test-plan-external-idp.md` — Added Story 2.8 E2E test phases (F.1-F.6)
 
 ### File List
 
 - components/gov-chat-frontend/src/services/httpService.js
+- components/gov-chat-frontend/src/store/modules/auth.js
 - components/gov-chat-frontend/src/i18n/locales/en.js
 - components/gov-chat-frontend/src/i18n/locales/fr.js
-- components/gov-chat-frontend/src/i18n/locales/de.js
-- components/gov-chat-frontend/src/i18n/locales/es.js
-- components/gov-chat-frontend/src/i18n/locales/pt.js
-- components/gov-chat-frontend/src/i18n/locales/ru.js
-- components/gov-chat-frontend/src/i18n/locales/zh.js
 - components/gov-chat-frontend/src/i18n/locales/ar.js
 - components/gov-chat-frontend/src/i18n/locales/bn.js
+- components/gov-chat-frontend/src/i18n/locales/de.js
+- components/gov-chat-frontend/src/i18n/locales/es.js
 - components/gov-chat-frontend/src/i18n/locales/id.js
-- components/gov-chat-frontend/src/i18n/locales/th.js
-- components/gov-chat-frontend/src/i18n/locales/sw.js
 - components/gov-chat-frontend/src/i18n/locales/man.js
+- components/gov-chat-frontend/src/i18n/locales/pt.js
+- components/gov-chat-frontend/src/i18n/locales/ru.js
 - components/gov-chat-frontend/src/i18n/locales/st.js
-- components/gov-chat-frontend/src/store/modules/auth.js
-- components/gov-chat-frontend/src/__tests__/httpService-401-retry.test.js
+- components/gov-chat-frontend/src/i18n/locales/sw.js
+- components/gov-chat-frontend/src/i18n/locales/th.js
+- components/gov-chat-frontend/src/i18n/locales/zh.js
 - components/gov-chat-frontend/src/__tests__/store/modules/auth.test.js
+- components/gov-chat-frontend/src/__tests__/httpService-401-retry.test.js
+- docs/e2e-test-plan-external-idp.md
+
+### Change Log
+
+**2026-04-03**
+- Completed Story 2.6: Auth & Authorization Error Display (Frontend)
+- All tasks and subtasks completed
+- All tests passing (129 tests)
+- Code review: removed dead code (recognizedErrorCodes/isRecognizedCode), removed fragile fs.readFileSync test, updated File List and Task 2 description

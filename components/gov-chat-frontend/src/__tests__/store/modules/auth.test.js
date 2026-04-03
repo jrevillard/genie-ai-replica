@@ -92,11 +92,25 @@ describe('Vuex Auth Module', () => {
       expect(authModule.getters.accessToken(state)).toBe('my-token');
     });
 
-    it('authError returns state.error', () => {
+    it('authError returns state.error message when error is string', () => {
       const state = createState();
       expect(authModule.getters.authError(state)).toBeNull();
       state.error = 'Error msg';
       expect(authModule.getters.authError(state)).toBe('Error msg');
+    });
+
+    it('authError returns message string when error is object { code, message }', () => {
+      const state = createState();
+      state.error = { code: 'TOKEN_EXPIRED', message: 'Session expired' };
+      expect(authModule.getters.authError(state)).toBe('Session expired');
+    });
+
+    it('authError handles mixed error state (object and null)', () => {
+      const state = createState();
+      state.error = { code: 'FORBIDDEN', message: 'Access denied' };
+      expect(authModule.getters.authError(state)).toBe('Access denied');
+      state.error = null;
+      expect(authModule.getters.authError(state)).toBeNull();
     });
 
     it('isAuthInitialized returns state.isInitialized', () => {
@@ -104,6 +118,24 @@ describe('Vuex Auth Module', () => {
       expect(authModule.getters.isAuthInitialized(state)).toBe(false);
       state.isInitialized = true;
       expect(authModule.getters.isAuthInitialized(state)).toBe(true);
+    });
+
+    it('lastAuthErrorCode returns error code when error is object', () => {
+      const state = createState();
+      expect(authModule.getters.lastAuthErrorCode(state)).toBeNull();
+      state.error = { code: 'TOKEN_EXPIRED', message: 'Session expired' };
+      expect(authModule.getters.lastAuthErrorCode(state)).toBe('TOKEN_EXPIRED');
+    });
+
+    it('lastAuthErrorCode returns null when error is string', () => {
+      const state = createState();
+      state.error = 'String error message';
+      expect(authModule.getters.lastAuthErrorCode(state)).toBeNull();
+    });
+
+    it('lastAuthErrorCode returns null when error is null', () => {
+      const state = createState();
+      expect(authModule.getters.lastAuthErrorCode(state)).toBeNull();
     });
   });
 
@@ -134,10 +166,43 @@ describe('Vuex Auth Module', () => {
       expect(state.error).toBeNull();
     });
 
-    it('setError sets error message', () => {
+    it('setError sets error message when string', () => {
       const state = createState();
       authModule.mutations.setError(state, 'Auth failed');
       expect(state.error).toBe('Auth failed');
+    });
+
+    it('setError sets structured error when object { code, message }', () => {
+      const state = createState();
+      authModule.mutations.setError(state, { code: 'TOKEN_EXPIRED', message: 'Session expired' });
+      expect(state.error).toEqual({
+        code: 'TOKEN_EXPIRED',
+        message: 'Session expired'
+      });
+    });
+
+    it('setError handles object with missing code gracefully', () => {
+      const state = createState();
+      authModule.mutations.setError(state, { message: 'Error without code' });
+      expect(state.error).toEqual({
+        code: 'UNKNOWN_ERROR',
+        message: 'Error without code'
+      });
+    });
+
+    it('setError handles object with missing message gracefully', () => {
+      const state = createState();
+      authModule.mutations.setError(state, { code: 'SOME_ERROR' });
+      expect(state.error).toEqual({
+        code: 'SOME_ERROR',
+        message: 'An error occurred'
+      });
+    });
+
+    it('setError handles null gracefully', () => {
+      const state = createState();
+      authModule.mutations.setError(state, null);
+      expect(state.error).toBeNull();
     });
 
     it('clearError sets error to null', () => {
@@ -436,6 +501,163 @@ describe('Vuex Auth Module', () => {
         await authModule.actions.clearError({ commit });
 
         expect(state.error).toBeNull();
+      });
+    });
+
+    describe('handleApiError', () => {
+      it('parses TOKEN_INVALID error and stores in state', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          error: 'TOKEN_INVALID',
+          message: 'Invalid token signature',
+          details: {}
+        };
+
+        const result = authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).toEqual({
+          code: 'TOKEN_INVALID',
+          message: 'Invalid token signature'
+        });
+        expect(result).toEqual({
+          code: 'TOKEN_INVALID',
+          message: 'Invalid token signature'
+        });
+      });
+
+      it('parses TOKEN_EXPIRED error and stores in state', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          error: 'TOKEN_EXPIRED',
+          message: 'Token has expired',
+          details: {}
+        };
+
+        const result = authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).toEqual({
+          code: 'TOKEN_EXPIRED',
+          message: 'Token has expired'
+        });
+        expect(result.code).toBe('TOKEN_EXPIRED');
+      });
+
+      it('parses FORBIDDEN error and stores in state', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          error: 'FORBIDDEN',
+          message: 'Access denied',
+          details: {}
+        };
+
+        const result = authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).toEqual({
+          code: 'FORBIDDEN',
+          message: 'Access denied'
+        });
+        expect(result.code).toBe('FORBIDDEN');
+      });
+
+      it('parses INSUFFICIENT_ROLES error and stores in state', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          error: 'INSUFFICIENT_ROLES',
+          message: 'You lack required permissions',
+          details: {}
+        };
+
+        const result = authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).toEqual({
+          code: 'INSUFFICIENT_ROLES',
+          message: 'You lack required permissions'
+        });
+        expect(result.code).toBe('INSUFFICIENT_ROLES');
+      });
+
+      it('parses AUTH_SERVICE_UNAVAILABLE error and stores in state', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          error: 'AUTH_SERVICE_UNAVAILABLE',
+          message: 'Auth service temporarily unavailable',
+          details: {}
+        };
+
+        const result = authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).toEqual({
+          code: 'AUTH_SERVICE_UNAVAILABLE',
+          message: 'Auth service temporarily unavailable'
+        });
+        expect(result.code).toBe('AUTH_SERVICE_UNAVAILABLE');
+      });
+
+      it('parses PROVISIONING_FAILED error and stores in state', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          error: 'PROVISIONING_FAILED',
+          message: 'User provisioning failed',
+          details: {}
+        };
+
+        const result = authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).toEqual({
+          code: 'PROVISIONING_FAILED',
+          message: 'User provisioning failed'
+        });
+        expect(result.code).toBe('PROVISIONING_FAILED');
+      });
+
+      it('handles malformed error response gracefully', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          foo: 'bar'
+        };
+
+        const result = authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).toEqual({
+          code: 'UNKNOWN_ERROR',
+          message: 'An error occurred'
+        });
+        expect(result.code).toBe('UNKNOWN_ERROR');
+      });
+
+      it('handles null error response gracefully', () => {
+        const state = createState();
+        const commit = createCommit(state);
+
+        const result = authModule.actions.handleApiError({ commit }, null);
+
+        expect(state.error).toEqual({
+          code: 'UNKNOWN_ERROR',
+          message: 'An error occurred'
+        });
+        expect(result.code).toBe('UNKNOWN_ERROR');
+      });
+
+      it('NEVER includes details field in stored error', () => {
+        const state = createState();
+        const commit = createCommit(state);
+        const errorResponse = {
+          error: 'TOKEN_INVALID',
+          message: 'Invalid token',
+          details: { sensitive: 'data' }
+        };
+
+        authModule.actions.handleApiError({ commit }, errorResponse);
+
+        expect(state.error).not.toHaveProperty('details');
+        expect(state.error.details).toBeUndefined();
       });
     });
   });

@@ -696,6 +696,16 @@ export default {
     oauthNotImplemented: "El inicio de sesión social aún no está implementado",
     savedLoginNotImplemented: "El inicio de sesión con cuenta guardada aún no está implementado"
   },
+  auth: {
+    errors: {
+      tokenExpired: "Su sesión ha expirado. Por favor, inicie sesión nuevamente.",
+      tokenInvalid: "Su sesión no es válida. Por favor, inicie sesión nuevamente.",
+      insufficientRoles: "No tiene los permisos requeridos. Contacte a su administrador.",
+      serviceUnavailable: "El servicio de autenticación está temporalmente no disponible. Por favor, intente nuevamente más tarde.",
+      provisioningFailed: "Ha ocurrido un error del sistema. Por favor, intente nuevamente más tarde.",
+      default: "Ha ocurrido un error"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Fecha',

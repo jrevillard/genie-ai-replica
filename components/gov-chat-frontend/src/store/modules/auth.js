@@ -57,7 +57,20 @@ const getters = {
   isAuthenticated: (state) => state.isAuthenticated,
   currentUser: (state) => state.user,
   accessToken: (state) => state.accessToken,
-  authError: (state) => state.error,
+  authError: (state) => {
+    // Backward compatibility: return message string if error is object
+    if (state.error && typeof state.error === 'object') {
+      return state.error.message;
+    }
+    return state.error;
+  },
+  lastAuthErrorCode: (state) => {
+    // Return error code if error is object, null otherwise
+    if (state.error && typeof state.error === 'object') {
+      return state.error.code;
+    }
+    return null;
+  },
   isAuthInitialized: (state) => state.isInitialized
 };
 
@@ -89,7 +102,7 @@ const actions = {
       }
     } catch (error) {
       console.error('[Auth Store] Initialization error:', error.message);
-      commit('setError', 'Authentication initialization failed');
+      commit('setError', { code: 'INIT_ERROR', message: 'Authentication initialization failed' });
     } finally {
       commit('setInitialized');
     }
@@ -106,7 +119,7 @@ const actions = {
       await keycloakAuthService.login(options);
     } catch (error) {
       console.error('[Auth Store] Login error:', error.message);
-      commit('setError', 'Login redirect failed');
+      commit('setError', { code: 'LOGIN_ERROR', message: 'Login redirect failed' });
       throw error;
     }
   },
@@ -135,7 +148,7 @@ const actions = {
       return user;
     } catch (error) {
       console.error('[Auth Store] Callback error:', error.message);
-      commit('setError', 'Authentication callback failed');
+      commit('setError', { code: 'CALLBACK_ERROR', message: 'Authentication callback failed' });
       throw error;
     }
   },
@@ -166,6 +179,63 @@ const actions = {
    */
   clearError({ commit }) {
     commit('clearError');
+  },
+
+  /**
+   * Handle API error responses with structured error parsing
+   *
+   * This action provides a standardized way for Vue components to handle API errors
+   * from backend responses. Use this in components that need to react to specific
+   * error codes or display user-friendly error messages.
+   *
+   * USAGE EXAMPLE IN VUE COMPONENT:
+   * ```javascript
+   * import { mapActions } from 'vuex';
+   *
+   * export default {
+   *   methods: {
+   *     ...mapActions(['handleApiError']),
+   *
+   *     async someApiCall() {
+   *       try {
+   *         const response = await api.someMethod();
+   *         return response;
+   *       } catch (error) {
+   *         const parsedError = this.handleApiError(error.response.data);
+   *
+   *         // React based on error code
+   *         if (parsedError.code === 'TOKEN_EXPIRED') {
+   *           // Redirect to login or show specific UI
+   *           this.$router.push('/login');
+   *         } else if (parsedError.code === 'INSUFFICIENT_ROLES') {
+   *           // Show permission denied UI
+   *           this.showPermissionDeniedMessage();
+   *         }
+   *
+   *         // Error is also stored in Vuex state (authError, lastAuthErrorCode getters)
+   *         // for template access: {{ $store.getters.authError }}
+   *       }
+   *     }
+   *   }
+   * }
+   * ```
+   *
+   * @param {Object} context - Vuex context
+   * @param {Object} errorResponse - Backend error response { error, message, details }
+   * @returns {Object} Parsed error { code, message }
+   */
+  handleApiError({ commit }, errorResponse) {
+    let code = 'UNKNOWN_ERROR';
+    let message = 'An error occurred';
+
+    if (errorResponse && typeof errorResponse === 'object') {
+      code = errorResponse.error || 'UNKNOWN_ERROR';
+      message = errorResponse.message || 'An error occurred';
+    }
+
+    commit('setError', { code, message });
+
+    return { code, message };
   }
 };
 
@@ -184,8 +254,18 @@ const mutations = {
     state.error = null;
   },
 
-  setError(state, message) {
-    state.error = message;
+  setError(state, error) {
+    // Handle both string and { code, message } object formats
+    if (typeof error === 'string') {
+      state.error = error;
+    } else if (error && typeof error === 'object') {
+      state.error = {
+        code: error.code || 'UNKNOWN_ERROR',
+        message: error.message || 'An error occurred'
+      };
+    } else {
+      state.error = null;
+    }
   },
 
   clearError(state) {

@@ -211,7 +211,10 @@ describe('Vuex Auth Module', () => {
 
         await authModule.actions.initialize({ commit });
 
-        expect(state.error).toBe('Authentication initialization failed');
+        expect(state.error).toEqual({
+          code: 'INIT_ERROR',
+          message: 'Authentication initialization failed'
+        });
         expect(state.isInitialized).toBe(true);
       });
 
@@ -296,7 +299,10 @@ describe('Vuex Auth Module', () => {
           authModule.actions.login({ commit })
         ).rejects.toThrow('Redirect failed');
 
-        expect(state.error).toBe('Login redirect failed');
+        expect(state.error).toEqual({
+          code: 'LOGIN_ERROR',
+          message: 'Login redirect failed'
+        });
       });
     });
 
@@ -369,7 +375,10 @@ describe('Vuex Auth Module', () => {
           authModule.actions.handleCallback({ commit })
         ).rejects.toThrow('Callback failed');
 
-        expect(state.error).toBe('Authentication callback failed');
+        expect(state.error).toEqual({
+          code: 'CALLBACK_ERROR',
+          message: 'Authentication callback failed'
+        });
       });
     });
 

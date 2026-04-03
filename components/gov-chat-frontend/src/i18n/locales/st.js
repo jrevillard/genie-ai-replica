@@ -687,6 +687,16 @@ export default {
     oauthNotImplemented: "Ho kena ka marang-rang a sechaba ha ho eso kenngwe tshebetsong",
     savedLoginNotImplemented: "Ho kena ha akhaonto e bolokilweng ha ho eso kenngwe tshebetsong"
   },
+  auth: {
+    errors: {
+      tokenExpired: "Nako ea hau e felile. Ka kopo ho kenya hape.",
+      tokenInvalid: "Nako ea hau ea se fosahetseng. Ka kopo ho kenya hape.",
+      insufficientRoles: "Ha u na litšebeletso tse hlokahalang. Ikopanye le molaoli ea hau.",
+      serviceUnavailable: "Ts'ebeletso ea ho netefatsa ha e fosahetsa hajwale. Ka kopo leka hape hamorao.",
+      provisioningFailed: "Ho feta phoso ea sisteme. Ka kopo leka hape hamorao.",
+      default: "Ho feta phoso"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Letsatsi',

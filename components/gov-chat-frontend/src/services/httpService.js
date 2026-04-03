@@ -1,5 +1,82 @@
 import axios from 'axios';
 import keycloakAuthService from './keycloakAuthService';
+import notificationService from './notificationService';
+
+/**
+ * Default error messages for fallback when backend message is missing
+ *
+ * WHY HARDCODED STRINGS INSTEAD OF I18N?
+ * ============================================
+ * httpService.js is a plain ES module (not a Vue component), which means:
+ * - It has NO access to Vue's i18n system (this.$t() or translate())
+ * - It cannot use Vue's composition API or inject/provide
+ * - It must have synchronous access to messages at module load time
+ * - i18n translation keys are defined in src/i18n/locales/*.js for:
+ *   1. Documentation purposes (this serves as the source of truth for message semantics)
+ *   2. Potential future use in Vue-based error pages
+ *   3. Consistency across all 14 supported languages
+ *
+ * ARCHITECTURE NOTES:
+ * - The i18n system (vue-i18n) is only available within Vue component context
+ * - Plain ES modules like httpService.js use hardcoded constants for runtime messages
+ * - This is a deliberate architectural decision, not an oversight
+ * - When backend returns a message, we use it; when missing, we use these fallbacks
+ */
+const DEFAULT_MESSAGES = {
+  tokenExpired: 'Your session has expired. Please log in again.',
+  tokenInvalid: 'Your session is invalid. Please log in again.',
+  insufficientRoles: 'You lack required permissions. Contact your administrator.',
+  serviceUnavailable: 'Authentication service is temporarily unavailable. Please try again later.',
+  provisioningFailed: 'A system error occurred. Please try again later.',
+  default: 'An error occurred'
+};
+
+/**
+ * Parse standardized backend error response format
+ * Extracts error code and message, never includes details field
+ * @param {Object} errorResponse - Backend error response { error, message, details }
+ * @returns {Object} Parsed error { code, message }
+ */
+function parseAuthError(errorResponse) {
+  if (!errorResponse || typeof errorResponse !== 'object') {
+    return {
+      code: 'UNKNOWN_ERROR',
+      message: DEFAULT_MESSAGES.default
+    };
+  }
+
+  const code = errorResponse.error || 'UNKNOWN_ERROR';
+  let message = errorResponse.message;
+
+  // Use fallback message if backend message is missing
+  if (!message) {
+    switch (code) {
+      case 'TOKEN_EXPIRED':
+        message = DEFAULT_MESSAGES.tokenExpired;
+        break;
+      case 'TOKEN_INVALID':
+        message = DEFAULT_MESSAGES.tokenInvalid;
+        break;
+      case 'INSUFFICIENT_ROLES':
+        message = DEFAULT_MESSAGES.insufficientRoles;
+        break;
+      case 'AUTH_SERVICE_UNAVAILABLE':
+        message = DEFAULT_MESSAGES.serviceUnavailable;
+        break;
+      case 'PROVISIONING_FAILED':
+        message = DEFAULT_MESSAGES.provisioningFailed;
+        break;
+      default:
+        message = DEFAULT_MESSAGES.default;
+    }
+  }
+
+  // NEVER include details field in parsed result
+  return {
+    code,
+    message
+  };
+}
 
 /**
  * Base service for handling HTTP requests
@@ -52,6 +129,16 @@ class HttpService {
       base += '/';
     }
     return `${base}${cleanEndpoint}`;
+  }
+
+  /**
+   * Parse standardized backend error response format
+   * Exposed as instance method for testing
+   * @param {Object} errorResponse - Backend error response { error, message, details }
+   * @returns {Object} Parsed error { code, message }
+   */
+  parseAuthError(errorResponse) {
+    return parseAuthError(errorResponse);
   }
 
   /**
@@ -132,7 +219,24 @@ class HttpService {
         message: error.response.data?.message || 'An error occurred'
       };
 
-      console.error('API response error:', errorData);
+      // Parse error for structured handling
+      const parsedError = parseAuthError(error.response.data);
+
+      // Emit user-facing error notifications (but NOT for 401 — redirect handles that)
+      // Recognized error codes get specific handling, others get generic notification
+      const recognizedErrorCodes = ['TOKEN_INVALID', 'TOKEN_EXPIRED', 'FORBIDDEN', 'INSUFFICIENT_ROLES', 'AUTH_SERVICE_UNAVAILABLE', 'PROVISIONING_FAILED'];
+      const isRecognizedCode = recognizedErrorCodes.includes(parsedError.code);
+
+      // Emit notification for all non-401 errors
+      notificationService.error(parsedError.message);
+
+      // Log only safe information (status, statusText, message) — NOT raw data or details
+      console.error('API response error:', {
+        status,
+        statusText,
+        message: parsedError.message
+      });
+
       return Promise.reject(errorData);
     } else if (error.request) {
       console.error('Network error - no response received:', error.request);

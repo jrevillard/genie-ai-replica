@@ -696,6 +696,16 @@ export default {
     oauthNotImplemented: "Soziale Anmeldung ist noch nicht implementiert",
     savedLoginNotImplemented: "Gespeicherte Kontoanmeldung ist noch nicht implementiert"
   },
+  auth: {
+    errors: {
+      tokenExpired: "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
+      tokenInvalid: "Ihre Sitzung ist ungültig. Bitte melden Sie sich erneut an.",
+      insufficientRoles: "Sie verfügen nicht über die erforderlichen Berechtigungen. Wenden Sie sich an Ihren Administrator.",
+      serviceUnavailable: "Der Authentifizierungsdienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.",
+      provisioningFailed: "Ein Systemfehler ist aufgetreten. Bitte versuchen Sie es später erneut.",
+      default: "Ein Fehler ist aufgetreten"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Datum',

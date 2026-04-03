@@ -697,6 +697,16 @@ export default {
     oauthNotImplemented: "Login social ainda não implementado",
     savedLoginNotImplemented: "Login com conta salva ainda não implementado"
   },
+  auth: {
+    errors: {
+      tokenExpired: "Sua sessão expirou. Por favor, faça login novamente.",
+      tokenInvalid: "Sua sessão não é válida. Por favor, faça login novamente.",
+      insufficientRoles: "Você não possui as permissões necessárias. Entre em contato com seu administrador.",
+      serviceUnavailable: "O serviço de autenticação está temporariamente indisponível. Por favor, tente novamente mais tarde.",
+      provisioningFailed: "Ocorreu um erro do sistema. Por favor, tente novamente mais tarde.",
+      default: "Ocorreu um erro"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Data',

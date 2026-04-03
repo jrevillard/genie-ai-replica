@@ -696,6 +696,16 @@ export default {
     oauthNotImplemented: "Social login is not yet implemented",
     savedLoginNotImplemented: "Saved account login is not yet implemented"
   },
+  auth: {
+    errors: {
+      tokenExpired: "Your session has expired. Please log in again.",
+      tokenInvalid: "Your session is invalid. Please log in again.",
+      insufficientRoles: "You lack required permissions. Contact your administrator.",
+      serviceUnavailable: "Authentication service is temporarily unavailable. Please try again later.",
+      provisioningFailed: "A system error occurred. Please try again later.",
+      default: "An error occurred"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Date',

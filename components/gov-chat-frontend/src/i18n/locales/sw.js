@@ -696,6 +696,16 @@ export default {
     oauthNotImplemented: "Kuingia kwa mitandao ya kijamii bado haijatekelezwa",
     savedLoginNotImplemented: "Kuingia kwa akaunti iliyohifadhiwa bado haijatekelezwa"
   },
+  auth: {
+    errors: {
+      tokenExpired: "Kipindi chako kimekamilika. Tafadhali ingia tena.",
+      tokenInvalid: "Kipindi chako si halali. Tafadhali ingia tena.",
+      insufficientRoles: "Huna ruhusu inayohitajika. Wasiliana na msimamizi wako.",
+      serviceUnavailable: "Huduma ya uthibitisho haipatikani kwa muda. Tafadhali jaribu tena baadaye.",
+      provisioningFailed: "Kuna hitilafu ya mfumo. Tafadhali jaribu tena baadaye.",
+      default: "Kuna hitilafu"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Tarehe',

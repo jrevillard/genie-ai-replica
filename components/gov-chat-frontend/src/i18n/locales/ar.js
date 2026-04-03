@@ -695,6 +695,16 @@ export default {
     oauthNotImplemented: "تسجيل الدخول الاجتماعي لم يتم تنفيذه بعد",
     savedLoginNotImplemented: "تسجيل الدخول بحساب محفوظ لم يتم تنفيذه بعد"
   },
+  auth: {
+    errors: {
+      tokenExpired: "انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.",
+      tokenInvalid: "جلستك غير صالحة. يرجى تسجيل الدخول مرة أخرى.",
+      insufficientRoles: "ليس لديك الأذونات المطلوبة. اتصل بمسؤول النظام الخاص بك.",
+      serviceUnavailable: "خدمة المصادقة غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى لاحقًا.",
+      provisioningFailed: "حدث خطأ في النظام. يرجى المحاولة مرة أخرى لاحقًا.",
+      default: "حدث خطأ"
+    }
+  },
   charts: {
     tooltip: {
       title: 'التاريخ',

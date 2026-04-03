@@ -687,6 +687,16 @@ export default {
     oauthNotImplemented: "Social long in mang dada folo",
     savedLoginNotImplemented: "Akaanti mara long in mang dada folo"
   },
+  auth: {
+    errors: {
+      tokenExpired: "I pani kekhenphamna kihi. In lang in si in tugung.",
+      tokenInvalid: "I pani kihi tam haeng. In lang in si in tugung.",
+      insufficientRoles: "In si khina thawna tam in kho khina. Admin in lailon tangkhun in kai hong.",
+      serviceUnavailable: "Auth service tam nei. In lang in tugung khamtham tam in khamlen tam in.",
+      provisioningFailed: "System jasi kekhenphamna kei. In lang in tugung khamtham tam in khamlen tam in.",
+      default: "Jasi kekhenphamna kei"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Lung',

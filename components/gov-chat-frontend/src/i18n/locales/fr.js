@@ -696,6 +696,16 @@ export default {
     oauthNotImplemented: "La connexion via les réseaux sociaux n'est pas encore implémentée",
     savedLoginNotImplemented: "La connexion avec un compte enregistré n'est pas encore implémentée"
   },
+  auth: {
+    errors: {
+      tokenExpired: "Votre session a expiré. Veuillez vous reconnecter.",
+      tokenInvalid: "Votre session n'est pas valide. Veuillez vous reconnecter.",
+      insufficientRoles: "Vous n'avez pas les permissions requises. Contactez votre administrateur.",
+      serviceUnavailable: "Le service d'authentification est temporairement indisponible. Veuillez réessayer plus tard.",
+      provisioningFailed: "Une erreur système s'est produite. Veuillez réessayer plus tard.",
+      default: "Une erreur s'est produite"
+    }
+  },
   charts: {
     tooltip: {
       title: 'Date',

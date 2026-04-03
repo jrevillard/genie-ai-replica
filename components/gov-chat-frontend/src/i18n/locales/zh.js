@@ -696,6 +696,16 @@ export default {
     oauthNotImplemented: "社交登录尚未实现",
     savedLoginNotImplemented: "保存账户登录尚未实现"
   },
+  auth: {
+    errors: {
+      tokenExpired: "您的会话已过期。请重新登录。",
+      tokenInvalid: "您的会话无效。请重新登录。",
+      insufficientRoles: "您缺少所需权限。请联系您的管理员。",
+      serviceUnavailable: "认证服务暂时不可用。请稍后再试。",
+      provisioningFailed: "发生系统错误。请稍后再试。",
+      default: "发生错误"
+    }
+  },
   charts: {
     tooltip: {
       title: '日期',

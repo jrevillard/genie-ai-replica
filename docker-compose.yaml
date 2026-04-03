@@ -209,6 +209,25 @@ services:
       - "3310:3310"
     networks:
       - genieai_network
+  
+  weather-mcp-standalone:
+    build:
+      context: ./components/weather-mcp-service
+      dockerfile: Dockerfile
+    container_name: weather-mcp-standalone
+    ports:
+      - "${WEATHER_MCP_PORT}:${WEATHER_MCP_PORT}"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=${WEATHER_MCP_PORT}
+      # Optional API keys (define in .env)
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - MAPBOX_ACCESS_TOKEN=${MAPBOX_ACCESS_TOKEN}
+    env_file:
+      - .env
+    networks:
+      - genieai_network
+    restart: unless-stopped
 
   arango-vector-db:
     image: arangodb/arangodb:3.12.4

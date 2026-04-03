@@ -108,6 +108,21 @@ services:
       - "3310:3310" # ClamAV daemon port
     networks:
       - chatqna_default
+  
+  weather-mcp-standalone:
+    build:
+      context: ./weather-mcp-service
+    container_name: weather-mcp-standalone
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Add these in .env or here
+      # - GOOGLE_API_KEY=your_google_api_key
+      # - MAPBOX_ACCESS_TOKEN=your_mapbox_token
+    networks:
+      - chatqna_default
+    restart: unless-stopped
 
 networks:
   chatqna_default:

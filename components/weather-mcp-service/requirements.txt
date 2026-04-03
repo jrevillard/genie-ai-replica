@@ -22,7 +22,7 @@ beautifulsoup4==4.12.3
 pydantic>=2.11.0
 
 # Early warning system — storage
-python-arango==7.9.4
+python-arango==7.9.1
 
 # Early warning system — scheduler
 APScheduler==3.10.4

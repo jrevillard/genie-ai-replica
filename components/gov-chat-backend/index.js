@@ -954,6 +954,18 @@ async function startApp() {
     });
     throw error;
   }
+  try {
+    logger.info('Initializing MCP Tool Registry...');
+    const toolRegistry = require('./services/tool-registry');
+    const weatherMcpBridge = require('./tools/weather-mcp-bridge');
+    toolRegistry.register(weatherMcpBridge.definition, weatherMcpBridge.handler);
+    logger.info(`MCP Tool Registry ready. Available tools: ${toolRegistry.list().join(', ')}`);
+  } catch (toolError) {
+    logger.warn('Failed to initialize MCP Tool Registry (Continuing without tools):', {
+      error: toolError.message,
+      stack: toolError.stack
+    });
+  }
 
   // Define routes with paths and services
   const routeConfigs = [

@@ -500,8 +500,7 @@ class QueryService {
             messages: queryData.messages,
             context: {
               categoryLabel: queryData.context.categoryLabel,
-              serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              serviceLabels: queryData.context.serviceLabels
             },
             user_id: queryData.userId,
             stream: false
@@ -531,7 +530,7 @@ class QueryService {
         await this.queries.update(queryId, updateData);
         } // end else (OPEA worker path)
         } // end else (non-weather path)
-      }
+      } // end outer else (non-test-mode)
 
       // Record the query in analytics
       if (this.analyticsService) {

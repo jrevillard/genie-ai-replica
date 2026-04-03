@@ -197,8 +197,18 @@ export default {
     window.addEventListener("resize", this.checkScreenSize);
     this.setupSystemThemeListener();
     eventBus.$on("notification:show", this.showNotification);
+
+    // Enforce theme — if anything external changes data-theme, revert it
+    this.themeEnforcer = setInterval(() => {
+      const domTheme = document.documentElement.getAttribute("data-theme");
+      if (domTheme !== this.theme) {
+        document.documentElement.setAttribute("data-theme", this.theme);
+        document.body.setAttribute("data-theme", this.theme);
+      }
+    }, 200);
   },
   beforeUnmount() {
+    if (this.themeEnforcer) clearInterval(this.themeEnforcer);
     window.removeEventListener("resize", this.checkScreenSize);
     if (this.systemThemeListener) {
       window
@@ -233,10 +243,14 @@ export default {
     },
 
     initTheme() {
-      const currentTheme =
-        document.documentElement.getAttribute("data-theme") || "light";
-      this.theme = currentTheme;
-      console.log("App component synchronized theme to:", this.theme);
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "dark" || savedTheme === "light" || savedTheme === "system") {
+        this.theme = savedTheme;
+      } else {
+        this.theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", this.theme);
+      document.body.setAttribute("data-theme", this.theme);
     },
 
     initFontSize() {

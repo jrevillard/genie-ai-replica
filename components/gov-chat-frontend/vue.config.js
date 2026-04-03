@@ -1,19 +1,6 @@
 // vue.config.js
 const { DefinePlugin } = require('webpack');
-
-// ==============================================================================
-// DEBUGGING CODE STARTS HERE
-// ==============================================================================
-console.log("\n\n\n============================================================");
-console.log("!!! VUE.CONFIG.JS IS LOADING. CHECKING ENV VARS... !!!");
-console.log("============================================================");
-console.log(`process.env.VUE_APP_API_URL IS: [${process.env.VUE_APP_API_URL}]`);
-console.log(`process.env.VUE_APP_CSP_CONNECT_SRC IS: [${process.env.VUE_APP_CSP_CONNECT_SRC}]`);
-console.log(`process.env.VUE_PROXY_HOST IS: [${process.env.VUE_PROXY_HOST}]`);
-console.log("============================================================\n\n\n");
-// ==============================================================================
-// DEBUGGING CODE ENDS HERE
-// ==============================================================================
+const isProduction = process.env.NODE_ENV === 'production';
 
 const cspConnectSrc = process.env.VUE_APP_CSP_CONNECT_SRC || "'self' http://localhost:3000 ws://localhost:8090";
 const vueProxyHost = process.env.VUE_PROXY_HOST || "localhost:3000";
@@ -51,6 +38,19 @@ module.exports = {
     config.module.rule('tsx').uses.delete('cache-loader');
   },
   configureWebpack: {
+    optimization: isProduction ? {
+      minimizer: [
+        new (require('terser-webpack-plugin'))({
+          terserOptions: {
+            compress: {
+              drop_console: true,
+              pure_funcs: ['console.debug']
+            }
+          },
+          extractComments: false
+        })
+      ]
+    } : {},
     resolve: {
       fallback: {
         crypto: require.resolve('crypto-browserify'),
@@ -78,5 +78,3 @@ module.exports = {
     ]
   }
 };
-console.log('DEBUG: Final constructed CSP string:');
-console.log(module.exports.devServer.headers['Content-Security-Policy']);

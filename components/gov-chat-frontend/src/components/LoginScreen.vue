@@ -289,19 +289,9 @@ export default {
     this.setMobileHeight()
     window.addEventListener('resize', this.setMobileHeight)
     this.applyTheme()
-    this.observeThemeChanges()
-    const checkbox = document.querySelector('.remember-me input')
-    console.log(
-      '[LOGIN] Checkbox computed background color:',
-      checkbox ? window.getComputedStyle(checkbox).backgroundColor : 'not found'
-    )
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.setMobileHeight)
-    if (this.themeObserver) {
-      console.log('[LOGIN] Disconnecting MutationObserver')
-      this.themeObserver.disconnect()
-    }
   },
   watch: {
     theme(newTheme) {
@@ -479,38 +469,6 @@ export default {
         '[LOGIN] Title computed color:',
         title ? window.getComputedStyle(title).color : 'not found'
       )
-    },
-
-    observeThemeChanges() {
-      console.log(
-        '[LOGIN] Setting up MutationObserver, initial theme:',
-        this.theme,
-        new Date().toISOString()
-      )
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === 'data-theme') {
-            const newTheme =
-              document.documentElement.getAttribute('data-theme')
-            console.log(
-              '[LOGIN] Detected theme change via MutationObserver:',
-              newTheme,
-              new Date().toISOString()
-            )
-            if (newTheme !== this.theme) {
-              console.log('[LOGIN] Updating component theme to:', newTheme)
-              this.theme = newTheme
-              const title = document.querySelector('.login-card .app-name')
-              console.log(
-                '[LOGIN] Title computed color after change:',
-                title ? window.getComputedStyle(title).color : 'not found'
-              )
-            }
-          }
-        })
-      })
-      observer.observe(document.documentElement, { attributes: true })
-      this.themeObserver = observer
     }
   }
 }

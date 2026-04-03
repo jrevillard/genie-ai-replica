@@ -403,32 +403,13 @@ export default {
         // Try the standard 'user' key first
         let userStr = localStorage.getItem('user');
 
-        // Log raw data for debugging
-        console.log('Raw user data from localStorage:', userStr);
-
         if (!userStr) {
-          // Check alternative keys if the main one isn't found
-          console.log('Checking alternative token key...');
           userStr = localStorage.getItem('token');
-          console.log('Raw token data:', userStr);
         }
 
         if (userStr) {
           // Parse the user data
           this.currentUser = JSON.parse(userStr);
-          console.log('Parsed user data:', this.currentUser);
-
-          // Check different possible structures
-          if (this.currentUser.user) {
-            console.log('User data is nested in .user property');
-          }
-
-          // Check role information
-          const role = this.currentUser.role ||
-            (this.currentUser.user && this.currentUser.user.role);
-          console.log('Detected role:', role);
-        } else {
-          console.log('No user found in localStorage');
         }
       } catch (error) {
         console.error('Error parsing user from localStorage:', error);

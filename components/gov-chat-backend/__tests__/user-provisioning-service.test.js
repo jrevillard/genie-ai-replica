@@ -98,10 +98,14 @@ describe('userProvisioningService', () => {
 
       expect(result).toEqual(existingUser);
       expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
-      // Verify the UPSERT query (2nd call) was called with updateDoc (no createdAt)
-      const upsertCallArgs = mockQuery.mock.calls[1];
-      expect(upsertCallArgs[1].updateDoc).toBeDefined();
-      expect(upsertCallArgs[1].updateDoc.createdAt).toBeUndefined();
+      // Verify the UPSERT uses UPDATE (not REPLACE) — updateDoc is the 3rd interpolated value
+      // aql`UPSERT { iss_sub: ${issSub} } INSERT ${newDoc} UPDATE ${updateDoc} IN users`
+      // values: [issSub, newDoc, updateDoc]
+      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertValues = upsertCall.values;
+      const updateDoc = upsertValues[2]; // 3rd interpolated value
+      expect(updateDoc).toBeDefined();
+      expect(updateDoc.createdAt).toBeUndefined();
     });
 
     it('should update email when it changes in JWT on re-login', async () => {
@@ -129,8 +133,9 @@ describe('userProvisioningService', () => {
       const result = await userProvisioningService.provisionUser(decoded);
 
       expect(result.email).toBe('newemail@example.com');
-      const upsertCallArgs = mockQuery.mock.calls[1];
-      expect(upsertCallArgs[1].updateDoc.email).toBe('newemail@example.com');
+      const upsertCall = mockQuery.mock.calls[1][0];
+      const updateDoc = upsertCall.values[2];
+      expect(updateDoc.email).toBe('newemail@example.com');
     });
 
     it('should return null for soft-deleted user without running UPSERT', async () => {
@@ -212,9 +217,10 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCallArgs = mockQuery.mock.calls[1];
-      expect(upsertCallArgs[1].updateDoc.roles).toEqual(['super-admin']);
-      expect(upsertCallArgs[1].newDoc.roles).toEqual(['super-admin']);
+      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertValues = upsertCall.values;
+      expect(upsertValues[2].roles).toEqual(['super-admin']); // updateDoc
+      expect(upsertValues[1].roles).toEqual(['super-admin']); // newDoc
     });
 
     it('should use preferred_username when name is not in JWT', async () => {
@@ -242,8 +248,8 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCallArgs = mockQuery.mock.calls[1];
-      expect(upsertCallArgs[1].newDoc.name).toBe('testuser');
+      const upsertCall = mockQuery.mock.calls[1][0];
+      expect(upsertCall.values[1].name).toBe('testuser'); // newDoc
     });
 
     it('should set email and name to null when not in JWT', async () => {
@@ -271,10 +277,10 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCallArgs = mockQuery.mock.calls[1];
-      expect(upsertCallArgs[1].newDoc.email).toBeNull();
-      expect(upsertCallArgs[1].newDoc.name).toBeNull();
-      expect(upsertCallArgs[1].newDoc.roles).toEqual([]);
+      const upsertCall = mockQuery.mock.calls[1][0];
+      expect(upsertCall.values[1].email).toBeNull(); // newDoc
+      expect(upsertCall.values[1].name).toBeNull(); // newDoc
+      expect(upsertCall.values[1].roles).toEqual([]); // newDoc
     });
 
     it('should set roles to empty array when realm_access is missing', async () => {
@@ -302,9 +308,9 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCallArgs = mockQuery.mock.calls[1];
-      expect(upsertCallArgs[1].newDoc.roles).toEqual([]);
-      expect(upsertCallArgs[1].updateDoc.roles).toEqual([]);
+      const upsertCall = mockQuery.mock.calls[1][0];
+      expect(upsertCall.values[1].roles).toEqual([]); // newDoc
+      expect(upsertCall.values[2].roles).toEqual([]); // updateDoc
     });
 
     it('should throw when UPSERT returns no result', async () => {

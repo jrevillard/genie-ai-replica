@@ -123,11 +123,11 @@ A manual validation checklist structured in 2 sequential phases:
 ### Service Inventory (20+ services)
 
 **Infrastructure layer:**
-- `kong-database` (PostgreSQL, internal 5432) — no deps
-- `postgres-init` — depends on kong-database (creates kong/keycloak users and databases)
-- `kong-migrations` — depends on kong-database
-- `kong` (internal 8000/8443) — depends on kong-database, kong-migrations
-- `keycloak` (internal 8080) — depends on kong-database, postgres-init
+- `postgres` (PostgreSQL, internal 5432) — no deps
+- `postgres-init` — depends on postgres (creates kong/keycloak users and databases)
+- `kong-migrations` — depends on postgres
+- `kong` (internal 8000/8443) — depends on postgres, kong-migrations
+- `keycloak` (internal 8080) — depends on postgres, postgres-init
 - `keycloak-config` — depends on keycloak
 - `nginx` (ports 80, 443) — depends on kong
 
@@ -165,7 +165,7 @@ A manual validation checklist structured in 2 sequential phases:
 | `JWT_SECRET` | backend, document-repository |
 | `SESSION_SECRET` | backend |
 | `TRANSLATION_CACHE_PASSWORD` | redis-cache, translation |
-| `POSTGRES_PASSWORD` | kong-database, postgres-init |
+| `POSTGRES_PASSWORD` | postgres, postgres-init |
 | `KONG_DB_PASSWORD` | postgres-init, kong, kong-migrations |
 | `KEYCLOAK_ADMIN_PASSWORD` | keycloak, keycloak-config |
 | `KEYCLOAK_DB_PASSWORD` | postgres-init, keycloak |
@@ -283,7 +283,7 @@ Since the branch only touches infrastructure, Phase 2 is a lightweight smoke tes
   - PASS/FAIL: _____
 
 - [ ] **Task 1.3.4:** Verify all infrastructure services are healthy
-  - Services: `kong-database`, `postgres-init`, `kong-migrations`, `kong`, `keycloak`, `keycloak-config`, `nginx`, `http-service`
+  - Services: `postgres`, `postgres-init`, `kong-migrations`, `kong`, `keycloak`, `keycloak-config`, `nginx`, `http-service`
   - Action: Run `docker compose ps`. Verify all 8 services show "healthy" or "running" (postgres-init and kong-migrations should exit 0). Check logs for errors: `docker compose logs kong`, `docker compose logs keycloak`, `docker compose logs nginx`.
   - Severity: CRITICAL
   - PASS/FAIL: _____

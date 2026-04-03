@@ -110,10 +110,11 @@ The current code uses `FORBIDDEN` (403) for soft-deleted users. The architecture
 - `keycloak-auth-middleware.js:121` — `TOKEN_INVALID` forwards `err.message || 'Token verification failed'` which leaks internal error details
 - Fix: Replace with hardcoded human-readable strings
 
-**Issue 2: Internal details exposed in service error messages**
-- `keycloak-auth-service.js:73` — issuer validation error exposes `payload.iss` (Keycloak URL)
-- `keycloak-auth-service.js:95` — audience mismatch error exposes `KEYCLOAK_CLIENT_ID` and `verifiedPayload.aud`
-- Fix: Replace with generic messages like "Token issuer validation failed" and "Token audience validation failed"
+**Issue 2: Internal details exposed in service error messages** (FIXED during Story 1.9 refactor)
+- Original code manually validated `iss` and `aud` claims with error messages that exposed internal values
+- Story 1.9 refactored `keycloak-auth-service.js` to OIDC discovery pattern — all claim validation is now delegated to `jose.jwtVerify()` with native `JWTClaimValidationFailed` errors
+- The service catches jose's structured errors and returns generic messages: "Token issuer validation failed", "Token audience validation failed"
+- No internal values (URLs, client IDs, token claims) are exposed in error messages
 
 **Issue 3: `TokenVerificationError` class is fine as-is**
 - The class has proper structure: `code`, `message`, `details`

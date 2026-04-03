@@ -204,7 +204,7 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
 - [ ] **Task 4: Add deploy.placement.constraints to all services**
   - File: `docker-compose.swarm.yaml`
   - Action: Add `deploy` section to each service with placement constraints:
-    - **API Gateway stack** (`node.role == manager`): `kong-database`, `kong-migrations`, `kong`, `nginx`
+    - **API Gateway stack** (`node.role == manager`): `postgres`, `kong-migrations`, `kong`, `nginx`
     - **OPEA/GPU stack** (`node.labels.gpu == true`): `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker`, `embedding`, `reranker`, `textgen`, `translation`, `guardrail`, `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `chatqna-xeon-ui-server`, `chatqna-xeon-nginx-server`
     - **GENIE.AI stack** (no constraint): `frontend`, `backend`, `arango-vector-db`, `redis-cache`, `document-repository`, `clamav`, `http-service`
   - Notes: Services with existing `deploy` sections (GPU services) — extend them. Services without — add new `deploy` section. Single-node Swarm requires `docker node update --label-add gpu=true <node>` for OPEA services to be scheduled.

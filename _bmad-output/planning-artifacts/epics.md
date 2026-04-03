@@ -420,11 +420,13 @@ So that the backend never depends on an external service to determine if a token
 
 ---
 
-### Story 2.2: Multi-Issuer JWKS Cache with Force-Refresh
+### Story 2.2: JWKS Force-Refresh on Validation Failure
 
 As a backend system,
-I want to cache JWKS public keys per issuer with a TTL and force-refresh on validation failure,
-So that token validation is both fast and resilient to key rotation.
+I want to force-refresh the JWKS cache when token validation fails with a valid expiration,
+So that token validation is resilient to Keycloak key rotation without user disruption.
+
+**Note:** Multi-issuer JWKS resolution and caching are already implemented (Story 1.9 OIDC discovery refactor). This story covers ONLY the two-attempt force-refresh pattern described in D3.
 
 **Acceptance Criteria:**
 
@@ -506,11 +508,13 @@ So that I understand whether my credentials are wrong, my session expired, or I 
 
 ---
 
-### Story 2.7: Keycloak Unavailable Detection & Health Check
+### Story 2.7: Health Check — Keycloak Discovery Endpoint Reachability
 
 As an IT administrator,
-I want the health check endpoint to report Keycloak availability status,
-So that I can monitor the authentication service dependency.
+I want the health check endpoint to verify that the Keycloak OIDC discovery endpoint is reachable,
+So that I can quickly diagnose whether authentication issues are caused by Keycloak being unreachable.
+
+**Note:** The auth layer already handles Keycloak unavailability via the lazy OIDC discovery singleton — if Keycloak is down at startup or during operation, `ensureInitialized()` returns `AUTH_SERVICE_UNAVAILABLE` with a 30s retry cooldown. This story covers ONLY the `/health` endpoint enhancement to proactively report Keycloak reachability (NFR11), not the auth-layer unavailability handling which is already implemented.
 
 **Acceptance Criteria:**
 

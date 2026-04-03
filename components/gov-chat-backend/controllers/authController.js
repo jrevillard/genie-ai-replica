@@ -324,8 +324,15 @@ class AuthController {
 
   async getCurrentUser(req, res) {
     try {
-      logger.info('Fetching current user info');
-      const userId = req.user.userId;
+      // When using Keycloak auth, req.user is set by keycloakAuthMiddleware
+      // from the JIT provisioning result (ArangoDB document)
+      if (req.user && req.user.iss_sub) {
+        const { _key, _id, _rev, encPassword, ...userWithoutInternals } = req.user;
+        return res.json({ success: true, user: userWithoutInternals });
+      }
+
+      // Legacy fallback: userId-based lookup
+      const userId = req.user?.userId;
       if (!userId) {
         logger.warn('User ID is required to fetch user info');
         return res.status(400).json({ success: false, message: 'User ID is required' });

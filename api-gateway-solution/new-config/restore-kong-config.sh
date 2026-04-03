@@ -147,7 +147,7 @@ restore_config() {
         log "Processing service $service_name"
         response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/services/$service_name" \
             -H "Content-Type: application/json" \
-            -d "$(echo "$service" | jq 'del(.id, .routes, .plugins, .created_at, .updated_at)')" < /dev/null)
+            -d "$(echo "$service" | jq 'del(.id, .routes, .plugins, .created_at, .updated_at, ._comment)')" < /dev/null)
         http_code=$(echo "$response" | sed -n '$p')
         body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
@@ -173,7 +173,7 @@ restore_config() {
             errors=$((errors + 1))
             continue
         fi
-        route_payload=$(echo "$route" | jq --arg sid "$route_service_id" 'del(.id, .plugins, .created_at, .updated_at) | .service = {id: $sid}')
+        route_payload=$(echo "$route" | jq --arg sid "$route_service_id" 'del(.id, .plugins, .created_at, .updated_at, ._comment) | .service = {id: $sid}')
         existing_route=$(curl -s "$KONG_ADMIN_URL/routes/$route_name" < /dev/null)
         if [ "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
             response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/routes/$route_name" \
@@ -210,7 +210,7 @@ restore_config() {
                     log "Plugin $plugin_name already exists for route $route_name, skipping"
                     continue
                 fi
-                plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at)')
+                plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at, ._comment)')
                 response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/$route_name/plugins" \
                     -H "Content-Type: application/json" \
                     -d "$plugin_payload" < /dev/null)
@@ -274,7 +274,7 @@ restore_config() {
             errors=$((errors + 1))
             continue
         fi
-        plugin_payload=$(echo "$plugin" | jq --arg sid "$plugin_svc_id" 'del(.id, .created_at, .updated_at) | .service = {id: $sid}')
+        plugin_payload=$(echo "$plugin" | jq --arg sid "$plugin_svc_id" 'del(.id, .created_at, .updated_at, ._comment) | .service = {id: $sid}')
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$plugin_service_name/plugins" \
             -H "Content-Type: application/json" \
             -d "$plugin_payload" < /dev/null)
@@ -303,7 +303,7 @@ restore_config() {
             log "Global plugin $plugin_name already exists, skipping"
             continue
         fi
-        plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at)')
+        plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at, ._comment)')
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/plugins" \
             -H "Content-Type: application/json" \
             -d "$plugin_payload" < /dev/null)
@@ -325,7 +325,7 @@ restore_config() {
     while IFS= read -r upstream; do
         upstream_name=$(echo "$upstream" | jq -r '.name')
         log "Processing upstream $upstream_name"
-        upstream_payload=$(echo "$upstream" | jq 'del(.targets, .id, .created_at, .updated_at)')
+        upstream_payload=$(echo "$upstream" | jq 'del(.targets, .id, .created_at, .updated_at, ._comment)')
         response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/upstreams/$upstream_name" \
             -H "Content-Type: application/json" \
             -d "$upstream_payload" < /dev/null)

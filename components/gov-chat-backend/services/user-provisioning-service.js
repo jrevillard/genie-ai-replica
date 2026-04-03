@@ -30,10 +30,9 @@ const userProvisioningService = {
     const checkCursor = await db.query(
       aql`
         FOR u IN users
-          FILTER u.iss_sub == @iss_sub AND u.deleted == true
+          FILTER u.iss_sub == ${issSub} AND u.deleted == true
           RETURN u
-      `,
-      { iss_sub: issSub }
+      `
     );
     const deletedUser = await checkCursor.next();
     if (deletedUser) {
@@ -63,12 +62,11 @@ const userProvisioningService = {
 
     const cursor = await db.query(
       aql`
-        UPSERT { iss_sub: @iss_sub }
-        INSERT @newDoc
-        REPLACE @updateDoc IN users
+        UPSERT { iss_sub: ${issSub} }
+        INSERT ${newDoc}
+        UPDATE ${updateDoc} IN users
         RETURN { new: NEW, old: OLD }
-      `,
-      { iss_sub: issSub, newDoc, updateDoc }
+      `
     );
 
     const result = await cursor.next();

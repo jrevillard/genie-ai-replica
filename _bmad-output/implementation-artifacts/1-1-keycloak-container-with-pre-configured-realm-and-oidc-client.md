@@ -51,7 +51,7 @@ So that no manual Keycloak setup is required after deployment.
   - [x] Web origins configured for CORS (from `KC_WEB_ORIGINS` env var)
   - [x] Default admin user created with password from `KC_ADMIN_PASSWORD` env var
   - [x] Realm roles defined: `admin`, `user` (minimum viable set)
-  - [x] Variable substitution via `${env:VAR}` syntax (keycloak-config-cli native)
+  - [x] Variable substitution via `$(env:VAR)` syntax (keycloak-config-cli native)
 
 - [x] Create Keycloak Docker images (AC: #1, #5)
   - [x] Create `config/keycloak/Dockerfile` — base `quay.io/keycloak/keycloak:26.5.6`, production mode (`kc.sh start`)
@@ -106,7 +106,7 @@ Custom Docker image approach with config baked in. No bind mounts. Secrets injec
 
 ### keycloak-config-cli YAML Variable Substitution
 
-Uses `${env:VAR_NAME}` syntax natively in YAML. Variables are passed as environment variables to the `keycloak-config` service and resolved at runtime by config-cli.
+Uses `$(env:VAR_NAME)` syntax natively in YAML. Variables are passed as environment variables to the `keycloak-config` service and resolved at runtime by config-cli.
 
 ### Keycloak Configuration
 
@@ -118,7 +118,7 @@ Uses `${env:VAR_NAME}` syntax natively in YAML. Variables are passed as environm
 
 ### PostgreSQL Multi-User Architecture
 
-Shared PostgreSQL instance (`kong-database`) with dedicated users:
+Shared PostgreSQL instance (`postgres`) with dedicated users:
 - Superuser `genieai` (POSTGRES_USER) — created by PostgreSQL init
 - Dedicated user `kong` (KONG_DB_PASSWORD) — created by `postgres-init`
 - Dedicated user `keycloak` (KEYCLOAK_DB_PASSWORD) — created by `postgres-init`

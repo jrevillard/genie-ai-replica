@@ -52,7 +52,7 @@ SESSION_SECRET=
 TRANSLATION_CACHE_PASSWORD=
 
 # PostgreSQL shared instance (API gateway + Keycloak)
-# The shared PostgreSQL (kong-database) uses a superuser + dedicated users:
+# The shared PostgreSQL (postgres service) uses a superuser + dedicated users:
 # - Superuser 'genieai' (POSTGRES_USER) with POSTGRES_PASSWORD — created by PostgreSQL init
 # - Dedicated user 'kong' with KONG_DB_PASSWORD — created by postgres-init
 # - Dedicated user 'keycloak' with KEYCLOAK_DB_PASSWORD — created by postgres-init (see Section 9)
@@ -63,7 +63,7 @@ TRANSLATION_CACHE_PASSWORD=
 # POSTGRES_USER=genieai
 
 # PostgreSQL superuser password
-# Used by: kong-database (init), postgres-init (superuser auth)
+# Used by: postgres (init), postgres-init (superuser auth)
 POSTGRES_PASSWORD=
 
 # Kong dedicated database user password (MUST differ from POSTGRES_PASSWORD)
@@ -294,11 +294,13 @@ HUGGING_FACE_HUB_TOKEN=
 # Keycloak is the identity provider for OIDC authentication.
 # All passwords below MUST be set in your .env before deployment.
 
-# Keycloak internal URL (for backend OIDC token validation)
-# Used by: backend (future — not yet implemented)
-# Note: keycloak-config service uses its own hardcoded KEYCLOAK_URL env var
-# Default: http://keycloak:8080 (Docker internal network)
-# KEYCLOAK_URL=http://keycloak:8080
+# Keycloak public URL (for backend OIDC discovery and token validation)
+# Used by: backend (keycloak-auth-service.js)
+# Must be the public URL via NGINX proxy so the issuer matches the JWT's iss claim.
+# In docker-compose, this is auto-derived from NGINX_PUBLIC_DOMAIN:
+#   KEYCLOAK_URL=https://<NGINX_PUBLIC_DOMAIN>/auth
+# Note: keycloak-config service uses its own internal KEYCLOAK_URL (http://keycloak:8080)
+# KEYCLOAK_URL=https://localhost/auth
 
 # Keycloak realm name
 # Default: genie
@@ -330,7 +332,7 @@ KEYCLOAK_DB_PASSWORD=
 
 # Keycloak PostgreSQL JDBC URL
 # Points to the shared PostgreSQL instance, 'keycloak' database
-# KC_DB_URL=jdbc:postgresql://kong-database:5432/keycloak
+# KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
 
 # Keycloak PostgreSQL username (dedicated user, created by postgres-init)
 # KC_DB_USERNAME=keycloak
@@ -344,6 +346,27 @@ KEYCLOAK_DB_PASSWORD=
 # Default: http://localhost:8090 (frontend dev URL)
 # Production: https://your-domain.com
 # KEYCLOAK_WEB_ORIGINS=http://localhost:8090
+
+# TLS verification for backend → NGINX OIDC discovery/JWKS fetches
+# Default: 1 (strict, production). Set to 0 for local dev with self-signed NGINX certs.
+# NODE_TLS_REJECT_UNAUTHORIZED=0
+
+# =============================================================================
+# SECTION 9B: EXTERNAL IDENTITY PROVIDERS (OPTIONAL)
+# =============================================================================
+# External IdP credentials are configured in Keycloak, NOT in GENIE.AI's .env.
+# See docs/external-idp-integration-guide.md for step-by-step instructions.
+#
+# GENIE.AI's backend and frontend code does NOT need any external IdP configuration.
+# Keycloak handles the entire identity brokering flow and issues standard OIDC tokens
+# to GENIE.AI, regardless of which external IdP was used.
+#
+# If using keycloak-config-cli for automated IdP provisioning (optional), inject
+# secrets via environment variables on the keycloak-config service:
+#   KEYCLOAK_GOOGLE_CLIENT_ID=<google-oauth-client-id>
+#   KEYCLOAK_GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
+# These are NOT GENIE.AI variables — they are Keycloak configuration only.
+# Add them to docker-compose.yaml under keycloak-config environment section.
 
 # =============================================================================
 # SECTION 10: GPU-SPECIFIC CONFIGURATION

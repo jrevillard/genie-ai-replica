@@ -44,7 +44,3 @@ All ignore rules are in the root `.gitignore` - no per-service `.gitignore` file
 | ArangoDB | 8529 |
 | Redis | 6379 (container, internal only) |
 | ClamAV | 3310 |
-
-## Test account
-- **Username:** jrevillard
-- **Password:** Test1234!

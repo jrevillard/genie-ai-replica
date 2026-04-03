@@ -16,17 +16,32 @@ describe('oidcConfig', () => {
   it('should return defaults when no config is available', () => {
     oidcConfig = require('@/config/oidcConfig').default;
 
-    expect(oidcConfig.authority).toBe('http://localhost:8080/realms/genie');
-    expect(oidcConfig.clientId).toBe('genie-app');
-    expect(oidcConfig.responseType).toBe('code');
+    expect(oidcConfig.authority).toBe('http://localhost/auth/realms/genie');
+    expect(oidcConfig.client_id).toBe('genie-app');
+    expect(oidcConfig.response_type).toBe('code');
     expect(oidcConfig.scope).toBe('openid profile email');
     expect(oidcConfig.automaticSilentRenew).toBe(true);
     expect(oidcConfig.storeAuthStateInCookie).toBe(false);
-    expect(oidcConfig.redirectUri).toMatch(/\/callback$/);
-    expect(oidcConfig.postLogoutRedirectUri).toBeDefined();
+    expect(oidcConfig.redirect_uri).toMatch(/\/callback$/);
+    expect(oidcConfig.post_logout_redirect_uri).toBeDefined();
   });
 
-  it('should read from window.APP_CONFIG.keycloak when available', () => {
+  it('should read client_id from window.APP_CONFIG.keycloak', () => {
+    window.APP_CONFIG = {
+      keycloak: {
+        url: 'https://auth.example.com',
+        realm: 'myrealm',
+        client_id: 'my-client'
+      }
+    };
+
+    oidcConfig = require('@/config/oidcConfig').default;
+
+    expect(oidcConfig.authority).toBe('https://auth.example.com/realms/myrealm');
+    expect(oidcConfig.client_id).toBe('my-client');
+  });
+
+  it('should also accept legacy clientId from APP_CONFIG', () => {
     window.APP_CONFIG = {
       keycloak: {
         url: 'https://auth.example.com',
@@ -38,7 +53,7 @@ describe('oidcConfig', () => {
     oidcConfig = require('@/config/oidcConfig').default;
 
     expect(oidcConfig.authority).toBe('https://auth.example.com/realms/myrealm');
-    expect(oidcConfig.clientId).toBe('my-client');
+    expect(oidcConfig.client_id).toBe('my-client');
   });
 
   it('should fall back to env vars when APP_CONFIG is empty', () => {
@@ -49,7 +64,7 @@ describe('oidcConfig', () => {
     oidcConfig = require('@/config/oidcConfig').default;
 
     expect(oidcConfig.authority).toBe('https://env.example.com/realms/envrealm');
-    expect(oidcConfig.clientId).toBe('env-client');
+    expect(oidcConfig.client_id).toBe('env-client');
   });
 
   it('should prefer APP_CONFIG over env vars', () => {
@@ -58,7 +73,7 @@ describe('oidcConfig', () => {
       keycloak: {
         url: 'https://app.example.com',
         realm: 'apprealm',
-        clientId: 'app-client'
+        client_id: 'app-client'
       }
     };
 
@@ -71,7 +86,6 @@ describe('oidcConfig', () => {
     window.APP_CONFIG = {
       keycloak: {
         url: 'https://app.example.com'
-        // realm and clientId not specified → fall back to env vars
       }
     };
     process.env.VUE_APP_KEYCLOAK_REALM = 'envrealm';
@@ -80,14 +94,13 @@ describe('oidcConfig', () => {
     oidcConfig = require('@/config/oidcConfig').default;
 
     expect(oidcConfig.authority).toBe('https://app.example.com/realms/envrealm');
-    expect(oidcConfig.clientId).toBe('env-client');
+    expect(oidcConfig.client_id).toBe('env-client');
   });
 
   it('should include PKCE-compatible settings', () => {
     oidcConfig = require('@/config/oidcConfig').default;
 
-    // Authorization Code flow with PKCE is default in oidc-client-ts
-    expect(oidcConfig.responseType).toBe('code');
+    expect(oidcConfig.response_type).toBe('code');
     expect(oidcConfig.scope).toContain('openid');
   });
 
@@ -96,7 +109,7 @@ describe('oidcConfig', () => {
       keycloak: {
         url: 'https://auth.example.com/',
         realm: 'myrealm',
-        clientId: 'my-client'
+        client_id: 'my-client'
       }
     };
 

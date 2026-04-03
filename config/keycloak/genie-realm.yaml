@@ -1,7 +1,15 @@
-realm: ${env:KC_REALM}
+realm: $(env:KC_REALM)
 enabled: true
 # TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
 sslRequired: none
+
+# Realm roles (must be defined before users that reference them)
+roles:
+  realm:
+    - name: admin
+      description: Administrator role with full access
+    - name: user
+      description: Standard user role
 
 # Default admin user
 users:
@@ -12,7 +20,7 @@ users:
     lastName: GENIE
     credentials:
       - type: password
-        value: ${env:KC_ADMIN_PASSWORD}
+        value: $(env:KC_ADMIN_PASSWORD)
         temporary: false
     realmRoles:
       - admin
@@ -20,10 +28,9 @@ users:
 
 # OIDC client configuration
 clients:
-  - clientId: ${env:KC_CLIENT_ID}
+  - clientId: $(env:KC_CLIENT_ID)
     enabled: true
-    publicClient: false
-    secret: ${env:KC_CLIENT_SECRET}
+    publicClient: true
     standardFlowEnabled: true
     directAccessGrantsEnabled: false
     implicitFlowEnabled: false
@@ -34,10 +41,14 @@ clients:
       client.credentials.use.refresh.token: false
       require.pushed.authorization.requests: false
     redirectUris:
-      - ${env:KC_VALID_REDIRECT_URIS}
+      - http://localhost:8090/*
+      - https://localhost/*
     webOrigins:
-      - ${env:KC_WEB_ORIGINS}
+      - http://localhost:8090
+      - https://localhost
     defaultClientScopes:
+      - openid
+      - basic
       - profile
       - email
       - roles
@@ -45,11 +56,3 @@ clients:
       - address
       - phone
       - offline_access
-
-# Realm roles
-roles:
-  realm:
-    - name: admin
-      description: Administrator role with full access
-    - name: user
-      description: Standard user role

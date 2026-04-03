@@ -35,10 +35,10 @@ docker compose up -d
 
 ### API Gateway Services
 
-- **kong-database**: Shared PostgreSQL database for Kong and Keycloak.
+- **postgres**: Shared PostgreSQL database for Kong and Keycloak.
   - Image: `postgres:13`.
   - Environment: Superuser `${POSTGRES_USER:-genieai}`, DB `kong`, Password from `POSTGRES_PASSWORD`.
-  - Volume: `kong_data:/var/lib/postgresql/data`; mounts custom `pg_hba.conf`.
+  - Volume: `postgres_data:/var/lib/postgresql/data`; mounts custom `pg_hba.conf`.
   - Healthcheck: Ensures database readiness.
 
 - **kong**: Kong API gateway.
@@ -68,7 +68,7 @@ docker compose up -d
 ### Networks and Volumes
 
 - **Network**: All services connected to `genieai_network` (overlay driver, attachable).
-- **Volumes**: `kong_data` (Kong Postgres), `./data/logs/kong` (Kong logs).
+- **Volumes**: `postgres_data` (shared Postgres), `./data/logs/kong` (Kong logs).
 
 ### Usage
 
@@ -103,7 +103,7 @@ docker compose up -d
 6. **Troubleshooting**:
    - Check dependencies: Use `docker compose ps` to verify service status.
    - Database issues: Ensure healthchecks pass; inspect logs.
-   - Network: Services communicate via Docker service names (e.g., `kong-database`, `kong`, `frontend`).
+   - Network: Services communicate via Docker service names (e.g., `postgres`, `kong`, `frontend`).
 
 ## Kong Configuration Scripts
 

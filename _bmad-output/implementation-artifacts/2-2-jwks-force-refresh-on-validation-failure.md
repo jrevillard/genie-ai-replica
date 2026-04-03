@@ -1,6 +1,6 @@
 # Story 2.2: JWKS Force-Refresh on Validation Failure
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -36,8 +36,8 @@ So that token validation is resilient to Keycloak key rotation without user disr
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement explicit JWKS TTL wrapper (AC: #1, #2, #6)
-  - [ ] 1.1 Create a `createJwksCache()` factory function that wraps jose's `createRemoteJWKSet()` with an explicit 5-minute TTL
+- [x] Task 1: Implement explicit JWKS TTL wrapper (AC: #1, #2, #6)
+  - [x] 1.1 Create a `createJwksCache()` factory function that wraps jose's `createRemoteJWKSet()` with an explicit 5-minute TTL
     - CRITICAL: jose's `jwtVerify(token, jwks, options)` calls `jwks` as a function with signature `(protectedHeader, token)` — NOT `jwks.verify(token, options)`. The wrapper MUST be a callable function, not a class with a `verify` method. Use a **closure-based factory** that returns a function with attached methods.
     - The wrapper MUST store both the `createRemoteJWKSet()` result AND the JWKS URI (from `doc.jwks_uri` in OIDC discovery) so that `forceRefresh()` can re-call `createRemoteJWKSet()` with the correct URI
     - Factory: `createJwksCache(jwksUri, ttlMs = 300000)` returns a callable `jwksFn` with attached `.forceRefresh()` and `._isExpired()` methods
@@ -68,33 +68,33 @@ So that token validation is resilient to Keycloak key rotation without user disr
         return jwksFn;
       }
       ```
-  - [ ] 1.2 Replace direct `createRemoteJWKSet()` usage in `init()` with the TTL wrapper
+  - [x] 1.2 Replace direct `createRemoteJWKSet()` usage in `init()` with the TTL wrapper
     - Current code (line 63): `const jwks = createRemoteJWKSet(new URL(doc.jwks_uri));`
     - New code: `const jwks = createJwksCache(doc.jwks_uri); issuerMap.set(doc.issuer, jwks);`
-  - [ ] 1.3 The `forceRefresh()` method is attached to the returned `jwksFn` — call it via `issuerMap.get(iss).forceRefresh()` in `verifyToken` when a retry is needed
-  - [ ] 1.4 Ensure TTL is tracked per-issuer in the existing `issuerMap` (value changes from raw JWKS function to `createJwksCache` result — a callable with attached methods)
-  - [ ] 1.5 Update `_resetForTesting()` — no change needed. Existing code already calls `issuerMap.clear()` which is sufficient since the cache functions will be garbage collected
+  - [x] 1.3 The `forceRefresh()` method is attached to the returned `jwksFn` — call it via `issuerMap.get(iss).forceRefresh()` in `verifyToken` when a retry is needed
+  - [x] 1.4 Ensure TTL is tracked per-issuer in the existing `issuerMap` (value changes from raw JWKS function to `createJwksCache` result — a callable with attached methods)
+  - [x] 1.5 Update `_resetForTesting()` — no change needed. Existing code already calls `issuerMap.clear()` which is sufficient since the cache functions will be garbage collected
 
-- [ ] Task 2: Implement two-attempt force-refresh in `verifyToken` (AC: #3, #4, #5)
-  - [ ] 2.1 In `verifyToken`, catch `jwtVerify` failures and distinguish between signature errors (force-refresh candidate) and expiration errors (no refresh)
+- [x] Task 2: Implement two-attempt force-refresh in `verifyToken` (AC: #3, #4, #5)
+  - [x] 2.1 In `verifyToken`, catch `jwtVerify` failures and distinguish between signature errors (force-refresh candidate) and expiration errors (no refresh)
     - jose v6 error types: `JWTExpired` → immediate `TOKEN_EXPIRED`; generic `Error` (signature mismatch) → force-refresh candidate; `JWTClaimValidationFailed` → `TOKEN_INVALID` (claim issues like `iss`/`aud` mismatch are NOT key rotation problems)
     - NOTE: jose v6 throws `JWTExpired` specifically for `exp` claims. `JWTClaimValidationFailed` for `exp` is NOT expected — jose uses the dedicated `JWTExpired` class
     - CRITICAL: jose checks signature BEFORE claims. When a signature error occurs, `exp` was never checked by jose. To decide whether to force-refresh, the developer must manually check `exp` from the unverified JWT payload (already decoded at lines 141-147 for `iss` lookup). If `payload.exp < Date.now() / 1000`, skip refresh and reject with `TOKEN_EXPIRED`. The unverified payload extraction already exists in the code — just add an `exp` check alongside the `iss` extraction
-  - [ ] 2.2 On signature failure with valid `exp`: call `jwks.forceRefresh()` (where `jwks = issuerMap.get(iss)`) then retry `jwtVerify` once
-  - [ ] 2.3 On retry failure: reject with 401 `TOKEN_INVALID`
-  - [ ] 2.4 On expired token (`JWTExpired`): reject immediately with 401 `TOKEN_EXPIRED` — no refresh attempt
-  - [ ] 2.5 Ensure the retry does not create infinite loops (max 2 attempts total)
-  - [ ] 2.6 If `forceRefresh` itself fails (network error, DNS), also reject with 401 `TOKEN_INVALID` — any error during refresh is treated as a failed retry
+  - [x] 2.2 On signature failure with valid `exp`: call `jwks.forceRefresh()` (where `jwks = issuerMap.get(iss)`) then retry `jwtVerify` once
+  - [x] 2.3 On retry failure: reject with 401 `TOKEN_INVALID`
+  - [x] 2.4 On expired token (`JWTExpired`): reject immediately with 401 `TOKEN_EXPIRED` — no refresh attempt
+  - [x] 2.5 Ensure the retry does not create infinite loops (max 2 attempts total)
+  - [x] 2.6 If `forceRefresh` itself fails (network error, DNS), also reject with 401 `TOKEN_INVALID` — any error during refresh is treated as a failed retry
 
-- [ ] Task 3: Add unit tests (AC: all)
-  - [ ] 3.1 Test: cached JWKS is reused within TTL (no re-fetch)
-  - [ ] 3.2 Test: cached JWKS expires after 5 minutes and re-fetches
-  - [ ] 3.3 Test: signature failure with valid `exp` triggers force-refresh and retry
-  - [ ] 3.4 Test: signature failure retry also fails → `TOKEN_INVALID`
-  - [ ] 3.5 Test: signature failure retry succeeds → token accepted
-  - [ ] 3.6 Test: expired token → `TOKEN_EXPIRED` (no refresh attempt)
-  - [ ] 3.7 Test: multi-issuer cache isolation (each issuer cached independently)
-  - [ ] 3.8 Test: `forceRefresh` only clears cache for the target issuer, not others
+- [x] Task 3: Add unit tests (AC: all)
+  - [x] 3.1 Test: cached JWKS is reused within TTL (no re-fetch)
+  - [x] 3.2 Test: cached JWKS expires after 5 minutes and re-fetches
+  - [x] 3.3 Test: signature failure with valid `exp` triggers force-refresh and retry
+  - [x] 3.4 Test: signature failure retry also fails → `TOKEN_INVALID`
+  - [x] 3.5 Test: signature failure retry succeeds → token accepted
+  - [x] 3.6 Test: expired token → `TOKEN_EXPIRED` (no refresh attempt)
+  - [x] 3.7 Test: multi-issuer cache isolation (each issuer cached independently)
+  - [x] 3.8 Test: `forceRefresh` only clears cache for the target issuer, not others
 
 ## Dev Notes
 
@@ -197,9 +197,51 @@ This story will be implemented in the `epic2-backend` worktree.
 ## Dev Agent Record
 
 ### Agent Model Used
+- claude-opus-4-6 (Claude 4.6 Opus)
 
 ### Debug Log References
+- No debug logs required for this story
 
 ### Completion Notes List
 
+#### Implementation Summary
+1. **createJwksCache() factory function** implemented with:
+   - Closure-based pattern storing `_inner`, `_jwksUri`, `_createdAt`
+   - TTL check on each call (5 minutes default)
+   - `.forceRefresh()` method for immediate re-fetch
+   - `._isExpired()` method for testing
+   - Compatible with jose's `jwtVerify(token, jwksFunction, options)` signature
+
+2. **Two-attempt force-refresh pattern** in `verifyToken()`:
+   - Extracts `exp` from unverified payload for expiration check
+   - Signature failure with valid `exp` → force-refresh + retry
+   - Expired token → immediate `TOKEN_EXPIRED` (no refresh)
+   - Claim validation errors → `TOKEN_INVALID` (no refresh)
+   - Max 2 attempts total (prevents infinite loops)
+
+3. **Unit tests** added for:
+   - Cache reuse within TTL (via verifyToken integration)
+   - Cache expiry after 5 minutes (via createJwksCache direct test)
+   - Force-refresh on signature failure with valid exp
+   - Retry failure → `TOKEN_INVALID`
+   - Retry success → token accepted
+   - Expired token → `TOKEN_EXPIRED` (no refresh)
+   - Multi-issuer cache isolation
+   - Claim validation errors don't trigger refresh
+   - Force-refresh method triggers re-fetch on next call
+
+**Test Results:** 81/81 tests passing
+
+#### Technical Decisions
+- Used `const JWKS_CACHE_TTL = 300000` (5 minutes) as per NFR10
+- Manual `exp` check from unverified payload (jose checks signature before claims)
+- Helper function `verifyWithJwt()` to avoid code duplication in retry logic
+- Added `_getJwksCache(issuer)` testing helper method
+- Exported `createJwksCache()` for direct unit testing of TTL behavior
+- Mock strategy: Since `jwtVerify` is mocked (ESM compatibility), TTL tests use `createJwksCache()` directly to verify re-fetch behavior
+
+#### Files Modified
+
 ### File List
+- components/gov-chat-backend/services/keycloak-auth-service.js (modified)
+- components/gov-chat-backend/__tests__/keycloak-auth-service.test.js (modified)

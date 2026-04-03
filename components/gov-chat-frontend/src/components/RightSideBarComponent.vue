@@ -104,7 +104,7 @@
 </template>
 
 <script>
-import authService from "@/services/authService";
+import userService from "@/services/userService";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
@@ -326,7 +326,7 @@ export default {
     },
 
     getAuthToken() {
-      const user = authService.getCurrentUser();
+      const user = userService.getCurrentUser();
       return user ? user.accessToken : null;
     },
 

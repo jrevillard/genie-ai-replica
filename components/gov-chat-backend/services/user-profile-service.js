@@ -4,7 +4,6 @@ const path = require('path');
 const fs = require('fs');
 const emailService = require('./email-service');
 const crypto = require('crypto');
-const authService = require('./auth-service');
 const { logger, dbService } = require('../shared-lib');
 
 class UserProfileService {
@@ -41,41 +40,6 @@ class UserProfileService {
       logger.info('UserProfileService database initialized');
     } catch (error) {
       logger.error(`Error initializing UserProfileService: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  async verifyPassword(userId, password) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.verify_password_start', { userId });
-
-      const user = await this.users.document(userId);
-      if (!user) {
-        logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error(`User with ID ${userId} not found`);
-      }
-
-      if (!user.encPassword) {
-        logger.warn('UserProfileService.no_password_set', { userId });
-        throw new Error('No password set for this user');
-      }
-
-      const isValid = await authService.verifyPassword(password, user.encPassword);
-      logger.info('UserProfileService.password_verification_completed', {
-        userId,
-        isValid,
-        durationMs: Date.now() - startTime
-      });
-
-      return isValid;
-    } catch (error) {
-      logger.error('UserProfileService.verify_password_failed', {
-        userId,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
       throw error;
     }
   }

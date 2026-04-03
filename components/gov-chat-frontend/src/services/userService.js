@@ -1,10 +1,8 @@
 // src/services/userService.js
 import httpService from './httpService';
-import crypto from 'crypto';
 
 /**
- * Service for user account management and authentication operations
- * Integrates account management with authentication features
+ * Service for user account management operations
  */
 class UserService {
   /**
@@ -12,75 +10,11 @@ class UserService {
    */
   constructor() {
     this.tokenKey = 'user';
-    this.authEndpoint = 'auth';
     this.userEndpoint = 'users';
+    this.authEndpoint = 'auth';
   }
 
   // ===== AUTHENTICATION METHODS =====
-
-  /**
-   * Authenticate user with username and password
-   * @param {string} loginName The username or email
-   * @param {string} password The password
-   * @returns {Promise} Promise with user data or error
-   */
-  async login(loginName, password) {
-    try {
-      // Hash the password client-side before sending
-      const encPassword = this.hashPassword(password);
-
-      const response = await httpService.post(`${this.authEndpoint}/login`, {
-        loginName,
-        encPassword
-      });
-
-      if (response.data && response.data.accessToken) {
-        this.setUserData(response.data);
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Register a new user
-   * @param {Object} userData User registration data
-   * @param {string} userData.loginName Username
-   * @param {string} userData.email Email address
-   * @param {string} userData.password Password (will be hashed)
-   * @param {string} [userData.fullName] Full name (optional)
-   * @returns {Promise} Promise with registration result or error
-   */
-  async register(userData) {
-    try {
-      // Create payload with hashed password
-      const payload = {
-        loginName: userData.loginName,
-        email: userData.email,
-        encPassword: this.hashPassword(userData.password)
-      };
-
-      // Add optional fields if provided
-      if (userData.fullName) {
-        payload.fullName = userData.fullName;
-      }
-
-      const response = await httpService.post(`${this.authEndpoint}/register`, payload);
-
-      // If registration includes auto login, store token
-      if (response.data && response.data.accessToken) {
-        this.setUserData(response.data);
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
-    }
-  }
 
   /**
    * Log out the user
@@ -204,97 +138,6 @@ class UserService {
     }
   }
 
-  /**
-   * Hash a password using SHA-256
-   * Note: This is done for demonstration. In production, HTTPS should be used
-   * rather than client-side hashing, or a more secure method should be employed.
-   * @param {string} password The password to hash
-   * @returns {string} The hashed password
-   */
-  hashPassword(password) {
-    return crypto
-      .createHash('sha256')
-      .update(password)
-      .digest('hex');
-  }
-
-  /**
-   * Initiate password reset process
-   * @param {string} email User's email address
-   * @returns {Promise} Promise with reset request result
-   */
-  async initiatePasswordReset(email) {
-    try {
-      const response = await httpService.post(`${this.authEndpoint}/reset-password`, { email });
-      return response.data;
-    } catch (error) {
-      console.error('Password reset initiation error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Validate a password reset token
-   * @param {string} token Reset token from email
-   * @returns {Promise} Promise with token validation result
-   */
-  async validateResetToken(token) {
-    try {
-      const response = await httpService.post(`${this.authEndpoint}/validate-token`, { token });
-      return response.data;
-    } catch (error) {
-      console.error('Token validation error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Reset password with token
-   * @param {string} token Reset token from email
-   * @param {string} newPassword New password (will be hashed)
-   * @returns {Promise} Promise with password reset result
-   */
-  async resetPassword(token, newPassword) {
-    try {
-      // Hash the new password before sending
-      const encPassword = this.hashPassword(newPassword);
-
-      const response = await httpService.post(`${this.authEndpoint}/reset-password/confirm`, {
-        token,
-        newPassword: encPassword
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Password reset error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Change password for authenticated user
-   * @param {string} currentPassword Current password (will be hashed)
-   * @param {string} newPassword New password (will be hashed)
-   * @returns {Promise} Promise with password change result
-   */
-  async changePassword(currentPassword, newPassword) {
-    try {
-      // Hash both passwords before sending
-      const encCurrentPassword = this.hashPassword(currentPassword);
-      const encNewPassword = this.hashPassword(newPassword);
-
-      const response = await httpService.post(`${this.authEndpoint}/change-password`, {
-        currentPassword: encCurrentPassword,
-        newPassword: encNewPassword
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Password change error:', error);
-      throw error;
-    }
-  }
-
   // ===== EXISTING USER METHODS =====
 
   /**
@@ -394,17 +237,15 @@ class UserService {
   /**
    * Update user's email address
    * @param {string} newEmail - New email address
-   * @param {string} password - Current password for verification
    * @param {string} userId - User ID for authentication
    * @returns {Promise} Operation result
    */
-  async updateEmail(newEmail, password, userId) {
+  async updateEmail(newEmail, userId) {
     try {
       console.log(`Updating email to: ${newEmail} for user: ${userId}`);
       const response = await httpService.put('users/email', {
         email: newEmail,
-        password: this.hashPassword(password),
-        userId: userId  // Include userId in the request payload
+        userId: userId
       });
       return response.data;
     } catch (error) {
@@ -448,14 +289,12 @@ class UserService {
   /**
    * Deactivate user account
    * @param {string} reason - Reason for deactivation
-   * @param {string} password - Password confirmation
    * @returns {Promise} Deactivation result
    */
-  async deactivateAccount(reason, password) {
+  async deactivateAccount(reason) {
     try {
       const response = await httpService.post('users/deactivate', {
-        reason,
-        password
+        reason
       });
       return response.data;
     } catch (error) {
@@ -528,6 +367,23 @@ class UserService {
       return response.data.available;
     } catch (error) {
       console.error('Error checking username availability:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if email is available
+   * @param {string} email - Email to check
+   * @returns {Promise<boolean>} True if email is available
+   */
+  async checkEmailAvailability(email) {
+    try {
+      const response = await httpService.get('users/check-email', {
+        params: { email }
+      });
+      return response.data.available;
+    } catch (error) {
+      console.error('Error checking email availability:', error);
       return false;
     }
   }
@@ -613,26 +469,6 @@ class UserService {
   }
 
   /**
- * Check if email is available
- * @param {string} email - Email to check
- * @returns {Promise<boolean>} True if email is available
- */
-  async checkEmailAvailability(email) {
-    try {
-      // Direct approach - manually construct the URL with the email parameter
-      const encodedEmail = encodeURIComponent(email);
-      const url = `${this.userEndpoint}/check-email?email=${encodedEmail}`;
-      console.log(`Checking email availability at: ${url}`);
-
-      const response = await httpService.get(url);
-      return response.data.available;
-    } catch (error) {
-      console.error('Error checking email availability:', error);
-      return false;
-    }
-  }
-
-  /**
    * Check if passwords match
    * @param {string} password First password
    * @param {string} confirmPassword Second password for confirmation
@@ -644,14 +480,12 @@ class UserService {
 
   /**
    * Permanently delete user account
-   * @param {string} password - Password confirmation for security
    * @param {string} reason - Optional reason for deletion
    * @returns {Promise} Deletion result
    */
-  async deleteAccount(password, reason = '') {
+  async deleteAccount(reason = '') {
     try {
       const response = await httpService.post('users/delete', {
-        password: this.hashPassword(password),
         reason
       });
 
@@ -705,7 +539,7 @@ class UserService {
    */
   async verifyUserEmail(userId) {
     try {
-      const response = await httpService.post(`admin/users/${userId}/resend-verification`);
+      const response = await httpService.post(`admin/users/${userId}/verify-email`);
       return response;
     } catch (error) {
       console.error('Error verifying user email:', error);
@@ -748,6 +582,21 @@ class UserService {
   }
 
   /**
+   * Verify user email (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+  async verifyUserEmail(userId) {
+    try {
+      const response = await httpService.post(`admin/users/${userId}/verify-email`);
+      return response;
+    } catch (error) {
+      console.error('Error verifying user email:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Force user logout by invalidating their token (admin only)
    * @param {String} userId - User ID
    * @returns {Promise} Operation result
@@ -779,7 +628,6 @@ class UserService {
       throw error;
     }
   }
-
 }
 
 export default new UserService();

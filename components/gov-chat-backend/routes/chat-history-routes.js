@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (chatHistoryService) => {
@@ -10,14 +10,14 @@ module.exports = (chatHistoryService) => {
 
     if (req.user) {
       // The userId must be in the format "users/2133"
-      if (req.user.userId) {
-        userId = req.user.userId;
+      if (req.user.iss_sub) {
+        userId = req.user.iss_sub;
         // Ensure it has the correct prefix
         if (!userId.startsWith('users/')) {
           userId = `users/${userId}`;
         }
       }
-      // If not in userId, try _key and other fields
+      // If not in iss_sub, try _key and other fields
       else if (req.user._key) {
         userId = `users/${req.user._key}`;
       }
@@ -52,7 +52,7 @@ module.exports = (chatHistoryService) => {
   };
 
   // Apply authentication middleware to all routes
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger

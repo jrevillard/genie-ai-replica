@@ -45,12 +45,12 @@ describe('isPublicRoute', () => {
     expect(isPublicRoute('/api/auth/logout/callback')).toBe(true);
   });
 
-  it('should identify /api/auth/login as public', () => {
-    expect(isPublicRoute('/api/auth/login')).toBe(true);
+  it('should NOT identify /api/auth/login as public (legacy endpoint removed)', () => {
+    expect(isPublicRoute('/api/auth/login')).toBe(false);
   });
 
-  it('should identify /api/auth/register as public', () => {
-    expect(isPublicRoute('/api/auth/register')).toBe(true);
+  it('should NOT identify /api/auth/register as public (legacy endpoint removed)', () => {
+    expect(isPublicRoute('/api/auth/register')).toBe(false);
   });
 
   it('should NOT identify /api/chat as public', () => {

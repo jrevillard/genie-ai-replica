@@ -18,6 +18,8 @@
 # 9031 - vllm-translation-guardrail (guarded LLM)
 # 9090 - guardrail (guard logic endpoint)
 # 6666 - http-service (for auth token retrieval)
+# 8025 - mailpit web UI
+# 1025 - mailpit SMTP server
 
 name: genieai_mvp
 
@@ -108,6 +110,7 @@ services:
     # as a variable named $PORT inside the container
     environment:
       - PORT=${FRONTEND_PORT}
+      - VUE_API_PROXY=kong:8000
     # --- UPDATED THIS SECTION ---
     # This now reads the port from your .env file
     ports:
@@ -131,6 +134,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - genieai_network
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - genieai_network
 

@@ -56,13 +56,15 @@ API_PREFIX=/api
 SESSION_SECRET=<your-session-secret>
 SESSION_EXPIRATION_TIME=1800000
 CORS_ORIGIN=http://localhost:8010/
-EMAIL_HOST=<your-smtp-host>
-EMAIL_PORT=<your-smtp-port>
+# Email — uses Mailpit (local SMTP sink) for development/testing
+# Mailpit catches all emails and displays them at http://localhost:8025
+EMAIL_HOST=mailpit
+EMAIL_PORT=1025
 EMAIL_SECURE=false
-EMAIL_USER=<your-email-user>
-EMAIL_PASSWORD=<your-smtp-password... quoted if it contains special characters>
-EMAIL_FROM=noreply@<your-domain-name>
-FRONTEND_URL=http://localhost:8090/
+EMAIL_USER=
+EMAIL_PASSWORD=
+EMAIL_FROM=noreply@localhost
+FRONTEND_URL=http://localhost:8090
 BACKUP_DIR=./database_backups
 MAX_BACKUPS=5
 BACKUP_FORMAT=json

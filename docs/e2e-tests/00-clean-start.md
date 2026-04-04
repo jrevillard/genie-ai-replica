@@ -1,6 +1,6 @@
 ## Phase 0: Clean Start
 
-This test plan is designed to run from a clean stack. If a stack is already running, tear it down first.
+This test plan is designed to run from a clean stack. **Phase 0 is MANDATORY and must be executed in full every time**, even if a stack is already deployed. A running stack with stale images will produce false test failures. Every step (0.1 through 0.9) must be completed — no step may be skipped or shortcut.
 
 **Scope**: These tests only validate the Keycloak authentication flow. The OPEA/AI stack (vLLM, TEI, chat, etc.) is **not needed**. Set `DEPLOY_OPEA=0` to skip GPU-dependent services.
 
@@ -67,7 +67,7 @@ DEPLOY_OPEA=0
 
 ### 0.4 Build and Push Images
 
-`docker stack deploy` cannot build images — all images must be pre-built and pushed to a local registry.
+**CRITICAL**: This step is NOT optional. `docker stack deploy` cannot build images — all images must be pre-built and pushed to a local registry. Skipping this step means running tests against stale code, which produces false failures.
 
 For the full build procedure (13 services), see **`docs/docker-swarm-setup.md` Step 5**. For auth testing with `DEPLOY_OPEA=0`, only these 9 images are needed:
 

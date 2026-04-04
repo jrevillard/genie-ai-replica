@@ -133,7 +133,7 @@ development_status:
 
   # Epic 2: Secure API Access & Resilient Authentication
   # Worktrees: epic2-backend | epic2-frontend (parallel after Epic 1 merged)
-  epic-2: done
+  epic-2: in-progress
   # Story 2.1 removed — fully implemented during Story 1.9 refactor (OIDC discovery pattern)
   # See sprint-change-proposal-2026-04-02.md Section 6
   2-2-jwks-force-refresh-on-validation-failure: ready-for-dev # worktree: epic2-backend
@@ -149,6 +149,7 @@ development_status:
   2-8-swagger-ui-with-keycloak-oidc-authorize-button: backlog # worktree: epic2-frontend
   2-9-multi-realm-configuration-support: done # worktree: epic2-backend (after 2-2)
   2-10-opea-continuity-keycloak-agnostic-downstream: done # worktree: epic2-backend (after 2-3)
+  2-11-e2e-test-coverage-epic2: done # QA: restructure E2E test plan + write missing Epic 2 tests
   epic-2-retrospective: done # Completed 2026-04-03
 
   # Epic 3: Session Management, User Lifecycle & GDPR

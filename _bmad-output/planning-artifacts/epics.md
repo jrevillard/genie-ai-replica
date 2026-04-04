@@ -578,6 +578,26 @@ So that the existing service-to-service authentication and payload structure are
 
 ---
 
+### Story 2.11: E2E Test Coverage for Epic 2
+
+As a QA engineer,
+I want comprehensive E2E tests for all Epic 2 stories, restructured into maintainable per-epic documents with separate Playwright spec files,
+so that I can validate Epic 2 features by executing commands from the test plan without inventing anything.
+
+**Acceptance Criteria:**
+
+**Given** the GENIE.AI stack is running with Keycloak authentication enabled
+**When** the QA engineer follows the Epic 2 test plan document
+**Then** the existing monolithic E2E test plan is restructured into per-epic files under `docs/e2e-tests/`
+**And** inline Playwright code is extracted into separate `.spec.js` files under `tests/e2e/`
+**And** a shared `playwright.config.js` with HTTPS configuration and reusable helpers exist
+**And** E2E tests exist for stories: 2-2 (JWKS force-refresh), 2-3 (token passthrough headers), 2-6 (auth error display), 2-8 (Swagger OAuth2), 2-9 (multi-realm), 2-10 (OPEA continuity)
+**And** Epic 1 test content is migrated without modification to the new structure
+**And** the QA engineer can execute each test by copying a single command from the markdown document
+**And** no tests are written for deferred stories (2-4, 2-5, 2-7)
+
+---
+
 ## Epic 3: Session Management, User Lifecycle & GDPR
 
 Handle logout, session invalidation on user disable/delete, user lifecycle management via Keycloak (roles, groups, external IdP attribute mapping), and GDPR compliance (right to erasure, session data purging).

@@ -1,4 +1,11 @@
 {
+  "scripts": {
+    "test:e2e": "npx playwright test tests/e2e/",
+    "test:e2e:list": "npx playwright test tests/e2e/ --list"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0"
+  },
   "dependencies": {
     "archiver": "^7.0.1"
   }

@@ -356,7 +356,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 90s
     environment:
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
@@ -368,6 +368,8 @@ services:
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # TLS verification for backend → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}

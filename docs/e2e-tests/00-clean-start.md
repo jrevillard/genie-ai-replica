@@ -123,6 +123,14 @@ set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml ge
 Wait for all services to become healthy. This may take 2-5 minutes depending on image availability.
 
 ```bash
+# Wait at least 120 seconds for all services to stabilize
+# ArangoDB can take up to 150s to pass healthchecks (start_period + retries)
+# The backend waits for ArangoDB via its entrypoint script (up to 60s)
+echo "Waiting 120 seconds for services to stabilize..."
+sleep 120
+```
+
+```bash
 # Check service status — all should show "Running" with replicas 1/1
 docker service ls --filter label=com.docker.stack.namespace=genieai
 

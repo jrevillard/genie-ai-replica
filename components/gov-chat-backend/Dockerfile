@@ -34,4 +34,8 @@ ENV UPLOAD_DIR=./Uploads
 ENV MAX_FILE_SIZE=5242880
 ENV SESSION_EXPIRATION_TIME=1800000
 
+COPY gov-chat-backend/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "index.js"]

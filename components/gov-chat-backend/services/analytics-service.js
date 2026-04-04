@@ -253,7 +253,7 @@ class AnalyticsService {
         logger.info("Test query result:", testResult);
       } catch (testError) {
         logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
-        return this.generateSampleDashboardData(locale);
+        throw new Error(`Database connection test failed: ${testError.message}`);
       }
 
       const analyticsQuery = `
@@ -398,8 +398,14 @@ class AnalyticsService {
       }).then(cursor => cursor.next());
 
       if (!analyticsData) {
-        logger.info("No analytics data found, returning sample data");
-        return this.generateSampleDashboardData(locale);
+        logger.info("No analytics data found, returning empty dashboard");
+        return {
+          queries: { total: 0, unanswered: 0, answeredPercentage: 0, avgResponseTime: 0 },
+          categories: [],
+          feedback: { total: 0, positive: 0, neutral: 0, negative: 0, positivePercentage: 0, negativePercentage: 0 },
+          users: { activeCount: 0 },
+          topQueries: []
+        };
       }
 
       logger.info("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
@@ -464,85 +470,8 @@ class AnalyticsService {
       return analyticsData;
     } catch (error) {
       logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
-      return this.generateSampleDashboardData(locale);
+      throw error;
     }
-  }
-
-  /**
-   * Generate sample dashboard data for development and fallback
-   * @private
-   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Object} Sample dashboard data
-   */
-  async generateSampleDashboardData(locale = 'en') {
-    logger.info(`Generating sample dashboard data for locale: ${locale}`);
-
-    const sampleTopQueries = [
-      { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
-      { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
-      { text: "How to renew my driver's license?", count: 1645, avgTime: 2.1 },
-      { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
-      { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
-    ];
-
-    // Try to get real categories from ServiceCategoryService
-    let sampleCategories = [];
-    
-    try {
-      logger.info("Attempting to get real categories for sample data using ServiceCategoryService...");
-      const realCategories = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
-      
-      if (realCategories && realCategories.length > 0) {
-        logger.info(`DEBUG: Using ${realCategories.length} real categories for sample data`);
-        
-        // Use real category names with sample counts
-        sampleCategories = realCategories.map((cat, index) => ({
-          categoryId: cat.catKey,
-          name: cat.name, // Already translated by service
-          count: Math.max(2347 - (index * 150), 470), // Descending sample counts
-          value: Math.max(15 - index, 8) // Sample values
-        }));
-        
-        logger.debug(`DEBUG: Sample categories generated:`, JSON.stringify(sampleCategories.slice(0, 3), null, 2));
-      }
-    } catch (error) {
-      logger.error(`Error getting real categories for sample data: ${error.message}`, { stack: error.stack });
-    }
-
-    // Fallback if no real categories available
-    if (sampleCategories.length === 0) {
-      logger.warn("Using generic fallback categories for sample data");
-      sampleCategories = Array.from({length: 13}, (_, i) => ({
-        categoryId: String(i + 1),
-        name: `Category ${i + 1}`, // Generic names
-        count: Math.max(2347 - (i * 150), 470),
-        value: Math.max(15 - i, 8)
-      }));
-    }
-
-    logger.info('Sample dashboard data generated successfully');
-
-    return {
-      queries: {
-        total: 12452,
-        unanswered: 453,
-        answeredPercentage: 96.4,
-        avgResponseTime: 2.8
-      },
-      categories: sampleCategories,
-      feedback: {
-        total: 3561,
-        positive: 2840,
-        neutral: 450,
-        negative: 271,
-        positivePercentage: 79.8,
-        negativePercentage: 7.6
-      },
-      users: {
-        activeCount: 4231
-      },
-      topQueries: sampleTopQueries
-    };
   }
 
   /**
@@ -602,15 +531,15 @@ class AnalyticsService {
       }));
 
       if (chartData.length === 0) {
-        logger.info('No time series data found, generating sample data');
-        return this.generateSampleTimeSeriesData(metricType, interval, start, end);
+        logger.info('No time series data found, returning empty array');
+        return [];
       }
 
       logger.info(`Time series data retrieved successfully with ${chartData.length} data points`);
       return chartData;
     } catch (error) {
       logger.error(`Error in getTimeSeriesData: ${error.message}`, { stack: error.stack });
-      return this.generateSampleTimeSeriesData(metricType, interval, start, end);
+      return [];
     }
   }
 
@@ -649,108 +578,6 @@ class AnalyticsService {
       logger.error(`Error formatting date label: ${error.message}`, { stack: error.stack });
       return String(timestamp);
     }
-  }
-
-  /**
-   * Generate sample time series data for development
-   * @param {string} metricType - Type of metric
-   * @param {string} interval - Time interval
-   * @param {Date} startDate - Start date
-   * @param {Date} endDate - End date
-   * @returns {Array} Sample time series data
-   */
-  generateSampleTimeSeriesData(metricType, interval, startDate, endDate) {
-    logger.info(`Generating sample time series data for metric: ${metricType}, interval: ${interval}, from ${startDate.toISOString()} to ${endDate.toISOString()}`);
-
-    const data = [];
-    const current = new Date(startDate);
-    const end = new Date(endDate);
-
-    let step;
-    switch (interval) {
-      case 'hourly':
-        step = 60 * 60 * 1000;
-        break;
-      case 'daily':
-        step = 24 * 60 * 60 * 1000;
-        break;
-      case 'weekly':
-        step = 7 * 24 * 60 * 60 * 1000;
-        break;
-      case 'monthly':
-        step = 30 * 24 * 60 * 60 * 1000;
-        break;
-      default:
-        step = 24 * 60 * 60 * 1000;
-    }
-
-    let baseValue;
-    switch (metricType) {
-      case 'queries':
-        baseValue = 100;
-        break;
-      case 'users':
-        baseValue = 30;
-        break;
-      default:
-        baseValue = 50;
-    }
-
-    while (current <= end) {
-      let fluctuation = 0.75 + (Math.random() * 0.5);
-
-      const hour = current.getHours();
-      const day = current.getDay();
-      const month = current.getMonth();
-
-      if (interval === 'hourly' && hour >= 9 && hour <= 17) {
-        fluctuation *= 1.5;
-      } else if (interval === 'hourly' && hour >= 0 && hour <= 5) {
-        fluctuation *= 0.3;
-      }
-
-      if ((interval === 'daily' || interval === 'weekly') && (day === 0 || day === 6)) {
-        fluctuation *= 0.6;
-      }
-
-      if (interval === 'monthly') {
-        if (month >= 5 && month <= 7) {
-          fluctuation *= 0.8;
-        } else if (month >= 9 && month <= 11) {
-          fluctuation *= 1.2;
-        }
-      }
-
-      const timeProgress = (current.getTime() - startDate.getTime()) / (endDate.getTime() - startDate.getTime());
-      const trendFactor = 1 + (timeProgress * 0.2);
-
-      const value = Math.round(baseValue * fluctuation * trendFactor);
-
-      let formattedTimestamp;
-      if (interval === 'hourly') {
-        formattedTimestamp = current.toISOString().slice(0, 13) + ':00:00Z';
-      } else if (interval === 'daily') {
-        formattedTimestamp = current.toISOString().slice(0, 10);
-      } else if (interval === 'weekly') {
-        const weekNum = Math.ceil((((current - new Date(current.getFullYear(), 0, 1)) / 86400000) + 1) / 7);
-        formattedTimestamp = `${current.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-      } else if (interval === 'monthly') {
-        formattedTimestamp = current.toISOString().slice(0, 7) + '-01';
-      } else {
-        formattedTimestamp = current.toISOString();
-      }
-
-      data.push({
-        timestamp: formattedTimestamp,
-        value: value
-      });
-
-      current.setTime(current.getTime() + step);
-    }
-
-    logger.info(`Sample time series data generated successfully with ${data.length} points`);
-
-    return data;
   }
 
   /**
@@ -913,65 +740,6 @@ class AnalyticsService {
       });
       throw error;
     }
-  }
-
-  /**
-   * Get sample satisfaction gauge data
-   * @param {String} locale - Locale code
-   * @returns {Object} Sample satisfaction gauge data
-   */
-  getSampleSatisfactionGaugeData(locale = 'en') {
-    const getLocalizedPeriods = () => {
-      if (locale === 'fr') {
-        return [
-          'Actuel',
-          'Semaine dernière',
-          'Il y a 2 semaines',
-          'Il y a 3 semaines',
-          'Il y a 4 semaines'
-        ];
-      } else if (locale === 'sw') {
-        return [
-          'Sasa',
-          'Wiki iliyopita',
-          'Wiki 2 iliyopita',
-          'Wiki 3 iliyopita',
-          'Wiki 4 iliyopita'
-        ];
-      } else {
-        return [
-          'Current',
-          'Last Week',
-          '2 Weeks Ago',
-          '3 Weeks Ago',
-          '4 Weeks Ago'
-        ];
-      }
-    };
-
-    const periods = getLocalizedPeriods();
-
-    const currentValue = 72.5;
-    const previousValue = 73.1;
-    const changePercentage = -0.6;
-
-    const historicalData = [
-      { label: periods[0], value: 72.5 },
-      { label: periods[1], value: 73.1 },
-      { label: periods[2], value: 73.8 },
-      { label: periods[3], value: 72.4 },
-      { label: periods[4], value: 71.2 },
-    ];
-
-    logger.info('Sample satisfaction gauge data generated successfully');
-
-    return {
-      currentValue,
-      previousValue,
-      changePercentage,
-      target: 85,
-      historicalData
-    };
   }
 
   /**
@@ -1142,100 +910,11 @@ class AnalyticsService {
         method: 'getSatisfactionHeatmapData'
       });
       
-      // Return sample data as fallback
-      return this.getSampleSatisfactionHeatmapData(locale);
+      // Return empty array on error
+      return [];
     }
   }
 
-  /**
-   * Get sample satisfaction heatmap data
-   * @param {String} locale - Locale code
-   * @returns {Array} Sample satisfaction heatmap data
-   */
-  async getSampleSatisfactionHeatmapData(locale = 'en') {
-    logger.info(`DEBUG: Generating sample heatmap data for locale: ${locale}`);
-
-    // Try to get real categories from ServiceCategoryService
-    let areas = [];
-    
-    try {
-      logger.info("Attempting to get real categories for sample heatmap data using ServiceCategoryService...");
-      const realCategories = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
-      
-      if (realCategories && realCategories.length > 0) {
-        logger.info(`DEBUG: Using ${realCategories.length} real categories for sample heatmap data`);
-        
-        // Use first 7 categories for heatmap
-        areas = realCategories.slice(0, 7).map(cat => cat.name);
-        
-        logger.debug(`DEBUG: Areas for heatmap:`, areas);
-      }
-    } catch (error) {
-      logger.error(`Error getting real categories for sample heatmap: ${error.message}`, { stack: error.stack });
-    }
-
-    // Fallback if no real categories available
-    if (areas.length === 0) {
-      logger.warn("Using generic fallback areas for sample heatmap");
-      areas = [
-        'Category 1',
-        'Category 2',
-        'Category 3',
-        'Category 4',
-        'Category 5',
-        'Category 6',
-        'Category 7'
-      ];
-    }
-
-    const periods = [];
-    if (locale === 'fr') {
-      periods.push(
-        'Il y a 4 semaines',
-        'Il y a 3 semaines',
-        'Il y a 2 semaines',
-        'Semaine dernière',
-        'Actuel'
-      );
-    } else if (locale === 'sw') {
-      periods.push(
-        'Wiki 4 iliyopita',
-        'Wiki 3 iliyopita',
-        'Wiki 2 iliyopita',
-        'Wiki iliyopita',
-        'Sasa'
-      );
-    } else {
-      periods.push(
-        '4 Weeks Ago',
-        '3 Weeks Ago',
-        '2 Weeks Ago',
-        'Last Week',
-        'Current'
-      );
-    }
-
-    const sampleData = areas.map(area => {
-      const data = {
-        name: area,
-        data: periods.map((period, index) => {
-          let baseScore = 75 + Math.floor(Math.random() * 15);
-          baseScore += index * (1 + Math.random());
-          const score = Math.min(Math.round(baseScore), 100);
-
-          return {
-            x: period,
-            y: score
-          };
-        })
-      };
-      return data;
-    });
-
-    logger.info(`Sample satisfaction heatmap data generated successfully with ${sampleData.length} areas`);
-
-    return sampleData;
-  }
 }
 
 // Singleton instance

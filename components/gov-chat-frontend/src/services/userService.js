@@ -455,7 +455,7 @@ class UserService {
     try {
       const response = await httpService.post('users/deactivate', {
         reason,
-        password: this.hashPassword(password)
+        password
       });
       return response.data;
     } catch (error) {
@@ -528,23 +528,6 @@ class UserService {
       return response.data.available;
     } catch (error) {
       console.error('Error checking username availability:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Check if email is available
-   * @param {string} email - Email to check
-   * @returns {Promise<boolean>} True if email is available
-   */
-  async checkEmailAvailability(email) {
-    try {
-      const response = await httpService.get('users/check-email', {
-        params: { email }
-      });
-      return response.data.available;
-    } catch (error) {
-      console.error('Error checking email availability:', error);
       return false;
     }
   }
@@ -660,25 +643,6 @@ class UserService {
   }
 
   /**
-   * Deactivate user account
-   * @param {string} reason - Reason for deactivation
-   * @param {string} password - Password confirmation
-   * @returns {Promise} Deactivation result
-   */
-  async deactivateAccount(reason, password) {
-    try {
-      const response = await httpService.post('users/deactivate', {
-        reason,
-        password: this.hashPassword(password)
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error deactivating account:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Permanently delete user account
    * @param {string} password - Password confirmation for security
    * @param {string} reason - Optional reason for deletion
@@ -741,7 +705,7 @@ class UserService {
    */
   async verifyUserEmail(userId) {
     try {
-      const response = await httpService.post(`admin/users/${userId}/verify-email`);
+      const response = await httpService.post(`admin/users/${userId}/resend-verification`);
       return response;
     } catch (error) {
       console.error('Error verifying user email:', error);
@@ -784,37 +748,6 @@ class UserService {
   }
 
   /**
-   * Update user role and status (admin only)
-   * @param {String} userId - User ID
-   * @param {Object} updateData - Data to update (role, disabled status)
-   * @returns {Promise} Update result
-   */
-  async updateUserRole(userId, updateData) {
-    try {
-      const response = await httpService.put(`admin/users/${userId}/role`, updateData);
-      return response;
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Verify user email (admin only)
-   * @param {String} userId - User ID
-   * @returns {Promise} Operation result
-   */
-  async verifyUserEmail(userId) {
-    try {
-      const response = await httpService.post(`admin/users/${userId}/verify-email`);
-      return response;
-    } catch (error) {
-      console.error('Error verifying user email:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Force user logout by invalidating their token (admin only)
    * @param {String} userId - User ID
    * @returns {Promise} Operation result
@@ -847,22 +780,6 @@ class UserService {
     }
   }
 
-  /**
-  * Force user logout by invalidating their token (admin only)
-  * @param {String} userId - User ID
-  * @returns {Promise} Operation result
-  */
-  async forceUserLogout(userId) {
-    try {
-      console.log(`[USER SERVICE DEBUG] Attempting force logout for user ${userId} at endpoint: /api/users/admin/users/${userId}/force-logout`);
-      const response = await httpService.post(`users/admin/users/${userId}/force-logout`);
-      console.log(`[USER SERVICE DEBUG] Force logout successful for user ${userId}:`, response.data);
-      return response.data;
-    } catch (error) {
-      console.error(`[USER SERVICE DEBUG] Error forcing logout for user ${userId}:`, error.message, error.response?.data);
-      throw error;
-    }
-  }
 }
 
 export default new UserService();

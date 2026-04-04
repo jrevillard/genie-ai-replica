@@ -1,7 +1,6 @@
 <template>
   <div
     class="market-price-summary-card"
-    :class="{ 'dark-mode': isDarkMode }"
     :style="{ borderColor: `${categoryColor}80` }"
     @click="openChart"
   >
@@ -106,11 +105,8 @@ export default {
     };
   },
   computed: {
-    isDarkMode() {
-      return document.documentElement.getAttribute("data-theme") === "dark";
-    },
     backgroundColor() {
-      return this.isDarkMode ? "#374151" : "#d1d5db";
+      return getComputedStyle(document.documentElement).getPropertyValue('--border-light').trim() || '#d1d5db';
     },
     gradientId() {
       return `gradient-${this.category}`;
@@ -119,42 +115,42 @@ export default {
     categoryConfig() {
       const configs = {
         maize: {
-          i18nKey: 'market.maizeGrains',
+          i18nKey: 'charts.market.maizeGrains',
           svgPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z',
           color: '#2E7D32'
         },
         cropProtection: {
-          i18nKey: 'market.cropProtection',
+          i18nKey: 'charts.market.cropProtection',
           svgPath: 'M20 8h-2V6c0-1.1-.9-2-2-2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2H6c-1.1 0-2 .9-2 2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2c0 1.1.9 2 2 2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2c1.1 0 2-.9 2-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1zm-4 10H8V8h8v10z',
           color: '#D84315'
         },
         vegetables: {
-          i18nKey: 'market.fruitsVeggies',
+          i18nKey: 'charts.market.fruitsVeggies',
           svgPath: 'M17 15.2c0 .9-.6 1.7-1.3 2.2-.3.2-.5.4-.6.7-.1.3-.1.6-.1.9v.2c0 .4-.3.8-.8.8H17c.4 0 .8-.3.8-.8v-.2c0-.3 0-.6-.1-.9-.1-.3-.3-.5-.6-.7-.7-.5-1.3-1.3-1.3-2.2 0-1.5 1.2-2.7 2.7-2.7s2.7 1.2 2.7 2.7c0 .9-.6 1.7-1.3 2.2-.3.2-.5.4-.6.7-.1.3-.1.6-.1.9v.2c0 .4-.3.8-.8.8h2.2c.4 0 .8-.3.8-.8v-.2c0-.3 0-.6-.1-.9-.1-.3-.3-.5-.6-.7-.7-.5-1.3-1.3-1.3-2.2 0-1.5 1.2-2.7 2.7-2.7s2.7 1.2 2.7 2.7zM12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8z M12 6c-.55 0-1 .45-1 1v5c0 .55.45 1 1 1s1-.45 1-1V7c0-.55-.45-1-1-1z',
           color: '#558B2F'
         },
         livestock: {
-          i18nKey: 'market.livestock',
+          i18nKey: 'charts.market.livestock',
           svgPath: 'M4.5 11.5c0 1 .6 1.9 1.5 2.2v2.3c0 3.5 2.9 6.4 6.4 6.4h.3c3.5 0 6.4-2.9 6.4-6.4v-2.3c.9-.3 1.5-1.2 1.5-2.2 0-1.4-1.1-2.5-2.5-2.5S15.6 10.1 15.6 11.5v1h-7.2v-1c0-1.4-1.1-2.5-2.5-2.5s-2.5 1.1-2.5 2.5zM12 4c1.1 0 2 .9 2 2v2h-4V6c0-1.1.9-2 2-2zm-6 8.5c0-.6.4-1 1-1s1 .4 1 1v3.5c0 1.4 1.1 2.5 2.5 2.5h3c1.4 0 2.5-1.1 2.5-2.5V12.5c0-.6.4-1 1-1s1 .4 1 1v3.5c0 2.5-2 4.5-4.5 4.5h-3c-2.5 0-4.5-2-4.5-4.5v-3.5z',
           color: '#8D6E63'
         },
         fertilizer: {
-          i18nKey: 'market.fertilizer',
+          i18nKey: 'charts.market.fertilizer',
           svgPath: 'M19 8h-2V6c0-1.1-.9-2-2-2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2h-2V2c0-.55-.45-1-1-1s-1 .45-1 1v2H6c-1.1 0-2 .9-2 2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2H2c-.55 0-1 .45-1 1s.45 1 1 1h2v2c0 1.1.9 2 2 2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2v2c0 .55.45 1 1 1s1-.45 1-1v-2h2c1.1 0 2-.9 2-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1h-2v-2h2c.55 0 1-.45 1-1s-.45-1-1-1zm-4 10H8V8h8v10z',
           color: '#F9A825'
         },
         apiary: {
-          i18nKey: 'market.apiary',
+          i18nKey: 'charts.market.apiary',
           svgPath: 'M12 2L2 22h20L12 2zm0 3.5L18.5 20H5.5L12 5.5z',
           color: '#F57F17'
         },
         aquaculture: {
-          i18nKey: 'market.aquaculture',
+          i18nKey: 'charts.market.aquaculture',
           svgPath: 'M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.41.21.75-.19.6-.6-.33-.89-.55-1.92-.55-2.95 0-2.05 1.05-3.95 2.6-5.35.1-.1.15-.25.1-.4-.05-.15-.2-.2-.35-.25-.6-.15-1.25-.25-1.9-.25-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 11.9 1 13v-7c1.45-1.1 3.55-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.41.21.75-.19.6-.6-.33-.89-.55-1.92-.55-2.95 0-1.45.5-2.8 1.35-3.9.1-.15.05-.35-.1-.45-.1-.05-.25-.05-.35 0-.65.35-1.35.55-2.05.55-1.95 0-4.05-.4-5.5-1.5z',
           color: '#0288D1'
         },
         harvestStorage: {
-          i18nKey: 'market.harvestStorage',
+          i18nKey: 'charts.market.harvestStorage',
           svgPath: 'M19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 18H5V4h14v16z M7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z',
           color: '#00838F'
         }
@@ -330,9 +326,9 @@ export default {
 <style scoped>
 .market-price-summary-card {
   padding: 8px;
-  background: #f5f5f5;
+  background: var(--bg-card);
   border-radius: 8px;
-  border: 2px solid rgba(0, 0, 0, 0.12);
+  border: 2px solid var(--border-light);
   cursor: pointer;
   transition: all 0.2s;
   height: 100px;
@@ -341,13 +337,8 @@ export default {
 }
 
 .market-price-summary-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
   transform: translateY(-1px);
-}
-
-.dark-mode.market-price-summary-card {
-  background: #424242;
-  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .card-content {

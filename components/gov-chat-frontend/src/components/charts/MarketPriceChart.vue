@@ -1,5 +1,5 @@
 <template>
-  <div class="market-price-chart" :class="{ 'dark-mode': isDarkMode }">
+  <div class="market-price-chart">
     <!-- Loading State -->
     <div v-if="loading" class="loading-indicator">
       <i class="fas fa-spinner fa-spin"></i>
@@ -278,44 +278,41 @@ export default {
     };
   },
   computed: {
-    isDarkMode() {
-      return (
-        this.$root?.darkMode ||
-        document.documentElement.getAttribute("data-theme") === "dark"
-      );
+    cssVar(name) {
+      return (prop) => getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
     },
     categoryConfig() {
       const configs = {
         maize: {
-          i18nKey: 'market.maizeGrains',
+          i18nKey: 'charts.market.maizeGrains',
           color: '#2E7D32'
         },
         cropProtection: {
-          i18nKey: 'market.cropProtection',
+          i18nKey: 'charts.market.cropProtection',
           color: '#D84315'
         },
         vegetables: {
-          i18nKey: 'market.fruitsVeggies',
+          i18nKey: 'charts.market.fruitsVeggies',
           color: '#558B2F'
         },
         livestock: {
-          i18nKey: 'market.livestock',
+          i18nKey: 'charts.market.livestock',
           color: '#8D6E63'
         },
         fertilizer: {
-          i18nKey: 'market.fertilizer',
+          i18nKey: 'charts.market.fertilizer',
           color: '#F9A825'
         },
         apiary: {
-          i18nKey: 'market.apiary',
+          i18nKey: 'charts.market.apiary',
           color: '#F57F17'
         },
         aquaculture: {
-          i18nKey: 'market.aquaculture',
+          i18nKey: 'charts.market.aquaculture',
           color: '#0288D1'
         },
         harvestStorage: {
-          i18nKey: 'market.harvestStorage',
+          i18nKey: 'charts.market.harvestStorage',
           color: '#00838F'
         }
       };
@@ -411,7 +408,7 @@ export default {
             rotate: -45,
             style: {
               fontSize: '11px',
-              colors: this.isDarkMode ? '#9ca3af' : '#6b7280'
+              colors: this.cssVar('--text-muted') || '#6b7280'
             }
           },
           axisBorder: { show: false },
@@ -425,7 +422,7 @@ export default {
           max: yMax,
           labels: {
             style: {
-              colors: this.isDarkMode ? '#9ca3af' : '#6b7280'
+              colors: this.cssVar('--text-muted') || '#6b7280'
             },
             formatter: (value) => this.formatAxisValue(value)
           }
@@ -447,17 +444,17 @@ export default {
         markers: {
           size: 6,
           colors: [this.categoryColor],
-          strokeColors: this.isDarkMode ? '#1f2937' : '#ffffff',
+          strokeColors: this.cssVar('--bg-card') || '#ffffff',
           strokeWidth: 2
         },
         tooltip: {
           y: {
             formatter: (value) => this.formatValue(value)
           },
-          theme: this.isDarkMode ? 'dark' : 'light'
+          theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
         },
         grid: {
-          borderColor: this.isDarkMode ? '#374151' : '#e5e7eb',
+          borderColor: this.cssVar('--border-light') || '#e5e7eb',
           strokeDashArray: 4,
           strokeOpacity: 0.5
         }
@@ -762,14 +759,9 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: #f9fafb;
+  background: var(--bg-tertiary);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
-}
-
-.dark-mode .summary-card {
-  background: #374151;
-  border-color: #4b5563;
+  border: 1px solid var(--border-light);
 }
 
 .summary-icon {
@@ -808,32 +800,20 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 
 .summary-label {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-bottom: 4px;
-}
-
-.dark-mode .summary-label {
-  color: #9ca3af;
 }
 
 .summary-value {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #111827;
-}
-
-.dark-mode .summary-value {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .summary-unit {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-top: 2px;
-}
-
-.dark-mode .summary-unit {
-  color: #9ca3af;
 }
 
 .summary-value.trend-up {
@@ -856,16 +836,11 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 .source-badge {
   align-self: flex-start;
   padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bg-tertiary);
   border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-light);
   font-size: 0.8rem;
   color: var(--text-secondary);
-}
-
-.dark-mode .source-badge {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Predict Button */
@@ -898,10 +873,6 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   color: var(--text-primary);
 }
 
-.dark-mode .chart-title {
-  color: var(--text-primary);
-}
-
 /* Line Chart */
 .line-chart-container {
   margin: 0;
@@ -911,12 +882,8 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 .data-table-container {
   max-height: 300px;
   overflow-y: auto;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-light);
   border-radius: 8px;
-}
-
-.dark-mode .data-table-container {
-  border-color: #4b5563;
 }
 
 .data-table {
@@ -928,33 +895,19 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 .data-table td {
   padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.dark-mode .data-table th,
-.dark-mode .data-table td {
-  border-bottom-color: #4b5563;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .data-table th {
-  background: #f9fafb;
+  background: var(--bg-tertiary);
   font-weight: 600;
   font-size: 0.9rem;
-  color: #374151;
-}
-
-.dark-mode .data-table th {
-  background: #374151;
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .data-table td {
   font-size: 0.95rem;
-  color: #6b7280;
-}
-
-.dark-mode .data-table td {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .value-cell {
@@ -968,11 +921,7 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   gap: 6px;
   margin-top: auto;
   font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.dark-mode .last-updated {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 /* Dialogs */
@@ -991,18 +940,14 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 }
 
 .dialog-container {
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 12px;
   width: 100%;
   max-width: 600px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.dark-mode .dialog-container {
-  background: #1f2937;
+  box-shadow: var(--shadow-lg);
 }
 
 .dialog-header {
@@ -1010,12 +955,8 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
-}
-
-.dark-mode .dialog-header {
-  border-bottom-color: #374151;
 }
 
 .dialog-title {
@@ -1024,18 +965,14 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   gap: 12px;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #111827;
-}
-
-.dark-mode .dialog-title {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
   font-size: 1.25rem;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -1043,13 +980,8 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 }
 
 .close-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
-}
-
-.dark-mode .close-btn:hover {
-  background: #374151;
-  color: #f9fafb;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .dialog-body {
@@ -1062,13 +994,9 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   display: flex;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-light);
   justify-content: flex-end;
   flex-wrap: wrap;
-}
-
-.dark-mode .dialog-footer {
-  border-top-color: #374151;
 }
 
 /* Prediction Dialog */
@@ -1084,12 +1012,8 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   display: block;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-primary);
   margin-bottom: 8px;
-}
-
-.dark-mode .dialog-label {
-  color: #f9fafb;
 }
 
 .timeframe-options {
@@ -1100,19 +1024,13 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 
 .timeframe-btn {
   padding: 8px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-light);
   border-radius: 20px;
-  background: #ffffff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.dark-mode .timeframe-btn {
-  background: #374151;
-  border-color: #4b5563;
-  color: #f9fafb;
 }
 
 .timeframe-btn:hover {
@@ -1128,28 +1046,22 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 .prediction-input {
   width: 100%;
   padding: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-light);
   border-radius: 8px;
-  background: #ffffff;
-  color: #111827;
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: 0.95rem;
   resize: vertical;
 }
 
-.dark-mode .prediction-input {
-  background: #374151;
-  border-color: #4b5563;
-  color: #f9fafb;
-}
-
 .cancel-btn,
 .action-btn {
   padding: 10px 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-light);
   border-radius: 8px;
-  background: #ffffff;
-  color: #374151;
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -1158,21 +1070,9 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
   gap: 8px;
 }
 
-.dark-mode .cancel-btn,
-.dark-mode .action-btn {
-  background: #374151;
-  border-color: #4b5563;
-  color: #f9fafb;
-}
-
 .cancel-btn:hover,
 .action-btn:hover {
-  background: #f3f4f6;
-}
-
-.dark-mode .cancel-btn:hover,
-.dark-mode .action-btn:hover {
-  background: #4b5563;
+  background: var(--bg-tertiary);
 }
 
 .submit-btn {
@@ -1206,11 +1106,7 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 .response-content {
   white-space: pre-wrap;
   line-height: 1.6;
-  color: #111827;
-}
-
-.dark-mode .response-content {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 /* Loading Overlay */
@@ -1228,18 +1124,14 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 }
 
 .loading-box {
-  background: #ffffff;
+  background: var(--bg-card);
   padding: 32px 48px;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.dark-mode .loading-box {
-  background: #1f2937;
+  box-shadow: var(--shadow-lg);
 }
 
 .loading-box i {
@@ -1249,7 +1141,7 @@ ${this.translate('charts.market.sharedVia', 'Shared via AgroGenio AI')}`;
 
 .loading-box span {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 /* Responsive */

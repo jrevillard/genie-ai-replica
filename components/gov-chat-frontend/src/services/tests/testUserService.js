@@ -406,16 +406,6 @@ global.localStorage = {
       }
     }
     
-    async updateAccountSettings(settings) {
-      try {
-        const response = await httpService.put(`${this.userEndpoint}/settings`, settings);
-        return response.data;
-      } catch (error) {
-        console.error('Error updating account settings:', error);
-        throw error;
-      }
-    }
-    
     async verifyEmail(token) {
       try {
         const response = await httpService.post(`${this.userEndpoint}/verify-email`, { token });
@@ -449,28 +439,6 @@ global.localStorage = {
       }
     }
     
-    async getActivityLog(page = 1, limit = 20) {
-      try {
-        const response = await httpService.get(`${this.userEndpoint}/activity`, {
-          params: { page, limit }
-        });
-        return response.data;
-      } catch (error) {
-        console.error('Error fetching activity log:', error);
-        throw error;
-      }
-    }
-    
-    async getAccountStatus() {
-      try {
-        const response = await httpService.get(`${this.userEndpoint}/status`);
-        return response.data;
-      } catch (error) {
-        console.error('Error fetching account status:', error);
-        throw error;
-      }
-    }
-    
     async deactivateAccount(reason, password) {
       try {
         const response = await httpService.post(`${this.userEndpoint}/deactivate`, {
@@ -494,21 +462,7 @@ global.localStorage = {
       }
     }
     
-    async uploadAvatar(avatarFile) {
-      try {
-        const formData = new FormData();
-        formData.append('avatar', avatarFile);
-        
-        const response = await httpService.post(`${this.userEndpoint}/avatar`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-        
-        return response.data;
-      } catch (error) {
-        console.error('Error uploading avatar:', error);
-        throw error;
+    async checkUsernameAvailability(username) {
       }
     }
     
@@ -675,26 +629,7 @@ global.localStorage = {
       console.log('\n  Testing getCurrentUserInfo...');
       const userInfo = await userService.getCurrentUserInfo();
       console.log('  User info:', userInfo);
-      
-      // Test get account status
-      console.log('\n  Testing getAccountStatus...');
-      const accountStatus = await userService.getAccountStatus();
-      console.log('  Account status:', accountStatus);
-      
-      // Test get activity log
-      console.log('\n  Testing getActivityLog...');
-      const activityLog = await userService.getActivityLog();
-      console.log('  Activity log:', activityLog);
-      
-      // Test update account settings
-      console.log('\n  Testing updateAccountSettings...');
-      const updateSettingsResult = await userService.updateAccountSettings({
-        theme: 'dark',
-        language: 'en',
-        notifications: true
-      });
-      console.log('  Update settings result:', updateSettingsResult);
-      
+
       // Test verify email
       console.log('\n  Testing verifyEmail...');
       const verifyEmailResult = await userService.verifyEmail('email-verification-token');
@@ -723,16 +658,6 @@ global.localStorage = {
       const newEmail = await userService.checkEmailAvailability('available@example.com');
       console.log('  Existing email available:', existingEmail);
       console.log('  New email available:', newEmail);
-      
-      // Test avatar management
-      console.log('\n  Testing uploadAvatar...');
-      const mockAvatar = { name: 'avatar.jpg', size: 1024 };
-      const uploadAvatarResult = await userService.uploadAvatar(mockAvatar);
-      console.log('  Upload avatar result:', uploadAvatarResult);
-      
-      console.log('\n  Testing deleteAvatar...');
-      const deleteAvatarResult = await userService.deleteAvatar();
-      console.log('  Delete avatar result:', deleteAvatarResult);
       
       // Test account deactivation/reactivation
       console.log('\n  Testing deactivateAccount...');

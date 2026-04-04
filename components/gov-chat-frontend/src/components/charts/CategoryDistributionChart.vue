@@ -303,9 +303,8 @@ export default {
         }
       } catch (error) {
         console.error("Error fetching category distribution data:", error);
-        console.log("Falling back to sample category data...");
-        // Fall back to hard-coded data
-        this.chartData = this.getFallbackData();
+        console.log("No category distribution data available from API");
+        this.chartData = [];
         this.updateChart();
       } finally {
         this.loading = false;
@@ -565,117 +564,6 @@ export default {
     handleResize() {
       this.checkMobile();
       this.updateChart();
-    },
-
-    /**
-     * Get fallback data in case API fails
-     * @returns {Array} Sample category distribution data
-     */
-    getFallbackData() {
-      // Get current locale
-      const currentLocale = this.$i18n.locale;
-
-      // Define multi-language names
-      const categoryNames = {
-        cat1: {
-          en: "Identity & Civil Registry",
-          fr: "Identité et Registre Civil",
-          sw: "Utambulisho na Usajili wa Kiraia",
-        },
-        cat2: {
-          en: "Healthcare & Social Services",
-          fr: "Santé et Services Sociaux",
-          sw: "Huduma za Afya na Jamii",
-        },
-        cat3: {
-          en: "Education & Learning",
-          fr: "Éducation et Apprentissage",
-          sw: "Elimu na Mafunzo",
-        },
-        cat4: {
-          en: "Employment & Labor Services",
-          fr: "Emploi et Services du Travail",
-          sw: "Ajira na Huduma za Kazi",
-        },
-        cat5: {
-          en: "Taxes & Revenue",
-          fr: "Impôts et Revenus",
-          sw: "Kodi na Mapato",
-        },
-        cat6: {
-          en: "Public Safety & Justice",
-          fr: "Sécurité Publique et Justice",
-          sw: "Usalama wa Umma na Haki",
-        },
-        cat7: {
-          en: "Transportation & Mobility",
-          fr: "Transport et Mobilité",
-          sw: "Usafiri na Uhamaji",
-        },
-        cat8: {
-          en: "Housing & Urban Development",
-          fr: "Logement et Développement Urbain",
-          sw: "Nyumba na Maendeleo ya Miji",
-        },
-      };
-
-      // Select language based on locale
-      const lang =
-        currentLocale === "fr" ? "fr" : currentLocale === "sw" ? "sw" : "en";
-
-      console.log(`[DEBUG] Using fallback data with language: ${lang}`);
-
-      // Create fallback data with appropriate language
-      return [
-        {
-          categoryId: "cat1",
-          name: categoryNames.cat1[lang],
-          count: 2347,
-          value: 23,
-        },
-        {
-          categoryId: "cat2",
-          name: categoryNames.cat2[lang],
-          count: 1782,
-          value: 17,
-        },
-        {
-          categoryId: "cat3",
-          name: categoryNames.cat3[lang],
-          count: 1645,
-          value: 16,
-        },
-        {
-          categoryId: "cat4",
-          name: categoryNames.cat4[lang],
-          count: 1245,
-          value: 12,
-        },
-        {
-          categoryId: "cat5",
-          name: categoryNames.cat5[lang],
-          count: 980,
-          value: 10,
-        },
-        {
-          categoryId: "cat6",
-          name: categoryNames.cat6[lang],
-          count: 850,
-          value: 8,
-        },
-        {
-          categoryId: "cat7",
-          name: categoryNames.cat7[lang],
-          count: 720,
-          value: 7,
-        },
-        {
-          categoryId: "cat8",
-          name: categoryNames.cat8[lang],
-          count: 650,
-          value: 6,
-        },
-      ];
     },
 
     /**

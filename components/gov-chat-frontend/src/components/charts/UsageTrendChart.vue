@@ -311,14 +311,14 @@ export default {
           }));
         } else {
           console.warn("Empty or invalid time series data received:", data);
-          this.chartData = this.generateSampleData();
+          this.chartData = [];
         }
 
         this.renderChart();
       } catch (error) {
         console.error("Error loading time series data:", error);
         this.error = this.$t("analytics.status.error");
-        this.chartData = this.generateSampleData();
+        this.chartData = [];
         this.renderChart();
       } finally {
         this.loading = false;
@@ -334,26 +334,6 @@ export default {
       } catch (e) {
         return dateString;
       }
-    },
-
-    generateSampleData() {
-      const result = [];
-      const today = new Date();
-
-      for (let i = 30; i > 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-
-        result.push({
-          timestamp: date.toISOString(),
-          dateLabel: date.toLocaleDateString(this.$i18n.locale),
-          value: Math.floor(Math.random() * 1000),
-          userCount: Math.floor(Math.random() * 200),
-        });
-      }
-
-      console.log("Generated sample data for chart:", result);
-      return result;
     },
 
     initChartDimensions() {

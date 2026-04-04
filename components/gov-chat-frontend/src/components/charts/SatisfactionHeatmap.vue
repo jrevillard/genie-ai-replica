@@ -124,8 +124,8 @@ export default {
       console.log("[SatisfactionHeatmap] Fetching data from API");
       this.fetchData();
     } else {
-      console.log("[SatisfactionHeatmap] Using fallback data");
-      this.chartData = this.getFallbackData();
+      console.log("[SatisfactionHeatmap] No data provided, chart will be empty");
+      this.chartData = [];
       this.updateChart();
     }
 
@@ -320,7 +320,7 @@ export default {
           console.warn(
             "[SatisfactionHeatmap] No satisfaction heatmap data returned from API"
           );
-          this.chartData = this.getFallbackData();
+          this.chartData = [];
           this.updateChart();
         }
       } catch (error) {
@@ -332,90 +332,11 @@ export default {
           "analytics.error.loading",
           "Failed to load satisfaction data."
         );
-        this.chartData = this.getFallbackData();
+        this.chartData = [];
         this.updateChart();
       } finally {
         this.loading = false;
       }
-    },
-
-    getFallbackData() {
-      // All 13 categories from serviceCategories
-      const areas = [
-        this.translate(
-          "analytics.areas.identity",
-          "Identity & Civil Registration"
-        ),
-        this.translate(
-          "analytics.areas.health",
-          "Healthcare & Social Services"
-        ),
-        this.translate("analytics.areas.education", "Education & Learning"),
-        this.translate(
-          "analytics.areas.employment",
-          "Employment & Labor Services"
-        ),
-        this.translate("analytics.areas.taxes", "Taxes & Revenue"),
-        this.translate(
-          "analytics.areas.transportation",
-          "Transportation & Mobility"
-        ),
-        this.translate("analytics.areas.business", "Business & Trade"),
-        this.translate(
-          "analytics.areas.housing",
-          "Housing & Urban Development"
-        ),
-        this.translate("analytics.areas.utilities", "Utilities & Environment"),
-        this.translate("analytics.areas.social", "Social Security & Pensions"),
-        this.translate(
-          "analytics.areas.immigration",
-          "Immigration & Citizenship"
-        ),
-        this.translate("analytics.areas.legal", "Legal & Judicial Services"),
-        this.translate(
-          "analytics.areas.public",
-          "Public Safety & Emergency Services"
-        ),
-      ];
-
-      // Dynamic time periods based on period and selectedDate
-      const endDate = this.selectedDate
-        ? new Date(this.selectedDate)
-        : new Date();
-      const weekDuration = 7 * 24 * 60 * 60 * 1000;
-      const timePeriods = [
-        {
-          label: this.translate("analytics.timePeriods.current", "Current"),
-          offset: 0,
-        },
-        {
-          label: this.translate("analytics.timePeriods.week1", "Last Week"),
-          offset: 1,
-        },
-        {
-          label: this.translate("analytics.timePeriods.week2", "2 Weeks Ago"),
-          offset: 2,
-        },
-        {
-          label: this.translate("analytics.timePeriods.week3", "3 Weeks Ago"),
-          offset: 3,
-        },
-        {
-          label: this.translate("analytics.timePeriods.week4", "4 Weeks Ago"),
-          offset: 4,
-        },
-      ];
-
-      return areas.map((area) => {
-        const data = {
-          name: area,
-          data: timePeriods.map((period) => ({
-            x: period.label,
-            y: 0, // Default to 0 for fallback
-          })),
-        };
-        return data;
-      });
     },
 
     handleResize() {

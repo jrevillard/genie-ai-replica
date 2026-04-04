@@ -432,8 +432,8 @@ export default {
           }
         } catch (apiError) {
           console.error("Error calling API:", apiError);
-          console.log("Falling back to sample query data...");
-          this.chartData = this.getFallbackData();
+          console.log("No top queries data available from API");
+          this.chartData = [];
         }
 
         this.updateChart();
@@ -443,32 +443,6 @@ export default {
       } finally {
         this.loading = false;
       }
-    },
-
-    /**
-     * Get fallback data for top queries
-     * @returns {Array} Sample top queries data
-     */
-    getFallbackData() {
-      return [
-        {
-          text: "How do I apply for a business license?",
-          count: 2347,
-          avgTime: 2.3,
-        },
-        { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
-        {
-          text: "How to renew my driver's license?",
-          count: 1645,
-          avgTime: 2.1,
-        },
-        {
-          text: "What documents do I need for passport application?",
-          count: 1423,
-          avgTime: 3.4,
-        },
-        { text: "When are property taxes due?", count: 1289, avgTime: 1.5 },
-      ];
     },
 
     /**

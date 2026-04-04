@@ -497,21 +497,6 @@ class UserService {
   }
 
   /**
-   * Update user account settings
-   * @param {Object} settings - Account settings to update
-   * @returns {Promise} Updated account settings
-   */
-  async updateAccountSettings(settings) {
-    try {
-      const response = await httpService.put('users/settings', settings);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating account settings:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Update user's email address
    * @param {string} newEmail - New email address
    * @param {string} password - Current password for verification
@@ -529,38 +514,6 @@ class UserService {
       return response.data;
     } catch (error) {
       console.error('Error updating email:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user account activity log
-   * @param {Number} page - Page number (starting from 1)
-   * @param {Number} limit - Results per page
-   * @returns {Promise} User activity log with pagination
-   */
-  async getActivityLog(page = 1, limit = 20) {
-    try {
-      const response = await httpService.get('users/activity', {
-        params: { page, limit }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching activity log:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user's account status
-   * @returns {Promise} Account status information
-   */
-  async getAccountStatus() {
-    try {
-      const response = await httpService.get('users/status');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching account status:', error);
       throw error;
     }
   }
@@ -594,43 +547,6 @@ class UserService {
       return response.data;
     } catch (error) {
       console.error('Error reactivating account:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Upload a user avatar
-   * @param {File} avatarFile - Avatar image file
-   * @returns {Promise} Upload result with avatar URL
-   */
-  async uploadAvatar(avatarFile) {
-    try {
-      const formData = new FormData();
-      formData.append('avatar', avatarFile);
-
-      const response = await httpService.post('users/avatar', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Error uploading avatar:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete user's avatar
-   * @returns {Promise} Operation result
-   */
-  async deleteAvatar() {
-    try {
-      const response = await httpService.delete('users/avatar');
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting avatar:', error);
       throw error;
     }
   }
@@ -784,7 +700,7 @@ class UserService {
     try {
       console.log(`Updating role for user ${userId} to ${updateData.role}`);
 
-      const response = await httpService.put(`${this.userEndpoint}/${userId}`, updateData);
+      const response = await httpService.put(`${this.userEndpoint}/${userId}/role`, updateData);
 
       console.log(`Role update response for ${userId}:`, response);
 
@@ -797,36 +713,6 @@ class UserService {
         console.error('Error response data:', error.response.data);
       }
 
-      throw error;
-    }
-  }
-
-  /**
-   * Verify user email (admin only)
-   * @param {String} userId - User ID
-   * @returns {Promise} Operation result
-   */
-  async verifyUserEmail(userId) {
-    try {
-      const response = await httpService.post(`admin/users/${userId}/resend-verification`);
-      return response;
-    } catch (error) {
-      console.error('Error verifying user email:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get a list of all users (admin only)
-   * @param {Object} options - Query options (limit, offset, sort)
-   * @returns {Promise} List of users
-   */
-  async getAllUsers(options = {}) {
-    try {
-      const response = await httpService.get('admin/users', { params: options });
-      return response;
-    } catch (error) {
-      console.error('Error fetching users list:', error);
       throw error;
     }
   }

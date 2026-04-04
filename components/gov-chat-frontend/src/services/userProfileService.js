@@ -99,21 +99,6 @@ class UserProfileService {
   }
 
   /**
-   * Delete a user profile
-   * @param {String} userId - User ID
-   * @returns {Promise} Deletion result
-   */
-  async deleteProfile(userId) {
-    try {
-      const response = await httpService.delete(`users/${userId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting user profile:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Prepare form data for file uploads
    * @param {Object} profileData - Profile data including files
    * @returns {FormData} Form data for submission
@@ -159,81 +144,8 @@ class UserProfileService {
     return formData;
   }
 
-  /**
-   * Search for users based on criteria
-   * @param {Object} criteria - Search criteria
-   * @param {Number} page - Page number (starting from 1)
-   * @param {Number} limit - Results per page
-   * @returns {Promise} Search results with pagination
-   */
-  async searchUsers(criteria, page = 1, limit = 20) {
-    try {
-      const offset = (page - 1) * limit;
-      
-      const response = await httpService.get('users/search', {
-        params: { ...criteria, limit, offset }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error searching users:', error);
-      throw error;
-    }
-  }
-
-
-  /**
-   * Update user role (admin only)
-   * @param {String} userId - User ID to update
-   * @param {Object} updateData - Data containing the new role
-   * @returns {Promise} Update result
-   */
-  async updateUserRole(userId, updateData) {
-    try {
-      console.log(`Updating role for user ${userId} to ${updateData.role}`);
-
-      // First try the admin-specific endpoint
-      try {
-        const response = await httpService.put(`admin/users/${userId}/role`, updateData);
-        return response;
-      } catch (adminError) {
-        console.warn('Admin-specific role update failed, falling back to standard user update:', adminError.message);
-
-        // If that fails, try the standard user update endpoint
-        // This matches the route in user-routes.js 
-        const response = await httpService.put(`users/${userId}`, {
-          role: updateData.role
-        });
-        return response;
-      }
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update user role only (specific method for role changes)
-   * @param {String} userId - User ID to update
-   * @param {String} role - New role value
-   * @returns {Promise} Update result
-   */
-  async updateUserRoleOnly(userId, role) {
-    try {
-      console.log(`Updating role for user ${userId} to ${role}`);
-
-      // Make the API request to the endpoint that matches the backend route
-      // This matches the PUT /api/users/:userId/role endpoint in user-routes.js
-      const response = await httpService.put(`users/${userId}/role`, { role });
-
-      console.log(`Role update response:`, response);
-      return response;
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      throw error;
-    }
-  }
-
 }
+
+
 
 export default new UserProfileService();

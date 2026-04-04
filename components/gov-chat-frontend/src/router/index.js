@@ -4,7 +4,9 @@ import store from '../store'
 
 // Import the login component
 import LoginScreen from '../components/LoginScreen.vue'
-import PasswordResetConfirmScreen from '../components/PasswordResetConfirmScreen.vue' // Added
+import PasswordResetConfirmScreen from '../components/PasswordResetConfirmScreen.vue'
+import EmailVerificationScreen from '../components/EmailVerificationScreen.vue'
+import RegistrationSuccessScreen from '../components/RegistrationSuccessScreen.vue'
 
 // Import your existing route components
 // Examples (replace with your actual components):
@@ -23,7 +25,21 @@ const routes = [
     name: 'PasswordResetConfirm', // Added
     component: PasswordResetConfirmScreen, // Added
     meta: { requiresAuth: false }, // Added
-    props: true // Added
+    props: true
+  },
+  {
+    path: '/verify-email/:token?',
+    name: 'EmailVerification',
+    component: EmailVerificationScreen,
+    meta: { requiresAuth: false },
+    props: true
+  },
+  {
+    path: '/registration-success',
+    name: 'RegistrationSuccess',
+    component: RegistrationSuccessScreen,
+    meta: { requiresAuth: false },
+    props: true
   },
   {
     path: '/',

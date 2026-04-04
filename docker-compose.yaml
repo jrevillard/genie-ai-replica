@@ -104,6 +104,7 @@ services:
       - .env
     environment:
       - PORT=${FRONTEND_PORT}
+      - VUE_API_PROXY=kong:8000
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     depends_on:

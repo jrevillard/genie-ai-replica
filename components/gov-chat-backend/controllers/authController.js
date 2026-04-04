@@ -9,8 +9,9 @@ const { logger } = require('../shared-lib');
 function getFrontendUrl(req) {
   const envFrontendUrl = process.env.FRONTEND_URL;
   if (envFrontendUrl) {
-    logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
-    return envFrontendUrl;
+    const cleaned = envFrontendUrl.replace(/\/+$/, '');
+    logger.info(`Using environment FRONTEND_URL: ${cleaned}`);
+    return cleaned;
   }
   const origin = req.headers.origin;
   const referer = req.headers.referer;

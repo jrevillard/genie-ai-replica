@@ -1,5 +1,5 @@
-# Use Node.js 22.14.0 as the base image
-FROM node:22.14.0-alpine
+# Build stage
+FROM node:22.14.0-alpine AS build
 
 # Set working directory
 WORKDIR /app
@@ -14,11 +14,17 @@ COPY . .
 # Build the Vue app for production
 RUN npm run build
 
-# Install http-server to serve static files
-RUN npm install -g http-server
+# Production stage
+FROM node:22.14.0-alpine
+
+# Set working directory
+WORKDIR /app
+
+COPY --from=build /app/dist /app/dist
+COPY --from=build /app/server.js /app/server.js
 
 # Expose the port the Vue app runs on
 EXPOSE 8090
 
-# Serve the built app with http-server
-CMD ["sh", "-c", "http-server /app/dist -p 8090"]
+# Serve the built app with SPA routing support
+CMD ["node", "server.js"]

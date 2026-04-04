@@ -94,61 +94,6 @@ export default {
   },
 
   /**
-   * Get fallback categories in case of API failure
-   * @param {String} locale - Locale code
-   * @returns {Array} Fallback categories
-   */
-  getFallbackCategories(locale = 'en') {
-    // These match the fallback data in ServiceTreePanelComponent
-    const fallbackData = {
-      en: [
-        { catKey: 'cat1', expanded: false },
-        { catKey: 'cat2', expanded: false },
-        { catKey: 'cat3', expanded: false },
-        { catKey: 'cat4', expanded: false },
-        { catKey: 'cat5', expanded: false },
-        { catKey: 'cat6', expanded: false },
-        { catKey: 'cat7', expanded: false },
-        { catKey: 'cat8', expanded: false },
-        { catKey: 'cat9', expanded: false },
-        { catKey: 'cat10', expanded: false },
-        { catKey: 'cat11', expanded: false },
-        { catKey: 'cat12', expanded: false }
-      ],
-      fr: [
-        { catKey: 'cat1', expanded: false },
-        { catKey: 'cat2', expanded: false },
-        { catKey: 'cat3', expanded: false },
-        { catKey: 'cat4', expanded: false },
-        { catKey: 'cat5', expanded: false },
-        { catKey: 'cat6', expanded: false },
-        { catKey: 'cat7', expanded: false },
-        { catKey: 'cat8', expanded: false },
-        { catKey: 'cat9', expanded: false },
-        { catKey: 'cat10', expanded: false },
-        { catKey: 'cat11', expanded: false },
-        { catKey: 'cat12', expanded: false }
-      ],
-      sw: [
-        { catKey: 'cat1', expanded: false },
-        { catKey: 'cat2', expanded: false },
-        { catKey: 'cat3', expanded: false },
-        { catKey: 'cat4', expanded: false },
-        { catKey: 'cat5', expanded: false },
-        { catKey: 'cat6', expanded: false },
-        { catKey: 'cat7', expanded: false },
-        { catKey: 'cat8', expanded: false },
-        { catKey: 'cat9', expanded: false },
-        { catKey: 'cat10', expanded: false },
-        { catKey: 'cat11', expanded: false },
-        { catKey: 'cat12', expanded: false }
-      ]
-    };
-
-    return fallbackData[locale] || fallbackData.en;
-  },
-
-  /**
    * Save selected services to user preferences
    * @param {String} userId - User ID
    * @param {Array} selectedServices - Selected services

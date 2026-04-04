@@ -379,9 +379,15 @@ export default {
         await this.loadTimeSeriesData();
       } catch (error) {
         console.error("Error loading analytics data:", error);
-        console.log("Falling back to sample dashboard data...");
-        this.analytics = this.getFallbackDashboardData();
-        this.timeSeriesData = this.getFallbackTimeSeriesData();
+        this.analytics = {
+          totalQueries: 0,
+          uniqueUsers: 0,
+          averageResponseTime: 0,
+          satisfactionRate: 0,
+          queryDistribution: [],
+          topQueries: [],
+        };
+        this.timeSeriesData = [];
       } finally {
         this.isLoading = false;
       }
@@ -478,11 +484,11 @@ export default {
           }));
         } else {
           console.warn("Empty or invalid time series data received:", data);
-          this.timeSeriesData = this.generateSampleData();
+          this.timeSeriesData = [];
         }
       } catch (error) {
         console.error("Error loading time series data:", error);
-        this.timeSeriesData = this.generateSampleData();
+        this.timeSeriesData = [];
       }
     },
 
@@ -498,29 +504,6 @@ export default {
       } catch (e) {
         return dateString;
       }
-    },
-
-    /**
-     * Generate sample data for fallback
-     */
-    generateSampleData() {
-      const result = [];
-      const today = new Date();
-
-      for (let i = 30; i > 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-
-        result.push({
-          timestamp: date.toISOString(),
-          dateLabel: date.toLocaleDateString(this.$i18n.locale),
-          value: Math.floor(Math.random() * 1000),
-          userCount: Math.floor(Math.random() * 200),
-        });
-      }
-
-      console.log("Generated sample data for chart:", result);
-      return result;
     },
 
     /**
@@ -661,193 +644,6 @@ export default {
           ? previousDate.toISOString().split("T")[0]
           : null,
       };
-    },
-
-    /**
-     * Get fallback dashboard data
-     * @returns {Object} Sample dashboard data
-     */
-    getFallbackDashboardData() {
-      return {
-        totalQueries: 12452,
-        uniqueUsers: 3847,
-        averageResponseTime: 2.3,
-        satisfactionRate: 87.5,
-        queryDistribution: [
-          {
-            categoryId: "cat1",
-            name: this.$t("leftPanel.cat1.name"),
-            count: 2347,
-          },
-          {
-            categoryId: "cat2",
-            name: this.$t("leftPanel.cat2.name"),
-            count: 1782,
-          },
-          {
-            categoryId: "cat3",
-            name: this.$t("leftPanel.cat3.name"),
-            count: 1645,
-          },
-          {
-            categoryId: "cat4",
-            name: this.$t("leftPanel.cat4.name"),
-            count: 1245,
-          },
-          {
-            categoryId: "cat5",
-            name: this.$t("leftPanel.cat5.name"),
-            count: 980,
-          },
-          {
-            categoryId: "cat6",
-            name: this.$t("leftPanel.cat6.name"),
-            count: 850,
-          },
-          {
-            categoryId: "cat7",
-            name: this.$t("leftPanel.cat7.name"),
-            count: 720,
-          },
-          {
-            categoryId: "cat8",
-            name: this.$t("leftPanel.cat8.name"),
-            count: 650,
-          },
-        ],
-        topQueries: [
-          {
-            text: "How do I apply for a business license?",
-            count: 2347,
-            avgTime: 2.3,
-          },
-          { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
-          {
-            text: "How to renew my driver's license?",
-            count: 1645,
-            avgTime: 2.1,
-          },
-          {
-            text: "What documents do I need for passport application?",
-            count: 1423,
-            avgTime: 3.4,
-          },
-          { text: "When are property taxes due?", count: 1289, avgTime: 1.5 },
-        ],
-      };
-    },
-
-    /**
-     * Get fallback time series data
-     * @returns {Array} Sample time series data
-     */
-    getFallbackTimeSeriesData() {
-      const now = new Date();
-      const result = [];
-      let interval, startDate;
-
-      switch (this.selectedPeriod) {
-        case "daily":
-          // Hourly data for today
-          for (let hour = 0; hour < 24; hour++) {
-            const time = new Date(now);
-            time.setHours(hour, 0, 0, 0);
-
-            // More activity during business hours
-            const baseValue = hour >= 9 && hour <= 17 ? 50 : 20;
-            const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
-            const userCount = Math.round(value / 3);
-
-            result.push({
-              timestamp: time.toISOString(),
-              dateLabel: time.toLocaleTimeString(this.$i18n.locale, {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              value: value,
-              userCount: userCount,
-            });
-          }
-          break;
-
-        case "weekly":
-          // Daily data for the week
-          for (let day = 6; day >= 0; day--) {
-            const date = new Date(now);
-            date.setDate(date.getDate() - day);
-            date.setHours(0, 0, 0, 0);
-
-            // Less activity on weekends
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-            const baseValue = isWeekend ? 200 : 350;
-            const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
-            const userCount = Math.round(value / 4);
-
-            result.push({
-              timestamp: date.toISOString(),
-              dateLabel: date.toLocaleDateString(this.$i18n.locale, {
-                month: "short",
-                day: "numeric",
-              }),
-              value: value,
-              userCount: userCount,
-            });
-          }
-          break;
-
-        case "monthly":
-          // Daily data for the month (last 30 days)
-          for (let day = 29; day >= 0; day--) {
-            const date = new Date(now);
-            date.setDate(date.getDate() - day);
-            date.setHours(0, 0, 0, 0);
-
-            // Random fluctuation with weekend pattern
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-            const baseValue = isWeekend ? 200 : 350;
-            const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
-            const userCount = Math.round(value / 4);
-
-            result.push({
-              timestamp: date.toISOString(),
-              dateLabel: date.toLocaleDateString(this.$i18n.locale, {
-                month: "short",
-                day: "numeric",
-              }),
-              value: value,
-              userCount: userCount,
-            });
-          }
-          break;
-
-        case "all-time":
-          // Monthly data for all time (last 12 months)
-          for (let month = 11; month >= 0; month--) {
-            const date = new Date(now);
-            date.setMonth(date.getMonth() - month);
-            date.setDate(1);
-            date.setHours(0, 0, 0, 0);
-
-            // Increasing trend over time with seasonal variation
-            const seasonalFactor = 1 + Math.sin((month / 6) * Math.PI) * 0.2;
-            const growthFactor = 1 + (11 - month) * 0.05;
-            const value = Math.round(300 * seasonalFactor * growthFactor);
-            const userCount = Math.round(value / 4);
-
-            result.push({
-              timestamp: date.toISOString(),
-              dateLabel: date.toLocaleDateString(this.$i18n.locale, {
-                month: "short",
-                year: "numeric",
-              }),
-              value: value,
-              userCount: userCount,
-            });
-          }
-          break;
-      }
-
-      return result;
     },
 
     /**

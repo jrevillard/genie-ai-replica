@@ -183,7 +183,7 @@ class AnalyticsService {
 
       if (!response.data || !Array.isArray(response.data)) {
         console.warn(`Invalid response format for ${metricType} time series:`, response.data);
-        return this.getFallbackTimeSeriesData(interval);
+        return [];
       }
 
       // Process the data to ensure it's valid
@@ -195,76 +195,8 @@ class AnalyticsService {
       }));
     } catch (error) {
       console.error('Error fetching time series data:', error);
-      return this.getFallbackTimeSeriesData(interval);
+      return [];
     }
-  }
-
-  /**
-   * Get fallback time series data
-   * @param {string} interval - Time interval
-   * @returns {Array} Sample time series data
-   */
-  getFallbackTimeSeriesData(interval) {
-    const result = [];
-    const now = new Date();
-    let count = 0;
-
-    // Determine number of data points based on interval
-    switch (interval) {
-      case 'hourly':
-        count = 24;
-        break;
-      case 'daily':
-        count = 30;
-        break;
-      case 'weekly':
-        count = 12;
-        break;
-      case 'monthly':
-        count = 12;
-        break;
-      default:
-        count = 30;
-    }
-
-    // Generate sample data
-    for (let i = 0; i < count; i++) {
-      const date = new Date(now);
-
-      // Adjust date based on interval
-      switch (interval) {
-        case 'hourly':
-          date.setHours(date.getHours() - (count - i - 1));
-          break;
-        case 'daily':
-          date.setDate(date.getDate() - (count - i - 1));
-          break;
-        case 'weekly':
-          date.setDate(date.getDate() - (count - i - 1) * 7);
-          break;
-        case 'monthly':
-          date.setMonth(date.getMonth() - (count - i - 1));
-          break;
-        default:
-          date.setDate(date.getDate() - (count - i - 1));
-      }
-
-      // Format date label
-      const dateLabel = this.formatDateLabel(date, interval);
-
-      // Generate random value
-      const value = Math.floor(Math.random() * 500) + 500;
-
-      // Add data point
-      result.push({
-        timestamp: date.toISOString(),
-        dateLabel,
-        value,
-        userCount: Math.floor(value * 0.2) // 20% of value
-      });
-    }
-
-    return result;
   }
 
   /**
@@ -550,110 +482,14 @@ class AnalyticsService {
 
       if (!response.data || !Array.isArray(response.data)) {
         console.warn('Invalid response format for satisfaction heatmap:', response.data);
-        return this.getFallbackSatisfactionHeatmap(currentLocale);
+        return [];
       }
 
       return response.data;
     } catch (error) {
       console.error('Error fetching satisfaction heatmap data:', error);
-      return this.getFallbackSatisfactionHeatmap(this.getCurrentLocale(locale));
+      return [];
     }
-  }
-
-  /**
-   * Get fallback satisfaction heatmap data
-   * @param {string} locale - Locale for translations
-   * @returns {Array} Sample satisfaction heatmap data
-   */
-  getFallbackSatisfactionHeatmap(locale = 'en') {
-    // Define knowledge areas based on locale
-    const getLocalizedAreas = () => {
-      if (locale === 'fr') {
-        return [
-          'Immigration et Citoyenneté',
-          'Entreprise et Commerce',
-          'Identité et État Civil',
-          'Sécurité Sociale et Retraites',
-          'Éducation et Apprentissage',
-          'Emploi et Services du Travail',
-          'Santé et Services Sociaux'
-        ];
-      } else if (locale === 'sw') {
-        return [
-          'Uhamiaji na Uraia',
-          'Biashara na Biashara',
-          'Utambulisho na Usajili wa Kiraia',
-          'Usalama wa Jamii na Pensheni',
-          'Elimu na Mafunzo',
-          'Ajira na Huduma za Kazi',
-          'Afya na Huduma za Kijamii'
-        ];
-      } else {
-        // Default to English
-        return [
-          'Immigration & Citizenship',
-          'Business & Trade',
-          'Identity & Civil Registration',
-          'Social Security & Pensions',
-          'Education & Learning',
-          'Employment & Labor Services',
-          'Health & Social Services'
-        ];
-      }
-    };
-
-    // Define time periods based on locale
-    const getLocalizedPeriods = () => {
-      if (locale === 'fr') {
-        return [
-          'Il y a 4 semaines',
-          'Il y a 3 semaines',
-          'Il y a 2 semaines',
-          'Semaine dernière',
-          'Actuel'
-        ];
-      } else if (locale === 'sw') {
-        return [
-          'Wiki 4 iliyopita',
-          'Wiki 3 iliyopita',
-          'Wiki 2 iliyopita',
-          'Wiki iliyopita',
-          'Sasa'
-        ];
-      } else {
-        // Default to English
-        return [
-          '4 Weeks Ago',
-          '3 Weeks Ago',
-          '2 Weeks Ago',
-          'Last Week',
-          'Current'
-        ];
-      }
-    };
-
-    const areas = getLocalizedAreas();
-    const periods = getLocalizedPeriods();
-
-    // Generate sample data for each area and time period
-    return areas.map(area => {
-      const data = {};
-      data.name = area;
-      data.data = periods.map((period, index) => {
-        // Generate random satisfaction scores that trend slightly upward
-        let baseScore = 75 + Math.floor(Math.random() * 15);
-        // Add a small upward trend (with some randomness)
-        baseScore += index * (1 + Math.random());
-        // Ensure score doesn't exceed 100
-        const score = Math.min(Math.round(baseScore), 100);
-
-        return {
-          x: period,
-          y: score
-        };
-      });
-      return data;
-    });
   }
 
   /**

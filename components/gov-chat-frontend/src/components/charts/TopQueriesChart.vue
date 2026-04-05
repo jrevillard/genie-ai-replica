@@ -58,6 +58,7 @@
 
 <script>
 import analyticsService from "../../services/analyticsService";
+import { useChartTheme } from "@/composables/useChartTheme";
 
 export default {
   name: "TopQueriesChart",
@@ -87,9 +88,16 @@ export default {
       default: null,
     },
   },
+  setup() {
+    const { theme, getTheme } = useChartTheme({
+      onThemeChange: () => {
+        // Chart will re-render via the theme watcher
+      },
+    });
+    return { theme, getTheme };
+  },
   data() {
     return {
-      theme: "light", // Store current theme
       chartData: [],
       loading: false,
       error: null,
@@ -97,7 +105,6 @@ export default {
       chartSeries: [],
       isMobile: false,
       tooltipId: "top-queries-chart-tooltip", // Store tooltip ID for reference
-      themeObserver: null,
     };
   },
   computed: {
@@ -162,16 +169,21 @@ export default {
       },
       immediate: false,
     },
+    // Watch for theme changes from useChartTheme composable
+    theme: {
+      handler() {
+        this.$nextTick(() => {
+          this.injectGlobalStyleForTheme();
+          if (this.chartData && this.chartData.length > 0) {
+            this.updateChart();
+          }
+        });
+      },
+    },
   },
   mounted() {
     // Check if mobile on mount
     this.checkMobile();
-
-    // Initialize theme based on localStorage
-    this.initializeTheme();
-
-    // Force theme sync with localStorage
-    this.forceThemeSync();
 
     // Use data from props or fetch from API
     if (this.externalData && this.data.length > 0) {
@@ -187,9 +199,6 @@ export default {
     // Create custom tooltip element
     this.ensureCustomTooltipExists();
 
-    // Set up theme change listener
-    this.setupThemeChangeListener();
-
     // Force re-render after parent theme sync
     setTimeout(() => {
       this.injectGlobalStyleForTheme();
@@ -202,11 +211,6 @@ export default {
     // Clean up tooltip
     this.cleanupTooltip();
 
-    // Clean up theme observer
-    if (this.themeObserver) {
-      this.themeObserver.disconnect();
-    }
-
     // Remove the injected style if it exists
     const injectedStyle = document.getElementById(
       "top-queries-chart-theme-style"
@@ -216,45 +220,6 @@ export default {
     }
   },
   methods: {
-    /**
-     * Initialize theme based on localStorage to ensure correct initial rendering
-     */
-    initializeTheme() {
-      let themeMode = localStorage.getItem("theme") || "light";
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[TopQueriesChart] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      console.log(`[TopQueriesChart] Initial theme set to: ${themeMode}`);
-      this.injectGlobalStyleForTheme();
-    },
-
-    /**
-     * Force sync of DOM data-theme with localStorage to prevent mismatches
-     */
-    forceThemeSync() {
-      const localStorageTheme = localStorage.getItem("theme") || "light";
-      const parentElement = this.$el.closest("[data-theme]");
-      if (
-        parentElement &&
-        parentElement.getAttribute("data-theme") !== localStorageTheme
-      ) {
-        console.warn(
-          `[TopQueriesChart] Forcing DOM data-theme to match localStorage: ${localStorageTheme}`
-        );
-        parentElement.setAttribute("data-theme", localStorageTheme);
-      }
-      document.documentElement.setAttribute("data-theme", localStorageTheme);
-    },
-
     /**
      * Inject a global stylesheet that targets ApexCharts data labels and chart elements
      */
@@ -349,65 +314,6 @@ export default {
       console.log(
         `[DEBUG] Device detected as ${this.isMobile ? "mobile" : "desktop"}`
       );
-    },
-
-    /**
-     * Get current theme information
-     */
-    getTheme() {
-      let themeMode = this.theme;
-      const localStorageTheme = localStorage.getItem("theme") || "light";
-      if (themeMode !== localStorageTheme) {
-        console.warn(
-          `[TopQueriesChart] Theme mismatch: component=${themeMode}, localStorage=${localStorageTheme}`
-        );
-        themeMode = localStorageTheme;
-        this.theme = themeMode;
-      }
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[TopQueriesChart] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      return {
-        isDarkMode: themeMode === "dark",
-        accentColor: "#4E97D1",
-        backgroundColor: themeMode === "dark" ? "#414141" : "#FFFFFF",
-        textColor: themeMode === "dark" ? "#FFFFFF" : "#333333",
-      };
-    },
-
-    /**
-     * Set up theme change listener
-     */
-    setupThemeChangeListener() {
-      this.themeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (
-            mutation.attributeName === "class" ||
-            mutation.attributeName === "data-theme"
-          ) {
-            console.log("[TopQueriesChart] Theme change detected");
-            this.forceThemeSync();
-            this.injectGlobalStyleForTheme();
-            this.updateChart();
-            break;
-          }
-        }
-      });
-
-      this.themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
-      console.log("[DEBUG] Theme change listener set up");
     },
 
     /**

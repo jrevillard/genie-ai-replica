@@ -222,6 +222,7 @@
 import userService from '@/services/userService'
 import { eventBus } from '@/eventBus.js'
 import LanguageSelector from '@/components/LanguageSelector.vue'
+import { themeManager } from '@/utils/ThemeManager'
 
 export default {
   name: 'LoginScreen',
@@ -258,7 +259,7 @@ export default {
     }
   },
   created() {
-    document.documentElement.setAttribute('data-theme', this.theme)
+    themeManager.setTheme(this.theme)
     this.ensureViewportMeta()
     this.error = ''
     if (this.$route.query.error) {
@@ -289,7 +290,6 @@ export default {
     this.setMobileHeight()
     window.addEventListener('resize', this.setMobileHeight)
     this.applyTheme()
-    this.observeThemeChanges()
     const checkbox = document.querySelector('.remember-me input')
     console.log(
       '[LOGIN] Checkbox computed background color:',
@@ -298,10 +298,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.setMobileHeight)
-    if (this.themeObserver) {
-      console.log('[LOGIN] Disconnecting MutationObserver')
-      this.themeObserver.disconnect()
-    }
   },
   watch: {
     theme(newTheme) {
@@ -473,45 +469,13 @@ export default {
           currentTheme
         )
       }
-      document.documentElement.setAttribute('data-theme', this.theme)
+      themeManager.setTheme(this.theme)
       const title = document.querySelector('.login-card .app-name')
       console.log(
         '[LOGIN] Title computed color:',
         title ? window.getComputedStyle(title).color : 'not found'
       )
     },
-
-    observeThemeChanges() {
-      console.log(
-        '[LOGIN] Setting up MutationObserver, initial theme:',
-        this.theme,
-        new Date().toISOString()
-      )
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === 'data-theme') {
-            const newTheme =
-              document.documentElement.getAttribute('data-theme')
-            console.log(
-              '[LOGIN] Detected theme change via MutationObserver:',
-              newTheme,
-              new Date().toISOString()
-            )
-            if (newTheme !== this.theme) {
-              console.log('[LOGIN] Updating component theme to:', newTheme)
-              this.theme = newTheme
-              const title = document.querySelector('.login-card .app-name')
-              console.log(
-                '[LOGIN] Title computed color after change:',
-                title ? window.getComputedStyle(title).color : 'not found'
-              )
-            }
-          }
-        })
-      })
-      observer.observe(document.documentElement, { attributes: true })
-      this.themeObserver = observer
-    }
   }
 }
 </script>

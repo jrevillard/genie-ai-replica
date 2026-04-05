@@ -134,6 +134,7 @@
 <script>
 import authService from "@/services/authService";
 import LanguageSelector from "@/components/LanguageSelector.vue";
+import { themeManager } from "@/utils/ThemeManager";
 
 export default {
   name: "RegisterScreen",
@@ -163,7 +164,7 @@ export default {
   },
   created() {
     console.log("[REGISTER] RegisterScreen component created");
-    document.documentElement.setAttribute("data-theme", this.theme);
+    themeManager.setTheme(this.theme);
     this.ensureViewportMeta();
     if (this.$i18n) {
       console.log("[REGISTER] Current locale:", this.$i18n.locale);
@@ -177,7 +178,6 @@ export default {
     this.setMobileHeight();
     window.addEventListener("resize", this.setMobileHeight);
     this.applyTheme();
-    this.observeThemeChanges();
     // Debug: Log computed styles and configuration values
     const title = document.querySelector(".register-card .app-name");
     console.log(
@@ -239,10 +239,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[REGISTER] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
-    }
   },
   watch: {
     theme(newTheme) {
@@ -415,7 +411,7 @@ export default {
           currentTheme
         );
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
+      themeManager.setTheme(this.theme);
       const title = document.querySelector(".register-card .app-name");
       console.log(
         "[REGISTER] Title computed color after apply:",
@@ -426,42 +422,6 @@ export default {
         "[REGISTER] Subtitle computed color after apply:",
         subtitle ? window.getComputedStyle(subtitle).color : "not found"
       );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[REGISTER] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[REGISTER] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log("[REGISTER] Updating component theme to:", newTheme);
-              this.theme = newTheme;
-              const title = document.querySelector(".register-card .app-name");
-              console.log(
-                "[REGISTER] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(".register-heading");
-              console.log(
-                "[REGISTER] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
     },
   },
 };

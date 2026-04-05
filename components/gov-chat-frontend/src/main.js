@@ -19,7 +19,7 @@ import FileDialogSafe from './fileDialogSafe' // Import our custom directive
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import VueApexCharts from 'vue3-apexcharts'
 import './text-fix.css'
-import { themeManager } from './utils/ThemeManager'; // Updated import path
+import './utils/ThemeManager' // Import to trigger singleton initialization
 
 // Import theme CSS files
 import './theme-variables.css'
@@ -167,41 +167,15 @@ if (process.env.NODE_ENV === 'development') {
   console.log("Active locale:", i18n.global.locale)
 }
 
-// Initialize theme system BEFORE creating the app
-const initializeTheme = () => {
-  let theme = 'light'; // Default theme
-
-  try {
-    // Synchronize with ThemeManager.js for initial theme detection
-    const themeInfo = themeManager.getThemeInfo();
-    theme = themeInfo.theme || 'light'; // Use ThemeManager's detected theme
-
-    // Override with saved user preference if it exists
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
-      theme = savedTheme;
-    }
-
-    // Apply theme to both HTML and BODY elements to ensure it cascades properly
-    document.documentElement.setAttribute('data-theme', theme);
-    document.body.setAttribute('data-theme', theme);
-
-    console.log('Theme initialized to:', theme);
-
-    // Initialize font size if saved
-    const fontSize = localStorage.getItem('fontSize');
-    if (fontSize) {
-      document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`;
-    }
-  } catch (e) {
-    console.warn('Error initializing theme, defaulting to light theme:', e);
-    document.documentElement.setAttribute('data-theme', 'light');
-    document.body.setAttribute('data-theme', 'light');
+// Initialize font size from saved preference
+try {
+  const fontSize = localStorage.getItem('fontSize');
+  if (fontSize) {
+    document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`;
   }
-};
-
-// Run theme initialization immediately
-initializeTheme();
+} catch (e) {
+  console.warn('Unable to initialize font size:', e);
+}
 
 // Create the Vue app
 const app = createApp(App)

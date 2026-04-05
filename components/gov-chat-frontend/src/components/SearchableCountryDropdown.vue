@@ -129,7 +129,7 @@ export default {
     this.setupMutationObserver();
   },
   
-  beforeDestroy() {
+  beforeUnmount() {
     // Clean up the mutation observer
     if (this.mutationObserver) {
       this.mutationObserver.disconnect();

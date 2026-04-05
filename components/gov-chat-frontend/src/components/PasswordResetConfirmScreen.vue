@@ -250,6 +250,7 @@
 <script>
 import authService from "@/services/authService";
 import passwordService from "@/services/passwordService";
+import { themeManager } from "@/utils/ThemeManager";
 
 export default {
   name: "PasswordResetConfirmScreen",
@@ -303,7 +304,7 @@ export default {
     },
   },
   created() {
-    document.documentElement.setAttribute("data-theme", this.theme);
+    themeManager.setTheme(this.theme);
     if (this.token) {
       this.validateToken();
     }
@@ -319,7 +320,6 @@ export default {
     this.setMobileHeight();
     window.addEventListener("resize", this.setMobileHeight);
     this.applyTheme();
-    this.observeThemeChanges();
     // Debug: Log computed styles and configuration values
     const title = document.querySelector(
       ".password-reset-confirm-card .app-name"
@@ -370,10 +370,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[RESET_CONFIRM] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
-    }
   },
   methods: {
     calculatePasswordStrength(password) {
@@ -582,7 +578,7 @@ export default {
           currentTheme
         );
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
+      themeManager.setTheme(this.theme);
       const title = document.querySelector(
         ".password-reset-confirm-card .app-name"
       );
@@ -597,49 +593,6 @@ export default {
         "[RESET_CONFIRM] Subtitle computed color after apply:",
         subtitle ? window.getComputedStyle(subtitle).color : "not found"
       );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[RESET_CONFIRM] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[RESET_CONFIRM] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log(
-                "[RESET_CONFIRM] Updating component theme to:",
-                newTheme
-              );
-              this.theme = newTheme;
-              const title = document.querySelector(
-                ".password-reset-confirm-card .app-name"
-              );
-              console.log(
-                "[RESET_CONFIRM] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(
-                ".password-reset-confirm-heading"
-              );
-              console.log(
-                "[RESET_CONFIRM] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
     },
   },
 };

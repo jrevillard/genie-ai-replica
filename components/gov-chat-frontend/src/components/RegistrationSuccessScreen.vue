@@ -74,6 +74,7 @@
 
 <script>
 import authService from "@/services/authService";
+import { themeManager } from "@/utils/ThemeManager";
 
 export default {
   name: "RegistrationSuccessScreen",
@@ -91,7 +92,7 @@ export default {
   },
   created() {
     this.email = this.$route.query.email || "";
-    document.documentElement.setAttribute("data-theme", this.theme);
+    themeManager.setTheme(this.theme);
     this.ensureViewportMeta();
     this.setMobileHeight();
     if (this.$i18n) {
@@ -105,7 +106,6 @@ export default {
   mounted() {
     window.addEventListener("resize", this.setMobileHeight);
     this.applyTheme();
-    this.observeThemeChanges();
     // Debug: Log computed styles and configuration values
     const title = document.querySelector(
       ".registration-success-card .app-name"
@@ -152,10 +152,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[REG_SUCCESS] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
-    }
   },
   watch: {
     theme(newTheme) {
@@ -210,7 +206,7 @@ export default {
           currentTheme
         );
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
+      themeManager.setTheme(this.theme);
       const title = document.querySelector(
         ".registration-success-card .app-name"
       );
@@ -223,47 +219,6 @@ export default {
         "[REG_SUCCESS] Subtitle computed color after apply:",
         subtitle ? window.getComputedStyle(subtitle).color : "not found"
       );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[REG_SUCCESS] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[REG_SUCCESS] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log(
-                "[REG_SUCCESS] Updating component theme to:",
-                newTheme
-              );
-              this.theme = newTheme;
-              const title = document.querySelector(
-                ".registration-success-card .app-name"
-              );
-              console.log(
-                "[REG_SUCCESS] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(".heading");
-              console.log(
-                "[REG_SUCCESS] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
     },
   },
 };

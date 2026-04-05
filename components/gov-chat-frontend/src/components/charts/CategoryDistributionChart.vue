@@ -23,6 +23,7 @@
 <script>
 import analyticsService from "../../services/analyticsService";
 import { serviceTreeService } from "../../services";
+import { useChartTheme } from "@/composables/useChartTheme";
 
 export default {
   name: "CategoryDistributionChart",
@@ -52,9 +53,17 @@ export default {
       default: null,
     },
   },
+  setup() {
+    const { theme, getTheme } = useChartTheme({
+      listenToSystem: true,
+      onThemeChange: () => {
+        // Chart will re-render via the theme watcher
+      },
+    });
+    return { theme, getTheme };
+  },
   data() {
     return {
-      theme: "light", // Store current theme
       chartData: [],
       categories: {},
       loading: false,
@@ -62,9 +71,6 @@ export default {
       chartOptions: null,
       chartSeries: [],
       isMobile: false,
-      themeObserver: null,
-      systemThemeMediaQuery: null,
-      systemThemeChangeHandler: null,
       processedData: [],
     };
   },
@@ -106,13 +112,20 @@ export default {
         });
       },
     },
+    // Watch for theme changes from useChartTheme composable
+    theme: {
+      handler() {
+        this.$nextTick(() => {
+          if (this.chartData && this.chartData.length > 0) {
+            this.updateChart();
+          }
+        });
+      },
+    },
   },
   mounted() {
     // Check if mobile on mount
     this.checkMobile();
-
-    // Set initial theme and listener
-    this.setupThemeChangeListener();
 
     // Load category names first
     this.loadCategoryNames().then(() => {
@@ -131,114 +144,13 @@ export default {
   beforeUnmount() {
     window.removeEventListener("resize", this.handleResize);
 
-    // Clean up theme change listeners
-    this.cleanupThemeChangeListener();
+    // Remove custom tooltip
+    const tooltip = document.getElementById("chart-custom-tooltip");
+    if (tooltip) {
+      tooltip.remove();
+    }
   },
   methods: {
-    /**
-     * Get current theme information
-     */
-    getTheme() {
-      let themeMode =
-        this.$refs.chart?.closest("[data-theme]")?.getAttribute("data-theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        localStorage.getItem("theme") ||
-        "light";
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[CategoryDistributionChart] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      return {
-        isDarkMode: themeMode === "dark",
-        backgroundColor: themeMode === "dark" ? "#414141" : "#FFFFFF",
-        textColor: themeMode === "dark" ? "#FFFFFF" : "#333333",
-      };
-    },
-
-    /**
-     * Set up theme change listener to update chart when theme changes
-     */
-    setupThemeChangeListener() {
-      // Watch for theme changes through classList or data-theme mutations
-      this.themeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (
-            mutation.attributeName === "class" ||
-            mutation.attributeName === "data-theme"
-          ) {
-            console.log("[DEBUG] Theme change detected, updating chart...");
-            this.updateChart();
-            break;
-          }
-        }
-      });
-
-      // Observe document root for theme changes
-      this.themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
-
-      // Also listen for system preference changes
-      this.systemThemeMediaQuery = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      );
-      this.systemThemeChangeHandler = (e) => {
-        console.log(
-          "[DEBUG] System theme preference changed, updating chart..."
-        );
-        this.updateChart();
-      };
-
-      // Add listener with compatibility for older browsers
-      if (this.systemThemeMediaQuery.addEventListener) {
-        this.systemThemeMediaQuery.addEventListener(
-          "change",
-          this.systemThemeChangeHandler
-        );
-      } else {
-        // Fallback for older browsers
-        this.systemThemeMediaQuery.addListener(this.systemThemeChangeHandler);
-      }
-    },
-
-    /**
-     * Clean up theme change listeners
-     */
-    cleanupThemeChangeListener() {
-      if (this.themeObserver) {
-        this.themeObserver.disconnect();
-      }
-
-      if (this.systemThemeMediaQuery) {
-        if (this.systemThemeMediaQuery.removeEventListener) {
-          this.systemThemeMediaQuery.removeEventListener(
-            "change",
-            this.systemThemeChangeHandler
-          );
-        } else {
-          // Fallback for older browsers
-          this.systemThemeMediaQuery.removeListener(
-            this.systemThemeChangeHandler
-          );
-        }
-      }
-
-      // Remove custom tooltip
-      const tooltip = document.getElementById("chart-custom-tooltip");
-      if (tooltip) {
-        tooltip.remove();
-      }
-    },
-
     /**
      * Check if the device is mobile based on screen width
      */

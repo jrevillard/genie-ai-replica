@@ -700,7 +700,7 @@ export default {
     this.connectExistingSearchField();
   },
 
-  beforeDestroy() {
+  beforeUnmount() {
     const searchInput = document.querySelector("input.search-box");
 
     if (searchInput) {
@@ -1430,8 +1430,8 @@ export default {
         return;
       }
       console.log(`Renaming chat ${this.activeChat._key} to "${this.newChatTitle}"`);
+      const originalTitle = this.activeChat.title;
       try {
-        const originalTitle = this.activeChat.title;
         this.activeChat.title = this.newChatTitle.trim();
         await chatHistoryService.updateConversation(this.activeChat._key, {
           title: this.newChatTitle.trim(),

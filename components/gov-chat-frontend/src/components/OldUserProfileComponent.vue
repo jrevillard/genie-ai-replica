@@ -604,6 +604,16 @@
       };
     },
     methods: {
+      /**
+       * Helper to read a CSS custom property value from the root element.
+       * @param {string} property - CSS variable name (with or without --)
+       * @param {string} fallback - Fallback value if the variable is not set
+       * @returns {string}
+       */
+      _getCssVar(property, fallback = '') {
+        const prop = property.startsWith('--') ? property : `--${property}`
+        return getComputedStyle(document.documentElement).getPropertyValue(prop).trim() || fallback
+      },
       cancel() {
         this.$emit('cancel');
       },
@@ -658,7 +668,7 @@
     margin-bottom: 16px;
   }
   .privacy-link {
-    color: #4E97D1;
+    color: var(--accent-color, #4E97D1);
     text-decoration: underline;
   }
   .tabs {
@@ -727,11 +737,11 @@
     background: #bbb;
   }
   .save-btn {
-    background: #4E97D1;
+    background: var(--accent-color, #4E97D1);
     color: #fff;
   }
   .save-btn:hover {
-    background: #3a7da0;
+    background: var(--accent-hover, #3a7da0);
   }
   </style>
   

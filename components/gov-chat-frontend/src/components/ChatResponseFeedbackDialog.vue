@@ -222,7 +222,7 @@ export default {
       }
     });
   },
-  beforeDestroy() {
+  beforeUnmount() {
     document.removeEventListener("keydown", this.escHandler);
   },
   watch: {

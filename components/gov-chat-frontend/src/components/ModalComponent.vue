@@ -77,7 +77,7 @@ export default {
     // Add escape key listener
     document.addEventListener('keydown', this.handleEscKey)
   },
-  beforeDestroy() {
+  beforeUnmount() {
     // Restore body scrolling when component is destroyed
     document.body.style.overflow = this.originalOverflow
     

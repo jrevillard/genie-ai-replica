@@ -145,7 +145,6 @@
         return operationTitles[this.operation] || this.translate('admin.operations.resultsTitle', 'Operation Results');
       },
       theme() {
-        // Get theme from document
         return document.documentElement.getAttribute('data-theme') || 'light';
       }
     },

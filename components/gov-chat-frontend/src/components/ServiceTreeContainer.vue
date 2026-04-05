@@ -74,6 +74,16 @@ export default {
   },
   methods: {
     /**
+     * Helper to read a CSS custom property value from the root element.
+     * @param {string} property - CSS variable name (with or without --)
+     * @param {string} fallback - Fallback value if the variable is not set
+     * @returns {string}
+     */
+    _getCssVar(property, fallback = '') {
+      const prop = property.startsWith('--') ? property : `--${property}`
+      return getComputedStyle(document.documentElement).getPropertyValue(prop).trim() || fallback
+    },
+    /**
      * Load service categories from backend
      */
     async loadCategories() {
@@ -272,7 +282,7 @@ export default {
   left: 0;
   right: 0;
   background-color: #ffebee;
-  color: #d32f2f;
+  color: var(--color-danger, #d32f2f);
   padding: 8px;
   display: flex;
   justify-content: space-between;
@@ -289,7 +299,7 @@ export default {
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 3px solid #4E97D1;
+  border-top: 3px solid var(--accent-color, #4E97D1);
   width: 24px;
   height: 24px;
   animation: spin 1s linear infinite;
@@ -303,7 +313,7 @@ export default {
 
 .retry-button {
   padding: 4px 8px;
-  background-color: #d32f2f;
+  background-color: var(--color-danger, #d32f2f);
   color: white;
   border: none;
   border-radius: 4px;
@@ -312,6 +322,6 @@ export default {
 }
 
 .retry-button:hover {
-  background-color: #b71c1c;
+  background-color: var(--color-danger-dark, #b71c1c);
 }
 </style>

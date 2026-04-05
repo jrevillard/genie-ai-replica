@@ -524,6 +524,7 @@ import userService from "@/services/userService";
 import notificationService from "@/services/notificationService";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import SearchableCountryDropdown from "@/components/SearchableCountryDropdown.vue";
+import { themeManager } from '../utils/ThemeManager';
 
 export default {
   name: "UserProfileComponent",
@@ -640,28 +641,8 @@ export default {
       );
     },
     dialogThemeStyles() {
-      const isDark = this.isDarkMode;
-      return {
-        "--dialog-background": isDark ? "#2a2a2a" : "#ffffff",
-        "--dialog-title-color": isDark ? "#ffffff" : "#333333",
-        "--dialog-text-color": isDark ? "rgba(255, 255, 255, 0.8)" : "#666666",
-        "--dialog-border-color": isDark ? "#3a3a3a" : "#dcdfe4",
-        "--dialog-box-shadow": isDark
-          ? "0 4px 12px rgba(0, 0, 0, 0.4)"
-          : "0 4px 12px rgba(0, 0, 0, 0.15)",
-        "--dialog-overlay-background": isDark
-          ? "rgba(0, 0, 0, 0.7)"
-          : "rgba(0, 0, 0, 0.5)",
-        "--dialog-input-background": isDark ? "#333333" : "#ffffff",
-        "--dialog-input-text-color": isDark ? "#f0f0f0" : "#333333",
-        "--dialog-input-border-color": isDark ? "#3a3a3a" : "#ddd",
-        "--dialog-input-placeholder-color": isDark ? "#8c8c8c" : "#767676",
-        "--dialog-tabs-background": isDark ? "#252525" : "#f0f2f5",
-        "--dialog-tabs-active-background": isDark ? "#2a2a2a" : "#ffffff",
-        "--dialog-tabs-text-color": isDark ? "#f0f0f0" : "#333333",
-        "--dialog-tabs-active-text-color": isDark ? "#ffffff" : "#000000",
-        "--dialog-tabs-border-color": isDark ? "#3a3a3a" : "#cccccc",
-      };
+      const _ = this.isThemeReady;
+      return themeManager.getDialogTheme();
     },
   },
   methods: {
@@ -1536,7 +1517,7 @@ export default {
     this.loadDegreeOptions();
     this.loadUserProfileData();
   },
-  beforeDestroy() {
+  beforeUnmount() {
     window.removeEventListener("themeChange", this.updateTheme);
   },
 };

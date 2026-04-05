@@ -114,6 +114,7 @@
 import passwordService from "@/services/passwordService";
 import userService from "@/services/userService";
 import LanguageSelector from "@/components/LanguageSelector.vue";
+import { themeManager } from "@/utils/ThemeManager";
 
 export default {
   name: "PasswordResetInitiateScreen",
@@ -150,7 +151,9 @@ export default {
   },
   created() {
     this.setCurrentUserEmail();
-    document.documentElement.setAttribute("data-theme", this.theme);
+    if (!this.isEmbedded) {
+      themeManager.setTheme(this.theme);
+    }
     this.error = "";
     if (this.$route.query.error) {
       this.error = this.$route.query.error;
@@ -167,7 +170,6 @@ export default {
     this.setMobileHeight();
     window.addEventListener("resize", this.setMobileHeight);
     this.applyTheme();
-    this.observeThemeChanges();
     // Debug: Log computed styles and configuration values
     const title = document.querySelector(
       ".password-reset-initiate-card .app-name"
@@ -209,10 +211,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[RESET] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
-    }
   },
   watch: {
     theme(newTheme) {
@@ -279,70 +277,9 @@ export default {
         this.theme,
         new Date().toISOString()
       );
-      const currentTheme = document.documentElement.getAttribute("data-theme");
-      if (currentTheme !== this.theme) {
-        console.warn(
-          "[RESET] Theme mismatch: component theme=",
-          this.theme,
-          "vs DOM theme=",
-          currentTheme
-        );
+      if (!this.isEmbedded) {
+        themeManager.setTheme(this.theme);
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
-      const title = document.querySelector(
-        ".password-reset-initiate-card .app-name"
-      );
-      console.log(
-        "[RESET] Title computed color after apply:",
-        title ? window.getComputedStyle(title).color : "not found"
-      );
-      const subtitle = document.querySelector(
-        ".password-reset-initiate-heading"
-      );
-      console.log(
-        "[RESET] Subtitle computed color after apply:",
-        subtitle ? window.getComputedStyle(subtitle).color : "not found"
-      );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[RESET] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[RESET] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log("[RESET] Updating component theme to:", newTheme);
-              this.theme = newTheme;
-              const title = document.querySelector(
-                ".password-reset-initiate-card .app-name"
-              );
-              console.log(
-                "[RESET] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(
-                ".password-reset-initiate-heading"
-              );
-              console.log(
-                "[RESET] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
     },
   },
 };

@@ -1543,6 +1543,7 @@ import { availableLanguages } from '../config/languageConfig.js'
 import documentFileService from '../services/documentFileService.js'
 import labelService from '../services/labelService.js'
 import { formatFileSize } from '../utils/fileUtils.js'
+import { themeManager } from '../utils/ThemeManager'
 
 export default {
   name: 'AdminDashboard',
@@ -2062,22 +2063,8 @@ export default {
       // Save to localStorage
       localStorage.setItem('theme', theme)
 
-      // Apply to document
-      document.documentElement.setAttribute('data-theme', theme)
-      document.body.setAttribute('data-theme', theme)
-
-      // Update class names
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark-mode')
-        document.documentElement.classList.remove('light-mode')
-        document.body.classList.remove('light-mode')
-        document.body.classList.add('dark-mode')
-      } else {
-        document.documentElement.classList.remove('dark-mode')
-        document.documentElement.classList.add('light-mode')
-        document.body.classList.remove('dark-mode')
-        document.body.classList.add('light-mode')
-      }
+      // Delegate to centralized theme manager
+      themeManager.setTheme(theme)
     },
 
     // Handle theme change event from other components

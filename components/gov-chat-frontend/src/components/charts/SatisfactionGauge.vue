@@ -126,6 +126,7 @@
 
 <script>
 import analyticsService from "../../services/analyticsService";
+import { useChartTheme } from "@/composables/useChartTheme";
 
 export default {
   name: "SatisfactionGauge",
@@ -170,16 +171,22 @@ export default {
       default: null,
     },
   },
+  setup() {
+    const { theme, getTheme } = useChartTheme({
+      onThemeChange: () => {
+        // Chart will re-render via the theme watcher
+      },
+    });
+    return { theme, getTheme };
+  },
   data() {
     return {
-      theme: "light", // Store current theme
       satisfactionValue: null, // Internal value when externalData is false
       internalHistoricalData: [], // Internal data when externalData is false
       internalChangeIndicator: null, // Internal change when externalData is false
       loading: false,
       error: null,
       chartOptions: null,
-      themeObserver: null,
       internalTarget: 85, // Default target
       debug: false, // Debug mode enabled
       chartKey: 0, // Force re-renders
@@ -355,6 +362,17 @@ export default {
         }
       },
     },
+    // Watch for theme changes from useChartTheme composable
+    theme: {
+      handler() {
+        this.injectGlobalStyleForTheme();
+        this.chartOptions = null;
+        this.$nextTick(() => {
+          this.chartKey++;
+          this.initChart();
+        });
+      },
+    },
   },
   mounted() {
     console.log(
@@ -363,7 +381,7 @@ export default {
       }`
     );
 
-    this.updateTheme(); // Set initial theme
+    this.injectGlobalStyleForTheme(); // Set initial theme styles
     if (!this.externalData) {
       console.log("[SatisfactionGauge] Fetching data from API");
       this.fetchData();
@@ -380,13 +398,9 @@ export default {
       });
     }
 
-    this.setupThemeChangeListener();
     window.addEventListener("error", this.handleGlobalError);
   },
   beforeUnmount() {
-    if (this.themeObserver) {
-      this.themeObserver.disconnect();
-    }
     window.removeEventListener("error", this.handleGlobalError);
     const injectedStyle = document.getElementById(
       "satisfaction-gauge-theme-style"
@@ -488,59 +502,6 @@ export default {
       } finally {
         this.loading = false;
       }
-    },
-
-    /**
-     * Set up theme change listener
-     */
-    setupThemeChangeListener() {
-      this.themeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (
-            mutation.attributeName === "class" ||
-            mutation.attributeName === "data-theme"
-          ) {
-            console.log("[SatisfactionGauge] Theme change detected");
-            this.updateTheme();
-            this.chartOptions = null;
-            this.$nextTick(() => {
-              this.chartKey++;
-              this.initChart();
-            });
-            break;
-          }
-        }
-      });
-
-      this.themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
-    },
-
-    /**
-     * Update theme based on parent or global settings
-     */
-    updateTheme() {
-      let themeMode =
-        this.$refs.chart?.closest("[data-theme]")?.getAttribute("data-theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        localStorage.getItem("theme") ||
-        "light";
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[SatisfactionGauge] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      console.log(`[SatisfactionGauge] Theme detected: ${themeMode}`);
-      this.injectGlobalStyleForTheme(); // Apply theme-specific styles
     },
 
     /**

@@ -17,6 +17,7 @@
   <script>
 import * as d3 from "d3";
 import analyticsService from "../../services/analyticsService";
+import { useChartTheme } from "@/composables/useChartTheme";
 
 export default {
   name: "UsageTrendChart",
@@ -43,15 +44,21 @@ export default {
       default: null,
     },
   },
+  setup() {
+    const { theme, getTheme } = useChartTheme({
+      onThemeChange: () => {
+        // Chart will re-render via the watcher or manual call in the component
+      },
+    });
+    return { theme, getTheme };
+  },
   data() {
     return {
-      theme: "light", // Store current theme
       chartData: [],
       loading: false,
       error: null,
       width: 0,
       height: 0,
-      themeObserver: null,
       debouncedResize: null, // Placeholder for the debounced function
     };
   },
@@ -97,6 +104,17 @@ export default {
         });
       },
     },
+    // Watch for theme changes from useChartTheme composable
+    theme: {
+      handler() {
+        this.injectGlobalStyleForTheme();
+        this.$nextTick(() => {
+          if (this.chartData && this.chartData.length > 0) {
+            this.renderChart();
+          }
+        });
+      },
+    },
   },
   mounted() {
     this.initChartDimensions();
@@ -114,9 +132,6 @@ export default {
     // NEW: Initialize and use debounced resize handler
     this.debouncedResize = this.debounce(this.processResize, 200);
     window.addEventListener("resize", this.debouncedResize);
-
-    // Set up theme change listener
-    this.setupThemeChangeListener();
   },
   beforeUnmount() {
     // NEW: Remove the debounced listener
@@ -125,11 +140,6 @@ export default {
     }
 
     d3.selectAll(".d3-tooltip").remove();
-
-    // Clean up theme observer
-    if (this.themeObserver) {
-      this.themeObserver.disconnect();
-    }
 
     // Remove the injected style if it exists
     const injectedStyle = document.getElementById(
@@ -198,77 +208,6 @@ export default {
         "[DEBUG] Injected theme style:",
         theme.isDarkMode ? "dark" : "light"
       );
-    },
-
-    /**
-     * Get current theme information
-     * @returns {Object} Theme colors and mode information
-     */
-    getTheme() {
-      let themeMode =
-        this.$refs.chartContainer
-          ?.closest("[data-theme]")
-          ?.getAttribute("data-theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        localStorage.getItem("theme") ||
-        "light";
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[UsageTrendChart] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      const isDarkMode = themeMode === "dark";
-      console.log(`[DEBUG] Theme detected: ${isDarkMode ? "dark" : "light"}`);
-      return {
-        isDarkMode,
-        textColor: isDarkMode ? "#FFFFFF" : "#333333",
-        backgroundColor: isDarkMode ? "#414141" : "#FFFFFF",
-        borderColor: isDarkMode ? "#555555" : "#E5E7EB",
-        gridColor: isDarkMode ? "rgba(255, 255, 255, 0.15)" : "#E0E0E0",
-        accentColor: "#4E97D1",
-        chartColors: [
-          "#5470c6",
-          "#91cc75",
-          "#fac858",
-          "#ee6666",
-          "#73c0de",
-          "#3ba272",
-          "#fc8452",
-          "#9a60b4",
-        ],
-      };
-    },
-
-    /**
-     * Set up theme change listener
-     */
-    setupThemeChangeListener() {
-      this.themeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (
-            mutation.attributeName === "class" ||
-            mutation.attributeName === "data-theme"
-          ) {
-            console.log("[DEBUG] Theme change detected, updating chart...");
-            this.injectGlobalStyleForTheme();
-            this.renderChart();
-            break;
-          }
-        }
-      });
-
-      this.themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
-      console.log("[DEBUG] Theme change listener set up");
     },
 
     async fetchData() {

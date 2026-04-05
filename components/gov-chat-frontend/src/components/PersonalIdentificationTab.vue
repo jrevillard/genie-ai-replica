@@ -270,7 +270,7 @@ export default {
       }, 300)
     }
   },
-  beforeDestroy() {
+  beforeUnmount() {
     // Clean up any blob URLs
     if (this.photoPreview && this.photoPreview.startsWith('blob:')) {
       URL.revokeObjectURL(this.photoPreview)

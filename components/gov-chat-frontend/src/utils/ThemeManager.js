@@ -37,7 +37,19 @@ class ThemeManager {
     const htmlElement = document.documentElement
     const bodyElement = document.body
 
-    // Check for explicit dark mode indicators - more robust checks
+    // 1. Check localStorage for saved user preference (HIGHEST priority)
+    try {
+      const savedTheme = localStorage.getItem('theme')
+      if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
+        this.setTheme(savedTheme)
+        console.log(`[ThemeManager] Theme from localStorage: ${savedTheme}`)
+        return
+      }
+    } catch (e) {
+      // localStorage not available
+    }
+
+    // 2. Check for explicit dark mode indicators - more robust checks
     const hasDarkClass =
       htmlElement.classList.contains('dark-theme') ||
       htmlElement.classList.contains('dark-mode') ||

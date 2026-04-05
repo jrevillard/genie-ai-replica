@@ -22,6 +22,7 @@
 
 <script>
 import analyticsService from "../../services/analyticsService";
+import { useChartTheme } from "@/composables/useChartTheme";
 
 export default {
   name: "SatisfactionHeatmap",
@@ -47,18 +48,23 @@ export default {
       default: null,
     },
   },
+  setup() {
+    const { theme, getTheme } = useChartTheme({
+      listenToSystem: true,
+      onThemeChange: () => {
+        // Chart will re-render via the theme watcher
+      },
+    });
+    return { theme, getTheme };
+  },
   data() {
     return {
-      theme: "light", // Store current theme
       chartData: [],
       loading: false,
       error: null,
       chartOptions: null,
       chartSeries: [],
       isMobile: false,
-      themeObserver: null,
-      systemThemeMediaQuery: null,
-      systemThemeChangeHandler: null,
     };
   },
   computed: {
@@ -110,10 +116,23 @@ export default {
         }
       },
     },
+    // Watch for theme changes from useChartTheme composable
+    theme: {
+      handler() {
+        this.$nextTick(() => {
+          this.injectGlobalStyleForTheme();
+          if (this.chartData && this.chartData.length > 0) {
+            this.updateChart();
+            setTimeout(() => {
+              this.enforceColorScheme();
+            }, 300);
+          }
+        });
+      },
+    },
   },
   mounted() {
     this.checkMobile();
-    this.setupThemeChangeListener();
     this.injectGlobalStyleForTheme();
 
     if (this.externalData && this.data && this.data.length > 0) {
@@ -136,7 +155,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.handleResize);
-    this.cleanupThemeChangeListener();
     const injectedStyle = document.getElementById(
       "satisfaction-heatmap-theme-style"
     );
@@ -235,38 +253,6 @@ export default {
       console.log("[DEBUG] Tooltip wrapper background set to transparent");
     },
 
-    /**
-     * Get current theme information
-     * @returns {Object} Theme colors and mode information
-     */
-    getTheme() {
-      let themeMode =
-        this.$refs.chart?.closest("[data-theme]")?.getAttribute("data-theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        localStorage.getItem("theme") ||
-        "light";
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[SatisfactionHeatmap] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      const isDarkMode = themeMode === "dark";
-      console.log(`[DEBUG] Theme detected: ${isDarkMode ? "dark" : "light"}`);
-      return {
-        isDarkMode,
-        textColor: isDarkMode ? "#FFFFFF" : "#333333",
-        backgroundColor: isDarkMode ? "#414141" : "#FFFFFF",
-        borderColor: isDarkMode ? "#555555" : "#E5E7EB",
-      };
-    },
-
     translate(key, defaultValue) {
       if (this.isI18nReady) {
         try {
@@ -342,66 +328,6 @@ export default {
     handleResize() {
       this.checkMobile();
       this.updateChart();
-    },
-
-    setupThemeChangeListener() {
-      this.themeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (
-            mutation.attributeName === "class" ||
-            mutation.attributeName === "data-theme"
-          ) {
-            this.updateChart();
-            setTimeout(() => {
-              this.enforceColorScheme();
-            }, 300);
-            break;
-          }
-        }
-      });
-
-      this.themeObserver.observe(document.documentElement, {
-        arguments: true,
-        attributeFilter: ["arguments", "data-theme"],
-      });
-
-      this.systemThemeMediaQuery = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      );
-      this.systemThemeChangeHandler = () => {
-        this.updateChart();
-        setTimeout(() => {
-          this.enforceColorScheme();
-        }, 300);
-      };
-
-      if (this.systemThemeMediaQuery.addEventListener) {
-        this.systemThemeMediaQuery.addEventListener(
-          "change",
-          this.systemThemeChangeHandler
-        );
-      } else {
-        this.systemThemeMediaQuery.addListener(this.systemThemeChangeHandler);
-      }
-    },
-
-    cleanupThemeChangeListener() {
-      if (this.themeObserver) {
-        this.themeObserver.disconnect();
-      }
-
-      if (this.systemThemeMediaQuery) {
-        if (this.systemThemeMediaQuery.removeEventListener) {
-          this.systemThemeMediaQuery.removeEventListener(
-            "change",
-            this.systemThemeChangeHandler
-          );
-        } else {
-          this.systemThemeMediaQuery.removeListener(
-            this.systemThemeChangeHandler
-          );
-        }
-      }
     },
 
     enforceColorScheme() {

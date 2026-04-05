@@ -360,6 +360,7 @@
         <PasswordResetInitiateScreen
           :prefilledEmail="userData.email"
           :isEmbedded="true"
+          :theme="settings.theme"
           @reset-initiated="handlePasswordResetInitiated"
           @cancel="cancelPasswordReset"
         />
@@ -499,7 +500,6 @@ export default {
       errorMessage: null,
       isThemeReady: false,
       currentUserId: "",
-      themeEnforcementInterval: null, // Track interval ID here
       settings: {
         language: this.getCurrentLanguage(),
         theme: this.getCurrentTheme(),
@@ -553,19 +553,15 @@ export default {
       return this.settings.theme === "dark";
     },
     dialogThemeStyles() {
-      const isDark = this.isDarkMode;
-      console.log("[SETTINGS] Computing dialogThemeStyles, isDark:", isDark);
+      const _ = this.settings.theme; // reactive bridge
+      const theme = themeManager.getDialogTheme();
       return {
-        "--dialog-background": isDark ? "#2a2a2a" : "#ffffff",
-        "--dialog-title-color": isDark ? "#f0f0f0" : "#333333",
-        "--dialog-text-color": isDark ? "rgba(255, 255, 255, 0.8)" : "#666666",
-        "--dialog-border-color": isDark ? "#3a3a3a" : "#dcdfe4",
-        "--dialog-box-shadow": isDark
-          ? "0 4px 12px rgba(0, 0, 0, 0.4)"
-          : "0 4px 12px rgba(0, 0, 0, 0.15)",
-        "--dialog-overlay-background": isDark
-          ? "rgba(0, 0, 0, 0.7)"
-          : "rgba(0, 0, 0, 0.5)",
+        "--dialog-background": theme.modal.background,
+        "--dialog-title-color": theme.modal.titleColor,
+        "--dialog-text-color": theme.modal.textColor,
+        "--dialog-border-color": theme.modal.borderColor,
+        "--dialog-box-shadow": theme.modal.boxShadow,
+        "--dialog-overlay-background": theme.overlay.background,
       };
     },
   },
@@ -628,24 +624,6 @@ export default {
     console.log("[SETTINGS] Forcing theme application on mount...");
     this.applyTheme(this.settings.theme);
 
-    // Continuously enforce theme to handle external overrides
-    // FIXED: Assigned to 'this' instead of const, removed $once
-    console.log("[SETTINGS] Setting up theme enforcement interval...");
-    this.themeEnforcementInterval = setInterval(() => {
-      const currentDomTheme =
-        document.documentElement.getAttribute("data-theme") || "light";
-      if (currentDomTheme !== this.settings.theme) {
-        console.log(
-          "[SETTINGS] Theme mismatch detected! DOM data-theme:",
-          currentDomTheme,
-          "Settings theme:",
-          this.settings.theme
-        );
-        console.log("[SETTINGS] Re-applying settings.theme...");
-        this.applyTheme(this.settings.theme);
-      }
-    }, 100);
-
     console.log("[SETTINGS] Scheduling theme readiness update...");
     this.$nextTick(() => {
       console.log("[SETTINGS] Setting isThemeReady to true...");
@@ -680,13 +658,7 @@ export default {
       this.$i18n.te("settings.deleteAccount") ? "exists" : "missing"
     );
   },
-  // FIXED: Added beforeUnmount to replace $once('hook:beforeDestroy')
   beforeUnmount() {
-    if (this.themeEnforcementInterval) {
-      console.log("[SETTINGS] Cleaning up theme enforcement interval...");
-      clearInterval(this.themeEnforcementInterval);
-      this.themeEnforcementInterval = null;
-    }
     console.log("[SETTINGS] Removing theme change event listener...");
     window.removeEventListener("themeChange", this.updateTheme);
   },
@@ -821,56 +793,10 @@ export default {
       });
     },
     applyTheme(theme) {
-      console.log("[SETTINGS] Theme button clicked:", theme);
-      console.log("[SETTINGS] Updating settings.theme to:", theme);
       this.settings.theme = theme;
-      console.log("[SETTINGS] Saving theme to localStorage...");
       localStorage.setItem("theme", theme);
-      console.log("[SETTINGS] Theme saved successfully");
-      try {
-        console.log("[SETTINGS] Applying theme with ThemeManager...");
-        if (themeManager && typeof themeManager.setTheme === "function") {
-          console.log("[SETTINGS] Using ThemeManager.setTheme...");
-          themeManager.setTheme(theme);
-          console.log("[SETTINGS] Theme applied via ThemeManager");
-        } else {
-          console.log("[SETTINGS] ThemeManager unavailable, using fallback...");
-          const effectiveTheme =
-            theme === "system"
-              ? window.matchMedia("(prefers-color-scheme: dark)").matches
-                ? "dark"
-                : "light"
-              : theme;
-          console.log(
-            "[SETTINGS] Effective theme resolved to:",
-            effectiveTheme
-          );
-          console.log("[SETTINGS] Setting data-theme attribute on document...");
-          document.documentElement.setAttribute("data-theme", effectiveTheme);
-          document.body.setAttribute("data-theme", effectiveTheme);
-          if (effectiveTheme === "dark") {
-            console.log("[SETTINGS] Applying dark mode classes...");
-            document.documentElement.classList.add("dark-mode");
-            document.documentElement.classList.remove("light-mode");
-            document.body.classList.remove("light-mode");
-            document.body.classList.add("dark-mode");
-          } else {
-            console.log("[SETTINGS] Applying light mode classes...");
-            document.documentElement.classList.remove("dark-mode");
-            document.documentElement.classList.add("light-mode");
-            document.body.classList.remove("dark-mode");
-            document.body.classList.add("light-mode");
-          }
-          console.log("[SETTINGS] Fallback theme application completed");
-        }
-      } catch (e) {
-        console.warn("[SETTINGS] Error applying theme:", e);
-      }
-      console.log("[SETTINGS] Emitting themeChanged event with theme:", theme);
+      themeManager.setTheme(theme);
       this.$emit("themeChanged", theme);
-      console.log(
-        "[SETTINGS] Forcing component re-render after theme change..."
-      );
       this.$forceUpdate();
     },
     updateDialogTexts() {
@@ -1005,12 +931,10 @@ export default {
           console.warn("[SETTINGS] Error saving language preference:", e);
         }
       }
-      console.log("[SETTINGS] Applying theme to DOM:", this.settings.theme);
-      document.documentElement.setAttribute("data-theme", this.settings.theme);
-      document.body.setAttribute("data-theme", this.settings.theme);
+      console.log("[SETTINGS] Applying theme:", this.settings.theme);
+      themeManager.setTheme(this.settings.theme);
       try {
         localStorage.setItem("theme", this.settings.theme);
-        console.log("[SETTINGS] Theme preference saved to localStorage");
       } catch (e) {
         console.warn("[SETTINGS] Error saving theme preference:", e);
       }

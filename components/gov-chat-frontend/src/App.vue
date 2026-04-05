@@ -97,7 +97,7 @@ import SplashScreen from "./components/SplashScreen.vue";
 import { mapGetters } from "vuex";
 import { eventBus } from "./eventBus.js";
 import chatHistoryService from "./services/chatHistoryService";
-import userService from "./services/userService";
+import { themeManager } from "./utils/ThemeManager";
 
 export default {
   name: "App",
@@ -233,9 +233,13 @@ export default {
     },
 
     initTheme() {
-      const currentTheme =
-        document.documentElement.getAttribute("data-theme") || "light";
-      this.theme = currentTheme;
+      const savedTheme = localStorage.getItem('theme')
+      if (savedTheme === 'dark' || savedTheme === 'light' || savedTheme === 'system') {
+        this.theme = savedTheme
+      } else {
+        this.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      }
+      themeManager.setTheme(this.theme)
       console.log("App component synchronized theme to:", this.theme);
     },
 
@@ -255,8 +259,7 @@ export default {
     setupSystemThemeListener() {
       if (this.theme === "system" && window.matchMedia) {
         this.systemThemeListener = (e) => {
-          document.documentElement.setAttribute("data-theme", "system");
-          document.body.setAttribute("data-theme", "system");
+          themeManager.setTheme('system')
           console.log("System theme changed");
         };
         window
@@ -268,8 +271,7 @@ export default {
     handleThemeChange(newTheme) {
       console.log("Theme changed to:", newTheme);
       this.theme = newTheme;
-      document.documentElement.setAttribute("data-theme", newTheme);
-      document.body.setAttribute("data-theme", newTheme);
+      themeManager.setTheme(newTheme);
       try {
         localStorage.setItem("theme", newTheme);
       } catch (e) {
@@ -353,8 +355,7 @@ export default {
 
     handleLoginSuccess(userData) {
       console.log("handleLoginSuccess: Received userData:", userData);
-      document.documentElement.setAttribute("data-theme", this.theme);
-      document.body.setAttribute("data-theme", this.theme);
+      themeManager.setTheme(this.theme);
       this.loadFoldersOnAuth();
     },
 

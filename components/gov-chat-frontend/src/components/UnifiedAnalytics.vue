@@ -209,7 +209,6 @@ import CategoryDistributionChart from "./charts/CategoryDistributionChart.vue";
 import SatisfactionGauge from "./charts/SatisfactionGauge.vue";
 import SatisfactionHeatmap from "./charts/SatisfactionHeatmap.vue";
 import analyticsService from "../services/analyticsService";
-import { getCurrentTheme } from "../utils/ThemeManager";
 
 export default {
   name: "UnifiedAnalytics",
@@ -490,8 +489,6 @@ export default {
         themeMode = "light";
       }
       this.theme = themeMode;
-      // Set data-theme attribute on root element
-      this.$el.setAttribute("data-theme", themeMode);
       console.log(`[UnifiedAnalytics] Applied theme: ${themeMode}`);
       // Force re-render of charts to pick up theme
       this.$nextTick(() => {

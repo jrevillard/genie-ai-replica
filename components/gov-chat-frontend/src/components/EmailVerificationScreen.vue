@@ -89,6 +89,7 @@
 
 <script>
 import authService from "@//services/authService";
+import { themeManager } from "@/utils/ThemeManager";
 
 export default {
   name: "EmailVerificationScreen",
@@ -119,7 +120,7 @@ export default {
     };
   },
   created() {
-    document.documentElement.setAttribute("data-theme", this.theme);
+    themeManager.setTheme(this.theme);
     this.ensureViewportMeta();
     if (this.$i18n) {
       console.log("[VERIFY] Current locale:", this.$i18n.locale);
@@ -138,7 +139,6 @@ export default {
     this.setMobileHeight();
     window.addEventListener("resize", this.setMobileHeight);
     this.applyTheme();
-    this.observeThemeChanges();
     // Debug: Log computed styles and configuration values
     const title = document.querySelector(".verify-card .app-name");
     console.log(
@@ -188,10 +188,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[VERIFY] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
-    }
   },
   watch: {
     theme(newTheme) {
@@ -275,7 +271,7 @@ export default {
           currentTheme
         );
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
+      themeManager.setTheme(this.theme);
       const title = document.querySelector(".verify-card .app-name");
       console.log(
         "[VERIFY] Title computed color after apply:",
@@ -286,42 +282,6 @@ export default {
         "[VERIFY] Subtitle computed color after apply:",
         subtitle ? window.getComputedStyle(subtitle).color : "not found"
       );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[VERIFY] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[VERIFY] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log("[VERIFY] Updating component theme to:", newTheme);
-              this.theme = newTheme;
-              const title = document.querySelector(".verify-card .app-name");
-              console.log(
-                "[VERIFY] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(".heading");
-              console.log(
-                "[VERIFY] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
     },
   },
 };

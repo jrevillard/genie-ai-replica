@@ -37,7 +37,19 @@ class ThemeManager {
     const htmlElement = document.documentElement
     const bodyElement = document.body
 
-    // Check for explicit dark mode indicators - more robust checks
+    // 1. Check localStorage for saved user preference (highest priority)
+    try {
+      const savedTheme = localStorage.getItem('theme')
+      if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
+        this.setTheme(savedTheme)
+        console.log(`[ThemeManager] Theme from localStorage: ${savedTheme}`)
+        return
+      }
+    } catch (e) {
+      // localStorage not available
+    }
+
+    // 2. Check for explicit dark mode indicators on DOM
     const hasDarkClass =
       htmlElement.classList.contains('dark-theme') ||
       htmlElement.classList.contains('dark-mode') ||
@@ -47,10 +59,7 @@ class ThemeManager {
     const hasDarkDataTheme =
       htmlElement.getAttribute('data-theme') === 'dark' || bodyElement.getAttribute('data-theme') === 'dark'
 
-    // Check system preference
-    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches
-
-    // Check for light mode indicators
+    // 3. Check for light mode indicators on DOM
     const hasLightClass =
       htmlElement.classList.contains('light-theme') ||
       htmlElement.classList.contains('light-mode') ||
@@ -60,10 +69,9 @@ class ThemeManager {
     const hasLightDataTheme =
       htmlElement.getAttribute('data-theme') === 'light' || bodyElement.getAttribute('data-theme') === 'light'
 
-    // Set initial theme with explicit priority:
-    // 1. Explicit light/dark classes or data attributes
-    // 2. System preference
-    // 3. Default to light mode
+    // 4. Fall back to system preference
+    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches
+
     if (hasDarkClass || hasDarkDataTheme) {
       this.setTheme('dark')
     } else if (hasLightClass || hasLightDataTheme) {
@@ -71,12 +79,8 @@ class ThemeManager {
     } else if (prefersDarkMode) {
       this.setTheme('dark')
     } else {
-      // Always default to light mode if no clear indication
       this.setTheme('light')
     }
-
-    // Force apply theme to ensure it's properly set in the DOM
-    this.forceApplyTheme()
 
     console.log(`[ThemeManager] Initial theme detected: ${this.currentTheme}`)
   }

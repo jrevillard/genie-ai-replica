@@ -5,48 +5,32 @@
       <div class="logo">
         <div class="app-logo">
           <img
+            v-if="$config && $config.app && $config.app.icon && $config.app.icon.type === 'file'"
             :src="$config.app.icon.value"
             alt="App Icon"
             class="ui-icon"
-            v-if="
-              $config &&
-              $config.app &&
-              $config.app.icon &&
-              $config.app.icon.type === 'file'
-            "
           />
-          <div class="app-logo-fallback" v-else></div>
+          <div v-else class="app-logo-fallback"></div>
         </div>
         <h1 class="app-name">
-          {{
-            $config && $config.app
-              ? $config.app.title
-              : $t("app.name", "Huduma AI")
-          }}
+          {{ $config && $config.app ? $config.app.title : $t('app.name', 'Huduma AI') }}
         </h1>
       </div>
 
       <h2 class="password-reset-confirm-heading">
-        {{ $t("passwordReset.resetPassword", "Reset Password") }}
+        {{ $t('passwordReset.resetPassword', 'Reset Password') }}
       </h2>
 
       <!-- Success message after password reset -->
       <div v-if="resetSuccess" class="success-message">
         <p>
-          {{
-            $t(
-              "passwordResetConfirm.resetSuccess",
-              "Password reset successful!"
-            )
-          }}
+          {{ $t('passwordResetConfirm.resetSuccess', 'Password reset successful!') }}
         </p>
         <div class="checkmark-circle">
           <div class="checkmark"></div>
         </div>
         <p>
-          {{
-            $t("passwordResetConfirm.redirecting", "Redirecting to login...")
-          }}
+          {{ $t('passwordResetConfirm.redirecting', 'Redirecting to login...') }}
         </p>
       </div>
 
@@ -54,19 +38,12 @@
       <div v-else-if="!isTokenValidated" class="token-validation-form">
         <!-- Show if token needs to be entered manually -->
         <div v-if="!isValidatingToken" class="form-group">
-          <label for="resetToken" class="form-label">{{
-            $t("passwordResetConfirm.tokenLabel", "Reset Token")
-          }}</label>
+          <label for="resetToken" class="form-label">{{ $t('passwordResetConfirm.tokenLabel', 'Reset Token') }}</label>
           <input
+            id="resetToken"
             v-model="manualToken"
             type="text"
-            id="resetToken"
-            :placeholder="
-              $t(
-                'passwordResetConfirm.tokenPlaceholder',
-                'Enter your reset token'
-              )
-            "
+            :placeholder="$t('passwordResetConfirm.tokenPlaceholder', 'Enter your reset token')"
             class="form-control"
             required
             @focus="tokenError = ''"
@@ -78,45 +55,31 @@
         <div v-else class="loading-state">
           <div class="loading-spinner"></div>
           <p>
-            {{
-              $t(
-                "passwordResetConfirm.validatingToken",
-                "Validating your token..."
-              )
-            }}
+            {{ $t('passwordResetConfirm.validatingToken', 'Validating your token...') }}
           </p>
         </div>
 
         <button
           v-if="!isValidatingToken"
-          @click="validateToken"
           class="validate-token-button"
           :disabled="!manualToken || isValidatingToken"
+          @click="validateToken"
         >
-          {{ $t("passwordResetConfirm.validateButton", "Validate Token") }}
+          {{ $t('passwordResetConfirm.validateButton', 'Validate Token') }}
         </button>
       </div>
 
       <!-- Password Reset Form -->
-      <form
-        v-else-if="!resetSuccess"
-        @submit.prevent="handlePasswordReset"
-        class="password-reset-confirm-form"
-      >
+      <form v-else-if="!resetSuccess" class="password-reset-confirm-form" @submit.prevent="handlePasswordReset">
         <div class="form-group">
           <label for="newPassword" class="form-label">
-            {{ $t("passwordResetConfirm.newPasswordLabel", "New Password") }}
+            {{ $t('passwordResetConfirm.newPasswordLabel', 'New Password') }}
           </label>
           <input
+            id="newPassword"
             v-model="newPassword"
             type="password"
-            id="newPassword"
-            :placeholder="
-              $t(
-                'passwordResetConfirm.newPasswordPlaceholder',
-                'Enter your new password'
-              )
-            "
+            :placeholder="$t('passwordResetConfirm.newPasswordPlaceholder', 'Enter your new password')"
             class="form-control"
             required
             @focus="newPasswordError = ''"
@@ -126,17 +89,9 @@
           </p>
 
           <!-- Password strength indicator -->
-          <div
-            v-if="newPassword && passwordStrength"
-            class="password-strength-indicator"
-          >
+          <div v-if="newPassword && passwordStrength" class="password-strength-indicator">
             <div class="strength-label">
-              {{
-                $t(
-                  "passwordResetConfirm.passwordStrength",
-                  "Password Strength"
-                )
-              }}:
+              {{ $t('passwordResetConfirm.passwordStrength', 'Password Strength') }}:
               <span :class="'strength-' + passwordStrength.score">
                 {{ getStrengthLabel(passwordStrength.score) }}
               </span>
@@ -148,21 +103,9 @@
                 :style="{ width: passwordStrength.score * 25 + '%' }"
               ></div>
             </div>
-            <ul
-              v-if="passwordStrength.feedback.suggestions.length > 0"
-              class="strength-suggestions"
-            >
-              <li
-                v-for="(suggestion, index) in passwordStrength.feedback
-                  .suggestions"
-                :key="index"
-              >
-                {{
-                  $t(
-                    "passwordResetConfirm.passwordSuggestions." + suggestion,
-                    suggestion
-                  )
-                }}
+            <ul v-if="passwordStrength.feedback.suggestions.length > 0" class="strength-suggestions">
+              <li v-for="(suggestion, index) in passwordStrength.feedback.suggestions" :key="index">
+                {{ $t('passwordResetConfirm.passwordSuggestions.' + suggestion, suggestion) }}
               </li>
             </ul>
           </div>
@@ -170,23 +113,13 @@
 
         <div class="form-group">
           <label for="confirmNewPassword" class="form-label">
-            {{
-              $t(
-                "passwordResetConfirm.confirmNewPasswordLabel",
-                "Confirm New Password"
-              )
-            }}
+            {{ $t('passwordResetConfirm.confirmNewPasswordLabel', 'Confirm New Password') }}
           </label>
           <input
+            id="confirmNewPassword"
             v-model="confirmNewPassword"
             type="password"
-            id="confirmNewPassword"
-            :placeholder="
-              $t(
-                'passwordResetConfirm.confirmNewPasswordPlaceholder',
-                'Confirm your new password'
-              )
-            "
+            :placeholder="$t('passwordResetConfirm.confirmNewPasswordPlaceholder', 'Confirm your new password')"
             class="form-control"
             required
             @focus="confirmNewPasswordError = ''"
@@ -199,41 +132,29 @@
         <button
           type="submit"
           class="reset-confirm-button"
-          :disabled="
-            isSubmitting || (passwordStrength && passwordStrength.score < 3)
-          "
+          :disabled="isSubmitting || (passwordStrength && passwordStrength.score < 3)"
         >
           <span v-if="isSubmitting" class="button-spinner"></span>
           {{
             isSubmitting
-              ? $t("passwordResetConfirm.processing", "Processing...")
-              : $t("passwordResetConfirm.resetButton", "Reset Password")
+              ? $t('passwordResetConfirm.processing', 'Processing...')
+              : $t('passwordResetConfirm.resetButton', 'Reset Password')
           }}
         </button>
       </form>
 
       <div class="login-link">
         <p>
-          {{
-            $t(
-              "passwordResetConfirm.rememberedPassword",
-              "Remembered your password?"
-            )
-          }}
+          {{ $t('passwordResetConfirm.rememberedPassword', 'Remembered your password?') }}
           <router-link to="/login" class="login-link-text">
-            {{ $t("passwordResetConfirm.backToLogin", "Back to Login") }}
+            {{ $t('passwordResetConfirm.backToLogin', 'Back to Login') }}
           </router-link>
         </p>
       </div>
 
       <div class="password-reset-confirm-footer">
         <p class="support-message">
-          {{
-            $t(
-              "passwordResetConfirm.supportMessage",
-              "If you need assistance, please contact support."
-            )
-          }}
+          {{ $t('passwordResetConfirm.supportMessage', 'If you need assistance, please contact support.') }}
         </p>
         <div class="language-selector">
           <select v-model="selectedLocale" @change="changeLocale">
@@ -248,400 +169,271 @@
 </template>
 
 <script>
-import passwordService from "@/services/passwordService";
+import passwordService from '@/services/passwordService'
+import { themeManager } from '@/utils/ThemeManager'
 
 export default {
-  name: "PasswordResetConfirmScreen",
+  name: 'PasswordResetConfirmScreen',
   props: {
     theme: {
       type: String,
-      default: "light",
+      default: 'light',
     },
     token: {
       type: String,
-      default: "",
+      default: '',
     },
   },
   data() {
     return {
       TEST_TOKENS: {
-        valid: "dev_reset_token_2023",
-        expired: "expired_reset_token",
-        invalid: "invalid_reset_token",
+        valid: 'dev_reset_token_2023',
+        expired: 'expired_reset_token',
+        invalid: 'invalid_reset_token',
       },
-      manualToken: this.token || "",
+      manualToken: this.token || '',
       isTokenValidated: false,
       isValidatingToken: false,
-      tokenError: "",
-      newPassword: "",
-      confirmNewPassword: "",
-      newPasswordError: "",
-      confirmNewPasswordError: "",
+      tokenError: '',
+      newPassword: '',
+      confirmNewPassword: '',
+      newPasswordError: '',
+      confirmNewPasswordError: '',
       passwordStrength: null,
       isSubmitting: false,
       resetSuccess: false,
-      selectedLocale: this.$i18n ? this.$i18n.locale : "en",
-    };
+      selectedLocale: this.$i18n ? this.$i18n.locale : 'en',
+    }
   },
   watch: {
     newPassword(newValue) {
       if (!newValue) {
-        this.passwordStrength = null;
-        return;
+        this.passwordStrength = null
+        return
       }
-      this.calculatePasswordStrength(newValue);
+      this.calculatePasswordStrength(newValue)
     },
     theme(newTheme) {
-      console.log(
-        "[RESET_CONFIRM] Theme prop updated:",
-        newTheme,
-        "source: prop change",
-        new Date().toISOString()
-      );
-      this.applyTheme();
+      console.log('[RESET_CONFIRM] Theme prop updated:', newTheme, 'source: prop change', new Date().toISOString())
+      this.applyTheme()
     },
   },
   created() {
-    document.documentElement.setAttribute("data-theme", this.theme);
+    themeManager.setTheme(this.theme)
     if (this.token) {
-      this.validateToken();
+      this.validateToken()
     }
     if (this.$i18n) {
-      console.log("[RESET_CONFIRM] Current locale:", this.$i18n.locale);
-      console.log(
-        "[RESET_CONFIRM] Token label translation:",
-        this.$t("passwordResetConfirm.tokenLabel")
-      );
+      console.log('[RESET_CONFIRM] Current locale:', this.$i18n.locale)
+      console.log('[RESET_CONFIRM] Token label translation:', this.$t('passwordResetConfirm.tokenLabel'))
     }
   },
   mounted() {
-    this.setMobileHeight();
-    window.addEventListener("resize", this.setMobileHeight);
-    this.applyTheme();
-    this.observeThemeChanges();
+    this.setMobileHeight()
+    window.addEventListener('resize', this.setMobileHeight)
+    this.applyTheme()
     // Debug: Log computed styles and configuration values
-    const title = document.querySelector(
-      ".password-reset-confirm-card .app-name"
-    );
+    const title = document.querySelector('.password-reset-confirm-card .app-name')
+    console.log('[RESET_CONFIRM] Title text content:', title ? title.textContent : 'not found')
+    console.log('[RESET_CONFIRM] Title computed color:', title ? window.getComputedStyle(title).color : 'not found')
+    const subtitle = document.querySelector('.password-reset-confirm-heading')
     console.log(
-      "[RESET_CONFIRM] Title text content:",
-      title ? title.textContent : "not found"
-    );
+      '[RESET_CONFIRM] Subtitle computed color:',
+      subtitle ? window.getComputedStyle(subtitle).color : 'not found'
+    )
+    const icon = document.querySelector('.app-logo')
+    console.log('[RESET_CONFIRM] Icon source:', icon ? icon.querySelector('img')?.src : 'fallback')
     console.log(
-      "[RESET_CONFIRM] Title computed color:",
-      title ? window.getComputedStyle(title).color : "not found"
-    );
-    const subtitle = document.querySelector(".password-reset-confirm-heading");
+      '[RESET_CONFIRM] Icon computed background color:',
+      icon ? window.getComputedStyle(icon).backgroundColor : 'not found'
+    )
+    const validateButton = document.querySelector('.validate-token-button')
     console.log(
-      "[RESET_CONFIRM] Subtitle computed color:",
-      subtitle ? window.getComputedStyle(subtitle).color : "not found"
-    );
-    const icon = document.querySelector(".app-logo");
+      '[RESET_CONFIRM] Validate button computed background color:',
+      validateButton ? window.getComputedStyle(validateButton).backgroundColor : 'not found'
+    )
+    const resetButton = document.querySelector('.reset-confirm-button')
     console.log(
-      "[RESET_CONFIRM] Icon source:",
-      icon ? icon.querySelector("img")?.src : "fallback"
-    );
+      '[RESET_CONFIRM] Reset button computed background color:',
+      resetButton ? window.getComputedStyle(resetButton).backgroundColor : 'not found'
+    )
+    const formField = document.querySelector('.form-control')
     console.log(
-      "[RESET_CONFIRM] Icon computed background color:",
-      icon ? window.getComputedStyle(icon).backgroundColor : "not found"
-    );
-    const validateButton = document.querySelector(".validate-token-button");
-    console.log(
-      "[RESET_CONFIRM] Validate button computed background color:",
-      validateButton
-        ? window.getComputedStyle(validateButton).backgroundColor
-        : "not found"
-    );
-    const resetButton = document.querySelector(".reset-confirm-button");
-    console.log(
-      "[RESET_CONFIRM] Reset button computed background color:",
-      resetButton
-        ? window.getComputedStyle(resetButton).backgroundColor
-        : "not found"
-    );
-    const formField = document.querySelector(".form-control");
-    console.log(
-      "[RESET_CONFIRM] Form field computed background color:",
-      formField
-        ? window.getComputedStyle(formField).backgroundColor
-        : "not found"
-    );
+      '[RESET_CONFIRM] Form field computed background color:',
+      formField ? window.getComputedStyle(formField).backgroundColor : 'not found'
+    )
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[RESET_CONFIRM] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
-    }
+    window.removeEventListener('resize', this.setMobileHeight)
   },
   methods: {
     calculatePasswordStrength(password) {
-      let score = 0;
-      if (password.length >= 8) score += 1;
-      if (/[A-Z]/.test(password)) score += 1;
-      if (/[a-z]/.test(password)) score += 1;
-      if (/[0-9]/.test(password)) score += 1;
-      if (/[^A-Za-z0-9]/.test(password)) score += 1;
-      score = Math.min(score, 4);
-      const suggestions = this.getStaticSuggestions(password, score);
+      let score = 0
+      if (password.length >= 8) score += 1
+      if (/[A-Z]/.test(password)) score += 1
+      if (/[a-z]/.test(password)) score += 1
+      if (/[0-9]/.test(password)) score += 1
+      if (/[^A-Za-z0-9]/.test(password)) score += 1
+      score = Math.min(score, 4)
+      const suggestions = this.getStaticSuggestions(password, score)
       this.passwordStrength = {
         score,
         feedback: { suggestions },
-      };
+      }
     },
     getStaticSuggestions(password, score) {
-      const suggestions = [];
+      const suggestions = []
       if (score < 4) {
-        if (password.length < 8) suggestions.push("atLeast8Chars");
-        if (!/[A-Z]/.test(password)) suggestions.push("addUppercase");
-        if (!/[a-z]/.test(password)) suggestions.push("addLowercase");
-        if (!/[0-9]/.test(password)) suggestions.push("addNumbers");
-        if (!/[^A-Za-z0-9]/.test(password)) suggestions.push("addSpecialChars");
+        if (password.length < 8) suggestions.push('atLeast8Chars')
+        if (!/[A-Z]/.test(password)) suggestions.push('addUppercase')
+        if (!/[a-z]/.test(password)) suggestions.push('addLowercase')
+        if (!/[0-9]/.test(password)) suggestions.push('addNumbers')
+        if (!/[^A-Za-z0-9]/.test(password)) suggestions.push('addSpecialChars')
       }
-      return suggestions;
+      return suggestions
     },
     async validateToken() {
-      this.tokenError = "";
-      this.isValidatingToken = true;
-      const token = this.manualToken || this.token;
+      this.tokenError = ''
+      this.isValidatingToken = true
+      const token = this.manualToken || this.token
       if (!token) {
-        this.tokenError = this.$t(
-          "passwordResetConfirm.noTokenProvided",
-          "Please enter a reset token"
-        );
-        this.isValidatingToken = false;
-        return;
+        this.tokenError = this.$t('passwordResetConfirm.noTokenProvided', 'Please enter a reset token')
+        this.isValidatingToken = false
+        return
       }
       try {
-        if (
-          process.env.NODE_ENV === "development" &&
-          token === this.TEST_TOKENS.valid
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, 800));
-          this.isTokenValidated = true;
-          this.isValidatingToken = false;
-          return;
+        if (process.env.NODE_ENV === 'development' && token === this.TEST_TOKENS.valid) {
+          await new Promise((resolve) => setTimeout(resolve, 800))
+          this.isTokenValidated = true
+          this.isValidatingToken = false
+          return
         }
-        if (
-          process.env.NODE_ENV === "development" &&
-          token === this.TEST_TOKENS.expired
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, 800));
-          this.tokenError = this.$t(
-            "passwordResetConfirm.expiredToken",
-            "This reset token has expired"
-          );
-          this.isValidatingToken = false;
-          return;
+        if (process.env.NODE_ENV === 'development' && token === this.TEST_TOKENS.expired) {
+          await new Promise((resolve) => setTimeout(resolve, 800))
+          this.tokenError = this.$t('passwordResetConfirm.expiredToken', 'This reset token has expired')
+          this.isValidatingToken = false
+          return
         }
-        const response = await passwordService.validateToken(token);
+        const response = await passwordService.validateToken(token)
         if (response && response.valid) {
-          this.isTokenValidated = true;
+          this.isTokenValidated = true
         } else {
           if (response.expired) {
-            this.tokenError = this.$t(
-              "passwordResetConfirm.expiredToken",
-              "This reset token has expired"
-            );
+            this.tokenError = this.$t('passwordResetConfirm.expiredToken', 'This reset token has expired')
           } else if (response.used) {
-            this.tokenError = this.$t(
-              "passwordResetConfirm.usedToken",
-              "This reset token has already been used"
-            );
+            this.tokenError = this.$t('passwordResetConfirm.usedToken', 'This reset token has already been used')
           } else {
-            this.tokenError = this.$t(
-              "passwordResetConfirm.invalidToken",
-              "Invalid reset token"
-            );
+            this.tokenError = this.$t('passwordResetConfirm.invalidToken', 'Invalid reset token')
           }
         }
       } catch (error) {
-        console.error("[RESET_CONFIRM] Token validation error:", error);
-        this.tokenError = this.$t(
-          "passwordResetConfirm.validationError",
-          "Could not validate token, please try again"
-        );
+        console.error('[RESET_CONFIRM] Token validation error:', error)
+        this.tokenError = this.$t('passwordResetConfirm.validationError', 'Could not validate token, please try again')
       } finally {
-        this.isValidatingToken = false;
+        this.isValidatingToken = false
       }
     },
     validatePasswords() {
-      this.newPasswordError = "";
-      this.confirmNewPasswordError = "";
+      this.newPasswordError = ''
+      this.confirmNewPasswordError = ''
       if (this.passwordStrength && this.passwordStrength.score < 3) {
         this.newPasswordError = this.$t(
-          "passwordResetConfirm.passwordTooWeak",
-          "Password is too weak. Please choose a stronger password."
-        );
-        return false;
+          'passwordResetConfirm.passwordTooWeak',
+          'Password is too weak. Please choose a stronger password.'
+        )
+        return false
       }
       if (this.newPassword !== this.confirmNewPassword) {
-        this.confirmNewPasswordError = this.$t(
-          "passwordResetConfirm.passwordsDoNotMatch",
-          "Passwords do not match"
-        );
-        return false;
+        this.confirmNewPasswordError = this.$t('passwordResetConfirm.passwordsDoNotMatch', 'Passwords do not match')
+        return false
       }
-      return true;
+      return true
     },
     async handlePasswordReset() {
       if (!this.validatePasswords()) {
-        return;
+        return
       }
-      this.isSubmitting = true;
+      this.isSubmitting = true
       try {
-        const token = this.manualToken || this.token;
-        if (
-          process.env.NODE_ENV === "development" &&
-          token === this.TEST_TOKENS.valid
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          this.resetSuccess = true;
+        const token = this.manualToken || this.token
+        if (process.env.NODE_ENV === 'development' && token === this.TEST_TOKENS.valid) {
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+          this.resetSuccess = true
           setTimeout(() => {
-            this.$router.push("/login");
-          }, 3000);
-          return;
+            this.$router.push('/login')
+          }, 3000)
+          return
         }
-        const response = await passwordService.resetPassword(
-          token,
-          this.newPassword
-        );
+        const response = await passwordService.resetPassword(token, this.newPassword)
         if (response && response.success) {
-          this.resetSuccess = true;
+          this.resetSuccess = true
           setTimeout(() => {
-            this.$router.push("/login");
-          }, 3000);
+            this.$router.push('/login')
+          }, 3000)
         } else {
-          throw new Error("Invalid response format");
+          throw new Error('Invalid response format')
         }
       } catch (error) {
-        console.error("[RESET_CONFIRM] Password reset failed:", error);
+        console.error('[RESET_CONFIRM] Password reset failed:', error)
         if (error.response && error.response.status === 410) {
-          this.tokenError = this.$t(
-            "passwordResetConfirm.expiredToken",
-            "This reset token has expired"
-          );
-          this.isTokenValidated = false;
+          this.tokenError = this.$t('passwordResetConfirm.expiredToken', 'This reset token has expired')
+          this.isTokenValidated = false
         } else if (error.response && error.response.status === 409) {
-          this.tokenError = this.$t(
-            "passwordResetConfirm.usedToken",
-            "This reset token has already been used"
-          );
-          this.isTokenValidated = false;
+          this.tokenError = this.$t('passwordResetConfirm.usedToken', 'This reset token has already been used')
+          this.isTokenValidated = false
         } else {
-          alert(
-            this.$t(
-              "passwordResetConfirm.resetFailed",
-              "Password reset failed. Please try again."
-            )
-          );
+          alert(this.$t('passwordResetConfirm.resetFailed', 'Password reset failed. Please try again.'))
         }
       } finally {
-        this.isSubmitting = false;
+        this.isSubmitting = false
       }
     },
     getStrengthLabel(score) {
       const labels = [
-        this.$t("passwordResetConfirm.strengthLabels.veryWeak", "Very Weak"),
-        this.$t("passwordResetConfirm.strengthLabels.weak", "Weak"),
-        this.$t("passwordResetConfirm.strengthLabels.fair", "Fair"),
-        this.$t("passwordResetConfirm.strengthLabels.good", "Good"),
-        this.$t("passwordResetConfirm.strengthLabels.strong", "Strong"),
-      ];
-      return labels[Math.min(score, 4)];
+        this.$t('passwordResetConfirm.strengthLabels.veryWeak', 'Very Weak'),
+        this.$t('passwordResetConfirm.strengthLabels.weak', 'Weak'),
+        this.$t('passwordResetConfirm.strengthLabels.fair', 'Fair'),
+        this.$t('passwordResetConfirm.strengthLabels.good', 'Good'),
+        this.$t('passwordResetConfirm.strengthLabels.strong', 'Strong'),
+      ]
+      return labels[Math.min(score, 4)]
     },
     changeLocale() {
       if (this.$i18n) {
-        this.$i18n.locale = this.selectedLocale;
+        this.$i18n.locale = this.selectedLocale
         try {
-          localStorage.setItem("userLocale", this.selectedLocale);
+          localStorage.setItem('userLocale', this.selectedLocale)
         } catch (e) {
-          console.warn("[RESET_CONFIRM] Error saving language preference:", e);
+          console.warn('[RESET_CONFIRM] Error saving language preference:', e)
         }
-      } else if (typeof this.$setLocale === "function") {
-        this.$setLocale(this.selectedLocale);
+      } else if (typeof this.$setLocale === 'function') {
+        this.$setLocale(this.selectedLocale)
       }
     },
     setMobileHeight() {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
+      const vh = window.innerHeight * 0.01
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
     },
     applyTheme() {
-      console.log(
-        "[RESET_CONFIRM] Applying theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const currentTheme = document.documentElement.getAttribute("data-theme");
+      console.log('[RESET_CONFIRM] Applying theme:', this.theme, new Date().toISOString())
+      const currentTheme = document.documentElement.getAttribute('data-theme')
       if (currentTheme !== this.theme) {
-        console.warn(
-          "[RESET_CONFIRM] Theme mismatch: component theme=",
-          this.theme,
-          "vs DOM theme=",
-          currentTheme
-        );
+        console.warn('[RESET_CONFIRM] Theme mismatch: component theme=', this.theme, 'vs DOM theme=', currentTheme)
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
-      const title = document.querySelector(
-        ".password-reset-confirm-card .app-name"
-      );
+      themeManager.setTheme(this.theme)
+      const title = document.querySelector('.password-reset-confirm-card .app-name')
       console.log(
-        "[RESET_CONFIRM] Title computed color after apply:",
-        title ? window.getComputedStyle(title).color : "not found"
-      );
-      const subtitle = document.querySelector(
-        ".password-reset-confirm-heading"
-      );
+        '[RESET_CONFIRM] Title computed color after apply:',
+        title ? window.getComputedStyle(title).color : 'not found'
+      )
+      const subtitle = document.querySelector('.password-reset-confirm-heading')
       console.log(
-        "[RESET_CONFIRM] Subtitle computed color after apply:",
-        subtitle ? window.getComputedStyle(subtitle).color : "not found"
-      );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[RESET_CONFIRM] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[RESET_CONFIRM] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log(
-                "[RESET_CONFIRM] Updating component theme to:",
-                newTheme
-              );
-              this.theme = newTheme;
-              const title = document.querySelector(
-                ".password-reset-confirm-card .app-name"
-              );
-              console.log(
-                "[RESET_CONFIRM] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(
-                ".password-reset-confirm-heading"
-              );
-              console.log(
-                "[RESET_CONFIRM] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
+        '[RESET_CONFIRM] Subtitle computed color after apply:',
+        subtitle ? window.getComputedStyle(subtitle).color : 'not found'
+      )
     },
   },
-};
+}
 </script>
 
 <style scoped>
@@ -657,11 +449,11 @@ export default {
   box-sizing: border-box;
 }
 
-[data-theme="light"] .password-reset-confirm-container {
+[data-theme='light'] .password-reset-confirm-container {
   background-color: var(--bg-primary, #f5f7fa);
 }
 
-[data-theme="dark"] .password-reset-confirm-container {
+[data-theme='dark'] .password-reset-confirm-container {
   background-color: var(--bg-primary, #1e1e1e);
 }
 
@@ -677,12 +469,12 @@ export default {
   flex-direction: column;
 }
 
-[data-theme="light"] .password-reset-confirm-card {
+[data-theme='light'] .password-reset-confirm-card {
   background-color: var(--bg-secondary, #ffffff);
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .password-reset-confirm-card {
+[data-theme='dark'] .password-reset-confirm-card {
   background-color: var(--bg-secondary, #252525);
   color: var(--text-primary, #f0f0f0);
 }
@@ -727,11 +519,11 @@ export default {
   font-weight: bold;
 }
 
-[data-theme="light"] .password-reset-confirm-card .app-name {
+[data-theme='light'] .password-reset-confirm-card .app-name {
   color: #000000 !important;
 }
 
-[data-theme="dark"] .password-reset-confirm-card .app-name {
+[data-theme='dark'] .password-reset-confirm-card .app-name {
   color: var(--text-primary, #f0f0f0) !important;
 }
 
@@ -743,15 +535,11 @@ export default {
   font-weight: 500;
 }
 
-[data-theme="light"]
-  .password-reset-confirm-card
-  .password-reset-confirm-heading {
+[data-theme='light'] .password-reset-confirm-card .password-reset-confirm-heading {
   color: var(--text-secondary, #4d4d4d) !important;
 }
 
-[data-theme="dark"]
-  .password-reset-confirm-card
-  .password-reset-confirm-heading {
+[data-theme='dark'] .password-reset-confirm-card .password-reset-confirm-heading {
   color: var(--text-secondary, #b3b3b3) !important;
 }
 
@@ -771,11 +559,11 @@ export default {
   font-weight: 500;
 }
 
-[data-theme="light"] .form-label {
+[data-theme='light'] .form-label {
   color: var(--text-primary, #333333) !important;
 }
 
-[data-theme="dark"] .form-label {
+[data-theme='dark'] .form-label {
   color: var(--text-primary, #f0f0f0) !important;
 }
 
@@ -788,12 +576,12 @@ export default {
   transition: background-color 0.2s;
 }
 
-[data-theme="light"] .form-control {
+[data-theme='light'] .form-control {
   background-color: var(--bg-tertiary, #f0f2f5) !important;
   color: var(--text-primary, #333333) !important;
 }
 
-[data-theme="dark"] .form-control {
+[data-theme='dark'] .form-control {
   background-color: var(--bg-input, #333333) !important;
   color: var(--text-primary, #f0f0f0) !important;
 }
@@ -802,11 +590,11 @@ export default {
   outline: none;
 }
 
-[data-theme="light"] .form-control:focus {
+[data-theme='light'] .form-control:focus {
   background-color: var(--bg-primary, #f5f7fa) !important;
 }
 
-[data-theme="dark"] .form-control:focus {
+[data-theme='dark'] .form-control:focus {
   background-color: var(--bg-input, #2a2a2a) !important;
 }
 
@@ -824,8 +612,8 @@ export default {
   transition: background-color 0.2s;
 }
 
-[data-theme="dark"] .validate-token-button,
-[data-theme="dark"] .reset-confirm-button {
+[data-theme='dark'] .validate-token-button,
+[data-theme='dark'] .reset-confirm-button {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -903,11 +691,11 @@ export default {
   font-size: 14px;
 }
 
-[data-theme="light"] .login-link {
+[data-theme='light'] .login-link {
   color: var(--text-secondary, #4d4d4d);
 }
 
-[data-theme="dark"] .login-link {
+[data-theme='dark'] .login-link {
   color: var(--text-secondary, #b3b3b3);
 }
 
@@ -933,11 +721,11 @@ export default {
   margin-bottom: 10px;
 }
 
-[data-theme="light"] .support-message {
+[data-theme='light'] .support-message {
   color: var(--text-muted, #6c757d);
 }
 
-[data-theme="dark"] .support-message {
+[data-theme='dark'] .support-message {
   color: var(--text-muted, #9ca3af);
 }
 
@@ -958,13 +746,13 @@ export default {
   cursor: pointer;
 }
 
-[data-theme="light"] .language-selector select {
+[data-theme='light'] .language-selector select {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme="dark"] .language-selector select {
+[data-theme='dark'] .language-selector select {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);
@@ -1043,7 +831,7 @@ export default {
 }
 
 .strength-suggestions li::before {
-  content: "• ";
+  content: '• ';
   color: #4e97d1;
 }
 
@@ -1067,7 +855,8 @@ export default {
   stroke-miterlimit: 10;
   margin: 14px auto;
   box-shadow: inset 0px 0px 0px #4ade80;
-  animation: fill 0.4s ease-in-out 0.4s forwards,
+  animation:
+    fill 0.4s ease-in-out 0.4s forwards,
     scale 0.3s ease-in-out 0.9s both;
   position: relative;
   top: 0;

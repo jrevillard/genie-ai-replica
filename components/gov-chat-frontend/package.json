@@ -4,7 +4,12 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build"
+    "build": "vue-cli-service build",
+    "lint": "eslint --max-warnings 999 src/",
+    "lint:fix": "eslint --fix src/",
+    "format": "prettier --check \"src/**/*.{js,vue,json,css,scss}\"",
+    "format:fix": "prettier --write \"src/**/*.{js,vue,json,css,scss}\"",
+    "prepare": "cd ../.. && husky components/gov-chat-frontend/.husky"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.7.2",
@@ -31,6 +36,21 @@
     "vuex": "^4.0.2"
   },
   "devDependencies": {
-    "@vue/cli-service": "^5.0.0"
+    "@vue/cli-service": "^5.0.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-vue": "^9.23.0",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5"
+  },
+  "lint-staged": {
+    "src/**/*.{js,vue}": [
+      "eslint --fix --max-warnings 999",
+      "prettier --write"
+    ],
+    "src/**/*.{json,css,scss}": [
+      "prettier --write"
+    ]
   }
 }

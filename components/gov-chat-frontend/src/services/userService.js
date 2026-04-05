@@ -1,6 +1,6 @@
 // src/services/userService.js
-import httpService from './httpService';
-import crypto from 'crypto';
+import httpService from './httpService'
+import crypto from 'crypto'
 
 /**
  * Service for user account management and authentication operations.
@@ -15,18 +15,18 @@ class UserService {
    * Initialize the UserService
    */
   constructor() {
-    this.tokenKey = 'user';
-    this.authEndpoint = 'auth';
-    this.userEndpoint = 'users';
+    this.tokenKey = 'user'
+    this.authEndpoint = 'auth'
+    this.userEndpoint = 'users'
 
     // Request resilience (from authService)
-    this.pendingRequests = new Map();
-    this.maxRetries = 3;
-    this.retryDelay = 1000;
+    this.pendingRequests = new Map()
+    this.maxRetries = 3
+    this.retryDelay = 1000
 
     // Proactive token refresh (from authService)
-    this.refreshInterval = 15 * 60 * 1000; // 15 minutes
-    this.setupTokenRefresh();
+    this.refreshInterval = 15 * 60 * 1000 // 15 minutes
+    this.setupTokenRefresh()
   }
 
   // ===== REQUEST RESILIENCE =====
@@ -39,18 +39,18 @@ class UserService {
     setInterval(async () => {
       if (this.isAuthenticated()) {
         try {
-          console.log('Attempting proactive token refresh');
-          await this.refreshToken();
-          console.log('Token refreshed proactively');
+          console.log('Attempting proactive token refresh')
+          await this.refreshToken()
+          console.log('Token refreshed proactively')
         } catch (error) {
-          console.error('Proactive token refresh failed:', error);
+          console.error('Proactive token refresh failed:', error)
           if (error.response?.status === 401 || error.response?.status === 403) {
-            this.clearUserData();
-            console.log('Cleared user data due to refresh failure');
+            this.clearUserData()
+            console.log('Cleared user data due to refresh failure')
           }
         }
       }
-    }, this.refreshInterval);
+    }, this.refreshInterval)
   }
 
   /**
@@ -63,14 +63,14 @@ class UserService {
    */
   async retryRequest(fn, attempt = 1) {
     try {
-      return await fn();
+      return await fn()
     } catch (error) {
       if (attempt >= this.maxRetries || ![401, 403].includes(error.response?.status)) {
-        throw error;
+        throw error
       }
-      console.log(`Retry attempt ${attempt} for failed request: ${error.message}`);
-      await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
-      return this.retryRequest(fn, attempt + 1);
+      console.log(`Retry attempt ${attempt} for failed request: ${error.message}`)
+      await new Promise((resolve) => setTimeout(resolve, this.retryDelay * attempt))
+      return this.retryRequest(fn, attempt + 1)
     }
   }
 
@@ -82,40 +82,40 @@ class UserService {
   async refreshToken() {
     // Prevent multiple simultaneous refresh attempts
     if (this.pendingRequests.has('refresh')) {
-      console.log('Returning existing refresh request');
-      return this.pendingRequests.get('refresh');
+      console.log('Returning existing refresh request')
+      return this.pendingRequests.get('refresh')
     }
 
     const requestPromise = (async () => {
       try {
-        const userData = this.getCurrentUser();
+        const userData = this.getCurrentUser()
         if (!userData?.refreshToken) {
-          throw new Error('No refresh token available');
+          throw new Error('No refresh token available')
         }
         const response = await httpService.post(`${this.authEndpoint}/refresh-token`, {
-          refreshToken: userData.refreshToken
-        });
+          refreshToken: userData.refreshToken,
+        })
         if (response.data && response.data.accessToken) {
           this.setUserData({
             ...userData,
             accessToken: response.data.accessToken,
-            refreshToken: response.data.refreshToken || userData.refreshToken
-          });
+            refreshToken: response.data.refreshToken || userData.refreshToken,
+          })
         }
-        return response.data;
+        return response.data
       } catch (error) {
-        console.error('Refresh token error:', error);
+        console.error('Refresh token error:', error)
         if (error.response?.status === 401 || error.response?.status === 403) {
-          this.clearUserData();
+          this.clearUserData()
         }
-        throw error;
+        throw error
       } finally {
-        this.pendingRequests.delete('refresh');
+        this.pendingRequests.delete('refresh')
       }
-    })();
+    })()
 
-    this.pendingRequests.set('refresh', requestPromise);
-    return requestPromise;
+    this.pendingRequests.set('refresh', requestPromise)
+    return requestPromise
   }
 
   // ===== AUTHENTICATION METHODS =====
@@ -128,20 +128,20 @@ class UserService {
    */
   async login(loginName, password) {
     try {
-      const encPassword = this.hashPassword(password);
+      const encPassword = this.hashPassword(password)
       const response = await this.retryRequest(() =>
         httpService.post(`${this.authEndpoint}/login`, {
           loginName,
-          encPassword
+          encPassword,
         })
-      );
+      )
       if (response.data && response.data.accessToken) {
-        this.setUserData(response.data);
+        this.setUserData(response.data)
       }
-      return response.data;
+      return response.data
     } catch (error) {
-      console.error('Login error:', error);
-      throw error;
+      console.error('Login error:', error)
+      throw error
     }
   }
 
@@ -159,18 +159,16 @@ class UserService {
       const payload = {
         loginName: userData.loginName,
         email: userData.email,
-        encPassword: this.hashPassword(userData.password)
-      };
-      if (userData.fullName) {
-        payload.fullName = userData.fullName;
+        encPassword: this.hashPassword(userData.password),
       }
-      const response = await this.retryRequest(() =>
-        httpService.post(`${this.authEndpoint}/register`, payload)
-      );
-      return response.data;
+      if (userData.fullName) {
+        payload.fullName = userData.fullName
+      }
+      const response = await this.retryRequest(() => httpService.post(`${this.authEndpoint}/register`, payload))
+      return response.data
     } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
+      console.error('Registration error:', error)
+      throw error
     }
   }
 
@@ -183,16 +181,16 @@ class UserService {
    */
   async logout() {
     try {
-      const userData = this.getCurrentUser();
-      const accessToken = userData?.accessToken;
+      const userData = this.getCurrentUser()
+      const accessToken = userData?.accessToken
 
       if (!accessToken) {
-        console.warn('No access token found for logout');
-        this.clearUserData();
-        return { success: true, message: 'Logged out successfully (no token)' };
+        console.warn('No access token found for logout')
+        this.clearUserData()
+        return { success: true, message: 'Logged out successfully (no token)' }
       }
 
-      console.log('Sending logout request with Authorization header');
+      console.log('Sending logout request with Authorization header')
 
       const response = await this.retryRequest(() =>
         httpService.post(
@@ -200,18 +198,18 @@ class UserService {
           {},
           {
             headers: {
-              'Authorization': `Bearer ${accessToken}`
-            }
+              Authorization: `Bearer ${accessToken}`,
+            },
           }
         )
-      );
+      )
 
-      this.clearUserData();
-      return response.data;
+      this.clearUserData()
+      return response.data
     } catch (error) {
-      console.error('Logout error:', error);
-      this.clearUserData();
-      throw error;
+      console.error('Logout error:', error)
+      this.clearUserData()
+      throw error
     }
   }
 
@@ -222,24 +220,22 @@ class UserService {
    */
   async fetchCurrentUser() {
     try {
-      const response = await this.retryRequest(() =>
-        httpService.get(`${this.authEndpoint}/me`)
-      );
-      return response.data.user;
+      const response = await this.retryRequest(() => httpService.get(`${this.authEndpoint}/me`))
+      return response.data.user
     } catch (error) {
       if (error.response?.status === 401) {
         try {
-          await this.refreshToken();
-          const retryResponse = await httpService.get(`${this.authEndpoint}/me`);
-          return retryResponse.data.user;
+          await this.refreshToken()
+          const retryResponse = await httpService.get(`${this.authEndpoint}/me`)
+          return retryResponse.data.user
         } catch (refreshError) {
-          console.error('Refresh failed, logging out:', refreshError);
-          this.clearUserData();
-          throw refreshError;
+          console.error('Refresh failed, logging out:', refreshError)
+          this.clearUserData()
+          throw refreshError
         }
       }
-      console.error('Fetch current user error:', error);
-      throw error;
+      console.error('Fetch current user error:', error)
+      throw error
     }
   }
 
@@ -249,13 +245,13 @@ class UserService {
    */
   getCurrentUser() {
     try {
-      const userStr = localStorage.getItem(this.tokenKey);
-      if (!userStr) return null;
+      const userStr = localStorage.getItem(this.tokenKey)
+      if (!userStr) return null
 
-      return JSON.parse(userStr);
+      return JSON.parse(userStr)
     } catch (e) {
-      console.error('Error parsing user data:', e);
-      return null;
+      console.error('Error parsing user data:', e)
+      return null
     }
   }
 
@@ -264,8 +260,8 @@ class UserService {
    * @returns {boolean} True if authenticated, false otherwise
    */
   isAuthenticated() {
-    const user = this.getCurrentUser();
-    return !!user && !!user.accessToken;
+    const user = this.getCurrentUser()
+    return !!user && !!user.accessToken
   }
 
   /**
@@ -274,7 +270,7 @@ class UserService {
    * @private
    */
   setUserData(userData) {
-    localStorage.setItem(this.tokenKey, JSON.stringify(userData));
+    localStorage.setItem(this.tokenKey, JSON.stringify(userData))
   }
 
   /**
@@ -282,7 +278,7 @@ class UserService {
    * @private
    */
   clearUserData() {
-    localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.tokenKey)
   }
 
   /**
@@ -293,10 +289,7 @@ class UserService {
    * @returns {string} The hashed password
    */
   hashPassword(password) {
-    return crypto
-      .createHash('sha256')
-      .update(password)
-      .digest('hex');
+    return crypto.createHash('sha256').update(password).digest('hex')
   }
 
   /**
@@ -306,13 +299,11 @@ class UserService {
    */
   async initiatePasswordReset(email) {
     try {
-      const response = await this.retryRequest(() =>
-        httpService.post(`${this.authEndpoint}/reset-password`, { email })
-      );
-      return response.data;
+      const response = await this.retryRequest(() => httpService.post(`${this.authEndpoint}/reset-password`, { email }))
+      return response.data
     } catch (error) {
-      console.error('Password reset initiation error:', error);
-      throw error;
+      console.error('Password reset initiation error:', error)
+      throw error
     }
   }
 
@@ -323,13 +314,11 @@ class UserService {
    */
   async validateResetToken(token) {
     try {
-      const response = await this.retryRequest(() =>
-        httpService.post(`${this.authEndpoint}/validate-token`, { token })
-      );
-      return response.data;
+      const response = await this.retryRequest(() => httpService.post(`${this.authEndpoint}/validate-token`, { token }))
+      return response.data
     } catch (error) {
-      console.error('Token validation error:', error);
-      throw error;
+      console.error('Token validation error:', error)
+      throw error
     }
   }
 
@@ -341,17 +330,17 @@ class UserService {
    */
   async resetPassword(token, newPassword) {
     try {
-      const encPassword = this.hashPassword(newPassword);
+      const encPassword = this.hashPassword(newPassword)
       const response = await this.retryRequest(() =>
         httpService.post(`${this.authEndpoint}/reset-password/confirm`, {
           token,
-          newPassword: encPassword
+          newPassword: encPassword,
         })
-      );
-      return response.data;
+      )
+      return response.data
     } catch (error) {
-      console.error('Password reset error:', error);
-      throw error;
+      console.error('Password reset error:', error)
+      throw error
     }
   }
 
@@ -363,18 +352,18 @@ class UserService {
    */
   async changePassword(currentPassword, newPassword) {
     try {
-      const encCurrentPassword = this.hashPassword(currentPassword);
-      const encNewPassword = this.hashPassword(newPassword);
+      const encCurrentPassword = this.hashPassword(currentPassword)
+      const encNewPassword = this.hashPassword(newPassword)
       const response = await this.retryRequest(() =>
         httpService.post(`${this.authEndpoint}/change-password`, {
           currentPassword: encCurrentPassword,
-          newPassword: encNewPassword
+          newPassword: encNewPassword,
         })
-      );
-      return response.data;
+      )
+      return response.data
     } catch (error) {
-      console.error('Password change error:', error);
-      throw error;
+      console.error('Password change error:', error)
+      throw error
     }
   }
 
@@ -387,22 +376,20 @@ class UserService {
    */
   async verifyEmail(token) {
     if (this.pendingRequests.has(`verify_${token}`)) {
-      console.log('Returning existing verification request');
-      return this.pendingRequests.get(`verify_${token}`);
+      console.log('Returning existing verification request')
+      return this.pendingRequests.get(`verify_${token}`)
     }
 
     try {
-      const requestPromise = this.retryRequest(() =>
-        httpService.get(`${this.authEndpoint}/verify-email/${token}`)
-      );
-      this.pendingRequests.set(`verify_${token}`, requestPromise);
-      const response = await requestPromise;
-      this.pendingRequests.delete(`verify_${token}`);
-      return response.data;
+      const requestPromise = this.retryRequest(() => httpService.get(`${this.authEndpoint}/verify-email/${token}`))
+      this.pendingRequests.set(`verify_${token}`, requestPromise)
+      const response = await requestPromise
+      this.pendingRequests.delete(`verify_${token}`)
+      return response.data
     } catch (error) {
-      this.pendingRequests.delete(`verify_${token}`);
-      console.error('Email verification error:', error);
-      throw error;
+      this.pendingRequests.delete(`verify_${token}`)
+      console.error('Email verification error:', error)
+      throw error
     }
   }
 
@@ -416,11 +403,11 @@ class UserService {
     try {
       const response = await this.retryRequest(() =>
         httpService.post(`${this.authEndpoint}/resend-verification`, { email })
-      );
-      return response.data;
+      )
+      return response.data
     } catch (error) {
-      console.error('Resend verification error:', error);
-      throw error;
+      console.error('Resend verification error:', error)
+      throw error
     }
   }
 
@@ -432,17 +419,17 @@ class UserService {
    */
   async resetUserData() {
     try {
-      console.log('Calling reset user data endpoint');
-      const response = await httpService.post(`${this.userEndpoint}/reset-data`);
+      console.log('Calling reset user data endpoint')
+      const response = await httpService.post(`${this.userEndpoint}/reset-data`)
 
       if (response.data && response.data.success) {
-        await this.refreshUserData();
+        await this.refreshUserData()
       }
 
-      return response.data;
+      return response.data
     } catch (error) {
-      console.error('Error resetting user data:', error);
-      throw error;
+      console.error('Error resetting user data:', error)
+      throw error
     }
   }
 
@@ -454,19 +441,19 @@ class UserService {
   async getCurrentUserInfo() {
     try {
       // First try to get from localStorage for faster loading
-      const cachedUser = this.getCurrentUser();
+      const cachedUser = this.getCurrentUser()
       if (cachedUser) {
         // If we have cached data, make a background refresh but don't wait for it
-        this.refreshUserData();
-        return cachedUser;
+        this.refreshUserData()
+        return cachedUser
       }
 
       // If no cached data, fetch from the server
-      const response = await httpService.get(`${this.authEndpoint}/me`);
-      return response.data.user || response.data;
+      const response = await httpService.get(`${this.authEndpoint}/me`)
+      return response.data.user || response.data
     } catch (error) {
-      console.error('Error fetching current user info:', error);
-      throw error;
+      console.error('Error fetching current user info:', error)
+      throw error
     }
   }
 
@@ -476,23 +463,23 @@ class UserService {
    */
   async refreshUserData() {
     try {
-      const response = await httpService.get(`${this.authEndpoint}/me`);
-      const userData = response.data.user || response.data;
+      const response = await httpService.get(`${this.authEndpoint}/me`)
+      const userData = response.data.user || response.data
 
       // Update local storage with fresh data
       if (userData) {
-        const currentData = this.getCurrentUser();
+        const currentData = this.getCurrentUser()
         this.setUserData({
           ...currentData,
-          ...userData
-        });
+          ...userData,
+        })
       }
 
-      return userData;
+      return userData
     } catch (error) {
-      console.error('Error refreshing user data:', error);
+      console.error('Error refreshing user data:', error)
       // Don't throw, this is a background refresh
-      return null;
+      return null
     }
   }
 
@@ -505,16 +492,16 @@ class UserService {
    */
   async updateEmail(newEmail, password, userId) {
     try {
-      console.log(`Updating email to: ${newEmail} for user: ${userId}`);
+      console.log(`Updating email to: ${newEmail} for user: ${userId}`)
       const response = await httpService.put('users/email', {
         email: newEmail,
         password: this.hashPassword(password),
-        userId: userId
-      });
-      return response.data;
+        userId: userId,
+      })
+      return response.data
     } catch (error) {
-      console.error('Error updating email:', error);
-      throw error;
+      console.error('Error updating email:', error)
+      throw error
     }
   }
 
@@ -528,12 +515,12 @@ class UserService {
     try {
       const response = await httpService.post('users/deactivate', {
         reason,
-        password
-      });
-      return response.data;
+        password,
+      })
+      return response.data
     } catch (error) {
-      console.error('Error deactivating account:', error);
-      throw error;
+      console.error('Error deactivating account:', error)
+      throw error
     }
   }
 
@@ -543,11 +530,11 @@ class UserService {
    */
   async reactivateAccount() {
     try {
-      const response = await httpService.post('users/reactivate');
-      return response.data;
+      const response = await httpService.post('users/reactivate')
+      return response.data
     } catch (error) {
-      console.error('Error reactivating account:', error);
-      throw error;
+      console.error('Error reactivating account:', error)
+      throw error
     }
   }
 
@@ -559,12 +546,12 @@ class UserService {
   async checkUsernameAvailability(username) {
     try {
       const response = await httpService.get('users/check-username', {
-        params: { username }
-      });
-      return response.data.available;
+        params: { username },
+      })
+      return response.data.available
     } catch (error) {
-      console.error('Error checking username availability:', error);
-      return false;
+      console.error('Error checking username availability:', error)
+      return false
     }
   }
 
@@ -579,62 +566,62 @@ class UserService {
       score: 0,
       feedback: {
         warnings: [],
-        suggestions: []
-      }
-    };
+        suggestions: [],
+      },
+    }
 
     if (!password || password.length < 8) {
-      result.feedback.warnings.push('Password is too short');
-      result.feedback.suggestions.push('Use at least 8 characters');
-      return result;
+      result.feedback.warnings.push('Password is too short')
+      result.feedback.suggestions.push('Use at least 8 characters')
+      return result
     }
 
-    let score = 0;
+    let score = 0
 
-    const hasLowercase = /[a-z]/.test(password);
-    const hasUppercase = /[A-Z]/.test(password);
-    const hasDigit = /\d/.test(password);
-    const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+    const hasLowercase = /[a-z]/.test(password)
+    const hasUppercase = /[A-Z]/.test(password)
+    const hasDigit = /\d/.test(password)
+    const hasSpecial = /[^a-zA-Z0-9]/.test(password)
 
-    if (hasLowercase) score++;
-    if (hasUppercase) score++;
-    if (hasDigit) score++;
-    if (hasSpecial) score++;
+    if (hasLowercase) score++
+    if (hasUppercase) score++
+    if (hasDigit) score++
+    if (hasSpecial) score++
 
-    if (password.length >= 12) score++;
-    if (password.length >= 16) score++;
+    if (password.length >= 12) score++
+    if (password.length >= 16) score++
 
-    score = Math.min(score, 4);
-    result.score = score;
-    result.isValid = score >= 3;
+    score = Math.min(score, 4)
+    result.score = score
+    result.isValid = score >= 3
 
     if (!hasLowercase) {
-      result.feedback.suggestions.push('Add lowercase letters');
+      result.feedback.suggestions.push('Add lowercase letters')
     }
     if (!hasUppercase) {
-      result.feedback.suggestions.push('Add uppercase letters');
+      result.feedback.suggestions.push('Add uppercase letters')
     }
     if (!hasDigit) {
-      result.feedback.suggestions.push('Add numbers');
+      result.feedback.suggestions.push('Add numbers')
     }
     if (!hasSpecial) {
-      result.feedback.suggestions.push('Add special characters');
+      result.feedback.suggestions.push('Add special characters')
     }
     if (password.length < 12) {
-      result.feedback.suggestions.push('Make your password longer');
+      result.feedback.suggestions.push('Make your password longer')
     }
 
     if (/^[a-zA-Z]+$/.test(password)) {
-      result.feedback.warnings.push('Password contains only letters');
+      result.feedback.warnings.push('Password contains only letters')
     }
     if (/^\d+$/.test(password)) {
-      result.feedback.warnings.push('Password contains only numbers');
+      result.feedback.warnings.push('Password contains only numbers')
     }
     if (/(.)\1{2,}/.test(password)) {
-      result.feedback.warnings.push('Password contains repeated characters');
+      result.feedback.warnings.push('Password contains repeated characters')
     }
 
-    return result;
+    return result
   }
 
   /**
@@ -644,15 +631,15 @@ class UserService {
    */
   async checkEmailAvailability(email) {
     try {
-      const encodedEmail = encodeURIComponent(email);
-      const url = `${this.userEndpoint}/check-email?email=${encodedEmail}`;
-      console.log(`Checking email availability at: ${url}`);
+      const encodedEmail = encodeURIComponent(email)
+      const url = `${this.userEndpoint}/check-email?email=${encodedEmail}`
+      console.log(`Checking email availability at: ${url}`)
 
-      const response = await httpService.get(url);
-      return response.data.available;
+      const response = await httpService.get(url)
+      return response.data.available
     } catch (error) {
-      console.error('Error checking email availability:', error);
-      return false;
+      console.error('Error checking email availability:', error)
+      return false
     }
   }
 
@@ -663,7 +650,7 @@ class UserService {
    * @returns {boolean} True if passwords match
    */
   doPasswordsMatch(password, confirmPassword) {
-    return password === confirmPassword;
+    return password === confirmPassword
   }
 
   /**
@@ -676,17 +663,17 @@ class UserService {
     try {
       const response = await httpService.post('users/delete', {
         password: this.hashPassword(password),
-        reason
-      });
+        reason,
+      })
 
       if (response.data && response.data.success) {
-        this.clearUserData();
+        this.clearUserData()
       }
 
-      return response.data;
+      return response.data
     } catch (error) {
-      console.error('Error deleting account:', error);
-      throw error;
+      console.error('Error deleting account:', error)
+      throw error
     }
   }
 
@@ -698,22 +685,22 @@ class UserService {
    */
   async updateUserRole(userId, updateData) {
     try {
-      console.log(`Updating role for user ${userId} to ${updateData.role}`);
+      console.log(`Updating role for user ${userId} to ${updateData.role}`)
 
-      const response = await httpService.put(`${this.userEndpoint}/${userId}/role`, updateData);
+      const response = await httpService.put(`${this.userEndpoint}/${userId}/role`, updateData)
 
-      console.log(`Role update response for ${userId}:`, response);
+      console.log(`Role update response for ${userId}:`, response)
 
-      return response;
+      return response
     } catch (error) {
-      console.error(`Error updating user role for ${userId}:`, error);
+      console.error(`Error updating user role for ${userId}:`, error)
 
       if (error.response) {
-        console.error('Error response status:', error.response.status);
-        console.error('Error response data:', error.response.data);
+        console.error('Error response status:', error.response.status)
+        console.error('Error response data:', error.response.data)
       }
 
-      throw error;
+      throw error
     }
   }
 
@@ -725,11 +712,11 @@ class UserService {
   async getUserProfile(userId) {
     try {
       return await httpService.get(`users/${userId}`, {
-        params: { admin: true }
-      });
+        params: { admin: true },
+      })
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      throw error;
+      console.error('Error fetching user profile:', error)
+      throw error
     }
   }
 
@@ -740,13 +727,19 @@ class UserService {
    */
   async forceUserLogout(userId) {
     try {
-      console.log(`[USER SERVICE DEBUG] Attempting force logout for user ${userId} at endpoint: /api/users/admin/users/${userId}/force-logout`);
-      const response = await httpService.post(`users/admin/users/${userId}/force-logout`);
-      console.log(`[USER SERVICE DEBUG] Force logout successful for user ${userId}:`, response.data);
-      return response.data;
+      console.log(
+        `[USER SERVICE DEBUG] Attempting force logout for user ${userId} at endpoint: /api/users/admin/users/${userId}/force-logout`
+      )
+      const response = await httpService.post(`users/admin/users/${userId}/force-logout`)
+      console.log(`[USER SERVICE DEBUG] Force logout successful for user ${userId}:`, response.data)
+      return response.data
     } catch (error) {
-      console.error(`[USER SERVICE DEBUG] Error forcing logout for user ${userId}:`, error.message, error.response?.data);
-      throw error;
+      console.error(
+        `[USER SERVICE DEBUG] Error forcing logout for user ${userId}:`,
+        error.message,
+        error.response?.data
+      )
+      throw error
     }
   }
 
@@ -757,15 +750,14 @@ class UserService {
    */
   async resendVerificationEmailAdmin(userId) {
     try {
-      console.log(`Attempting to resend verification email for user: ${userId}`);
-      const response = await httpService.post(`users/admin/users/${userId}/resend-verification`);
-      return response.data;
+      console.log(`Attempting to resend verification email for user: ${userId}`)
+      const response = await httpService.post(`users/admin/users/${userId}/resend-verification`)
+      return response.data
     } catch (error) {
-      console.error('Verification email resend error:', error.response || error);
-      throw error;
+      console.error('Verification email resend error:', error.response || error)
+      throw error
     }
   }
-
 }
 
-export default new UserService();
+export default new UserService()

@@ -1,0 +1,1 @@
+cd components/gov-chat-frontend && npx lint-staged

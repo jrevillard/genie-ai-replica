@@ -344,6 +344,7 @@ N/A — documentation and test file creation only, no runtime debugging needed.
 - `docker-compose.yaml` — add SERVICE_AUTH_TOKEN to backend, increase start_period to 90s
 - `_bmad-output/implementation-artifacts/2-11-e2e-test-coverage-epic2.md` — story status + task checkboxes
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — story status update
+- `_bmad-output/planning-artifacts/epics.md` — epic 2 status update
 
 **Archived files:**
 - `docs/e2e-test-plan-external-idp.md` → `docs/e2e-test-plan-external-idp.md.archived`

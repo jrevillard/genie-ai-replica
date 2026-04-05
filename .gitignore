@@ -1,6 +1,9 @@
 # playwright-cli working directory (test snapshots)
 .playwright-cli/
 
+# Playwright test results
+test-results/
+
 # Environment files (secrets - never commit)
 .env
 .env.local

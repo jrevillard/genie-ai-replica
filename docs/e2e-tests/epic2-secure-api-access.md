@@ -33,6 +33,8 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 
 **Scope:** This phase tests Story 2.3 (Token Passthrough -- Headers Injection to Upstream) conditional on OPEA infrastructure availability.
 
+**Important:** Header construction and injection are verified via backend logs (`docker service logs genieai_backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"`) and authenticated endpoint responses (`GET /api/users/{_key}`).
+
 **Prerequisites:**
 - OPEA infrastructure MUST be deployed (`DEPLOY_OPEA=1`) for Phase F full testing
 - Phases G–K work with `DEPLOY_OPEA=0`
@@ -79,20 +81,20 @@ fi
 **Verification:**
 ```bash
 # Get admin token
-TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Get test user token (use existing test user)
-USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Get the authenticated user's profile (this triggers header extraction in the middleware)
 # First, find the user's _key by looking up the test user
-USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=testuser@example.com" \
+USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=testuser@genie.local" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Make authenticated request to the user profile endpoint
-curl -s -X GET "https://localhost/api/users/${USER_KEY}" \
+curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json"
 # Expected: 200 OK with user profile data
@@ -101,7 +103,7 @@ curl -s -X GET "https://localhost/api/users/${USER_KEY}" \
 docker service logs genieai_backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
 ```
 
-> **Note:** The debug endpoint `/api/test/debug-headers` does not exist in the backend. This test uses the user profile endpoint (`GET /api/users/{_key}`) as the authenticated route, then inspects backend logs to verify header extraction.
+> **Note:** This test uses the user profile endpoint (`GET /api/users/{_key}`) as the authenticated route, then inspects backend logs to verify header extraction.
 
 **Expected Behavior:**
 - Headers are correctly constructed using ArangoDB `_key` for `X-User-Id`
@@ -124,11 +126,11 @@ docker service logs genieai_backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Iss
 **Verification:**
 ```bash
 # Get a valid token
-USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make a chat query (this will trigger OPEA call)
-curl -s -X POST "https://localhost/api/chat" \
+curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -162,11 +164,11 @@ docker service logs genieai_chatqna-xeon-backend-server 2>&1 | grep -E "X-User-I
 **Verification:**
 ```bash
 # Get admin token
-TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Create user in genie realm (if not exists)
-curl -s -X POST "https://localhost/auth/admin/realms/genie/users" \
+curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -177,17 +179,17 @@ curl -s -X POST "https://localhost/auth/admin/realms/genie/users" \
   }'
 
 # Get user token from genie realm
-USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
 
 # Look up the user in ArangoDB to find their _key
-USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
+USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 echo "User _key: $USER_KEY"
 
 # Make request and verify X-User-Id in backend logs
-curl -s -X GET "https://localhost/api/users/${USER_KEY}" \
+curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN"
 
 # Check backend logs for the X-User-Id header value
@@ -195,7 +197,7 @@ docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the ArangoDB _key (e.g., "12345")
 ```
 
-> **Note:** The debug endpoint `/api/test/debug-headers` does not exist in the backend. This test uses the user profile endpoint and backend log inspection instead.
+> **Note:** This test uses the user profile endpoint and backend log inspection.
 
 **Expected Behavior:**
 - `X-User-Id` uses ArangoDB `_key` format (Story 2-10 change)
@@ -213,11 +215,11 @@ docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
 **Verification:**
 ```bash
 # Get test user token
-USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make OPEA call and capture what was sent
-curl -s -X POST "https://localhost/api/chat" \
+curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Test"}]}'
@@ -227,7 +229,7 @@ docker service logs genieai_chatqna-xeon-backend-server 2>&1 | grep -i "authoriz
 # Expected: No Authorization header in logs
 ```
 
-> **Note:** The debug endpoint `/api/test/debug-opea-headers` does not exist in the backend. Full OPEA header verification requires `DEPLOY_OPEA=1`. Use backend log analysis to confirm the Authorization header is stripped before forwarding to OPEA services.
+> **Note:** Full OPEA header verification requires `DEPLOY_OPEA=1`. Use backend log analysis to confirm the Authorization header is stripped before forwarding to OPEA services.
 
 **Expected Behavior:**
 - Authorization header is stripped before OPEA call
@@ -246,11 +248,11 @@ docker service logs genieai_chatqna-xeon-backend-server 2>&1 | grep -i "authoriz
 **Verification:**
 ```bash
 # Get test user token
-USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make chat query
-RESPONSE=$(curl -s -X POST "https://localhost/api/chat" \
+RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Verify user_id"}]}')
@@ -281,25 +283,25 @@ echo "$RESPONSE" | jq '.data | keys'
 **Verification:**
 ```bash
 # Get admin token
-TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Look up the test user's _key
-USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
+USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Remove roles (Keycloak 26 specific approach)
-curl -s -X PATCH "https://localhost/api/users/$USER_KEY" \
+curl -sk -X PATCH "https://localhost/api/users/$USER_KEY" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"roles": []}'
 
 # Get token for user without roles
-NO_ROLES_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+NO_ROLES_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=e2e@example.com&password=e2epass123&grant_type=password' | jq -r '.access_token')
 
 # Make request and check X-User-Roles in backend logs
-curl -s -X GET "https://localhost/api/users/${USER_KEY}" \
+curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
   -H "Authorization: Bearer $NO_ROLES_TOKEN"
 
 # Verify backend logs for empty X-User-Roles
@@ -307,14 +309,14 @@ docker service logs genieai_backend 2>&1 | grep -E "X-User-Roles" | tail -5
 # Expected: X-User-Roles: "" (empty string)
 
 # Verify backend doesn't crash on missing roles
-curl -s -X POST "https://localhost/api/chat" \
+curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $NO_ROLES_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"No roles test"}]}'
 # Should succeed (401 if token invalid, 200 if token valid but no auth required)
 ```
 
-> **Note:** The debug endpoint `/api/test/debug-headers` does not exist in the backend. This test uses backend log analysis to verify the `X-User-Roles` header value.
+> **Note:** This test uses backend log analysis to verify the `X-User-Roles` header value.
 
 **Expected Behavior:**
 - Missing `realm_access.roles` -> empty string in X-User-Roles
@@ -334,11 +336,11 @@ curl -s -X POST "https://localhost/api/chat" \
 **Verification:**
 ```bash
 # Get admin token
-TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Create user in genie realm with 'user' role
-curl -s -X POST "https://localhost/auth/admin/realms/genie/users" \
+curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -350,7 +352,7 @@ curl -s -X POST "https://localhost/auth/admin/realms/genie/users" \
   }'
 
 # Create user in genie2 realm with 'admin' role
-curl -s -X POST "https://localhost/auth/admin/realms/genie2/users" \
+curl -sk -X POST "https://localhost/auth/admin/realms/genie2/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -362,32 +364,32 @@ curl -s -X POST "https://localhost/auth/admin/realms/genie2/users" \
   }'
 
 # Get tokens from both realms
-USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie-realm-user&password=geniepass123&grant_type=password' | jq -r '.access_token')
 
-USER2_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
+USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
 
 # Look up user keys in ArangoDB for both users
-GENIE_USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=genie@example.com" \
+GENIE_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=genie@example.com" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
-GENIE2_USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=genie2@example.com" \
+GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=genie2@example.com" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Make request with genie realm token and check logs
-curl -s -X GET "https://localhost/api/users/${GENIE_USER_KEY}" \
+curl -sk -X GET "https://localhost/api/users/${GENIE_USER_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN"
 docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the genie-realm-user's ArangoDB _key
 
 # Make request with genie2 realm token and check logs
-curl -s -X GET "https://localhost/api/users/${GENIE2_USER_KEY}" \
+curl -sk -X GET "https://localhost/api/users/${GENIE2_USER_KEY}" \
   -H "Authorization: Bearer $USER2_TOKEN"
 docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the genie2-realm-user's ArangoDB _key (different from genie)
 ```
 
-> **Note:** The debug endpoint `/api/test/debug-headers` does not exist in the backend. This test uses user profile endpoints and backend log analysis instead. Each user from a different realm gets a unique ArangoDB `_key`.
+> **Note:** This test uses user profile endpoints and backend log analysis. Each user from a different realm gets a unique ArangoDB `_key`.
 
 **Expected Behavior:**
 - Each realm produces unique X-User-Id values (distinct ArangoDB `_key` per user)
@@ -405,11 +407,11 @@ docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
 **Verification:**
 ```bash
 # Get test user token
-USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d 'client_id=genie-app&username=testuser&password=TestPass123!&grant_type=password' | jq -r '.access_token')
 
 # Make chat query
-RESPONSE=$(curl -s -X POST "https://localhost/api/chat" \
+RESPONSE=$(curl -sk -X POST "https://localhost/api/chat" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Payload preservation test"}]}')
@@ -517,7 +519,7 @@ curl -sk "https://localhost/auth/admin/realms/genie/clients?clientId=genie-app" 
 ```json
 {
   "redirectUris": [
-    "https://localhost/api-docs*",
+    "https://localhost/*",
     "https://localhost/api-docs*",
     "... other redirect URIs"
   ],
@@ -835,46 +837,26 @@ docker service logs genieai_backend 2>&1 | tail -20 | grep -i "force.refresh\|JW
 
 **Expected**: Log line mentioning JWKS force-refresh or retry (exact message may vary by implementation)
 
-### Test H.4 — Verify Expired Token is Rejected Without Retry
+### Test H.4 — Verify Corrupted Token is Rejected Without Retry
 
-An expired token should be rejected immediately with `TOKEN_EXPIRED` — the backend must NOT attempt JWKS refresh for expired tokens.
+A corrupted token (invalid signature) should be rejected immediately with `TOKEN_INVALID` — the backend must NOT attempt JWKS refresh for structurally invalid tokens.
+
+> **Note**: Expired token rejection (`TOKEN_EXPIRED`) is tested in Phase K.2. H.4 specifically tests that a token with an invalid signature does not trigger JWKS refresh.
 
 ```bash
-# Create a short-lived token by temporarily reducing realm lifespan
-# (Save original value first)
-ORIG_LIFESPAN=$(curl -sk "https://localhost/auth/admin/realms/genie" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.accessTokenLifespan')
+# Corrupt the token by modifying characters near the end
+CORRUPTED_TOKEN=$(echo "$USER_TOKEN" | sed 's/.\{5\}$/XXXXX/')
 
-# Set short lifespan (10 seconds)
-curl -sk -X PUT "https://localhost/auth/admin/realms/genie" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"accessTokenLifespan\": \"10\"}" -w "HTTP: %{http_code}\n"
-
-# Get a fresh token (will expire in 10s)
-SHORT_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-# Wait for token to expire
-echo "Waiting 12 seconds for token to expire..."
-sleep 12
-
-# Use the expired token
 curl -sk "https://localhost/api/auth/me" \
-  -H "Authorization: Bearer $SHORT_TOKEN" \
-  -w "\nHTTP: %{http_code}\n"
+  -H "Authorization: Bearer $CORRUPTED_TOKEN" | jq .
 ```
 
-**Expected**: `HTTP: 401` with body containing `"error": "TOKEN_EXPIRED"`
+**Expected**: `HTTP: 401` with `{"error": "TOKEN_INVALID", ...}`
 
+**Browser test** (automated via Playwright):
 ```bash
-# Restore original lifespan
-curl -sk -X PUT "https://localhost/auth/admin/realms/genie" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"accessTokenLifespan\": \"$ORIG_LIFESPAN\"}" -w "HTTP: %{http_code}\n"
+npx playwright test tests/e2e/epic2/h1-jwks-force-refresh.spec.js
 ```
-
-**Expected**: `HTTP: 204`
 
 ---
 
@@ -889,40 +871,20 @@ Validates that the backend can validate tokens from multiple Keycloak realms sim
 - Phase 0 complete (`$TOKEN` available)
 - **IMPORTANT**: `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` must be set in `.env` BEFORE deploying the stack. The additional realms must be created in Keycloak before the backend starts — see Phase 0, Step 0.7b.
 
-### Test I.1 — Create Second Realm `genie2` with Test User
+### Test I.1 — Verify `genie2` Realm Exists and Create Test User
+
+The `genie2` realm and client should already exist from Phase 0, Step 0.7b. Verify and create the test user.
 
 ```bash
-# Create realm
-curl -sk -X POST "https://localhost/auth/admin/realms" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" -d '{
-    "realm": "genie2",
-    "enabled": true,
-    "sslRequired": "none"
-  }' -w "\nHTTP: %{http_code}\n"
+# Verify realm exists (should return 200, not 404)
+curl -sk "https://localhost/auth/admin/realms/genie2" \
+  -H "Authorization: Bearer $TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
 ```
 
-**Expected**: `HTTP: 201`
+**Expected**: `HTTP: 200`
 
 ```bash
-# Create client in genie2 realm
-curl -sk -X POST "https://localhost/auth/admin/realms/genie2/clients" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" -d '{
-    "clientId": "genie-app",
-    "enabled": true,
-    "publicClient": true,
-    "directAccessGrantsEnabled": true,
-    "standardFlowEnabled": true,
-    "redirectUris": ["https://localhost/*"],
-    "webOrigins": ["https://localhost"]
-  }' -w "\nHTTP: %{http_code}\n"
-```
-
-**Expected**: `HTTP: 201`
-
-```bash
-# Create test user in genie2 realm
+# Create test user in genie2 realm (201 = created, 409 = already exists — OK)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie2/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{
@@ -935,7 +897,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie2/users" \
   }' -w "\nHTTP: %{http_code}\n"
 ```
 
-**Expected**: `HTTP: 201`
+**Expected**: `HTTP: 201` or `HTTP: 409` (user already exists from previous run)
 
 ### Test I.2 — Get Token from `genie2` Realm and Verify Different `iss`
 
@@ -1000,10 +962,15 @@ for user in data.get('result', []):
 - One with `iss_sub: https://localhost/auth/realms/genie#<sub-uuid>` (testuser from genie realm)
 - One with `iss_sub: https://localhost/auth/realms/genie2#<sub-uuid>` (testuser2 from genie2 realm)
 
-### Test I.5 — Cleanup: Delete `genie2` Realm
+### Test I.5 — Cleanup: Delete Test User (Not Realm)
+
+The `genie2` realm was created by Phase 0.7b — do NOT delete it. Only clean up the test user.
 
 ```bash
-curl -sk -X DELETE "https://localhost/auth/admin/realms/genie2" \
+NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie2/users?username=testuser2" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+
+curl -sk -X DELETE "https://localhost/auth/admin/realms/genie2/users/${NOROLES_USER_ID}" \
   -H "Authorization: Bearer $TOKEN" -w "\nHTTP: %{http_code}\n"
 ```
 
@@ -1178,9 +1145,9 @@ Create a user with no realm roles, obtain a token, and attempt to access an admi
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" -d '{
-    "username": "noroles-user",
+    "username": "noroles-user-e2e",
     "enabled": true,
-    "email": "noroles@genie.local",
+    "email": "noroles-e2e@genie.local",
     "firstName": "No",
     "lastName": "Roles",
     "credentials": [{"type": "password", "value": "TestPass123!", "temporary": false}]
@@ -1192,7 +1159,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
 ```bash
 # Get token for no-roles user
 NOROLES_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=genie-app" -d "username=noroles-user" -d "password=TestPass123!" -d "grant_type=password" \
+  -d "client_id=genie-app" -d "username=noroles-user-e2e" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Attempt admin-only operation (e.g., role management endpoint)
@@ -1249,7 +1216,7 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/genie" \
 
 ```bash
 # Find and delete the noroles user
-NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=noroles-user" \
+NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=noroles-user-e2e" \
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${NOROLES_USER_ID}" \

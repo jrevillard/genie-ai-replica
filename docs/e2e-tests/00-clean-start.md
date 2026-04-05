@@ -346,7 +346,7 @@ TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-c
 
 - GENIE.AI Docker Swarm stack deployed and healthy (Phase 0 complete)
 - Admin access to Keycloak (`KEYCLOAK_ADMIN_PASSWORD` from `.env`)
-- `playwright-cli` installed (`npm install -g @playwright/cli && playwright install chromium`)
+- `@playwright/test` installed (`npm install` at project root, then `npx playwright install chromium`)
 - `curl`, `python3`, `jq` available on the host
 
 ## Architecture Notes

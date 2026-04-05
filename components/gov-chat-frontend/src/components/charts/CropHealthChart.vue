@@ -1,5 +1,5 @@
 <template>
-  <div class="crop-health-chart" :class="{ 'dark-mode': isDarkMode }">
+  <div class="crop-health-chart">
     <div class="chart-header">
       <div class="header-text">
         <h3>{{ chartTitle }}</h3>
@@ -150,11 +150,8 @@ export default {
     };
   },
   computed: {
-    isDarkMode() {
-      return (
-        this.$root?.darkMode ||
-        document.documentElement.getAttribute("data-theme") === "dark"
-      );
+    cssVar() {
+      return (prop) => getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
     },
     chartTitle() {
       return this.translate("charts.cropHealthTitle", "Crop Health - NDVI Index");
@@ -230,6 +227,9 @@ export default {
       const departments = this.departmentData.map((d) => d.department);
       const ndviValues = this.departmentData.map((d) => d.ndvi);
       const colors = this.departmentData.map((d) => this.getHealthColor(d.health));
+      const textMuted = this.cssVar('--text-muted') || '#6b7280';
+      const bgCard = this.cssVar('--bg-card') || '#ffffff';
+      const borderLight = this.cssVar('--border-light') || '#e5e7eb';
 
       return {
         chart: {
@@ -254,7 +254,7 @@ export default {
             rotate: -45,
             style: {
               fontSize: "11px",
-              colors: this.isDarkMode ? "#9ca3af" : "#6b7280",
+              colors: textMuted,
             },
           },
           axisBorder: { show: false },
@@ -264,14 +264,14 @@ export default {
           title: {
             text: this.translate("charts.ndviValue", "NDVI Value"),
             style: {
-              color: this.isDarkMode ? "#9ca3af" : "#6b7280",
+              color: textMuted,
             },
           },
           min: 0,
           max: 1,
           labels: {
             style: {
-              colors: this.isDarkMode ? "#9ca3af" : "#6b7280",
+              colors: textMuted,
             },
             formatter: (value) => value.toFixed(2),
           },
@@ -293,17 +293,17 @@ export default {
         markers: {
           size: 6,
           colors: colors,
-          strokeColors: this.isDarkMode ? "#1f2937" : "#ffffff",
+          strokeColors: bgCard,
           strokeWidth: 2,
         },
         tooltip: {
           y: {
             formatter: (value) => value.toFixed(3),
           },
-          theme: this.isDarkMode ? "dark" : "light",
+          theme: "dark",
         },
         grid: {
-          borderColor: this.isDarkMode ? "#374151" : "#e5e7eb",
+          borderColor: borderLight,
           strokeDashArray: 4,
         },
       };
@@ -406,7 +406,7 @@ export default {
   padding: 24px;
   background: var(--bg-card);
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .chart-header {
@@ -425,17 +425,9 @@ export default {
   color: var(--text-primary);
 }
 
-.dark-mode .header-text h3 {
-  color: var(--text-primary);
-}
-
 .chart-subtitle {
   margin: 0;
   font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.dark-mode .chart-subtitle {
   color: var(--text-secondary);
 }
 
@@ -461,12 +453,7 @@ export default {
   justify-content: center;
   gap: 12px;
   padding: 60px 20px;
-  color: #6b7280;
-}
-
-.dark-mode .loading-indicator,
-.dark-mode .error-message {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .error-message {
@@ -489,14 +476,9 @@ export default {
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: #f9fafb;
+  background: var(--bg-tertiary);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
-}
-
-.dark-mode .summary-card {
-  background: #374151;
-  border-color: #4b5563;
+  border: 1px solid var(--border-light);
 }
 
 .summary-icon {
@@ -533,22 +515,14 @@ export default {
 
 .summary-label {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-bottom: 4px;
-}
-
-.dark-mode .summary-label {
-  color: #9ca3af;
 }
 
 .summary-value {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #111827;
-}
-
-.dark-mode .summary-value {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .summary-value.good {
@@ -590,21 +564,13 @@ export default {
 
 .health-details {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-top: 4px;
-}
-
-.dark-mode .health-details {
-  color: #9ca3af;
 }
 
 .department-details h4 {
   margin: 0 0 16px 0;
   font-size: 1.1rem;
-  color: var(--text-primary);
-}
-
-.dark-mode .department-details h4 {
   color: var(--text-primary);
 }
 
@@ -620,13 +586,9 @@ export default {
   gap: 16px;
   align-items: center;
   padding: 16px;
-  background: #f9fafb;
+  background: var(--bg-tertiary);
   border-radius: 8px;
   border-left: 4px solid transparent;
-}
-
-.dark-mode .department-item {
-  background: #374151;
 }
 
 .department-item.good {
@@ -649,20 +611,12 @@ export default {
 
 .dept-name {
   font-weight: 600;
-  color: #111827;
-}
-
-.dark-mode .dept-name {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .dept-ndvi {
   font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.dark-mode .dept-ndvi {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .dept-trend {
@@ -689,13 +643,9 @@ export default {
 .dept-health-bar {
   width: 100px;
   height: 6px;
-  background: #e5e7eb;
+  background: var(--border-light);
   border-radius: 3px;
   overflow: hidden;
-}
-
-.dark-mode .dept-health-bar {
-  background: #4b5563;
 }
 
 .health-bar-fill {
@@ -722,11 +672,7 @@ export default {
   gap: 6px;
   margin-top: 20px;
   font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.dark-mode .last-updated {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 @media (max-width: 768px) {

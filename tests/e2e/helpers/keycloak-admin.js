@@ -82,7 +82,7 @@ async function createUser(adminToken, realm, userData) {
     },
   });
 
-  if (userRes.status !== 201) {
+  if (userRes.status !== 201 && userRes.status !== 409) {
     throw new Error(`Failed to create user ${username}: ${userRes.status} ${JSON.stringify(userRes.data)}`);
   }
 

@@ -42,6 +42,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
 
     // Step 5: Wait for the full broker redirect chain to complete
     // The flow is: external-idp -> broker exchange -> genie realm callback -> app dashboard
+    // First wait until we reach /callback (the app processes the code exchange there)
     await page.waitForURL(
       (url) => {
         const urlStr = url.toString();
@@ -49,6 +50,17 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       },
       { timeout: 30000 },
     );
+
+    // If we landed on /callback, wait for the Vue app to process the auth code
+    // and redirect to the dashboard (the handleCallback action does the code exchange)
+    const currentUrl = page.url();
+    if (currentUrl.includes('/callback')) {
+      // Wait for navigation away from /callback (to /dashboard or / on error)
+      await page.waitForURL(
+        (url) => !url.toString().includes('/callback'),
+        { timeout: 30000 },
+      );
+    }
 
     // Step 6: Verify we are back on the app as an authenticated user
     const finalUrl = page.url();

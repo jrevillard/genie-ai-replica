@@ -280,7 +280,6 @@ export default {
     },
 
     getAuthToken() {
-<<<<<<< HEAD
       const user = authService.getCurrentUser();
       return user ? user.accessToken : null;
     },

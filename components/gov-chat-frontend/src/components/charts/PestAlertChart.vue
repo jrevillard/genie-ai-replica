@@ -767,26 +767,17 @@ Recommendations: ${recommendations}`;
 
 .alert-card.high {
   border-left: 4px solid #F44336;
+  background: linear-gradient(to right, rgba(244, 67, 54, 0.12), transparent);
 }
 
 .alert-card.moderate {
   border-left: 4px solid #FF9800;
+  background: linear-gradient(to right, rgba(255, 152, 0, 0.12), transparent);
 }
 
 .alert-card.low {
   border-left: 4px solid #2196F3;
-}
-
-.alert-card.high {
-  background: linear-gradient(to right, #FFEBEE, var(--bg-card));
-}
-
-.alert-card.moderate {
-  background: linear-gradient(to right, #FFF3E0, var(--bg-card));
-}
-
-.alert-card.low {
-  background: linear-gradient(to right, #E3F2FD, var(--bg-card));
+  background: linear-gradient(to right, rgba(33, 150, 243, 0.12), transparent);
 }
 
 .alert-header {
@@ -1288,5 +1279,55 @@ Recommendations: ${recommendations}`;
     flex: 1;
     justify-content: center;
   }
+}
+
+/* Dark mode: --bg-tertiary equals --bg-card (#2a2a2a), so inset elements
+   need a slightly lighter surface to be distinguishable from their parent */
+[data-theme="dark"] .summary-chip {
+  background: #333333;
+  border-color: #444444;
+}
+
+[data-theme="dark"] .chip-count {
+  background: #3a3a3a;
+}
+
+[data-theme="dark"] .alert-description {
+  background: #333333;
+}
+
+[data-theme="dark"] .detail-item {
+  background: #333333;
+  border-color: #444444;
+}
+
+[data-theme="dark"] .action-btn {
+  background: #333333;
+  border-color: #444444;
+}
+
+[data-theme="dark"] .action-btn:hover {
+  background: #3a3a3a;
+}
+
+[data-theme="dark"] .alert-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .cancel-btn {
+  background: #333333;
+}
+
+[data-theme="dark"] .cancel-btn:hover {
+  background: #444444;
+}
+
+[data-theme="dark"] .prompt-display {
+  background: #333333;
+  border-color: #444444;
+}
+
+[data-theme="dark"] .response-content {
+  background: #333333;
 }
 </style>

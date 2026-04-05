@@ -54,8 +54,15 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // Get fresh token (expires in 10s)
     const shortToken = await getUserToken('testuser', 'TestPass123!');
 
-    // Wait for expiry
-    await new Promise((resolve) => setTimeout(resolve, 12000));
+    // Wait for expiry (polling up to 30s)
+    const startTime = Date.now();
+    while (Date.now() - startTime < 30000) {
+      const res = await authRequest('GET', '/api/auth/me', {
+        headers: { Authorization: `Bearer ${shortToken}` },
+      });
+      if (res.status === 401 && res.data.error === 'TOKEN_EXPIRED') break;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
 
     const res = await authRequest('GET', '/api/auth/me', {
       headers: { Authorization: `Bearer ${shortToken}` },

@@ -541,7 +541,7 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/genie/clients/${GENIE_APP_I
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{
     "redirectUris": [
-      "https://localhost/api-docs*",
+      "https://localhost/*",
       "https://localhost/api-docs*"
     ],
     "webOrigins": ["https://localhost"],

@@ -33,7 +33,7 @@ for (const path of LEGACY_ROUTES) {
         );
       },
       { timeout: 15000 },
-    ).catch(() => {}); // If no redirect happens, proceed to check current URL
+    ); // If no redirect happens, the assertion below will catch it
 
     const currentUrl = page.url();
 

@@ -1,12 +1,9 @@
 <template>
   <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
     <div class="sidebar-header">
-      <h3 v-if="!sidebarCollapsed">{{ $t("sidebar.title") }}</h3>
-      <button @click="toggleSidebar" class="sidebar-toggle">
-        <i
-          class="fas"
-          :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"
-        ></i>
+      <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
+      <button class="sidebar-toggle" @click="toggleSidebar">
+        <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
       </button>
     </div>
 
@@ -14,14 +11,10 @@
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-file-alt"></i>
-          {{ $t("sidebar.relatedDocs") }}
+          {{ $t('sidebar.relatedDocs') }}
         </h4>
         <div class="related-documents">
-          <div
-            v-for="doc in relatedDocuments"
-            :key="doc.id"
-            class="document-item"
-          >
+          <div v-for="doc in relatedDocuments" :key="doc.id" class="document-item">
             <div class="document-header" @click="openDocument(doc)">
               <div class="document-icon">
                 <i :class="documentIconClass(doc)"></i>
@@ -34,68 +27,45 @@
               </div>
             </div>
             <div class="document-details">
-              <div class="detail-item" v-if="doc.documentName">
+              <div v-if="doc.documentName" class="detail-item">
                 <span class="detail-label">Document Name:</span>
                 <span class="detail-value">{{ doc.documentName }}</span>
               </div>
-              <div class="detail-item" v-if="doc.fileName">
+              <div v-if="doc.fileName" class="detail-item">
                 <span class="detail-label">File Name:</span>
                 <span class="detail-value">{{ doc.fileName }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">{{ $t("sidebar.id") }}:</span>
+                <span class="detail-label">{{ $t('sidebar.id') }}:</span>
                 <span class="detail-value">{{ doc.id }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">{{ $t("sidebar.labels") }}:</span>
-                <span class="detail-value small-text">{{
-                  formatLabels(doc)
-                }}</span>
+                <span class="detail-label">{{ $t('sidebar.labels') }}:</span>
+                <span class="detail-value small-text">{{ formatLabels(doc) }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label"
-                  >{{ $t("sidebar.confidence") }}:</span
-                >
+                <span class="detail-label">{{ $t('sidebar.confidence') }}:</span>
                 <span class="detail-value">{{ formatScore(doc.score) }}</span>
               </div>
             </div>
           </div>
           <div v-if="relatedDocuments.length === 0" class="empty-state">
-            {{ $t("sidebar.noDocuments") }}
+            {{ $t('sidebar.noDocuments') }}
           </div>
         </div>
       </div>
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-question-circle"></i>
-          {{ $t("sidebar.faq") }}
+          {{ $t('sidebar.faq') }}
         </h4>
         <div class="faq-list">
-          <div
-            v-for="(faq, index) in frequentlyAskedQuestions"
-            :key="index"
-            class="faq-item"
-          >
-            <div
-              class="faq-question"
-              @click="toggleFaq(index)"
-              :class="{ active: expandedFaqs.includes(index) }"
-            >
+          <div v-for="(faq, index) in frequentlyAskedQuestions" :key="index" class="faq-item">
+            <div class="faq-question" :class="{ active: expandedFaqs.includes(index) }" @click="toggleFaq(index)">
               <span v-html="faq.question"></span>
-              <i
-                class="fas"
-                :class="
-                  expandedFaqs.includes(index)
-                    ? 'fa-chevron-up'
-                    : 'fa-chevron-down'
-                "
-              ></i>
+              <i class="fas" :class="expandedFaqs.includes(index) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
             </div>
-            <div
-              class="faq-answer"
-              v-if="expandedFaqs.includes(index)"
-              v-html="faq.answer"
-            ></div>
+            <div v-if="expandedFaqs.includes(index)" class="faq-answer" v-html="faq.answer"></div>
           </div>
         </div>
       </div>
@@ -104,12 +74,13 @@
 </template>
 
 <script>
-import userService from "@/services/userService";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
+import userService from '@/services/userService'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import { formatFileSize } from '../utils/fileUtils.js'
 
 export default {
-  name: "RightSideBarComponent",
+  name: 'RightSideBarComponent',
 
   props: {
     currentChatId: {
@@ -118,7 +89,7 @@ export default {
     },
     currentLocale: {
       type: String,
-      default: "en",
+      default: 'en',
     },
     relatedDocuments: {
       type: Array,
@@ -131,236 +102,211 @@ export default {
       sidebarCollapsed: false,
       expandedFaqs: [],
       frequentlyAskedQuestions: [],
-    };
+    }
   },
 
   watch: {
     currentLocale: {
       handler() {
-        this.loadFaqContent();
+        this.loadFaqContent()
       },
       immediate: true,
     },
   },
 
   methods: {
+    formatFileSize,
     async loadFaqContent() {
       try {
-        const response = await fetch("/FAQ.md");
+        const response = await fetch('/FAQ.md')
         if (!response.ok) {
-          throw new Error("FAQ.md not found");
+          throw new Error('FAQ.md not found')
         }
-        let markdown = await response.text();
+        let markdown = await response.text()
 
-        if (this.currentLocale !== "en") {
-          markdown = await this.translateMarkdown(markdown);
+        if (this.currentLocale !== 'en') {
+          markdown = await this.translateMarkdown(markdown)
         }
 
-        const tokens = marked.lexer(markdown);
-        const faqs = [];
-        let currentQuestion = null;
-        let currentAnswer = "";
+        const tokens = marked.lexer(markdown)
+        const faqs = []
+        let currentQuestion = null
+        let currentAnswer = ''
 
         tokens.forEach((token) => {
-          if (token.type === "heading" && token.depth === 2) {
+          if (token.type === 'heading' && token.depth === 2) {
             if (currentQuestion) {
               faqs.push({
-                question: DOMPurify.sanitize(
-                  marked.parseInline(currentQuestion)
-                ),
+                question: DOMPurify.sanitize(marked.parseInline(currentQuestion)),
                 answer: DOMPurify.sanitize(marked.parse(currentAnswer.trim())),
-              });
+              })
             }
-            currentQuestion = token.text;
-            currentAnswer = "";
+            currentQuestion = token.text
+            currentAnswer = ''
           } else if (currentQuestion) {
-            currentAnswer += token.raw;
+            currentAnswer += token.raw
           }
-        });
+        })
 
         if (currentQuestion) {
           faqs.push({
             question: DOMPurify.sanitize(marked.parseInline(currentQuestion)),
             answer: DOMPurify.sanitize(marked.parse(currentAnswer.trim())),
-          });
+          })
         }
 
-        this.frequentlyAskedQuestions = faqs;
+        this.frequentlyAskedQuestions = faqs
       } catch (error) {
-        console.error("Failed to load or parse FAQ content:", error);
-        this.frequentlyAskedQuestions = [
-          { question: "Error", answer: "Could not load FAQ content." },
-        ];
+        console.error('Failed to load or parse FAQ content:', error)
+        this.frequentlyAskedQuestions = [{ question: 'Error', answer: 'Could not load FAQ content.' }]
       }
     },
 
     async translateMarkdown(markdown) {
-      const authToken = this.getAuthToken();
+      const authToken = this.getAuthToken()
       if (!authToken) {
-        console.error("No auth token found, cannot translate FAQ.");
-        return markdown; // Fallback to English
+        console.error('No auth token found, cannot translate FAQ.')
+        return markdown // Fallback to English
       }
 
       try {
-        const response = await fetch("/api/translate/markdown", {
-          method: "POST",
+        const response = await fetch('/api/translate/markdown', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
             Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
             markdown,
-            source_lang: "en",
+            source_lang: 'en',
             target_lang: this.currentLocale,
           }),
-        });
+        })
 
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          throw new Error(`HTTP error! status: ${response.status}`)
         }
 
-        const data = await response.json();
-        return data.translated_markdown;
+        const data = await response.json()
+        return data.translated_markdown
       } catch (error) {
-        console.error("Translation failed:", error);
-        return markdown; // Fallback to English
+        console.error('Translation failed:', error)
+        return markdown // Fallback to English
       }
     },
 
     toggleSidebar() {
-      this.sidebarCollapsed = !this.sidebarCollapsed;
-      this.$emit("sidebar-toggle", this.sidebarCollapsed);
+      this.sidebarCollapsed = !this.sidebarCollapsed
+      this.$emit('sidebar-toggle', this.sidebarCollapsed)
     },
 
     toggleFaq(index) {
       if (this.expandedFaqs.includes(index)) {
-        this.expandedFaqs = this.expandedFaqs.filter((i) => i !== index);
+        this.expandedFaqs = this.expandedFaqs.filter((i) => i !== index)
       } else {
-        this.expandedFaqs.push(index);
+        this.expandedFaqs.push(index)
       }
     },
 
     isExternalUrl(url) {
-      if (!url) return false;
-      const isHttp = url.startsWith("http://") || url.startsWith("https://");
-      const isPlaceholder = url.includes("<HOST>") || url.includes("<PORT>");
+      if (!url) return false
+      const isHttp = url.startsWith('http://') || url.startsWith('https://')
+      const isPlaceholder = url.includes('<HOST>') || url.includes('<PORT>')
       // A URL is considered external only if it's a valid HTTP link AND not a placeholder.
-      return isHttp && !isPlaceholder;
+      return isHttp && !isPlaceholder
     },
 
     // Added missing method to fix runtime error
     documentIconClass(doc) {
-      if (!doc) return "fas fa-file";
+      if (!doc) return 'fas fa-file'
 
       // Check for external web links using the existing helper
       if (this.isExternalUrl(doc.url)) {
-        return "fas fa-globe";
+        return 'fas fa-globe'
       }
 
       // Check file extensions if fileName exists
       if (doc.fileName) {
-        const lowerName = doc.fileName.toLowerCase();
-        if (lowerName.endsWith(".pdf")) return "fas fa-file-pdf";
-        if (lowerName.endsWith(".doc") || lowerName.endsWith(".docx"))
-          return "fas fa-file-word";
-        if (lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx"))
-          return "fas fa-file-excel";
-        if (lowerName.endsWith(".ppt") || lowerName.endsWith(".pptx"))
-          return "fas fa-file-powerpoint";
-        if (
-          lowerName.endsWith(".jpg") ||
-          lowerName.endsWith(".png") ||
-          lowerName.endsWith(".jpeg")
-        )
-          return "fas fa-file-image";
+        const lowerName = doc.fileName.toLowerCase()
+        if (lowerName.endsWith('.pdf')) return 'fas fa-file-pdf'
+        if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) return 'fas fa-file-word'
+        if (lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) return 'fas fa-file-excel'
+        if (lowerName.endsWith('.ppt') || lowerName.endsWith('.pptx')) return 'fas fa-file-powerpoint'
+        if (lowerName.endsWith('.jpg') || lowerName.endsWith('.png') || lowerName.endsWith('.jpeg'))
+          return 'fas fa-file-image'
       }
 
       // Default icon
-      return "fas fa-file-alt";
+      return 'fas fa-file-alt'
     },
 
     async openDocument(doc) {
       if (this.isExternalUrl(doc.url)) {
-        console.log(`Opening external URL: ${doc.url}`);
-        window.open(doc.url, "_blank");
-        this.$emit("open-document", doc);
-        return;
+        console.log(`Opening external URL: ${doc.url}`)
+        window.open(doc.url, '_blank')
+        this.$emit('open-document', doc)
+        return
       }
 
-      const authToken = this.getAuthToken();
+      const authToken = this.getAuthToken()
       if (!authToken) {
-        console.error(
-          "Authentication token not found. Unable to open internal document."
-        );
-        return;
+        console.error('Authentication token not found. Unable to open internal document.')
+        return
       }
 
-      const fileUrl = `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+      const fileUrl = `${window.location.origin}/api/files/${doc.id}/viewbrowser`
 
       try {
         const response = await fetch(fileUrl, {
           headers: {
             Authorization: `Bearer ${authToken}`,
           },
-        });
+        })
 
         if (!response.ok) {
-          throw new Error(
-            `Network response was not ok: ${response.statusText}`
-          );
+          throw new Error(`Network response was not ok: ${response.statusText}`)
         }
 
-        const fileBlob = await response.blob();
-        const blobUrl = URL.createObjectURL(fileBlob);
-        window.open(blobUrl, "_blank");
+        const fileBlob = await response.blob()
+        const blobUrl = URL.createObjectURL(fileBlob)
+        window.open(blobUrl, '_blank')
 
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 100)
 
-        this.$emit("open-document", doc);
+        this.$emit('open-document', doc)
       } catch (error) {
-        console.error(
-          "There was a problem fetching the internal document:",
-          error
-        );
+        console.error('There was a problem fetching the internal document:', error)
       }
     },
 
     getAuthToken() {
-      const user = userService.getCurrentUser();
-      return user ? user.accessToken : null;
+      const user = userService.getCurrentUser()
+      return user ? user.accessToken : null
     },
 
     getDisplayUrl(doc) {
-      if (!doc) return "";
+      if (!doc) return ''
       if (this.isExternalUrl(doc.url)) {
-        return doc.url;
+        return doc.url
       }
       if (doc.id) {
-        return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+        return `${window.location.origin}/api/files/${doc.id}/viewbrowser`
       }
-      return doc.url || ""; // Fallback to show the original placeholder if no ID
-    },
-
-    formatFileSize(bytes) {
-      if (!bytes) return "0 B";
-      if (bytes < 1024) return bytes + " B";
-      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
-      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+      return doc.url || '' // Fallback to show the original placeholder if no ID
     },
 
     formatScore(score) {
-      if (typeof score !== "number" || isNaN(score))
-        return this.$t("sidebar.unknown");
-      return (score * 100).toFixed(2) + "%";
+      if (typeof score !== 'number' || isNaN(score)) return this.$t('sidebar.unknown')
+      return (score * 100).toFixed(2) + '%'
     },
 
     formatLabels(doc) {
-      if (!doc.categoryLabel) return this.$t("sidebar.unknown");
-      const services = doc.serviceLabels?.join(", ") || "";
-      return `${doc.categoryLabel}${services ? ":" + services : ""}`;
+      if (!doc.categoryLabel) return this.$t('sidebar.unknown')
+      const services = doc.serviceLabels?.join(', ') || ''
+      return `${doc.categoryLabel}${services ? ':' + services : ''}`
     },
   },
-};
+}
 </script>
 
 <style scoped>
@@ -616,34 +562,34 @@ export default {
   }
 }
 
-[data-theme="dark"] .section-title,
-html[data-theme="dark"] .section-title {
+[data-theme='dark'] .section-title,
+html[data-theme='dark'] .section-title {
   color: rgba(255, 255, 255, 0.9) !important;
 }
 
-[data-theme="dark"] .document-title,
-html[data-theme="dark"] .document-title,
-[data-theme="dark"] .faq-question,
-html[data-theme="dark"] .faq-question,
-[data-theme="dark"] .detail-label,
-html[data-theme="dark"] .detail-label {
+[data-theme='dark'] .document-title,
+html[data-theme='dark'] .document-title,
+[data-theme='dark'] .faq-question,
+html[data-theme='dark'] .faq-question,
+[data-theme='dark'] .detail-label,
+html[data-theme='dark'] .detail-label {
   color: rgba(255, 255, 255, 0.9) !important;
 }
 
-[data-theme="dark"] .detail-value,
-html[data-theme="dark"] .detail-value,
-[data-theme="dark"] .document-meta,
-html[data-theme="dark"] .document-meta {
+[data-theme='dark'] .detail-value,
+html[data-theme='dark'] .detail-value,
+[data-theme='dark'] .document-meta,
+html[data-theme='dark'] .document-meta {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
-[data-theme="dark"] .empty-state,
-html[data-theme="dark"] .empty-state {
+[data-theme='dark'] .empty-state,
+html[data-theme='dark'] .empty-state {
   color: rgba(255, 255, 255, 0.6) !important;
 }
 
-[data-theme="dark"] .sidebar-header h3,
-html[data-theme="dark"] .sidebar-header h3 {
+[data-theme='dark'] .sidebar-header h3,
+html[data-theme='dark'] .sidebar-header h3 {
   color: rgba(255, 255, 255, 0.9) !important;
 }
 </style>

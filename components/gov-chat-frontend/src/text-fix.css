@@ -1,36 +1,39 @@
 /* text-fix.css */
-/* Global text color fixes */
+/* Text color fixes scoped to analytics dashboard to avoid breaking other components */
 
 /* General heading fixes */
-h1, h2, h3, h4, h5, h6,
-.modal-header h3,
+.analytics-dashboard h1,
 .analytics-dashboard h2,
 .analytics-dashboard h3,
-.period-selector label,
-.dashboard-header h2 {
+.analytics-dashboard h4,
+.analytics-dashboard h5,
+.analytics-dashboard h6,
+.analytics-dashboard .modal-header h3,
+.analytics-dashboard .period-selector label,
+.analytics-dashboard .dashboard-header h2 {
   color: #000 !important;
   font-weight: 600 !important;
 }
 
 /* Metric values */
-.metric-value,
-[class*="metric"] [class*="value"],
-.metrics-summary .metric-value,
-.metric-card .metric-value {
+.analytics-dashboard .metric-value,
+.analytics-dashboard [class*="metric"] [class*="value"],
+.analytics-dashboard .metrics-summary .metric-value,
+.analytics-dashboard .metric-card .metric-value {
   color: #000 !important;
   font-weight: 700 !important;
 }
 
 /* Dialog content */
-.modal-content h3,
-.modal-content p,
-.modal-body p,
-.modal-header h3 {
+.analytics-dashboard .modal-content h3,
+.analytics-dashboard .modal-content p,
+.analytics-dashboard .modal-body p,
+.analytics-dashboard .modal-header h3 {
   color: #000 !important;
   font-weight: normal !important;
 }
 
 /* Chart text */
-svg text {
+.analytics-dashboard svg text {
   fill: #000 !important;
 }

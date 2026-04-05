@@ -47,11 +47,9 @@ export function getThemeColors() {
   }
   
   // For dark mode, adjust colors for better contrast
-  const contrastTextColor = isDarkMode ? '#f0f0f0' : textColor;
-  const contrastGridColor = isDarkMode ? 'rgba(255, 255, 255, 0.15)' : gridColor;
   const tooltipBgColor = 'rgba(0, 0, 0, 0.7)'; // Dark tooltip BG for both themes
   const tooltipTextColor = 'white'; // White tooltip text for both themes
-  
+
   // Chart-specific colors with theme awareness
   const chartColors = [
     '#5470c6', '#91cc75', '#fac858', '#ee6666',
@@ -59,14 +57,13 @@ export function getThemeColors() {
   ];
   
   return {
-    textColor: isDarkMode ? '#ffffff' : textColor, // Force white text in dark mode
+    textColor,
     backgroundColor,
     borderColor,
     accentColor,
-    gridColor: contrastGridColor, // Use contrast grid color for better visibility
+    gridColor,
     tertiaryBgColor,
     isDarkMode,
-    contrastTextColor,
     tooltipBgColor,
     tooltipTextColor,
     chartColors
@@ -125,15 +122,7 @@ export function getThemeInfo() {
   
   // Combine detection methods with proper priority
   const isDarkMode = hasDarkClass || hasDataTheme || isDarkBg || prefersDarkMode;
-  
-  console.log('[DEBUG] Theme detection results:', {
-    hasDarkClass,
-    hasDataTheme,
-    isDarkBg,
-    prefersDarkMode,
-    finalResult: isDarkMode
-  });
-  
+
   // Return theme configuration based on detection
   return {
     isDarkMode,

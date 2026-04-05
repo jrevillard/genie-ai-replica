@@ -84,30 +84,29 @@ class ThemeManager {
         console.log(`[ThemeManager] Initial theme detected: ${this.currentTheme}`);
     }
 
-    // Add this new method to ThemeManager class
-forceApplyTheme() {
-    // Force apply the theme to the DOM
-    document.documentElement.setAttribute('data-theme', this.currentTheme);
-    document.body.setAttribute('data-theme', this.currentTheme);
-    
-    // Add/remove dark mode classes for compatibility
-    if (this.isDarkMode) {
-        document.documentElement.classList.add('dark-mode');
-        document.body.classList.add('dark-mode');
-    } else {
-        document.documentElement.classList.remove('dark-mode');
-        document.body.classList.remove('dark-mode');
-    }
-    
-    // Dispatch theme change event
-    window.dispatchEvent(new CustomEvent('themeChange', {
-        detail: {
-            theme: this.currentTheme,
-            isDarkMode: this.isDarkMode,
-            userPreference: this.userPreference
+    forceApplyTheme() {
+        // Force apply the theme to the DOM
+        document.documentElement.setAttribute('data-theme', this.currentTheme);
+        document.body.setAttribute('data-theme', this.currentTheme);
+
+        // Add/remove dark mode classes for compatibility
+        if (this.isDarkMode) {
+            document.documentElement.classList.add('dark-mode');
+            document.body.classList.add('dark-mode');
+        } else {
+            document.documentElement.classList.remove('dark-mode');
+            document.body.classList.remove('dark-mode');
         }
-    }));
-}
+
+        // Dispatch theme change event
+        window.dispatchEvent(new CustomEvent('themeChange', {
+            detail: {
+                theme: this.currentTheme,
+                isDarkMode: this.isDarkMode,
+                userPreference: this.userPreference
+            }
+        }));
+    }
 
     /**
      * Set up listener for system theme changes
@@ -189,6 +188,11 @@ forceApplyTheme() {
         this.setTheme(this.currentTheme === 'light' ? 'dark' : 'light');
     }
 
+    _getCssVar(property, fallback = '') {
+        const prop = property.startsWith('--') ? property : `--${property}`;
+        return getComputedStyle(document.documentElement).getPropertyValue(prop).trim() || fallback;
+    }
+
     /**
      * Get current theme information
      * @returns {Object} Theme configuration
@@ -196,16 +200,16 @@ forceApplyTheme() {
     getThemeInfo() {
         return {
             isDarkMode: this.isDarkMode,
-            textColor: this.isDarkMode ? '#FFFFFF' : '#333333',
+            textColor: this._getCssVar('--text-primary', this.isDarkMode ? '#f0f0f0' : '#333333'),
             backgroundColor: 'transparent',
             tooltipBackground: this.isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-            tooltipTextColor: this.isDarkMode ? '#FFFFFF' : '#333333',
+            tooltipTextColor: this._getCssVar('--text-primary', this.isDarkMode ? '#f0f0f0' : '#333333'),
             theme: this.currentTheme,
 
             // Additional useful colors
-            borderColor: this.isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-            gridColor: this.isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
-            accentColor: '#4E97D1',
+            borderColor: this._getCssVar('--border-color', this.isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'),
+            gridColor: this._getCssVar('--border-light', this.isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'),
+            accentColor: this._getCssVar('--accent-color', '#4E97D1'),
 
             // Standard chart colors that work in both themes
             chartColors: [
@@ -224,11 +228,10 @@ forceApplyTheme() {
 
         return {
             modal: {
-                titleColor: isDarkMode ? '#ffffff' : '#333333',
-                textColor: isDarkMode ? 'rgba(255, 255, 255, 0.8)' : '#666666',    
-                background: isDarkMode ? '#2a2a2a' : '#ffffff',
-                textColor: isDarkMode ? '#f0f0f0' : '#333333',
-                borderColor: isDarkMode ? '#3a3a3a' : '#dcdfe4',
+                titleColor: this._getCssVar('--text-primary', isDarkMode ? '#f0f0f0' : '#333333'),
+                textColor: this._getCssVar('--text-secondary', isDarkMode ? 'rgba(255, 255, 255, 0.8)' : '#666666'),
+                background: this._getCssVar('--bg-dialog', isDarkMode ? '#2a2a2a' : '#ffffff'),
+                borderColor: this._getCssVar('--border-color', isDarkMode ? '#3a3a3a' : '#dcdfe4'),
                 boxShadow: isDarkMode
                     ? '0 4px 12px rgba(0, 0, 0, 0.4)'
                     : '0 4px 12px rgba(0, 0, 0, 0.15)'
@@ -240,28 +243,28 @@ forceApplyTheme() {
             },
             buttons: {
                 primary: {
-                    background: '#4E97D1',
+                    background: this._getCssVar('--accent-color', '#4E97D1'),
                     textColor: '#ffffff',
-                    hoverBackground: '#3a7da0'
+                    hoverBackground: this._getCssVar('--accent-hover', '#3a7da0')
                 },
                 secondary: {
-                    background: isDarkMode ? '#3a3a3a' : '#cccccc',
-                    textColor: isDarkMode ? '#e0e0e0' : '#333333',
-                    hoverBackground: isDarkMode ? '#4a4a4a' : '#bbbbbb'
+                    background: this._getCssVar('--bg-button-secondary', isDarkMode ? '#3a3a3a' : '#cccccc'),
+                    textColor: this._getCssVar('--text-button-secondary', isDarkMode ? '#e0e0e0' : '#333333'),
+                    hoverBackground: this._getCssVar('--bg-button-secondary-hover', isDarkMode ? '#4a4a4a' : '#bbbbbb')
                 }
             },
             input: {
-                background: isDarkMode ? '#333333' : '#ffffff',
-                textColor: isDarkMode ? '#f0f0f0' : '#333333',
-                borderColor: isDarkMode ? '#3a3a3a' : '#ddd',
-                placeholderColor: isDarkMode ? '#8c8c8c' : '#767676'
+                background: this._getCssVar('--bg-input', isDarkMode ? '#333333' : '#ffffff'),
+                textColor: this._getCssVar('--text-primary', isDarkMode ? '#f0f0f0' : '#333333'),
+                borderColor: this._getCssVar('--border-input', isDarkMode ? '#3a3a3a' : '#ddd'),
+                placeholderColor: this._getCssVar('--text-tertiary', isDarkMode ? '#8c8c8c' : '#767676')
             },
             tabs: {
-                background: isDarkMode ? '#252525' : '#f0f2f5',
-                activeBackground: isDarkMode ? '#2a2a2a' : '#ffffff',
-                textColor: isDarkMode ? '#f0f0f0' : '#333333',
-                activeTextColor: isDarkMode ? '#ffffff' : '#000000',
-                borderColor: isDarkMode ? '#3a3a3a' : '#cccccc'
+                background: this._getCssVar('--bg-tertiary', isDarkMode ? '#252525' : '#f0f2f5'),
+                activeBackground: this._getCssVar('--bg-dialog', isDarkMode ? '#2a2a2a' : '#ffffff'),
+                textColor: this._getCssVar('--text-primary', isDarkMode ? '#f0f0f0' : '#333333'),
+                activeTextColor: this._getCssVar('--text-primary', isDarkMode ? '#ffffff' : '#000000'),
+                borderColor: this._getCssVar('--border-color', isDarkMode ? '#3a3a3a' : '#cccccc')
             }
         };
     }
@@ -283,62 +286,6 @@ forceApplyTheme() {
         });
     }
 }
-
-// Legacy exported functions for backward compatibility
-export function applyThemeToAxes(svg, theme) {
-    if (!svg || !theme) return;
-
-    // Apply theme to all axis domains and tick lines
-    svg.selectAll('.domain, .tick line')
-        .attr('stroke', theme.borderColor);
-
-    // Apply theme to all axis text
-    svg.selectAll('.tick text')
-        .style('fill', theme.textColor)
-        .style('font-weight', theme.isDarkMode ? 'normal' : 'bold');
-}
-
-export function createThemedTooltip(containerId = 'chart-tooltip') {
-    const theme = themeManager.getThemeInfo();
-
-    // Remove any existing tooltip with this ID
-    d3.select(`#${containerId}`).remove();
-
-    // Create new tooltip
-    const tooltip = d3.select('body')
-        .append('div')
-        .attr('id', containerId)
-        .attr('class', 'd3-tooltip')
-        .style('position', 'absolute')
-        .style('background', theme.tooltipBackground)
-        .style('color', theme.tooltipTextColor)
-        .style('padding', '8px')
-        .style('border-radius', '4px')
-        .style('font-size', '12px')
-        .style('pointer-events', 'none')
-        .style('opacity', 0)
-        .style('z-index', 1000)
-        .style('box-shadow', '0 3px 14px rgba(0,0,0,0.4)');
-
-    return tooltip;
-}
-
-/**
- * Convenience method to apply dialog theme to an element
- * @param {HTMLElement} element - Element to apply theme to
- * @param {string} [themeType='modal'] - Type of theme to apply
- */
-//export function applyDialogTheme(element, themeType = 'modal') {
-//    if (!element) return;
-
-//    const theme = this.getDialogTheme();
-//    const themeStyles = theme[themeType] || theme.modal;
-
-//    Object.entries(themeStyles).forEach(([key, value]) => {
-//        if (typeof value === 'object') return; // Skip nested objects
-//        element.style.setProperty(`--dialog-${key}`, value);
-//    });
-//}
 
 // Ensure singleton export
 export const themeManager = new ThemeManager();

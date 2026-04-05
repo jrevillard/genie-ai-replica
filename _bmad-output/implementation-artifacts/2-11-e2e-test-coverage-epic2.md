@@ -332,9 +332,16 @@ N/A — documentation and test file creation only, no runtime debugging needed.
 - `docs/e2e-tests/00-clean-start.md`
 - `docs/e2e-tests/epic1-keycloak-foundation.md`
 - `docs/e2e-tests/epic2-secure-api-access.md`
+- `components/gov-chat-backend/docker-entrypoint.sh` — wait-for-ArangoDB startup script
 
 **Modified files:**
 - `package.json` — added `@playwright/test` as devDependency
+- `package-lock.json` — lockfile update for @playwright/test
+- `components/gov-chat-backend/Dockerfile` — added docker-entrypoint.sh, ENTRYPOINT
+- `components/gov-chat-backend/middleware/keycloak-auth-middleware.js` — fix isPublicRoute() for /api prefix, use req.originalUrl
+- `components/gov-chat-backend/controllers/authController.js` — expose ArangoDB _key as 'id' in /api/auth/me
+- `api-gateway-solution/nginx/conf/default.conf.template` — add /api-docs location block (Bug G)
+- `docker-compose.yaml` — add SERVICE_AUTH_TOKEN to backend, increase start_period to 90s
 - `_bmad-output/implementation-artifacts/2-11-e2e-test-coverage-epic2.md` — story status + task checkboxes
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — story status update
 

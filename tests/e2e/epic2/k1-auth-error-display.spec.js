@@ -40,7 +40,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     tokenParts[1] = 'X' + tokenParts[1].slice(1); // Change first char of payload
     const modifiedToken = tokenParts.join('.');
 
-    const res = await authRequest('GET', '/api/users/me', {
+    const res = await authRequest('GET', '/api/auth/me', {
       headers: { Authorization: `Bearer ${modifiedToken}` },
     });
     expect(res.status).toBe(401);
@@ -57,7 +57,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // Wait for expiry
     await new Promise((resolve) => setTimeout(resolve, 12000));
 
-    const res = await authRequest('GET', '/api/users/me', {
+    const res = await authRequest('GET', '/api/auth/me', {
       headers: { Authorization: `Bearer ${shortToken}` },
     });
     expect(res.status).toBe(401);

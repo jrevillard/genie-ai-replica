@@ -19,7 +19,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 - Phase F requires `DEPLOY_OPEA=1` (OPEA services must be running for header injection tests)
 - Phases G–K work with `DEPLOY_OPEA=0`
 - Phase J requires `SERVICE_AUTH_TOKEN` in `.env`
-- Phase I requires `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` in `.env`
+- Phase I requires `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` in `.env` — additional realms must be created **before** backend starts (Phase 0, Step 0.7b)
 
 ## Conventions
 

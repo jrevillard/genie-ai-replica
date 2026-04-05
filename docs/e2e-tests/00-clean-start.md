@@ -166,6 +166,93 @@ docker exec $(docker ps --filter name=genieai_backend --format '{{.ID}}' | head 
 # Expected: {"clusterId":...,"health":"GOOD",...}
 ```
 
+### 0.7b Create Additional Realms (Phase I Prerequisite)
+
+If `KEYCLOAK_ADDITIONAL_REALMS` is set in `.env`, the corresponding realms **must** exist in Keycloak **before** the backend starts. The backend initializes JWKS for additional realms at startup (see `keycloak-auth-service.js:initAllRealms()`) — realms created after startup are not recognized.
+
+```bash
+source .env
+
+# Get admin token
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+  -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Create additional realms from KEYCLOAK_ADDITIONAL_REALMS env var
+# Format: {"realm-name":"client-id","realm2-name":"client2-id"}
+python3 -c "
+import json, os, subprocess, sys
+
+raw = os.environ.get('KEYCLOAK_ADDITIONAL_REALMS', '')
+if not raw or raw == '{}':
+    print('KEYCLOAK_ADDITIONAL_REALMS not set — skipping additional realm setup')
+    sys.exit(0)
+
+realms = json.loads(raw)
+token = '$TOKEN'
+
+for realm_name, client_id in realms.items():
+    # Check if realm already exists
+    check = subprocess.run([
+        'curl', '-sk', f'https://localhost/auth/admin/realms/{realm_name}',
+        '-H', f'Authorization: Bearer {token}'
+    ], capture_output=True, text=True)
+
+    if check.returncode == 0:
+        print(f'Realm {realm_name} already exists — skipping creation')
+        continue
+
+    # Create realm
+    result = subprocess.run([
+        'curl', '-sk', '-X', 'POST', 'https://localhost/auth/admin/realms',
+        '-H', f'Authorization: Bearer {token}',
+        '-H', 'Content-Type: application/json',
+        '-d', json.dumps({
+            'realm': realm_name,
+            'enabled': True,
+            'sslRequired': 'none',
+            'roles': {
+                'realm': [
+                    {'name': 'GENIE.AI_USER', 'description': 'Standard user role'},
+                    {'name': 'GENIE.AI_ADMIN', 'description': 'Admin role'}
+                ]
+            }
+        })
+    ], capture_output=True, text=True)
+    print(f'Realm {realm_name}: {result.stdout.strip()} (HTTP {result.returncode})')
+
+    # Create client
+    result = subprocess.run([
+        'curl', '-sk', '-X', 'POST',
+        f'https://localhost/auth/admin/realms/{realm_name}/clients',
+        '-H', f'Authorization: Bearer {token}',
+        '-H', 'Content-Type: application/json',
+        '-d', json.dumps({
+            'clientId': client_id,
+            'enabled': True,
+            'publicClient': True,
+            'directAccessGrantsEnabled': True,
+            'standardFlowEnabled': True,
+            'redirectUris': ['https://localhost/*'],
+            'webOrigins': ['https://localhost']
+        })
+    ], capture_output=True, text=True)
+    print(f'Client {client_id} in {realm_name}: HTTP {result.returncode}')
+
+print('Additional realms setup complete')
+"
+```
+
+**Important**: After creating additional realms, the backend must be restarted to pick up the new JWKS endpoints:
+
+```bash
+docker service update --force genieai_backend
+echo "Waiting 30 seconds for backend to reinitialize with additional realms..."
+sleep 30
+curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code}\n"
+# Expected: 200
+```
+
 ### 0.8 Enable ROPC on genie-app Client (Test Only)
 
 The `genie-app` client uses authorization code flow for the frontend. ROPC (Direct Access Grants) is only needed for API testing via curl and should **not** be enabled in production.

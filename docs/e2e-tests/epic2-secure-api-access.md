@@ -456,16 +456,17 @@ Verify that the generated OpenAPI specification includes the Keycloak OIDC secur
 curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes'
 ```
 
-**Expected**: The output includes `KeycloakOIDC` with OAuth2 implicit flow configuration:
+**Expected**: The output includes `KeycloakOAuth2` with OAuth2 authorizationCode flow configuration:
 
 ```json
 {
-  "KeycloakOIDC": {
+  "KeycloakOAuth2": {
     "type": "oauth2",
     "description": "Keycloak OAuth2 authentication",
     "flows": {
-      "implicit": {
+      "authorizationCode": {
         "authorizationUrl": "https://localhost/auth/realms/genie/protocol/openid-connect/auth",
+        "tokenUrl": "https://localhost/auth/realms/genie/protocol/openid-connect/token",
         "scopes": {
           "openid": "OpenID Connect scope",
           "profile": "User profile information"
@@ -627,15 +628,15 @@ grep 'swagger-ui-express' components/gov-chat-backend/package.json
 
 **Root causes**:
 1. `securitySchemes` not configured in Swagger options
-2. OAuth2 flow type mismatch (implicit vs authorization code)
+2. OAuth2 flow type mismatch (authorization code vs implicit)
 
 **Fix**:
 ```bash
 # Verify the spec contains OAuth2 scheme
 curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes'
 
-# Check that implicit flow is configured (not authorization code)
-curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes.KeycloakOIDC.flows'
+# Check that authorizationCode flow is configured (not implicit)
+curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes.KeycloakOAuth2.flows'
 ```
 
 #### Issue: "invalid_redirect_uri" after clicking authorize link
@@ -673,20 +674,21 @@ docker service update genieai_backend --force
 **Symptoms**: Error message about PKCE or authorization code flow.
 
 **Root causes**:
-1. Swagger UI trying to use authorization code flow instead of implicit
-2. swagger-ui-express version incompatible with implicit flow
+1. Swagger UI version incompatible with authorization code flow
+2. Missing token URL configuration
 
-**Fix**: Verify that the Swagger configuration explicitly sets `implicit` flow (not `authorizationCode`):
+**Fix**: Verify that the Swagger configuration explicitly sets `authorizationCode` flow (not `implicit`):
 
 ```javascript
 // In components/gov-chat-backend/index.js
 components: {
   securitySchemes: {
-    KeycloakOIDC: {
+    KeycloakOAuth2: {
       type: 'oauth2',
       flows: {
-        implicit: {  // Must be implicit, not authorizationCode
+        authorizationCode: {  // Must be authorizationCode, not implicit
           authorizationUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
+          tokenUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
           scopes: { openid: '...', profile: '...' }
         }
       }
@@ -737,7 +739,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Get the authenticated user's profile (any authenticated endpoint)
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Status: OK, User: {d.get(\"name\", \"N/A\")}')"
 ```
 
@@ -819,7 +821,7 @@ Use the SAME `$USER_TOKEN` from H.1 (signed with the old key). The backend shoul
 
 ```bash
 # Use the SAME token from H.1 (signed with old key, not yet expired)
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -w "\nHTTP: %{http_code}\n"
 ```
@@ -858,7 +860,7 @@ echo "Waiting 12 seconds for token to expire..."
 sleep 12
 
 # Use the expired token
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $SHORT_TOKEN" \
   -w "\nHTTP: %{http_code}\n"
 ```
@@ -885,15 +887,7 @@ Validates that the backend can validate tokens from multiple Keycloak realms sim
 ### Prerequisites
 
 - Phase 0 complete (`$TOKEN` available)
-- **IMPORTANT**: `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` must be set in `.env` BEFORE deploying the stack. If not set, restart the backend after adding it:
-  ```bash
-  # Add to .env
-  echo 'KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}' >> .env
-  # Restart backend to pick up new realm config
-  docker service update --force genieai_backend
-  # Wait for backend to be healthy
-  sleep 15
-  ```
+- **IMPORTANT**: `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` must be set in `.env` BEFORE deploying the stack. The additional realms must be created in Keycloak before the backend starts — see Phase 0, Step 0.7b.
 
 ### Test I.1 — Create Second Realm `genie2` with Test User
 
@@ -969,12 +963,12 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 ```bash
 # Test genie realm token (original)
 echo "=== Genie realm token ==="
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", d.get(\"error\", \"N/A\"))}')"
 
 # Test genie2 realm token
 echo "=== Genie2 realm token ==="
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", d.get(\"error\", \"N/A\"))}')"
 ```
 
@@ -1035,7 +1029,7 @@ Get the authenticated user's ArangoDB `_key`, then call the OPEA context endpoin
 
 ```bash
 # Get user _key from an authenticated response
-USER_KEY=$(curl -sk "https://localhost/api/users/me" \
+USER_KEY=$(curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
 echo "User _key: $USER_KEY"
 
@@ -1127,7 +1121,7 @@ Send a token with a modified payload character. The backend should detect the si
 ```bash
 # Modify one character in the token payload
 MODIFIED_TOKEN=$(echo "$USER_TOKEN" | sed 's/./X/4')
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $MODIFIED_TOKEN" | jq .
 ```
 
@@ -1167,7 +1161,7 @@ echo "Waiting 12 seconds for token to expire..."
 sleep 12
 
 # Send expired token
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $EXPIRED_TOKEN" | jq .
 ```
 
@@ -1221,7 +1215,7 @@ echo "Waiting 5 seconds for Keycloak to stop..."
 sleep 5
 
 # Attempt authenticated request
-curl -sk "https://localhost/api/users/me" \
+curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq .
 ```
 

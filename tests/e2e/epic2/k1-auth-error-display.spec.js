@@ -86,11 +86,10 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     expect(res.data.error).toBe('FORBIDDEN');
   });
 
-  test.fixme('K.4 — TOKEN_INVALID (Keycloak unavailable)', async () => {
-    // NOTE: Keycloak unavailability testing requires `docker service scale genieai_keycloak=0`
-    // which cannot be done from Playwright. The curl-based test in epic2-secure-api-access.md
-    // handles this scenario. This test verifies the error code pattern for invalid tokens.
-    const res = await authRequest('GET', '/api/users/me', {
+  test('K.4 — TOKEN_INVALID (invalid token string)', async () => {
+    // NOTE: Keycloak unavailability (docker service scale keycloak=0) is tested
+    // via curl in epic2-secure-api-access.md Phase K.4 — cannot be done from Playwright.
+    const res = await authRequest('GET', '/api/auth/me', {
       headers: { Authorization: 'Bearer clearly-invalid-token' },
     });
     expect(res.status).toBe(401);

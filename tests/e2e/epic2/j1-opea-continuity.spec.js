@@ -12,13 +12,13 @@ test.describe('Phase J: OPEA Continuity', () => {
     }
     userToken = await getUserToken('testuser', 'TestPass123!');
 
-    // Get user _key from authenticated profile
-    const profile = await authRequest('GET', '/api/users/me', {
+    // Get user id (ArangoDB _key) from authenticated profile
+    const profile = await authRequest('GET', '/api/auth/me', {
       headers: { Authorization: `Bearer ${userToken}` },
     });
-    userKey = profile.data._key;
+    userKey = profile.data.user.id;
     if (!userKey) {
-      throw new Error('Could not determine user _key from profile response');
+      throw new Error('Could not determine user id from profile response');
     }
   });
 

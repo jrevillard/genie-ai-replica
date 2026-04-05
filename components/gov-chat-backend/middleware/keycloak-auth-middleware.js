@@ -34,9 +34,10 @@ function isPublicRoute(path) {
 
   // OPEA user context endpoint: /users/:userId/context
   // Protected by X-Service-Token in route handler, not Keycloak JWT
-  // Precise match: exactly 3 segments (/users/X/context) to avoid matching future routes
+  // Match with or without /api prefix: /api/users/X/context (4 segments) or /users/X/context (3 segments)
   const segments = path.split('/').filter(Boolean);
-  if (segments.length === 3 && segments[0] === 'users' && segments[2] === 'context') {
+  const offset = segments.length >= 3 && segments[0] === 'api' ? 1 : 0;
+  if (segments.length - offset === 3 && segments[offset] === 'users' && segments[offset + 2] === 'context') {
     return true;
   }
 
@@ -86,7 +87,9 @@ const keycloakAuthMiddleware = {
    */
   async authenticate(req, res, next) {
     // Skip auth for public routes
-    const path = req.path || req.originalUrl || req.url || '/';
+    // Use originalUrl (full path) because req.path is relative to mount point
+    // when middleware is mounted via app.use(basePath, middleware, ...)
+    const path = req.originalUrl || req.path || req.url || '/';
     if (isPublicRoute(path)) {
       return next();
     }

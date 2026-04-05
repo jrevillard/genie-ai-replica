@@ -12,11 +12,11 @@ test.describe('Phase H: JWKS Force-Refresh', () => {
   });
 
   test('H.1 — valid token passes with cached JWKS', async () => {
-    const res = await authRequest('GET', '/api/users/me', {
+    const res = await authRequest('GET', '/api/auth/me', {
       headers: { Authorization: `Bearer ${userToken}` },
     });
     expect(res.status).toBe(200);
-    expect(res.data).toHaveProperty('name');
+    expect(res.data).toHaveProperty('success');
   });
 
   test('H.2 — rotate realm signing keys', async () => {
@@ -27,20 +27,17 @@ test.describe('Phase H: JWKS Force-Refresh', () => {
 
   test('H.3 — old token succeeds via force-refresh after key rotation', async () => {
     // Use the SAME token from beforeAll (signed with old key)
-    const res = await authRequest('GET', '/api/users/me', {
+    const res = await authRequest('GET', '/api/auth/me', {
       headers: { Authorization: `Bearer ${userToken}` },
     });
     // Backend should force-refresh JWKS and validate the token
     expect(res.status).toBe(200);
   });
 
-  test.fixme('H.4 — expired token is rejected without retry', async () => {
-    // NOTE: Full expired token testing requires realm settings manipulation.
-    // The curl-based test in epic2-secure-api-access.md handles the complete flow.
-    // This test verifies the error code for a corrupted token.
-    const expiredToken = userToken.slice(0, -5) + 'XXXXX';
-    const res = await authRequest('GET', '/api/users/me', {
-      headers: { Authorization: `Bearer ${expiredToken}` },
+  test('H.4 — corrupted token is rejected without retry', async () => {
+    const corruptedToken = userToken.slice(0, -5) + 'XXXXX';
+    const res = await authRequest('GET', '/api/auth/me', {
+      headers: { Authorization: `Bearer ${corruptedToken}` },
     });
     expect(res.status).toBe(401);
   });

@@ -382,6 +382,8 @@ services:
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD}
       - EMAIL_FROM=${EMAIL_FROM}
+      # OPEA service shared secret for /api/users/:userId/context endpoint
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN}
       # OPEA AI/ML service override (code default is deployment-specific: 'e2e-109-198')
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)

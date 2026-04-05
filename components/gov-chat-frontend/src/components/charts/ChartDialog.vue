@@ -1,5 +1,5 @@
 <template>
-  <div class="chart-dialog-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="close">
+  <div class="chart-dialog-overlay" @click.self="close">
     <div class="chart-dialog-container">
       <div class="chart-dialog-header">
         <h3>{{ title }}</h3>
@@ -21,11 +21,6 @@ export default {
     title: {
       type: String,
       required: true
-    }
-  },
-  computed: {
-    isDarkMode() {
-      return document.documentElement.getAttribute("data-theme") === "dark";
     }
   },
   methods: {
@@ -65,12 +60,8 @@ export default {
   backdrop-filter: blur(4px);
 }
 
-.dark-mode.chart-dialog-overlay {
-  background: rgba(0, 0, 0, 0.85);
-}
-
 .chart-dialog-container {
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 12px;
   width: 100%;
   max-width: 95vw;
@@ -78,11 +69,7 @@ export default {
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.dark-mode .chart-dialog-container {
-  background: #1f2937;
+  box-shadow: var(--shadow-lg);
 }
 
 .chart-dialog-header {
@@ -90,30 +77,22 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
-}
-
-.dark-mode .chart-dialog-header {
-  border-bottom-color: #374151;
 }
 
 .chart-dialog-header h3 {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #111827;
-}
-
-.dark-mode .chart-dialog-header h3 {
-  color: #f9fafb;
+  color: var(--text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
   font-size: 1.25rem;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -124,13 +103,8 @@ export default {
 }
 
 .close-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
-}
-
-.dark-mode .close-btn:hover {
-  background: #374151;
-  color: #f9fafb;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .chart-dialog-body {
@@ -144,25 +118,17 @@ export default {
 }
 
 .chart-dialog-body::-webkit-scrollbar-track {
-  background: #f9fafb;
+  background: var(--bg-tertiary);
   border-radius: 4px;
-}
-
-.dark-mode .chart-dialog-body::-webkit-scrollbar-track {
-  background: #374151;
 }
 
 .chart-dialog-body::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--border-color);
   border-radius: 4px;
 }
 
-.dark-mode .chart-dialog-body::-webkit-scrollbar-thumb {
-  background: #4b5563;
-}
-
 .chart-dialog-body::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--text-muted);
 }
 
 @media (max-width: 768px) {

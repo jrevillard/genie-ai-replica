@@ -88,8 +88,8 @@ USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openi
 
 # Get the authenticated user's profile (this triggers header extraction in the middleware)
 # First, find the user's _key by looking up the test user
-USER_KEY=$(curl -s -X GET "https://localhost/api/users/search?email=testuser@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0]._key')
+USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=testuser@example.com" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Make authenticated request to the user profile endpoint
 curl -s -X GET "https://localhost/api/users/${USER_KEY}" \
@@ -181,8 +181,8 @@ USER_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openi
   -d 'client_id=genie-app&username=e2e-test-user&password=e2epass123&grant_type=password' | jq -r '.access_token')
 
 # Look up the user in ArangoDB to find their _key
-USER_KEY=$(curl -s -X GET "https://localhost/api/users/search?email=e2e@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0]._key')
+USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 echo "User _key: $USER_KEY"
 
@@ -285,8 +285,8 @@ TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie/protocol/openid-con
   -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Look up the test user's _key
-USER_KEY=$(curl -s -X GET "https://localhost/api/users/search?email=e2e@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0]._key')
+USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Remove roles (Keycloak 26 specific approach)
 curl -s -X PATCH "https://localhost/api/users/$USER_KEY" \
@@ -369,10 +369,10 @@ USER2_TOKEN=$(curl -s -X POST "https://localhost/auth/realms/genie2/protocol/ope
   -d 'client_id=genie-app&username=genie2-realm-user&password=genie2pass123&grant_type=password' | jq -r '.access_token')
 
 # Look up user keys in ArangoDB for both users
-GENIE_USER_KEY=$(curl -s -X GET "https://localhost/api/users/search?email=genie@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0]._key')
-GENIE2_USER_KEY=$(curl -s -X GET "https://localhost/api/users/search?email=genie2@example.com" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.[0]._key')
+GENIE_USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=genie@example.com" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
+GENIE2_USER_KEY=$(curl -s -X GET "https://localhost/api/admin/users/search?email=genie2@example.com" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Make request with genie realm token and check logs
 curl -s -X GET "https://localhost/api/users/${GENIE_USER_KEY}" \
@@ -1028,10 +1028,10 @@ Validates that the backend-to-OPEA authentication uses `X-Service-Token` (shared
 Get the authenticated user's ArangoDB `_key`, then call the OPEA context endpoint.
 
 ```bash
-# Get user _key from an authenticated response
+# Get user id (ArangoDB _key exposed as 'id') from authenticated response
 USER_KEY=$(curl -sk "https://localhost/api/auth/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | jq -r '._key')
-echo "User _key: $USER_KEY"
+  -H "Authorization: Bearer $USER_TOKEN" | jq -r '.user.id')
+echo "User key: $USER_KEY"
 
 # Call OPEA callback endpoint with service token
 curl -sk "https://localhost/api/users/${USER_KEY}/context" \

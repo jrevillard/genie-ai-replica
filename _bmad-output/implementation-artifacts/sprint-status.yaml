@@ -133,7 +133,7 @@ development_status:
 
   # Epic 2: Secure API Access & Resilient Authentication
   # Worktrees: epic2-backend | epic2-frontend (parallel after Epic 1 merged)
-  epic-2: in-progress
+  epic-2: done
   # Story 2.1 removed — fully implemented during Story 1.9 refactor (OIDC discovery pattern)
   # See sprint-change-proposal-2026-04-02.md Section 6
   2-2-jwks-force-refresh-on-validation-failure: ready-for-dev # worktree: epic2-backend

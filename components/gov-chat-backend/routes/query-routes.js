@@ -60,7 +60,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error.
    */
-  router.patch('/:queryId/responsetime', async (req, res) => {
+  router.patch('/:queryId/responsetime', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const { responseTime } = req.body;
@@ -74,10 +74,7 @@ module.exports = (queryService) => {
       res.json(updatedQuery);
     } catch (error) {
       logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -327,17 +324,14 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/:queryId/feedback', async (req, res) => {
+  router.post('/:queryId/feedback', async (req, res, next) => {
     try {
       logger.info(`Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`);
       const query = await queryService.addFeedback(req.params.queryId, req.body);
       res.json(query);
     } catch (error) {
       logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -390,7 +384,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error.
    */
-  router.patch('/:queryId/answered', async (req, res) => {
+  router.patch('/:queryId/answered', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const { responseTime } = req.body;
@@ -404,10 +398,7 @@ module.exports = (queryService) => {
       res.json(updatedQuery);
     } catch (error) {
       logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -564,19 +555,14 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/:queryId/conversations', async (req, res) => {
+  router.get('/:queryId/conversations', async (req, res, next) => {
     try {
       logger.info(`Getting conversations for query ${req.params.queryId}`);
       const conversations = await queryService.getConversationsForQuery(req.params.queryId);
       res.json(conversations);
     } catch (error) {
       logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -626,7 +612,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/:queryId/conversation', async (req, res) => {
+  router.post('/:queryId/conversation', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const options = req.body;
@@ -637,12 +623,7 @@ module.exports = (queryService) => {
       res.status(201).json(result);
     } catch (error) {
       logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -692,7 +673,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/:queryId/link/:messageId', async (req, res) => {
+  router.post('/:queryId/link/:messageId', async (req, res, next) => {
     try {
       const { queryId, messageId } = req.params;
       const options = req.body;
@@ -703,12 +684,7 @@ module.exports = (queryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
-      
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: error.message });
-      }
-      
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 

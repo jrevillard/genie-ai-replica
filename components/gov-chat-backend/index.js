@@ -1153,6 +1153,10 @@ async function startApp() {
       ip: req.ip,
       userAgent: req.get('User-Agent') || 'none'
     });
+    // Typed errors (AppError subclasses) carry their own status code
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
     res.status(500).json({
       message: 'An unexpected error occurred',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined

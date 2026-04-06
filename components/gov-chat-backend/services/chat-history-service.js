@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
+const { NotFoundError, ForbiddenError } = require('../middleware/errors');
 
 //const initDB = dbService.getConnection();
 
@@ -837,7 +838,7 @@ class ChatHistoryService {
       const permission = await permissionCursor.next();
 
       if (!permission) {
-        throw new Error('You do not have permission to delete this conversation');
+        throw new ForbiddenError('You do not have permission to delete this conversation');
       }
 
       // Get messages
@@ -1262,7 +1263,7 @@ class ChatHistoryService {
 
       if (!query) {
         logger.warn(`Query ${queryId} not found`);
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       // Extract conversationTitle from options or use the query text (truncated if needed)
@@ -1719,7 +1720,7 @@ class ChatHistoryService {
 
       if (!permission) {
         logger.warn(`User ${userId} does not have permission to delete folder ${folderId}`);
-        throw new Error('You do not have permission to delete this folder');
+        throw new ForbiddenError('You do not have permission to delete this folder');
       }
 
       // Get all conversation links for this folder
@@ -1853,12 +1854,12 @@ class ChatHistoryService {
 
       if (!folderPermission) {
         logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new Error('You do not have permission to access this folder');
+        throw new ForbiddenError('You do not have permission to access this folder');
       }
 
       if (!conversationPermission) {
         logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-        throw new Error('You do not have permission to access this conversation');
+        throw new ForbiddenError('You do not have permission to access this conversation');
       }
 
       // Check if the conversation already exists in any folder
@@ -1924,7 +1925,7 @@ class ChatHistoryService {
 
       if (!permission) {
         logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new Error('You do not have permission to access this folder');
+        throw new ForbiddenError('You do not have permission to access this folder');
       }
 
       // Find the folder-conversation edge
@@ -1939,7 +1940,7 @@ class ChatHistoryService {
 
       if (!link) {
         logger.warn(`Conversation ${conversationId} not found in folder ${folderId}`);
-        throw new Error('Conversation not found in this folder');
+        throw new NotFoundError('Conversation not found in this folder');
       }
 
       // Delete the edge
@@ -2039,7 +2040,7 @@ class ChatHistoryService {
 
       if (!convPermission) {
         logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-        throw new Error('You do not have permission to access this conversation');
+        throw new ForbiddenError('You do not have permission to access this conversation');
       }
 
       if (targetFolderId) {
@@ -2053,7 +2054,7 @@ class ChatHistoryService {
 
         if (!folderPermission) {
           logger.warn(`User ${userId} does not have permission to access folder ${targetFolderId}`);
-          throw new Error('You do not have permission to access the target folder');
+          throw new ForbiddenError('You do not have permission to access the target folder');
         }
       }
 
@@ -2237,7 +2238,7 @@ class ChatHistoryService {
 
         if (!permission) {
           logger.warn(`User ${userId} does not have permission to access folder ${item.folderId}`);
-          throw new Error(`You do not have permission to access folder ${item.folderId}`);
+          throw new ForbiddenError(`You do not have permission to access folder ${item.folderId}`);
         }
 
         // Verify folder belongs to correct parent
@@ -2408,7 +2409,7 @@ class ChatHistoryService {
 
       if (!share) {
         logger.warn(`Share for folder ${folderId} to user ${targetUserId} not found or user is the owner`);
-        throw new Error('Share not found or the target user is the owner');
+        throw new NotFoundError('Share not found or the target user is the owner');
       }
 
       // Delete the share
@@ -2521,7 +2522,7 @@ class ChatHistoryService {
 
       if (!permission) {
         logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new Error('You do not have permission to access this folder');
+        throw new ForbiddenError('You do not have permission to access this folder');
       }
 
       // Get all users with access

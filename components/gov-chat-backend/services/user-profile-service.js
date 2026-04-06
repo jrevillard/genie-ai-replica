@@ -6,6 +6,7 @@ const emailService = require('./email-service');
 const crypto = require('crypto');
 const authService = require('./auth-service');
 const { logger, dbService } = require('../shared-lib');
+const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
 
 class UserProfileService {
@@ -54,7 +55,7 @@ class UserProfileService {
       const user = await this.users.document(userId);
       if (!user) {
         logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error(`User with ID ${userId} not found`);
+        throw new NotFoundError(`User with ID ${userId} not found`);
       }
 
       if (!user.encPassword) {
@@ -161,7 +162,7 @@ class UserProfileService {
       const userExists = await this.userExists(userId);
       if (!userExists) {
         logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error(`User with ID ${userId} not found`);
+        throw new NotFoundError(`User with ID ${userId} not found`);
       }
 
       const processedData = await this.process(userId, profileData, files);
@@ -323,7 +324,7 @@ class UserProfileService {
       const user = await this.getUserProfile(userId);
       if (!user) {
         logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error(`User with ID ${userId} not found`);
+        throw new NotFoundError(`User with ID ${userId} not found`);
       }
 
       const token = crypto.randomBytes(32).toString('hex');
@@ -708,7 +709,7 @@ class UserProfileService {
       const currentUserDoc = await this.getUserProfile(userId);
       if (!currentUserDoc) {
         logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error(`User with ID ${userId} not found`);
+        throw new NotFoundError(`User with ID ${userId} not found`);
       }
 
       const preservedData = {
@@ -774,7 +775,7 @@ class UserProfileService {
       const user = await this.getUserProfile(userId);
       if (!user) {
         logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error(`User not found`);
+        throw new NotFoundError(`User not found`);
       }
 
       await this.deleteUserFiles(user);
@@ -837,7 +838,7 @@ class UserProfileService {
       const user = await this.getUserProfile(userId);
       if (!user) {
         logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error('User not found');
+        throw new NotFoundError('User not found');
       }
 
       if (user.disabled === true) {
@@ -895,7 +896,7 @@ class UserProfileService {
       const user = await this.getUserProfile(userId);
       if (!user) {
         logger.warn('UserProfileService.user_not_found', { userId });
-        throw new Error('User not found');
+        throw new NotFoundError('User not found');
       }
 
       if (user.disabled !== true) {
@@ -953,7 +954,7 @@ class UserProfileService {
           adminId,
           timestamp: new Date().toISOString()
         });
-        throw new Error('User not found');
+        throw new NotFoundError('User not found');
       }
 
       logger.info('UserProfileService.user_found_for_force_logout', { userId, adminId, timestamp: new Date().toISOString() });

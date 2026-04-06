@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
+const { NotFoundError } = require('../middleware/errors');
 
 class QueryService {
   constructor() {
@@ -1193,7 +1194,7 @@ class QueryService {
 
       if (!query) {
         logger.warn('QueryService.query_not_found', { queryId });
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       const conversation = await this.chatHistoryService.createConversationFromQuery(
@@ -1315,7 +1316,7 @@ class QueryService {
       });
 
       if (error.name === 'ArangoError' && error.errorNum === 1202) {
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       throw error;
@@ -1352,7 +1353,7 @@ class QueryService {
 
       if (!message) {
         logger.warn('QueryService.message_not_found', { messageId });
-        throw new Error('Message not found');
+        throw new NotFoundError('Message not found');
       }
 
       const link = await this.chatHistoryService.linkQueryToConversation(

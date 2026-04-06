@@ -99,7 +99,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/conversations', async (req, res) => {
+  router.get('/conversations', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -131,10 +131,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error getting user conversations: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: `Error getting user conversations: ${error.message}`
-      });
+      next(error);
     }
   });
 
@@ -162,7 +159,7 @@ module.exports = (chatHistoryService) => {
  *       500:
  *         description: Server error
  */
-  router.get('/conversations/:conversationId', async (req, res) => {
+  router.get('/conversations/:conversationId', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
       logger.info(`Getting conversation ${conversationId}`);
@@ -177,12 +174,7 @@ module.exports = (chatHistoryService) => {
       res.json(conversation);
     } catch (error) {
       logger.error(`Error getting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Conversation not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -224,7 +216,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/conversations', async (req, res) => {
+  router.post('/conversations', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -268,7 +260,7 @@ module.exports = (chatHistoryService) => {
       res.status(201).json(conversation);
     } catch (error) {
       logger.error(`Error creating conversation: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -320,7 +312,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.patch('/conversations/:conversationId', async (req, res) => {
+  router.patch('/conversations/:conversationId', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
 
@@ -344,12 +336,7 @@ module.exports = (chatHistoryService) => {
       res.json(updatedConversation);
     } catch (error) {
       logger.error(`Error updating conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Conversation not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -379,7 +366,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.delete('/conversations/:conversationId', async (req, res) => {
+  router.delete('/conversations/:conversationId', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
 
@@ -401,16 +388,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error deleting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Conversation not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -456,7 +434,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/conversations/:conversationId/messages', async (req, res) => {
+  router.get('/conversations/:conversationId/messages', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
       const limit = parseInt(req.query.limit) || 50;
@@ -471,12 +449,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error getting messages for conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Conversation not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -527,7 +500,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/conversations/:conversationId/messages', async (req, res) => {
+  router.post('/conversations/:conversationId/messages', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
       let userId = extractUserId(req);
@@ -593,10 +566,7 @@ module.exports = (chatHistoryService) => {
       res.status(201).json(message);
     } catch (error) {
       logger.error(`Error adding message to conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Conversation not found' });
-      }
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -635,7 +605,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/conversations/:conversationId/messages/read', async (req, res) => {
+  router.post('/conversations/:conversationId/messages/read', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
       const { messageIds } = req.body;
@@ -646,12 +616,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error marking messages as read in conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Conversation not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -679,7 +644,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/query/:queryId/messages', async (req, res) => {
+  router.get('/query/:queryId/messages', async (req, res, next) => {
     try {
       const { queryId } = req.params;
 
@@ -689,12 +654,7 @@ module.exports = (chatHistoryService) => {
       res.json(messages);
     } catch (error) {
       logger.error(`Error finding messages for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -722,7 +682,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/messages/:messageId/query', async (req, res) => {
+  router.get('/messages/:messageId/query', async (req, res, next) => {
     try {
       const { messageId } = req.params;
 
@@ -737,7 +697,7 @@ module.exports = (chatHistoryService) => {
       res.json(query);
     } catch (error) {
       logger.error(`Error finding originating query for message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -782,7 +742,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/query/:queryId/conversation', async (req, res) => {
+  router.post('/query/:queryId/conversation', async (req, res, next) => {
     try {
       const { queryId } = req.params;
 
@@ -811,12 +771,7 @@ module.exports = (chatHistoryService) => {
       res.status(201).json(result);
     } catch (error) {
       logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -860,7 +815,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/search', async (req, res) => {
+  router.get('/search', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -891,7 +846,7 @@ module.exports = (chatHistoryService) => {
       res.json(results);
     } catch (error) {
       logger.error(`Error searching conversations: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -917,7 +872,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/recent', async (req, res) => {
+  router.get('/recent', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -939,7 +894,7 @@ module.exports = (chatHistoryService) => {
       res.json(conversations);
     } catch (error) {
       logger.error(`Error getting recent conversations: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -958,7 +913,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/stats', async (req, res) => {
+  router.get('/stats', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -978,7 +933,7 @@ module.exports = (chatHistoryService) => {
       res.json(stats);
     } catch (error) {
       logger.error(`Error getting conversation statistics: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1009,7 +964,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/folders', async (req, res) => {
+  router.get('/folders', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -1035,10 +990,7 @@ module.exports = (chatHistoryService) => {
       res.json(folders);
     } catch (error) {
       logger.error(`Error getting user folders: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: `Error getting user folders: ${error.message}`
-      });
+      next(error);
     }
   });
 
@@ -1081,7 +1033,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/folders', async (req, res) => {
+  router.post('/folders', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -1140,7 +1092,7 @@ module.exports = (chatHistoryService) => {
       res.status(201).json(folder);
     } catch (error) {
       logger.error(`Error creating folder: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1168,7 +1120,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/folders/:folderId', async (req, res) => {
+  router.get('/folders/:folderId', async (req, res, next) => {
     try {
       const { folderId } = req.params;
       logger.info(`Getting folder ${folderId}`);
@@ -1183,12 +1135,7 @@ module.exports = (chatHistoryService) => {
       res.json(folder);
     } catch (error) {
       logger.error(`Error getting folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Folder not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1241,7 +1188,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.patch('/folders/:folderId', async (req, res) => {
+  router.patch('/folders/:folderId', async (req, res, next) => {
     try {
       const { folderId } = req.params;
 
@@ -1288,12 +1235,7 @@ module.exports = (chatHistoryService) => {
       res.json(updatedFolder);
     } catch (error) {
       logger.error(`Error updating folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Folder not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1329,7 +1271,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.delete('/folders/:folderId', async (req, res) => {
+  router.delete('/folders/:folderId', async (req, res, next) => {
     try {
       const { folderId } = req.params;
       const deleteContents = req.query.deleteContents === 'true';
@@ -1352,16 +1294,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error deleting folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Folder not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1387,7 +1320,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/folders/shared', async (req, res) => {
+  router.get('/folders/shared', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -1411,10 +1344,7 @@ module.exports = (chatHistoryService) => {
       res.json(folders);
     } catch (error) {
       logger.error(`Error getting shared folders: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: `Error getting shared folders: ${error.message}`
-      });
+      next(error);
     }
   });
 
@@ -1446,7 +1376,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/folders/search', async (req, res) => {
+  router.get('/folders/search', async (req, res, next) => {
     try {
       let userId = extractUserId(req);
 
@@ -1475,7 +1405,7 @@ module.exports = (chatHistoryService) => {
       res.json(results);
     } catch (error) {
       logger.error(`Error searching folders: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1519,7 +1449,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/folders/reorder', async (req, res) => {
+  router.post('/folders/reorder', async (req, res, next) => {
     try {
       const { folderOrders, parentFolderId } = req.body;
 
@@ -1545,12 +1475,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error reordering folders: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1578,7 +1503,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/folders/:folderId/path', async (req, res) => {
+  router.get('/folders/:folderId/path', async (req, res, next) => {
     try {
       const { folderId } = req.params;
       logger.info(`Getting path for folder ${folderId}`);
@@ -1587,12 +1512,7 @@ module.exports = (chatHistoryService) => {
       res.json(path);
     } catch (error) {
       logger.error(`Error getting path for folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Folder not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1628,7 +1548,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/folders/:folderId/conversations/:conversationId', async (req, res) => {
+  router.post('/folders/:folderId/conversations/:conversationId', async (req, res, next) => {
     try {
       const { folderId, conversationId } = req.params;
 
@@ -1650,16 +1570,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error adding conversation to folder: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Folder or conversation not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1695,7 +1606,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.delete('/folders/:folderId/conversations/:conversationId', async (req, res) => {
+  router.delete('/folders/:folderId/conversations/:conversationId', async (req, res, next) => {
     try {
       const { folderId, conversationId } = req.params;
 
@@ -1717,16 +1628,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error removing conversation from folder: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: error.message });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1752,7 +1654,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/conversations/:conversationId/folder', async (req, res) => {
+  router.get('/conversations/:conversationId/folder', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
       logger.info(`Finding folder for conversation ${conversationId}`);
@@ -1772,7 +1674,7 @@ module.exports = (chatHistoryService) => {
       });
     } catch (error) {
       logger.error(`Error finding folder for conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1815,7 +1717,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/conversations/:conversationId/move', async (req, res) => {
+  router.post('/conversations/:conversationId/move', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
       const { sourceFolderId, targetFolderId } = req.body;
@@ -1838,16 +1740,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error moving conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: error.message });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1894,7 +1787,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/folders/:folderId/share', async (req, res) => {
+  router.post('/folders/:folderId/share', async (req, res, next) => {
     try {
       const { folderId } = req.params;
       const { targetUserId, role } = req.body;
@@ -1932,16 +1825,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error sharing folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission') || error.message.includes('owner')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Folder or target user not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -1977,7 +1861,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.delete('/folders/:folderId/share/:targetUserId', async (req, res) => {
+  router.delete('/folders/:folderId/share/:targetUserId', async (req, res, next) => {
     try {
       const { folderId, targetUserId } = req.params;
 
@@ -2000,16 +1884,7 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error removing folder share ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission') || error.message.includes('owner')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: error.message });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -2039,7 +1914,7 @@ module.exports = (chatHistoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/folders/:folderId/users', async (req, res) => {
+  router.get('/folders/:folderId/users', async (req, res, next) => {
     try {
       const { folderId } = req.params;
 
@@ -2061,16 +1936,7 @@ module.exports = (chatHistoryService) => {
       res.json(users);
     } catch (error) {
       logger.error(`Error getting users for folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-
-      if (error.message.includes('permission')) {
-        return res.status(403).json({ message: error.message });
-      }
-
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Folder not found' });
-      }
-
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 

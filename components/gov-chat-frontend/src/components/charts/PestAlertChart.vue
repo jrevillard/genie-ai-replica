@@ -222,7 +222,8 @@
         </div>
         <div class="dialog-body">
           <div class="response-content">
-            {{ assistanceDialog.response || t('charts.noResponse') }}
+            <div v-if="assistanceDialog.response" v-html="renderedAIResponse"></div>
+            <span v-else>{{ t('charts.noResponse') }}</span>
           </div>
         </div>
         <div class="dialog-footer">
@@ -241,6 +242,8 @@
 </template>
 
 <script>
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import agriculturalService from "../../services/agriculturalService";
 import usdaRssService from "../../services/usdaRssService";
 import chatbotService from "../../services/chatbotService";
@@ -289,6 +292,10 @@ export default {
     };
   },
   computed: {
+    renderedAIResponse() {
+      if (!this.assistanceDialog.response) return '';
+      return DOMPurify.sanitize(marked.parse(this.assistanceDialog.response));
+    },
     cssVar() {
       return (prop) => getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
     },

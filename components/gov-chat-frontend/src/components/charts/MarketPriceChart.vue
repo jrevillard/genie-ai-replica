@@ -197,7 +197,8 @@
         </div>
         <div class="dialog-body">
           <div class="response-content">
-            {{ predictionResponse || translate('charts.market.noResponse', 'No response received') }}
+            <div v-if="predictionResponse" v-html="renderedPrediction"></div>
+            <span v-else>{{ translate('charts.market.noResponse', 'No response received') }}</span>
           </div>
         </div>
         <div class="dialog-footer">
@@ -226,6 +227,8 @@
 <script>
 import worldBankService from "../../services/worldBankService";
 import chatbotService from "../../services/chatbotService";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 export default {
   name: "MarketPriceChart",
@@ -278,6 +281,10 @@ export default {
     };
   },
   computed: {
+    renderedPrediction() {
+      if (!this.predictionResponse) return '';
+      return DOMPurify.sanitize(marked.parse(this.predictionResponse));
+    },
     cssVar(name) {
       return (prop) => getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
     },

@@ -349,7 +349,7 @@ module.exports = (userService) => {
       logger.info('=======================================================');
       logger.error(`[EMAIL ROUTE DEBUG] EMAIL UPDATE ERROR: ${error.message}`, { stack: error.stack });
       logger.info('=======================================================');
-      res.status(500).json({ error: error.message || 'Failed to initiate email change' });
+      res.status(500).json({ error: 'Failed to initiate email change' });
     }
   });
 

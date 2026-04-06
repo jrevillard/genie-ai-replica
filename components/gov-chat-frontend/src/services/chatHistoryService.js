@@ -359,28 +359,6 @@ class ChatHistoryService {
   }
 
   /**
-   * Export conversation to PDF or other format
-   * @param {String} conversationId - ID of the conversation to export
-   * @param {String} format - Export format (pdf, json, etc.)
-   * @returns {Promise} Export data or download URL
-   */
-  async exportConversation(conversationId, format = 'pdf') {
-    try {
-      const response = await httpService.get(
-        `/chat/conversations/${conversationId}/export`,
-        {
-          params: { format },
-          responseType: 'blob'
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error(`Error exporting conversation ${conversationId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Get all folders for the authenticated user
    * @param {String} userId - User ID (required)
    * @param {Object} options - Filter options

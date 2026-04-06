@@ -1,6 +1,6 @@
 # Story 3.2: Session Invalidation on User Disable/Delete
 
-Status: review
+Status: done
 
 ## Story
 

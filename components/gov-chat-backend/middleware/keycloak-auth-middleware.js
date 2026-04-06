@@ -105,11 +105,13 @@ const keycloakAuthMiddleware = {
         });
       }
 
-      // Extract issuer from token for potential Keycloak introspection
+      // Extract issuer and sub from token for potential Keycloak introspection
+      // Parse once to avoid duplication - payload only used for introspection URL construction
       let tokenIssuer;
+      let tokenPayload;
       try {
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-        tokenIssuer = payload.iss;
+        tokenPayload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+        tokenIssuer = tokenPayload.iss;
       } catch (e) {
         // If we can't extract issuer, we'll skip introspection
       }
@@ -153,16 +155,15 @@ const keycloakAuthMiddleware = {
         if (err.code === 'TOKEN_EXPIRED') {
           // Check user status in Keycloak via UserInfo to determine if disabled/deleted
           let userDisabled = false;
-          if (token && tokenIssuer) {
+          if (token && tokenIssuer && tokenPayload) {
             const statusResult = await keycloakAuthService.checkUserStatusInKeycloak(token, tokenIssuer);
             if (statusResult && statusResult.disabled) {
               userDisabled = true;
 
               // Update ArangoDB user to reflect disabled status
               try {
-                // Extract sub from token to identify user
-                const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-                const issSub = `${tokenIssuer}#${payload.sub}`;
+                // Reuse already-parsed payload to extract sub for user identification
+                const issSub = `${tokenIssuer}#${tokenPayload.sub}`;
 
                 // Find user in ArangoDB and mark as deleted
                 const userProvisioningService = require('../services/user-provisioning-service');

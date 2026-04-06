@@ -429,7 +429,7 @@ const keycloakAuthService = {
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         return { active: false, disabled: true };
       }
-      // Network errors
+      // Network errors: timeouts are transient (warn), unexpected errors are severe (error)
       if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
         logger.warn(`[KeycloakAuth] Keycloak UserInfo check failed (network): ${error.message}`);
       } else {

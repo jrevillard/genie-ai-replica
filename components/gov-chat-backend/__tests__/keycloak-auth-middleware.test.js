@@ -249,6 +249,19 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(res.status).toHaveBeenCalledWith(401);
   });
 
+  it('should not call introspection when token has malformed base64url payload', async () => {
+    req.headers.authorization = 'Bearer header.invalidbase64==.signature';
+    const err = new Error('Token expired');
+    err.code = 'TOKEN_EXPIRED';
+    mockVerifyToken.mockRejectedValue(err);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(mockCheckUserStatusInKeycloak).not.toHaveBeenCalled();
+    expect(mockMarkUserAsDeleted).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
   it('should return 401 TOKEN_INVALID when token verification fails', async () => {
     req.headers.authorization = 'Bearer invalid-token';
     const err = new Error('internal-jose-error-details');

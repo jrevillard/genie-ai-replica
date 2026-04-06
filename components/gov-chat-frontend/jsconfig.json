@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "moduleResolution": "bundler",
+    "types": [],
     "paths": {
       "@/*": ["./src/*"]
     },

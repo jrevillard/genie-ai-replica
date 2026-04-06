@@ -448,6 +448,42 @@ curl -sk https://localhost/
 # Use the web UI at https://<gateway-domain>/
 ```
 
+## Step 10b: User & Role Management (Post-Deploy)
+
+After verifying deployment, set up user accounts and roles. All user management is performed through the Keycloak admin console — no GENIE.AI-specific interface is needed.
+
+### Keycloak Admin Console
+
+| Deployment | URL |
+|---|---|
+| Localhost (dev) | `https://localhost/auth/admin` |
+| Domain | `https://<NGINX_PUBLIC_DOMAIN>/auth/admin` |
+
+**Credentials**: username `admin`, password from `KEYCLOAK_ADMIN_PASSWORD` in `.env`.
+
+Select the **genie** realm (not `master`) after logging in.
+
+### First Steps
+
+1. **Change the admin password** (if still using the default from `.env`): Users > admin > Credentials > Set password
+2. **Create user accounts**: Users > Add user — set credentials and assign the `user` role
+3. **Grant admin access**: Users > [user] > Role Mapping > Assign `admin` role
+
+### Pre-configured Users and Roles
+
+The following are configured automatically during deployment via `config/keycloak/genie-realm.yaml`:
+
+| User | Roles | Purpose |
+|---|---|---|
+| `admin` | `admin`, `user` | Initial administrator account |
+| — | `user` | Default role for all new users |
+
+### Documentation
+
+For complete user management instructions (CRUD operations, role assignment, group management, verification commands, security considerations), see the [Keycloak Admin Operations Guide](keycloak-admin-guide.md).
+
+For connecting external identity providers (Google, Microsoft, SAML/OIDC), see the [External IdP Integration Guide](external-idp-integration-guide.md).
+
 ## Step 11: Debugging Internal Services
 
 Internal services are not exposed to the host. Use these methods:

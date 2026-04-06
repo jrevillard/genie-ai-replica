@@ -999,9 +999,9 @@ export default {
           `[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`
         );
         if (contextOption === "conversation-with-labels") {
-          const serviceLabels = this.selectedContextItems.map(
-            (item) => item.service
-          );
+          const serviceLabels = this.selectedContextItems
+            .filter((item) => !item.serviceKey?.startsWith('quickhelp.'))
+            .map((item) => item.service);
           // Build messages array, replacing last user message with hidden prompt if available
           const messagesForQuery = this.chatMessages.map((msg) => ({
             role: msg.sender === "user" ? "user" : "assistant",

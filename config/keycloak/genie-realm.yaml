@@ -56,3 +56,27 @@ clients:
       - address
       - phone
       - offline_access
+
+  # Service account for GENIE.AI backend → Keycloak Admin API proxy
+  # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.
+  # Permissions are restricted: cannot modify realm settings, client config, or other admin operations.
+  - clientId: genie-proxy-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_PROXY_CLIENT_SECRET)
+    defaultClientScopes:
+      - openid
+    optionalClientScopes:
+      - offline_access
+    # Assign realm-management client roles to restrict Admin API access
+    serviceAccountRoles:
+      client:
+        realm-management:
+          - query-users
+          - view-users
+          - manage-users
+          - manage-roles

@@ -373,6 +373,9 @@ services:
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
       # NOTE: Docker Swarm ${VAR:-{}} breaks due to nested braces. Use env file or set empty string.
       - KEYCLOAK_ADDITIONAL_REALMS
+      # Keycloak proxy service account — restricted permissions for user/role management
+      - KEYCLOAK_PROXY_CLIENT_ID=genie-proxy-client
+      - KEYCLOAK_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
       # TLS verification for backend → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
@@ -1143,6 +1146,7 @@ services:
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - KC_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
     networks:
       - genieai_network
     deploy:

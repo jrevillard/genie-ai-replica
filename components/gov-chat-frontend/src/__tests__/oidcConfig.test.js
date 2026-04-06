@@ -6,7 +6,6 @@ describe('oidcConfig', () => {
   beforeEach(() => {
     // Reset env vars
     delete process.env.VUE_APP_KEYCLOAK_URL;
-    delete process.env.VUE_APP_KEYCLOAK_REALM;
     delete process.env.VUE_APP_KEYCLOAK_CLIENT_ID;
     // Reset window config
     window.APP_CONFIG = {};
@@ -58,12 +57,12 @@ describe('oidcConfig', () => {
 
   it('should fall back to env vars when APP_CONFIG is empty', () => {
     process.env.VUE_APP_KEYCLOAK_URL = 'https://env.example.com';
-    process.env.VUE_APP_KEYCLOAK_REALM = 'envrealm';
     process.env.VUE_APP_KEYCLOAK_CLIENT_ID = 'env-client';
 
     oidcConfig = require('@/config/oidcConfig').default;
 
-    expect(oidcConfig.authority).toBe('https://env.example.com/realms/envrealm');
+    // realm falls back to 'genie' default when not in APP_CONFIG
+    expect(oidcConfig.authority).toBe('https://env.example.com/realms/genie');
     expect(oidcConfig.client_id).toBe('env-client');
   });
 
@@ -88,12 +87,12 @@ describe('oidcConfig', () => {
         url: 'https://app.example.com'
       }
     };
-    process.env.VUE_APP_KEYCLOAK_REALM = 'envrealm';
     process.env.VUE_APP_KEYCLOAK_CLIENT_ID = 'env-client';
 
     oidcConfig = require('@/config/oidcConfig').default;
 
-    expect(oidcConfig.authority).toBe('https://app.example.com/realms/envrealm');
+    // realm falls back to 'genie' default when not in APP_CONFIG
+    expect(oidcConfig.authority).toBe('https://app.example.com/realms/genie');
     expect(oidcConfig.client_id).toBe('env-client');
   });
 

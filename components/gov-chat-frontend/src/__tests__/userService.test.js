@@ -89,80 +89,6 @@ describe('userService', () => {
     });
   });
 
-  describe('deactivateAccount', () => {
-    it('should call POST /users/deactivate endpoint with reason', async () => {
-      httpService.post.mockResolvedValue({
-        data: { success: true, message: 'Account deactivated successfully' }
-      });
-
-      const result = await userService.deactivateAccount('Taking a break');
-
-      expect(httpService.post).toHaveBeenCalledWith(
-        'users/deactivate',
-        { reason: 'Taking a break' }
-      );
-      expect(result.success).toBe(true);
-    });
-
-    it('should throw error if deactivation fails', async () => {
-      httpService.post.mockRejectedValue(new Error('Deactivation failed'));
-
-      await expect(userService.deactivateAccount('Test')).rejects.toThrow('Deactivation failed');
-    });
-  });
-
-  describe('reactivateAccount', () => {
-    it('should call POST /users/reactivate endpoint', async () => {
-      httpService.post.mockResolvedValue({
-        data: { success: true, message: 'Account reactivated successfully' }
-      });
-
-      const result = await userService.reactivateAccount();
-
-      expect(httpService.post).toHaveBeenCalledWith('users/reactivate');
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe('updateUserRole', () => {
-    it('should call PUT /users/:userId with role data', async () => {
-      httpService.put.mockResolvedValue({
-        data: { success: true, data: { _key: 'users/123', roles: ['admin'] } }
-      });
-
-      const result = await userService.updateUserRole('users/123', {
-        role: 'admin',
-        disabled: false
-      });
-
-      expect(httpService.put).toHaveBeenCalledWith(
-        'users/users/123',
-        { role: 'admin', disabled: false }
-      );
-      // updateUserRole returns the full response, so result.data contains the axios response data
-      expect(result.data.data.roles).toContain('admin');
-    });
-
-    it('should log the role update operation', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      httpService.put.mockResolvedValue({ data: { success: true } });
-
-      await userService.updateUserRole('users/123', { role: 'admin' });
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Updating role for user users/123')
-      );
-      consoleSpy.mockRestore();
-    });
-
-    it('should handle update errors gracefully', async () => {
-      httpService.put.mockRejectedValue(new Error('Insufficient permissions'));
-
-      await expect(userService.updateUserRole('users/123', { role: 'admin' }))
-        .rejects.toThrow('Insufficient permissions');
-    });
-  });
-
   describe('forceUserLogout', () => {
     it('should call POST /users/admin/users/:userId/force-logout', async () => {
       httpService.post.mockResolvedValue({
@@ -251,31 +177,6 @@ describe('userService', () => {
       expect(httpService.post).toHaveBeenCalledWith('admin/users/users/123/verify-email');
       // verifyUserEmail returns the full response (not just response.data)
       expect(result.data.success).toBe(true);
-    });
-  });
-
-  describe('resendVerificationEmailAdmin', () => {
-    it('should call POST /users/admin/users/:userId/resend-verification', async () => {
-      httpService.post.mockResolvedValue({
-        data: { success: true, message: 'Verification email sent' }
-      });
-
-      const result = await userService.resendVerificationEmailAdmin('users/123');
-
-      expect(httpService.post).toHaveBeenCalledWith('users/admin/users/users/123/resend-verification');
-      expect(result.success).toBe(true);
-    });
-
-    it('should log the resend operation', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      httpService.post.mockResolvedValue({ data: { success: true } });
-
-      await userService.resendVerificationEmailAdmin('users/123');
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Attempting to resend verification email for user: users/123')
-      );
-      consoleSpy.mockRestore();
     });
   });
 
@@ -670,18 +571,4 @@ describe('userService', () => {
     });
   });
 
-  describe('resetUserData', () => {
-    it('should call POST /users/reset-data and refresh user data', async () => {
-      httpService.post.mockResolvedValue({
-        data: { success: true }
-      });
-      httpService.get.mockResolvedValue({
-        data: { user: { _key: 'users/123', resetData: true } }
-      });
-
-      await userService.resetUserData();
-
-      expect(httpService.post).toHaveBeenCalledWith('users/reset-data');
-    });
-  });
 });

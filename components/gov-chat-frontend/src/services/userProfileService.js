@@ -144,6 +144,27 @@ class UserProfileService {
     return formData;
   }
 
+  /**
+   * Search for users based on criteria
+   * @param {Object} criteria - Search criteria
+   * @param {Number} page - Page number (starting from 1)
+   * @param {Number} limit - Results per page
+   * @returns {Promise} Search results with pagination
+   */
+  async searchUsers(criteria, page = 1, limit = 20) {
+    try {
+      const offset = (page - 1) * limit;
+
+      const response = await httpService.get('users/search', {
+        params: { ...criteria, limit, offset }
+      })
+
+      return response.data
+    } catch (error) {
+      console.error('Error searching users:', error)
+      throw error
+    }
+  }
 }
 
 

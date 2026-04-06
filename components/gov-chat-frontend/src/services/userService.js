@@ -184,32 +184,38 @@ class UserService {
   }
 
   /**
-   * Deactivate user account
-   * @param {string} reason - Reason for deactivation
-   * @returns {Promise} Deactivation result
+   * Upload a user avatar
+   * @param {File} avatarFile - Avatar image file
+   * @returns {Promise} Upload result with avatar URL
    */
-  async deactivateAccount(reason) {
+  async uploadAvatar(avatarFile) {
     try {
-      const response = await httpService.post('users/deactivate', {
-        reason
+      const formData = new FormData()
+      formData.append('avatar', avatarFile)
+
+      const response = await httpService.post('users/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       })
+
       return response.data
     } catch (error) {
-      console.error('Error deactivating account:', error)
+      console.error('Error uploading avatar:', error)
       throw error
     }
   }
 
   /**
-   * Reactivate a previously deactivated account
-   * @returns {Promise} Reactivation result
+   * Delete user's avatar
+   * @returns {Promise} Operation result
    */
-  async reactivateAccount() {
+  async deleteAvatar() {
     try {
-      const response = await httpService.post('users/reactivate')
+      const response = await httpService.delete('users/avatar')
       return response.data
     } catch (error) {
-      console.error('Error reactivating account:', error)
+      console.error('Error deleting avatar:', error)
       throw error
     }
   }
@@ -316,33 +322,6 @@ class UserService {
   }
 
   /**
-   * Update user role (admin only)
-   * @param {String} userId - User ID
-   * @param {Object} updateData - Data to update (role, disabled status)
-   * @returns {Promise} Update result
-   */
-  async updateUserRole(userId, updateData) {
-    try {
-      console.log(`Updating role for user ${userId} to ${updateData.role}`)
-
-      const response = await httpService.put(`${this.userEndpoint}/${userId}/role`, updateData)
-
-      console.log(`Role update response for ${userId}:`, response)
-
-      return response
-    } catch (error) {
-      console.error(`Error updating user role for ${userId}:`, error)
-
-      if (error.response) {
-        console.error('Error response status:', error.response.status)
-        console.error('Error response data:', error.response.data)
-      }
-
-      throw error
-    }
-  }
-
-  /**
    * Verify user email (admin only)
    * @param {String} userId - User ID
    * @returns {Promise} Operation result
@@ -407,22 +386,6 @@ class UserService {
         error.message,
         error.response?.data
       )
-      throw error
-    }
-  }
-
-  /**
-   * Resend email verification for a user (admin only)
-   * @param {String} userId - User ID
-   * @returns {Promise} Operation result
-   */
-  async resendVerificationEmailAdmin(userId) {
-    try {
-      console.log(`Attempting to resend verification email for user: ${userId}`)
-      const response = await httpService.post(`users/admin/users/${userId}/resend-verification`)
-      return response.data
-    } catch (error) {
-      console.error('Verification email resend error:', error.response || error)
       throw error
     }
   }

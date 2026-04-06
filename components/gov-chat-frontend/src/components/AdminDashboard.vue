@@ -1425,6 +1425,16 @@
                         >
                           {{ translate('admin.edit', 'Edit') }}
                         </button>
+                        <a
+                          :href="keycloakAdminUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="btn btn-outline"
+                          style="padding: 0.25rem 0.5rem; text-decoration: none; display: inline-block"
+                          :title="translate('admin.manageInKeycloak', 'Manage in Keycloak')"
+                        >
+                          Keycloak
+                        </a>
                       </td>
                     </tr>
                     <tr v-if="displayedUsers.length === 0">
@@ -1540,6 +1550,7 @@ import FileDetailsDialog from './FileDetailsDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue' // IMPORT ConfirmDialog
 import { eventBus } from '../eventBus.js'
 import { availableLanguages } from '../config/languageConfig.js'
+import oidcConfig from '../config/oidcConfig.js'
 import documentFileService from '../services/documentFileService.js'
 import labelService from '../services/labelService.js'
 import { formatFileSize } from '../utils/fileUtils.js'
@@ -1786,6 +1797,13 @@ export default {
     }
   },
   computed: {
+    keycloakAdminUrl() {
+      const keycloakUrl = window.location.origin + '/auth/admin';
+      // Extract realm from runtime OIDC config (authority = "https://host/auth/realms/{realm}")
+      const realm = (oidcConfig.authority.match(/\/realms\/([^/]+)$/)||[])[1] || 'genie';
+      return `${keycloakUrl}/${realm}/console/`;
+    },
+
     // Test if there are unsaved changes
     isFormDirty() {
       if (!this.originalHierarchyFormState) {

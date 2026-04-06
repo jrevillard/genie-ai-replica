@@ -17,8 +17,12 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/__tests__/**/*.test.js"],
-    "testPathIgnorePatterns": ["/node_modules/"]
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ]
   },
   "dependencies": {
     "@google-cloud/translate": "^9.1.0",

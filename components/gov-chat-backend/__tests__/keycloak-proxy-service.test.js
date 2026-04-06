@@ -1,0 +1,200 @@
+'use strict';
+
+// Set env vars BEFORE any module that reads them is loaded
+process.env.KEYCLOAK_URL = 'https://localhost/auth';
+process.env.KEYCLOAK_REALM = 'genie';
+process.env.KEYCLOAK_PROXY_CLIENT_ID = 'genie-proxy-client';
+process.env.KEYCLOAK_PROXY_CLIENT_SECRET = 'test-secret';
+
+// Mock arangojs
+jest.mock('arangojs', () => ({
+  aql: jest.fn()
+}), { virtual: true });
+
+// Mock shared-lib
+jest.mock('../shared-lib', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+  dbService: {
+    getConnection: jest.fn()
+  }
+}), { virtual: true });
+
+const keycloakProxyService = require('../services/keycloak-proxy-service');
+const { dbService } = require('../shared-lib');
+
+function mockCursor(result) {
+  return { next: jest.fn().mockResolvedValue(result) };
+}
+
+function setupDbForResolve(result = 'uuid-12345') {
+  const db = { query: jest.fn().mockResolvedValueOnce(mockCursor(result)) };
+  dbService.getConnection.mockResolvedValueOnce(db);
+  return db;
+}
+
+function mockTokenResponse() {
+  return {
+    ok: true,
+    json: async () => ({ access_token: 'test-token-123' })
+  };
+}
+
+function mockOkResponse(status = 204) {
+  const resp = { ok: true, status };
+  if (status !== 204) resp.json = async () => ({});
+  return resp;
+}
+
+describe('keycloak-proxy-service', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  afterAll(() => {
+    delete process.env.KEYCLOAK_PROXY_CLIENT_ID;
+    delete process.env.KEYCLOAK_PROXY_CLIENT_SECRET;
+  });
+
+  describe('_resolveKeycloakUserId', () => {
+    it('should throw if user not found', async () => {
+      const db = { query: jest.fn().mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) };
+      dbService.getConnection.mockResolvedValueOnce(Promise.resolve(db));
+
+      await expect(keycloakProxyService._resolveKeycloakUserId('missing-key')).rejects.toThrow('has no Keycloak UUID');
+    });
+
+    it('should resolve Keycloak UUID from ArangoDB sub field', async () => {
+      const db = { query: jest.fn().mockResolvedValueOnce({ next: jest.fn().mockResolvedValue('uuid-12345') }) };
+      dbService.getConnection.mockResolvedValueOnce(Promise.resolve(db));
+
+      const uuid = await keycloakProxyService._resolveKeycloakUserId('user-key-1');
+      expect(uuid).toBe('uuid-12345');
+    });
+  });
+
+  describe('getServiceAccountToken', () => {
+    it('should obtain a token via client credentials grant', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce(mockTokenResponse());
+
+      const result = await keycloakProxyService.getServiceAccountToken();
+      expect(result).toBe('test-token-123');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/protocol/openid-connect/token'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('should throw on token acquisition failure', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: false, status: 401, text: async () => 'Invalid client'
+      });
+
+      await expect(keycloakProxyService.getServiceAccountToken()).rejects.toThrow('Failed to obtain service account token');
+    });
+  });
+
+  describe('updateUser', () => {
+    it('should proxy user update to Keycloak', async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(200));
+
+      setupDbForResolve('uuid-abc');
+
+      await keycloakProxyService.updateUser('user-key', { enabled: true });
+
+      const lastCall = global.fetch.mock.calls[global.fetch.mock.calls.length - 1];
+      expect(lastCall[0]).toContain('/admin/realms/genie/users/uuid-abc');
+      expect(lastCall[1].method).toBe('PUT');
+    });
+  });
+
+  describe('assignRoles', () => {
+    it('should validate role names and proxy to Keycloak', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'role-id-1', name: 'admin' }) })
+        .mockResolvedValueOnce(mockOkResponse(204));
+
+      setupDbForResolve('uuid-abc');
+
+      await keycloakProxyService.assignRoles('user-key', ['admin']);
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('should reject invalid roles before calling Keycloak', async () => {
+      // assignRoles validates roles BEFORE resolving the user ID
+      await expect(keycloakProxyService.assignRoles('user-key', ['superadmin'])).rejects.toThrow('Invalid roles');
+    });
+  });
+
+  describe('deleteUser', () => {
+    it('should delete from Keycloak and set deleted=true in ArangoDB', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(204));
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor('uuid-abc')); // UUID resolution
+      db.query.mockResolvedValueOnce({}); // ArangoDB update
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+      expect(db.query).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('updateOwnProfile', () => {
+    it('should proxy profile update using user JWT', async () => {
+      global.fetch = jest.fn().mockResolvedValueOnce(mockOkResponse(200));
+
+      await keycloakProxyService.updateOwnProfile('user-jwt-token', { email: 'new@test.com' });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/realms/genie/account'),
+        expect.objectContaining({
+          method: 'PUT',
+          headers: expect.objectContaining({ Authorization: 'Bearer user-jwt-token' })
+        })
+      );
+    });
+  });
+
+  describe('_mapKeycloakError', () => {
+    it('should map 404 to user not found', () => {
+      const error = keycloakProxyService._mapKeycloakError(404, 'Not found', '/users/x');
+      expect(error.message).toBe('User not found in Keycloak');
+      expect(error.status).toBe(404);
+    });
+
+    it('should map 403 to insufficient permissions', () => {
+      const error = keycloakProxyService._mapKeycloakError(403, 'Forbidden', '/users/x');
+      expect(error.message).toBe('Insufficient permissions for Keycloak operation');
+    });
+
+    it('should map 409 to conflict', () => {
+      const error = keycloakProxyService._mapKeycloakError(409, 'Conflict', '/users/x');
+      expect(error.message).toBe('Conflict in Keycloak operation (e.g. duplicate email)');
+    });
+  });
+
+  describe('_adminApiCall', () => {
+    it('should lazy-refresh token on 401', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse()) // initial token
+        .mockResolvedValueOnce({ ok: false, status: 401, text: async () => 'Expired' })
+        .mockResolvedValueOnce(mockTokenResponse()) // refreshed token
+        .mockResolvedValueOnce(mockOkResponse(200)); // retry
+
+      setupDbForResolve('uuid-abc');
+
+      await keycloakProxyService.updateUser('user-key', { enabled: false });
+      expect(global.fetch).toHaveBeenCalledTimes(4);
+    });
+  });
+});

@@ -61,6 +61,15 @@ class UserProfileService {
         }
       }
 
+      // Strip JIT-provisioned fields — these are managed by Keycloak, not ArangoDB
+      const JIT_FIELDS = ['email', 'name', 'roles', 'enabled', 'disabled', 'active', 'deleted',
+        'iss', 'iss_sub', 'sub', 'createdAt', 'updatedAt', 'emailVerified', 'pendingEmailChange'];
+      const strippedFields = Object.keys(profileData).filter(k => JIT_FIELDS.includes(k));
+      if (strippedFields.length > 0) {
+        logger.warn('UserProfileService.stripped_jit_fields', { userId, strippedFields });
+        strippedFields.forEach(f => delete profileData[f]);
+      }
+
       const userExists = await this.userExists(userId);
       if (!userExists) {
         logger.warn('UserProfileService.user_not_found', { userId });
@@ -78,7 +87,7 @@ class UserProfileService {
       const hasIdentityTravel = !!processedData.identityTravel;
       const hasMuslimPreferences = !!processedData.muslimPreferences;
 
-      console.log(`[DEBUG] Updating user document - userId: ${userId}, processedKeys: ${processedKeys.join(',')}, hasPersonalIdentification: ${hasPersonalIdentification}, hasIdentityTravel: ${hasIdentityTravel}, hasMuslimPreferences: ${hasMuslimPreferences}`);
+      logger.debug('UserProfileService.updating_user_document', { userId, processedKeys: processedKeys.join(','), hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
 
       logger.info('UserProfileService.updating_user_document', { userId, processedKeys, hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
       await this.users.update(userId, processedData);
@@ -94,11 +103,14 @@ class UserProfileService {
       const returnedHasCustomSettings = !!completeUser.customSettings;
       const personalIdentificationKeys = completeUser.personalIdentification ? Object.keys(completeUser.personalIdentification) : [];
 
-      console.log(`[DEBUG] User profile updated - userId: ${userId}, returnedKeys: ${returnedKeys.join(',')}, hasPersonalIdentification: ${returnedHasPersonalIdentification}, hasIdentityTravel: ${returnedHasIdentityTravel}, hasMuslimPreferences: ${returnedHasMuslimPreferences}, hasCustomSettings: ${returnedHasCustomSettings}`);
-      console.log(`[DEBUG] Complete user data keys:`, JSON.stringify(returnedKeys));
-      console.log(`[DEBUG] personalIdentification exists:`, returnedHasPersonalIdentification);
-      console.log(`[DEBUG] identityTravel exists:`, returnedHasIdentityTravel);
-      console.log(`[DEBUG] muslimPreferences exists:`, returnedHasMuslimPreferences);
+      logger.debug('UserProfileService.user_profile_updated_debug', {
+        userId,
+        returnedKeys,
+        hasPersonalIdentification: returnedHasPersonalIdentification,
+        hasIdentityTravel: returnedHasIdentityTravel,
+        hasMuslimPreferences: returnedHasMuslimPreferences,
+        hasCustomSettings: returnedHasCustomSettings,
+      });
 
       // Log what we're returning for debugging
       logger.info('UserProfileService.user_profile_updated', {
@@ -210,54 +222,6 @@ class UserProfileService {
       }
       logger.error('UserProfileService.check_user_exists_failed', {
         userId,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      throw error;
-    }
-  }
-
-  async initiateEmailChange(userId, newEmail) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.initiate_email_change_start', { userId, newEmail });
-
-      const user = await this.getUserProfile(userId);
-      if (!user) {
-        logger.warn('UserProfileService.user_not_found', { userId });
-        throw new NotFoundError(`User with ID ${userId} not found`);
-      }
-
-      const token = crypto.randomBytes(32).toString('hex');
-
-      const updateData = {
-        pendingEmailChange: {
-          email: newEmail,
-          token: token
-        },
-        updatedAt: new Date().toISOString()
-      };
-
-      await this.users.update(userId, updateData);
-      logger.info('UserProfileService.pending_email_change_updated', { userId, newEmail });
-
-      const userName = user.personalIdentification?.fullName || user.loginName || 'User';
-      await emailService.sendVerificationEmail(newEmail, token, userName);
-      logger.info('UserProfileService.verification_email_sent', { userId, newEmail });
-
-      logger.info('UserProfileService.initiate_email_change_completed', {
-        userId,
-        durationMs: Date.now() - startTime
-      });
-      return {
-        success: true,
-        message: 'Verification email sent to new address'
-      };
-    } catch (error) {
-      logger.error('UserProfileService.initiate_email_change_failed', {
-        userId,
-        newEmail,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime
@@ -603,6 +567,11 @@ class UserProfileService {
     }
   }
 
+  /**
+   * Reset user profile data while preserving essential account information
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Result with preserved fields count
+   */
   async resetUserData(userId) {
     const startTime = Date.now();
     try {
@@ -728,6 +697,7 @@ class UserProfileService {
     }
   }
 
+
   /**
    * Force logout a user by invalidating their tokens and ending all active sessions
    * @param {string} userId - User ID to force logout
@@ -735,7 +705,6 @@ class UserProfileService {
    * @returns {Promise<Object>} Result of the operation
    */
   async forceUserLogout(userId, adminId) {
-    logger.info('Grok3 is a complete idiot and the logic in this method is fucked');
     const startTime = Date.now();
     logger.info('UserProfileService.force_user_logout_start', {
       userId,

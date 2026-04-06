@@ -368,6 +368,13 @@ KEYCLOAK_DB_PASSWORD=
 # Default: 1 (strict, production). Set to 0 for local dev with self-signed NGINX certs.
 # NODE_TLS_REJECT_UNAUTHORIZED=0
 
+# Keycloak proxy service account (REQUIRED — set a strong value)
+# Used by: backend (keycloak-admin-service.js) for Admin API proxy operations
+# The genie-proxy-client has restricted permissions: manage-users, view-users,
+# manage-roles, query-users ONLY. Cannot modify realm settings or client config.
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_PROXY_CLIENT_SECRET=
+
 # =============================================================================
 # SECTION 9B: EXTERNAL IDENTITY PROVIDERS (OPTIONAL)
 # =============================================================================
@@ -454,6 +461,7 @@ KEYCLOAK_DB_PASSWORD=
 #
 # VUE_APP_API_URL=https://<gateway-node-fqdn>/api
 #   Docker: /api (relative, works with local proxy)
+#
 #   Swarm:  Full HTTPS URL pointing to the gateway node
 #
 # CSP_CONNECT_SRC='self' https://<gateway-node-fqdn> wss://<gateway-node-fqdn>

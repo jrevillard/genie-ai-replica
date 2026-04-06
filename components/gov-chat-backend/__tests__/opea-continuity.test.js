@@ -23,11 +23,6 @@ jest.mock('../shared-lib', () => ({
   }
 }), { virtual: true });
 
-// Mock email-service (required by user-routes.js at module level)
-jest.mock('../services/email-service', () => ({
-  sendVerificationEmail: jest.fn().mockResolvedValue()
-}));
-
 const supertest = require('supertest');
 
 // Mock keycloak-auth-service

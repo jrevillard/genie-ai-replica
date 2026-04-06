@@ -210,13 +210,6 @@
               </h3>
               <div class="actions-grid">
                 <button
-                  class="action-button verify-email-button"
-                  @click="verifyEmail"
-                  :disabled="isSaving"
-                >
-                  {{ translate("admin.userEdit.verifyEmail", "Verify Email") }}
-                </button>
-                <button
                   class="action-button force-logout-button"
                   @click="forceLogout"
                   :disabled="!userData.accessToken || isSaving"
@@ -545,57 +538,6 @@ export default {
           this.translate(
             "admin.userEdit.errorSaving",
             "Error saving user settings"
-          ),
-          false
-        );
-      } finally {
-        this.isSaving = false;
-      }
-    },
-
-    // Manually verify user's email
-    // Manually verify user's email
-    async verifyEmail() {
-      try {
-        this.isSaving = true;
-        this.operationMessage = "";
-
-        // Call the new admin-specific method to resend verification email
-        const response = await userService.resendVerificationEmailAdmin(
-          this.userId
-        );
-
-        if (response && response.success) {
-          // Update user data to reflect that email verification is pending
-          this.userData.emailVerified = false;
-          this.showMessage(
-            this.translate(
-              "admin.userEdit.verifyEmailSuccess",
-              "Verification email sent successfully"
-            ),
-            true
-          );
-
-          // Emit event to parent component
-          this.$emit("user-updated", {
-            userId: this.userId,
-            changes: { emailVerified: false },
-          });
-        } else {
-          this.showMessage(
-            this.translate(
-              "admin.userEdit.emailVerificationFailed",
-              "Failed to send verification email"
-            ),
-            false
-          );
-        }
-      } catch (error) {
-        console.error("Error resending verification email:", error);
-        this.showMessage(
-          this.translate(
-            "admin.userEdit.errorVerifyingEmail",
-            "Error sending verification email"
           ),
           false
         );

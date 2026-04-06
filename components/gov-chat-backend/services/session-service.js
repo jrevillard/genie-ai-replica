@@ -5,11 +5,14 @@ const { logger, dbService } = require('../shared-lib');
 
 class SessionService {
   constructor() {
-    this.sessionExpirationTime = process.env.SESSION_EXPIRATION_TIME || 30 * 60 * 1000; // 30 minutes in milliseconds
+    this.sessionExpirationTime = parseInt(process.env.SESSION_EXPIRATION_TIME, 10) || 30 * 60 * 1000; // 30 minutes in milliseconds
     this.db = null;
     this.sessions = null;
     this.userSessions = null;
+    this.sessionQueries = null;
     this.initialized = false;
+    this._lastCleanupTime = 0;
+    this._cleanupIntervalMs = 5 * 60 * 1000; // Throttle: cleanup at most every 5 minutes
     logger.info('SessionService constructor called');
   }
 
@@ -22,6 +25,16 @@ class SessionService {
       this.db = await dbService.getConnection('default');
       this.sessions = this.db.collection('sessions');
       this.userSessions = this.db.collection('userSessions');
+      this.sessionQueries = this.db.collection('sessionQueries');
+
+      // Ensure index for expired session cleanup queries
+      await this.sessions.ensureIndex({
+        type: 'persistent',
+        fields: ['active', 'lastActiveTime'],
+        name: 'idx-active-lastActiveTime',
+        sparse: false
+      });
+
       this.initialized = true;
       logger.info(`SessionService initialized successfully with expiration time: ${this.sessionExpirationTime}ms`);
     } catch (error) {
@@ -104,9 +117,12 @@ class SessionService {
       }
 
       const sessionStartTime = new Date(session.startTime).getTime();
+      const lastActive = session.lastActiveTime
+        ? new Date(session.lastActiveTime).getTime()
+        : sessionStartTime;
       const currentTime = new Date().getTime();
-      
-      if (currentTime - sessionStartTime > this.sessionExpirationTime) {
+
+      if (currentTime - lastActive > this.sessionExpirationTime) {
         logger.info(`Session ${session._key} for user ${userId} has expired`);
         await this.endSession(session._key);
         return null;
@@ -123,6 +139,15 @@ class SessionService {
   async getOrCreateSession(userId, deviceInfo = {}, ipAddress = '') {
     try {
       logger.info(`Getting or creating session for user ${userId}`);
+
+      // Lazy cleanup: purge expired sessions on each access (throttled, no cron required)
+      const now = Date.now();
+      if (now - this._lastCleanupTime > this._cleanupIntervalMs) {
+        this._lastCleanupTime = now;
+        this.cleanupExpiredSessions().catch((err) => {
+          logger.warn(`Background session cleanup failed: ${err.message}`);
+        });
+      }
 
       const activeSession = await this.getActiveSession(userId);
       
@@ -266,33 +291,65 @@ class SessionService {
       logger.info('Starting cleanup of expired sessions');
 
       const expirationTime = new Date(Date.now() - this.sessionExpirationTime).toISOString();
-      
+
       const query = aql`
         FOR session IN sessions
           FILTER session.active == true
           FILTER session.startTime < ${expirationTime}
           FILTER session.lastActiveTime == null OR session.lastActiveTime < ${expirationTime}
+          LIMIT 100
           RETURN session
       `;
-      
+
       const cursor = await this.db.query(query);
       const expiredSessions = await cursor.all();
-      
+
       let endedCount = 0;
+      let edgesRemoved = 0;
       for (const session of expiredSessions) {
+        // Remove orphaned edges before ending session
+        edgesRemoved += await this._removeSessionEdges(session._id);
         await this.endSession(session._key);
         endedCount++;
       }
-      
-      logger.info(`Expired sessions cleanup completed successfully: ${expiredSessions.length} found, ${endedCount} ended`);
+
+      logger.info(`Expired sessions cleanup completed: ${expiredSessions.length} found, ${endedCount} ended, ${edgesRemoved} edges removed`);
       return {
         expiredSessionsFound: expiredSessions.length,
-        sessionsEnded: endedCount
+        sessionsEnded: endedCount,
+        edgesRemoved
       };
     } catch (error) {
       logger.error(`Error cleaning up expired sessions: ${error.message}`, { stack: error.stack });
       throw error;
     }
+  }
+
+  async _removeSessionEdges(sessionId) {
+    let removed = 0;
+    try {
+      const userSessionEdges = await this.db.query(aql`
+        FOR edge IN userSessions
+          FILTER edge._to == ${sessionId}
+          REMOVE edge IN userSessions
+          RETURN edge._id
+      `);
+      removed += (await userSessionEdges.all()).length;
+    } catch (error) {
+      logger.warn(`Failed to clean userSessions edges for ${sessionId}: ${error.message}`);
+    }
+    try {
+      const queryEdges = await this.db.query(aql`
+        FOR edge IN sessionQueries
+          FILTER edge._from == ${sessionId}
+          REMOVE edge IN sessionQueries
+          RETURN edge._id
+      `);
+      removed += (await queryEdges.all()).length;
+    } catch (error) {
+      logger.warn(`Failed to clean sessionQueries edges for ${sessionId}: ${error.message}`);
+    }
+    return removed;
   }
 
   async getSessionStats(startDate, endDate) {

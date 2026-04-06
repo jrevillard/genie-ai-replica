@@ -44,7 +44,7 @@ jest.mock('../services/user-provisioning-service', () => ({
 
 const { keycloakAuthMiddleware, buildUserHeaders, isPublicRoute } = require('../middleware/keycloak-auth-middleware');
 const serviceTokenService = require('../services/service-token-service');
-const { mockJwtPayload } = require('./mocks/mockJwtPayload');
+const { mockJwtPayload } = require('../test-fixtures/mockJwtPayload');
 
 describe('Story 2-10: OPEA Continuity', () => {
   let req, res, next;

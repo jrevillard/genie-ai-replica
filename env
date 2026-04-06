@@ -220,6 +220,19 @@ HUGGING_FACE_HUB_TOKEN=
 # They serve the same purpose but at different stages (build-time vs runtime).
 # CSP_CONNECT_SRC=
 
+# Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
+# Controls how long an inactive analytics session is kept before automatic cleanup.
+# Used by: backend (session-service.js)
+# Default: 1800000 (30 minutes in milliseconds)
+# IMPORTANT: Value is in MILLISECONDS. Common values:
+#   15 minutes = 900000
+#   30 minutes = 1800000 (default)
+#   1 hour     = 3600000
+# Alignment with Keycloak: set this value to match or slightly exceed Keycloak's
+# SSO Session Max or Access Token Lifespan to ensure sessions are purged after
+# the user's authentication expires.
+# SESSION_EXPIRATION_TIME=
+
 # =============================================================================
 # SECTION 7: API GATEWAY CONFIGURATION
 # =============================================================================

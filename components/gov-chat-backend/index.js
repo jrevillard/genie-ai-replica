@@ -860,27 +860,27 @@ async function initializeServices() {
     // Set dependencies
     logger.info('Setting service dependencies');
     try {
-      if (services.queryService && services.analyticsService) {
+      if (services.queryService && services.analyticsService && typeof services.queryService.setAnalyticsService === 'function') {
         services.queryService.setAnalyticsService(services.analyticsService);
         logger.debug('QueryService.setAnalyticsService completed');
       }
-      if (services.queryService && services.chatHistoryService) {
+      if (services.queryService && services.chatHistoryService && typeof services.queryService.setChatHistoryService === 'function') {
         services.queryService.setChatHistoryService(services.chatHistoryService);
         logger.debug('QueryService.setChatHistoryService completed');
       }
-      if (services.chatHistoryService && services.analyticsService) {
+      if (services.chatHistoryService && services.analyticsService && typeof services.chatHistoryService.setAnalyticsService === 'function') {
         services.chatHistoryService.setAnalyticsService(services.analyticsService);
         logger.debug('ChatHistoryService.setAnalyticsService completed');
       }
-      if (services.adminDashboardService && services.logsService) {
+      if (services.adminDashboardService && services.logsService && typeof services.adminDashboardService.setLogsService === 'function') {
         services.adminDashboardService.setLogsService(services.logsService);
         logger.debug('AdminDashboardService.setLogsService completed');
       }
-      if (services.adminDashboardService && services.securityScanService) {
+      if (services.adminDashboardService && services.securityScanService && typeof services.adminDashboardService.setSecurityScanService === 'function') {
         services.adminDashboardService.setSecurityScanService(services.securityScanService);
         logger.debug('AdminDashboardService.setSecurityScanService completed');
       }
-      if (services.weatherService && services.analyticsService) {
+      if (services.weatherService && services.analyticsService && typeof services.weatherService.setAnalyticsService === 'function') {
         services.weatherService.setAnalyticsService(services.analyticsService);
         logger.debug('WeatherService.setAnalyticsService completed');
       }
@@ -1181,7 +1181,9 @@ async function startApp() {
       logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
     });
     // Set server timeout to 300 seconds
-    server.setTimeout(300000);
+    if (typeof server.setTimeout === 'function') {
+      server.setTimeout(300000);
+    }
     logger.info(`Server timeout set to 300 seconds`);
   } catch (error) {
     logger.error('Failed to start server:', {

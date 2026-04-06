@@ -1,6 +1,6 @@
 # Story 3.7: Session Data Automatic Purging
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -18,37 +18,33 @@ so that no manual cleanup is required and stale sessions do not consume resource
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Fix `getActiveSession()` expiration bug and add database index** (AC: #1)
-  - [ ] Fix pre-existing bug: `getActiveSession()` (line 109) checks `currentTime - sessionStartTime` but ignores `lastActiveTime` — meanwhile `keepSessionAlive()` updates `lastActiveTime` and `cleanupExpiredSessions()` correctly uses it. Align `getActiveSession()` to use `lastActiveTime` (or max of `startTime`, `lastActiveTime`)
-  - [ ] Add persistent ArangoDB index on `[active, startTime]` to the sessions collection — current query in `cleanupExpiredSessions()` does full collection scan on unindexed fields
-  - [ ] Fix schema mismatch: existing index is on `[userId, createdAt]` but session documents use `startTime`, not `createdAt` — the existing index is unused dead weight
-  - [ ] Verify `user-profile-service.js` (consumer of `sessionService.getUserSessions()`) compatibility with any session behavior changes
+- [x] **Task 1: Fix `getActiveSession()` expiration bug and add database index** (AC: #1)
+  - [x] Fix pre-existing bug: `getActiveSession()` (line 109) checks `currentTime - sessionStartTime` but ignores `lastActiveTime` — meanwhile `keepSessionAlive()` updates `lastActiveTime` and `cleanupExpiredSessions()` uses both. Align `getActiveSession()` to use `lastActiveTime` (or `max(startTime, lastActiveTime)`) — same fix as `cleanupExpiredSessions()`
+  - [x] Fix schema mismatch: remove unused `[userId, createdAt]` index, add persistent index `[active, lastActiveTime]` (deferred: create index after query is corrected, `lastActiveTime` is nullable so index must handle nulls)
+  - [x] Verify `user-profile-service.js` (consumer of `sessionService.getUserSessions()`) compatibility with any session behavior changes
 
-- [ ] **Task 2: Wire up existing `cleanupExpiredSessions()` method** (AC: #1, #3)
-  - [ ] `cleanupExpiredSessions()` already exists at line 264 of `session-service.js` — it queries for expired sessions using `lastActiveTime` and ends each via `endSession()`
-  - [ ] This method is currently dead code (never called anywhere in the codebase) — the task is to **wire it up**, not create it from scratch
-  - [ ] Call `cleanupExpiredSessions()` from appropriate entry points: on server startup, or lazily on session access (e.g., at the start of `getOrCreateSession()`)
-  - [ ] Ensure no background jobs or cron schedules — wire into existing request flow only (AC #3)
-  - [ ] Handle `sessionQueries` edge collection: when a session document is deleted (not just marked inactive), orphaned `sessionQueries` edges remain — add edge cleanup in purge flow
-  - [ ] Consider impact on `getSessionStats()` (line 298) which queries all sessions for analytics — document whether purging should delete permanently or mark inactive (deletion breaks analytics)
+- [x] **Task 2: Wire up existing `cleanupExpiredSessions()` method** (AC: #1, #3)
+  - [x] `cleanupExpiredSessions()` already exists at line 264 of `session-service.js` — it queries for expired sessions using `lastActiveTime` and ends each via `endSession()`
+  - [x] This method is currently dead code (never called anywhere in the codebase) — the task is to **wire it up**, not create it from scratch
+  - [x] Call `cleanupExpiredSessions()` from appropriate entry points: on server startup, or lazily on session access (e.g., at the start of `getOrCreateSession()`)
+  - [x] Ensure no background jobs or cron schedules — wire into existing request flow only (AC #3)
+  - [x] Handle `sessionQueries` AND `userSessions` edge collections: when a session document is deleted (not just marked inactive), orphaned edges remain — add edge cleanup in purge flow
+  - [x] Consider impact on `getSessionStats()` (line 298) which queries all sessions for analytics — document whether purging should delete permanently or mark inactive (deletion breaks analytics)
+  - [x] Review `session-routes.js` for any session query endpoints affected by purge changes — ensure route handlers don't break when sessions are purged
 
-- [ ] **Task 3: Document session lifetime configuration** (AC: #2)
-  - [ ] Add prominent documentation that `SESSION_EXPIRATION_TIME` is in **milliseconds** (default 1800000 = 30 min, NOT 30)
-  - [ ] Document recommended alignment with Keycloak realm settings: set `SESSION_EXPIRATION_TIME` to match Keycloak's SSO session max or access token lifespan + buffer
-  - [ ] Add env var documentation in `.env` template and `services/README.md`
+- [x] **Task 3: Document session lifetime configuration** (AC: #2)
+  - [x] Add prominent documentation that `SESSION_EXPIRATION_TIME` is in **milliseconds** (default 1800000 = 30 min, NOT 30)
+  - [x] Document recommended alignment with Keycloak realm settings: set `SESSION_EXPIRATION_TIME` to match Keycloak's SSO session max or access token lifespan + buffer
+  - [x] Add env var documentation in `.env` template and `services/README.md`
 
-- [ ] **Task 4: Backend tests for session purging** (AC: #1, #3)
-  - [ ] Add test: `cleanupExpiredSessions()` marks expired sessions as inactive
-  - [ ] Add test: `getActiveSession()` returns null after session exceeds lifetime (with `lastActiveTime`)
-  - [ ] Add test: active sessions are NOT purged
-  - [ ] Add test: `cleanupExpiredSessions()` cleans up `sessionQueries` edges
-  - [ ] Add test: `SESSION_EXPIRATION_TIME` respects millisecond configuration
-  - [ ] Add test: purge does not affect `getSessionStats()` for non-expired sessions (or document if it does)
-  - [ ] **Note**: Existing test files that mock session-service (`authController.test.js`, `swagger-config.test.js`, `token-passthrough-integration.test.js`) may need mock updates if purge behavior changes
-
-- [ ] **Task 5: Verify `session-routes.js` compatibility** (AC: #1)
-  - [ ] Review `components/gov-chat-backend/routes/session-routes.js` for any session query endpoints affected by purge changes
-  - [ ] Ensure route handlers don't break when sessions are purged
+- [x] **Task 4: Backend tests for session purging** (AC: #1, #3)
+  - [x] Add test: `cleanupExpiredSessions()` marks expired sessions as inactive
+  - [x] Add test: `getActiveSession()` returns null after session exceeds lifetime (with `lastActiveTime`)
+  - [x] Add test: active sessions are NOT purged
+  - [x] Add test: `cleanupExpiredSessions()` cleans up `sessionQueries` AND `userSessions` edges
+  - [x] Add test: `SESSION_EXPIRATION_TIME` respects millisecond configuration
+  - [x] Add test: purge does not affect `getSessionStats()` for non-expired sessions (or document if it does)
+  - [x] **Note**: Existing test files that mock session-service (`authController.test.js`, `swagger-config.test.js`, `token-passthrough-integration.test.js`) may need mock updates if purge behavior changes
 
 ## Dev Notes
 
@@ -68,7 +64,9 @@ so that no manual cleanup is required and stale sessions do not consume resource
 #### Gap 1: `cleanupExpiredSessions()` is dead code — needs to be wired up
 **File**: `components/gov-chat-backend/services/session-service.js`
 
-**Current state**: `cleanupExpiredSessions()` exists and works correctly (uses `lastActiveTime`), but is never called. Expired sessions accumulate in the database until someone explicitly queries them.
+**Current state**: `cleanupExpiredSessions()` exists at line 264 of `session-service.js`. It queries for expired sessions and ends each via `endSession()`. Currently dead code (never called anywhere).
+
+**⚠️ BUG**: The query (line 273) filters on BOTH `session.startTime` AND `lastActiveTime` — using `startTime` as a standalone condition. This means a session created 31 minutes ago with `lastActiveTime` of 1 second ago would still be purged. This is the same conceptual bug as `getActiveSession()` (see Gap 2). The fix should apply to both methods: use `lastActiveTime` (or `max(startTime, lastActiveTime)`) as the primary expiration check.
 
 **Problem**: Violates FR35 (no residual data) and NFR14. Database grows with stale session records. AC #3 requires no cron jobs.
 
@@ -86,21 +84,21 @@ so that no manual cleanup is required and stale sessions do not consume resource
 
 **Current state**: Only index is `[userId, createdAt]` (which is mismatched — see Gap 4). The `cleanupExpiredSessions()` method filters on `session.active == true` and `session.startTime < expirationTime` — both unindexed. Full collection scan on every purge.
 
-**Solution**: Add persistent index `[active, startTime]` to sessions collection. This can be done in application startup code or via ArangoDB migration script.
+**Solution**: Add persistent index `[active, lastActiveTime]` to sessions collection. Note: `lastActiveTime` is nullable (sessions that never received a keepalive), so the index must handle nulls or the query must include a null check. This index should be created after Gap 2 fix is applied (see below). Defer index spec to after the query is corrected.
 
 #### Gap 4: Schema mismatch — existing index uses `createdAt` but documents use `startTime`
 **File**: ArangoDB schema and `session-service.js`
 
 **Current state**: Schema index is on `[userId, createdAt]` but `createSession()` stores `startTime` (not `createdAt`). The existing index is unused dead weight.
 
-**Solution**: Remove unused `[userId, createdAt]` index. Add `[active, startTime]` index (see Gap 3).
+**Solution**: Remove unused `[userId, createdAt]` index. New index handled by Gap 3 (`[active, lastActiveTime]`).
 
-#### Gap 5: `sessionQueries` edge collection not cleaned up on purge
-**File**: `components/gov-chat-backend/services/session-service.js`, edge collection
+#### Gap 5: Edge collections not cleaned up on purge
+**File**: `components/gov-chat-backend/services/session-service.js`, edge collections
 
-**Current state**: Graph definition links sessions to queries via `sessionQueries` edges. When sessions are purged/deleted, orphaned edges remain in the database.
+**Current state**: Graph definition links sessions to queries via `sessionQueries` edges (see `arango-schema.json` line 2388-2394). Also, `userSessions` edges (line 24) link users to sessions. When sessions are purged/deleted, orphaned edges remain in both collections.
 
-**Solution**: In purge flow, delete associated `sessionQueries` edges before deleting session document. Or: use ArangoDB edge collection with `synchronize` option.
+**Solution**: In purge flow, delete associated `sessionQueries` AND `userSessions` edges before deleting session document. Or: use ArangoDB edge collection with `synchronize` option.
 
 #### Gap 6: `getSessionStats()` conflict with purging
 **File**: `components/gov-chat-backend/services/session-service.js`, line 298
@@ -128,10 +126,9 @@ so that no manual cleanup is required and stale sessions do not consume resource
 
 | File | Change |
 |------|--------|
-| `components/gov-chat-backend/services/session-service.js` | Wire up `cleanupExpiredSessions()`, fix `getActiveSession()` bug, add index creation, handle edge cleanup |
-| `components/gov-chat-backend/routes/session-routes.js` | Review for compatibility with purge changes |
+| `components/gov-chat-backend/services/session-service.js` | Wire up `cleanupExpiredSessions()`, fix `getActiveSession()` bug, add index creation, handle edge cleanup, review `session-routes.js` compatibility |
 | `components/gov-chat-backend/services/user-profile-service.js` | Verify compatibility (consumer of session service) |
-| `components/gov-chat-backend/__tests__/session-service.test.js` | Add tests for purging, expiration, index |
+| `components/gov-chat-backend/__tests__/session-service.test.js` | **CREATE**: Tests for purging, expiration, index |
 | `components/gov-chat-backend/scripts/` | Add index creation script or startup migration (if needed) |
 | `_bmad-output/implementation-artifacts/3-7-session-data-automatic-purging.md` | Document strategy and decisions |
 
@@ -182,10 +179,44 @@ so that no manual cleanup is required and stale sessions do not consume resource
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+glm-5-turbo
 
 ### Debug Log References
 
+- Dev Notes Gap 1 bug claim about `cleanupExpiredSessions()` was incorrect — the AQL query logic (`AND` between `startTime` and `lastActiveTime` filters with `OR null`) correctly prevents premature purging. Only `getActiveSession()` had the actual bug.
+- `[userId, createdAt]` index referenced in Dev Notes Gap 4 has no code definition in the codebase — may only exist in the database. Not removed in code since there's nothing to remove.
+- `services/README.md` does not exist in the project — documentation added to `env` template only.
+
 ### Completion Notes List
 
+- ✅ Fixed `getActiveSession()` to use `lastActiveTime` (fallback to `startTime` when null) — aligns expiration logic with `cleanupExpiredSessions()`
+- ✅ Added persistent index `[active, lastActiveTime]` on sessions collection via `ensureIndex()` in `init()` (non-sparse, handles nulls)
+- ✅ Wired `cleanupExpiredSessions()` into `getOrCreateSession()` as fire-and-forget lazy cleanup (no cron, no background jobs)
+- ✅ Added `_removeSessionEdges()` helper to clean up orphaned `userSessions` and `sessionQueries` edges during purge
+- ✅ Verified `user-profile-service.js` compatibility unchanged (uses `getUserSessions()`/`endSession()` which are unmodified)
+- ✅ Verified `session-routes.js` unaffected (all route handler methods unchanged)
+- ✅ `getSessionStats()` preserved — purging marks inactive (not deletes), analytics data intact
+- ✅ Documented `SESSION_EXPIRATION_TIME` in `env` template with millisecond emphasis and Keycloak alignment guidance
+- ✅ Created 19 unit tests covering all acceptance criteria (164/164 total tests pass, 0 regressions)
+
 ### File List
+
+| File | Action |
+|------|--------|
+| `components/gov-chat-backend/services/session-service.js` | Modified: fix `getActiveSession()` bug, add index, wire cleanup, add edge removal |
+| `components/gov-chat-backend/__tests__/session-service.test.js` | Created: 19 tests for session purging, expiration, edge cleanup |
+| `components/gov-chat-backend/__tests__/opea-continuity.test.js` | Modified: fix import path `./mocks/mockJwtPayload` → `../test-fixtures/mockJwtPayload` |
+| `components/gov-chat-backend/index.js` | Modified: add `typeof` guards on `setAnalyticsService` and `setTimeout` (pre-existing test fix) |
+| `components/gov-chat-backend/package.json` | Modified: add `supertest` to devDependencies (pre-existing missing dep) |
+| `env` | Modified: add `SESSION_EXPIRATION_TIME` documentation |
+| `_bmad-output/implementation-artifacts/3-7-session-data-automatic-purging.md` | Modified: tasks checked, dev agent record, file list, status |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | Modified: status in-progress → review |
+
+Note: `services/README.md` does not exist in the project — documentation added to `env` template only.
+
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-04-06 | Story 3.7 implementation: fixed getActiveSession() expiration bug, wired cleanupExpiredSessions() into lazy request flow, added [active, lastActiveTime] index, added edge cleanup for sessionQueries and userSessions, documented SESSION_EXPIRATION_TIME env var, created 19 unit tests |
+| 2026-04-06 | Code review fixes: added supertest dep, fixed opea-continuity import path, added typeof guards in index.js, updated file list |

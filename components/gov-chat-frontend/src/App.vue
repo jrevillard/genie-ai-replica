@@ -322,21 +322,12 @@ export default {
       try {
         await this.$store.dispatch('logout')
         await this.$store.dispatch('chatHistory/clearFolders')
-        console.log('handleLogout: Folders cleared from Vuex store')
-        try {
-          localStorage.removeItem('chatHistory')
-          console.log('handleLogout: Cleared chatHistory from localStorage')
-        } catch (e) {
-          console.error('handleLogout: Error clearing chatHistory from localStorage:', e)
-        }
+        localStorage.removeItem('chatHistory')
       } catch (error) {
         console.error('handleLogout: Error during logout:', error)
-        try {
-          localStorage.removeItem('chatHistory')
-          console.log('handleLogout: Cleared chatHistory from localStorage on error')
-        } catch (e) {
-          console.error('handleLogout: Error clearing chatHistory from localStorage:', e)
-        }
+        localStorage.removeItem('chatHistory')
+      } finally {
+        window.location.href = '/login'
       }
     },
 

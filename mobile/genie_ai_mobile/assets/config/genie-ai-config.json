@@ -370,7 +370,7 @@
         "buttons": [
           {
             "id": "plant-basic-grains",
-            "category": "1",
+            "category": "26653158",
             "action": {
               "visibleText": "quickhelp.plantBasicGrainsUserPrompt",
               "hiddenPrompt": "quickhelp.plantBasicGrainsPrompt"
@@ -414,7 +414,7 @@
           },
           {
             "id": "diagnose-pest-disease",
-            "category": "10",
+            "category": "28486582",
             "action": {
               "visibleText": "quickhelp.diagnosePestDiseaseUserPrompt",
               "hiddenPrompt": "quickhelp.diagnosePestDiseasePrompt"
@@ -458,7 +458,7 @@
           },
           {
             "id": "grow-fruits-veggies",
-            "category": "3",
+            "category": "26653264",
             "action": {
               "visibleText": "quickhelp.growFruitsVeggiesUserPrompt",
               "hiddenPrompt": "quickhelp.growFruitsVeggiesPrompt"
@@ -502,7 +502,7 @@
           },
           {
             "id": "manage-poultry-pigs",
-            "category": "5",
+            "category": "26653377",
             "action": {
               "visibleText": "quickhelp.managePoultryPigsUserPrompt",
               "hiddenPrompt": "quickhelp.managePoultryPigsPrompt"
@@ -546,7 +546,7 @@
           },
           {
             "id": "fertilizer-soil-advice",
-            "category": "8",
+            "category": "26653552",
             "action": {
               "visibleText": "quickhelp.fertilizerSoilAdviceUserPrompt",
               "hiddenPrompt": "quickhelp.fertilizerSoilAdvicePrompt"
@@ -590,7 +590,7 @@
           },
           {
             "id": "start-manage-apiary",
-            "category": "4",
+            "category": "26653325",
             "action": {
               "visibleText": "quickhelp.startManageApiaryUserPrompt",
               "hiddenPrompt": "quickhelp.startManageApiaryPrompt"
@@ -634,7 +634,7 @@
           },
           {
             "id": "tilapia-pond-care",
-            "category": "6",
+            "category": "26653435",
             "action": {
               "visibleText": "quickhelp.tilapiaPondCareUserPrompt",
               "hiddenPrompt": "quickhelp.tilapiaPondCarePrompt"
@@ -678,7 +678,7 @@
           },
           {
             "id": "harvest-storage",
-            "category": "11",
+            "category": "28486646",
             "action": {
               "visibleText": "quickhelp.harvestStorageUserPrompt",
               "hiddenPrompt": "quickhelp.harvestStoragePrompt"

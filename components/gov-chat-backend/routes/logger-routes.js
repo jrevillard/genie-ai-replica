@@ -133,7 +133,7 @@ module.exports = () => {
 
       res.json({ success: true, message: 'Logger configuration updated successfully' });
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Failed to update logger configuration', error: error.message });
+      res.status(500).json({ success: false, message: 'Failed to update logger configuration' });
     }
   });
 
@@ -185,7 +185,7 @@ module.exports = () => {
       triggerLogRollover();
       res.json({ success: true, message: 'Log rollover triggered successfully' });
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Failed to trigger log rollover', error: error.message });
+      res.status(500).json({ success: false, message: 'Failed to trigger log rollover' });
     }
   });
 

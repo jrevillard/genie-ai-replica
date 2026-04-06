@@ -130,7 +130,7 @@ const authMiddleware = {
         });
       }
 
-      const isAdmin = parseInt(user._key) <= 10 || user.role === 'Admin';
+      const isAdmin = user.role === 'Admin';
 
       if (!isAdmin) {
         logger.info(`Admin check failed: user ${userId} is not admin`);

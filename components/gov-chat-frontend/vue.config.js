@@ -49,6 +49,13 @@ module.exports = {
     config.module.rule('js').uses.delete('cache-loader');
     config.module.rule('ts').uses.delete('cache-loader');
     config.module.rule('tsx').uses.delete('cache-loader');
+
+    if (process.env.NODE_ENV === 'production') {
+      config.optimization.minimizer('terser').tap(args => {
+        args[0].terserOptions.compress.pure_funcs = ['console.log', 'console.debug', 'console.info'];
+        return args;
+      });
+    }
   },
   configureWebpack: {
     resolve: {

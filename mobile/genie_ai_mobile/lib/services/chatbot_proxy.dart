@@ -14,32 +14,31 @@ class ChatbotProxy {
     String? contextLabels,
     String? language,
   }) async {
-    // DEBUG: Log the incoming language parameter
-    print("[CHATBOT_PROXY] submitQuery called with language: '$language'");
-
     // CRITICAL FIX: Clean userId to remove 'users/' prefix
     // This ensures backend profile lookup succeeds and avoids "User profile not found" warnings
     final cleanUserId = userId.startsWith('users/') ? userId.substring(7) : userId;
-    print("[CHATBOT_PROXY] Cleaned userId: '$cleanUserId' (original: '$userId')");
 
-    // Build context object first (like Vue does)
-    // Backend checks context.language FIRST (line 1238 of genieai_chatqna.py)
+    // Build context object (matching Vue app's queryData.context)
     final Map<String, dynamic> context = {};
 
     // Always include language in context (UPPERCASE like Vue)
     context['language'] = (language ?? 'en').toUpperCase();
 
+    // categoryLabel must be the category NAME (e.g. "Grain Crop Cultivation"),
+    // NOT the _key. Backend resolves the name to _key via nameEN lookup.
+    // categoryId parameter here is actually the category NAME (set by callers).
     if (categoryId != null && categoryId.isNotEmpty) {
-      context['categoryLabel'] = categoryId;  // Vue uses 'categoryLabel', not 'categoryId'
+      context['categoryLabel'] = categoryId;
     }
+    // contextLabels parameter contains service label names as a comma-separated string or list
     if (contextLabels != null && contextLabels.isNotEmpty) {
-      context['serviceLabels'] = contextLabels;  // Vue uses 'serviceLabels', not 'labels'
+      context['serviceLabels'] = contextLabels;
     }
 
     final Map<String, dynamic> payload = {
       'sessionId': sessionId,
       'messages': messages,
-      'userId': cleanUserId,  // Use cleaned userId
+      'userId': cleanUserId,
       'timestamp': DateTime.now().toIso8601String(),
     };
 
@@ -53,15 +52,7 @@ class ChatbotProxy {
       payload['contextOption'] = 'conversation-with-context-labels';
     }
 
-    print("[CHATBOT_PROXY] Context object: $context");
-    print("[CHATBOT_PROXY] Payload keys: ${payload.keys.toList()}");
-    print("[CHATBOT_PROXY] Context in JSON: ${jsonEncode(context)}");
-    print("[CHATBOT_PROXY] Full payload with context: ${jsonEncode(payload)}");
-
     try {
-      print("[CHATBOT_PROXY] Submitting query to /queries");
-      print("[CHATBOT_PROXY] Payload as JSON: ${jsonEncode(payload)}");
-
       final response = await _api.post('queries', payload);
 
       if (response.statusCode == 200 || response.statusCode == 201) {

@@ -12,6 +12,7 @@ import 'package:genie_ai_mobile/components/charts/pest_alert_map_card.dart';
 import 'package:genie_ai_mobile/components/charts/market_price_summary_card.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
+import 'package:genie_ai_mobile/services/service_tree_proxy.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
@@ -41,6 +42,7 @@ class ChatBotComponent extends StatefulWidget {
 class ChatBotComponentState extends State<ChatBotComponent> {
   final ChatHistoryProxy _chatHistoryProxy = ChatHistoryProxy();
   final ChatbotProxy _chatBotProxy = ChatbotProxy();
+  final ServiceTreeProxy _serviceTreeProxy = ServiceTreeProxy();
   final ApiService _api = ApiService();
 
   // Conversation State
@@ -63,6 +65,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   String? _selectedCategoryId;
   String _selectedCategoryName = "";
   List<dynamic> _relatedDocuments = [];
+  List<Map<String, dynamic>> _serviceCategories = [];
 
   // Quick Help Configuration
   List<Map<String, dynamic>> _quickHelpButtons = [];
@@ -120,6 +123,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     _welcomeMessage = tr('chatbot.welcomeMessage');
 
     _loadQuickHelpConfig();
+    _loadServiceCategories();
     _titleController.text = _conversationTitle;
 
     _messages.add({
@@ -211,6 +215,34 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
     }
+  }
+
+  /// Load service categories from API so quick help buttons can resolve
+  /// category _key values (e.g. "26653158") to human-readable names
+  /// (e.g. "Grain Crop Cultivation") that the backend expects as categoryLabel.
+  Future<void> _loadServiceCategories() async {
+    try {
+      final String locale = I18nService().currentLocale.languageCode;
+      final categories = await _serviceTreeProxy.getAllCategories(locale: locale);
+      if (categories.isNotEmpty) {
+        setState(() {
+          _serviceCategories = List<Map<String, dynamic>>.from(categories);
+        });
+      }
+    } catch (e) {
+      debugPrint("[CHATBOT] Failed to load service categories: $e");
+    }
+  }
+
+  /// Resolve a category _key (e.g. "26653158") to its translated name
+  /// by matching against the catKey field from the API response.
+  String _getCategoryNameById(String id) {
+    for (final cat in _serviceCategories) {
+      if (cat['catKey']?.toString() == id) {
+        return cat['name']?.toString() ?? '';
+      }
+    }
+    return '';
   }
 
   void _updateQuickHelpVisibility() {
@@ -404,16 +436,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       final String currentLanguage = I18nService().currentLocale.languageCode;
 
-      // DEBUG: Log the language being sent to the API
-      print("[CHATBOT] Language from I18nService: '$currentLanguage'");
-      print("[CHATBOT] Full locale: ${I18nService().currentLocale.toString()}");
-
       final response = await _chatBotProxy.submitQuery(
         sessionId: sessionId,
         messages: messagesForApi,
         userId: widget.userId,
-        categoryId: _selectedCategoryId,
-        contextLabels: _selectedCategoryName,
+        categoryId: _selectedCategoryName.isNotEmpty ? _selectedCategoryName : null,
+        contextLabels: null,
         language: currentLanguage,
       );
 
@@ -500,6 +528,18 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     setState(() {
       _showQuickHelpOverlay = false;
     });
+
+    // Resolve category _key (from config) to the category name that the backend expects
+    final String? categoryId = button['category']?.toString();
+    if (categoryId != null && categoryId.isNotEmpty) {
+      final String categoryName = _getCategoryNameById(categoryId);
+      if (categoryName.isNotEmpty) {
+        setState(() {
+          _selectedCategoryId = categoryId;
+          _selectedCategoryName = categoryName;
+        });
+      }
+    }
 
     // Send using the 2-prompt system
     // The UI shows 'visibleText', API receives 'hiddenPrompt'

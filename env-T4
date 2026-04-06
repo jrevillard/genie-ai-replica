@@ -9,14 +9,14 @@ https_proxy=
 
 POSTGRES_USER=kong
 POSTGRES_DB=kong
-POSTGRES_PASSWORD=k1ngk0ng
+POSTGRES_PASSWORD=<your_postgres_password>
 
 # ========= KONG SERVICE CONFIG =========
 
 KONG_DATABASE=postgres
 KONG_PG_HOST=kong-database
 KONG_PG_USER=kong
-KONG_PG_PASSWORD=k1ngk0ng
+KONG_PG_PASSWORD=<your_postgres_password>
 KONG_PROXY_ACCESS_LOG=/dev/stdout
 KONG_ADMIN_ACCESS_LOG=/dev/stdout
 KONG_PROXY_ERROR_LOG=/dev/stderr
@@ -39,9 +39,9 @@ CORS_ALLOWED_ORIGINS=http://localhost,https://localhost,http://localhost:8090,ht
 
 UV_THREADPOOL_SIZE=128
 LOG_LEVEL=debug
-JWT_SECRET=UJeFROw+yRJeVOPiUTgdcXzlE2eukTfATZPxBfPkptQLZs+ER+iuSA1BIXiJtw1sS181kiRqdncodVZOWD4sfA==
+JWT_SECRET=<your_jwt_secret>
 JWT_EXPIRES_IN=24h
-OPENWEATHERMAP_API_KEY=b115ccced35ade4c9a1077b6e5a210dd
+OPENWEATHERMAP_API_KEY=<your_openweathermap_api_key>
 NODE_ENV=production
 # Translation Service Configuration
 # Backend selection: cpu (CPU-based NLLB), gpu (vLLM GPU), or auto (try GPU, fallback to CPU)
@@ -52,12 +52,12 @@ TRANSLATION_THREADS=4
 TRANSLATION_BATCHES=5
 TRANSLATION_CACHE=on
 TRANSLATION_CACHE_PATH=/cache/translations
-TRANSLATION_CACHE_PASSWORD=!@#$$5678
+TRANSLATION_CACHE_PASSWORD=<your_redis_password>
 TRANSLATION_CACHE_HOST=redis-cache
 TRANSLATION_CACHE_PORT=6379
 BACKEND_PORT=3000
 API_PREFIX=/api
-SESSION_SECRET=default-session-secret
+SESSION_SECRET=<your_session_secret>
 SESSION_EXPIRATION_TIME=1800000
 CORS_ORIGIN=http://localhost/
 EMAIL_HOST=<your-smtp-host>
@@ -84,7 +84,7 @@ ARANGO_DB_NAME=genie-ai
 ARANGO_DB=genie-ai
 ARANGO_USER=root
 ARANGO_USERNAME=root
-ARANGO_PASSWORD=test
+ARANGO_PASSWORD=<your_arango_password>
 
 # ========= DOCUMENT REPOSITORY SERVICE CONFIG ==========
 DOC_REPO_PORT=3001
@@ -225,8 +225,8 @@ Output format (strict JSON, no extra text):
 # ========= HTTP SERVICE - Authorization service (used by chatqna and data prep services) ==========
 AUTH_SERVICE_PORT=6666
 AUTH_SERVICE_URL="http://backend:3000/"
-AUTH_SERVICE_USERNAME="genie-ai-manager"
-AUTH_SERVICE_PASSWORD="1357924680+Manager"
+AUTH_SERVICE_USERNAME="<your_auth_service_username>"
+AUTH_SERVICE_PASSWORD="<your_auth_service_password>"
 GET_AUTH_TOKEN_URL=http://http-service:6666/get-token
 
 

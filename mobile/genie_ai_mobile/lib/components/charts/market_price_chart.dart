@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:share_plus/share_plus.dart';
@@ -1143,11 +1144,17 @@ ${tr('market.sharedVia')}
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: response.containsKey('response')
-                      ? Text(
-                          response['response']?.toString() ?? tr('market.noResponse'),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            height: 1.5,
+                      ? MarkdownBody(
+                          data: response['response']?.toString() ?? tr('market.noResponse'),
+                          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                            p: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
                           ),
+                          selectable: true,
+                          onTapLink: (text, href, title) {
+                            if (href != null) {
+                              launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+                            }
+                          },
                         )
                       : response.containsKey('error')
                           ? Text(

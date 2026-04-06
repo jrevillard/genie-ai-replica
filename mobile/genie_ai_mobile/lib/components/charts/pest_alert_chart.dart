@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:genie_ai_mobile/services/agricultural_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
@@ -1131,9 +1132,17 @@ class _ResponseDialog extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: response.containsKey('response')
-                      ? Text(
-                          response['response'] ?? tr('charts.noResponse'),
-                          style: theme.textTheme.bodyMedium,
+                      ? MarkdownBody(
+                          data: response['response'] ?? tr('charts.noResponse'),
+                          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                            p: theme.textTheme.bodyMedium,
+                          ),
+                          selectable: true,
+                          onTapLink: (text, href, title) {
+                            if (href != null) {
+                              launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+                            }
+                          },
                         )
                       : response.containsKey('error')
                           ? Text(

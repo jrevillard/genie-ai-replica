@@ -61,29 +61,6 @@ const authMiddleware = {
       const authHeader = req.headers.authorization;
       if (!authHeader) {
         logger.info('[AUTH DEBUG] ❌ No Authorization header found');
-
-        // Special handling for '/email' route - try to extract userId from body
-        if (req.originalUrl.includes('/email') && req.body && req.body.userId) {
-          logger.info(`[AUTH DEBUG] 📧 Email route detected with userId: ${req.body.userId} in body`);
-          logger.info('[AUTH DEBUG] Checking if this is a direct userId authentication attempt');
-
-          try {
-            logger.info(`[AUTH DEBUG] Attempting to get user by ID: ${req.body.userId}`);
-            const user = await authService.getUserById(req.body.userId);
-
-            if (user) {
-              logger.info('[AUTH DEBUG] ✅ Found user by ID:', safeStringify(user));
-              req.user = user;
-              next();
-              return;
-            } else {
-              logger.info(`[AUTH DEBUG] ❌ No user found with ID: ${req.body.userId}`);
-            }
-          } catch (userErr) {
-            logger.error(`[AUTH DEBUG] ❌ Error fetching user by ID: ${userErr.message}`, { stack: userErr.stack });
-          }
-        }
-
         return res.status(401).json({
           error: 'Unauthorized',
           message: 'Please log in again'
@@ -186,22 +163,6 @@ const authMiddleware = {
         // Still set basic user data even if fetching details fails
         req.user = decoded;
         logger.info(`[AUTH DEBUG] ✅ User attached to request (without role)`);
-      }
-
-      // Check if we need to get additional user data
-      if (req.originalUrl.includes('/email')) {
-        try {
-          logger.info(`[AUTH DEBUG] 📧 Email route - fetching additional user data for ID: ${tokenUserId}`);
-          const userDetails = await authService.getUserById(tokenUserId);
-
-          if (userDetails) {
-            logger.info('[AUTH DEBUG] ✅ Additional user details found:', safeStringify(userDetails));
-          } else {
-            logger.warn(`[AUTH DEBUG] ⚠️ WARNING: Could not find additional user details for ID: ${tokenUserId}`);
-          }
-        } catch (userDetailErr) {
-          logger.error(`[AUTH DEBUG] ⚠️ Error fetching additional user details: ${userDetailErr.message}`, { stack: userDetailErr.stack });
-        }
       }
 
       logger.info('[AUTH DEBUG] ✅ Authentication middleware complete, calling next()');

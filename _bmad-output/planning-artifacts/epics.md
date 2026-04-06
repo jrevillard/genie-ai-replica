@@ -671,7 +671,35 @@ So that users from external IdPs automatically receive the correct GENIE.AI role
 
 ---
 
-### Story 3.5: JIT Provisioning — User Profile Updates on Re-login
+### Story 3.5: Keycloak Admin API Proxy for User Management
+
+As a functional administrator,
+I want to manage users (enable/disable, assign roles, change email, delete accounts) through the GENIE.AI admin interface,
+So that these operations are proxied to Keycloak Admin API instead of modifying ArangoDB directly, keeping Keycloak as the single source of truth for identity data.
+
+**Acceptance Criteria:**
+
+**Given** the GENIE.AI backend is running
+**When** an admin modifies a user's role, enable/disable status, email, or deletes an account via the GENIE.AI admin UI or API
+**Then** the operation is forwarded to Keycloak Admin API via a restricted service account (`genie-proxy-client`) (FR19, FR20)
+**And** the change takes effect in Keycloak immediately
+**And** the change is reflected in ArangoDB on the user's next login via JIT provisioning
+**And** superadmin credentials are never used at runtime — only the restricted service account
+
+**Given** a user is logged in and edits their profile
+**When** they modify JIT-provisioned fields (email, name)
+**Then** the changes are forwarded to Keycloak Account API using their own JWT token
+**When** they modify custom fields (personalIdentification, preferences)
+**Then** the changes are saved directly to ArangoDB
+**And** self-context is enforced — a user cannot modify another user's profile
+
+**Given** the GENIE.AI backend is running
+**When** removed routes (`POST /reset-data`, `POST /admin/.../resend-verification`, `PUT /:userId/role`) are called
+**Then** the endpoint returns 404
+
+---
+
+### Story 3.6: JIT Provisioning — User Profile Updates on Re-login
 
 As a backend system,
 I want to update the ArangoDB user profile when a returning user authenticates with changed attributes,
@@ -687,7 +715,7 @@ So that the local user record stays in sync with the identity provider.
 
 ---
 
-### Story 3.6: Right to Erasure — User Identity Data Deletion
+### Story 3.7: Right to Erasure — User Identity Data Deletion
 
 As an end user exercising my GDPR rights,
 I want my identity data stored in ArangoDB to be completely deleted upon request,
@@ -704,7 +732,7 @@ So that the application complies with GDPR Article 17 (right to erasure).
 
 ---
 
-### Story 3.7: Session Data Automatic Purging
+### Story 3.8: Session Data Automatic Purging
 
 As a system,
 I want session data to be automatically purged when it exceeds the session lifetime,

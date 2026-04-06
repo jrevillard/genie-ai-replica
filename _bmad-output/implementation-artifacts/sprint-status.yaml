@@ -88,10 +88,13 @@ story_location: _bmad-output/implementation-artifacts
 #
 #   Round 3 (parallel):
 #     epic3-sessions: 3-7  Session purging (needs 3-1 merged)
-#     epic3-keycloak: 3-5  JIT profile updates
+#     epic3-keycloak: 3-5  Keycloak Admin API proxy (after 3-4)
 #
 #   Round 4:
-#     epic3-keycloak: 3-6  Right to erasure
+#     epic3-keycloak: 3-6  JIT profile updates (needs 3-5)
+#
+#   Round 5:
+#     epic3-keycloak: 3-7  Right to erasure (needs 3-6)
 #
 # ─── Epic 4 (single worktree, after Epic 3 merged) ───
 #   Sequential: 4-1 → 4-2
@@ -109,7 +112,7 @@ story_location: _bmad-output/implementation-artifacts
 #
 # Epic 3:
 #   epic3-sessions  ← 3-1 → 3-2 → 3-7 (session lifecycle, frontend + backend)
-#   epic3-keycloak  ← 3-3 → 3-4 → 3-5 → 3-6 (Keycloak admin docs + ArangoDB user)
+#   epic3-keycloak  ← 3-3 → 3-4 → 3-5 → 3-6 → 3-7 (Keycloak admin docs + API proxy + user lifecycle)
 #
 # Epic 4:
 #   epic4-logging   ← 4-1 → 4-2 (audit logging + retention)
@@ -158,10 +161,11 @@ development_status:
   3-1-user-logout-and-session-termination-across-application: done # worktree: epic3-sessions
   3-2-session-invalidation-on-user-disable-delete: done # worktree: epic3-sessions (after 3-1)
   3-3-role-and-group-management-via-keycloak: done # worktree: epic3-keycloak
-  3-4-external-idp-attribute-to-role-mapping-via-keycloak: backlog # worktree: epic3-keycloak
-  3-5-jit-provisioning-user-profile-updates-on-re-login: backlog # worktree: epic3-keycloak
-  3-6-right-to-erasure-user-identity-data-deletion: backlog # worktree: epic3-keycloak
-  3-7-session-data-automatic-purging: done # worktree: epic3-sessions (after 3-1)
+  3-4-external-idp-attribute-to-role-mapping-via-keycloak: done # worktree: epic3-keycloak
+  3-5-keycloak-admin-api-proxy-user-management: ready-for-dev # worktree: epic3-keycloak (after 3-4)
+  3-6-jit-provisioning-user-profile-updates-on-re-login: backlog # worktree: epic3-keycloak (after 3-5)
+  3-7-right-to-erasure-user-identity-data-deletion: backlog # worktree: epic3-keycloak (after 3-6)
+  3-8-session-data-automatic-purging: done # worktree: epic3-sessions (after 3-1)
   epic-3-retrospective: optional
 
   # Epic 4: Audit Logging & Compliance Reporting

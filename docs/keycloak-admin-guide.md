@@ -453,3 +453,270 @@ The Keycloak Admin REST API supports all operations described in this guide. Whe
 - Use short-lived admin tokens (they expire with the SSO session)
 - The `admin-cli` client has no client secret — authentication requires username/password
 - Consider creating a service account with restricted permissions for automated administration tasks
+
+## 8. External IdP Attribute to Role Mapping
+
+This section explains how to automatically assign Keycloak realm roles to users based on attributes from an external Identity Provider (IdP). For example, a user whose Google Workspace `groups` claim contains `"genie-admin"` can be automatically assigned the `admin` role in Keycloak — no manual intervention required.
+
+### 8.1 Protocol Mappers vs Identity Provider Mappers
+
+Keycloak has two mapper mechanisms that are often confused. Understanding the difference is essential:
+
+| Feature | Protocol Mapper | Identity Provider Mapper |
+|---|---|---|
+| Scope | Client-level (controls JWT content) | IdP-level (transforms claims during brokering) |
+| Configuration location | Client → Protocol Mappers tab | Identity Provider → Mappers tab |
+| Use case | Add/remove claims from JWT | Map external IdP attributes to Keycloak roles/groups |
+| Already configured? | Yes — `roles` client scope includes `user-realm-roles` mapper | **This is what you configure for attribute mapping** |
+
+**Protocol Mappers** determine what claims appear in the JWT. The `roles` client scope (already configured in `genie-realm.yaml`) includes a `user-realm-roles` protocol mapper that puts all assigned realm roles into `realm_access.roles`. No changes needed here.
+
+**Identity Provider Mappers** run during the authentication flow when Keycloak brokers to the external IdP. They can inspect incoming claims (e.g., `groups`, `department`) and assign realm roles to the user before the JWT is issued. **This is the mechanism for automatic attribute-to-role mapping.**
+
+### 8.2 Mapper Types for Role Mapping
+
+Keycloak provides three relevant Identity Provider Mapper types:
+
+| Mapper Type | Purpose | Key Config Fields |
+|---|---|---|
+| `hardcoded-role-idp-mapper` | Assigns a **fixed** realm role to **all** users from this IdP (baseline role) | `role` |
+| `attribute-to-role-idp-mapper` | Assigns a realm role when an attribute **contains** a specific value | `attribute`, `role`, `claimValue` |
+| `oidc-user-attribute-idp-mapper` | Imports an attribute from the external IdP token into a Keycloak user attribute (no role assignment) | `claim`, `userAttribute` |
+
+**Important:** `attribute-to-role-idp-mapper` performs a **substring/contains check** on the attribute value, not an exact match. A single mapper can detect `"genie-admin"` within a multi-value `groups` attribute like `["staff", "genie-admin", "finance"]`.
+
+### 8.3 Configuring an Identity Provider Mapper (Admin Console)
+
+#### 8.3.1 Map a `groups` Claim to a Realm Role
+
+Use this pattern when the external IdP provides group membership information (e.g., Google Workspace, Microsoft Entra ID).
+
+1. Navigate to **Identity Providers** in the left menu
+2. Click on the external IdP (e.g., `google`)
+3. Go to the **Mappers** tab
+4. Click **Add mapper**
+5. Select **Attribute to Role** mapper type
+6. Configure:
+   - **Name**: `google-groups-to-admin` (descriptive, unique within this IdP)
+   - **Identity Provider Alias**: `google` (auto-filled)
+   - **Mapper Type**: `attribute to role`
+   - **Attribute name**: `groups`
+   - **Role**: `admin`
+   - **Claim value**: `genie-admin`
+7. Click **Save**
+
+After this configuration, any user authenticating via Google whose `groups` claim contains `"genie-admin"` will automatically receive the `admin` realm role in Keycloak.
+
+#### 8.3.2 Assign a Baseline Role to All Users from an IdP
+
+Use a `hardcoded-role-idp-mapper` to ensure all users from a specific IdP receive a default role:
+
+1. Navigate to **Identity Providers** → click on the IdP (e.g., `google`)
+2. Go to the **Mappers** tab
+3. Click **Add mapper**
+4. Select **Hardcoded Role** mapper type
+5. Configure:
+   - **Name**: `google-default-user-role`
+   - **Identity Provider Alias**: `google`
+   - **Mapper Type**: `hardcoded role`
+   - **Role**: `user`
+6. Click **Save**
+
+#### 8.3.3 Mapper Evaluation Order
+
+Mapper evaluation order matters. Configure **baseline mappers first** (hardcoded roles), then **conditional mappers** (attribute-to-role). Keycloak evaluates mappers in the order they appear in the Mappers list. Use the arrow buttons to reorder.
+
+### 8.4 Mapping a Custom Attribute (e.g., `department`)
+
+Some IdPs provide organizational attributes rather than group memberships. For example, Microsoft Entra ID can return a `department` claim:
+
+1. Navigate to **Identity Providers** → click on the IdP (e.g., `microsoft`)
+2. Go to the **Mappers** tab
+3. Add a **Hardcoded Role** mapper named `ms-default-user-role` → role: `user`
+4. Add an **Attribute to Role** mapper named `ms-department-to-admin`:
+   - **Attribute name**: `department`
+   - **Role**: `admin`
+   - **Claim value**: `IT`
+5. Add another **Attribute to Role** mapper named `ms-department-to-analyst`:
+   - **Attribute name**: `department`
+   - **Role**: `analyst`
+   - **Claim value**: `Research`
+
+Users in the `IT` department get `admin` role, users in `Research` get `analyst` role (see [Section 8.5](#85-adding-new-realm-roles) to create `analyst` first), and all Microsoft users get the baseline `user` role.
+
+### 8.5 Adding New Realm Roles
+
+If the mapped attribute requires a role that doesn't exist yet, create it first in `config/keycloak/genie-realm.yaml`:
+
+```yaml
+roles:
+  realm:
+    - name: admin
+    - name: user
+    - name: analyst        # ← New role for attribute mapping
+```
+
+After adding the role to `genie-realm.yaml`, redeploy the keycloak-config service:
+
+```bash
+docker service update --force genieai_keycloak-config
+```
+
+The new role will be available for assignment via Identity Provider Mappers.
+
+### 8.6 Data Flow: External IdP Attribute Mapping
+
+The complete flow from external IdP authentication to GENIE.AI role propagation:
+
+```
+1. External IdP token (has "groups" claim)
+   └── Keycloak Identity Provider Mapper (attribute-to-role-idp-mapper)
+       └── Keycloak assigns realm role to local user
+
+2. Keycloak issues JWT
+   └── Protocol Mapper (user-realm-roles, already configured via "roles" client scope)
+       └── JWT realm_access.roles includes the mapped role
+
+3. GENIE.AI backend processes JWT
+   └── keycloak-auth-middleware.js → extract realm_access.roles (source-agnostic)
+   └── user-provisioning-service.js → persist roles to ArangoDB (source-agnostic)
+   └── X-User-Roles header → downstream services (source-agnostic)
+```
+
+**No GENIE.AI code changes are required.** The existing implementation handles roles identically whether they are manually assigned in Keycloak or mapped via Identity Provider Mappers:
+
+| Capability | Implementation | Works with mapped roles? |
+|---|---|---|
+| Role extraction from JWT | `realm_access.roles` extraction | Yes — source-agnostic |
+| X-User-Roles header | Comma-separated roles | Yes — source-agnostic |
+| ArangoDB role persistence | `roles` field in UPSERT | Yes — source-agnostic |
+| Role-based access control | `requireAdmin` middleware | Yes — source-agnostic |
+
+### 8.7 YAML Configuration (keycloak-config-cli)
+
+Mappers can also be configured via YAML in `genie-realm.yaml` under the `identityProviders` section. The mapper entries are nested under each IdP's `mappers[]` array:
+
+```yaml
+identityProviders:
+  - alias: google
+    providerId: google
+    enabled: true
+    config:
+      clientId: $(env:KEYCLOAK_GOOGLE_CLIENT_ID)
+      clientSecret: $(env:KEYCLOAK_GOOGLE_CLIENT_SECRET)
+    mappers:
+      # Standard attribute import (already configured via Story 1.9)
+      - name: google-email
+        identityProviderAlias: google
+        identityProviderMapper: oidc-user-attribute-idp-mapper
+        config:
+          claim: email
+          userAttribute: email
+
+      # Baseline role for ALL Google users
+      - name: google-default-user-role
+        identityProviderAlias: google
+        identityProviderMapper: hardcoded-role-idp-mapper
+        config:
+          role: user
+
+      # Map specific group to admin role
+      - name: google-groups-to-admin
+        identityProviderAlias: google
+        identityProviderMapper: attribute-to-role-idp-mapper
+        config:
+          attribute: groups
+          role: admin
+          claimValue: "genie-admin"
+```
+
+> **Note:** The external IdP in this project was configured via the Keycloak admin console (Story 1.9), not via `genie-realm.yaml`. The YAML example above is documented for reference — adding a mapper to `genie-realm.yaml` without its parent IdP entry would be orphaned and ignored by keycloak-config-cli. If you manage your IdP via YAML, include the full IdP entry with its mappers.
+>
+> **Environment variables:** The YAML example uses `$(env:KEYCLOAK_GOOGLE_CLIENT_ID)` and `$(env:KEYCLOAK_GOOGLE_CLIENT_SECRET)`. These variables are documented in the `env` template (Section 9B) as Keycloak-only configuration. To use the YAML approach, add them to the `keycloak-config` service environment section in `docker-compose.yaml`:
+>
+> ```yaml
+> # In docker-compose.yaml, under keycloak-config → environment:
+> - KEYCLOAK_GOOGLE_CLIENT_ID=${KEYCLOAK_GOOGLE_CLIENT_ID}
+> - KEYCLOAK_GOOGLE_CLIENT_SECRET=${KEYCLOAK_GOOGLE_CLIENT_SECRET}
+> ```
+>
+> Then set the actual values in `.env` (they are listed as commented placeholders in Section 9B of the `env` template).
+
+#### Mapper Config Field Reference
+
+For `attribute-to-role-idp-mapper`:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | Yes | Unique mapper name within this IdP |
+| `identityProviderAlias` | Yes | Must match the parent IdP alias |
+| `identityProviderMapper` | Yes | `attribute-to-role-idp-mapper` |
+| `config.attribute` | Yes | Claim name from the external IdP token (e.g., `groups`, `department`) |
+| `config.role` | Yes | Keycloak realm role name to assign |
+| `config.claimValue` | Yes | Value to match in the attribute (contains check) |
+
+For `hardcoded-role-idp-mapper`:
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | Yes | Unique mapper name |
+| `identityProviderAlias` | Yes | Must match the parent IdP alias |
+| `identityProviderMapper` | Yes | `hardcoded-role-idp-mapper` |
+| `config.role` | Yes | Keycloak realm role to assign to all users from this IdP |
+
+### 8.8 Verification with curl Commands
+
+These commands verify that attribute-to-role mapping works end-to-end. **Note:** Full verification requires an active external IdP connection (Story 1.9).
+
+```bash
+# Load environment
+source .env
+
+# Step 1: Authenticate via external IdP
+# This triggers the Identity Provider Mapper chain:
+#   1. hardcoded-role-idp-mapper assigns baseline "user" role
+#   2. attribute-to-role-idp-mapper checks groups claim for "genie-admin"
+# The IdP redirect flow happens via browser — use the admin API to verify the result:
+
+# Step 2: Get admin token
+TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+  -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Step 3: Find the user (authenticated via external IdP)
+# Replace "user@example.com" with the federated user's email
+USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?email=user@example.com" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+users = json.load(sys.stdin)
+if not users:
+    print('ERROR: No federated user found with that email')
+    sys.exit(1)
+print(users[0]['id'])
+")
+
+# Step 4: Verify the user has the mapped roles
+curl -sk "https://localhost/auth/admin/realms/genie/users/${USER_ID}/role-mappings/realm" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+roles = json.load(sys.stdin)
+role_names = [r['name'] for r in roles]
+print(f'Assigned roles: {role_names}')
+assert 'user' in role_names, 'FAIL: baseline user role not assigned'
+print('PASS: baseline user role present')
+# Check for attribute-mapped roles (depends on IdP configuration)
+if 'admin' in role_names:
+    print('PASS: admin role mapped via attribute mapper')
+else:
+    print('INFO: admin role not mapped (user may not be in the mapped group)')
+"
+```
+
+**Note:** If the external IdP returns group information, the mapped roles appear immediately after the first authentication through that IdP. If the user already had an active session, they must re-authenticate for the new mapper configuration to take effect.
+
+### 8.9 Cross-References
+
+- **Role Assignment (manual):** See [Section 3](#3-role-assignment) for manually assigning roles via the admin console
+- **Role Propagation Flow:** See [Section 3.4](#34-role-propagation-flow) for how roles flow from Keycloak to GENIE.AI
+- **Data Flow Diagrams:** See [Section 5](#5-data-flow-keycloak-to-genieai) for the complete system data flow
+- **Group Management:** See [Section 4](#4-group-management) for Keycloak groups vs roles

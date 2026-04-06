@@ -5,7 +5,7 @@ const { logger } = require('../shared-lib');
 
 module.exports = (databaseService) => {
   // Apply authentication middleware to all routes
-  router.use(authMiddleware.authenticate);
+  router.use(authMiddleware.authenticate, authMiddleware.isAdmin);
 
   /**
    * @swagger

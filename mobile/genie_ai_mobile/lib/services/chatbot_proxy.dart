@@ -11,12 +11,13 @@ class ChatbotProxy {
     required List<Map<String, dynamic>> messages,
     required String userId,
     String? categoryId,
+    String? categoryKey,
     String? contextLabels,
     String? language,
   }) async {
     // CRITICAL FIX: Clean userId to remove 'users/' prefix
     // This ensures backend profile lookup succeeds and avoids "User profile not found" warnings
-    final cleanUserId = userId.startsWith('users/') ? userId.substring(7) : userId;
+    final cleanUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
 
     // Build context object (matching Vue app's queryData.context)
     final Map<String, dynamic> context = {};
@@ -39,7 +40,7 @@ class ChatbotProxy {
       'sessionId': sessionId,
       'messages': messages,
       'userId': cleanUserId,
-      'timestamp': DateTime.now().toIso8601String(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
     };
 
     // Add context if it has content (it should always have at least language)
@@ -50,6 +51,12 @@ class ChatbotProxy {
     // Add contextOption like Vue does
     if (categoryId != null && categoryId.isNotEmpty) {
       payload['contextOption'] = 'conversation-with-context-labels';
+    }
+
+    // If we have the raw category _key but no resolved name, send it directly
+    // so the backend can use it as categoryId (backend checks queryData.categoryId first)
+    if (categoryKey != null && categoryKey.isNotEmpty) {
+      payload['categoryId'] = categoryKey;
     }
 
     try {

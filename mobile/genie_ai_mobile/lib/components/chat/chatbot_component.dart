@@ -441,6 +441,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         messages: messagesForApi,
         userId: widget.userId,
         categoryId: _selectedCategoryName.isNotEmpty ? _selectedCategoryName : null,
+        categoryKey: _selectedCategoryId,
         contextLabels: null,
         language: currentLanguage,
       );
@@ -532,13 +533,18 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     // Resolve category _key (from config) to the category name that the backend expects
     final String? categoryId = button['category']?.toString();
     if (categoryId != null && categoryId.isNotEmpty) {
-      final String categoryName = _getCategoryNameById(categoryId);
-      if (categoryName.isNotEmpty) {
-        setState(() {
-          _selectedCategoryId = categoryId;
-          _selectedCategoryName = categoryName;
-        });
+      String categoryName = _getCategoryNameById(categoryId);
+      // Fallback: if service categories haven't loaded yet, send the raw _key
+      // so the backend can still associate the query with a category.
+      // This matches the Vue app's fallback behavior ("Category {id}").
+      if (categoryName.isEmpty) {
+        categoryName = categoryId;
+        debugPrint("[CHATBOT] Category name not found for $categoryId, using raw _key as fallback");
       }
+      setState(() {
+        _selectedCategoryId = categoryId;
+        _selectedCategoryName = categoryName;
+      });
     }
 
     // Send using the 2-prompt system

@@ -73,7 +73,12 @@ class DatabaseOperationsService {
               await collection.dropIndex(index.id);
               logger.info(`Dropped index ${index.id} from collection ${collectionName}`);
             } catch (dropError) {
-              logger.warn(`Error dropping index ${index.id} for collection ${collectionName}: ${dropError.message}`, { stack: dropError.stack });
+              // Graph edge collections have auto-managed indexes that cannot be dropped — skip silently
+              if (dropError.message.includes('forbidden')) {
+                logger.debug(`Skipped graph-managed index ${index.id} on ${collectionName}`);
+              } else {
+                logger.warn(`Error dropping index ${index.id} for collection ${collectionName}: ${dropError.message}`, { stack: dropError.stack });
+              }
             }
           }
 

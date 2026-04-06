@@ -28,6 +28,7 @@ jest.mock('../shared-lib', () => ({
 var mockJwtVerify;
 var mockCreateRemoteJWKSet;
 var mockFetch;
+var mockAxiosGet;
 
 // Mock jose completely to avoid ESM issues
 jest.mock('jose', () => ({
@@ -35,10 +36,16 @@ jest.mock('jose', () => ({
   createRemoteJWKSet: (...args) => mockCreateRemoteJWKSet(...args)
 }));
 
+// Mock axios for UserInfo introspection
+jest.mock('axios', () => ({
+  get: (...args) => mockAxiosGet(...args)
+}));
+
 // Mock global fetch for OIDC discovery
 global.fetch = jest.fn();
 
 const keycloakAuthService = require('../services/keycloak-auth-service');
+const axios = require('axios');
 
 // Discovery response matching KEYCLOAK_URL + KEYCLOAK_REALM
 const mockDiscovery = {
@@ -55,6 +62,7 @@ describe('keycloakAuthService', () => {
       ok: true,
       json: async () => mockDiscovery
     });
+    mockAxiosGet = jest.fn();
   });
 
   describe('verifyToken', () => {
@@ -978,6 +986,100 @@ describe('keycloakAuthService', () => {
       // To test the warning path, we'd need to re-require the module.
       // This test verifies the safe default behavior instead.
       expect(keycloakAuthService._getAudienceMap().size).toBe(0);
+    });
+  });
+
+  describe('checkUserStatusInKeycloak', () => {
+    it('should return { active: true, disabled: false } when UserInfo returns 200', async () => {
+      mockAxiosGet.mockResolvedValue({
+        status: 200,
+        data: { sub: '12345678-1234-1234-1234-123456789012', email: 'test@example.com' }
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toEqual({ active: true, disabled: false });
+      expect(mockAxiosGet).toHaveBeenCalledWith(
+        'http://localhost:8080/realms/genie/protocol/openid-connect/userinfo',
+        {
+          headers: {
+            Authorization: 'Bearer valid-token',
+            Accept: 'application/json'
+          },
+          timeout: 3000
+        }
+      );
+    });
+
+    it('should return null when UserInfo call times out', async () => {
+      mockAxiosGet.mockRejectedValue({
+        code: 'ECONNABORTED',
+        message: 'timeout of 3000ms exceeded'
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when UserInfo call fails with network error', async () => {
+      mockAxiosGet.mockRejectedValue({
+        code: 'ETIMEDOUT',
+        message: 'Connection timed out'
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when UserInfo returns unexpected status', async () => {
+      mockAxiosGet.mockResolvedValue({
+        status: 500, // Unexpected status
+        data: {}
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('should return { active: false, disabled: true } when UserInfo returns 401 (disabled user)', async () => {
+      mockAxiosGet.mockRejectedValue({
+        response: { status: 401 }
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toEqual({ active: false, disabled: true });
+    });
+
+    it('should return { active: false, disabled: true } when UserInfo returns 403', async () => {
+      mockAxiosGet.mockRejectedValue({
+        response: { status: 403 }
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toEqual({ active: false, disabled: true });
     });
   });
 });

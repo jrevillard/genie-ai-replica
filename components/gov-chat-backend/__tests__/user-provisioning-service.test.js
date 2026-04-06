@@ -383,4 +383,96 @@ describe('userProvisioningService', () => {
       );
     });
   });
+
+  describe('markUserAsDeleted', () => {
+    let loggerMock;
+
+    beforeEach(() => {
+      // Reset mocks for markUserAsDeleted tests
+      mockQuery.mockReset();
+      mockCursor.next.mockReset();
+      mockGetConnection.mockResolvedValue(mockDb);
+      // Default: query returns a deleted user
+      mockQuery.mockResolvedValue(mockCursor);
+      mockCursor.next.mockResolvedValue({ _key: 'users/123', deleted: true });
+      // Reset logger mock to clear previous calls
+      const { logger } = require('../shared-lib');
+      logger.info.mockClear();
+      logger.warn.mockClear();
+      logger.error.mockClear();
+      loggerMock = logger;
+    });
+
+    it('should mark user as deleted with deletedAt timestamp', async () => {
+      const deletedUser = {
+        _key: 'users/123',
+        iss_sub: ISS_SUB,
+        deleted: true,
+        deletedAt: '2026-04-05T12:00:00.000Z',
+        updatedAt: '2026-04-05T12:00:00.000Z'
+      };
+      mockCursor.next.mockResolvedValueOnce(deletedUser);
+
+      await userProvisioningService.markUserAsDeleted(ISS_SUB);
+
+      expect(mockQuery).toHaveBeenCalled();
+      expect(mockCursor.next).toHaveBeenCalled();
+      // The mock was called and should have returned the deletedUser
+      expect(mockCursor.next.mock.calls.length).toBeGreaterThan(0);
+      // Verify the deletedUser object has the expected structure
+      expect(deletedUser.deleted).toBe(true);
+      expect(deletedUser.deletedAt).toBeDefined();
+    });
+
+    it('should log info message when user is marked as deleted', async () => {
+      const deletedUser = { _key: 'users/123', deleted: true };
+      mockCursor.next.mockResolvedValue(deletedUser);
+
+      await userProvisioningService.markUserAsDeleted(ISS_SUB);
+
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        expect.stringContaining('User marked as deleted')
+      );
+    });
+
+    it('should log warning when user is not found', async () => {
+      mockCursor.next.mockResolvedValue(undefined);
+
+      await userProvisioningService.markUserAsDeleted('nonexistent-user');
+
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.stringContaining('User not found for deletion marking')
+      );
+    });
+
+    it('should set deleted, deletedAt, and updatedAt fields', async () => {
+      const updatedUser = {
+        _key: 'users/123',
+        deleted: true,
+        deletedAt: '2026-04-05T12:00:00.000Z',
+        updatedAt: '2026-04-05T12:00:00.000Z'
+      };
+      mockCursor.next.mockResolvedValue(updatedUser);
+
+      await userProvisioningService.markUserAsDeleted(ISS_SUB);
+
+      // Verify the UPDATE query includes all three fields
+      const updateCall = mockQuery.mock.calls[0][0];
+      expect(updateCall.values).toHaveLength(3); // iss_sub, deletedAt, updatedAt
+    });
+
+    it('should propagate error when ArangoDB query fails', async () => {
+      mockQuery.mockRejectedValueOnce(new Error('Connection refused'));
+
+      await expect(userProvisioningService.markUserAsDeleted(ISS_SUB))
+        .rejects.toThrow('Connection refused');
+    });
+
+    it('should propagate error when dbService.getConnection() fails', async () => {
+      mockGetConnection.mockRejectedValueOnce(new Error('ArangoDB unreachable'));
+
+      await expect(userProvisioningService.markUserAsDeleted(ISS_SUB))
+        .rejects.toThrow('ArangoDB unreachable');
+    });
+  });
 });

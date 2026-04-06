@@ -12,14 +12,18 @@ jest.mock('../shared-lib', () => ({
 
 // Mock keycloak-auth-service
 const mockVerifyToken = jest.fn();
+const mockCheckUserStatusInKeycloak = jest.fn();
 jest.mock('../services/keycloak-auth-service', () => ({
-  verifyToken: (...args) => mockVerifyToken(...args)
+  verifyToken: (...args) => mockVerifyToken(...args),
+  checkUserStatusInKeycloak: (...args) => mockCheckUserStatusInKeycloak(...args)
 }));
 
 // Mock user-provisioning-service
 const mockProvisionUser = jest.fn();
+const mockMarkUserAsDeleted = jest.fn();
 jest.mock('../services/user-provisioning-service', () => ({
-  provisionUser: (...args) => mockProvisionUser(...args)
+  provisionUser: (...args) => mockProvisionUser(...args),
+  markUserAsDeleted: (...args) => mockMarkUserAsDeleted(...args)
 }));
 
 const { keycloakAuthMiddleware, isPublicRoute, PUBLIC_PATHS } = require('../middleware/keycloak-auth-middleware');
@@ -95,6 +99,8 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     next = jest.fn();
     mockVerifyToken.mockReset();
     mockProvisionUser.mockReset();
+    mockCheckUserStatusInKeycloak.mockReset();
+    mockMarkUserAsDeleted.mockReset();
   });
 
   it('should return 401 TOKEN_INVALID when no Authorization header is present', async () => {
@@ -152,6 +158,95 @@ describe('keycloakAuthMiddleware.authenticate', () => {
       details: {}
     });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should call Keycloak introspection on TOKEN_EXPIRED and mark user as deleted when disabled', async () => {
+    // Create a valid JWT format token for issuer extraction
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      sub: '12345678-1234-1234-1234-123456789012',
+      iss: 'http://localhost:8080/realms/genie',
+      exp: Math.floor(Date.now() / 1000) - 3600
+    })).toString('base64url');
+    const sig = Buffer.from('mock-signature').toString('base64url');
+    const expiredToken = `${header}.${payload}.${sig}`;
+
+    req.headers.authorization = `Bearer ${expiredToken}`;
+    const err = new Error('Token expired');
+    err.code = 'TOKEN_EXPIRED';
+    mockVerifyToken.mockRejectedValue(err);
+    mockCheckUserStatusInKeycloak.mockResolvedValue({ active: false, disabled: true });
+    mockMarkUserAsDeleted.mockResolvedValue(undefined);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(mockCheckUserStatusInKeycloak).toHaveBeenCalledWith(expiredToken, 'http://localhost:8080/realms/genie');
+    expect(mockMarkUserAsDeleted).toHaveBeenCalledWith('http://localhost:8080/realms/genie#12345678-1234-1234-1234-123456789012');
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_EXPIRED',
+      message: 'Token has expired',
+      details: {}
+    });
+  });
+
+  it('should not mark user as deleted when Keycloak introspection returns active user', async () => {
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      sub: '12345678-1234-1234-1234-123456789012',
+      iss: 'http://localhost:8080/realms/genie',
+      exp: Math.floor(Date.now() / 1000) - 3600
+    })).toString('base64url');
+    const sig = Buffer.from('mock-signature').toString('base64url');
+    const expiredToken = `${header}.${payload}.${sig}`;
+
+    req.headers.authorization = `Bearer ${expiredToken}`;
+    const err = new Error('Token expired');
+    err.code = 'TOKEN_EXPIRED';
+    mockVerifyToken.mockRejectedValue(err);
+    mockCheckUserStatusInKeycloak.mockResolvedValue({ active: true, disabled: false });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(mockCheckUserStatusInKeycloak).toHaveBeenCalledWith(expiredToken, 'http://localhost:8080/realms/genie');
+    expect(mockMarkUserAsDeleted).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it('should not mark user as deleted when Keycloak introspection fails (returns null)', async () => {
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      sub: '12345678-1234-1234-1234-123456789012',
+      iss: 'http://localhost:8080/realms/genie',
+      exp: Math.floor(Date.now() / 1000) - 3600
+    })).toString('base64url');
+    const sig = Buffer.from('mock-signature').toString('base64url');
+    const expiredToken = `${header}.${payload}.${sig}`;
+
+    req.headers.authorization = `Bearer ${expiredToken}`;
+    const err = new Error('Token expired');
+    err.code = 'TOKEN_EXPIRED';
+    mockVerifyToken.mockRejectedValue(err);
+    mockCheckUserStatusInKeycloak.mockResolvedValue(null); // Introspection failed
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(mockCheckUserStatusInKeycloak).toHaveBeenCalled();
+    expect(mockMarkUserAsDeleted).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it('should not call introspection when token format is invalid (cannot extract issuer)', async () => {
+    req.headers.authorization = 'Bearer invalid-token-format';
+    const err = new Error('Token expired');
+    err.code = 'TOKEN_EXPIRED';
+    mockVerifyToken.mockRejectedValue(err);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(mockCheckUserStatusInKeycloak).not.toHaveBeenCalled();
+    expect(mockMarkUserAsDeleted).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 
   it('should return 401 TOKEN_INVALID when token verification fails', async () => {

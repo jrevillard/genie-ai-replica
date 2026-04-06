@@ -105,6 +105,15 @@ const keycloakAuthMiddleware = {
         });
       }
 
+      // Extract issuer from token for potential Keycloak introspection
+      let tokenIssuer;
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+        tokenIssuer = payload.iss;
+      } catch (e) {
+        // If we can't extract issuer, we'll skip introspection
+      }
+
       try {
         const decoded = await keycloakAuthService.verifyToken(token);
 
@@ -142,6 +151,29 @@ const keycloakAuthMiddleware = {
         next();
       } catch (err) {
         if (err.code === 'TOKEN_EXPIRED') {
+          // Check user status in Keycloak via UserInfo to determine if disabled/deleted
+          let userDisabled = false;
+          if (token && tokenIssuer) {
+            const statusResult = await keycloakAuthService.checkUserStatusInKeycloak(token, tokenIssuer);
+            if (statusResult && statusResult.disabled) {
+              userDisabled = true;
+
+              // Update ArangoDB user to reflect disabled status
+              try {
+                // Extract sub from token to identify user
+                const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+                const issSub = `${tokenIssuer}#${payload.sub}`;
+
+                // Find user in ArangoDB and mark as deleted
+                const userProvisioningService = require('../services/user-provisioning-service');
+                await userProvisioningService.markUserAsDeleted(issSub);
+                logger.info(`[KeycloakAuth Middleware] Marked user as deleted in ArangoDB: ${issSub}`);
+              } catch (updateErr) {
+                logger.warn(`[KeycloakAuth Middleware] Failed to mark user as deleted: ${updateErr.message}`);
+              }
+            }
+          }
+
           return res.status(401).json({
             error: 'TOKEN_EXPIRED',
             message: 'Token has expired',

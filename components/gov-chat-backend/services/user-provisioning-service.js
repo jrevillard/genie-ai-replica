@@ -85,6 +85,33 @@ const userProvisioningService = {
     }
 
     return user;
+  },
+
+  /**
+   * Mark a user as deleted in ArangoDB (soft delete)
+   * Called when Keycloak introspection confirms user is disabled/deleted
+   * @param {string} issSub - User identifier (iss#sub format)
+   * @returns {Promise<void>}
+   */
+  async markUserAsDeleted(issSub) {
+    const db = await dbService.getConnection('default');
+    const now = new Date().toISOString();
+
+    const cursor = await db.query(
+      aql`
+        FOR u IN users
+          FILTER u.iss_sub == ${issSub}
+          UPDATE u WITH { deleted: true, deletedAt: ${now}, updatedAt: ${now} } IN users
+          RETURN NEW
+      `
+    );
+
+    const result = await cursor.next();
+    if (result) {
+      logger.info(`[UserProvisioning] User marked as deleted: ${issSub}`);
+    } else {
+      logger.warn(`[UserProvisioning] User not found for deletion marking: ${issSub}`);
+    }
   }
 };
 

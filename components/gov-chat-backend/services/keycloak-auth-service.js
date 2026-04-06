@@ -2,6 +2,9 @@
 
 const { jwtVerify, createRemoteJWKSet } = require('jose');
 const { logger } = require('../shared-lib');
+const axios = require('axios');
+
+const userProvisioningService = require('./user-provisioning-service');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -393,6 +396,47 @@ const keycloakAuthService = {
    */
   getAudienceForIssuer(issuer) {
     return audienceMap.get(issuer);
+  },
+
+  /**
+   * Check user status in Keycloak via UserInfo endpoint
+   * Called when token validation fails with 401 to determine if user was disabled/deleted
+   * @param {string} token - The rejected access/refresh token
+   * @param {string} issuer - The token's issuer URL
+   * @returns {Promise<{active: boolean, disabled: boolean}>} User status from Keycloak, or null if check failed
+   */
+  async checkUserStatusInKeycloak(token, issuer) {
+    try {
+      const userInfoUrl = `${issuer}/protocol/openid-connect/userinfo`;
+      const response = await axios.get(userInfoUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json'
+        },
+        timeout: 3000
+      });
+
+      // If we get a 200 response, user is active
+      if (response.status === 200 && response.data) {
+        return { active: true, disabled: false };
+      }
+
+      // Unexpected response
+      logger.warn(`[KeycloakAuth] Unexpected Keycloak UserInfo response: ${response.status}`);
+      return null;
+    } catch (error) {
+      // 401/403 responses indicate user is disabled/deleted
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        return { active: false, disabled: true };
+      }
+      // Network errors
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        logger.warn(`[KeycloakAuth] Keycloak UserInfo check failed (network): ${error.message}`);
+      } else {
+        logger.error(`[KeycloakAuth] Keycloak UserInfo check failed: ${error.message}`);
+      }
+      return null;
+    }
   },
 
   TokenVerificationError,

@@ -99,9 +99,11 @@ class ServiceCategoryService {
         const categoryData = categories[i];
         // ... (skipping invalid category checks) ...
 
+        const categoryName = categoryData.name || `Category ${i + 1}`;
         const categoryDoc = {
           catCode: categoryData.catKey || `cat${i + 1}`,
-          order: i + 1
+          order: i + 1,
+          nameEN: categoryName
         };
 
         const newCategory = await this.serviceCategories.save(categoryDoc);
@@ -115,7 +117,7 @@ class ServiceCategoryService {
           _key: `${newCategory._key}_${upperLocale}`,
           serviceCategoryId: newCategory._key,
           languageCode: upperLocale,
-          translation: categoryData.name || `Category ${i + 1}`, // 'name' is the English value
+          translation: categoryName,
           isActive: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -194,11 +196,12 @@ class ServiceCategoryService {
         logger.info(`Processing service ${i + 1}/${services.length}: "${serviceName}"`);
 
         try {
-          // Create service document without name fields
+          // Create service document with nameEN for query-service compatibility
           const serviceDoc = {
             serviceCode: `service_${i + 1}`,
             categoryId: categoryKey,
-            order: i + 1
+            order: i + 1,
+            nameEN: serviceName
           };
 
           logger.info(`Creating service with serviceCode: ${serviceDoc.serviceCode}`);
@@ -274,6 +277,7 @@ class ServiceCategoryService {
       // 2. Create the main service document
       const serviceDoc = {
         categoryId: categoryKey,
+        nameEN: payload.nameEN,
       };
       const newService = await this.services.save(serviceDoc);
       logger.info(`Service document created with key: ${newService._key}`);
@@ -322,6 +326,9 @@ class ServiceCategoryService {
       };
       await this.serviceTranslations.save(englishTranslationDoc, { overwrite: true });
       logger.info(`Upserted English translation for service ${serviceKey}`);
+
+      // 2b. Keep nameEN in sync on the parent service document
+      await this.services.update(serviceKey, { nameEN: payload.nameEN });
 
       // 3. Clear old non-English translations and save the new set
       await this.db.query(aql`
@@ -810,9 +817,10 @@ class ServiceCategoryService {
       const newOrder = maxOrder + 1;
       logger.info(`Determined new category order: ${newOrder}`);
 
-      // 2. Create the category document with the correct order
+      // 2. Create the category document with the correct order and nameEN
       const categoryDoc = {
-        order: newOrder
+        order: newOrder,
+        nameEN: payload.nameEN
       };
       const newCategory = await this.serviceCategories.save(categoryDoc);
 
@@ -852,6 +860,9 @@ class ServiceCategoryService {
       };
       await this.serviceCategoryTranslations.save(englishTranslationDoc, { overwrite: true });
       logger.info(`Upserted English translation for category ${categoryKey}`);
+
+      // 2b. Keep nameEN in sync on the parent category document
+      await this.serviceCategories.update(categoryKey, { nameEN: payload.nameEN });
 
       // 3. Update/create the other translations
       if (payload.translations && Array.isArray(payload.translations)) {

@@ -166,6 +166,9 @@ const actions = {
       // Always clear local state even if Keycloak redirect fails
       commit('clearAuth');
     } finally {
+      // Clean up legacy localStorage items not managed by OIDC
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
       // Always clean up silent renew callback
       if (silentRenewCallback) {
         keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);

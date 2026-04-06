@@ -5,6 +5,8 @@ const mockGetUser = jest.fn();
 const mockSigninRedirect = jest.fn();
 const mockSigninRedirectCallback = jest.fn();
 const mockSignoutRedirect = jest.fn();
+const mockRemoveUser = jest.fn();
+const mockClearStaleState = jest.fn();
 const mockSigninSilent = jest.fn();
 const mockAddUserLoaded = jest.fn(() => jest.fn());
 const mockAddSilentRenewError = jest.fn(() => jest.fn());
@@ -13,6 +15,8 @@ const MockUserManager = jest.fn().mockImplementation(() => ({
   signinRedirect: mockSigninRedirect,
   signinRedirectCallback: mockSigninRedirectCallback,
   signoutRedirect: mockSignoutRedirect,
+  removeUser: mockRemoveUser,
+  clearStaleState: mockClearStaleState,
   signinSilent: mockSigninSilent,
   events: {
     addUserLoaded: mockAddUserLoaded,
@@ -164,20 +168,57 @@ describe('keycloakAuthService', () => {
   });
 
   describe('logout', () => {
-    it('should call signoutRedirect', async () => {
+    it('should call removeUser() before signoutRedirect()', async () => {
       mockGetUser.mockResolvedValue(createMockUser());
+      mockRemoveUser.mockResolvedValue(undefined);
+      mockClearStaleState.mockResolvedValue(undefined);
+      mockSignoutRedirect.mockResolvedValue(undefined);
       await keycloakAuthService.initialize();
 
       await keycloakAuthService.logout();
 
+      expect(mockRemoveUser).toHaveBeenCalledTimes(1);
+      expect(mockSignoutRedirect).toHaveBeenCalledTimes(1);
+      const removeUserCallTime = mockRemoveUser.mock.invocationCallOrder[0];
+      const signoutRedirectCallTime = mockSignoutRedirect.mock.invocationCallOrder[0];
+      expect(removeUserCallTime).toBeLessThan(signoutRedirectCallTime);
+    });
+
+    it('should call clearStaleState() on logout', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      mockRemoveUser.mockResolvedValue(undefined);
+      mockClearStaleState.mockResolvedValue(undefined);
+      mockSignoutRedirect.mockResolvedValue(undefined);
+      await keycloakAuthService.initialize();
+
+      await keycloakAuthService.logout();
+
+      expect(mockClearStaleState).toHaveBeenCalledTimes(1);
+    });
+
+    it('should clear auth state even if removeUser() fails', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      mockRemoveUser.mockRejectedValue(new Error('removeUser failed'));
+      mockClearStaleState.mockResolvedValue(undefined);
+      mockSignoutRedirect.mockResolvedValue(undefined);
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      await keycloakAuthService.initialize();
+
+      await keycloakAuthService.logout();
+
+      expect(keycloakAuthService.isAuthenticated()).toBe(false);
+      // signoutRedirect should still be attempted
       expect(mockSignoutRedirect).toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
 
     it('should clear user even if signoutRedirect fails', async () => {
       mockGetUser.mockResolvedValue(createMockUser());
-      await keycloakAuthService.initialize();
+      mockRemoveUser.mockResolvedValue(undefined);
+      mockClearStaleState.mockResolvedValue(undefined);
       mockSignoutRedirect.mockRejectedValue(new Error('Network error'));
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      await keycloakAuthService.initialize();
 
       await keycloakAuthService.logout();
 
@@ -192,6 +233,9 @@ describe('keycloakAuthService', () => {
 
     it('should remove event listeners on logout', async () => {
       mockGetUser.mockResolvedValue(createMockUser());
+      mockRemoveUser.mockResolvedValue(undefined);
+      mockClearStaleState.mockResolvedValue(undefined);
+      mockSignoutRedirect.mockResolvedValue(undefined);
       await keycloakAuthService.initialize();
 
       const unsubUserLoaded = mockAddUserLoaded.mock.results[0].value;

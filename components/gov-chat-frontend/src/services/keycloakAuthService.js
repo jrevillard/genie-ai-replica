@@ -96,6 +96,16 @@ async function logout() {
 
   const manager = getUserManager();
   try {
+    await manager.removeUser();
+  } catch (error) {
+    console.error('[KeycloakAuth] Error removing user:', error.message);
+  }
+  try {
+    await manager.clearStaleState();
+  } catch (error) {
+    console.error('[KeycloakAuth] Error clearing stale state:', error.message);
+  }
+  try {
     await manager.signoutRedirect();
   } catch (error) {
     console.error('[KeycloakAuth] Error during logout redirect:', error.message);

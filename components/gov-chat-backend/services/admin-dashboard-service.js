@@ -2,6 +2,7 @@ const { logger, dbService } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
+const { isValidDateStr } = require('./path-sanitizer');
 
 class AdminDashboardService {
   constructor() {
@@ -470,6 +471,10 @@ class AdminDashboardService {
           logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
         }
       } else if (dateRange === 'custom' && startDate && endDate) {
+        if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
+          logger.warn('getLogs.invalid_custom_date_range', { startDate, endDate });
+          return { logs: [], totalLogs: 0 };
+        }
         const start = new Date(startDate);
         const end = new Date(endDate);
         const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));

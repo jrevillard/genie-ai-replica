@@ -6,6 +6,7 @@ const emailService = require('./email-service');
 const crypto = require('crypto');
 const authService = require('./auth-service');
 const { logger, dbService } = require('../shared-lib');
+const { sanitizePath } = require('./path-sanitizer');
 
 class UserProfileService {
   constructor() {
@@ -487,7 +488,7 @@ class UserProfileService {
     try {
       logger.debug('UserProfileService.store_file_start', { userId, fieldName });
 
-      const userDir = path.join(this.uploadDir, userId);
+      const userDir = sanitizePath(this.uploadDir, userId);
       if (!fs.existsSync(userDir)) {
         fs.mkdirSync(userDir, { recursive: true });
         logger.info('UserProfileService.created_user_directory', { userId, path: userDir });
@@ -495,7 +496,7 @@ class UserProfileService {
 
       const fileExt = path.extname(file.originalname || file.name || 'unknown');
       const fileName = `${fieldName}-${Date.now()}${fileExt}`;
-      const filePath = path.join(userDir, fileName);
+      const filePath = sanitizePath(userDir, fileName);
 
       if (file.buffer) {
         await fs.promises.writeFile(filePath, file.buffer);
@@ -529,7 +530,7 @@ class UserProfileService {
   async deleteUserFiles(user) {
     const startTime = Date.now();
     const userId = user._key;
-    const userDir = path.join(this.uploadDir, userId);
+    const userDir = sanitizePath(this.uploadDir, userId);
 
     logger.info('UserProfileService.delete_user_files_start', { userId });
 

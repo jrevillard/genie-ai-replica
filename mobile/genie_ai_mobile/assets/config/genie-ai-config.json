@@ -414,7 +414,7 @@
           },
           {
             "id": "diagnose-pest-disease",
-            "category": "2",
+            "category": "10",
             "action": {
               "visibleText": "quickhelp.diagnosePestDiseaseUserPrompt",
               "hiddenPrompt": "quickhelp.diagnosePestDiseasePrompt"
@@ -502,7 +502,7 @@
           },
           {
             "id": "manage-poultry-pigs",
-            "category": "4",
+            "category": "5",
             "action": {
               "visibleText": "quickhelp.managePoultryPigsUserPrompt",
               "hiddenPrompt": "quickhelp.managePoultryPigsPrompt"
@@ -546,7 +546,7 @@
           },
           {
             "id": "fertilizer-soil-advice",
-            "category": "5",
+            "category": "8",
             "action": {
               "visibleText": "quickhelp.fertilizerSoilAdviceUserPrompt",
               "hiddenPrompt": "quickhelp.fertilizerSoilAdvicePrompt"
@@ -590,7 +590,7 @@
           },
           {
             "id": "start-manage-apiary",
-            "category": "6",
+            "category": "4",
             "action": {
               "visibleText": "quickhelp.startManageApiaryUserPrompt",
               "hiddenPrompt": "quickhelp.startManageApiaryPrompt"
@@ -634,7 +634,7 @@
           },
           {
             "id": "tilapia-pond-care",
-            "category": "7",
+            "category": "6",
             "action": {
               "visibleText": "quickhelp.tilapiaPondCareUserPrompt",
               "hiddenPrompt": "quickhelp.tilapiaPondCarePrompt"
@@ -678,7 +678,7 @@
           },
           {
             "id": "harvest-storage",
-            "category": "8",
+            "category": "11",
             "action": {
               "visibleText": "quickhelp.harvestStorageUserPrompt",
               "hiddenPrompt": "quickhelp.harvestStoragePrompt"

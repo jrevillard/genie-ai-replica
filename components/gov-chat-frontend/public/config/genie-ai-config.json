@@ -306,7 +306,7 @@
               "type": "file",
               "value": "/config/quickhelp/diagnose-pest-disease.svg"
             },
-            "category": "2",
+            "category": "10",
             "action": {
               "visibleText": "quickhelp.diagnosePestDiseaseUserPrompt",
               "hiddenPrompt": "quickhelp.diagnosePestDiseasePrompt"
@@ -342,7 +342,7 @@
               "type": "file",
               "value": "/config/quickhelp/manage-poultry-pigs.svg"
             },
-            "category": "4",
+            "category": "5",
             "action": {
               "visibleText": "quickhelp.managePoultryPigsUserPrompt",
               "hiddenPrompt": "quickhelp.managePoultryPigsPrompt"
@@ -360,7 +360,7 @@
               "type": "file",
               "value": "/config/quickhelp/fertilizer-soil-advice.svg"
             },
-            "category": "5",
+            "category": "8",
             "action": {
               "visibleText": "quickhelp.fertilizerSoilAdviceUserPrompt",
               "hiddenPrompt": "quickhelp.fertilizerSoilAdvicePrompt"
@@ -378,7 +378,7 @@
               "type": "file",
               "value": "/config/quickhelp/start-manage-apiary.svg"
             },
-            "category": "6",
+            "category": "4",
             "action": {
               "visibleText": "quickhelp.startManageApiaryUserPrompt",
               "hiddenPrompt": "quickhelp.startManageApiaryPrompt"
@@ -396,7 +396,7 @@
               "type": "file",
               "value": "/config/quickhelp/tilapia-pond-care.svg"
             },
-            "category": "7",
+            "category": "6",
             "action": {
               "visibleText": "quickhelp.tilapiaPondCareUserPrompt",
               "hiddenPrompt": "quickhelp.tilapiaPondCarePrompt"
@@ -414,7 +414,7 @@
               "type": "file",
               "value": "/config/quickhelp/harvest-storage.svg"
             },
-            "category": "8",
+            "category": "11",
             "action": {
               "visibleText": "quickhelp.harvestStorageUserPrompt",
               "hiddenPrompt": "quickhelp.harvestStoragePrompt"

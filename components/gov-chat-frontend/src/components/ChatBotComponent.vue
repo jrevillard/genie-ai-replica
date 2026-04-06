@@ -644,6 +644,30 @@ export default {
       return `Category ${id}`; // Fallback
     },
 
+    checkContextConfig(context) {
+      const user = this.$store.getters.currentUser
+      if (!user || user.role !== 'Admin') return
+
+      const warnings = []
+      if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
+        warnings.push(`Category "${context.categoryLabel}" not found in knowledge hierarchy`)
+      }
+      if (context.serviceLabels?.length > 0) {
+        for (const label of context.serviceLabels) {
+          const item = this.selectedContextItems.find((i) => i.service === label)
+          if (item?.serviceKey?.startsWith('quickhelp.') && item.serviceKey !== 'quickhelp.justChat') {
+            warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`)
+          }
+        }
+      }
+      if (warnings.length > 0) {
+        notificationService.warning(
+          `Configuration mismatch: ${warnings.join('; ')}. Please check the Quick Help and knowledge hierarchy configuration.`,
+          8000
+        )
+      }
+    },
+
     // Safely translate a key, with mapping for static strings
     safeTranslate(key) {
       try {
@@ -1016,6 +1040,8 @@ export default {
           "Submitting query with data:",
           JSON.stringify(queryData, null, 2)
         );
+
+        this.checkContextConfig(queryData.context);
 
         const result = await chatbotService.submitQuery(queryData);
 

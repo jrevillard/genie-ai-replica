@@ -63,16 +63,10 @@ const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const readline = require('readline');
-const path = require('path');
 const { getDbConfig } = require('./db-config');
 
 const config = getDbConfig();
 
-/**
- * Resolves the ArangoDB URL. If running on host but URL points to docker service, 
- * it falls back to localhost.
- */
-// Removed: logic moved to db-config.js
 
 // To support modern ESM-only packages like inquirer v9+, we will dynamically import it.
 let inquirer;

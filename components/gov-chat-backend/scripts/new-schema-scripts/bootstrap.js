@@ -35,7 +35,7 @@ async function runBootstrap() {
     const scriptPath = path.join(__dirname, script);
     console.log(`\n>> Executing ${script}...`);
     try {
-      execSync(`node "${scriptPath}"`, { stdio: 'inherit', env: process.env });
+      execSync(`node "${scriptPath}"`, { stdio: 'inherit', env: process.env, cwd: __dirname });
       console.log(`>> Successfully executed ${script}.`);
     } catch (error) {
       console.error(`\n[ERROR] Bootstrap failed during ${script}`);

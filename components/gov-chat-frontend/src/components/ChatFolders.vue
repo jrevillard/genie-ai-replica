@@ -205,13 +205,7 @@
       </template>
     </modal-dialog>
 
-    <modal-dialog
-      v-if="showEditFolderDialog"
-      @close="
-        editingFolder = null
-        showEditFolderDialog = false
-      "
-    >
+    <modal-dialog v-if="showEditFolderDialog" @close="closeEditFolderDialog">
       <template #header>
         <h3>{{ safeT('sidebar.editFolder', 'Edit Folder') }}</h3>
       </template>
@@ -228,13 +222,7 @@
         </div>
       </template>
       <template #footer>
-        <button
-          class="cancel-btn"
-          @click="
-            editingFolder = null
-            showEditFolderDialog = false
-          "
-        >
+        <button class="cancel-btn" @click="closeEditFolderDialog">
           {{ safeT('common.cancel', 'Cancel') }}
         </button>
         <button class="primary-btn" :disabled="!editingFolderName.trim()" @click="handleUpdateFolder">
@@ -243,13 +231,7 @@
       </template>
     </modal-dialog>
 
-    <modal-dialog
-      v-if="showDeleteFolderDialog"
-      @close="
-        editingFolder = null
-        showDeleteFolderDialog = false
-      "
-    >
+    <modal-dialog v-if="showDeleteFolderDialog" @close="closeDeleteFolderDialog">
       <template #header>
         <h3>{{ safeT('sidebar.deleteFolder', 'Delete Folder') }}</h3>
       </template>
@@ -263,13 +245,7 @@
         </p>
       </template>
       <template #footer>
-        <button
-          class="cancel-btn"
-          @click="
-            editingFolder = null
-            showDeleteFolderDialog = false
-          "
-        >
+        <button class="cancel-btn" @click="closeDeleteFolderDialog">
           {{ safeT('common.cancel', 'Cancel') }}
         </button>
         <button class="danger-btn" @click="handleDeleteFolder">
@@ -584,6 +560,15 @@ export default {
       'deleteChat',
       'moveChat',
     ]),
+
+    closeEditFolderDialog() {
+      this.editingFolder = null
+      this.showEditFolderDialog = false
+    },
+    closeDeleteFolderDialog() {
+      this.editingFolder = null
+      this.showDeleteFolderDialog = false
+    },
 
     handleConversationSaved(conversationId) {
       console.log(`Received conversation-saved event for conversation ${conversationId}`)

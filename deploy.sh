@@ -62,9 +62,10 @@ log "Kong is ready."
 # ── Step 3: Bootstrap ArangoDB schema & user accounts ─────────────────────────
 log "Running database bootstrap..."
 SCRIPTS_DIR="components/gov-chat-backend/scripts/new-schema-scripts"
-if [ ! -d "${SCRIPTS_DIR}/node_modules" ]; then
-    log "Installing bootstrap dependencies..."
-    npm install --prefix "$SCRIPTS_DIR" --silent
+BACKEND_DIR="components/gov-chat-backend"
+if [ ! -d "${BACKEND_DIR}/node_modules" ]; then
+    log "Installing backend dependencies (this may take a minute)..."
+    npm install --prefix "$BACKEND_DIR" || fail "npm install failed for gov-chat-backend."
 fi
 node "${SCRIPTS_DIR}/bootstrap.js" || fail "Bootstrap failed. Check ArangoDB connectivity and .env values."
 log "Bootstrap complete."
@@ -82,7 +83,8 @@ export EXPRESS_API_PORT=${EXPRESS_API_PORT:-3000}
 export DOC_REPO_HOST=${DOC_REPO_HOST:-document-repository}
 export DOC_REPO_PORT=${DOC_REPO_PORT:-3001}
 
-(cd "$KONG_CONFIG_DIR" && chmod +x manage-kong-config.sh && ./manage-kong-config.sh -a) \
+chmod +x "${KONG_CONFIG_DIR}/manage-kong-config.sh"
+(cd "$KONG_CONFIG_DIR" && ./manage-kong-config.sh -a) \
     || fail "Kong configuration failed."
 log "Kong configuration applied."
 

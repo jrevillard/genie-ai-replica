@@ -762,6 +762,12 @@ After launching services and waiting for the service startup: the following is a
 
 #### 4\. Launch Services
 
+> **Before launching:** Some models (Gemma, Granite) are gated on HuggingFace and require you to:
+> 1. Accept the license at their HuggingFace model page while logged in with the account that owns your token.
+> 2. Set `HUGGINGFACEHUB_API_TOKEN` and `HUGGING_FACE_HUB_TOKEN` in your `.env`.
+>
+> If a vLLM container exits immediately with code 1, this is almost always the cause.
+
 Prerequisite: Download OCR Models  **CRITICAL**
 Because the framework uses EasyOCR during data prep and model downloads inside containers can be slow or unreliable, you must download these files to the root of your project folder first.
 

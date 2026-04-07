@@ -4,36 +4,27 @@
       <div class="logo">
         <div class="app-logo">
           <img
+            v-if="$config && $config.app && $config.app.icon && $config.app.icon.type === 'file'"
             :src="$config.app.icon.value"
             alt="App Icon"
             class="ui-icon"
-            v-if="
-              $config &&
-              $config.app &&
-              $config.app.icon &&
-              $config.app.icon.type === 'file'
-            "
           />
-          <div class="app-logo-fallback" v-else></div>
+          <div v-else class="app-logo-fallback"></div>
         </div>
         <h1 class="app-name">
-          {{
-            $config && $config.app ? $config.app.title : $t("register.appTitle")
-          }}
+          {{ $config && $config.app ? $config.app.title : $t('register.appTitle') }}
         </h1>
       </div>
 
-      <h2 class="register-heading">{{ $t("register.createAccount") }}</h2>
+      <h2 class="register-heading">{{ $t('register.createAccount') }}</h2>
 
-      <form @submit.prevent="handleRegister" class="register-form">
+      <form class="register-form" @submit.prevent="handleRegister">
         <div class="form-group">
-          <label for="username" class="form-label">{{
-            $t("register.username")
-          }}</label>
+          <label for="username" class="form-label">{{ $t('register.username') }}</label>
           <input
+            id="username"
             v-model="username"
             type="text"
-            id="username"
             :placeholder="$t('register.usernamePlaceholder')"
             class="form-control"
             required
@@ -42,13 +33,11 @@
         </div>
 
         <div class="form-group">
-          <label for="email" class="form-label">{{
-            $t("register.email")
-          }}</label>
+          <label for="email" class="form-label">{{ $t('register.email') }}</label>
           <input
+            id="email"
             v-model="email"
             type="email"
-            id="email"
             :placeholder="$t('register.emailPlaceholder')"
             class="form-control"
             required
@@ -57,13 +46,11 @@
         </div>
 
         <div class="form-group">
-          <label for="password" class="form-label">{{
-            $t("register.password")
-          }}</label>
+          <label for="password" class="form-label">{{ $t('register.password') }}</label>
           <input
+            id="password"
             v-model="password"
             type="password"
-            id="password"
             autocomplete="new-password"
             :placeholder="$t('register.passwordPlaceholder')"
             class="form-control"
@@ -73,13 +60,11 @@
         </div>
 
         <div class="form-group">
-          <label for="confirmPassword" class="form-label">{{
-            $t("register.confirmPassword")
-          }}</label>
+          <label for="confirmPassword" class="form-label">{{ $t('register.confirmPassword') }}</label>
           <input
+            id="confirmPassword"
             v-model="confirmPassword"
             type="password"
-            id="confirmPassword"
             autocomplete="new-password"
             :placeholder="$t('register.confirmPasswordPlaceholder')"
             class="form-control"
@@ -92,37 +77,29 @@
 
         <div class="terms-checkbox">
           <label class="terms">
-            <input type="checkbox" v-model="acceptTerms" required />
-            <span
-              >{{ $t("register.acceptTerms") }}
-              <a href="#" class="terms-link">{{
-                $t("register.termsOfService")
-              }}</a></span
-            >
+            <input v-model="acceptTerms" type="checkbox" required />
+            <span>
+              {{ $t('register.acceptTerms') }}
+              <a href="#" class="terms-link">{{ $t('register.termsOfService') }}</a>
+            </span>
           </label>
           <p v-if="termsError" class="error-message">{{ termsError }}</p>
         </div>
 
         <button type="submit" class="register-button" :disabled="isSubmitting">
-          {{
-            isSubmitting
-              ? $t("register.processing")
-              : $t("register.registerButton")
-          }}
+          {{ isSubmitting ? $t('register.processing') : $t('register.registerButton') }}
         </button>
       </form>
 
       <div class="login-link">
         <p>
-          {{ $t("register.alreadyHaveAccount") }}
-          <router-link to="/login" class="login-link-text">{{
-            $t("register.loginNow")
-          }}</router-link>
+          {{ $t('register.alreadyHaveAccount') }}
+          <router-link to="/login" class="login-link-text">{{ $t('register.loginNow') }}</router-link>
         </p>
       </div>
 
       <div class="register-footer">
-        <p class="terms-policy">{{ $t("register.privacyNotice") }}</p>
+        <p class="terms-policy">{{ $t('register.privacyNotice') }}</p>
         <div class="language-selector">
           <language-selector />
         </div>
@@ -132,339 +109,252 @@
 </template>
 
 <script>
-import authService from "@/services/authService";
-import LanguageSelector from "@/components/LanguageSelector.vue";
+import userService from '@/services/userService'
+import LanguageSelector from '@/components/LanguageSelector.vue'
+import { themeManager } from '@/utils/ThemeManager'
 
 export default {
-  name: "RegisterScreen",
+  name: 'RegisterScreen',
   components: {
     LanguageSelector,
   },
   props: {
     theme: {
       type: String,
-      default: "light",
+      default: 'light',
     },
   },
   data() {
     return {
-      username: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
       acceptTerms: false,
       isSubmitting: false,
-      usernameError: "",
-      emailError: "",
-      passwordError: "",
-      confirmPasswordError: "",
-      termsError: "",
-    };
-  },
-  created() {
-    console.log("[REGISTER] RegisterScreen component created");
-    document.documentElement.setAttribute("data-theme", this.theme);
-    this.ensureViewportMeta();
-    if (this.$i18n) {
-      console.log("[REGISTER] Current locale:", this.$i18n.locale);
-      console.log(
-        "[REGISTER] Create account translation:",
-        this.$t("register.createAccount")
-      );
-    }
-  },
-  mounted() {
-    this.setMobileHeight();
-    window.addEventListener("resize", this.setMobileHeight);
-    this.applyTheme();
-    this.observeThemeChanges();
-    // Debug: Log computed styles and configuration values
-    const title = document.querySelector(".register-card .app-name");
-    console.log(
-      "[REGISTER] Title text content:",
-      title ? title.textContent : "not found"
-    );
-    console.log(
-      "[REGISTER] Title computed color:",
-      title ? window.getComputedStyle(title).color : "not found"
-    );
-    const subtitle = document.querySelector(".register-heading");
-    console.log(
-      "[REGISTER] Subtitle computed color:",
-      subtitle ? window.getComputedStyle(subtitle).color : "not found"
-    );
-    const icon = document.querySelector(".app-logo");
-    console.log(
-      "[REGISTER] Icon source:",
-      icon ? icon.querySelector("img")?.src : "fallback"
-    );
-    console.log(
-      "[REGISTER] Icon computed background color:",
-      icon ? window.getComputedStyle(icon).backgroundColor : "not found"
-    );
-    const formField = document.querySelector(".form-control");
-    console.log(
-      "[REGISTER] Form field computed background color:",
-      formField
-        ? window.getComputedStyle(formField).backgroundColor
-        : "not found"
-    );
-    const checkbox = document.querySelector(".terms input");
-    console.log(
-      "[REGISTER] Checkbox computed background color:",
-      checkbox ? window.getComputedStyle(checkbox).backgroundColor : "not found"
-    );
-    const registerButton = document.querySelector(".register-button");
-    console.log(
-      "[REGISTER] Register button computed background color:",
-      registerButton
-        ? window.getComputedStyle(registerButton).backgroundColor
-        : "not found"
-    );
-    const loginLink = document.querySelector(".login-link-text");
-    console.log(
-      "[REGISTER] Login link computed color:",
-      loginLink ? window.getComputedStyle(loginLink).color : "not found"
-    );
-    const termsLink = document.querySelector(".terms-link");
-    console.log(
-      "[REGISTER] Terms link computed color:",
-      termsLink ? window.getComputedStyle(termsLink).color : "not found"
-    );
-    const footer = document.querySelector(".terms-policy");
-    console.log(
-      "[REGISTER] Footer computed color:",
-      footer ? window.getComputedStyle(footer).color : "not found"
-    );
-  },
-  beforeUnmount() {
-    window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[REGISTER] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
+      usernameError: '',
+      emailError: '',
+      passwordError: '',
+      confirmPasswordError: '',
+      termsError: '',
     }
   },
   watch: {
     theme(newTheme) {
-      console.log(
-        "[REGISTER] Theme prop updated:",
-        newTheme,
-        "source: prop change",
-        new Date().toISOString()
-      );
-      this.applyTheme();
+      console.log('[REGISTER] Theme prop updated:', newTheme, 'source: prop change', new Date().toISOString())
+      this.applyTheme()
     },
     username() {
-      this.usernameError = "";
+      this.usernameError = ''
     },
     email() {
-      this.emailError = "";
+      this.emailError = ''
     },
     password() {
-      this.passwordError = "";
+      this.passwordError = ''
       if (this.confirmPassword) {
         this.confirmPasswordError =
-          this.password !== this.confirmPassword
-            ? this.$t("register.passwordsDoNotMatch")
-            : "";
+          this.password !== this.confirmPassword ? this.$t('register.passwordsDoNotMatch') : ''
       }
     },
     confirmPassword() {
-      this.confirmPasswordError =
-        this.password !== this.confirmPassword
-          ? this.$t("register.passwordsDoNotMatch")
-          : "";
+      this.confirmPasswordError = this.password !== this.confirmPassword ? this.$t('register.passwordsDoNotMatch') : ''
     },
     acceptTerms() {
-      this.termsError = "";
+      this.termsError = ''
     },
+  },
+  created() {
+    console.log('[REGISTER] RegisterScreen component created')
+    themeManager.setTheme(this.theme)
+    this.ensureViewportMeta()
+    if (this.$i18n) {
+      console.log('[REGISTER] Current locale:', this.$i18n.locale)
+      console.log('[REGISTER] Create account translation:', this.$t('register.createAccount'))
+    }
+  },
+  mounted() {
+    this.setMobileHeight()
+    window.addEventListener('resize', this.setMobileHeight)
+    this.applyTheme()
+    // Debug: Log computed styles and configuration values
+    const title = document.querySelector('.register-card .app-name')
+    console.log('[REGISTER] Title text content:', title ? title.textContent : 'not found')
+    console.log('[REGISTER] Title computed color:', title ? window.getComputedStyle(title).color : 'not found')
+    const subtitle = document.querySelector('.register-heading')
+    console.log('[REGISTER] Subtitle computed color:', subtitle ? window.getComputedStyle(subtitle).color : 'not found')
+    const icon = document.querySelector('.app-logo')
+    console.log('[REGISTER] Icon source:', icon ? icon.querySelector('img')?.src : 'fallback')
+    console.log(
+      '[REGISTER] Icon computed background color:',
+      icon ? window.getComputedStyle(icon).backgroundColor : 'not found'
+    )
+    const formField = document.querySelector('.form-control')
+    console.log(
+      '[REGISTER] Form field computed background color:',
+      formField ? window.getComputedStyle(formField).backgroundColor : 'not found'
+    )
+    const checkbox = document.querySelector('.terms input')
+    console.log(
+      '[REGISTER] Checkbox computed background color:',
+      checkbox ? window.getComputedStyle(checkbox).backgroundColor : 'not found'
+    )
+    const registerButton = document.querySelector('.register-button')
+    console.log(
+      '[REGISTER] Register button computed background color:',
+      registerButton ? window.getComputedStyle(registerButton).backgroundColor : 'not found'
+    )
+    const loginLink = document.querySelector('.login-link-text')
+    console.log(
+      '[REGISTER] Login link computed color:',
+      loginLink ? window.getComputedStyle(loginLink).color : 'not found'
+    )
+    const termsLink = document.querySelector('.terms-link')
+    console.log(
+      '[REGISTER] Terms link computed color:',
+      termsLink ? window.getComputedStyle(termsLink).color : 'not found'
+    )
+    const footer = document.querySelector('.terms-policy')
+    console.log('[REGISTER] Footer computed color:', footer ? window.getComputedStyle(footer).color : 'not found')
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.setMobileHeight)
   },
   methods: {
     setMobileHeight() {
-      const vh = window.innerHeight * 0.01;
+      const vh = window.innerHeight * 0.01
       // PATCHED: Added .style before .setProperty
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
     },
     ensureViewportMeta() {
       if (!document.querySelector('meta[name="viewport"]')) {
-        const meta = document.createElement("meta");
-        meta.name = "viewport";
-        meta.content =
-          "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
-        document.getElementsByTagName("head")[0].appendChild(meta);
+        const meta = document.createElement('meta')
+        meta.name = 'viewport'
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+        document.getElementsByTagName('head')[0].appendChild(meta)
       }
     },
     goToLogin() {
-      this.$router.push("/login");
+      this.$router.push('/login')
     },
     validateUsername(username) {
       if (username.length < 3) {
-        return this.$t("register.usernameMinLength");
+        return this.$t('register.usernameMinLength')
       }
-      const validUsernameRegex = /^[a-zA-Z0-9_.-]+$/;
+      const validUsernameRegex = /^[a-zA-Z0-9_.-]+$/
       if (!validUsernameRegex.test(username)) {
         return (
-          this.$t("register.usernameInvalidChars") ||
-          "Username can only contain letters, numbers, underscores, dots and hyphens"
-        );
+          this.$t('register.usernameInvalidChars') ||
+          'Username can only contain letters, numbers, underscores, dots and hyphens'
+        )
       }
-      return "";
+      return ''
     },
     validateForm() {
-      let isValid = true;
-      this.usernameError = "";
-      this.emailError = "";
-      this.passwordError = "";
-      this.confirmPasswordError = "";
-      this.termsError = "";
-      const usernameError = this.validateUsername(this.username);
+      let isValid = true
+      this.usernameError = ''
+      this.emailError = ''
+      this.passwordError = ''
+      this.confirmPasswordError = ''
+      this.termsError = ''
+      const usernameError = this.validateUsername(this.username)
       if (usernameError) {
-        this.usernameError = usernameError;
-        isValid = false;
+        this.usernameError = usernameError
+        isValid = false
       }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(this.email)) {
-        this.emailError = this.$t("register.invalidEmail");
-        isValid = false;
+        this.emailError = this.$t('register.invalidEmail')
+        isValid = false
       }
-      const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+      const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/
       if (!passwordRegex.test(this.password)) {
-        this.passwordError = this.$t("register.passwordRequirements");
-        isValid = false;
+        this.passwordError = this.$t('register.passwordRequirements')
+        isValid = false
       }
       if (this.password !== this.confirmPassword) {
-        this.confirmPasswordError = this.$t("register.passwordsDoNotMatch");
-        isValid = false;
+        this.confirmPasswordError = this.$t('register.passwordsDoNotMatch')
+        isValid = false
       }
       if (!this.acceptTerms) {
-        this.termsError = this.$t("register.mustAcceptTerms");
-        isValid = false;
+        this.termsError = this.$t('register.mustAcceptTerms')
+        isValid = false
       }
-      return isValid;
+      return isValid
     },
     async handleRegister() {
       if (!this.validateForm()) {
-        return;
+        return
       }
-      this.isSubmitting = true;
+      this.isSubmitting = true
       try {
         const userData = {
           loginName: this.username,
           email: this.email,
           password: this.password,
-        };
-        const response = await authService.register(userData);
-        console.log("[REGISTER] User registered successfully:", response);
+        }
+        const response = await userService.register(userData)
+        console.log('[REGISTER] User registered successfully:', response)
         this.$router.push({
-          path: "/registration-success",
+          path: '/registration-success',
           query: { email: this.email },
-        });
+        })
       } catch (error) {
-        console.error("[REGISTER] Registration error:", error);
+        console.error('[REGISTER] Registration error:', error)
         if (error.response) {
-          const { status, data } = error.response;
+          const { status, data } = error.response
           if (status === 409 || status === 400) {
-            const errorMessage = data.message || "";
+            const errorMessage = data.message || ''
             if (
-              errorMessage.toLowerCase().includes("username already exists") ||
-              (errorMessage.toLowerCase().includes("username") &&
-                errorMessage.toLowerCase().includes("exists")) ||
-              (data.field && data.field.toLowerCase() === "username") ||
-              errorMessage.toLowerCase().includes("loginname")
+              errorMessage.toLowerCase().includes('username already exists') ||
+              (errorMessage.toLowerCase().includes('username') && errorMessage.toLowerCase().includes('exists')) ||
+              (data.field && data.field.toLowerCase() === 'username') ||
+              errorMessage.toLowerCase().includes('loginname')
             ) {
-              this.usernameError = this.$t("register.usernameExists");
+              this.usernameError = this.$t('register.usernameExists')
             } else if (
-              errorMessage.toLowerCase().includes("email already exists") ||
-              (errorMessage.toLowerCase().includes("email") &&
-                errorMessage.toLowerCase().includes("exists")) ||
-              (data.field && data.field.toLowerCase() === "email")
+              errorMessage.toLowerCase().includes('email already exists') ||
+              (errorMessage.toLowerCase().includes('email') && errorMessage.toLowerCase().includes('exists')) ||
+              (data.field && data.field.toLowerCase() === 'email')
             ) {
-              this.emailError = this.$t("register.emailExists");
-            } else if (
-              errorMessage.includes("username") ||
-              errorMessage.includes("fordendk")
-            ) {
-              this.usernameError = this.$t("register.usernameExists");
+              this.emailError = this.$t('register.emailExists')
+            } else if (errorMessage.includes('username') || errorMessage.includes('fordendk')) {
+              this.usernameError = this.$t('register.usernameExists')
             } else {
-              this.usernameError = this.$t("register.registrationFailed");
+              this.usernameError = this.$t('register.registrationFailed')
             }
           } else {
-            this.usernameError = this.$t("register.registrationFailed");
+            this.usernameError = this.$t('register.registrationFailed')
           }
-        } else if (error.message && error.message.includes("Network Error")) {
-          this.usernameError = this.$t("register.networkError");
+        } else if (error.message && error.message.includes('Network Error')) {
+          this.usernameError = this.$t('register.networkError')
         } else {
-          this.usernameError = this.$t("register.registrationFailed");
+          this.usernameError = this.$t('register.registrationFailed')
         }
       } finally {
-        this.isSubmitting = false;
+        this.isSubmitting = false
       }
     },
     applyTheme() {
-      console.log(
-        "[REGISTER] Applying theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const currentTheme = document.documentElement.getAttribute("data-theme");
+      console.log('[REGISTER] Applying theme:', this.theme, new Date().toISOString())
+      const currentTheme = document.documentElement.getAttribute('data-theme')
       if (currentTheme !== this.theme) {
-        console.warn(
-          "[REGISTER] Theme mismatch: component theme=",
-          this.theme,
-          "vs DOM theme=",
-          currentTheme
-        );
+        console.warn('[REGISTER] Theme mismatch: component theme=', this.theme, 'vs DOM theme=', currentTheme)
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
-      const title = document.querySelector(".register-card .app-name");
+      themeManager.setTheme(this.theme)
+      const title = document.querySelector('.register-card .app-name')
       console.log(
-        "[REGISTER] Title computed color after apply:",
-        title ? window.getComputedStyle(title).color : "not found"
-      );
-      const subtitle = document.querySelector(".register-heading");
+        '[REGISTER] Title computed color after apply:',
+        title ? window.getComputedStyle(title).color : 'not found'
+      )
+      const subtitle = document.querySelector('.register-heading')
       console.log(
-        "[REGISTER] Subtitle computed color after apply:",
-        subtitle ? window.getComputedStyle(subtitle).color : "not found"
-      );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[REGISTER] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[REGISTER] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log("[REGISTER] Updating component theme to:", newTheme);
-              this.theme = newTheme;
-              const title = document.querySelector(".register-card .app-name");
-              console.log(
-                "[REGISTER] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(".register-heading");
-              console.log(
-                "[REGISTER] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
+        '[REGISTER] Subtitle computed color after apply:',
+        subtitle ? window.getComputedStyle(subtitle).color : 'not found'
+      )
     },
   },
-};
+}
 </script>
 
 <style scoped>
@@ -480,11 +370,11 @@ export default {
   box-sizing: border-box;
 }
 
-[data-theme="light"] .register-container {
+[data-theme='light'] .register-container {
   background-color: var(--bg-primary, #f5f7fa);
 }
 
-[data-theme="dark"] .register-container {
+[data-theme='dark'] .register-container {
   background-color: var(--bg-primary, #1e1e1e);
 }
 
@@ -501,12 +391,12 @@ export default {
   overflow-y: auto;
 }
 
-[data-theme="light"] .register-card {
+[data-theme='light'] .register-card {
   background-color: var(--bg-secondary, #ffffff);
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .register-card {
+[data-theme='dark'] .register-card {
   background-color: var(--bg-secondary, #252525);
   color: var(--text-primary, #f0f0f0);
 }
@@ -551,11 +441,11 @@ export default {
   font-weight: bold;
 }
 
-[data-theme="light"] .register-card .app-name {
+[data-theme='light'] .register-card .app-name {
   color: #000000 !important;
 }
 
-[data-theme="dark"] .register-card .app-name {
+[data-theme='dark'] .register-card .app-name {
   color: var(--text-primary, #f0f0f0) !important;
 }
 
@@ -567,11 +457,11 @@ export default {
   font-weight: 500;
 }
 
-[data-theme="light"] .register-card .register-heading {
+[data-theme='light'] .register-card .register-heading {
   color: var(--text-secondary, #4d4d4d) !important;
 }
 
-[data-theme="dark"] .register-card .register-heading {
+[data-theme='dark'] .register-card .register-heading {
   color: var(--text-secondary, #b3b3b3) !important;
 }
 
@@ -590,11 +480,11 @@ export default {
   font-weight: 500;
 }
 
-[data-theme="light"] .form-label {
+[data-theme='light'] .form-label {
   color: var(--text-primary, #333333) !important;
 }
 
-[data-theme="dark"] .form-label {
+[data-theme='dark'] .form-label {
   color: var(--text-primary, #f0f0f0) !important;
 }
 
@@ -607,12 +497,12 @@ export default {
   transition: background-color 0.2s;
 }
 
-[data-theme="light"] .form-control {
+[data-theme='light'] .form-control {
   background-color: var(--bg-tertiary, #f0f2f5) !important;
   color: var(--text-primary, #333333) !important;
 }
 
-[data-theme="dark"] .form-control {
+[data-theme='dark'] .form-control {
   background-color: var(--bg-input, #333333) !important;
   color: var(--text-primary, #f0f0f0) !important;
 }
@@ -622,11 +512,11 @@ export default {
   box-shadow: 0 0 0 2px var(--bg-button-primary, #2a9d8f);
 }
 
-[data-theme="light"] .form-control:focus {
+[data-theme='light'] .form-control:focus {
   background-color: var(--bg-primary, #f5f7fa) !important;
 }
 
-[data-theme="dark"] .form-control:focus {
+[data-theme='dark'] .form-control:focus {
   background-color: var(--bg-input, #2a2a2a) !important;
 }
 
@@ -648,11 +538,11 @@ export default {
   font-size: 13px;
 }
 
-[data-theme="light"] .terms {
+[data-theme='light'] .terms {
   color: var(--text-secondary, #4d4d4d);
 }
 
-[data-theme="dark"] .terms {
+[data-theme='dark'] .terms {
   color: var(--text-secondary, #b3b3b3);
 }
 
@@ -668,7 +558,7 @@ export default {
 }
 
 .terms input:checked::after {
-  content: "\2713";
+  content: '\2713';
   color: #ffffff;
   position: absolute;
   top: 50%;
@@ -699,7 +589,7 @@ export default {
   transition: background-color 0.2s;
 }
 
-[data-theme="dark"] .register-button {
+[data-theme='dark'] .register-button {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -719,11 +609,11 @@ export default {
   font-size: 14px;
 }
 
-[data-theme="light"] .login-link {
+[data-theme='light'] .login-link {
   color: var(--text-secondary, #4d4d4d);
 }
 
-[data-theme="dark"] .login-link {
+[data-theme='dark'] .login-link {
   color: var(--text-secondary, #b3b3b3);
 }
 
@@ -749,11 +639,11 @@ export default {
   margin-bottom: 10px;
 }
 
-[data-theme="light"] .terms-policy {
+[data-theme='light'] .terms-policy {
   color: var(--text-muted, #6c757d);
 }
 
-[data-theme="dark"] .terms-policy {
+[data-theme='dark'] .terms-policy {
   color: var(--text-muted, #9ca3af);
 }
 
@@ -774,13 +664,13 @@ export default {
   cursor: pointer;
 }
 
-[data-theme="light"] .language-selector :deep(select) {
+[data-theme='light'] .language-selector :deep(select) {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme="dark"] .language-selector :deep(select) {
+[data-theme='dark'] .language-selector :deep(select) {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);

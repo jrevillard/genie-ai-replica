@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AuthService from './authService';
+import userService from './userService';
 
 /**
  * Base service for handling HTTP requests
@@ -11,8 +11,6 @@ class HttpService {
    */
   constructor() {
     this.baseUrl = process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
-    console.log('VUE_APP_API_URL=', process.env.VUE_APP_API_URL);
-
     this.axios = axios;
 
     // Configure axios
@@ -21,7 +19,7 @@ class HttpService {
     // Token refresh state
     this.isRefreshing = false;
     this.refreshSubscribers = [];
-    this.maxRetries = 2; // Limit interceptor retries to avoid overlap with authService
+    this.maxRetries = 2; // Limit interceptor retries to avoid overlap with userService
     this.retryDelay = 2000; // Delay for 401/403 retries in ms
 
     // Add request interceptor
@@ -43,7 +41,7 @@ class HttpService {
    */
   async refreshToken() {
     try {
-      const response = await AuthService.refreshToken();
+      const response = await userService.refreshToken();
       return response;
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -175,7 +173,7 @@ class HttpService {
 
         if (originalRequest._retryCount >= this.maxRetries) {
           console.error(`[HttpService] Max retries (${this.maxRetries}) reached for ${originalRequest.url}`);
-          AuthService.clearUserData();
+          userService.clearUserData();
           if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
             console.log('[HttpService] Redirecting to login due to max retries');
             window.location.href = '/login?error=session_expired';
@@ -226,7 +224,7 @@ class HttpService {
         } catch (refreshError) {
           console.error('Token refresh error:', refreshError);
           this.isRefreshing = false;
-          AuthService.clearUserData();
+          userService.clearUserData();
           localStorage.removeItem('user');
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');

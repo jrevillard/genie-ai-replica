@@ -1,67 +1,45 @@
 <!-- src/components/PasswordResetInitiateScreen.vue -->
 <template>
-  <div
-    class="password-reset-initiate-container"
-    :class="{ embedded: isEmbedded }"
-    :data-theme="theme"
-  >
+  <div class="password-reset-initiate-container" :class="{ embedded: isEmbedded }" :data-theme="theme">
     <div class="password-reset-initiate-card">
       <div class="logo">
         <div class="app-logo">
           <img
+            v-if="$config && $config.app && $config.app.icon && $config.app.icon.type === 'file'"
             :src="$config.app.icon.value"
             alt="App Icon"
             class="ui-icon"
-            v-if="
-              $config &&
-              $config.app &&
-              $config.app.icon &&
-              $config.app.icon.type === 'file'
-            "
           />
-          <div class="app-logo-fallback" v-else></div>
+          <div v-else class="app-logo-fallback"></div>
         </div>
         <h1 class="app-name">
-          {{
-            $config && $config.app
-              ? $config.app.title
-              : $t("passwordReset.appTitle")
-          }}
+          {{ $config && $config.app ? $config.app.title : $t('passwordReset.appTitle') }}
         </h1>
       </div>
 
       <h2 class="password-reset-initiate-heading">
-        {{ $t("passwordReset.resetPassword") }}
+        {{ $t('passwordReset.resetPassword') }}
       </h2>
 
       <!-- Success message after submitting email -->
       <div v-if="resetRequested" class="success-message">
-        <p>{{ $t("passwordReset.resetRequestSuccess") }}</p>
+        <p>{{ $t('passwordReset.resetRequestSuccess') }}</p>
         <p>
-          {{
-            $t(
-              "passwordReset.checkEmail",
-              "Please check your email for further instructions."
-            )
-          }}
+          {{ $t('passwordReset.checkEmail', 'Please check your email for further instructions.') }}
         </p>
       </div>
 
       <!-- Email Form -->
-      <form
-        v-else
-        @submit.prevent="handleInitiateReset"
-        class="password-reset-initiate-form"
-      >
+      <form v-else class="password-reset-initiate-form" @submit.prevent="handleInitiateReset">
         <!-- Force email label to always be visible by setting display -->
         <div class="form-group">
           <label for="email" class="form-label" style="display: block">
-            {{ $t("passwordReset.emailLabel") }}
+            {{ $t('passwordReset.emailLabel') }}
           </label>
           <input
+            id="email"
             v-model="email"
             type="email"
-            id="email"
             :placeholder="$t('passwordReset.emailPlaceholder')"
             class="form-control"
             required
@@ -70,31 +48,23 @@
           <p v-if="emailError" class="error-message">{{ emailError }}</p>
         </div>
 
-        <button
-          type="submit"
-          class="reset-initiate-button"
-          :disabled="isSubmitting || !isValidEmail"
-        >
+        <button type="submit" class="reset-initiate-button" :disabled="isSubmitting || !isValidEmail">
           <span v-if="isSubmitting" class="button-spinner"></span>
-          {{
-            isSubmitting
-              ? $t("passwordReset.processing")
-              : $t("passwordReset.resetButton")
-          }}
+          {{ isSubmitting ? $t('passwordReset.processing') : $t('passwordReset.resetButton') }}
         </button>
       </form>
 
       <div class="login-link">
         <p>
-          {{ $t("passwordReset.rememberPassword") }}
+          {{ $t('passwordReset.rememberPassword') }}
           <router-link to="/login" class="login-link-text">
-            {{ $t("passwordReset.backToLogin") }}
+            {{ $t('passwordReset.backToLogin') }}
           </router-link>
         </p>
       </div>
 
       <div class="password-reset-initiate-footer">
-        <p class="support-message">{{ $t("passwordReset.supportMessage") }}</p>
+        <p class="support-message">{{ $t('passwordReset.supportMessage') }}</p>
         <div class="language-selector">
           <language-selector />
         </div>
@@ -103,7 +73,7 @@
       <!-- Cancel button for embedded mode -->
       <div v-if="isEmbedded" class="modal-footer">
         <button class="cancel-button" @click="cancelReset">
-          {{ $t("common.cancel") }}
+          {{ $t('common.cancel') }}
         </button>
       </div>
     </div>
@@ -111,12 +81,13 @@
 </template>
 
 <script>
-import passwordService from "@/services/passwordService";
-import userService from "@/services/userService";
-import LanguageSelector from "@/components/LanguageSelector.vue";
+import passwordService from '@/services/passwordService'
+import userService from '@/services/userService'
+import LanguageSelector from '@/components/LanguageSelector.vue'
+import { themeManager } from '@/utils/ThemeManager'
 
 export default {
-  name: "PasswordResetInitiateScreen",
+  name: 'PasswordResetInitiateScreen',
   components: {
     LanguageSelector,
   },
@@ -127,225 +98,147 @@ export default {
     },
     prefilledEmail: {
       type: String,
-      default: "",
+      default: '',
     },
     theme: {
       type: String,
-      default: "light",
+      default: 'light',
     },
   },
   data() {
     return {
-      email: this.prefilledEmail || "",
-      emailError: "",
+      email: this.prefilledEmail || '',
+      emailError: '',
       isSubmitting: false,
       resetRequested: false,
-    };
+    }
   },
   computed: {
     isValidEmail() {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      return emailRegex.test(this.email);
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      return emailRegex.test(this.email)
     },
-  },
-  created() {
-    this.setCurrentUserEmail();
-    document.documentElement.setAttribute("data-theme", this.theme);
-    this.error = "";
-    if (this.$route.query.error) {
-      this.error = this.$route.query.error;
-    }
-    if (this.$i18n) {
-      console.log("[RESET] Current locale:", this.$i18n.locale);
-      console.log(
-        "[RESET] Email label translation:",
-        this.$t("passwordReset.emailLabel")
-      );
-    }
-  },
-  mounted() {
-    this.setMobileHeight();
-    window.addEventListener("resize", this.setMobileHeight);
-    this.applyTheme();
-    this.observeThemeChanges();
-    // Debug: Log computed styles and configuration values
-    const title = document.querySelector(
-      ".password-reset-initiate-card .app-name"
-    );
-    console.log(
-      "[RESET] Title text content:",
-      title ? title.textContent : "not found"
-    );
-    console.log(
-      "[RESET] Title computed color:",
-      title ? window.getComputedStyle(title).color : "not found"
-    );
-    const subtitle = document.querySelector(".password-reset-initiate-heading");
-    console.log(
-      "[RESET] Subtitle computed color:",
-      subtitle ? window.getComputedStyle(subtitle).color : "not found"
-    );
-    const icon = document.querySelector(".app-logo");
-    console.log(
-      "[RESET] Icon source:",
-      icon ? icon.querySelector("img")?.src : "fallback"
-    );
-    console.log(
-      "[RESET] Icon computed background color:",
-      icon ? window.getComputedStyle(icon).backgroundColor : "not found"
-    );
-    const button = document.querySelector(".reset-initiate-button");
-    console.log(
-      "[RESET] Button computed background color:",
-      button ? window.getComputedStyle(button).backgroundColor : "not found"
-    );
-    const formField = document.querySelector(".form-control");
-    console.log(
-      "[RESET] Form field computed background color:",
-      formField
-        ? window.getComputedStyle(formField).backgroundColor
-        : "not found"
-    );
-  },
-  beforeUnmount() {
-    window.removeEventListener("resize", this.setMobileHeight);
-    if (this.themeObserver) {
-      console.log("[RESET] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
-    }
   },
   watch: {
     theme(newTheme) {
-      console.log(
-        "[RESET] Theme prop updated:",
-        newTheme,
-        "source: prop change",
-        new Date().toISOString()
-      );
-      this.applyTheme();
+      console.log('[RESET] Theme prop updated:', newTheme, 'source: prop change', new Date().toISOString())
+      this.applyTheme()
     },
+  },
+  created() {
+    this.setCurrentUserEmail()
+    if (!this.isEmbedded) {
+      themeManager.setTheme(this.theme)
+    }
+    this.error = ''
+    if (this.$route.query.error) {
+      this.error = this.$route.query.error
+    }
+    if (this.$i18n) {
+      console.log('[RESET] Current locale:', this.$i18n.locale)
+      console.log('[RESET] Email label translation:', this.$t('passwordReset.emailLabel'))
+    }
+  },
+  mounted() {
+    this.setMobileHeight()
+    window.addEventListener('resize', this.setMobileHeight)
+    this.applyTheme()
+    // Debug: Log computed styles and configuration values
+    const title = document.querySelector('.password-reset-initiate-card .app-name')
+    console.log('[RESET] Title text content:', title ? title.textContent : 'not found')
+    console.log('[RESET] Title computed color:', title ? window.getComputedStyle(title).color : 'not found')
+    const subtitle = document.querySelector('.password-reset-initiate-heading')
+    console.log('[RESET] Subtitle computed color:', subtitle ? window.getComputedStyle(subtitle).color : 'not found')
+    const icon = document.querySelector('.app-logo')
+    console.log('[RESET] Icon source:', icon ? icon.querySelector('img')?.src : 'fallback')
+    console.log(
+      '[RESET] Icon computed background color:',
+      icon ? window.getComputedStyle(icon).backgroundColor : 'not found'
+    )
+    const button = document.querySelector('.reset-initiate-button')
+    console.log(
+      '[RESET] Button computed background color:',
+      button ? window.getComputedStyle(button).backgroundColor : 'not found'
+    )
+    const formField = document.querySelector('.form-control')
+    console.log(
+      '[RESET] Form field computed background color:',
+      formField ? window.getComputedStyle(formField).backgroundColor : 'not found'
+    )
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.setMobileHeight)
   },
   methods: {
     setCurrentUserEmail() {
       if (!this.email && this.isEmbedded) {
         try {
-          const currentUser = userService.getCurrentUserInfo();
+          const currentUser = userService.getCurrentUserInfo()
           if (currentUser && currentUser.email) {
-            this.email = currentUser.email;
+            this.email = currentUser.email
           }
         } catch (error) {
-          console.warn("[RESET] Could not fetch current user email:", error);
+          console.warn('[RESET] Could not fetch current user email:', error)
         }
       }
     },
     async handleInitiateReset() {
-      this.emailError = "";
+      this.emailError = ''
       if (!this.isValidEmail) {
-        this.emailError = this.$t("passwordReset.invalidEmail");
-        return;
+        this.emailError = this.$t('passwordReset.invalidEmail')
+        return
       }
-      this.isSubmitting = true;
+      this.isSubmitting = true
       try {
-        const response = await passwordService.initiateReset(this.email);
-        console.log("[RESET] Password reset initiated successfully");
-        this.resetRequested = true;
+        const response = await passwordService.initiateReset(this.email)
+        console.log('[RESET] Password reset initiated successfully')
+        this.resetRequested = true
         if (this.isEmbedded) {
           setTimeout(() => {
-            this.$emit("reset-initiated", this.email);
-          }, 2000);
+            this.$emit('reset-initiated', this.email)
+          }, 2000)
         }
       } catch (error) {
-        console.error("[RESET] Password reset initiation failed:", error);
-        this.resetRequested = true;
+        console.error('[RESET] Password reset initiation failed:', error)
+        this.resetRequested = true
         if (this.isEmbedded) {
           setTimeout(() => {
-            this.$emit("reset-initiated", this.email);
-          }, 2000);
+            this.$emit('reset-initiated', this.email)
+          }, 2000)
         }
       } finally {
-        this.isSubmitting = false;
+        this.isSubmitting = false
       }
     },
     cancelReset() {
-      this.$emit("cancel");
+      this.$emit('cancel')
     },
     setMobileHeight() {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
+      const vh = window.innerHeight * 0.01
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
     },
     applyTheme() {
-      console.log(
-        "[RESET] Applying theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const currentTheme = document.documentElement.getAttribute("data-theme");
+      console.log('[RESET] Applying theme:', this.theme, new Date().toISOString())
+      const currentTheme = document.documentElement.getAttribute('data-theme')
       if (currentTheme !== this.theme) {
-        console.warn(
-          "[RESET] Theme mismatch: component theme=",
-          this.theme,
-          "vs DOM theme=",
-          currentTheme
-        );
+        console.warn('[RESET] Theme mismatch: component theme=', this.theme, 'vs DOM theme=', currentTheme)
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
-      const title = document.querySelector(
-        ".password-reset-initiate-card .app-name"
-      );
+      if (!this.isEmbedded) {
+        themeManager.setTheme(this.theme)
+      }
+      const title = document.querySelector('.password-reset-initiate-card .app-name')
       console.log(
-        "[RESET] Title computed color after apply:",
-        title ? window.getComputedStyle(title).color : "not found"
-      );
-      const subtitle = document.querySelector(
-        ".password-reset-initiate-heading"
-      );
+        '[RESET] Title computed color after apply:',
+        title ? window.getComputedStyle(title).color : 'not found'
+      )
+      const subtitle = document.querySelector('.password-reset-initiate-heading')
       console.log(
-        "[RESET] Subtitle computed color after apply:",
-        subtitle ? window.getComputedStyle(subtitle).color : "not found"
-      );
-    },
-    observeThemeChanges() {
-      console.log(
-        "[RESET] Setting up MutationObserver, initial theme:",
-        this.theme,
-        new Date().toISOString()
-      );
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
-            const newTheme =
-              document.documentElement.getAttribute("data-theme");
-            console.log(
-              "[RESET] Detected theme change via MutationObserver:",
-              newTheme,
-              new Date().toISOString()
-            );
-            if (newTheme !== this.theme) {
-              console.log("[RESET] Updating component theme to:", newTheme);
-              this.theme = newTheme;
-              const title = document.querySelector(
-                ".password-reset-initiate-card .app-name"
-              );
-              console.log(
-                "[RESET] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
-              const subtitle = document.querySelector(
-                ".password-reset-initiate-heading"
-              );
-              console.log(
-                "[RESET] Subtitle computed color after change:",
-                subtitle ? window.getComputedStyle(subtitle).color : "not found"
-              );
-            }
-          }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
-      this.themeObserver = observer;
+        '[RESET] Subtitle computed color after apply:',
+        subtitle ? window.getComputedStyle(subtitle).color : 'not found'
+      )
     },
   },
-};
+}
 </script>
 
 <style scoped>
@@ -361,11 +254,11 @@ export default {
   box-sizing: border-box;
 }
 
-[data-theme="light"] .password-reset-initiate-container {
+[data-theme='light'] .password-reset-initiate-container {
   background-color: var(--bg-primary, #f5f7fa);
 }
 
-[data-theme="dark"] .password-reset-initiate-container {
+[data-theme='dark'] .password-reset-initiate-container {
   background-color: var(--bg-primary, #1e1e1e);
 }
 
@@ -391,12 +284,12 @@ export default {
   flex-direction: column;
 }
 
-[data-theme="light"] .password-reset-initiate-card {
+[data-theme='light'] .password-reset-initiate-card {
   background-color: var(--bg-secondary, #ffffff);
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .password-reset-initiate-card {
+[data-theme='dark'] .password-reset-initiate-card {
   background-color: var(--bg-secondary, #252525);
   color: var(--text-primary, #f0f0f0);
 }
@@ -446,11 +339,11 @@ export default {
   font-weight: bold;
 }
 
-[data-theme="light"] .password-reset-initiate-card .app-name {
+[data-theme='light'] .password-reset-initiate-card .app-name {
   color: #000000 !important;
 }
 
-[data-theme="dark"] .password-reset-initiate-card .app-name {
+[data-theme='dark'] .password-reset-initiate-card .app-name {
   color: var(--text-primary, #f0f0f0) !important;
 }
 
@@ -462,15 +355,11 @@ export default {
   font-weight: 500;
 }
 
-[data-theme="light"]
-  .password-reset-initiate-card
-  .password-reset-initiate-heading {
+[data-theme='light'] .password-reset-initiate-card .password-reset-initiate-heading {
   color: var(--text-secondary, #4d4d4d) !important;
 }
 
-[data-theme="dark"]
-  .password-reset-initiate-card
-  .password-reset-initiate-heading {
+[data-theme='dark'] .password-reset-initiate-card .password-reset-initiate-heading {
   color: var(--text-secondary, #b3b3b3) !important;
 }
 
@@ -489,11 +378,11 @@ export default {
   font-weight: 500;
 }
 
-[data-theme="light"] .form-label {
+[data-theme='light'] .form-label {
   color: var(--text-primary, #333333) !important;
 }
 
-[data-theme="dark"] .form-label {
+[data-theme='dark'] .form-label {
   color: var(--text-primary, #f0f0f0) !important;
 }
 
@@ -503,15 +392,17 @@ export default {
   font-size: 15px;
   border: none;
   border-radius: 8px;
-  transition: background-color 0.2s, box-shadow 0.2s;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
 }
 
-[data-theme="light"] .form-control {
+[data-theme='light'] .form-control {
   background-color: var(--bg-tertiary, #f0f2f5) !important;
   color: var(--text-primary, #333333) !important;
 }
 
-[data-theme="dark"] .form-control {
+[data-theme='dark'] .form-control {
   background-color: var(--bg-input, #333333) !important;
   color: var(--text-primary, #f0f0f0) !important;
 }
@@ -521,11 +412,11 @@ export default {
   box-shadow: 0 0 0 2px var(--bg-button-primary, #2a9d8f);
 }
 
-[data-theme="light"] .form-control:focus {
+[data-theme='light'] .form-control:focus {
   background-color: var(--bg-primary, #f5f7fa) !important;
 }
 
-[data-theme="dark"] .form-control:focus {
+[data-theme='dark'] .form-control:focus {
   background-color: var(--bg-input, #2a2a2a) !important;
 }
 
@@ -544,7 +435,7 @@ export default {
   margin-top: 8px;
 }
 
-[data-theme="dark"] .reset-initiate-button {
+[data-theme='dark'] .reset-initiate-button {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -597,11 +488,11 @@ export default {
   font-size: 14px;
 }
 
-[data-theme="light"] .login-link {
+[data-theme='light'] .login-link {
   color: var(--text-secondary, #4d4d4d);
 }
 
-[data-theme="dark"] .login-link {
+[data-theme='dark'] .login-link {
   color: var(--text-secondary, #b3b3b3);
 }
 
@@ -627,11 +518,11 @@ export default {
   margin-bottom: 10px;
 }
 
-[data-theme="light"] .support-message {
+[data-theme='light'] .support-message {
   color: var(--text-muted, #6c757d);
 }
 
-[data-theme="dark"] .support-message {
+[data-theme='dark'] .support-message {
   color: var(--text-muted, #9ca3af);
 }
 
@@ -652,13 +543,13 @@ export default {
   cursor: pointer;
 }
 
-[data-theme="light"] .language-selector :deep(select) {
+[data-theme='light'] .language-selector :deep(select) {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme="dark"] .language-selector :deep(select) {
+[data-theme='dark'] .language-selector :deep(select) {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);

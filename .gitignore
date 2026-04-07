@@ -7,6 +7,7 @@ logs
 *.log.gz
 dist/
 build/
+*.backup
 .claude/
 .roo/
 _bmad/

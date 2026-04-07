@@ -5,17 +5,12 @@
       <div class="logo">
         <div class="app-logo">
           <img
+            v-if="$config && $config.app && $config.app.icon && $config.app.icon.type === 'file'"
             :src="$config.app.icon.value"
             alt="App Icon"
             class="ui-icon"
-            v-if="
-              $config &&
-              $config.app &&
-              $config.app.icon &&
-              $config.app.icon.type === 'file'
-            "
           />
-          <div class="app-logo-fallback" v-else></div>
+          <div v-else class="app-logo-fallback"></div>
         </div>
         <h1 class="app-name">
           {{ $config && $config.app ? $config.app.title : $t('login.title') }}
@@ -31,8 +26,8 @@
         name="login-form"
         action="/api/auth/login"
         method="POST"
-        @submit.prevent="handleLogin"
         class="login-form"
+        @submit.prevent="handleLogin"
       >
         <div class="form-group">
           <input
@@ -60,10 +55,10 @@
 
         <div class="remember-forgot">
           <label class="remember-me">
-            <input type="checkbox" v-model="rememberMe" />
+            <input v-model="rememberMe" type="checkbox" />
             <span>{{ $t('login.rememberMe') }}</span>
           </label>
-          <a href="#" @click.prevent="goToForgotPassword" class="forgot-link">
+          <a href="#" class="forgot-link" @click.prevent="goToForgotPassword">
             {{ $t('login.forgotPassword') }}
           </a>
         </div>
@@ -78,9 +73,7 @@
       <div class="register-account">
         <p>
           {{ $t('login.noAccount') }}
-          <router-link to="/register" class="login-link">{{
-            $t('login.registerNow')
-          }}</router-link>
+          <router-link to="/register" class="login-link">{{ $t('login.registerNow') }}</router-link>
         </p>
       </div>
 
@@ -91,11 +84,7 @@
       </div>
 
       <div class="social-login">
-        <button
-          @click="handleGoogleLogin"
-          class="social-button google-button"
-          :disabled="isLoading"
-        >
+        <button class="social-button google-button" :disabled="isLoading" @click="handleGoogleLogin">
           <div class="button-content">
             <svg class="social-icon" viewBox="0 0 24 24" width="18" height="18">
               <g transform="matrix(1, 0, 0, 1, 0, 0)">
@@ -121,11 +110,7 @@
           </div>
         </button>
 
-        <button
-          @click="handleFacebookLogin"
-          class="social-button facebook-button"
-          :disabled="isLoading"
-        >
+        <button class="social-button facebook-button" :disabled="isLoading" @click="handleFacebookLogin">
           <div class="button-content">
             <svg class="social-icon" width="18" height="18" viewBox="0 0 24 24">
               <path
@@ -149,20 +134,14 @@
           >
             <div class="account-left">
               <div class="account-initials">
-                {{ account.name.charAt(0)
-                }}{{ account.name.split(' ')[1]?.charAt(0) || '' }}
+                {{ account.name.charAt(0) }}{{ account.name.split(' ')[1]?.charAt(0) || '' }}
               </div>
               <span class="account-name">{{ account.name }}</span>
             </div>
 
             <div class="account-provider">
               <template v-if="account.provider === 'Google'">
-                <svg
-                  class="provider-icon"
-                  viewBox="0 0 24 24"
-                  width="16"
-                  height="16"
-                >
+                <svg class="provider-icon" viewBox="0 0 24 24" width="16" height="16">
                   <g transform="matrix(1, 0, 0, 1, 0, 0)">
                     <path
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -185,12 +164,7 @@
                 <span>Google</span>
               </template>
               <template v-else-if="account.provider === 'Facebook'">
-                <svg
-                  class="provider-icon"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                >
+                <svg class="provider-icon" width="16" height="16" viewBox="0 0 24 24">
                   <path
                     d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
                     fill="#1877F2"
@@ -207,9 +181,7 @@
       </div>
 
       <div class="login-footer">
-        <p class="terms-policy">
-          By logging in, you agree to our Terms of Service and Privacy Policy
-        </p>
+        <p class="terms-policy">By logging in, you agree to our Terms of Service and Privacy Policy</p>
         <div class="language-selector">
           <language-selector />
         </div>
@@ -222,17 +194,18 @@
 import userService from '@/services/userService'
 import { eventBus } from '@/eventBus.js'
 import LanguageSelector from '@/components/LanguageSelector.vue'
+import { themeManager } from '@/utils/ThemeManager'
 
 export default {
   name: 'LoginScreen',
   components: {
-    LanguageSelector
+    LanguageSelector,
   },
   props: {
     theme: {
       type: String,
-      default: 'light'
-    }
+      default: 'light',
+    },
   },
   data() {
     return {
@@ -246,19 +219,25 @@ export default {
           id: 1,
           name: 'John Doe',
           provider: 'Google',
-          email: 'john.doe@gmail.com'
+          email: 'john.doe@gmail.com',
         },
         {
           id: 2,
           name: 'Jane Smith',
           provider: 'Facebook',
-          email: 'jane.smith@facebook.com'
-        }
-      ]
+          email: 'jane.smith@facebook.com',
+        },
+      ],
     }
   },
+  watch: {
+    theme(newTheme) {
+      console.log('[LOGIN] Theme prop updated:', newTheme, 'source: prop change', new Date().toISOString())
+      this.applyTheme()
+    },
+  },
   created() {
-    document.documentElement.setAttribute('data-theme', this.theme)
+    themeManager.setTheme(this.theme)
     this.ensureViewportMeta()
     this.error = ''
     if (this.$route.query.error) {
@@ -270,7 +249,7 @@ export default {
       const savedPassword = localStorage.getItem('savedPassword')
       if (savedLoginName && savedPassword) {
         console.log('[DEBUG] Retrieved credentials from localStorage:', {
-          id: savedLoginName
+          id: savedLoginName,
         })
         this.username = savedLoginName
         this.password = savedPassword
@@ -279,40 +258,16 @@ export default {
         console.log('[DEBUG] No credentials found in localStorage')
       }
     } catch (error) {
-      console.error(
-        '[DEBUG] Error retrieving credentials from localStorage:',
-        error
-      )
+      console.error('[DEBUG] Error retrieving credentials from localStorage:', error)
     }
   },
   mounted() {
     this.setMobileHeight()
     window.addEventListener('resize', this.setMobileHeight)
     this.applyTheme()
-    this.observeThemeChanges()
-    const checkbox = document.querySelector('.remember-me input')
-    console.log(
-      '[LOGIN] Checkbox computed background color:',
-      checkbox ? window.getComputedStyle(checkbox).backgroundColor : 'not found'
-    )
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.setMobileHeight)
-    if (this.themeObserver) {
-      console.log('[LOGIN] Disconnecting MutationObserver')
-      this.themeObserver.disconnect()
-    }
-  },
-  watch: {
-    theme(newTheme) {
-      console.log(
-        '[LOGIN] Theme prop updated:',
-        newTheme,
-        'source: prop change',
-        new Date().toISOString()
-      )
-      this.applyTheme()
-    }
   },
   methods: {
     setMobileHeight() {
@@ -324,8 +279,7 @@ export default {
       if (!document.querySelector('meta[name="viewport"]')) {
         const meta = document.createElement('meta')
         meta.name = 'viewport'
-        meta.content =
-          'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
         document.getElementsByTagName('head')[0].appendChild(meta)
       }
     },
@@ -353,20 +307,12 @@ export default {
 
         if (this.rememberMe) {
           try {
-            console.log(
-              '[DEBUG] Attempting to store credentials in localStorage for username:',
-              result.loginName
-            )
+            console.log('[DEBUG] Attempting to store credentials in localStorage for username:', result.loginName)
             localStorage.setItem('savedLoginName', result.loginName)
             localStorage.setItem('savedPassword', this.password)
-            console.log(
-              '[DEBUG] Credentials stored successfully in localStorage'
-            )
+            console.log('[DEBUG] Credentials stored successfully in localStorage')
           } catch (error) {
-            console.error(
-              '[DEBUG] Error storing credentials from localStorage:',
-              error
-            )
+            console.error('[DEBUG] Error storing credentials from localStorage:', error)
           }
         } else {
           try {
@@ -375,10 +321,7 @@ export default {
             localStorage.removeItem('savedPassword')
             console.log('[DEBUG] Credentials cleared from localStorage')
           } catch (error) {
-            console.error(
-              '[DEBUG] Error clearing credentials from localStorage:',
-              error
-            )
+            console.error('[DEBUG] Error clearing credentials from localStorage:', error)
           }
         }
 
@@ -386,24 +329,23 @@ export default {
         this.$store.commit('setUser', result)
 
         // Emit login success event
-        console.log("Emitting login-success with user data:", result);
+        console.log('Emitting login-success with user data:', result)
         this.$emit('login-success', result)
 
         // Show welcome toast
         if (this.$config?.features?.chat?.welcomeMessage) {
-          console.log("Showing welcome toast");
+          console.log('Showing welcome toast')
           eventBus.$emit('notification:show', {
             message: this.$config.features.chat.welcomeMessage,
             type: 'success',
-            duration: 5000
+            duration: 5000,
           })
           console.log('[DEBUG] Welcome toast shown')
         }
 
-
         // Navigate to home or dashboard or redirect URL
         const redirectPath = this.$route.query.redirect || '/'
-        console.log("Navigating to:", redirectPath);
+        console.log('Navigating to:', redirectPath)
         this.$router.push(redirectPath)
       } catch (error) {
         console.error('Login error:', error)
@@ -459,60 +401,16 @@ export default {
     },
 
     applyTheme() {
-      console.log(
-        '[LOGIN] Applying theme:',
-        this.theme,
-        new Date().toISOString()
-      )
+      console.log('[LOGIN] Applying theme:', this.theme, new Date().toISOString())
       const currentTheme = document.documentElement.getAttribute('data-theme')
       if (currentTheme !== this.theme) {
-        console.warn(
-          '[LOGIN] Theme mismatch: component theme=',
-          this.theme,
-          'vs DOM theme=',
-          currentTheme
-        )
+        console.warn('[LOGIN] Theme mismatch: component theme=', this.theme, 'vs DOM theme=', currentTheme)
       }
-      document.documentElement.setAttribute('data-theme', this.theme)
+      themeManager.setTheme(this.theme)
       const title = document.querySelector('.login-card .app-name')
-      console.log(
-        '[LOGIN] Title computed color:',
-        title ? window.getComputedStyle(title).color : 'not found'
-      )
+      console.log('[LOGIN] Title computed color:', title ? window.getComputedStyle(title).color : 'not found')
     },
-
-    observeThemeChanges() {
-      console.log(
-        '[LOGIN] Setting up MutationObserver, initial theme:',
-        this.theme,
-        new Date().toISOString()
-      )
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === 'data-theme') {
-            const newTheme =
-              document.documentElement.getAttribute('data-theme')
-            console.log(
-              '[LOGIN] Detected theme change via MutationObserver:',
-              newTheme,
-              new Date().toISOString()
-            )
-            if (newTheme !== this.theme) {
-              console.log('[LOGIN] Updating component theme to:', newTheme)
-              this.theme = newTheme
-              const title = document.querySelector('.login-card .app-name')
-              console.log(
-                '[LOGIN] Title computed color after change:',
-                title ? window.getComputedStyle(title).color : 'not found'
-              )
-            }
-          }
-        })
-      })
-      observer.observe(document.documentElement, { attributes: true })
-      this.themeObserver = observer
-    }
-  }
+  },
 }
 </script>
 

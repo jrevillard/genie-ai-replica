@@ -2,13 +2,13 @@
 <template>
   <div class="tab-panel">
     <h3 class="tab-title">{{ $t('userProfile.tabs.tab1') }}</h3>
-    
+
     <div class="form-grid">
       <div class="form-group">
         <label for="fullName">{{ $t('userProfile.fields.fullName') }} *</label>
-        <input 
+        <input
           id="fullName"
-          v-model="localData.fullName" 
+          v-model="localData.fullName"
           type="text"
           class="form-control"
           :placeholder="$t('userProfile.placeholders.fullName')"
@@ -18,29 +18,18 @@
           {{ validationErrors.fullName }}
         </small>
       </div>
-      
+
       <div class="form-group">
         <label for="dob">{{ $t('userProfile.fields.dob') }} *</label>
-        <input 
-          id="dob"
-          v-model="localData.dob" 
-          type="date"
-          class="form-control"
-          @change="updateFormData"
-        />
+        <input id="dob" v-model="localData.dob" type="date" class="form-control" @change="updateFormData" />
         <small v-if="validationErrors.dob" class="error-text">
           {{ validationErrors.dob }}
         </small>
       </div>
-      
+
       <div class="form-group">
         <label for="gender">{{ $t('userProfile.fields.gender') }}</label>
-        <select 
-          id="gender"
-          v-model="localData.gender" 
-          class="form-control"
-          @change="updateFormData"
-        >
+        <select id="gender" v-model="localData.gender" class="form-control" @change="updateFormData">
           <option value="">{{ $t('userProfile.select') }}</option>
           <option value="male">{{ $t('userProfile.gender.male') }}</option>
           <option value="female">{{ $t('userProfile.gender.female') }}</option>
@@ -48,27 +37,22 @@
           <option value="prefer-not">{{ $t('userProfile.gender.preferNot') }}</option>
         </select>
       </div>
-      
+
       <div class="form-group">
         <label for="nationality">{{ $t('userProfile.fields.nationality') }}</label>
-        <input 
+        <input
           id="nationality"
-          v-model="localData.nationality" 
+          v-model="localData.nationality"
           type="text"
           class="form-control"
           :placeholder="$t('userProfile.placeholders.nationality')"
           @input="updateFormData"
         />
       </div>
-      
+
       <div class="form-group">
         <label for="maritalStatus">{{ $t('userProfile.fields.maritalStatus') }}</label>
-        <select 
-          id="maritalStatus"
-          v-model="localData.maritalStatus" 
-          class="form-control"
-          @change="updateFormData"
-        >
+        <select id="maritalStatus" v-model="localData.maritalStatus" class="form-control" @change="updateFormData">
           <option value="">{{ $t('userProfile.select') }}</option>
           <option value="single">{{ $t('userProfile.maritalStatus.single') }}</option>
           <option value="married">{{ $t('userProfile.maritalStatus.married') }}</option>
@@ -78,18 +62,15 @@
         </select>
       </div>
     </div>
-    
+
     <div class="file-upload-section">
       <h4>{{ $t('userProfile.documentUpload') }}</h4>
-      
+
       <div class="file-upload-row">
         <div class="file-upload-group">
           <label for="photo">{{ $t('userProfile.fields.photograph') }}</label>
           <div class="file-input-wrapper">
-            <div 
-              v-if="photoPreview" 
-              class="file-preview"
-            >
+            <div v-if="photoPreview" class="file-preview">
               <img :src="photoPreview" alt="Photo preview" class="image-preview" />
               <button type="button" class="remove-file" @click="removeFile('photo')">×</button>
             </div>
@@ -97,24 +78,21 @@
               <span class="upload-icon">+</span>
               <span>{{ $t('userProfile.uploadPhoto') }}</span>
             </label>
-            <input 
+            <input
               id="photo"
-              type="file" 
-              accept="image/*" 
-              @change="onFileChange($event, 'photo')"
+              type="file"
+              accept="image/*"
               class="hidden-input"
+              @change="onFileChange($event, 'photo')"
             />
           </div>
           <small class="help-text">{{ $t('userProfile.photoRequirements') }}</small>
         </div>
-        
+
         <div class="file-upload-group">
           <label for="biometric">{{ $t('userProfile.fields.biometric') }}</label>
           <div class="file-input-wrapper">
-            <div 
-              v-if="biometricPreview" 
-              class="file-preview file-document"
-            >
+            <div v-if="biometricPreview" class="file-preview file-document">
               <span class="file-name">{{ biometricFileName }}</span>
               <button type="button" class="remove-file" @click="removeFile('biometric')">×</button>
             </div>
@@ -122,22 +100,20 @@
               <span class="upload-icon">+</span>
               <span>{{ $t('userProfile.uploadFile') }}</span>
             </label>
-            <input 
+            <input
               id="biometric"
-              type="file" 
-              accept=".pdf,.jpg,.png" 
-              @change="onFileChange($event, 'biometric')"
+              type="file"
+              accept=".pdf,.jpg,.png"
               class="hidden-input"
+              @change="onFileChange($event, 'biometric')"
             />
           </div>
           <small class="help-text">{{ $t('userProfile.biometricRequirements') }}</small>
         </div>
       </div>
     </div>
-    
-    <div class="required-notice">
-      * {{ $t('userProfile.requiredFields') }}
-    </div>
+
+    <div class="required-notice">* {{ $t('userProfile.requiredFields') }}</div>
   </div>
 </template>
 
@@ -147,8 +123,8 @@ export default {
   props: {
     formData: {
       type: Object,
-      required: true
-    }
+      required: true,
+    },
   },
   data() {
     return {
@@ -159,21 +135,27 @@ export default {
         nationality: this.formData.personalIdentification.nationality || '',
         maritalStatus: this.formData.personalIdentification.maritalStatus || '',
         photo: this.formData.personalIdentification.photo || null,
-        biometric: this.formData.personalIdentification.biometric || null
+        biometric: this.formData.personalIdentification.biometric || null,
       },
       photoPreview: null,
       biometricFileName: '',
       biometricPreview: null,
       validationErrors: {
         fullName: '',
-        dob: ''
+        dob: '',
       },
-      debounceTimer: null
+      debounceTimer: null,
     }
   },
   mounted() {
     this.initializeFilePreview()
     this.validateFields()
+  },
+  beforeUnmount() {
+    // Clean up any blob URLs
+    if (this.photoPreview && this.photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(this.photoPreview)
+    }
   },
   methods: {
     initializeFilePreview() {
@@ -184,7 +166,7 @@ export default {
         // Handle existing photo from server (string URL)
         this.photoPreview = this.localData.photo
       }
-      
+
       // If biometric file exists
       if (this.localData.biometric instanceof File) {
         this.biometricFileName = this.localData.biometric.name
@@ -198,16 +180,16 @@ export default {
     onFileChange(event, fieldName) {
       const file = event.target.files[0]
       if (!file) return
-      
+
       this.localData[fieldName] = file
-      
+
       if (fieldName === 'photo') {
         this.createPhotoPreview(file)
       } else if (fieldName === 'biometric') {
         this.biometricFileName = file.name
         this.biometricPreview = true
       }
-      
+
       this.updateFormData()
     },
     createPhotoPreview(file) {
@@ -215,7 +197,7 @@ export default {
       if (this.photoPreview && this.photoPreview.startsWith('blob:')) {
         URL.revokeObjectURL(this.photoPreview)
       }
-      
+
       // Create a new preview
       this.photoPreview = URL.createObjectURL(file)
     },
@@ -229,7 +211,7 @@ export default {
         this.biometricFileName = ''
         this.biometricPreview = null
       }
-      
+
       this.localData[fieldName] = null
       this.updateFormData()
     },
@@ -237,45 +219,39 @@ export default {
       // Reset validation errors
       this.validationErrors = {
         fullName: '',
-        dob: ''
+        dob: '',
       }
-      
+
       // Validate full name
       if (!this.localData.fullName.trim()) {
         this.validationErrors.fullName = this.$t('userProfile.validation.nameRequired')
       }
-      
+
       // Validate date of birth
       if (!this.localData.dob) {
         this.validationErrors.dob = this.$t('userProfile.validation.dobRequired')
       } else {
         const dobDate = new Date(this.localData.dob)
         const today = new Date()
-        
+
         if (dobDate > today) {
           this.validationErrors.dob = this.$t('userProfile.validation.dobFuture')
         }
       }
-      
-      return !Object.values(this.validationErrors).some(error => error)
+
+      return !Object.values(this.validationErrors).some((error) => error)
     },
     updateFormData() {
       // Debounce updates to prevent excessive emissions
       clearTimeout(this.debounceTimer)
       this.debounceTimer = setTimeout(() => {
         this.validateFields()
-        
+
         // Emit update with only the changes for this section
         this.$emit('update:form-data', 'personalIdentification', this.localData)
       }, 300)
-    }
+    },
   },
-  beforeDestroy() {
-    // Clean up any blob URLs
-    if (this.photoPreview && this.photoPreview.startsWith('blob:')) {
-      URL.revokeObjectURL(this.photoPreview)
-    }
-  }
 }
 </script>
 
@@ -285,8 +261,12 @@ export default {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .tab-title {
@@ -325,7 +305,7 @@ label {
 }
 
 .form-control:focus {
-  border-color: #4E97D1;
+  border-color: #4e97d1;
   outline: none;
 }
 
@@ -380,7 +360,7 @@ label {
 }
 
 .file-upload-label:hover {
-  border-color: #4E97D1;
+  border-color: #4e97d1;
   background: rgba(78, 151, 209, 0.05);
 }
 

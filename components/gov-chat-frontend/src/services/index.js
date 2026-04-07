@@ -1,5 +1,4 @@
 // src/services/index.js - Export all services
-import api from './api';
 import userProfileService from './userProfileService';
 import serviceTreeService from './serviceTreeService';
 import chatbotService from './chatbotService';
@@ -8,7 +7,6 @@ import analyticsService from './analyticsService';
 
 // Export individual services
 export {
-  api,
   userProfileService,
   serviceTreeService,
   chatbotService,
@@ -18,7 +16,6 @@ export {
 
 // Export as a single services object
 export default {
-  api,
   userProfile: userProfileService,
   serviceTree: serviceTreeService,
   chatbot: chatbotService,

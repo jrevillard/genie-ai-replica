@@ -8,11 +8,11 @@
         height="100%"
         :options="chartOptions"
         :series="chartSeries"
-      ></apexchart>
+      />
     </div>
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ $t("analytics.status.loading") }}</span>
+      <span>{{ $t('analytics.status.loading') }}</span>
     </div>
     <div v-if="error" class="error-message">
       {{ error }}
@@ -21,11 +21,12 @@
 </template>
 
 <script>
-import analyticsService from "../../services/analyticsService";
-import { serviceTreeService } from "../../services";
+import analyticsService from '../../services/analyticsService'
+import { serviceTreeService } from '../../services'
+import { useChartTheme } from '../../composables/useChartTheme'
 
 export default {
-  name: "CategoryDistributionChart",
+  name: 'CategoryDistributionChart',
   props: {
     // Data can be provided by parent component
     data: {
@@ -40,11 +41,11 @@ export default {
     // Period and date for API fetching if not using external data
     period: {
       type: String,
-      default: "daily",
+      default: 'daily',
     },
     selectedDate: {
       type: String,
-      default: () => new Date().toISOString().split("T")[0],
+      default: () => new Date().toISOString().split('T')[0],
     },
     // Added to force re-render when language changes
     renderKey: {
@@ -52,9 +53,14 @@ export default {
       default: null,
     },
   },
+  setup() {
+    const { theme, getTheme } = useChartTheme({
+      listenToSystem: true,
+    })
+    return { theme, getTheme }
+  },
   data() {
     return {
-      theme: "light", // Store current theme
       chartData: [],
       categories: {},
       loading: false,
@@ -62,19 +68,16 @@ export default {
       chartOptions: null,
       chartSeries: [],
       isMobile: false,
-      themeObserver: null,
-      systemThemeMediaQuery: null,
-      systemThemeChangeHandler: null,
       processedData: [],
-    };
+    }
   },
   watch: {
     // Watch for data changes from parent
     data: {
       handler(newData) {
         if (this.externalData && newData && newData.length > 0) {
-          this.chartData = newData;
-          this.updateChart();
+          this.chartData = newData
+          this.updateChart()
         }
       },
       deep: true,
@@ -83,14 +86,14 @@ export default {
     period: {
       handler() {
         if (!this.externalData) {
-          this.fetchData();
+          this.fetchData()
         }
       },
     },
     selectedDate: {
       handler() {
         if (!this.externalData) {
-          this.fetchData();
+          this.fetchData()
         }
       },
     },
@@ -101,185 +104,79 @@ export default {
         this.loadCategoryNames().then(() => {
           if (this.chartData && this.chartData.length > 0) {
             // Update chart with new locale
-            this.updateChart();
+            this.updateChart()
           }
-        });
+        })
       },
+    },
+    // Watch for theme changes (driven by useChartTheme composable)
+    theme() {
+      if (this.chartData && this.chartData.length > 0) {
+        this.updateChart()
+      }
     },
   },
   mounted() {
     // Check if mobile on mount
-    this.checkMobile();
-
-    // Set initial theme and listener
-    this.setupThemeChangeListener();
+    this.checkMobile()
 
     // Load category names first
     this.loadCategoryNames().then(() => {
       // Use data from props or fetch from API
       if (this.externalData && this.data.length > 0) {
-        this.chartData = this.data;
-        this.updateChart();
+        this.chartData = this.data
+        this.updateChart()
       } else if (!this.externalData) {
-        this.fetchData();
+        this.fetchData()
       }
-    });
+    })
 
     // Add resize listener
-    window.addEventListener("resize", this.handleResize);
+    window.addEventListener('resize', this.handleResize)
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener('resize', this.handleResize)
 
-    // Clean up theme change listeners
-    this.cleanupThemeChangeListener();
+    // Remove custom tooltip element
+    const tooltip = document.getElementById('chart-custom-tooltip')
+    if (tooltip) {
+      tooltip.remove()
+    }
   },
   methods: {
-    /**
-     * Get current theme information
-     */
-    getTheme() {
-      let themeMode =
-        this.$refs.chart?.closest("[data-theme]")?.getAttribute("data-theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        localStorage.getItem("theme") ||
-        "light";
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[CategoryDistributionChart] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      return {
-        isDarkMode: themeMode === "dark",
-        backgroundColor: themeMode === "dark" ? "#414141" : "#FFFFFF",
-        textColor: themeMode === "dark" ? "#FFFFFF" : "#333333",
-      };
-    },
-
-    /**
-     * Set up theme change listener to update chart when theme changes
-     */
-    setupThemeChangeListener() {
-      // Watch for theme changes through classList or data-theme mutations
-      this.themeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (
-            mutation.attributeName === "class" ||
-            mutation.attributeName === "data-theme"
-          ) {
-            console.log("[DEBUG] Theme change detected, updating chart...");
-            this.updateChart();
-            break;
-          }
-        }
-      });
-
-      // Observe document root for theme changes
-      this.themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
-
-      // Also listen for system preference changes
-      this.systemThemeMediaQuery = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      );
-      this.systemThemeChangeHandler = (e) => {
-        console.log(
-          "[DEBUG] System theme preference changed, updating chart..."
-        );
-        this.updateChart();
-      };
-
-      // Add listener with compatibility for older browsers
-      if (this.systemThemeMediaQuery.addEventListener) {
-        this.systemThemeMediaQuery.addEventListener(
-          "change",
-          this.systemThemeChangeHandler
-        );
-      } else {
-        // Fallback for older browsers
-        this.systemThemeMediaQuery.addListener(this.systemThemeChangeHandler);
-      }
-    },
-
-    /**
-     * Clean up theme change listeners
-     */
-    cleanupThemeChangeListener() {
-      if (this.themeObserver) {
-        this.themeObserver.disconnect();
-      }
-
-      if (this.systemThemeMediaQuery) {
-        if (this.systemThemeMediaQuery.removeEventListener) {
-          this.systemThemeMediaQuery.removeEventListener(
-            "change",
-            this.systemThemeChangeHandler
-          );
-        } else {
-          // Fallback for older browsers
-          this.systemThemeMediaQuery.removeListener(
-            this.systemThemeChangeHandler
-          );
-        }
-      }
-
-      // Remove custom tooltip
-      const tooltip = document.getElementById("chart-custom-tooltip");
-      if (tooltip) {
-        tooltip.remove();
-      }
-    },
-
     /**
      * Check if the device is mobile based on screen width
      */
     checkMobile() {
-      this.isMobile = window.innerWidth < 768;
-      console.log(
-        `[DEBUG] Device detected as ${this.isMobile ? "mobile" : "desktop"}`
-      );
+      this.isMobile = window.innerWidth < 768
+      console.log(`[DEBUG] Device detected as ${this.isMobile ? 'mobile' : 'desktop'}`)
     },
 
     /**
      * Fetch category distribution data from API
      */
     async fetchData() {
-      if (this.externalData) return;
+      if (this.externalData) return
 
-      this.loading = true;
-      this.error = null;
+      this.loading = true
+      this.error = null
 
       try {
         // Calculate date range based on period
-        const { startDate, endDate } = analyticsService.calculateDateRange(
-          this.period,
-          this.selectedDate
-        );
+        const { startDate, endDate } = analyticsService.calculateDateRange(this.period, this.selectedDate)
 
         // Get current locale from i18n and ensure it's passed to the service
-        const locale = this.$i18n.locale;
-        console.log(`[DEBUG] fetchData: Current locale is "${locale}"`);
+        const locale = this.$i18n.locale
+        console.log(`[DEBUG] fetchData: Current locale is "${locale}"`)
 
         // Make sure analyticsService has the locale information
         if (!analyticsService.$i18n) {
-          console.log(`[DEBUG] Setting i18n instance on analyticsService`);
-          analyticsService.$i18n = this.$i18n;
+          console.log(`[DEBUG] Setting i18n instance on analyticsService`)
+          analyticsService.$i18n = this.$i18n
         }
 
         // Fetch dashboard analytics with explicit locale
-        const dashboardData = await analyticsService.getDashboardAnalytics(
-          this.period,
-          this.selectedDate
-        );
+        const dashboardData = await analyticsService.getDashboardAnalytics(this.period, this.selectedDate)
 
         if (dashboardData && dashboardData.queryDistribution) {
           // Debug: Log category names from API
@@ -290,25 +187,24 @@ export default {
               name: item.name,
               count: item.count,
             }))
-          );
+          )
 
-          this.chartData = dashboardData.queryDistribution;
-          this.updateChart();
+          this.chartData = dashboardData.queryDistribution
+          this.updateChart()
 
           // Debug: Check language of received category names
-          this.logCategoryLanguageInfo();
+          this.logCategoryLanguageInfo()
         } else {
-          console.error(`[DEBUG] No queryDistribution in response`);
-          this.error = this.$t("analytics.status.noData");
+          console.error(`[DEBUG] No queryDistribution in response`)
+          this.error = this.$t('analytics.status.noData')
         }
       } catch (error) {
-        console.error("Error fetching category distribution data:", error);
-        console.log("Falling back to sample category data...");
-        // Fall back to hard-coded data
-        this.chartData = this.getFallbackData();
-        this.updateChart();
+        console.error('Error fetching category distribution data:', error)
+        console.log('No category distribution data available from API')
+        this.chartData = []
+        this.updateChart()
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
 
@@ -317,80 +213,69 @@ export default {
      */
     async loadCategoryNames() {
       try {
-        const categories = await serviceTreeService.getAllCategories();
+        const categories = await serviceTreeService.getAllCategories()
 
         // Create a lookup object for category names by ID
         categories.forEach((category) => {
           // Extract the numeric ID from serviceCategories/123 (full path)
           // or just use the raw _key (which is typically just the number)
           const id =
-            category._key ||
-            (category._id && category._id.split("/")[1]) ||
-            category.catKey ||
-            category.categoryId;
+            category._key || (category._id && category._id.split('/')[1]) || category.catKey || category.categoryId
 
           if (id) {
             // Use the appropriate translation based on current locale
-            const currentLocale = this.$i18n.locale;
+            const currentLocale = this.$i18n.locale
 
             // Use nameXX based on locale or fall back to nameEN
-            let name = null;
-            if (currentLocale === "fr" && category.nameFR) {
-              name = category.nameFR;
-              console.log(
-                `[DEBUG] Using French name for category ${id}: ${name}`
-              );
-            } else if (currentLocale === "sw" && category.nameSW) {
-              name = category.nameSW;
-              console.log(
-                `[DEBUG] Using Swahili name for category ${id}: ${name}`
-              );
+            let name = null
+            if (currentLocale === 'fr' && category.nameFR) {
+              name = category.nameFR
+              console.log(`[DEBUG] Using French name for category ${id}: ${name}`)
+            } else if (currentLocale === 'sw' && category.nameSW) {
+              name = category.nameSW
+              console.log(`[DEBUG] Using Swahili name for category ${id}: ${name}`)
             } else {
-              name = category.nameEN || category.name || null;
-              console.log(
-                `[DEBUG] Using default/English name for category ${id}: ${name}`
-              );
+              name = category.nameEN || category.name || null
+              console.log(`[DEBUG] Using default/English name for category ${id}: ${name}`)
             }
 
             // Store the name with various ID formats for flexible lookup
             if (name) {
               // Store with numeric ID (most important - this is the _key in ArangoDB)
-              this.categories[id] = name;
+              this.categories[id] = name
 
               // Store with full path from _id (serviceCategories/X)
               if (category._id) {
-                this.categories[category._id] = name;
+                this.categories[category._id] = name
               } else if (id.match(/^\d+$/)) {
-                this.categories[`serviceCategories/${id}`] = name;
+                this.categories[`serviceCategories/${id}`] = name
               }
 
               // Store with s/X short format
               if (id.match(/^\d+$/)) {
-                this.categories[`s/${id}`] = name;
+                this.categories[`s/${id}`] = name
               }
 
               // Store with serviceCategorie format
               if (id.match(/^\d+$/)) {
-                this.categories[`serviceCategorie${id}`] = name;
+                this.categories[`serviceCategorie${id}`] = name
               }
 
               // Store with cat format
               if (id.match(/^\d+$/)) {
-                this.categories[`cat${id}`] = name;
+                this.categories[`cat${id}`] = name
               }
             }
           }
-        });
+        })
 
         console.log(
-          `[DEBUG] Loaded ${
-            Object.keys(this.categories).length
-          } category names for locale: ${this.$i18n.locale}`
-        );
+          `[DEBUG] Loaded ${Object.keys(this.categories).length} category names for locale: ${this.$i18n.locale}`
+        )
       } catch (error) {
-        console.error("Error loading category names:", error);
+        console.error('Error loading category names:', error)
         // Populate with fallback data in case of error
-        this.populateFallbackCategories();
+        this.populateFallbackCategories()
       }
     },
 
@@ -401,281 +286,166 @@ export default {
       // Based on the schema/sample data, provide fallback names
       const fallbackCategories = {
         1: {
-          nameEN: "Identity & Civil Registration",
-          nameFR: "Identité et état civil",
-          nameSW: "Utambulisho na Usajili wa Kiraia",
+          nameEN: 'Identity & Civil Registration',
+          nameFR: 'Identité et état civil',
+          nameSW: 'Utambulisho na Usajili wa Kiraia',
         },
-        2: { nameEN: "Transportation", nameFR: "Transport", nameSW: "Usafiri" },
+        2: { nameEN: 'Transportation', nameFR: 'Transport', nameSW: 'Usafiri' },
         3: {
-          nameEN: "Taxes & Revenue",
-          nameFR: "Impôts et Revenus",
-          nameSW: "Kodi na Mapato",
+          nameEN: 'Taxes & Revenue',
+          nameFR: 'Impôts et Revenus',
+          nameSW: 'Kodi na Mapato',
         },
         4: {
-          nameEN: "Immigration & Citizenship",
-          nameFR: "Immigration et Citoyenneté",
-          nameSW: "Uhamiaji na Uraia",
+          nameEN: 'Immigration & Citizenship',
+          nameFR: 'Immigration et Citoyenneté',
+          nameSW: 'Uhamiaji na Uraia',
         },
         5: {
-          nameEN: "Education & Learning",
-          nameFR: "Éducation et Apprentissage",
-          nameSW: "Elimu na Mafunzo",
+          nameEN: 'Education & Learning',
+          nameFR: 'Éducation et Apprentissage',
+          nameSW: 'Elimu na Mafunzo',
         },
         6: {
-          nameEN: "Housing & Properties",
-          nameFR: "Logement et Propriétés",
-          nameSW: "Nyumba na Mali",
+          nameEN: 'Housing & Properties',
+          nameFR: 'Logement et Propriétés',
+          nameSW: 'Nyumba na Mali',
         },
         7: {
-          nameEN: "Health & Healthcare",
-          nameFR: "Santé et Soins Médicaux",
-          nameSW: "Afya na Huduma za Afya",
+          nameEN: 'Health & Healthcare',
+          nameFR: 'Santé et Soins Médicaux',
+          nameSW: 'Afya na Huduma za Afya',
         },
         8: {
-          nameEN: "Public Safety",
-          nameFR: "Sécurité Publique",
-          nameSW: "Usalama wa Umma",
+          nameEN: 'Public Safety',
+          nameFR: 'Sécurité Publique',
+          nameSW: 'Usalama wa Umma',
         },
         9: {
-          nameEN: "Business & Economy",
-          nameFR: "Entreprise et Économie",
-          nameSW: "Biashara na Uchumi",
+          nameEN: 'Business & Economy',
+          nameFR: 'Entreprise et Économie',
+          nameSW: 'Biashara na Uchumi',
         },
         10: {
-          nameEN: "Social Services",
-          nameFR: "Services Sociaux",
-          nameSW: "Huduma za Kijamii",
+          nameEN: 'Social Services',
+          nameFR: 'Services Sociaux',
+          nameSW: 'Huduma za Kijamii',
         },
         11: {
-          nameEN: "Environment",
-          nameFR: "Environnement",
-          nameSW: "Mazingira",
+          nameEN: 'Environment',
+          nameFR: 'Environnement',
+          nameSW: 'Mazingira',
         },
         12: {
-          nameEN: "Culture & Recreation",
-          nameFR: "Culture et Loisirs",
-          nameSW: "Utamaduni na Burudani",
+          nameEN: 'Culture & Recreation',
+          nameFR: 'Culture et Loisirs',
+          nameSW: 'Utamaduni na Burudani',
         },
         13: {
-          nameEN: "Legal Services",
-          nameFR: "Services Juridiques",
-          nameSW: "Huduma za Kisheria",
+          nameEN: 'Legal Services',
+          nameFR: 'Services Juridiques',
+          nameSW: 'Huduma za Kisheria',
         },
-      };
+      }
 
       // Determine the current locale
-      const currentLocale = this.$i18n.locale;
-      console.log(
-        `[DEBUG] Using fallback categories for locale: ${currentLocale}`
-      );
+      const currentLocale = this.$i18n.locale
+      console.log(`[DEBUG] Using fallback categories for locale: ${currentLocale}`)
 
       // Add entries for each format with the appropriate language
       Object.entries(fallbackCategories).forEach(([id, names]) => {
         // Choose the right language name
-        let name = names.nameEN;
-        if (currentLocale === "fr" && names.nameFR) {
-          name = names.nameFR;
-        } else if (currentLocale === "sw" && names.nameSW) {
-          name = names.nameSW;
+        let name = names.nameEN
+        if (currentLocale === 'fr' && names.nameFR) {
+          name = names.nameFR
+        } else if (currentLocale === 'sw' && names.nameSW) {
+          name = names.nameSW
         }
 
         // Add entries with all possible ID formats for maximum compatibility
-        this.categories[id] = name;
-        this.categories[`serviceCategories/${id}`] = name;
-        this.categories[`s/${id}`] = name;
-        this.categories[`serviceCategorie${id}`] = name;
-        this.categories[`cat${id}`] = name;
-      });
+        this.categories[id] = name
+        this.categories[`serviceCategories/${id}`] = name
+        this.categories[`s/${id}`] = name
+        this.categories[`serviceCategorie${id}`] = name
+        this.categories[`cat${id}`] = name
+      })
     },
 
     /**
      * Format category ID for display when no name is found
      */
     formatCategoryId(categoryId) {
-      if (!categoryId) return this.$t("charts.notAvailable");
+      if (!categoryId) return this.$t('charts.notAvailable')
 
       // Extract the numeric ID from different formats
-      let numericId = null;
+      let numericId = null
 
       // Try serviceCategories/X format (from database _id)
-      const serviceCategoriesMatch = categoryId.match(
-        /serviceCategories\/(\d+)/i
-      );
+      const serviceCategoriesMatch = categoryId.match(/serviceCategories\/(\d+)/i)
       if (serviceCategoriesMatch) {
-        numericId = serviceCategoriesMatch[1];
+        numericId = serviceCategoriesMatch[1]
       }
 
       // Try s/X format
       if (!numericId) {
-        const sMatch = categoryId.match(/s\/(\d+)/i);
+        const sMatch = categoryId.match(/s\/(\d+)/i)
         if (sMatch) {
-          numericId = sMatch[1];
+          numericId = sMatch[1]
         }
       }
 
       // Try serviceCategorie format
       if (!numericId) {
-        const serviceCatMatch = categoryId.match(/serviceCategorie(\d+)/i);
+        const serviceCatMatch = categoryId.match(/serviceCategorie(\d+)/i)
         if (serviceCatMatch) {
-          numericId = serviceCatMatch[1];
+          numericId = serviceCatMatch[1]
         }
       }
 
       // Try cat format
       if (!numericId) {
-        const catMatch = categoryId.match(/cat(\d+)/i);
+        const catMatch = categoryId.match(/cat(\d+)/i)
         if (catMatch) {
-          numericId = catMatch[1];
+          numericId = catMatch[1]
         }
       }
 
       // Try to parse the ID itself if it's a number
       if (!numericId && /^\d+$/.test(categoryId)) {
-        numericId = categoryId;
+        numericId = categoryId
       }
 
       // If we found a numeric ID, check our fallback data
       if (numericId && this.categories[numericId]) {
-        return this.categories[numericId];
+        return this.categories[numericId]
       }
 
       // Default fallback - just format the ID nicely
       // Extract the relevant part of the ID for display
-      let idDisplay = categoryId;
-      if (categoryId.includes("/")) {
-        idDisplay = categoryId.split("/").pop();
+      let idDisplay = categoryId
+      if (categoryId.includes('/')) {
+        idDisplay = categoryId.split('/').pop()
       } else {
-        idDisplay = categoryId.replace(/^(serviceCategorie|cat)/i, "");
+        idDisplay = categoryId.replace(/^(serviceCategorie|cat)/i, '')
       }
 
-      return `${this.$t("analytics.chartLabels.category")} ${idDisplay}`;
+      return `${this.$t('analytics.chartLabels.category')} ${idDisplay}`
     },
 
     /**
      * Remove number prefix from category name
      */
     removeNumberPrefix(text) {
-      if (!text) return "";
-      return text.replace(/^\d+\.\s*/, "");
+      if (!text) return ''
+      return text.replace(/^\d+\.\s*/, '')
     },
 
     /**
      * Handle window resize
      */
     handleResize() {
-      this.checkMobile();
-      this.updateChart();
-    },
-
-    /**
-     * Get fallback data in case API fails
-     * @returns {Array} Sample category distribution data
-     */
-    getFallbackData() {
-      // Get current locale
-      const currentLocale = this.$i18n.locale;
-
-      // Define multi-language names
-      const categoryNames = {
-        cat1: {
-          en: "Identity & Civil Registry",
-          fr: "Identité et Registre Civil",
-          sw: "Utambulisho na Usajili wa Kiraia",
-        },
-        cat2: {
-          en: "Healthcare & Social Services",
-          fr: "Santé et Services Sociaux",
-          sw: "Huduma za Afya na Jamii",
-        },
-        cat3: {
-          en: "Education & Learning",
-          fr: "Éducation et Apprentissage",
-          sw: "Elimu na Mafunzo",
-        },
-        cat4: {
-          en: "Employment & Labor Services",
-          fr: "Emploi et Services du Travail",
-          sw: "Ajira na Huduma za Kazi",
-        },
-        cat5: {
-          en: "Taxes & Revenue",
-          fr: "Impôts et Revenus",
-          sw: "Kodi na Mapato",
-        },
-        cat6: {
-          en: "Public Safety & Justice",
-          fr: "Sécurité Publique et Justice",
-          sw: "Usalama wa Umma na Haki",
-        },
-        cat7: {
-          en: "Transportation & Mobility",
-          fr: "Transport et Mobilité",
-          sw: "Usafiri na Uhamaji",
-        },
-        cat8: {
-          en: "Housing & Urban Development",
-          fr: "Logement et Développement Urbain",
-          sw: "Nyumba na Maendeleo ya Miji",
-        },
-      };
-
-      // Select language based on locale
-      const lang =
-        currentLocale === "fr" ? "fr" : currentLocale === "sw" ? "sw" : "en";
-
-      console.log(`[DEBUG] Using fallback data with language: ${lang}`);
-
-      // Create fallback data with appropriate language
-      return [
-        {
-          categoryId: "cat1",
-          name: categoryNames.cat1[lang],
-          count: 2347,
-          value: 23,
-        },
-        {
-          categoryId: "cat2",
-          name: categoryNames.cat2[lang],
-          count: 1782,
-          value: 17,
-        },
-        {
-          categoryId: "cat3",
-          name: categoryNames.cat3[lang],
-          count: 1645,
-          value: 16,
-        },
-        {
-          categoryId: "cat4",
-          name: categoryNames.cat4[lang],
-          count: 1245,
-          value: 12,
-        },
-        {
-          categoryId: "cat5",
-          name: categoryNames.cat5[lang],
-          count: 980,
-          value: 10,
-        },
-        {
-          categoryId: "cat6",
-          name: categoryNames.cat6[lang],
-          count: 850,
-          value: 8,
-        },
-        {
-          categoryId: "cat7",
-          name: categoryNames.cat7[lang],
-          count: 720,
-          value: 7,
-        },
-        {
-          categoryId: "cat8",
-          name: categoryNames.cat8[lang],
-          count: 650,
-          value: 6,
-        },
-      ];
+      this.checkMobile()
+      this.updateChart()
     },
 
     /**
@@ -684,80 +454,68 @@ export default {
      */
     logCategoryLanguageInfo() {
       if (!this.chartData || !this.chartData.length) {
-        console.log("[DEBUG] No chart data available to check language");
-        return;
+        console.log('[DEBUG] No chart data available to check language')
+        return
       }
 
-      const locale = this.$i18n.locale;
-      console.log(`[DEBUG] Analyzing category names for locale: "${locale}"`);
+      const locale = this.$i18n.locale
+      console.log(`[DEBUG] Analyzing category names for locale: "${locale}"`)
 
       // Simple word patterns to detect language
       const patterns = {
-        en: [
-          "and",
-          "of",
-          "services",
-          "identity",
-          "civil",
-          "education",
-          "business",
-        ],
-        sw: ["na", "ya", "huduma", "utambulisho", "elimu", "biashara"],
-        fr: ["et", "de", "services", "identité", "civil", "éducation"],
-      };
+        en: ['and', 'of', 'services', 'identity', 'civil', 'education', 'business'],
+        sw: ['na', 'ya', 'huduma', 'utambulisho', 'elimu', 'biashara'],
+        fr: ['et', 'de', 'services', 'identité', 'civil', 'éducation'],
+      }
 
-      let matchCount = 0;
-      let totalWithNames = 0;
+      let matchCount = 0
+      let totalWithNames = 0
 
       this.chartData.forEach((cat) => {
         if (!cat.name) {
-          console.log(`[DEBUG] Missing name for category: ${cat.categoryId}`);
-          return;
+          console.log(`[DEBUG] Missing name for category: ${cat.categoryId}`)
+          return
         }
 
-        totalWithNames++;
+        totalWithNames++
 
         // Check each language
-        const results = {};
+        const results = {}
         Object.entries(patterns).forEach(([lang, words]) => {
-          const nameLower = cat.name.toLowerCase();
-          const matches = words.filter((word) =>
-            nameLower.includes(word.toLowerCase())
-          );
-          results[lang] = matches.length;
-        });
+          const nameLower = cat.name.toLowerCase()
+          const matches = words.filter((word) => nameLower.includes(word.toLowerCase()))
+          results[lang] = matches.length
+        })
 
         // Determine likely language
-        let likelyLang = "unknown";
-        let highestCount = 0;
+        let likelyLang = 'unknown'
+        let highestCount = 0
 
         Object.entries(results).forEach(([lang, count]) => {
           if (count > highestCount) {
-            highestCount = count;
-            likelyLang = lang;
+            highestCount = count
+            likelyLang = lang
           }
-        });
+        })
 
-        const isMatch = likelyLang === locale;
+        const isMatch = likelyLang === locale
         if (isMatch) {
-          matchCount++;
+          matchCount++
         }
 
         console.log(
           `[DEBUG] Category "${cat.categoryId}" name: "${
             cat.name
-          }" - likely language: ${likelyLang} (match with current locale: ${
-            isMatch ? "YES" : "NO"
-          })`
-        );
-      });
+          }" - likely language: ${likelyLang} (match with current locale: ${isMatch ? 'YES' : 'NO'})`
+        )
+      })
 
       // Summary statistics
       if (totalWithNames > 0) {
-        const matchPercent = Math.round((matchCount / totalWithNames) * 100);
+        const matchPercent = Math.round((matchCount / totalWithNames) * 100)
         console.log(
           `[DEBUG] Language match summary: ${matchCount}/${totalWithNames} (${matchPercent}%) names match current locale "${locale}"`
-        );
+        )
       }
     },
 
@@ -765,29 +523,29 @@ export default {
      * Get ApexCharts tooltip formatter with transparent black background
      */
     tooltipFormatter(value, opts) {
-      const item = this.processedData[opts.dataPointIndex];
-      if (!item) return "";
+      const item = this.processedData[opts.dataPointIndex]
+      if (!item) return ''
 
       // Use transparent black background and white text for all themes
-      const bgColor = "rgba(0, 0, 0, 0.75)";
-      const textColor = "#FFFFFF";
+      const bgColor = 'rgba(0, 0, 0, 0.75)'
+      const textColor = '#FFFFFF'
 
       return `
         <div class="apexcharts-tooltip-box" style="background: ${bgColor}; border-radius: 5px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
           <div class="apexcharts-tooltip-title" style="color: ${textColor}; font-weight: bold; margin-bottom: 5px;">${
-        item.categoryName
-      }</div>
+            item.categoryName
+          }</div>
           <div class="apexcharts-tooltip-series-group" style="color: ${textColor}; padding: 0;">
             <div style="color: ${textColor}; padding: 2px 0;">${this.$t(
-        "analytics.table.count"
-      )}: ${item.count ? item.count.toLocaleString() : "N/A"}</div>
+              'analytics.table.count'
+            )}: ${item.count ? item.count.toLocaleString() : 'N/A'}</div>
             <div style="color: ${textColor}; padding: 2px 0;">${this.$t(
-        "analytics.percentage",
-        "Percentage"
-      )}: ${Math.round(item.percentage)}%</div>
+              'analytics.percentage',
+              'Percentage'
+            )}: ${Math.round(item.percentage)}%</div>
           </div>
         </div>
-      `;
+      `
     },
 
     /**
@@ -796,80 +554,67 @@ export default {
     getCategoryDisplayName(categoryId) {
       // First check if the exact ID exists in our categories lookup
       if (this.categories[categoryId]) {
-        return this.categories[categoryId];
+        return this.categories[categoryId]
       }
 
       // Handle "serviceCategories/X" format (format from the database _id field)
-      const serviceCategoriesMatch = categoryId.match(
-        /serviceCategories\/(\d+)/i
-      );
-      if (
-        serviceCategoriesMatch &&
-        this.categories[serviceCategoriesMatch[1]]
-      ) {
-        return this.categories[serviceCategoriesMatch[1]];
+      const serviceCategoriesMatch = categoryId.match(/serviceCategories\/(\d+)/i)
+      if (serviceCategoriesMatch && this.categories[serviceCategoriesMatch[1]]) {
+        return this.categories[serviceCategoriesMatch[1]]
       }
 
       // Handle "s/X" format (shorthand format used in some places)
-      const sMatch = categoryId.match(/s\/(\d+)/i);
+      const sMatch = categoryId.match(/s\/(\d+)/i)
       if (sMatch && this.categories[sMatch[1]]) {
-        return this.categories[sMatch[1]];
+        return this.categories[sMatch[1]]
       }
 
       // Then try extracting numeric part if it's a serviceCategorie format
-      const serviceMatch = categoryId.match(/serviceCategorie(\d+)/i);
+      const serviceMatch = categoryId.match(/serviceCategorie(\d+)/i)
       if (serviceMatch && this.categories[serviceMatch[1]]) {
-        return this.categories[serviceMatch[1]];
+        return this.categories[serviceMatch[1]]
       }
 
       // Then try extracting numeric part if it's a cat format
-      const catMatch = categoryId.match(/cat(\d+)/i);
+      const catMatch = categoryId.match(/cat(\d+)/i)
       if (catMatch && this.categories[catMatch[1]]) {
-        return this.categories[catMatch[1]];
+        return this.categories[catMatch[1]]
       }
 
       // Fallback to formatting the ID
-      return this.formatCategoryId(categoryId);
+      return this.formatCategoryId(categoryId)
     },
 
     /**
      * Process chart data to ensure all necessary properties
      */
     processChartData() {
-      if (!this.chartData || this.chartData.length === 0) return [];
+      if (!this.chartData || this.chartData.length === 0) return []
 
       // Calculate total for percentages
       const total = this.chartData.reduce((sum, item) => {
-        const value = Number(item.value) || Number(item.count) || 1;
-        return sum + value;
-      }, 0);
+        const value = Number(item.value) || Number(item.count) || 1
+        return sum + value
+      }, 0)
 
       // Process and prepare data with proper names
       return this.chartData
         .map((item) => {
           // Ensure the value property exists and is a valid number
-          const value = Number(item.value) || Number(item.count) || 1;
-          const percentage = (value / total) * 100;
+          const value = Number(item.value) || Number(item.count) || 1
+          const percentage = (value / total) * 100
 
           // CRITICAL: Prioritize the name directly from the API response
-          let displayName = "";
+          let displayName = ''
 
-          if (
-            item.name &&
-            item.name !== item.categoryId &&
-            !item.name.startsWith("Category ")
-          ) {
+          if (item.name && item.name !== item.categoryId && !item.name.startsWith('Category ')) {
             // Use the name directly from the API which should already be in the correct language
-            displayName = item.name;
-            console.log(
-              `[DEBUG] Using API-provided name: "${displayName}" for ${item.categoryId}`
-            );
+            displayName = item.name
+            console.log(`[DEBUG] Using API-provided name: "${displayName}" for ${item.categoryId}`)
           } else {
             // Only fall back to category lookup if API didn't provide a usable name
-            displayName = this.getCategoryDisplayName(item.categoryId);
-            console.log(
-              `[DEBUG] Using looked-up name: "${displayName}" for ${item.categoryId}`
-            );
+            displayName = this.getCategoryDisplayName(item.categoryId)
+            console.log(`[DEBUG] Using looked-up name: "${displayName}" for ${item.categoryId}`)
           }
 
           return {
@@ -878,9 +623,9 @@ export default {
             count: Number(item.count) || 0,
             value: value,
             percentage: percentage,
-          };
+          }
         })
-        .sort((a, b) => b.value - a.value); // Sort by value descending for better visualization
+        .sort((a, b) => b.value - a.value) // Sort by value descending for better visualization
     },
 
     /**
@@ -888,58 +633,47 @@ export default {
      */
     updateChart() {
       // Process the data for the chart
-      this.processedData = this.processChartData();
+      this.processedData = this.processChartData()
 
       if (!this.processedData || this.processedData.length === 0) {
-        this.error = this.$t("analytics.status.noData");
-        return;
+        this.error = this.$t('analytics.status.noData')
+        return
       }
 
-      const container = this.$refs.chart;
+      const container = this.$refs.chart
       if (container && Math.max(0, container.offsetWidth) < 100) {
-        return; // Prevents ApexCharts from rendering when container is collapsed
+        return // Prevents ApexCharts from rendering when container is collapsed
       }
 
       // Get theme information
-      const theme = this.getTheme();
-      console.log(
-        `[DEBUG] Theme detected: ${theme.isDarkMode ? "dark" : "light"}`
-      );
+      const theme = this.getTheme()
+      console.log(`[DEBUG] Theme detected: ${theme.isDarkMode ? 'dark' : 'light'}`)
 
       // Create explicit center label style based on theme
       const centerLabelStyle = {
-        color: theme.isDarkMode ? "#FFFFFF" : "#333333",
-        fontSize: "14px",
-        fontWeight: "bold",
-      };
+        color: theme.isDarkMode ? '#FFFFFF' : '#333333',
+        fontSize: '14px',
+        fontWeight: 'bold',
+      }
 
       // Prepare series data for ApexCharts
-      this.chartSeries = this.processedData.map((item) => item.value);
+      this.chartSeries = this.processedData.map((item) => item.value)
 
       // Set up chart labels with proper category names
       const labels = this.processedData.map((item) => {
         // Truncate long names
-        const nameMaxLength = this.isMobile ? 18 : 25;
-        return this.truncateText(item.categoryName, nameMaxLength);
-      });
+        const nameMaxLength = this.isMobile ? 18 : 25
+        return this.truncateText(item.categoryName, nameMaxLength)
+      })
 
       // Get colors for chart
-      const colors = [
-        "#5470c6",
-        "#91cc75",
-        "#fac858",
-        "#ee6666",
-        "#73c0de",
-        "#3ba272",
-        "#fc8452",
-        "#9a60b4",
-      ];
+      const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4']
 
       // Set up chart options - DISABLE BUILT-IN TOOLTIPS COMPLETELY
       this.chartOptions = {
         chart: {
-          type: "donut",
-          fontFamily: "inherit",
+          type: 'donut',
+          fontFamily: 'inherit',
           toolbar: {
             show: false,
           },
@@ -958,11 +692,11 @@ export default {
         dataLabels: {
           enabled: true,
           formatter: (val) => {
-            return Math.round(val) + "%";
+            return Math.round(val) + '%'
           },
           style: {
-            fontSize: "12px",
-            fontWeight: "bold",
+            fontSize: '12px',
+            fontWeight: 'bold',
             colors: [theme.textColor],
           },
           dropShadow: {
@@ -970,12 +704,12 @@ export default {
           },
         },
         legend: {
-          position: this.isMobile ? "bottom" : "right",
+          position: this.isMobile ? 'bottom' : 'right',
           offsetY: this.isMobile ? 10 : 0,
           formatter: (seriesName, opts) => {
-            const item = this.processedData[opts.seriesIndex];
-            if (!item) return seriesName;
-            return `${seriesName} (${Math.round(item.percentage)}%)`;
+            const item = this.processedData[opts.seriesIndex]
+            if (!item) return seriesName
+            return `${seriesName} (${Math.round(item.percentage)}%)`
           },
           labels: {
             colors: theme.textColor,
@@ -988,29 +722,29 @@ export default {
           pie: {
             expandOnClick: false, // Don't expand on click
             donut: {
-              size: "60%",
-              background: "transparent",
+              size: '60%',
+              background: 'transparent',
               labels: {
                 show: true,
                 name: {
                   show: true,
                   formatter: function (val) {
-                    return "Knowledge Areas"; // First line
+                    return 'Knowledge Areas' // First line
                   },
                   style: centerLabelStyle,
                 },
                 value: {
                   show: true,
                   formatter: function (val) {
-                    return val; // Show the value
+                    return val // Show the value
                   },
                   style: centerLabelStyle,
                 },
                 total: {
                   show: true,
-                  label: "by Usage", // Second line
+                  label: 'by Usage', // Second line
                   formatter: function () {
-                    return ""; // Use empty formatter to show just the label
+                    return '' // Use empty formatter to show just the label
                   },
                   style: centerLabelStyle,
                 },
@@ -1029,13 +763,13 @@ export default {
         states: {
           hover: {
             filter: {
-              type: "none", // No filter on hover
+              type: 'none', // No filter on hover
             },
           },
           active: {
             allowMultipleDataPointsSelection: false,
             filter: {
-              type: "none", // No filter on active state
+              type: 'none', // No filter on active state
             },
           },
         },
@@ -1047,7 +781,7 @@ export default {
                 height: 380,
               },
               legend: {
-                position: "bottom",
+                position: 'bottom',
                 offsetY: 0,
                 height: 100,
               },
@@ -1055,33 +789,31 @@ export default {
           },
         ],
         theme: {
-          mode: theme.isDarkMode ? "dark" : "light",
-          palette: "palette1",
+          mode: theme.isDarkMode ? 'dark' : 'light',
+          palette: 'palette1',
         },
-      };
+      }
 
       // Create or get a custom tooltip element
-      this.ensureCustomTooltipExists();
+      this.ensureCustomTooltipExists()
 
       // Apply fixes after chart renders
       this.$nextTick(() => {
         setTimeout(() => {
-          console.log("[DEBUG] Applying direct DOM fixes and custom tooltips");
+          console.log('[DEBUG] Applying direct DOM fixes and custom tooltips')
 
           // Fix center text color
-          const isDark = theme.isDarkMode;
-          const centerColor = isDark ? "#FFFFFF" : "#333333";
-          const centerLabels = document.querySelectorAll(
-            ".apexcharts-datalabels-group text"
-          );
+          const isDark = theme.isDarkMode
+          const centerColor = isDark ? '#FFFFFF' : '#333333'
+          const centerLabels = document.querySelectorAll('.apexcharts-datalabels-group text')
           centerLabels.forEach((label) => {
-            label.setAttribute("fill", centerColor);
-          });
+            label.setAttribute('fill', centerColor)
+          })
 
           // Add custom tooltip handlers to chart slices
-          this.addTooltipHandlers();
-        }, 500); // Longer delay to ensure chart is fully rendered
-      });
+          this.addTooltipHandlers()
+        }, 500) // Longer delay to ensure chart is fully rendered
+      })
     },
 
     /**
@@ -1089,14 +821,14 @@ export default {
      */
     ensureCustomTooltipExists() {
       // Remove any existing tooltip
-      const existingTooltip = document.getElementById("chart-custom-tooltip");
+      const existingTooltip = document.getElementById('chart-custom-tooltip')
       if (existingTooltip) {
-        existingTooltip.remove();
+        existingTooltip.remove()
       }
 
       // Create a new tooltip element
-      const tooltip = document.createElement("div");
-      tooltip.id = "chart-custom-tooltip";
+      const tooltip = document.createElement('div')
+      tooltip.id = 'chart-custom-tooltip'
       tooltip.style.cssText = `
         position: absolute;
         background: rgba(0, 0, 0, 0.65);
@@ -1109,19 +841,19 @@ export default {
         display: none;
         min-width: 160px;
         box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-      `;
-      document.body.appendChild(tooltip);
+      `
+      document.body.appendChild(tooltip)
     },
 
     /**
      * Truncate text to fit in available space
      */
     truncateText(text, maxLength) {
-      if (!text) return "";
+      if (!text) return ''
 
       // On mobile, truncate more aggressively
-      const limit = this.isMobile ? Math.min(maxLength, 18) : maxLength;
-      return text.length > limit ? text.slice(0, limit) + "..." : text;
+      const limit = this.isMobile ? Math.min(maxLength, 18) : maxLength
+      return text.length > limit ? text.slice(0, limit) + '...' : text
     },
 
     /**
@@ -1129,44 +861,40 @@ export default {
      */
     addTooltipHandlers() {
       // Get the tooltip element
-      const tooltip = document.getElementById("chart-custom-tooltip");
-      if (!tooltip) return;
+      const tooltip = document.getElementById('chart-custom-tooltip')
+      if (!tooltip) return
 
       // Get all slice elements
-      const chartContainer = this.$refs.chart;
-      if (!chartContainer) return;
+      const chartContainer = this.$refs.chart
+      if (!chartContainer) return
 
       // All possible selectors for chart slices
       const sliceSelectors = [
-        ".apexcharts-pie-area",
-        ".apexcharts-slice-0",
-        ".apexcharts-slice",
-        ".apexcharts-pie .apexcharts-series path",
-        ".apexcharts-donut-slice-0",
-        ".apexcharts-series path",
-      ];
+        '.apexcharts-pie-area',
+        '.apexcharts-slice-0',
+        '.apexcharts-slice',
+        '.apexcharts-pie .apexcharts-series path',
+        '.apexcharts-donut-slice-0',
+        '.apexcharts-series path',
+      ]
 
       // Try different selectors until we find slices
-      let slices = [];
+      let slices = []
       for (const selector of sliceSelectors) {
-        slices = chartContainer.querySelectorAll(selector);
+        slices = chartContainer.querySelectorAll(selector)
         if (slices.length > 0) {
-          console.log(
-            `[DEBUG] Found ${slices.length} slices using selector: ${selector}`
-          );
-          break;
+          console.log(`[DEBUG] Found ${slices.length} slices using selector: ${selector}`)
+          break
         }
       }
 
       // If we still can't find slices, try the document
       if (slices.length === 0) {
         for (const selector of sliceSelectors) {
-          slices = document.querySelectorAll(selector);
+          slices = document.querySelectorAll(selector)
           if (slices.length > 0) {
-            console.log(
-              `[DEBUG] Found ${slices.length} slices in document using selector: ${selector}`
-            );
-            break;
+            console.log(`[DEBUG] Found ${slices.length} slices in document using selector: ${selector}`)
+            break
           }
         }
       }
@@ -1175,67 +903,63 @@ export default {
       if (slices.length > 0) {
         slices.forEach((slice, index) => {
           // Make sure index is in range
-          if (index >= this.processedData.length) return;
+          if (index >= this.processedData.length) return
 
           // Set cursor style
-          slice.style.cursor = "pointer";
+          slice.style.cursor = 'pointer'
 
           // Mouse enter handler - show tooltip
-          slice.addEventListener("mouseenter", (e) => {
-            const item = this.processedData[index];
-            if (!item) return;
+          slice.addEventListener('mouseenter', (e) => {
+            const item = this.processedData[index]
+            if (!item) return
 
             // Update tooltip content
             tooltip.innerHTML = `
-              <div style="font-weight: bold; margin-bottom: 6px;">${
-                item.categoryName
-              }</div>
+              <div style="font-weight: bold; margin-bottom: 6px;">${item.categoryName}</div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                 <span>Total Queries:</span>
                 <span style="font-weight: 500;">${item.count.toLocaleString()}</span>
               </div>
               <div style="display: flex; justify-content: space-between;">
                 <span>Percentage:</span>
-                <span style="font-weight: 500;">${Math.round(
-                  item.percentage
-                )}%</span>
+                <span style="font-weight: 500;">${Math.round(item.percentage)}%</span>
               </div>
-            `;
+            `
 
             // Show tooltip
-            tooltip.style.display = "block";
+            tooltip.style.display = 'block'
 
             // Apply active styles to slice (optional)
-            slice.setAttribute("data-active", "true");
-          });
+            slice.setAttribute('data-active', 'true')
+          })
 
           // Mouse move handler - position tooltip
-          slice.addEventListener("mousemove", (e) => {
+          slice.addEventListener('mousemove', (e) => {
             // Position tooltip near cursor but not directly under it
-            const offset = 15;
-            tooltip.style.left = e.pageX + offset + "px";
-            tooltip.style.top = e.pageY + offset + "px";
-          });
+            const offset = 15
+            tooltip.style.left = e.pageX + offset + 'px'
+            tooltip.style.top = e.pageY + offset + 'px'
+          })
 
           // Mouse leave handler - hide tooltip
-          slice.addEventListener("mouseleave", () => {
-            tooltip.style.display = "none";
-            slice.removeAttribute("data-active");
-          });
-        });
+          slice.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none'
+            slice.removeAttribute('data-active')
+          })
+        })
 
-        console.log("[DEBUG] Successfully added tooltip handlers to slices");
+        console.log('[DEBUG] Successfully added tooltip handlers to slices')
       } else {
-        console.log("[DEBUG] No slices found to attach tooltips");
+        console.log('[DEBUG] No slices found to attach tooltips')
 
         // Last resort: try again after a longer delay
         setTimeout(() => {
-          this.addTooltipHandlers();
-        }, 1000);
+          this.addTooltipHandlers()
+        }, 1000)
       }
     },
   },
-};
+}
 </script>
 
 <style scoped>
@@ -1312,35 +1036,32 @@ export default {
 
 /* Force white text ONLY in dark mode for donut center */
 :deep(.dark-theme) .apexcharts-datalabel-label,
-:deep([data-theme="dark"]) .apexcharts-datalabel-label,
+:deep([data-theme='dark']) .apexcharts-datalabel-label,
 :deep(.dark-mode) .apexcharts-datalabel-label,
 :deep(.dark-theme) .apexcharts-datalabel-value,
-:deep([data-theme="dark"]) .apexcharts-datalabel-value,
+:deep([data-theme='dark']) .apexcharts-datalabel-value,
 :deep(.dark-mode) .apexcharts-datalabel-value {
   fill: white !important;
 }
 
 /* Force dark text ONLY in light mode for donut center */
-:deep([data-theme="light"]) .apexcharts-datalabel-label,
-:deep([data-theme="light"]) .apexcharts-datalabel-value {
+:deep([data-theme='light']) .apexcharts-datalabel-label,
+:deep([data-theme='light']) .apexcharts-datalabel-value {
   fill: #333333 !important;
 }
 
 /* System dark mode preference - ONLY apply in dark mode */
 @media (prefers-color-scheme: dark) {
-  :deep(:not(.light-theme):not([data-theme="light"]))
-    .apexcharts-datalabel-label,
-  :deep(:not(.light-theme):not([data-theme="light"]))
-    .apexcharts-datalabel-value {
+  :deep(:not(.light-theme):not([data-theme='light'])) .apexcharts-datalabel-label,
+  :deep(:not(.light-theme):not([data-theme='light'])) .apexcharts-datalabel-value {
     fill: white !important;
   }
 }
 
 /* System light mode preference - ONLY apply in light mode */
 @media (prefers-color-scheme: light) {
-  :deep(:not(.dark-theme):not([data-theme="dark"])) .apexcharts-datalabel-label,
-  :deep(:not(.dark-theme):not([data-theme="dark"]))
-    .apexcharts-datalabel-value {
+  :deep(:not(.dark-theme):not([data-theme='dark'])) .apexcharts-datalabel-label,
+  :deep(:not(.dark-theme):not([data-theme='dark'])) .apexcharts-datalabel-value {
     fill: #333333 !important;
   }
 }

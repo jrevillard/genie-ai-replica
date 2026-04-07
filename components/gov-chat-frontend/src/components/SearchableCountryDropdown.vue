@@ -2,19 +2,33 @@
   <div class="searchable-dropdown">
     <label v-if="label">{{ label }}</label>
     <div class="select-wrapper">
-      <input v-if="showSearch" type="text" v-model="searchTerm" class="search-input"
-        :placeholder="searchPlaceholder" @input="filterOptions" @blur="handleBlur"
-        @keydown.enter="selectActiveOption" @keydown.down="navigateOptions(1)" @keydown.up="navigateOptions(-1)"
-        ref="searchInput" />
+      <input
+        v-if="showSearch"
+        ref="searchInput"
+        v-model="searchTerm"
+        type="text"
+        class="search-input"
+        :placeholder="searchPlaceholder"
+        @input="filterOptions"
+        @blur="handleBlur"
+        @keydown.enter="selectActiveOption"
+        @keydown.down="navigateOptions(1)"
+        @keydown.up="navigateOptions(-1)"
+      />
       <div v-else class="selected-option" @click="toggleSearch">
         <span v-if="selectedOption">{{ selectedOption }}</span>
         <span v-else-if="value && displayCode">{{ displayCode }}</span>
         <span v-else>{{ placeholder }}</span>
       </div>
       <div v-if="showSearch" class="options-dropdown">
-        <div v-for="(option, index) in filteredOptions" :key="index" class="option"
-          :class="{ 'active': index === selectedIndex }" @click="selectOption(option.code, option.name)"
-          @mouseenter="selectedIndex = index">
+        <div
+          v-for="(option, index) in filteredOptions"
+          :key="index"
+          class="option"
+          :class="{ active: index === selectedIndex }"
+          @click="selectOption(option.code, option.name)"
+          @mouseenter="selectedIndex = index"
+        >
           {{ option.name }}
         </div>
         <div v-if="filteredOptions.length === 0" class="no-results">
@@ -24,7 +38,10 @@
     </div>
     <!-- Add a hidden debugging element that can be toggled via prop -->
     <div v-if="debug" class="debug-info">
-      <p><strong>Debug:</strong> value: {{ value }}, selectedOption: {{ selectedOption }}</p>
+      <p>
+        <strong>Debug:</strong>
+        value: {{ value }}, selectedOption: {{ selectedOption }}
+      </p>
       <p>displayCode: {{ displayCode }}</p>
       <p>Countries loaded: {{ allCountries.length }}</p>
       <p>Last update: {{ debugInfo.lastUpdated }}</p>
@@ -38,28 +55,28 @@ export default {
   props: {
     value: {
       type: String,
-      default: ''
+      default: '',
     },
     label: {
       type: String,
-      default: ''
+      default: '',
     },
     placeholder: {
       type: String,
-      default: 'Select a country'
+      default: 'Select a country',
     },
     searchPlaceholder: {
       type: String,
-      default: 'Search countries...'
+      default: 'Search countries...',
     },
     noResultsText: {
       type: String,
-      default: 'No matching countries found'
+      default: 'No matching countries found',
     },
     debug: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
   data() {
     return {
@@ -71,112 +88,112 @@ export default {
       filteredOptions: [],
       codeToNameMap: {
         // Default mapping for common countries - more will be added when loadCountries() is called
-        'AF': 'Afghanistan',
-        'AU': 'Australia',
-        'US': 'United States',
-        'CA': 'Canada',
-        'GB': 'United Kingdom',
-        'DE': 'Germany',
-        'FR': 'France',
-        'JP': 'Japan',
-        'CN': 'China',
-        'IN': 'India',
-        'BR': 'Brazil',
-        'RU': 'Russia',
-        'ZA': 'South Africa',
-        'ID': 'Indonesia'
+        AF: 'Afghanistan',
+        AU: 'Australia',
+        US: 'United States',
+        CA: 'Canada',
+        GB: 'United Kingdom',
+        DE: 'Germany',
+        FR: 'France',
+        JP: 'Japan',
+        CN: 'China',
+        IN: 'India',
+        BR: 'Brazil',
+        RU: 'Russia',
+        ZA: 'South Africa',
+        ID: 'Indonesia',
       },
       debugInfo: {
         renderCount: 0,
         lastUpdated: '',
-        valueHistory: []
+        valueHistory: [],
       },
       isInitialized: false,
-      mutationObserver: null
-    };
+      mutationObserver: null,
+    }
   },
   computed: {
     displayCode() {
-      if (!this.value) return '';
-      
+      if (!this.value) return ''
+
       // Try to find the name for this code
-      const countryName = this.getCountryNameByCode(this.value);
-      return countryName || this.value;
-    }
-  },
-  created() {
-    console.log(`Dropdown CREATED with value: ${this.value}`);
-    this.debugInfo.valueHistory.push(`created: ${this.value}`);
-    
-    // Load countries first
-    this.loadCountries();
-  },
-  mounted() {
-    console.log(`Dropdown MOUNTED with value: ${this.value}, selectedOption: ${this.selectedOption}`);
-    this.debugInfo.valueHistory.push(`mounted: ${this.value}`);
-    
-    // Set initial value after mounting
-    if (this.value) {
-      this.$nextTick(() => {
-        this.manuallySetCountryName(this.value);
-      });
-    }
-    
-    // Mark component as initialized
-    this.isInitialized = true;
-    
-    // Add mutation observer to detect when this component is re-attached to DOM
-    this.setupMutationObserver();
-  },
-  
-  beforeDestroy() {
-    // Clean up the mutation observer
-    if (this.mutationObserver) {
-      this.mutationObserver.disconnect();
-    }
-  },
-  updated() {
-    this.debugInfo.renderCount++;
-    this.debugInfo.lastUpdated = new Date().toISOString();
+      const countryName = this.getCountryNameByCode(this.value)
+      return countryName || this.value
+    },
   },
   watch: {
     value: {
       handler(newVal, oldVal) {
-        console.log(`Value CHANGED: ${oldVal} -> ${newVal}`);
-        this.debugInfo.valueHistory.push(`value changed: ${oldVal} -> ${newVal}`);
-        
+        console.log(`Value CHANGED: ${oldVal} -> ${newVal}`)
+        this.debugInfo.valueHistory.push(`value changed: ${oldVal} -> ${newVal}`)
+
         if (newVal !== oldVal && this.isInitialized) {
           if (newVal) {
             // Add a slight delay to ensure all data is ready
             this.$nextTick(() => {
-              this.manuallySetCountryName(newVal);
-            });
+              this.manuallySetCountryName(newVal)
+            })
           } else {
-            this.selectedOption = '';
-            this.$emit('update:name', '');
+            this.selectedOption = ''
+            this.$emit('update:name', '')
           }
         }
-      }
+      },
     },
     allCountries: {
       handler(newCountries) {
-        console.log(`Countries list UPDATED with ${newCountries.length} countries`);
-        
+        console.log(`Countries list UPDATED with ${newCountries.length} countries`)
+
         // Update the code-to-name map
-        newCountries.forEach(country => {
+        newCountries.forEach((country) => {
           if (country && country.code) {
-            this.codeToNameMap[country.code] = country.name;
+            this.codeToNameMap[country.code] = country.name
           }
-        });
-        
+        })
+
         // Try to update selected option if we have a value
         if (this.value) {
           this.$nextTick(() => {
-            this.manuallySetCountryName(this.value);
-          });
+            this.manuallySetCountryName(this.value)
+          })
         }
-      }
+      },
+    },
+  },
+  created() {
+    console.log(`Dropdown CREATED with value: ${this.value}`)
+    this.debugInfo.valueHistory.push(`created: ${this.value}`)
+
+    // Load countries first
+    this.loadCountries()
+  },
+  mounted() {
+    console.log(`Dropdown MOUNTED with value: ${this.value}, selectedOption: ${this.selectedOption}`)
+    this.debugInfo.valueHistory.push(`mounted: ${this.value}`)
+
+    // Set initial value after mounting
+    if (this.value) {
+      this.$nextTick(() => {
+        this.manuallySetCountryName(this.value)
+      })
     }
+
+    // Mark component as initialized
+    this.isInitialized = true
+
+    // Add mutation observer to detect when this component is re-attached to DOM
+    this.setupMutationObserver()
+  },
+
+  beforeUnmount() {
+    // Clean up the mutation observer
+    if (this.mutationObserver) {
+      this.mutationObserver.disconnect()
+    }
+  },
+  updated() {
+    this.debugInfo.renderCount++
+    this.debugInfo.lastUpdated = new Date().toISOString()
   },
   methods: {
     setupMutationObserver() {
@@ -186,182 +203,180 @@ export default {
           for (const mutation of mutations) {
             if (mutation.type === 'childList' && mutation.addedNodes.length) {
               // Check if our component or any parent is being added back to DOM
-              let containsSelf = false;
-              mutation.addedNodes.forEach(node => {
-                if (node.contains && node.contains(this.$el) || (node === this.$el)) {
-                  containsSelf = true;
+              let containsSelf = false
+              mutation.addedNodes.forEach((node) => {
+                if ((node.contains && node.contains(this.$el)) || node === this.$el) {
+                  containsSelf = true
                 }
-              });
-              
+              })
+
               if (containsSelf && this.value) {
-                console.log('Dropdown re-attached to DOM, restoring state for:', this.value);
+                console.log('Dropdown re-attached to DOM, restoring state for:', this.value)
                 this.$nextTick(() => {
-                  this.manuallySetCountryName(this.value);
-                });
+                  this.manuallySetCountryName(this.value)
+                })
               }
             }
           }
-        });
-        
+        })
+
         // Observe changes to the body element
         this.mutationObserver.observe(document.body, {
           childList: true,
-          subtree: true
-        });
+          subtree: true,
+        })
       }
     },
 
     manuallySetCountryName(code) {
-      if (!code) return;
-      
-      console.log(`Trying to set country name for code: ${code}`);
-      const countryName = this.getCountryNameByCode(code);
-      
+      if (!code) return
+
+      console.log(`Trying to set country name for code: ${code}`)
+      const countryName = this.getCountryNameByCode(code)
+
       if (countryName) {
-        console.log(`Setting selectedOption to: ${countryName}`);
-        this.selectedOption = countryName;
-        this.$emit('update:name', countryName);
+        console.log(`Setting selectedOption to: ${countryName}`)
+        this.selectedOption = countryName
+        this.$emit('update:name', countryName)
       } else {
-        console.log(`Country name not found for code: ${code}`);
+        console.log(`Country name not found for code: ${code}`)
       }
     },
     getCountryNameByCode(code) {
-      if (!code) return '';
-      
+      if (!code) return ''
+
       // Normalize the code to uppercase for consistent lookup
-      const normalizedCode = code.toUpperCase();
-      
+      const normalizedCode = code.toUpperCase()
+
       // Try to find in code-to-name map first (should be fastest)
       if (this.codeToNameMap[normalizedCode]) {
-        return this.codeToNameMap[normalizedCode];
+        return this.codeToNameMap[normalizedCode]
       }
-      
+
       // Then try to find in loaded countries
-      const country = this.allCountries.find(c => 
-        c && c.code && c.code.toUpperCase() === normalizedCode
-      );
-      
+      const country = this.allCountries.find((c) => c && c.code && c.code.toUpperCase() === normalizedCode)
+
       if (country) {
         // Update the map for future lookups
-        this.codeToNameMap[normalizedCode] = country.name;
-        return country.name;
+        this.codeToNameMap[normalizedCode] = country.name
+        return country.name
       }
-      
-      return '';
+
+      return ''
     },
     loadCountries() {
       try {
-        console.log('Loading countries');
-        let loadedCountries = [];
-        
+        console.log('Loading countries')
+        let loadedCountries = []
+
         // Try to get translations if i18n is available
-        const hasI18n = this.$i18n && typeof this.$i18n.t === 'function';
-        const hasTeMethod = this.$te && typeof this.$te === 'function';
-        
+        const hasI18n = this.$i18n && typeof this.$i18n.t === 'function'
+        const hasTeMethod = this.$te && typeof this.$te === 'function'
+
         if (hasI18n && hasTeMethod && this.$te('countries')) {
-          console.log('Using translated countries from i18n');
+          console.log('Using translated countries from i18n')
           try {
-            const translatedCountries = this.$t('countries');
+            const translatedCountries = this.$t('countries')
             if (typeof translatedCountries === 'object' && translatedCountries !== null) {
-              loadedCountries = Object.keys(translatedCountries).map(code => ({
+              loadedCountries = Object.keys(translatedCountries).map((code) => ({
                 code,
-                name: translatedCountries[code]
-              }));
+                name: translatedCountries[code],
+              }))
             } else {
-              console.warn('i18n countries not in expected format, using default countries');
-              loadedCountries = this.getDefaultCountries();
+              console.warn('i18n countries not in expected format, using default countries')
+              loadedCountries = this.getDefaultCountries()
             }
           } catch (translationError) {
-            console.error('Error getting translations:', translationError);
-            loadedCountries = this.getDefaultCountries();
+            console.error('Error getting translations:', translationError)
+            loadedCountries = this.getDefaultCountries()
           }
         } else {
-          console.log('No translations found, using default countries');
-          loadedCountries = this.getDefaultCountries();
+          console.log('No translations found, using default countries')
+          loadedCountries = this.getDefaultCountries()
         }
-        
+
         // Sort countries by name with safe locale fallback
-        const locale = hasI18n && this.$i18n.locale ? this.$i18n.locale : 'en';
-        
+        const locale = hasI18n && this.$i18n.locale ? this.$i18n.locale : 'en'
+
         try {
-          loadedCountries.sort((a, b) => 
-            a.name.toLowerCase().localeCompare(b.name.toLowerCase(), locale)
-          );
+          loadedCountries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase(), locale))
         } catch (sortError) {
-          console.warn('Error sorting countries, using basic sort:', sortError);
-          loadedCountries.sort((a, b) => a.name.localeCompare(b.name));
+          console.warn('Error sorting countries, using basic sort:', sortError)
+          loadedCountries.sort((a, b) => a.name.localeCompare(b.name))
         }
-        
+
         // Build complete code to name map for faster lookup
-        loadedCountries.forEach(country => {
+        loadedCountries.forEach((country) => {
           if (country && country.code) {
-            this.codeToNameMap[country.code] = country.name;
+            this.codeToNameMap[country.code] = country.name
           }
-        });
-        
+        })
+
         // Update the component data
-        this.allCountries = loadedCountries;
-        this.filteredOptions = [...loadedCountries];
-        
-        console.log(`Loaded ${loadedCountries.length} countries`);
+        this.allCountries = loadedCountries
+        this.filteredOptions = [...loadedCountries]
+
+        console.log(`Loaded ${loadedCountries.length} countries`)
       } catch (error) {
-        console.error('Error loading countries:', error);
+        console.error('Error loading countries:', error)
         // Fallback to default countries
-        this.allCountries = this.getDefaultCountries();
-        this.filteredOptions = [...this.allCountries];
+        this.allCountries = this.getDefaultCountries()
+        this.filteredOptions = [...this.allCountries]
       }
     },
     toggleSearch() {
-      this.showSearch = true;
-      this.searchTerm = this.selectedOption || '';
-      this.filterOptions();
+      this.showSearch = true
+      this.searchTerm = this.selectedOption || ''
+      this.filterOptions()
       this.$nextTick(() => {
         if (this.$refs.searchInput) {
-          this.$refs.searchInput.focus();
+          this.$refs.searchInput.focus()
         }
-      });
+      })
     },
     filterOptions() {
       if (!this.searchTerm) {
-        this.filteredOptions = [...this.allCountries];
+        this.filteredOptions = [...this.allCountries]
       } else {
-        const searchTerm = this.searchTerm.toLowerCase();
-        this.filteredOptions = this.allCountries.filter(option =>
-          option.name.toLowerCase().includes(searchTerm)
-        );
+        const searchTerm = this.searchTerm.toLowerCase()
+        this.filteredOptions = this.allCountries.filter((option) => option.name.toLowerCase().includes(searchTerm))
       }
-      this.selectedIndex = -1;
+      this.selectedIndex = -1
     },
     selectOption(code, name) {
-      console.log(`User selected: ${name} (${code})`);
-      this.selectedOption = name;
-      this.showSearch = false;
-      this.$emit('input', code);
-      this.$emit('update:name', name);
-      this.$emit('change', code);
+      console.log(`User selected: ${name} (${code})`)
+      this.selectedOption = name
+      this.showSearch = false
+      this.$emit('input', code)
+      this.$emit('update:name', name)
+      this.$emit('change', code)
     },
     handleBlur(event) {
       if (!event.relatedTarget || !event.relatedTarget.closest('.options-dropdown')) {
         setTimeout(() => {
-          this.showSearch = false;
-        }, 150);
+          this.showSearch = false
+        }, 150)
       }
     },
     selectActiveOption() {
-      if (this.filteredOptions.length > 0 && this.selectedIndex >= 0 && this.selectedIndex < this.filteredOptions.length) {
-        const selectedOption = this.filteredOptions[this.selectedIndex];
-        this.selectOption(selectedOption.code, selectedOption.name);
+      if (
+        this.filteredOptions.length > 0 &&
+        this.selectedIndex >= 0 &&
+        this.selectedIndex < this.filteredOptions.length
+      ) {
+        const selectedOption = this.filteredOptions[this.selectedIndex]
+        this.selectOption(selectedOption.code, selectedOption.name)
       } else if (this.filteredOptions.length > 0) {
-        const firstOption = this.filteredOptions[0];
-        this.selectOption(firstOption.code, firstOption.name);
+        const firstOption = this.filteredOptions[0]
+        this.selectOption(firstOption.code, firstOption.name)
       }
     },
     navigateOptions(direction) {
-      const optionsLength = this.filteredOptions.length;
+      const optionsLength = this.filteredOptions.length
       if (optionsLength > 0) {
-        this.selectedIndex = (this.selectedIndex + direction + optionsLength) % optionsLength;
+        this.selectedIndex = (this.selectedIndex + direction + optionsLength) % optionsLength
         if (this.selectedIndex >= 0 && this.selectedIndex < optionsLength) {
-          this.$refs.searchInput.focus();
+          this.$refs.searchInput.focus()
         }
       }
     },
@@ -561,124 +576,123 @@ export default {
         { code: 'VN', name: 'Vietnam' },
         { code: 'YE', name: 'Yemen' },
         { code: 'ZM', name: 'Zambia' },
-        { code: 'ZW', name: 'Zimbabwe' }
-      ];
-    }
-  }
-};
+        { code: 'ZW', name: 'Zimbabwe' },
+      ]
+    },
+  },
+}
 </script>
-
 
 <style scoped>
 /* Inherit styles from the parent UserProfileComponent for consistency */
 .searchable-dropdown {
-    display: flex;
-    flex-direction: column;
+  display: flex;
+  flex-direction: column;
 }
 
 .searchable-dropdown label {
-    margin-bottom: 4px;
-    font-weight: 500;
-    font-size: 0.95rem;
+  margin-bottom: 4px;
+  font-weight: 500;
+  font-size: 0.95rem;
 }
 
 .select-wrapper {
-    position: relative;
-    width: 100%;
+  position: relative;
+  width: 100%;
 }
 
 .search-input {
-    width: 100%;
-    padding: 6px;
-    border: 1px solid var(--dialog-input-border-color, #ddd);
-    border-radius: 4px;
-    background-color: var(--dialog-input-background, #ffffff);
-    color: var(--dialog-input-text-color, #333333);
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--dialog-input-border-color, #ddd);
+  border-radius: 4px;
+  background-color: var(--dialog-input-background, #ffffff);
+  color: var(--dialog-input-text-color, #333333);
 }
 
 .selected-option {
-    width: 100%;
-    padding: 6px;
-    border: 1px solid var(--dialog-input-border-color, #ddd);
-    border-radius: 4px;
-    background-color: var(--dialog-input-background, #ffffff);
-    color: var(--dialog-input-text-color, #333333);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    position: relative;
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--dialog-input-border-color, #ddd);
+  border-radius: 4px;
+  background-color: var(--dialog-input-background, #ffffff);
+  color: var(--dialog-input-text-color, #333333);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  position: relative;
 }
 
 .selected-option:after {
-    content: '▼';
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.8em;
-    color: var(--dialog-input-text-color, #888);
+  content: '▼';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8em;
+  color: var(--dialog-input-text-color, #888);
 }
 
 .options-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 200px;
-    overflow-y: auto;
-    background-color: var(--dialog-input-background, #ffffff);
-    border: 1px solid var(--dialog-input-border-color, #ddd);
-    border-radius: 0 0 4px 4px;
-    z-index: 10;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: var(--dialog-input-background, #ffffff);
+  border: 1px solid var(--dialog-input-border-color, #ddd);
+  border-radius: 0 0 4px 4px;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .option {
-    padding: 6px 10px;
-    cursor: pointer;
+  padding: 6px 10px;
+  cursor: pointer;
 }
 
 .option:hover,
 .option.active {
-    background-color: var(--dialog-primary-button-bg, #4E97D1);
-    color: var(--dialog-primary-button-text, #ffffff);
+  background-color: var(--dialog-primary-button-bg, #4e97d1);
+  color: var(--dialog-primary-button-text, #ffffff);
 }
 
 .no-results {
-    padding: 10px;
-    text-align: center;
-    color: #999;
-    font-style: italic;
+  padding: 10px;
+  text-align: center;
+  color: #999;
+  font-style: italic;
 }
 
 /* Focus styles */
 .search-input:focus {
-    border-color: var(--dialog-primary-button-bg, #4E97D1);
-    box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.2);
-    outline: none;
+  border-color: var(--dialog-primary-button-bg, #4e97d1);
+  box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.2);
+  outline: none;
 }
 
 /* Dark theme adjustments */
-:deep([data-theme="dark"]) .options-dropdown,
+:deep([data-theme='dark']) .options-dropdown,
 :deep(.dark-mode) .options-dropdown {
-    background-color: var(--dialog-input-background, #333333);
-    border-color: var(--dialog-input-border-color, #3a3a3a);
+  background-color: var(--dialog-input-background, #333333);
+  border-color: var(--dialog-input-border-color, #3a3a3a);
 }
 
-:deep([data-theme="dark"]) .option:hover,
+:deep([data-theme='dark']) .option:hover,
 :deep(.dark-mode) .option:hover,
-:deep([data-theme="dark"]) .option.active,
+:deep([data-theme='dark']) .option.active,
 :deep(.dark-mode) .option.active {
-    background-color: var(--dialog-primary-button-bg, #4E97D1);
+  background-color: var(--dialog-primary-button-bg, #4e97d1);
 }
 
-:deep([data-theme="dark"]) .no-results,
+:deep([data-theme='dark']) .no-results,
 :deep(.dark-mode) .no-results {
-    color: #777;
+  color: #777;
 }
 
 .unmatched-value {
-    font-style: italic;
-    opacity: 0.8;
+  font-style: italic;
+  opacity: 0.8;
 }
 </style>

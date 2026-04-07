@@ -169,8 +169,9 @@ development_status:
   epic-3-retrospective: done # Retrospective completed 2026-04-07
 
   # Epic 4: Audit Logging & Compliance Reporting
-  # Worktree: epic4-logging (after Epic 3 merged)
-  epic-4: backlog
-  4-1-structured-authentication-audit-logging: backlog # worktree: epic4-logging
-  4-2-configurable-log-retention-policies: backlog # worktree: epic4-logging (after 4-1)
-  epic-4-retrospective: optional
+  # CLOSED — YAGNI: All requirements (FR32, FR33, NFR12, NFR13) satisfied by Keycloak native
+  # event listener configuration. No backend code needed. See epic-4-closure.md for rationale.
+  epic-4: done
+  4-1-structured-authentication-audit-logging: closed # YAGNI — Keycloak covers audit logging
+  4-2-configurable-log-retention-policies: closed # YAGNI — Keycloak covers log retention
+  epic-4-retrospective: closed

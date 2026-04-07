@@ -224,8 +224,7 @@ class AnalyticsService {
       return result || 0;
     } catch (error) {
       logger.error(`Error getting unique users count: ${error.message}`, { stack: error.stack });
-      logger.info("Returning fixed sample count of 60 instead");
-      return 60;
+      return 0;
     }
   }
 
@@ -253,7 +252,7 @@ class AnalyticsService {
         logger.info("Test query result:", testResult);
       } catch (testError) {
         logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
-        throw new Error(`Database connection test failed: ${testError.message}`);
+        return this.getEmptyDashboardData();
       }
 
       const analyticsQuery = `
@@ -398,14 +397,8 @@ class AnalyticsService {
       }).then(cursor => cursor.next());
 
       if (!analyticsData) {
-        logger.info("No analytics data found, returning empty dashboard");
-        return {
-          queries: { total: 0, unanswered: 0, answeredPercentage: 0, avgResponseTime: 0 },
-          categories: [],
-          feedback: { total: 0, positive: 0, neutral: 0, negative: 0, positivePercentage: 0, negativePercentage: 0 },
-          users: { activeCount: 0 },
-          topQueries: []
-        };
+        logger.info("No analytics data found, returning empty data");
+        return this.getEmptyDashboardData();
       }
 
       logger.info("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
@@ -470,8 +463,38 @@ class AnalyticsService {
       return analyticsData;
     } catch (error) {
       logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
-      throw error;
+      return this.getEmptyDashboardData();
     }
+  }
+
+  /**
+   * Get empty dashboard data with correct shape for safe consumption by clients
+   * @private
+   * @returns {Object} Empty dashboard data matching the success response shape
+   */
+  getEmptyDashboardData() {
+    logger.info('Returning empty dashboard data (no fabricated values)');
+    return {
+      queries: {
+        total: 0,
+        unanswered: 0,
+        answeredPercentage: 0,
+        avgResponseTime: 0
+      },
+      categories: [],
+      feedback: {
+        total: 0,
+        positive: 0,
+        neutral: 0,
+        negative: 0,
+        positivePercentage: 0,
+        negativePercentage: 0
+      },
+      users: {
+        activeCount: 0
+      },
+      topQueries: []
+    };
   }
 
   /**

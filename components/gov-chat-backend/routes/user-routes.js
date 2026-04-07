@@ -349,7 +349,7 @@ module.exports = (userService) => {
       logger.info('=======================================================');
       logger.error(`[EMAIL ROUTE DEBUG] EMAIL UPDATE ERROR: ${error.message}`, { stack: error.stack });
       logger.info('=======================================================');
-      res.status(500).json({ error: error.message || 'Failed to initiate email change' });
+      res.status(500).json({ error: 'Failed to initiate email change' });
     }
   });
 
@@ -491,17 +491,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/:userId', (req, res, next) => {
-    if (!req.headers.authorization) {
-      logger.warn(`Authentication required for fetching user profile ${req.params.userId}`);
-      return res.status(401).json({ 
-        error: 'Authentication required', 
-        message: 'Not authorized' 
-      });
-    }
-    
-    authMiddleware.authenticate(req, res, next);
-  }, async (req, res) => {
+  router.get('/:userId', authMiddleware.authenticate, async (req, res) => {
     try {
       logger.info(`Getting user profile for ID: ${req.params.userId}`);
       const user = await userService.getUserProfile(req.params.userId);
@@ -531,14 +521,7 @@ module.exports = (userService) => {
    *       200:
    *         description: Safe user context
    */
-  router.get('/:userId/context', (req, res, next) => {
-    // 1. Enforce Authentication
-    if (!req.headers.authorization) {
-      logger.warn(`Authentication required for fetching user context ${req.params.userId}`);
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    authMiddleware.authenticate(req, res, next);
-  }, async (req, res) => {
+  router.get('/:userId/context', authMiddleware.authenticate, async (req, res) => {
     try {
       logger.info(`Getting AI context for user ID: ${req.params.userId}`);
       
@@ -729,17 +712,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/', (req, res, next) => {
-    if (!req.headers.authorization) {
-      logger.warn('Authentication required for searching users');
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Not authorized'
-      });
-    }
-
-    authMiddleware.authenticate(req, res, next);
-  }, async (req, res) => {
+  router.get('/', authMiddleware.authenticate, async (req, res) => {
     try {
       const { limit = 20, offset = 0, ...criteria } = req.query;
       logger.info("Search criteria:", JSON.stringify(criteria));

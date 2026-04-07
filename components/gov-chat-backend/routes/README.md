@@ -304,7 +304,6 @@ All routes, except specific authentication endpoints (e.g., `/auth/login`, `/aut
 | POST | `/folders/:folderId/share` | Share folder with another user |
 | DELETE | `/folders/:folderId/share/:targetUserId` | Remove folder share |
 | GET | `/folders/:folderId/users` | Get users with folder access |
-| GET | `/conversations/:conversationId/export` | Export conversation (PDF/JSON) |
 
 #### Key Parameters
 - `userId`: Extracted from request for user-specific operations.
@@ -562,7 +561,7 @@ Routes can be tested using tools like Postman or the Swagger UI.
 Run the integration test script to verify connections between services:
 
 ```bash
-node verify-integration.js
+node tests/verify-integration.js
 ```
 
 This script tests the integration between the query service, analytics service, and other components of the GENIE.AI framework, ensuring that queries and feedback are correctly recorded in analytics.

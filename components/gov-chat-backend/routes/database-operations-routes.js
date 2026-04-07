@@ -5,7 +5,7 @@ const { logger } = require('../shared-lib');
 
 module.exports = (databaseService) => {
   // Apply authentication middleware to all routes
-  router.use(authMiddleware.authenticate);
+  router.use(authMiddleware.authenticate, authMiddleware.isAdmin);
 
   /**
    * @swagger
@@ -50,10 +50,9 @@ module.exports = (databaseService) => {
       }
     } catch (error) {
       logger.error(`Unexpected error during database reindexing: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: 'Unexpected error during database reindexing',
-        error: error.message 
+        message: 'Unexpected error during database reindexing'
       });
     }
   });
@@ -96,10 +95,9 @@ module.exports = (databaseService) => {
       }
     } catch (error) {
       logger.error(`Unexpected error during database backup: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: 'Unexpected error during database backup',
-        error: error.message 
+        message: 'Unexpected error during database backup'
       });
     }
   });
@@ -149,10 +147,9 @@ module.exports = (databaseService) => {
       }
     } catch (error) {
       logger.error(`Unexpected error during database optimization: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: 'Unexpected error during database optimization',
-        error: error.message 
+        message: 'Unexpected error during database optimization'
       });
     }
   });

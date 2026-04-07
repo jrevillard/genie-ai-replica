@@ -274,7 +274,7 @@ module.exports = (adminService, logsService) => {
       logger.info(`[ADMIN-ROUTES] Security scan completed successfully by user: ${req.user?.email || 'unknown'}`);
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error running security scan: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ success: false, message: 'Failed to run security scan', error: error.message });
+      res.status(500).json({ success: false, message: 'Failed to run security scan' });
     }
   });
 

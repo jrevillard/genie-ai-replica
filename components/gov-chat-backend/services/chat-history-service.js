@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
+const { NotFoundError, ForbiddenError } = require('../middleware/errors');
 
 //const initDB = dbService.getConnection();
 
@@ -266,15 +267,14 @@ class ChatHistoryService {
       const snippet = messageData.content.length > 100
         ? `${messageData.content.substring(0, 97)}...`
         : messageData.content;
-      const safeSnippet = JSON.stringify(snippet);
 
-      const updateStatsQuery = `
+      const updateStatsQuery = aql`
         FOR doc IN conversations
-          FILTER doc._key == "${messageData.conversationId}"
-          UPDATE doc WITH { 
+          FILTER doc._key == ${messageData.conversationId}
+          UPDATE doc WITH {
             messageCount: doc.messageCount + 1,
-            lastMessage: ${safeSnippet},
-            updated: "${new Date().toISOString()}"
+            lastMessage: ${snippet},
+            updated: ${new Date().toISOString()}
           } IN conversations
       `;
 
@@ -413,50 +413,81 @@ class ChatHistoryService {
       const filterStarred = options.filterStarred || false;
       const searchTerm = options.searchTerm || '';
 
-      // Use the most basic, simple query possible to reduce errors
-      const query = `
-        FOR edge IN userConversations
-          FILTER edge._from == '${userIdWithPrefix}'
-          
-          LET conversation = DOCUMENT(edge._to)
-          
-          FILTER ${!includeArchived ? 'conversation.isArchived == false' : 'true'}
-          FILTER ${filterStarred ? 'conversation.isStarred == true' : 'true'}
-          
-          ${searchTerm ? `FILTER (
-            LIKE(LOWER(conversation.title), CONCAT("%", LOWER("${searchTerm.replace(/"/g, '\\"')}"), "%")) OR
-            LIKE(LOWER(conversation.lastMessage), CONCAT("%", LOWER("${searchTerm.replace(/"/g, '\\"')}"), "%")) OR
-            LIKE(LOWER(conversation.category), CONCAT("%", LOWER("${searchTerm.replace(/"/g, '\\"')}"), "%"))
-          )` : ''}
-          
-          SORT conversation.updated DESC
-          LIMIT ${offset}, ${limit}
-          
-          LET messagePreview = (
-            FOR msg IN messages
-              FILTER msg.conversationId == PARSE_IDENTIFIER(conversation._id).key
-              SORT msg.sequence DESC
-              LIMIT 1
-              RETURN msg
-          )[0]
-          
-          RETURN {
-            _id: conversation._id,
-            _key: conversation._key,
-            title: conversation.title,
-            lastMessage: conversation.lastMessage,
-            created: conversation.created,
-            updated: conversation.updated,
-            messageCount: conversation.messageCount,
-            isStarred: conversation.isStarred,
-            isArchived: conversation.isArchived,
-            category: conversation.category,
-            tags: conversation.tags,
-            userRole: edge.role,
-            lastViewedAt: edge.lastViewedAt,
-            lastMessagePreview: messagePreview
-          }
-      `;
+      // Build query with conditional search filter — cannot use ternary with aql
+      // templates because a falsy '' value becomes a bind var that breaks AQL syntax
+      let query;
+      if (searchTerm) {
+        query = aql`
+          FOR edge IN userConversations
+            FILTER edge._from == ${userIdWithPrefix}
+            LET conversation = DOCUMENT(edge._to)
+            FILTER ${includeArchived} ? true : conversation.isArchived == false
+            FILTER ${filterStarred} ? conversation.isStarred == true : true
+            FILTER (
+              LIKE(LOWER(conversation.title), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+              LIKE(LOWER(conversation.lastMessage), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+              LIKE(LOWER(conversation.category), CONCAT("%", LOWER(${searchTerm}), "%"))
+            )
+            SORT conversation.updated DESC
+            LIMIT ${offset}, ${limit}
+            LET messagePreview = (
+              FOR msg IN messages
+                FILTER msg.conversationId == PARSE_IDENTIFIER(conversation._id).key
+                SORT msg.sequence DESC
+                LIMIT 1
+                RETURN msg
+            )[0]
+            RETURN {
+              _id: conversation._id,
+              _key: conversation._key,
+              title: conversation.title,
+              lastMessage: conversation.lastMessage,
+              created: conversation.created,
+              updated: conversation.updated,
+              messageCount: conversation.messageCount,
+              isStarred: conversation.isStarred,
+              isArchived: conversation.isArchived,
+              category: conversation.category,
+              tags: conversation.tags,
+              userRole: edge.role,
+              lastViewedAt: edge.lastViewedAt,
+              lastMessagePreview: messagePreview
+            }
+        `;
+      } else {
+        query = aql`
+          FOR edge IN userConversations
+            FILTER edge._from == ${userIdWithPrefix}
+            LET conversation = DOCUMENT(edge._to)
+            FILTER ${includeArchived} ? true : conversation.isArchived == false
+            FILTER ${filterStarred} ? conversation.isStarred == true : true
+            SORT conversation.updated DESC
+            LIMIT ${offset}, ${limit}
+            LET messagePreview = (
+              FOR msg IN messages
+                FILTER msg.conversationId == PARSE_IDENTIFIER(conversation._id).key
+                SORT msg.sequence DESC
+                LIMIT 1
+                RETURN msg
+            )[0]
+            RETURN {
+              _id: conversation._id,
+              _key: conversation._key,
+              title: conversation.title,
+              lastMessage: conversation.lastMessage,
+              created: conversation.created,
+              updated: conversation.updated,
+              messageCount: conversation.messageCount,
+              isStarred: conversation.isStarred,
+              isArchived: conversation.isArchived,
+              category: conversation.category,
+              tags: conversation.tags,
+              userRole: edge.role,
+              lastViewedAt: edge.lastViewedAt,
+              lastMessagePreview: messagePreview
+            }
+        `;
+      }
 
       // Log and execute the query
       logger.info(`Executing simplified query for user path: ${userIdWithPrefix}`);
@@ -464,22 +495,36 @@ class ChatHistoryService {
       const conversations = await cursor.all();
       logger.info(`Found ${conversations.length} conversations for user ${userIdWithPrefix}`);
 
-      // Simplified count query
-      const countQuery = `
-        RETURN LENGTH(
-          FOR edge IN userConversations
-            FILTER edge._from == '${userIdWithPrefix}'
-            LET conversation = DOCUMENT(edge._to)
-            FILTER ${!includeArchived ? 'conversation.isArchived == false' : 'true'}
-            FILTER ${filterStarred ? 'conversation.isStarred == true' : 'true'}
-            ${searchTerm ? `FILTER (
-              LIKE(LOWER(conversation.title), CONCAT("%", LOWER("${searchTerm.replace(/"/g, '\\"')}"), "%")) OR
-              LIKE(LOWER(conversation.lastMessage), CONCAT("%", LOWER("${searchTerm.replace(/"/g, '\\"')}"), "%")) OR
-              LIKE(LOWER(conversation.category), CONCAT("%", LOWER("${searchTerm.replace(/"/g, '\\"')}"), "%"))
-            )` : ''}
-            RETURN 1
-        )
-      `;
+      // Simplified count query (same conditional approach)
+      let countQuery;
+      if (searchTerm) {
+        countQuery = aql`
+          RETURN LENGTH(
+            FOR edge IN userConversations
+              FILTER edge._from == ${userIdWithPrefix}
+              LET conversation = DOCUMENT(edge._to)
+              FILTER ${includeArchived} ? true : conversation.isArchived == false
+              FILTER ${filterStarred} ? conversation.isStarred == true : true
+              FILTER (
+                LIKE(LOWER(conversation.title), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+                LIKE(LOWER(conversation.lastMessage), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+                LIKE(LOWER(conversation.category), CONCAT("%", LOWER(${searchTerm}), "%"))
+              )
+              RETURN 1
+          )
+        `;
+      } else {
+        countQuery = aql`
+          RETURN LENGTH(
+            FOR edge IN userConversations
+              FILTER edge._from == ${userIdWithPrefix}
+              LET conversation = DOCUMENT(edge._to)
+              FILTER ${includeArchived} ? true : conversation.isArchived == false
+              FILTER ${filterStarred} ? conversation.isStarred == true : true
+              RETURN 1
+          )
+        `;
+      }
 
       const countCursor = await this.db.query(countQuery);
       const totalCount = await countCursor.next() || 0;
@@ -539,39 +584,60 @@ class ChatHistoryService {
 
       const limit = options.limit || 50;
       const offset = options.offset || 0;
-      const sortDirection = options.newestFirst ? 'DESC' : 'ASC';
 
-      // Get messages with explicit string template
-      const messageQuery = `
-        FOR msg IN messages
-          FILTER msg.conversationId == "${conversationId}"
-          SORT msg.sequence ${sortDirection === 'DESC' ? 'DESC' : 'ASC'}
-          LIMIT ${offset}, ${limit}
-          
-          LET queryInfo = (
-            FOR edge IN queryMessages
-              FILTER edge._to == CONCAT('messages/', msg._key)
-              FOR q IN queries
-                FILTER q._id == edge._from
-                RETURN {
-                  _id: q._id,
-                  _key: q._key,
-                  text: q.text,
-                  responseType: edge.responseType,
-                  confidenceScore: edge.confidenceScore
-                }
-          )[0]
-          
-          RETURN MERGE(msg, { queryInfo: queryInfo })
-      `;
+      // SORT direction must be a literal — ArangoDB does not accept bind vars in SORT
+      let messageQuery;
+      if (options.newestFirst) {
+        messageQuery = aql`
+          FOR msg IN messages
+            FILTER msg.conversationId == ${conversationId}
+            SORT msg.sequence DESC
+            LIMIT ${offset}, ${limit}
+            LET queryInfo = (
+              FOR edge IN queryMessages
+                FILTER edge._to == CONCAT('messages/', msg._key)
+                FOR q IN queries
+                  FILTER q._id == edge._from
+                  RETURN {
+                    _id: q._id,
+                    _key: q._key,
+                    text: q.text,
+                    responseType: edge.responseType,
+                    confidenceScore: edge.confidenceScore
+                  }
+            )[0]
+            RETURN MERGE(msg, { queryInfo: queryInfo })
+        `;
+      } else {
+        messageQuery = aql`
+          FOR msg IN messages
+            FILTER msg.conversationId == ${conversationId}
+            SORT msg.sequence ASC
+            LIMIT ${offset}, ${limit}
+            LET queryInfo = (
+              FOR edge IN queryMessages
+                FILTER edge._to == CONCAT('messages/', msg._key)
+                FOR q IN queries
+                  FILTER q._id == edge._from
+                  RETURN {
+                    _id: q._id,
+                    _key: q._key,
+                    text: q.text,
+                    responseType: edge.responseType,
+                    confidenceScore: edge.confidenceScore
+                  }
+            )[0]
+            RETURN MERGE(msg, { queryInfo: queryInfo })
+        `;
+      }
 
       const messageCursor = await this.db.query(messageQuery);
       const messages = await messageCursor.all();
 
       // Count total messages
-      const countQuery = `
+      const countQuery = aql`
         FOR msg IN messages
-          FILTER msg.conversationId == "${conversationId}"
+          FILTER msg.conversationId == ${conversationId}
           COLLECT WITH COUNT INTO total
           RETURN total
       `;
@@ -673,14 +739,11 @@ class ChatHistoryService {
       if (messageIds && messageIds.length > 0) {
         logger.info(`Marking ${messageIds.length} specific messages as read`);
 
-        // Convert message IDs to JSON string for AQL
-        const messageIdsJson = JSON.stringify(messageIds);
-
         // Update only the specified messages
-        const updateQuery = `
-          FOR msgId IN ${messageIdsJson}
+        const updateQuery = aql`
+          FOR msgId IN ${messageIds}
             UPDATE { _key: msgId, readStatus: true } IN messages
-            FILTER OLD.conversationId == "${conversationId}" AND OLD.readStatus == false
+            FILTER OLD.conversationId == ${conversationId} AND OLD.readStatus == false
             RETURN NEW
         `;
 
@@ -691,9 +754,9 @@ class ChatHistoryService {
         // Update all unread messages in the conversation
         logger.info(`Marking all unread messages as read in conversation ${conversationId}`);
 
-        const updateQuery = `
+        const updateQuery = aql`
           FOR msg IN messages
-            FILTER msg.conversationId == "${conversationId}" AND msg.readStatus == false
+            FILTER msg.conversationId == ${conversationId} AND msg.readStatus == false
             UPDATE msg WITH { readStatus: true } IN messages
             RETURN NEW
         `;
@@ -709,10 +772,10 @@ class ChatHistoryService {
         this.getConversationOwnerId(conversationId).then(userId => {
           if (userId) {
             const currentTime = new Date().toISOString();
-            const updateViewedQuery = `
+            const updateViewedQuery = aql`
               FOR edge IN userConversations
-                FILTER edge._from == 'users/${userId}' AND edge._to == 'conversations/${conversationId}'
-                UPDATE edge WITH { lastViewedAt: "${currentTime}" } IN userConversations
+                FILTER edge._from == ${'users/' + userId} AND edge._to == ${'conversations/' + conversationId}
+                UPDATE edge WITH { lastViewedAt: ${currentTime} } IN userConversations
             `;
             return this.db.query(updateViewedQuery);
           }
@@ -766,22 +829,22 @@ class ChatHistoryService {
       const conversationIdFull = `conversations/${convKey}`;
 
       // Verify permission
-      const permissionQuery = `
+      const permissionQuery = aql`
         FOR edge IN userConversations
-          FILTER edge._to == '${conversationIdFull}' AND edge._from == 'users/${userId}'
+          FILTER edge._to == ${conversationIdFull} AND edge._from == ${'users/' + userId}
           RETURN edge
       `;
       const permissionCursor = await this.db.query(permissionQuery);
       const permission = await permissionCursor.next();
 
       if (!permission) {
-        throw new Error('You do not have permission to delete this conversation');
+        throw new ForbiddenError('You do not have permission to delete this conversation');
       }
 
       // Get messages
-      const messageQuery = `
+      const messageQuery = aql`
         FOR msg IN messages
-          FILTER msg.conversationId == "${convKey}"
+          FILTER msg.conversationId == ${convKey}
           RETURN msg._id
       `;
       const messageCursor = await this.db.query(messageQuery);
@@ -795,9 +858,9 @@ class ChatHistoryService {
         // Delete message-query edges
         for (const messageId of messageIds) {
           await trx.step(() => {
-            const deleteEdgeQuery = `
+            const deleteEdgeQuery = aql`
               FOR edge IN queryMessages
-                FILTER edge._to == "${messageId}"
+                FILTER edge._to == ${messageId}
                 REMOVE edge IN queryMessages
             `;
             return this.db.query(deleteEdgeQuery);
@@ -805,9 +868,9 @@ class ChatHistoryService {
         }
 
         // Delete messages
-        const deleteMessageQuery = `
+        const deleteMessageQuery = aql`
           FOR msg IN messages
-            FILTER msg.conversationId == "${convKey}"
+            FILTER msg.conversationId == ${convKey}
             REMOVE msg IN messages
             RETURN OLD
         `;
@@ -815,26 +878,26 @@ class ChatHistoryService {
         const messagesDeleted = await deleteMessageResult.all();
 
         // Delete user links
-        const deleteUserEdgeQuery = `
+        const deleteUserEdgeQuery = aql`
           FOR edge IN userConversations
-            FILTER edge._to == '${conversationIdFull}'
+            FILTER edge._to == ${conversationIdFull}
             REMOVE edge IN userConversations
         `;
         await trx.step(() => this.db.query(deleteUserEdgeQuery));
 
         // Delete category links
-        const deleteCategoryEdgeQuery = `
+        const deleteCategoryEdgeQuery = aql`
           FOR edge IN conversationCategories
-            FILTER edge._from == '${conversationIdFull}'
+            FILTER edge._from == ${conversationIdFull}
             REMOVE edge IN conversationCategories
         `;
         await trx.step(() => this.db.query(deleteCategoryEdgeQuery));
 
         // NEW: Delete file mappings (Standard Document Delete)
         // Note: Using 'doc.conversationId' instead of '_from'
-        const deleteFileDocQuery = `
+        const deleteFileDocQuery = aql`
           FOR doc IN conversationFiles
-            FILTER doc.conversationId == "${convKey}"
+            FILTER doc.conversationId == ${convKey}
             REMOVE doc IN conversationFiles
         `;
         await trx.step(() => this.db.query(deleteFileDocQuery));
@@ -863,19 +926,19 @@ class ChatHistoryService {
     try {
       logger.info(`Finding messages related to query ${queryId}`);
 
-      const query = `
+      const query = aql`
         FOR edge IN queryMessages
-          FILTER edge._from == 'queries/${queryId}'
-          
+          FILTER edge._from == ${'queries/' + queryId}
+
           FOR msg IN messages
             FILTER msg._id == edge._to
-            
+
             LET conversation = (
               FOR conv IN conversations
                 FILTER conv._key == msg.conversationId
                 RETURN conv
             )[0]
-            
+
             RETURN {
               message: msg,
               conversation: conversation,
@@ -1048,38 +1111,36 @@ class ChatHistoryService {
       const offset = options.offset || 0;
       const includeArchived = options.includeArchived || false;
 
-      const searchTermEscaped = searchTerm.replace(/"/g, '\\"'); // Escape quotes
-
-      const query = `
+      const query = aql`
         FOR edge IN userConversations
-          FILTER edge._from == 'users/${userId}'
-          
+          FILTER edge._from == ${'users/' + userId}
+
           FOR conv IN conversations
             FILTER conv._id == edge._to
             FILTER ${includeArchived} OR conv.isArchived == false
-            
+
             FILTER (
-              LIKE(LOWER(conv.title), CONCAT("%", LOWER("${searchTermEscaped}"), "%")) OR
-              LIKE(LOWER(conv.lastMessage), CONCAT("%", LOWER("${searchTermEscaped}"), "%")) OR
-              LIKE(LOWER(conv.category), CONCAT("%", LOWER("${searchTermEscaped}"), "%")) OR
-              "${searchTermEscaped}" IN conv.tags
+              LIKE(LOWER(conv.title), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+              LIKE(LOWER(conv.lastMessage), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+              LIKE(LOWER(conv.category), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+              ${searchTerm} IN conv.tags
             )
-            
+
             // Also search in messages content
             LET matchingMessages = (
               FOR msg IN messages
                 FILTER msg.conversationId == conv._key
-                FILTER LIKE(LOWER(msg.content), CONCAT("%", LOWER("${searchTermEscaped}"), "%"))
+                FILTER LIKE(LOWER(msg.content), CONCAT("%", LOWER(${searchTerm}), "%"))
                 SORT msg.timestamp DESC
                 LIMIT 3
                 RETURN msg
             )
-            
+
             SORT LENGTH(matchingMessages) > 0 ? 1 : 0 DESC, // Prioritize conversations with matching messages
                  conv.updated DESC
-            
+
             LIMIT ${offset}, ${limit}
-            
+
             RETURN {
               conversation: conv,
               matchingMessages: matchingMessages,
@@ -1108,20 +1169,20 @@ class ChatHistoryService {
     try {
       logger.info(`Getting conversation statistics for user ${userId}`);
 
-      const query = `
+      const query = aql`
         LET userConvs = (
           FOR edge IN userConversations
-            FILTER edge._from == 'users/${userId}'
+            FILTER edge._from == ${'users/' + userId}
             FOR conv IN conversations
               FILTER conv._id == edge._to
               RETURN conv
         )
-        
+
         LET totalCount = LENGTH(userConvs)
         LET activeCount = LENGTH(FOR c IN userConvs FILTER c.isArchived == false RETURN c)
         LET archivedCount = LENGTH(FOR c IN userConvs FILTER c.isArchived == true RETURN c)
         LET starredCount = LENGTH(FOR c IN userConvs FILTER c.isStarred == true RETURN c)
-        
+
         LET messageCount = (
           FOR conv IN userConvs
             FOR msg IN messages
@@ -1129,7 +1190,7 @@ class ChatHistoryService {
               COLLECT WITH COUNT INTO count
               RETURN count
         )[0] OR 0
-        
+
         LET categoryDistribution = (
           FOR conv IN userConvs
             COLLECT category = conv.category WITH COUNT INTO count
@@ -1140,7 +1201,7 @@ class ChatHistoryService {
               count: count
             }
         )
-        
+
         LET timeDistribution = (
           FOR conv IN userConvs
             LET hour = DATE_HOUR(DATE_ISO8601(conv.created))
@@ -1151,7 +1212,7 @@ class ChatHistoryService {
               count: count
             }
         )
-        
+
         RETURN {
           total: totalCount,
           active: activeCount,
@@ -1202,7 +1263,7 @@ class ChatHistoryService {
 
       if (!query) {
         logger.warn(`Query ${queryId} not found`);
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       // Extract conversationTitle from options or use the query text (truncated if needed)
@@ -1464,16 +1525,16 @@ class ChatHistoryService {
       const parentFolderId = options.parentFolderId || null;
 
       // Create the base query to check what's available
-      const baseQuery = `
+      const baseQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._from == '${userId}'
+        FILTER edge._from == ${userId}
         LET folder = DOCUMENT(edge._to)
-        RETURN { 
-          _id: folder._id, 
-          _key: folder._key, 
-          _from: edge._from, 
+        RETURN {
+          _id: folder._id,
+          _key: folder._key,
+          _from: edge._from,
           _to: edge._to,
-          collection: "folders" 
+          collection: "folders"
         }
       `;
 
@@ -1491,9 +1552,9 @@ class ChatHistoryService {
 
         // Now fetch the actual folder documents to check their properties
         const folderIds = edges.map(edge => edge._to);
-        const folderKeysQuery = `
+        const folderKeysQuery = aql`
         FOR folder IN folders
-          FILTER folder._id IN ${JSON.stringify(folderIds)}
+          FILTER folder._id IN ${folderIds}
           RETURN {
             _id: folder._id,
             _key: folder._key,
@@ -1522,37 +1583,37 @@ class ChatHistoryService {
       // Create the actual query with filters and verbose debug information
       logger.info(`DEBUG - Using filters: includeArchived=${includeArchived}, parentFolderId=${parentFolderId || 'null'}`);
 
-      const query = `
+      const query = aql`
       FOR edge IN userFolders
-        FILTER edge._from == '${userId}'
-        
+        FILTER edge._from == ${userId}
+
         LET folder = DOCUMENT(edge._to)
-        
+
         // Debug information about each folder and filter conditions
-        LET archiveCondition = ${!includeArchived ? 'folder.isArchived == false || folder.isArchived == null' : 'true'}
-        LET parentCondition = ${parentFolderId ? `folder.parentFolderId == "${parentFolderId}"` : 'folder.parentFolderId == null || !HAS(folder, "parentFolderId")'}
-        
+        LET archiveCondition = ${includeArchived} ? true : (folder.isArchived == false || folder.isArchived == null)
+        LET parentCondition = ${parentFolderId} != null ? folder.parentFolderId == ${parentFolderId} : (folder.parentFolderId == null || !HAS(folder, "parentFolderId"))
+
         // Filter based on conditions
         FILTER archiveCondition
         FILTER parentCondition
-        
+
         // Count conversations in each folder
         LET conversationCount = LENGTH(
           FOR convEdge IN folderConversations
             FILTER convEdge._from == folder._id
             RETURN 1
         )
-        
+
         // Get child folders count
         LET childFolderCount = LENGTH(
           FOR childFolder IN folders
             FILTER childFolder.parentFolderId == PARSE_IDENTIFIER(folder._id).key
-            FILTER ${!includeArchived ? 'childFolder.isArchived == false || childFolder.isArchived == null' : 'true'}
+            FILTER ${includeArchived} ? true : (childFolder.isArchived == false || childFolder.isArchived == null)
             RETURN 1
         )
-        
+
         SORT folder.order ASC, folder.name ASC
-        
+
         RETURN {
           _id: folder._id,
           _key: folder._key,
@@ -1561,7 +1622,7 @@ class ChatHistoryService {
           created: folder.created || null,
           updated: folder.updated || null,
           isArchived: folder.isArchived || false,
-          color: folder.color || "#808080", 
+          color: folder.color || "#808080",
           icon: folder.icon || "folder",
           parentFolderId: folder.parentFolderId || null,
           order: folder.order || 0,
@@ -1648,9 +1709,9 @@ class ChatHistoryService {
       logger.info(`Deleting folder ${folderId} for user ${userId}, deleteContents: ${deleteContents}`);
 
       // Verify the user has permission to delete this folder
-      const permissionQuery = `
+      const permissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + userId}
         RETURN edge
     `;
 
@@ -1659,13 +1720,13 @@ class ChatHistoryService {
 
       if (!permission) {
         logger.warn(`User ${userId} does not have permission to delete folder ${folderId}`);
-        throw new Error('You do not have permission to delete this folder');
+        throw new ForbiddenError('You do not have permission to delete this folder');
       }
 
       // Get all conversation links for this folder
-      const conversationLinkQuery = `
+      const conversationLinkQuery = aql`
       FOR edge IN folderConversations
-        FILTER edge._from == 'folders/${folderId}'
+        FILTER edge._from == ${'folders/' + folderId}
         RETURN edge
     `;
 
@@ -1701,18 +1762,18 @@ class ChatHistoryService {
         }
 
         // Delete user-folder edges
-        const deleteUserEdgeQuery = `
+        const deleteUserEdgeQuery = aql`
         FOR edge IN userFolders
-          FILTER edge._to == 'folders/${folderId}'
+          FILTER edge._to == ${'folders/' + folderId}
           REMOVE edge IN userFolders
       `;
 
         await trx.step(() => this.db.query(deleteUserEdgeQuery));
 
         // Check if there are child folders
-        const childFoldersQuery = `
+        const childFoldersQuery = aql`
         FOR folder IN folders
-          FILTER folder.parentFolderId == '${folderId}'
+          FILTER folder.parentFolderId == ${folderId}
           RETURN folder._key
       `;
 
@@ -1773,15 +1834,15 @@ class ChatHistoryService {
       logger.info(`Adding conversation ${conversationId} to folder ${folderId}`);
 
       // Verify the user has permission to access both folder and conversation
-      const folderPermissionQuery = `
+      const folderPermissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + userId}
         RETURN edge
     `;
 
-      const convPermissionQuery = `
+      const convPermissionQuery = aql`
       FOR edge IN userConversations
-        FILTER edge._to == 'conversations/${conversationId}' AND edge._from == 'users/${userId}'
+        FILTER edge._to == ${'conversations/' + conversationId} AND edge._from == ${'users/' + userId}
         RETURN edge
     `;
 
@@ -1793,18 +1854,18 @@ class ChatHistoryService {
 
       if (!folderPermission) {
         logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new Error('You do not have permission to access this folder');
+        throw new ForbiddenError('You do not have permission to access this folder');
       }
 
       if (!conversationPermission) {
         logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-        throw new Error('You do not have permission to access this conversation');
+        throw new ForbiddenError('You do not have permission to access this conversation');
       }
 
       // Check if the conversation already exists in any folder
-      const existingLinkQuery = `
+      const existingLinkQuery = aql`
       FOR edge IN folderConversations
-        FILTER edge._to == 'conversations/${conversationId}'
+        FILTER edge._to == ${'conversations/' + conversationId}
         RETURN edge
     `;
 
@@ -1853,9 +1914,9 @@ class ChatHistoryService {
       logger.info(`Removing conversation ${conversationId} from folder ${folderId}`);
 
       // Verify the user has permission to access the folder
-      const permissionQuery = `
+      const permissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + userId}
         RETURN edge
     `;
 
@@ -1864,13 +1925,13 @@ class ChatHistoryService {
 
       if (!permission) {
         logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new Error('You do not have permission to access this folder');
+        throw new ForbiddenError('You do not have permission to access this folder');
       }
 
       // Find the folder-conversation edge
-      const linkQuery = `
+      const linkQuery = aql`
       FOR edge IN folderConversations
-        FILTER edge._from == 'folders/${folderId}' AND edge._to == 'conversations/${conversationId}'
+        FILTER edge._from == ${'folders/' + folderId} AND edge._to == ${'conversations/' + conversationId}
         RETURN edge
     `;
 
@@ -1879,7 +1940,7 @@ class ChatHistoryService {
 
       if (!link) {
         logger.warn(`Conversation ${conversationId} not found in folder ${folderId}`);
-        throw new Error('Conversation not found in this folder');
+        throw new NotFoundError('Conversation not found in this folder');
       }
 
       // Delete the edge
@@ -1909,35 +1970,34 @@ class ChatHistoryService {
       logger.info(`Searching folders for user ${userId} with term: "${searchTerm}"`);
 
       const includeArchived = options.includeArchived || false;
-      const searchTermEscaped = searchTerm.replace(/"/g, '\\"'); // Escape quotes
 
-      const query = `
+      const query = aql`
       FOR edge IN userFolders
-        FILTER edge._from == 'users/${userId}'
-        
+        FILTER edge._from == ${'users/' + userId}
+
         FOR folder IN folders
           FILTER folder._id == edge._to
           FILTER ${includeArchived} OR folder.isArchived == false
-          
+
           FILTER (
-            LIKE(LOWER(folder.name), CONCAT("%", LOWER("${searchTermEscaped}"), "%")) OR
-            LIKE(LOWER(folder.description), CONCAT("%", LOWER("${searchTermEscaped}"), "%"))
+            LIKE(LOWER(folder.name), CONCAT("%", LOWER(${searchTerm}), "%")) OR
+            LIKE(LOWER(folder.description), CONCAT("%", LOWER(${searchTerm}), "%"))
           )
-          
+
           LET conversationCount = LENGTH(
             FOR convEdge IN folderConversations
               FILTER convEdge._from == folder._id
               RETURN 1
           )
-          
+
           LET childFolderCount = LENGTH(
             FOR childFolder IN folders
               FILTER childFolder.parentFolderId == PARSE_IDENTIFIER(folder._id).key
               RETURN 1
           )
-          
+
           SORT folder.name ASC
-          
+
           RETURN {
             folder: folder,
             conversationCount: conversationCount,
@@ -1980,7 +2040,7 @@ class ChatHistoryService {
 
       if (!convPermission) {
         logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-        throw new Error('You do not have permission to access this conversation');
+        throw new ForbiddenError('You do not have permission to access this conversation');
       }
 
       if (targetFolderId) {
@@ -1994,7 +2054,7 @@ class ChatHistoryService {
 
         if (!folderPermission) {
           logger.warn(`User ${userId} does not have permission to access folder ${targetFolderId}`);
-          throw new Error('You do not have permission to access the target folder');
+          throw new ForbiddenError('You do not have permission to access the target folder');
         }
       }
 
@@ -2086,12 +2146,12 @@ class ChatHistoryService {
     try {
       logger.info(`Finding folder for conversation ${conversationId}`);
 
-      const query = `
+      const query = aql`
       FOR edge IN folderConversations
-        FILTER edge._to == 'conversations/${conversationId}'
-        
+        FILTER edge._to == ${'conversations/' + conversationId}
+
         LET folder = DOCUMENT(edge._from)
-        
+
         RETURN {
           _id: folder._id,
           _key: folder._key,
@@ -2167,9 +2227,9 @@ class ChatHistoryService {
 
       // Verify user has permission for each folder
       for (const item of folderOrders) {
-        const permissionQuery = `
+        const permissionQuery = aql`
         FOR edge IN userFolders
-          FILTER edge._to == 'folders/${item.folderId}' AND edge._from == 'users/${userId}'
+          FILTER edge._to == ${'folders/' + item.folderId} AND edge._from == ${'users/' + userId}
           RETURN edge
       `;
 
@@ -2178,13 +2238,13 @@ class ChatHistoryService {
 
         if (!permission) {
           logger.warn(`User ${userId} does not have permission to access folder ${item.folderId}`);
-          throw new Error(`You do not have permission to access folder ${item.folderId}`);
+          throw new ForbiddenError(`You do not have permission to access folder ${item.folderId}`);
         }
 
         // Verify folder belongs to correct parent
-        const folderQuery = `
+        const folderQuery = aql`
         FOR folder IN folders
-          FILTER folder._key == '${item.folderId}'
+          FILTER folder._key == ${item.folderId}
           RETURN folder.parentFolderId
       `;
 
@@ -2243,9 +2303,9 @@ class ChatHistoryService {
       logger.info(`Sharing folder ${folderId} from user ${ownerUserId} to user ${targetUserId} with role ${role}`);
 
       // Verify the owner has permission to share this folder
-      const ownerPermissionQuery = `
+      const ownerPermissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${ownerUserId}' AND edge.role == 'owner'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + ownerUserId} AND edge.role == 'owner'
         RETURN edge
     `;
 
@@ -2258,9 +2318,9 @@ class ChatHistoryService {
       }
 
       // Check if the target user already has access
-      const existingShareQuery = `
+      const existingShareQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${targetUserId}'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + targetUserId}
         RETURN edge
     `;
 
@@ -2323,9 +2383,9 @@ class ChatHistoryService {
       logger.info(`Removing share for folder ${folderId} from user ${targetUserId}`);
 
       // Verify the owner has permission to manage shares for this folder
-      const ownerPermissionQuery = `
+      const ownerPermissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${ownerUserId}' AND edge.role == 'owner'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + ownerUserId} AND edge.role == 'owner'
         RETURN edge
     `;
 
@@ -2338,9 +2398,9 @@ class ChatHistoryService {
       }
 
       // Find the share to remove
-      const shareQuery = `
+      const shareQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${targetUserId}' AND edge.role != 'owner'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + targetUserId} AND edge.role != 'owner'
         RETURN edge
     `;
 
@@ -2349,7 +2409,7 @@ class ChatHistoryService {
 
       if (!share) {
         logger.warn(`Share for folder ${folderId} to user ${targetUserId} not found or user is the owner`);
-        throw new Error('Share not found or the target user is the owner');
+        throw new NotFoundError('Share not found or the target user is the owner');
       }
 
       // Delete the share
@@ -2383,14 +2443,14 @@ class ChatHistoryService {
       // Parse options
       const includeArchived = options.includeArchived || false;
 
-      const query = `
+      const query = aql`
       FOR edge IN userFolders
-        FILTER edge._from == '${userIdWithPrefix}'
+        FILTER edge._from == ${userIdWithPrefix}
         FILTER edge.role != 'owner'
-        
+
         LET folder = DOCUMENT(edge._to)
-        FILTER ${!includeArchived ? 'folder.isArchived == false' : 'true'}
-        
+        FILTER ${includeArchived} ? true : folder.isArchived == false
+
         LET owner = (
           FOR ownerEdge IN userFolders
             FILTER ownerEdge._to == edge._to AND ownerEdge.role == 'owner'
@@ -2400,15 +2460,15 @@ class ChatHistoryService {
               name: ownerUser.fullName || ownerUser.loginName || "Unknown"
             }
         )[0]
-        
+
         LET conversationCount = LENGTH(
           FOR convEdge IN folderConversations
             FILTER convEdge._from == folder._id
             RETURN 1
         )
-        
+
         SORT folder.name ASC
-        
+
         RETURN {
           _id: folder._id,
           _key: folder._key,
@@ -2451,9 +2511,9 @@ class ChatHistoryService {
       logger.info(`Getting users with access to folder ${folderId}`);
 
       // Verify the user has permission to view this folder
-      const permissionQuery = `
+      const permissionQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
+        FILTER edge._to == ${'folders/' + folderId} AND edge._from == ${'users/' + userId}
         RETURN edge
     `;
 
@@ -2462,16 +2522,16 @@ class ChatHistoryService {
 
       if (!permission) {
         logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-        throw new Error('You do not have permission to access this folder');
+        throw new ForbiddenError('You do not have permission to access this folder');
       }
 
       // Get all users with access
-      const usersQuery = `
+      const usersQuery = aql`
       FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}'
-        
+        FILTER edge._to == ${'folders/' + folderId}
+
         LET user = DOCUMENT(edge._from)
-        
+
         RETURN {
           userId: PARSE_IDENTIFIER(edge._from).key,
           name: user.fullName || user.loginName || "Unknown",

@@ -134,7 +134,7 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/categories/:categoryId', async (req, res) => {
+  router.get('/categories/:categoryId', async (req, res, next) => {
     const start = Date.now();
     try {
       const locale = req.query.locale || 'en';
@@ -143,13 +143,8 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      if (error.message.includes('not found')) {
-        logger.warn(`Category ${req.params.categoryId} not found`);
-        res.status(404).json({ message: error.message });
-      } else {
-        logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
-        res.status(500).json({ message: error.message });
-      }
+      logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      next(error);
     }
   });
 

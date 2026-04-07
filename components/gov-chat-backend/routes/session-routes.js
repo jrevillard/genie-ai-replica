@@ -87,19 +87,14 @@ module.exports = (sessionService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/:sessionId', async (req, res) => {
+  router.get('/:sessionId', async (req, res, next) => {
     try {
       logger.info(`Fetching session with ID: ${req.params.sessionId}`);
       const session = await sessionService.getSession(req.params.sessionId);
       res.json(session);
     } catch (error) {
-      if (error.message.includes('not found')) {
-        logger.warn(`Session ${req.params.sessionId} not found`);
-        res.status(404).json({ message: error.message });
-      } else {
-        logger.error(`Error fetching session ${req.params.sessionId}: ${error.message}`, { stack: error.stack });
-        res.status(500).json({ message: error.message });
-      }
+      logger.error(`Error fetching session ${req.params.sessionId}: ${error.message}`, { stack: error.stack });
+      next(error);
     }
   });
 
@@ -129,19 +124,14 @@ module.exports = (sessionService) => {
    *       500:
    *         description: Server error
    */
-  router.patch('/:sessionId/end', async (req, res) => {
+  router.patch('/:sessionId/end', async (req, res, next) => {
     try {
       logger.info(`Ending session ${req.params.sessionId}`);
       const session = await sessionService.endSession(req.params.sessionId);
       res.json(session);
     } catch (error) {
-      if (error.message.includes('not found')) {
-        logger.warn(`Session ${req.params.sessionId} not found for ending`);
-        res.status(404).json({ message: error.message });
-      } else {
-        logger.error(`Error ending session ${req.params.sessionId}: ${error.message}`, { stack: error.stack });
-        res.status(500).json({ message: error.message });
-      }
+      logger.error(`Error ending session ${req.params.sessionId}: ${error.message}`, { stack: error.stack });
+      next(error);
     }
   });
 
@@ -171,19 +161,14 @@ module.exports = (sessionService) => {
    *       500:
    *         description: Server error
    */
-  router.patch('/:sessionId/keepalive', async (req, res) => {
+  router.patch('/:sessionId/keepalive', async (req, res, next) => {
     try {
       logger.info(`Keeping session ${req.params.sessionId} alive`);
       const session = await sessionService.keepSessionAlive(req.params.sessionId);
       res.json(session);
     } catch (error) {
-      if (error.message.includes('not found')) {
-        logger.warn(`Session ${req.params.sessionId} not found for keepalive`);
-        res.status(404).json({ message: error.message });
-      } else {
-        logger.error(`Error keeping session ${req.params.sessionId} alive: ${error.message}`, { stack: error.stack });
-        res.status(500).json({ message: error.message });
-      }
+      logger.error(`Error keeping session ${req.params.sessionId} alive: ${error.message}`, { stack: error.stack });
+      next(error);
     }
   });
 

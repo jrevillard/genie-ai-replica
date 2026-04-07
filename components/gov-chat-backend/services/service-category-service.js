@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { NotFoundError } = require('../middleware/errors');
 
 class ServiceCategoryService {
   constructor() {
@@ -553,7 +554,7 @@ class ServiceCategoryService {
 
       if (!result) {
         logger.warn(`Category ${categoryKey} not found`);
-        throw new Error(`Category ${categoryKey} not found`);
+        throw new NotFoundError(`Category ${categoryKey} not found`);
       }
 
       if (!result.name) {

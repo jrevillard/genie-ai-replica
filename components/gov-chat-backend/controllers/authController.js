@@ -129,7 +129,8 @@ class AuthController {
         logger.warn('User ID is required for logout');
         return res.status(400).json({ success: false, message: 'User ID is required' });
       }
-      const result = await this.authService.logout(userId);
+      const token = req.headers.authorization?.split(' ')[1] || null;
+      const result = await this.authService.logout(userId, token);
       logger.info(`User logout successful for userId: ${userId}`);
       res.json(result);
     } catch (error) {

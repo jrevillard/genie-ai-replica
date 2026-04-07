@@ -86,11 +86,11 @@ RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet
 RUN mkdir -p /root/.EasyOCR/model && \
     mkdir -p /root/.EasyOCR/config && \
 # 2. Download and Unzip the 'en' (English) recognition model
-    wget -q -O /tmp/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
+    wget -q --show-progress -O /tmp/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
     unzip -o /tmp/english_g2.zip -d /root/.EasyOCR/model && \
     rm /tmp/english_g2.zip && \
 # 3. Download and Unzip the text detection model (CRAFT)
-    wget -q -O /tmp/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-releases/craft_mlt_25k.zip && \
+    wget -q --show-progress -O /tmp/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
     unzip -o /tmp/craft_mlt_25k.zip -d /root/.EasyOCR/model && \
     rm /tmp/craft_mlt_25k.zip
 

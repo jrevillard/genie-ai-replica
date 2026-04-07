@@ -241,6 +241,7 @@ services:
     container_name: nginx
     restart: unless-stopped
     ports:
+      - "80:80"
       - "443:443" # This will always run on port 443 as port 80 is taken by the OPEA nginx and we only want a https listener
     volumes:
       - ./api-gateway-solution/nginx/conf:/etc/nginx/conf.d

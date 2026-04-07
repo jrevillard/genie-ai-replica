@@ -227,7 +227,8 @@ services:
     container_name: nginx
     restart: unless-stopped
     ports:
-      - "443:443" # Port 80 is taken by chatqna-xeon-nginx-server; we only need HTTPS
+      - "80:80"
+      - "443:443" # Port 80 is no longer taken by chatqna-xeon-nginx-server; we need it for HTTP -> HTTPS redirect
     env_file:
       - .env
     volumes:

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
-const { NotFoundError } = require('../middleware/errors');
+const { NotFoundError, ValidationError } = require('../middleware/errors');
 
 class ServiceCategoryService {
   constructor() {
@@ -262,6 +262,9 @@ class ServiceCategoryService {
   async createServiceWithTranslations(categoryKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
   
       // 1. Get the current maximum order number for services IN THIS CATEGORY
@@ -311,6 +314,9 @@ class ServiceCategoryService {
   async updateServiceWithTranslations(serviceKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Updating service ${serviceKey} with name "${payload.nameEN}"`);
 
       // 1. Ensure the service exists (this will throw an error if not found)
@@ -806,6 +812,9 @@ class ServiceCategoryService {
   async createCategory(payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Creating new category "${payload.nameEN}"`);
 
       // 1. Get the current maximum order number for categories
@@ -844,6 +853,9 @@ class ServiceCategoryService {
   async updateCategoryWithTranslations(categoryKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Updating category ${categoryKey} with name "${payload.nameEN}"`);
 
       // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)

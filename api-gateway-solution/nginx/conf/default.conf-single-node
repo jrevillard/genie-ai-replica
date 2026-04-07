@@ -49,7 +49,7 @@ server {
     # Proxy for the backend API through Kong
     location /api/ {
         # Using a variable for the upstream forces DNS re-resolution
-        set $kong_upstream http://kong:8000;
+        set $kong_upstream http://kong:8010;
         proxy_pass $kong_upstream;
 
         proxy_set_header Host $host;

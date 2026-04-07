@@ -93,30 +93,25 @@ async function createArangoUser() {
 
     const usersCollection = db.collection("users");
 
-    // 1. Check if the user already exists
-    console.log(`Checking for existing user with loginName: "${managerUser.loginName}"...`);
+    // UPSERT: always enforce the correct password, create if missing
+    console.log(`Upserting user "${managerUser.loginName}"...`);
     const cursor = await db.query({
       query: `
-        FOR user IN users
-        FILTER user.loginName == @loginName
-        LIMIT 1
-        RETURN user
+        UPSERT { loginName: @loginName }
+        INSERT @user
+        UPDATE { encPassword: @encPassword, emailVerified: true, updatedAt: @now }
+        IN users
+        RETURN { action: OLD ? 'updated' : 'inserted', loginName: NEW.loginName }
       `,
-      bindVars: { loginName: managerUser.loginName }
+      bindVars: {
+        loginName: managerUser.loginName,
+        user: managerUser,
+        encPassword: managerUser.encPassword,
+        now: new Date().toISOString()
+      }
     });
-
-    const existingUser = await cursor.next();
-
-    if (existingUser) {
-      // 2a. If user exists, do nothing
-      console.log(`User "${managerUser.loginName}" already exists. No action taken.`);
-    } else {
-      // 2b. If user does not exist, create it
-      console.log(`User "${managerUser.loginName}" not found. Creating new user...`);
-      const result = await usersCollection.save(managerUser, { returnNew: true });
-      console.log("Successfully created new user:");
-      console.log(result.new);
-    }
+    const result = await cursor.next();
+    console.log(`User "${managerUser.loginName}" ${result.action} successfully.`);
 
   } catch (err) {
     console.error("An error occurred:", err.message);

@@ -91,30 +91,25 @@ async function createAdminUser() {
 
     const usersCollection = db.collection("users");
 
-    // 1. Check if the user already exists
-    console.log(`Checking for existing user with loginName: "${adminUser.loginName}"...`);
+    // UPSERT: always enforce the correct password, create if missing
+    console.log(`Upserting user "${adminUser.loginName}"...`);
     const cursor = await db.query({
       query: `
-        FOR user IN users
-        FILTER user.loginName == @loginName
-        LIMIT 1
-        RETURN user
+        UPSERT { loginName: @loginName }
+        INSERT @user
+        UPDATE { encPassword: @encPassword, emailVerified: true, updatedAt: @now }
+        IN users
+        RETURN { action: OLD ? 'updated' : 'inserted', loginName: NEW.loginName }
       `,
-      bindVars: { loginName: adminUser.loginName }
+      bindVars: {
+        loginName: adminUser.loginName,
+        user: adminUser,
+        encPassword: adminUser.encPassword,
+        now: new Date().toISOString()
+      }
     });
-
-    const existingUser = await cursor.next();
-
-    if (existingUser) {
-      // 2a. If user exists, do nothing
-      console.log(`User "${adminUser.loginName}" already exists. No action taken.`);
-    } else {
-      // 2b. If user does not exist, create it
-      console.log(`User "${adminUser.loginName}" not found. Creating new user...`);
-      const result = await usersCollection.save(adminUser, { returnNew: true });
-      console.log("Successfully created new admin user:");
-      console.log(result.new);
-    }
+    const result = await cursor.next();
+    console.log(`User "${adminUser.loginName}" ${result.action} successfully.`);
 
   } catch (err) {
     console.error("An error occurred:", err.message);

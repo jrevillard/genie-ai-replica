@@ -191,7 +191,7 @@ class ArangoSchemaCreator {
         await collection.create(options);
         console.log(`Created collection: ${collectionSchema.name}`);
       } catch (error) {
-        if (error.code === 1207) { // Collection already exists
+        if (error.errorNum === 1207) { // Collection already exists
           console.log(`Collection already exists: ${collectionSchema.name}`);
         } else {
           console.error(`Error creating collection ${collectionSchema.name}: ${error.message}`);
@@ -266,7 +266,7 @@ class ArangoSchemaCreator {
         await graph.create({ edgeDefinitions: edgeDefs, orphanCollections: orphanColls, ...graphOptions });
         console.log(`Created graph: ${graphSchema.name}`);
       } catch (error) {
-        if (error.code === 1925) { // Graph already exists
+        if (error.errorNum === 1925) { // Graph already exists
           console.log(`Graph already exists: ${graphSchema.name}`);
         } else {
           console.error(`Error creating graph ${graphSchema.name}:`, error.message);
@@ -285,7 +285,7 @@ class ArangoSchemaCreator {
         await view.create(viewSchema.properties, viewSchema.type);
         console.log(`Created view: ${viewSchema.name}`);
       } catch (error) {
-        if (error.code === 1207) { // View already exists
+        if (error.errorNum === 1207) { // View already exists
           console.log(`View already exists: ${viewSchema.name}`);
         } else {
           console.error(`Error creating view ${viewSchema.name}:`, error);
@@ -312,7 +312,7 @@ class ArangoSchemaCreator {
         });
         console.log(`Created analyzer: ${analyzerSchema.name}`);
       } catch (error) {
-        if (error.code === 1650) { // Analyzer already exists
+        if (error.errorNum === 1650) { // Analyzer already exists
           console.log(`Analyzer already exists: ${analyzerSchema.name}`);
         } else {
           console.error(`Error creating analyzer ${analyzerSchema.name}:`, error);
@@ -338,7 +338,7 @@ class ArangoSchemaCreator {
         });
         console.log(`Created function: ${functionSchema.name}`);
       } catch (error) {
-        if (error.code === 1582) { // Function already exists
+        if (error.errorNum === 1582) { // Function already exists
           console.log(`Function already exists: ${functionSchema.name}`);
         } else {
           console.error(`Error creating function ${functionSchema.name}:`, error);

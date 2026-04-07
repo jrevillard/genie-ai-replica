@@ -34,7 +34,8 @@ ARANGO_PORT=$(grep -E '^ARANGO_PORT=' .env | cut -d= -f2 | tr -d '"' || echo 852
 ARANGO_PASSWORD=$(grep -E '^ARANGO_PASSWORD=' .env | cut -d= -f2 | tr -d '"' || echo "")
 MAX_WAIT=120
 ELAPSED=0
-until curl -s -u "root:${ARANGO_PASSWORD}" "http://localhost:${ARANGO_PORT}/_api/version" >/dev/null 2>&1; do
+# Accept both 200 (auth ok) and 401 (arango up, password mismatch) as "running"
+until HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${ARANGO_PORT}/_api/version") && [[ "$HTTP_CODE" =~ ^(200|401)$ ]]; do
     if [ $ELAPSED -ge $MAX_WAIT ]; then
         fail "ArangoDB did not become healthy within ${MAX_WAIT}s. Check: docker compose logs arango-vector-db"
     fi
@@ -43,6 +44,29 @@ until curl -s -u "root:${ARANGO_PASSWORD}" "http://localhost:${ARANGO_PORT}/_api
     echo -n "."
 done
 echo ""
+log "ArangoDB is up (HTTP ${HTTP_CODE})."
+
+# ── Step 1b: Enforce root password from .env (idempotent — runs every deploy) ─
+log "Enforcing ArangoDB root password from .env..."
+if docker exec arango-vector-db arangosh \
+    --server.endpoint tcp://127.0.0.1:8529 \
+    --server.username root \
+    --server.password "${ARANGO_PASSWORD}" \
+    --javascript.execute-string "db._version();" > /dev/null 2>&1; then
+    log "ArangoDB root password is correct — no change needed."
+else
+    warn "Password mismatch — resetting root password to match .env..."
+    # Try with blank password (default when container was started without ARANGO_ROOT_PASSWORD)
+    if docker exec arango-vector-db arangosh \
+        --server.endpoint tcp://127.0.0.1:8529 \
+        --server.username root \
+        --server.password "" \
+        --javascript.execute-string "require('@arangodb/users').update('root', '${ARANGO_PASSWORD}');" > /dev/null 2>&1; then
+        log "Root password reset successfully from blank."
+    else
+        fail "Cannot reset ArangoDB root password. Connect manually and run:\n  docker exec arango-vector-db arangosh --server.username root --server.password <current-pw> --javascript.execute-string \"require('@arangodb/users').update('root', '${ARANGO_PASSWORD}');\""
+    fi
+fi
 log "ArangoDB is ready."
 
 # ── Step 2: Wait for Kong ─────────────────────────────────────────────────────

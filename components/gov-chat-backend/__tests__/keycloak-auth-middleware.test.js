@@ -387,31 +387,6 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(req.user.roles).toEqual([]);
   });
 
-  it('should return 403 when provisioning returns null (soft-deleted user)', async () => {
-    req.headers.authorization = 'Bearer valid-token';
-    const decodedPayload = {
-      iss_sub: 'http://localhost:8080/realms/genie#12345678',
-      sub: '12345678',
-      iss: 'http://localhost:8080/realms/genie',
-      aud: 'genie-app',
-      email: 'deleted@example.com',
-      exp: Math.floor(Date.now() / 1000) + 3600,
-      iat: Math.floor(Date.now() / 1000)
-    };
-    mockVerifyToken.mockResolvedValue(decodedPayload);
-    mockProvisionUser.mockResolvedValue(null);
-
-    await keycloakAuthMiddleware.authenticate(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({
-      error: 'FORBIDDEN',
-      message: 'User account is deactivated',
-      details: {}
-    });
-    expect(next).not.toHaveBeenCalled();
-  });
-
   it('should return 403 when provisioning returns a soft-deleted user (defense-in-depth)', async () => {
     req.headers.authorization = 'Bearer valid-token';
     const decodedPayload = {
@@ -447,6 +422,43 @@ describe('keycloakAuthMiddleware.authenticate', () => {
       details: {}
     });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should allow re-activated user (provisionUser returns user with deleted=false)', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    const decodedPayload = {
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      aud: 'genie-app',
+      email: 'reactivated@example.com',
+      name: 'Reactivated User',
+      realm_access: { roles: ['user'] },
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    mockVerifyToken.mockResolvedValue(decodedPayload);
+    mockProvisionUser.mockResolvedValue({
+      _key: 'users/123',
+      iss_sub: 'http://localhost:8080/realms/genie#12345678',
+      sub: '12345678',
+      iss: 'http://localhost:8080/realms/genie',
+      email: 'reactivated@example.com',
+      name: 'Reactivated User',
+      roles: ['user'],
+      active: true,
+      deleted: false,
+      deletedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: expect.any(String)
+    });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user.deleted).toBe(false);
+    expect(req.user.deletedAt).toBeNull();
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it('should return 500 PROVISIONING_FAILED when provisioning throws error', async () => {

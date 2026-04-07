@@ -14,7 +14,7 @@ const userProvisioningService = {
   /**
    * Provision or update a user from a verified JWT payload
    * @param {Object} decodedToken - Verified JWT payload (with iss_sub added by keycloak-auth-service)
-   * @returns {Promise<Object|null>} User document from ArangoDB, or null if soft-deleted
+   * @returns {Promise<Object>} User document from ArangoDB (re-activates soft-deleted users)
    * @throws {Error} On ArangoDB connection or query failure
    */
   async provisionUser(decodedToken) {
@@ -35,9 +35,9 @@ const userProvisioningService = {
       `
     );
     const deletedUser = await checkCursor.next();
-    if (deletedUser) {
-      logger.warn(`[UserProvisioning] Soft-deleted user attempted login: ${issSub}`);
-      return null;
+    const isReactivation = !!deletedUser;
+    if (isReactivation) {
+      logger.info(`[UserProvisioning] User re-activated: ${issSub}`);
     }
 
     const newDoc = {
@@ -57,7 +57,8 @@ const userProvisioningService = {
       email: decodedToken.email || null,
       name: decodedToken.name || decodedToken.preferred_username || null,
       roles: decodedToken.realm_access?.roles || [],
-      updatedAt: now
+      updatedAt: now,
+      ...(isReactivation ? { deleted: false, deletedAt: null } : {})
     };
 
     const cursor = await db.query(
@@ -78,9 +79,9 @@ const userProvisioningService = {
     const user = result.new;
 
     // Log differentiated events
-    if (!result.old) {
+    if (!isReactivation && !result.old) {
       logger.info(`[UserProvisioning] User provisioned: ${issSub}`);
-    } else {
+    } else if (!isReactivation) {
       logger.info(`[UserProvisioning] User profile updated: ${issSub}`);
     }
 

@@ -108,6 +108,46 @@ describe('userProvisioningService', () => {
       expect(updateDoc.createdAt).toBeUndefined();
     });
 
+    it('should preserve custom fields (personalIdentification, theme) during UPSERT on re-login', async () => {
+      const existingUserWithCustomFields = {
+        _key: 'users/456',
+        iss_sub: ISS_SUB,
+        iss: 'http://localhost:8080/realms/genie',
+        sub: '12345678-1234-1234-1234-123456789012',
+        email: 'updated@example.com',
+        name: 'Updated Name',
+        roles: ['user'],
+        active: true,
+        deleted: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-04-06T00:00:00.000Z',
+        personalIdentification: 'PID-12345',
+        theme: 'dark',
+        notificationPreferences: { email: true, push: false }
+      };
+      mockCursor.next.mockResolvedValue({ new: existingUserWithCustomFields, old: { _key: 'users/456' } });
+
+      const decoded = {
+        ...mockJwtPayload,
+        iss_sub: ISS_SUB
+      };
+
+      const result = await userProvisioningService.provisionUser(decoded);
+
+      // Custom fields preserved in the result (ArangoDB UPDATE preserves them)
+      expect(result.personalIdentification).toBe('PID-12345');
+      expect(result.theme).toBe('dark');
+      expect(result.notificationPreferences).toEqual({ email: true, push: false });
+      // createdAt also preserved
+      expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
+      // Verify updateDoc does NOT contain custom fields — UPDATE only merges listed fields
+      const upsertCall = mockQuery.mock.calls[1][0];
+      const updateDoc = upsertCall.values[2];
+      expect(updateDoc.personalIdentification).toBeUndefined();
+      expect(updateDoc.theme).toBeUndefined();
+      expect(updateDoc.notificationPreferences).toBeUndefined();
+    });
+
     it('should update email when it changes in JWT on re-login', async () => {
       const updatedUser = {
         _key: 'users/456',
@@ -138,7 +178,7 @@ describe('userProvisioningService', () => {
       expect(updateDoc.email).toBe('newemail@example.com');
     });
 
-    it('should return null for soft-deleted user without running UPSERT', async () => {
+    it('should re-activate soft-deleted user when valid token is presented', async () => {
       const deletedUser = {
         _key: 'users/789',
         iss_sub: ISS_SUB,
@@ -149,13 +189,33 @@ describe('userProvisioningService', () => {
         roles: ['user'],
         active: false,
         deleted: true,
+        deletedAt: '2026-01-15T00:00:00.000Z',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-15T00:00:00.000Z'
       };
+
+      const reactivatedUser = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        iss: 'http://localhost:8080/realms/genie',
+        sub: '12345678-1234-1234-1234-123456789012',
+        email: 'testuser@example.com',
+        name: 'Test User',
+        roles: ['user'],
+        active: true,
+        deleted: false,
+        deletedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: expect.any(String)
+      };
+
       // First query (soft-delete check) returns the deleted user
+      // Second query (upsert) returns the reactivated user
       mockQuery
         .mockReset()
-        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) }); // check finds deleted user
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) }) // check finds deleted user
+        .mockResolvedValue(mockCursor); // upsert returns reactivated user
+      mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
 
       const decoded = {
         ...mockJwtPayload,
@@ -164,9 +224,92 @@ describe('userProvisioningService', () => {
 
       const result = await userProvisioningService.provisionUser(decoded);
 
-      expect(result).toBeNull();
-      // UPSERT should NOT have been called — only the soft-delete check query
-      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(result).not.toBeNull();
+      expect(result.deleted).toBe(false);
+      expect(result.deletedAt).toBeNull();
+      expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
+      // UPSERT should have been called after the soft-delete check
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    });
+
+    it('should update JIT fields from JWT when re-activating soft-deleted user', async () => {
+      const deletedUser = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        email: 'old@example.com',
+        name: 'Old Name',
+        roles: ['user'],
+        deleted: true,
+        deletedAt: '2026-01-15T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      };
+
+      const reactivatedUser = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        email: 'newemail@example.com',
+        name: 'New Name',
+        roles: ['user', 'admin'],
+        deleted: false,
+        deletedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: expect.any(String)
+      };
+
+      mockQuery
+        .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
+        .mockResolvedValue(mockCursor);
+      mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
+
+      const decoded = {
+        ...mockJwtPayload,
+        email: 'newemail@example.com',
+        name: 'New Name',
+        iss_sub: ISS_SUB
+      };
+
+      const result = await userProvisioningService.provisionUser(decoded);
+
+      expect(result.email).toBe('newemail@example.com');
+      expect(result.name).toBe('New Name');
+      // Verify updateDoc includes re-activation fields
+      const upsertCall = mockQuery.mock.calls[1][0];
+      const updateDoc = upsertCall.values[2];
+      expect(updateDoc.deleted).toBe(false);
+      expect(updateDoc.deletedAt).toBeNull();
+    });
+
+    it('should log "User re-activated" when soft-deleted user is restored', async () => {
+      const deletedUser = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        deleted: true,
+        createdAt: '2026-01-01T00:00:00.000Z'
+      };
+      const reactivatedUser = {
+        _key: 'users/789',
+        iss_sub: ISS_SUB,
+        deleted: false,
+        deletedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z'
+      };
+
+      mockQuery
+        .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
+        .mockResolvedValue(mockCursor);
+      mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
+
+      const decoded = { ...mockJwtPayload, iss_sub: ISS_SUB };
+      const { logger } = require('../shared-lib');
+      logger.info.mockClear();
+
+      await userProvisioningService.provisionUser(decoded);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('User re-activated')
+      );
     });
 
     it('should throw error when ArangoDB query fails', async () => {

@@ -163,7 +163,7 @@ development_status:
   3-3-role-and-group-management-via-keycloak: done # worktree: epic3-keycloak
   3-4-external-idp-attribute-to-role-mapping-via-keycloak: done # worktree: epic3-keycloak
   3-5-keycloak-admin-api-proxy-user-management: done # worktree: epic3-keycloak (after 3-4)
-  3-6-jit-provisioning-user-profile-updates-on-re-login: backlog # worktree: epic3-keycloak (after 3-5)
+  3-6-jit-provisioning-user-profile-updates-on-re-login: done # worktree: epic3-keycloak (after 3-5)
   3-7-right-to-erasure-user-identity-data-deletion: backlog # worktree: epic3-keycloak (after 3-6)
   3-8-session-data-automatic-purging: done # worktree: epic3-sessions (after 3-1)
   epic-3-retrospective: optional

@@ -11,29 +11,50 @@
 #   -d: Enable debug mode (verbose output)
 #   -h: Display help
 
-# --- Configuration Prompts ---
-echo "This script will configure your Kong instance."
-echo "Please provide the required connection details."
-echo ""
 
-echo "--- Kong Admin API Details ---"
-read -p "Enter Kong host [default: localhost]: " KONG_HOST
-KONG_HOST=${KONG_HOST:-localhost}
-read -p "Enter Kong admin port [default: 8001]: " KONG_PORT
-KONG_PORT=${KONG_PORT:-8001}
-echo ""
+# --- Configuration (env var overrides → interactive prompts → defaults) ---
+# Set these in the environment to run non-interactively:
+#   KONG_HOST, KONG_PORT, EXPRESS_API_HOST, EXPRESS_API_PORT,
+#   DOC_REPO_HOST, DOC_REPO_PORT
+#
+# Example (non-interactive single-node):
+#   EXPRESS_API_HOST=backend DOC_REPO_HOST=document-repository ./manage-kong-config.sh -a
 
-echo "--- Backend Service Details ---"
-read -p "Enter 'express-api' service host [default: localhost]: " EXPRESS_API_HOST
-EXPRESS_API_HOST=${EXPRESS_API_HOST:-localhost}
-read -p "Enter 'express-api' service port [default: 3000]: " EXPRESS_API_PORT
-EXPRESS_API_PORT=${EXPRESS_API_PORT:-3000}
-echo ""
-read -p "Enter 'document-repository' service host [default: localhost]: " DOC_REPO_HOST
-DOC_REPO_HOST=${DOC_REPO_HOST:-localhost}
-read -p "Enter 'document-repository' service port [default: 3001]: " DOC_REPO_PORT
-DOC_REPO_PORT=${DOC_REPO_PORT:-3001}
-echo ""
+if [ -t 0 ] && [ -z "$KONG_HOST" ]; then
+    echo "This script will configure your Kong instance."
+    echo "Please provide the required connection details."
+    echo ""
+    echo "--- Kong Admin API Details ---"
+    read -p "Enter Kong host [default: localhost]: " _input_kong_host
+    KONG_HOST=${_input_kong_host:-localhost}
+    read -p "Enter Kong admin port [default: 8001]: " _input_kong_port
+    KONG_PORT=${_input_kong_port:-8001}
+    echo ""
+    echo "--- Backend Service Details ---"
+    read -p "Enter 'express-api' service host [default: localhost]: " _input_express_host
+    EXPRESS_API_HOST=${_input_express_host:-localhost}
+    read -p "Enter 'express-api' service port [default: 3000]: " _input_express_port
+    EXPRESS_API_PORT=${_input_express_port:-3000}
+    echo ""
+    read -p "Enter 'document-repository' service host [default: localhost]: " _input_doc_host
+    DOC_REPO_HOST=${_input_doc_host:-localhost}
+    read -p "Enter 'document-repository' service port [default: 3001]: " _input_doc_port
+    DOC_REPO_PORT=${_input_doc_port:-3001}
+    echo ""
+else
+    # Non-interactive mode: apply defaults for any unset variables
+    KONG_HOST=${KONG_HOST:-localhost}
+    KONG_PORT=${KONG_PORT:-8001}
+    EXPRESS_API_HOST=${EXPRESS_API_HOST:-localhost}
+    EXPRESS_API_PORT=${EXPRESS_API_PORT:-3000}
+    DOC_REPO_HOST=${DOC_REPO_HOST:-localhost}
+    DOC_REPO_PORT=${DOC_REPO_PORT:-3001}
+    echo "Running in non-interactive mode."
+    echo "  Kong:               ${KONG_HOST}:${KONG_PORT}"
+    echo "  express-api:        ${EXPRESS_API_HOST}:${EXPRESS_API_PORT}"
+    echo "  document-repository:${DOC_REPO_HOST}:${DOC_REPO_PORT}"
+    echo ""
+fi
 
 # --- Script Constants ---
 KONG_ADMIN_URL="http://${KONG_HOST}:${KONG_PORT}"

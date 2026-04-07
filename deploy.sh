@@ -1,0 +1,99 @@
+#!/bin/bash
+# =============================================================================
+# deploy.sh — GENIE.AI Post-Compose Setup Script
+#
+# Run this ONCE after your first `docker compose up -d`:
+#   chmod +x deploy.sh && ./deploy.sh
+#
+# On subsequent deploys (code updates), you only need: docker compose up -d --build
+# This script is idempotent — safe to re-run.
+# =============================================================================
+
+set -e
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$REPO_ROOT"
+
+# ── Colours ──────────────────────────────────────────────────────────────────
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+log()  { echo -e "${GREEN}[deploy]${NC} $1"; }
+warn() { echo -e "${YELLOW}[deploy]${NC} $1"; }
+fail() { echo -e "${RED}[deploy] ERROR:${NC} $1"; exit 1; }
+
+# ── Pre-flight checks ─────────────────────────────────────────────────────────
+[ -f ".env" ]          || fail ".env not found. Run: cp env .env && nano .env"
+command -v docker      >/dev/null 2>&1 || fail "Docker not found."
+command -v node        >/dev/null 2>&1 || fail "Node.js not found. Install: curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && apt install -y nodejs"
+command -v jq          >/dev/null 2>&1 || { warn "jq not found — installing..."; apt-get install -y jq; }
+
+log "Starting GENIE.AI deployment..."
+
+# ── Step 1: Wait for ArangoDB ─────────────────────────────────────────────────
+log "Waiting for ArangoDB to be healthy..."
+ARANGO_PORT=$(grep -E '^ARANGO_PORT=' .env | cut -d= -f2 | tr -d '"' || echo 8529)
+ARANGO_PASSWORD=$(grep -E '^ARANGO_PASSWORD=' .env | cut -d= -f2 | tr -d '"' || echo "")
+MAX_WAIT=120
+ELAPSED=0
+until curl -s -u "root:${ARANGO_PASSWORD}" "http://localhost:${ARANGO_PORT}/_api/version" >/dev/null 2>&1; do
+    if [ $ELAPSED -ge $MAX_WAIT ]; then
+        fail "ArangoDB did not become healthy within ${MAX_WAIT}s. Check: docker compose logs arango-vector-db"
+    fi
+    sleep 3
+    ELAPSED=$((ELAPSED + 3))
+    echo -n "."
+done
+echo ""
+log "ArangoDB is ready."
+
+# ── Step 2: Wait for Kong ─────────────────────────────────────────────────────
+log "Waiting for Kong Admin API to be ready..."
+ELAPSED=0
+until curl -s http://localhost:8001/status >/dev/null 2>&1; do
+    if [ $ELAPSED -ge $MAX_WAIT ]; then
+        fail "Kong did not become ready within ${MAX_WAIT}s. Check: docker compose logs kong"
+    fi
+    sleep 3
+    ELAPSED=$((ELAPSED + 3))
+    echo -n "."
+done
+echo ""
+log "Kong is ready."
+
+# ── Step 3: Bootstrap ArangoDB schema & user accounts ─────────────────────────
+log "Running database bootstrap..."
+SCRIPTS_DIR="components/gov-chat-backend/scripts/new-schema-scripts"
+if [ ! -d "${SCRIPTS_DIR}/node_modules" ]; then
+    log "Installing bootstrap dependencies..."
+    npm install --prefix "$SCRIPTS_DIR" --silent
+fi
+node "${SCRIPTS_DIR}/bootstrap.js" || fail "Bootstrap failed. Check ArangoDB connectivity and .env values."
+log "Bootstrap complete."
+
+# ── Step 4: Apply Kong configuration ─────────────────────────────────────────
+log "Applying Kong API Gateway configuration..."
+KONG_CONFIG_DIR="api-gateway-solution/new-config"
+
+# For single-node: backend and document-repository are Docker service names.
+# For three-node: set these env vars to the actual hostnames before running.
+export KONG_HOST=${KONG_HOST:-localhost}
+export KONG_PORT=${KONG_PORT:-8001}
+export EXPRESS_API_HOST=${EXPRESS_API_HOST:-backend}
+export EXPRESS_API_PORT=${EXPRESS_API_PORT:-3000}
+export DOC_REPO_HOST=${DOC_REPO_HOST:-document-repository}
+export DOC_REPO_PORT=${DOC_REPO_PORT:-3001}
+
+(cd "$KONG_CONFIG_DIR" && chmod +x manage-kong-config.sh && ./manage-kong-config.sh -a) \
+    || fail "Kong configuration failed."
+log "Kong configuration applied."
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║   GENIE.AI deployment complete! ✅           ║${NC}"
+echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
+echo ""
+echo "  Web UI:       https://$(hostname -f 2>/dev/null || echo '<your-domain>')"
+echo "  Kong Admin:   http://localhost:8001"
+echo "  ArangoDB:     http://localhost:${ARANGO_PORT}"
+echo ""
+warn "⚠  Change the default admin/manager passwords via the Admin Dashboard on first login!"

@@ -817,83 +817,66 @@ The ArangoDB database and its required schema are now initialized automatically 
 
 *(Note: Manual database creation is no longer necessary as the bootstrap script utilizes the `_system` database internally to establish your target database dynamically).*
 
-## 4.2 NGINX and Kong API Gateway Configuration **CRITICAL**
+## 4.2 Kong API Gateway Configuration **CRITICAL**
 
-#### There are Nginx default.conf files available for both three-node and single-node deployments:
+Kong is already part of the main `docker-compose.yaml` and starts automatically. You only need to initialize its database schema and apply the route configuration.
 
-1. For three-node deployments, use the default default.conf and modify the upstream addresses (different servers as it is a three-node deployment)
-2. for single-node deployments, use the default.conf-single-node (this uses the container service names)
+**1. Initialize the Kong database (one-time):**
 
-#### Kong requires specific initialization and configuration to route traffic correctly.
+```bash
+docker compose exec kong-database psql -U kong postgres -c "CREATE DATABASE kong;"
+docker compose exec kong-database psql -U kong postgres -c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
+docker compose run --rm kong kong migrations bootstrap
+docker compose restart kong
+```
 
-1. **Initialize Database:** Execute these commands to prepare the Kong postgres database:
+**2. Apply Kong route configuration:**
 
-Bash
+The `kong_config.json` in `api-gateway-solution/new-config/` is pre-configured with all routes for both `express-api` (backend – port 3000) and `document-repository` (port 3001). The `manage-kong-config.sh` script overrides the hostnames at runtime via its interactive prompts, so no manual editing of the JSON is required.
 
-\# Note:- the database may have already bean iniitalized<b>
+```bash
+# Install jq if not present
+apt install -y jq
 
-docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;" 
+cd api-gateway-solution/new-config
+chmod +x manage-kong-config.sh
+./manage-kong-config.sh -a
+```
 
-docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
+When prompted, enter the following for a **single-node** deployment:
 
-docker compose run \--rm kong kong migrations bootstrap docker compose restart kong
+```
+--- Kong Admin API Details ---
+Enter Kong host [default: localhost]:           <press Enter>
+Enter Kong admin port [default: 8001]:          <press Enter>
 
-2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script (ensure that curl and jq are installed).  
-   For Single-Node installation: 
+--- Backend Service Details ---
+Enter 'express-api' service host:               backend
+Enter 'express-api' service port [default: 3000]: <press Enter>
+Enter 'document-repository' service host:       document-repository
+Enter 'document-repository' service port [default: 3001]: <press Enter>
+```
 
-Bash
+For a **three-node** deployment, replace `backend` and `document-repository` with the actual hostnames of those nodes.
 
-cd api-gateway-solution/new-config/
+> **Routes registered by this configuration:**
+> `/api/auth`, `/api/users`, `/api/sessions`, `/api/queries`, `/api/chat`, `/api/files`, `/api/crawl-job`, `/api/crawl-log`, `/api/labels`, `/api/admin`, `/api/analytics`, `/api/logger`, `/api/security`, `/api/database`, `/api/services`, `/api/service-categories`
 
-cp kong\_config.json-single-node kong\_config.json
-
-chmod \+x [manage-kong-config.sh](http://manage-kong-config.sh)
-
-sudo apt update 
-
-sudo apt install jq
-
-./manage-kong-config.sh \-a
-
-#### For Three-Node installation: 
-simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
-
-## CRITICAL - Enter the correct hosts and expect the following output:
-
-Bash
-
-govstack@bb-ai-gpu-01:\~/genie-ai-replica-single-node/api-gateway-solution/new-config$ ./manage-kong-config.sh \-a  
-This script will configure your Kong instance.  
-Please provide the required connection details - be sure to enter the correct hosts (this depends on whether you are using a 3-node or single-node config - for single-node, use the container service names - for 3-node, use the infrastructure hostname). The example below shows a single-node config.
-
-\--- Kong Admin API Details \---  
-Enter Kong host \[default: localhost\]:  
-Enter Kong admin port \[default: 8001\]:
-
-\--- Backend Service Details \---  
-Enter 'express-api' service host \[default: localhost\]: backend  
-Enter 'express-api' service port \[default: 3000\]:
-
-Enter 'document-repository' service host \[default: localhost\]: document-repository  
-Enter 'document-repository' service port \[default: 3001\]:
-
-\[2025-11-08 14:12:02\] Applying configuration from kong\_config.json  
-\[2025-11-08 14:12:02\] Using Kong Admin API at: [http://localhost:8001](http://localhost:8001)  
-\[2025-11-08 14:12:02\] Setting 'express-api' to: backend:3000  
-\[2025-11-08 14:12:02\] Setting 'document-repository' to: document-repository:3001  
-\[2025-11-08 14:12:02\] Processing service: express-api  
-\[2025-11-08 14:12:02\] Service 'express-api' applied successfully.  
-...
 
 ## 4.3 Nginx Configuration
 
-Nginx acts as the reverse proxy and SSL termination point.
+Nginx is managed as part of the **main** `docker-compose.yaml` and starts automatically with the rest of the stack.
 
-1. Navigate to api-gateway-solution/nginx.  
-2. Select the appropriate configuration file:  
-\* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
-\* For \*\*Three-Node\*\*, use: default.conf.  
-3. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
+The Nginx configuration uses a **template-based approach** (`api-gateway-solution/nginx/conf.template/default.conf.template`) with a runtime entrypoint script that runs `envsubst` on startup. This means:
+- All domain-specific values (`VUE_APP_CSP_CONNECT_SRC`, `CORS_ALLOWED_ORIGINS`) are **injected from `.env` at container start time** — no manual file editing needed.
+- SSL certificates must be placed in `api-gateway-solution/nginx/certs/` (mounted as a bind volume).
+
+**To apply a configuration change** (e.g. after updating `.env` or modifying the template):
+```bash
+docker compose up -d --force-recreate nginx
+```
+
+> **No need to rebuild the Vue.js frontend for CSP or domain changes.** Template substitution handles this at Nginx startup.
 
 ## 4.4 Domain & Security Configuration (CSP & CORS)
 
@@ -941,17 +924,26 @@ This method is ideal for initial deployments, migrating an existing instance, or
 
 ### **5.1 Setup the Initial Requirements**
 
-Execute the `bootstrap.js` script to seamlessly establish your schema, create default variables, and seed your user accounts securely.
+Execute the `bootstrap.js` script from the **root** of the repository to establish the schema, seed default data, and create user accounts:
 
-Bash
+```bash
+# From the repo root
+npm install --prefix components/gov-chat-backend/scripts/new-schema-scripts
+node components/gov-chat-backend/scripts/new-schema-scripts/bootstrap.js
+```
 
-cd components/gov-chat-backend/scripts/new-schema-scripts
-npm install
-node bootstrap.js
+The script performs a **pre-flight ArangoDB connectivity check** before executing. If ArangoDB is not yet healthy, it will print a clear error and exit rather than failing silently.
 
-**Note:** The system securely reads `.env` variables (e.g. `JWT_SECRET`, password configs) directly. No manual sourcing of variables is needed.
+**What the bootstrap creates (in order):**
+1. `arango-schema-creator.js` — creates the `node-services` database and all required collections
+2. `create-knowledge-hierarchy.js` — seeds the base knowledge hierarchy structure
+3. `create-translations.js` — loads all UI string translations
+4. `create-genie-ai-admin-account.js` — creates the admin user account
+5. `create-genie-ai-manager-account.js` — creates the manager user account
 
-The script creates accounts with default credentials via SHA-256 secure hashing. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard. At this point you can bounce the services and login if you want to test the config without establishing any knowledge heirarchy. The UI allows an Admin to establish the hierarchy with a GUI.
+**Note:** The script reads all credentials directly from the root `.env` file. No manual variable sourcing is required.
+
+The script is **idempotent** — safe to run again without duplicating data.
 
 ### **Skip to Step 6 if you like**
 

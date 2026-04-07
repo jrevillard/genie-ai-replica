@@ -31,11 +31,6 @@ volumes:
 
 services:
 
-  # Note: after starting this service, execute the following commands:
-  #       docker compose exec kong-database psql -U kong postgres
-  #       CREATE DATABASE kong;
-  #       ALTER USER kong WITH PASSWORD '${KONG_PG_PASSWORD}';
-  #       GRANT ALL PRIVILEGES ON DATABASE kong TO kong;
   kong-database:
     image: postgres:13
     restart: unless-stopped
@@ -45,7 +40,7 @@ services:
     env_file:
       - .env
     ports:
-      - "5432:5432" # Leave the standard PostGres port unchanged as Kong connects to it by default
+      - "5432:5432"
     volumes:
       - kong_data:/var/lib/postgresql/data
       - ./api-gateway-solution/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
@@ -55,8 +50,20 @@ services:
       timeout: 5s
       retries: 5
 
-  # Note: before starting up kong you need to create the schema with this command:
-  #       docker compose run --rm kong kong migrations bootstrap
+  # One-shot service: bootstraps Kong's Postgres schema on first run, then exits.
+  # On subsequent runs, 'kong migrations bootstrap' is a no-op if already applied.
+  kong-migrations:
+    image: kong:latest
+    command: kong migrations bootstrap
+    restart: on-failure
+    networks:
+      - genieai_network
+    depends_on:
+      kong-database:
+        condition: service_healthy
+    env_file:
+      - .env
+
   kong:
     image: kong:latest
     restart: unless-stopped
@@ -65,10 +72,12 @@ services:
     depends_on:
       kong-database:
         condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
     env_file:
       - .env
     ports:
-      - "8010:8000"  # Note that we had to change this port to 8010 because vLLM runs on 8000
+      - "8010:8000"  # vLLM runs on 8000, so Kong proxy is on 8010
       - "8443:8443"
       - "8001:8001"
     volumes:
@@ -218,16 +227,19 @@ services:
     container_name: nginx
     restart: unless-stopped
     ports:
-      - "443:443" # This will always run on port 443 as port 80 is taken by the OPEA nginx and we only want a https listener
+      - "443:443" # Port 80 is taken by chatqna-xeon-nginx-server; we only need HTTPS
+    env_file:
+      - .env
     volumes:
+      - ./api-gateway-solution/nginx/conf.template:/etc/nginx/conf.template:ro
       - ./api-gateway-solution/nginx/conf:/etc/nginx/conf.d
       - ./api-gateway-solution/nginx/certs:/etc/nginx/certs
-      - nginx_conf:/etc/nginx
-      - nginx_certs:/etc/ssl/private
+      - ./api-gateway-solution/nginx/entrypoint.sh:/docker-entrypoint.d/99-envsubst.sh:ro
     networks:
       - genieai_network
     depends_on:
-      - kong
+      frontend:
+        condition: service_started
 
   http-service:
     build:
@@ -619,30 +631,6 @@ services:
     networks:
       - genieai_network
     restart: "no"
-
-  # --- API Gateway (Nginx) ---
-  # Public-facing reverse proxy. Terminates TLS, enforces CSP, proxies /api/
-  # to Kong and / to the frontend SPA. Lives on genieai_network so it can
-  # resolve all backend services by Docker service name without cross-stack hacks.
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    env_file:
-      - .env
-    volumes:
-      - ./api-gateway-solution/nginx/conf.template:/etc/nginx/conf.template:ro
-      - ./api-gateway-solution/nginx/conf:/etc/nginx/conf.d
-      - ./api-gateway-solution/nginx/certs:/etc/nginx/certs
-      - ./api-gateway-solution/nginx/entrypoint.sh:/docker-entrypoint.d/99-envsubst.sh:ro
-    networks:
-      - genieai_network
-    depends_on:
-      frontend:
-        condition: service_started
 
 networks:
   genieai_network:

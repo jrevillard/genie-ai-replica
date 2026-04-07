@@ -143,7 +143,20 @@ apply_config() {
     ENV_FILE="../../.env"
     if [ -f "$ENV_FILE" ]; then
         log "Loading environment variables from $ENV_FILE"
-        export $(grep -v '^#' "$ENV_FILE" | xargs)
+        # Safe loader: only export simple KEY=VALUE lines, skipping comments,
+        # blank lines, and multi-line values that would break xargs.
+        while IFS='=' read -r key value; do
+            # Skip blank lines and comments
+            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+            # Skip keys with spaces (invalid identifiers) or empty keys
+            [[ "$key" =~ [[:space:]] ]] && continue
+            # Strip surrounding quotes from value if present
+            value="${value%\"}"
+            value="${value#\"}"
+            value="${value%\'}"
+            value="${value#\'}"
+            export "$key=$value" 2>/dev/null || true
+        done < "$ENV_FILE"
     else
         log "WARNING: .env file not found at $ENV_FILE"
     fi

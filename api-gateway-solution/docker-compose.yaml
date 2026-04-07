@@ -101,27 +101,9 @@ services:
     networks:
       - kong-net
 
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    env_file:
-      - ../.env
-    volumes:
-      - ./nginx/conf.template:/etc/nginx/conf.template:ro
-      - ./nginx/conf:/etc/nginx/conf.d
-      - ./nginx/certs:/etc/nginx/certs
-      - ./nginx/entrypoint.sh:/docker-entrypoint.d/99-envsubst.sh:ro
-      - nginx_conf:/etc/nginx
-      - nginx_certs:/etc/ssl/private
-    networks:
-      - kong-net
-      - genieai_network
-    depends_on:
-      - kong
+  # NOTE: The Nginx API gateway has been moved to the root docker-compose.yaml
+  # to avoid .env path issues and cross-stack network dependencies.
+  # Run: docker compose up -d nginx (from ~/genie-ai)
 
   # OWASP ZAP service with alternative ports
   zap:

@@ -620,6 +620,30 @@ services:
       - genieai_network
     restart: "no"
 
+  # --- API Gateway (Nginx) ---
+  # Public-facing reverse proxy. Terminates TLS, enforces CSP, proxies /api/
+  # to Kong and / to the frontend SPA. Lives on genieai_network so it can
+  # resolve all backend services by Docker service name without cross-stack hacks.
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./api-gateway-solution/nginx/conf.template:/etc/nginx/conf.template:ro
+      - ./api-gateway-solution/nginx/conf:/etc/nginx/conf.d
+      - ./api-gateway-solution/nginx/certs:/etc/nginx/certs
+      - ./api-gateway-solution/nginx/entrypoint.sh:/docker-entrypoint.d/99-envsubst.sh:ro
+    networks:
+      - genieai_network
+    depends_on:
+      frontend:
+        condition: service_started
+
 networks:
   genieai_network:
     name: genieai_mvp_genieai_network

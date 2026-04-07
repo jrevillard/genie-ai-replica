@@ -9,6 +9,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 | [00-clean-start.md](00-clean-start.md) | Common setup: deploy stack, create test user, get tokens | Phase 0 |
 | [epic1-keycloak-foundation.md](epic1-keycloak-foundation.md) | Keycloak foundation: login redirect, JIT provisioning, external IdP | Phases A–E |
 | [epic2-secure-api-access.md](epic2-secure-api-access.md) | Secure API access: token headers, JWKS refresh, multi-realm, OPEA, error display | Phases F–K |
+| [epic3-session-lifecycle-gdpr.md](epic3-session-lifecycle-gdpr.md) | Session management, user lifecycle, GDPR erasure | Phases L–N |
 
 ## Prerequisites
 
@@ -20,6 +21,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 - Phases G–K work with `DEPLOY_OPEA=0`
 - Phase J requires `SERVICE_AUTH_TOKEN` in `.env`
 - Phase I requires `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` in `.env` — additional realms must be created **before** backend starts (Phase 0, Step 0.7b)
+- Phases L–N require Phase K cleanup completed (K.5 + K.6 executed, stack healthy)
 
 ## Conventions
 
@@ -55,7 +57,7 @@ Each step follows this format:
 ## Phase Execution Order
 
 ```
-Phase 0 (setup) → F (token passthrough) → G (Swagger OAuth2) → H (JWKS refresh) → I (multi-realm) → J (OPEA continuity) → K (auth errors, LAST)
+Phase 0 (setup) → F (token passthrough) → G (Swagger OAuth2) → H (JWKS refresh) → I (multi-realm) → J (OPEA continuity) → K (auth errors) → L (session management) → M (user lifecycle) → N (GDPR compliance)
 ```
 
-**Important**: Phase K is always LAST — it mutates realm settings and scales Keycloak to 0.
+**Important**: Phase K mutates realm settings and scales Keycloak to 0. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L.

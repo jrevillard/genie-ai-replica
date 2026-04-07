@@ -1069,9 +1069,9 @@ echo "$RESPONSE" | jq 'has("iss") or has("sub") or has("iss_sub") or has("realm_
 
 ---
 
-## Phase K: Auth Error Display (Story 2-6) — LAST PHASE
+## Phase K: Auth Error Display (Story 2-6)
 
-**This phase MUST be executed LAST** because it mutates Keycloak realm settings and scales the Keycloak service to 0. Cleanup steps (K.5, K.6) restore state, but the stack may need recovery time.
+**This phase mutates Keycloak realm settings and scales the Keycloak service to 0. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L (Epic 3).**
 
 Validates that authentication and authorization errors are returned with correct error codes and user-friendly messages.
 
@@ -1227,7 +1227,7 @@ curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${NOROLES_US
 
 ---
 
-**Phase K complete.** All realm settings restored, test user cleaned up. Verify stack health before proceeding:
+**Phase K complete.** All realm settings restored, test user cleaned up. Stack is ready for Phase L (Epic 3). Verify:
 
 ```bash
 docker service ls --filter label=com.docker.stack.namespace=genieai

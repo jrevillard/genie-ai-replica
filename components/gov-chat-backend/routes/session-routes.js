@@ -11,6 +11,8 @@ module.exports = (sessionService) => {
    *     summary: Create a new session
    *     description: Creates a new session for a user
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -47,6 +49,9 @@ module.exports = (sessionService) => {
    *       500:
    *         description: Server error
    */
+  // Apply authentication middleware to all routes
+  router.use(keycloakAuthMiddleware.authenticate);
+
   router.post('/', async (req, res) => {
     try {
       logger.info(`Creating session with body: ${JSON.stringify(req.body)}, IP: ${req.ip}`);
@@ -57,9 +62,6 @@ module.exports = (sessionService) => {
       res.status(500).json({ message: error.message });
     }
   });
-
-  // Apply authentication middleware to all remaining routes
-  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger

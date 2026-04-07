@@ -10,7 +10,7 @@ const config = getDbConfig();
 async function runBootstrap() {
   // Pre-flight check: Verify ArangoDB connectivity
   console.log(`\n>> Pre-flight check: Connecting to ArangoDB at ${config.url}...`);
-  const db = new Database({ url: config.url });
+  const db = new Database({ url: config.url, auth: config.auth });
   
   try {
     await db.version();

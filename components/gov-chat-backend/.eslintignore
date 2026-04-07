@@ -1,0 +1,8 @@
+node_modules/
+uploads/
+logs/
+*.log
+coverage/
+dist/
+.env
+.env.*

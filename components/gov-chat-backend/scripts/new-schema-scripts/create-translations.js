@@ -57,10 +57,17 @@
 const { Database, aql } = require('arangojs');
 const { Translate } = require('@google-cloud/translate').v2;
 const fs = require('fs');
-const path = require('path');
 const readline = require('readline');
-const crypto = require('crypto');
-require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+const path = require('path');
+const { getDbConfig } = require('./db-config');
+
+const config = getDbConfig();
+
+/**
+ * Resolves the ArangoDB URL. If running on host but URL points to docker service, 
+ * it falls back to localhost.
+ */
+// Removed: logic moved to db-config.js
 
 // --- Internal Translation Service Client ---
 /**
@@ -636,28 +643,17 @@ async function main() {
     } else if (!arg.startsWith('--')) {
       lang = arg;
     }
-  }
+    }
 
-  if (!lang) {
-    console.error('Usage: node create-translations.js <lang> [--translation-engine=google|internal]');
-    console.error('Example: node create-translations.js ID');
-    console.error('         node create-translations.js FR --translation-engine=internal');
-    process.exit(1);
-  }
-
-    // Read configuration from environment variables, with defaults
+    // Read configuration from centralized utility
     const dbConfig = {
-        url: process.env.ARANGO_URL || "http://localhost:8529",
-        databaseName: process.env.ARANGO_DATABASE || "node-services",
-        auth: {
-            username: process.env.ARANGO_USER || "root",
-            password: process.env.ARANGO_PASSWORD || "test"
-        }
+        ...config,
+        databaseName: config.database
     };
 
     // --- Confirmation Prompt ---
     console.log('--- Database Translation Creation Script ---');
-    console.log(`Translation Engine: ${translationEngine === 'google' ? 'Google Cloud Translate' : 'Internal Translation Service'}`);
+    console.log(`Translation Engine: ${engine === 'google' ? 'Google Cloud Translate' : 'Internal Translation Service'}`);
     console.log(`This script will translate categories and services into '${lang.toUpperCase()}'.`);
     console.log('\nDatabase configuration to be used:');
     console.log(`  URL:      ${dbConfig.url}`);

@@ -1,10 +1,8 @@
-#!/usr/bin/env node
-
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
 const readline = require('readline');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+const { getDbConfig } = require('./db-config');
 
 // Redirect all console output to both console and log file
 let logBuffer = [];
@@ -371,15 +369,8 @@ function askQuestion(query) {
 async function main() {
   const schemaPath = process.argv[2] || './arango-schema.json';
   
-  // Read configuration from environment variables, with defaults
-  const config = {
-    url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
-    database: process.env.ARANGO_DATABASE || 'node-services',
-    auth: {
-      username: process.env.ARANGO_USER || 'root',
-      password: process.env.ARANGO_PASSWORD || 'your-database-password'
-    }
-  };
+  // Read configuration from centralized utility
+  const config = getDbConfig();
 
   // --- Confirmation Prompt ---
   if (!process.env.AUTO_BOOTSTRAP) {

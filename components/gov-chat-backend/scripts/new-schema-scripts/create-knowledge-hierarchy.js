@@ -63,7 +63,16 @@ const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const readline = require('readline');
-require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+const path = require('path');
+const { getDbConfig } = require('./db-config');
+
+const config = getDbConfig();
+
+/**
+ * Resolves the ArangoDB URL. If running on host but URL points to docker service, 
+ * it falls back to localhost.
+ */
+// Removed: logic moved to db-config.js
 
 // To support modern ESM-only packages like inquirer v9+, we will dynamically import it.
 let inquirer;
@@ -400,14 +409,10 @@ Please run the schema creation script first to set up the database structure:
 }
 
 async function main() {
-    // Read configuration from environment variables, with defaults
+    // Read configuration from centralized utility
     const dbConfig = {
-        url: process.env.ARANGO_URL || "http://localhost:8529",
-        databaseName: process.env.ARANGO_DATABASE || "test-temp",
-        auth: {
-            username: process.env.ARANGO_USER || "root",
-            password: process.env.ARANGO_PASSWORD || "test"
-        }
+        ...config,
+        databaseName: config.database
     };
 
     // --- Confirmation Prompt ---

@@ -1,10 +1,11 @@
 const { Database } = require('arangojs');
 const readline = require('readline');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+const { getDbConfig } = require('./db-config');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
+const config = getDbConfig();
 const jwtSecret = process.env.JWT_SECRET || 'default-jwt-secret';
 const managerPasswordHash = crypto.createHash('sha256').update('manager').digest('hex');
 
@@ -54,14 +55,10 @@ function askQuestion(query) {
  * Main function to connect to ArangoDB and create the user.
  */
 async function createArangoUser() {
-    // Read configuration from environment variables, with defaults
+    // Read configuration from centralized utility
     const dbConfig = {
-        url: process.env.ARANGO_URL || "http://127.0.0.1:8529",
-        databaseName: process.env.ARANGO_DATABASE || "node-services",
-        auth: {
-          username: process.env.ARANGO_USER || "root",
-          password: process.env.ARANGO_PASSWORD || "your-database-password"
-        },
+        ...config,
+        databaseName: config.database
     };
 
     // --- Confirmation Prompt ---

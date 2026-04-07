@@ -106,9 +106,13 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    env_file:
+      - ./.env
     volumes:
+      - ./nginx/conf.template:/etc/nginx/conf.template:ro
       - ./nginx/conf:/etc/nginx/conf.d
       - ./nginx/certs:/etc/nginx/certs
+      - ./nginx/entrypoint.sh:/docker-entrypoint.d/99-envsubst.sh:ro
       - nginx_conf:/etc/nginx
       - nginx_certs:/etc/ssl/private
     networks:

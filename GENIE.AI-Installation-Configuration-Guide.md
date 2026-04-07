@@ -813,10 +813,9 @@ Once the base services are running (Step 3), you must configure the core infrast
 
 ## 4.1 ArangoDB Database Initialization
 
-While the arango-vector-db service is running, the specific application databases must be created.
+The ArangoDB database and its required schema are now initialized automatically via the bootstrap automation script in step 5. You only need to verify that your environment variables in `.env` (such as `ARANGO_DB_NAME`) are set correctly.
 
-1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).  
-2. Create the necessary databases as defined in your environment variables (default: genie-ai) \- ensure ALL of the services use the same database (check the .env) - there are multiple ARANGO vars ARANGO_DB and ARANGO_DB_NAME (they msut be the same).
+*(Note: Manual database creation is no longer necessary as the bootstrap script utilizes the `_system` database internally to establish your target database dynamically).*
 
 ## 4.2 NGINX and Kong API Gateway Configuration **CRITICAL**
 
@@ -898,69 +897,37 @@ Nginx acts as the reverse proxy and SSL termination point.
 
 ## 4.4 Domain & Security Configuration (CSP & CORS)
 
-When deploying GENIE.AI to a specific host domain (e.g., genie.agency.gov) or a public IP address other than localhost, you must configure the **Content Security Policy (CSP)** and **Cross-Origin Resource Sharing (CORS)** settings. Failure to do this will result in the browser blocking the application from connecting to the backend API or WebSocket services.
-
-This configuration involves updates in two locations: the central .env file and the Nginx configuration file.
+When deploying GENIE.AI to a specific host domain (e.g., genie.agency.gov) or a public IP address other than localhost, you must configure the **Content Security Policy (CSP)** and **Cross-Origin Resource Sharing (CORS)** settings. This is now fully dynamic and injected at runtime.
 
 ### 1. Update Environment Variables (.env)
 
-The frontend and backend services rely on specific environment variables to construct their security headers. Locate the following variables in your root .env file and update them to include your target domain/IP.
-
-**Critical Formatting Note:** When defining CSP sources that contain single quotes (like 'self'), you **must** wrap the entire value in double quotes. Failure to do so may cause the backend configuration to strip the quotes, resulting in browser errors.
+Locate the following variables in your root `.env` file and update them to include your target domain/IP.
 
 **Example Configuration for genie.agency.gov:**
 
 Bash
 
-\# \========= FRONTEND SERVICE CONFIG \=========
+# ========= FRONTEND SERVICE CONFIG =========
 
-\# 1\. VUE\_APP\_CSP\_CONNECT\_SRC: Used by the Vue build process.  
-\# Ensure you include both http/https for API and ws/wss for WebSockets.  
-VUE\_APP\_CSP\_CONNECT\_SRC="'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int"
+# 1. VUE_APP_CSP_CONNECT_SRC: Used dynamically by Nginx's runtime substitution.
+VUE_APP_CSP_CONNECT_SRC="'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int"
 
-\# 2\. CSP\_CONNECT\_SRC: Used by the Node.js Backend (Helmet Middleware).  
-\# Must match the frontend allowed sources.  
-CSP\_CONNECT\_SRC="'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int"
+# 2. CSP_CONNECT_SRC: Used by the Node.js Backend (Helmet Middleware).
+# Must match the frontend allowed sources.
+CSP_CONNECT_SRC="'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int"
 
-\# 3\. CORS\_ALLOWED\_ORIGINS: A comma-separated list of origins allowed to access the backend.  
-CORS\_ALLOWED\_ORIGINS=https://genie.agency.gov,https://genie-ai.itu.int
+# 3. CORS_ALLOWED_ORIGINS: Read by the automated manage-kong-config.sh script.
+CORS_ALLOWED_ORIGINS="https://genie.agency.gov,https://genie-ai.itu.int"
 
-**Checklist for Variables:**
+### 2. Apply Dynamic Kong Settings
 
-* **Protocols:** Ensure you list wss:// (Secure WebSockets) if you are using https://. If you are testing on http://, use ws://.  
-* **Ports:** If your application runs on a non-standard port (e.g., :8443), that port must be appended to the domain in the CSP (e.g., https://genie.agency.gov:8443).  
-* **Quoting:** Verify that 'self' is enclosed in single quotes, and the whole string is enclosed in double quotes.
-* **System Prompts:** These must be single line strings in the environment or docker will not like them.
+Run the `./manage-kong-config.sh` script to parse your .env and apply the `CORS_ALLOWED_ORIGINS` directly into the gateway.
 
-### 2\. Update Nginx Configuration
+### 3. Nginx Runtime Injection
 
-The Nginx reverse proxy also serves a Content-Security-Policy header which acts as the final gatekeeper. You must ensure the default.conf file matches your environment variables.
-
-1. Open your active Nginx configuration file (e.g., api-gateway-solution/nginx/default.conf or default.conf-single-node).  
-2. Locate the add\_header Content-Security-Policy directive.  
-3. Append your new domain to the connect-src section.
-
-**Example Nginx Update:**
-
-Nginx
-
-\# Ensure this is on a SINGLE line to avoid syntax errors  
-add\_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int;" always;
-
-### 3\. Rebuild the Frontend
-
-**Crucial Step:** The Vue.js frontend "bakes" the VUE\_APP\_ environment variables into the static HTML/JS files at **build time**. Simply restarting the container is not enough.
-
-If you change the CSP or Domain settings, you must force a rebuild of the frontend container:
-
-Bash
-
-\# For Single Node  
-docker compose down  
-docker compose \-f docker-compose.yaml up --build \-d --force-recreate
-
-\# For Standard/Three-Node  
-TBD
+The Nginx proxy now automatically injects the `VUE_APP_CSP_CONNECT_SRC` into your frontend proxy blocks via environment substitution at runtime. If you update the variables in `.env`, simply recreate the Nginx container:
+`docker compose up -d --force-recreate nginx`
+(Note: You no longer need to rebuild the Vue.js container for CSP configuration modifications!).
 
 ---
 
@@ -970,42 +937,21 @@ You have a choice at this juncture. Assuming you have done all your data analysi
 
 ## Method 1: Automated Script Approach (Recommended for Initial Setup)
 
-This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows.
+This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows. The setup is fully orchestrated via a unified `bootstrap.js` script.
 
-### **5.1 Prepare Script Environment** You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set\_env.sh script for the correct database environment
+### **5.1 Setup the Initial Requirements**
+
+Execute the `bootstrap.js` script to seamlessly establish your schema, create default variables, and seed your user accounts securely.
 
 Bash
 
 cd components/gov-chat-backend/scripts/new-schema-scripts
+npm install
+node bootstrap.js
 
-chmod \+x set-env.sh 
+**Note:** The system securely reads `.env` variables (e.g. `JWT_SECRET`, password configs) directly. No manual sourcing of variables is needed.
 
-source set-env.sh
-
-5.2 Create Database Schema
-
-Use the arango-schema-creator.js script to generate the collections, indexes, and graphs.
-
-Bash
-
-\# Ensure you are still in the new-schema-scripts directory and environment is set  
-npm install arangojs 
-
-node arango-schema-creator.js ./arango-schema.json
-
-### 5.3 Create Initial User Accounts
-
-You must create the default Admin and Manager accounts. These are required for the application to load correctly and for full integration with the Document Repository.
-
-Bash
-
-\# Create the Admin account  
-node create-genie-ai-admin-account.js
-
-\# Create the Manager account  
-node create-genie-ai-manager-account.js
-
-**Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard. At this point you can bounce the services and login if you want to test the config without establishing any knowledge heirarchy. The UI allows an Admin to establish the hierarchy with a GUI.
+The script creates accounts with default credentials via SHA-256 secure hashing. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard. At this point you can bounce the services and login if you want to test the config without establishing any knowledge heirarchy. The UI allows an Admin to establish the hierarchy with a GUI.
 
 ### **Skip to Step 6 if you like**
 

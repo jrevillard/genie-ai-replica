@@ -7,7 +7,7 @@ server {
     include conf.d/security-headers.conf;
 
     # Redirect all HTTP traffic to HTTPS
-    return 301 https://e2e-82-109.ssdcloudindia.net$request_uri;
+    return 301 https://$host$request_uri;
 }
 
 server {
@@ -53,7 +53,7 @@ server {
 
         # --- Location-specific headers ---
         add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
-        add_header Access-Control-Allow-Origin "https://e2e-82-109.ssdcloudindia.net" always;
+        add_header Access-Control-Allow-Origin "${CORS_ALLOWED_ORIGINS}" always;
         add_header Cache-Control "public, max-age=86400";
         try_files $uri =404;
     }
@@ -70,7 +70,7 @@ server {
         
         # --- Location-specific headers ---
         add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
-        add_header Access-Control-Allow-Origin "https://e2e-82-109.ssdcloudindia.net" always;
+        add_header Access-Control-Allow-Origin "${CORS_ALLOWED_ORIGINS}" always;
 
         try_files $uri =404;
     }
@@ -84,22 +84,10 @@ server {
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
         add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
-        
-        # --- Location-specific headers (CORS) ---
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' 'https://e2e-82-109.ssdcloudindia.net' always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
-            add_header 'Access-Control-Allow-Credentials' 'true' always;
-            add_header 'Access-Control-Max-Age' 86400 always;
-            return 204;
-        }
-    
-        add_header 'Access-Control-Allow-Origin' 'https://e2e-82-109.ssdcloudindia.net' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
-        add_header 'Access-Control-Allow-Credentials' 'true' always;
-    
+
+        # NOTE: No CORS headers here — Kong is the authoritative CORS source.
+        # Adding them here would create duplicate headers and cause ERR_FAILED in browsers.
+
         # --- Proxy settings to KONG ---
         proxy_pass http://kong:8000/api/;
         proxy_http_version 1.1;
@@ -128,15 +116,15 @@ server {
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
         add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
 
-        # --- Proxy settings to VUE APP ---
-        proxy_pass http://e2e-109-51:8090;
+        # --- Proxy settings to VUE APP (frontend service) ---
+        proxy_pass http://frontend:8090;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Host genie-ai.itu.int;
+        proxy_set_header Host $host;
         proxy_buffering off;
         proxy_connect_timeout 300s;
         proxy_read_timeout 3600s;
@@ -147,14 +135,14 @@ server {
         error_page 404 = @frontend_spa;
 
         # --- Location-specific headers (CSP) ---
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://e2e-82-109.ssdcloudindia.net wss://genie-ai.itu.int:443 ws://localhost:8090 wss://localhost:8090 ws://e2e-g2-109.ssdcloudindia.net:443 wss://e2e-g2-109.ssdcloudindia.net:443; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ${VUE_APP_CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
     }
 
     # Named location for SPA fallback
     location @frontend_spa {
-        proxy_pass http://e2e-109-51:8090;
+        proxy_pass http://frontend:8090;
         proxy_http_version 1.1;
-        proxy_set_header Host genie-ai.itu.int;
+        proxy_set_header Host $host;
         rewrite ^ /index.html break;
     }
 }

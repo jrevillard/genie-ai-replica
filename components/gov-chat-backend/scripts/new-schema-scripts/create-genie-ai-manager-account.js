@@ -1,16 +1,22 @@
-// Import the ArangoDB driver
 const { Database } = require('arangojs');
 const readline = require('readline');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+
+const jwtSecret = process.env.JWT_SECRET || 'default-jwt-secret';
+const managerPasswordHash = crypto.createHash('sha256').update('manager').digest('hex');
 
 // --- User Data ---
 // The user object to be created.
 const managerUser = {
   "loginName": "genie-ai-manager",
   "email": "genie.ai@atomicmail.io",
-  "encPassword": "$2b$10$6Lh/XglcywVVChMHeLEFB.9o140Rz6D652miTNWghLcisyUL6oroq",
+  "encPassword": managerPasswordHash,
   "emailVerified": true,
-  "createdAt": "2025-08-26T13:39:27.730Z",
-  "updatedAt": "2025-10-06T03:07:39.356Z",
+  "createdAt": new Date().toISOString(),
+  "updatedAt": new Date().toISOString(),
   "personalIdentification": {
     "fullName": "genie-ai-manager",
     "dob": "",
@@ -21,8 +27,8 @@ const managerUser = {
   "addressResidency": {
     "currentAddress": ""
   },
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTYyIiwibG9naW5OYW1lIjoiZ2VuaWUtYWktbWFuYWdlciIsImVtYWlsIjoiZ2VuaWUuYWlAYXRvbWljbWFpbC5pbyIsImlhdCI6MTc1OTcyMDA1OSwiZXhwIjoxNzU5ODA2NDU5fQ.V93S6eBKkJpPj_wCbuVMdcdS6NhwGMMBKtGEFEHkn7E",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTYyIiwidG9rZW5WZXJzaW9uIjowLCJpYXQiOjE3NTk3MjAwNTksImV4cCI6MTc2MDMyNDg1OX0.wrG8l0e4z4AcY2FxBbfXcx9HfgWjFVD7ZRL80ygI4yQ",
+  "accessToken": jwt.sign({ userId: "2162", loginName: "genie-ai-manager", email: "genie.ai@atomicmail.io" }, jwtSecret, { expiresIn: '1h' }),
+  "refreshToken": jwt.sign({ userId: "2162", tokenVersion: 0 }, jwtSecret, { expiresIn: '7d' }),
   "role": "Admin"
 };
 
@@ -59,6 +65,7 @@ async function createArangoUser() {
     };
 
     // --- Confirmation Prompt ---
+  if (!process.env.AUTO_BOOTSTRAP) {
     console.log('--- Manager User Creation Script ---');
     console.log('This script will create a genie-ai-manager user in the database.');
     console.log('\nDatabase configuration to be used:');
@@ -72,7 +79,8 @@ async function createArangoUser() {
       console.log('Operation cancelled by user. Exiting.');
       process.exit(0);
     }
-    // --- End Confirmation Prompt ---
+  }
+  // --- End Confirmation Prompt ---
 
   console.log("\nConnecting to ArangoDB...");
   const db = new Database(dbConfig);

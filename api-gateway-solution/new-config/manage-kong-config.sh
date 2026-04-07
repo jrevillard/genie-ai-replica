@@ -139,6 +139,16 @@ apply_config() {
     log "Setting 'express-api' to: ${EXPRESS_API_HOST}:${EXPRESS_API_PORT}"
     log "Setting 'document-repository' to: ${DOC_REPO_HOST}:${DOC_REPO_PORT}"
 
+    # --- Read .env for dynamic secrets ---
+    ENV_FILE="../../.env"
+    if [ -f "$ENV_FILE" ]; then
+        log "Loading environment variables from $ENV_FILE"
+        export $(grep -v '^#' "$ENV_FILE" | xargs)
+    else
+        log "WARNING: .env file not found at $ENV_FILE"
+    fi
+    CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-"http://localhost"}
+
     config_json=$(cat "$CONFIG_FILE")
     errors=0
 
@@ -214,6 +224,14 @@ apply_config() {
     while IFS= read -r plugin; do
         plugin_name=$(echo "$plugin" | jq -r '.name')
         payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at)')
+        
+        # Inject dynamic CORS payload
+        if [ "$plugin_name" == "cors" ]; then
+            log "Injecting dynamic CORS_ALLOWED_ORIGINS '$CORS_ALLOWED_ORIGINS' into plugin 'cors'"
+            # Split comma-separated origins string into a valid JSON array or just insert string if not comma separated
+            origins_array=$(echo "[\"$CORS_ALLOWED_ORIGINS\"]")
+            payload=$(echo "$payload" | jq --argjson origins "$origins_array" '.config.origins = $origins')
+        fi
         
         # Determine scope: service or global
         if jq -e '.service' <<< "$plugin" > /dev/null; then

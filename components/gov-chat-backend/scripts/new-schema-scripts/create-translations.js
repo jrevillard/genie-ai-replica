@@ -60,7 +60,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
-require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
 // --- Internal Translation Service Client ---
 /**

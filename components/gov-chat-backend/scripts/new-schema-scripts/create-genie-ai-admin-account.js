@@ -1,16 +1,22 @@
-// Import the ArangoDB driver
 const { Database } = require('arangojs');
 const readline = require('readline');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+
+const jwtSecret = process.env.JWT_SECRET || 'default-jwt-secret';
+const adminPasswordHash = crypto.createHash('sha256').update('admin').digest('hex');
 
 // --- Admin User Data ---
 // The basic admin user object to be created.
 const adminUser = {
   "loginName": "Admin",
   "email": "admin@admin.com",
-  "encPassword": "$2b$10$/84cIgD6IhXCTMFGP7Tjn.2btwbqgUtqbbucuiyEh91dwc2pF./Aa",
+  "encPassword": adminPasswordHash,
   "emailVerified": true,
-  "createdAt": "2025-04-15T16:40:05.829Z",
-  "updatedAt": "2025-10-07T06:37:32.681Z",
+  "createdAt": new Date().toISOString(),
+  "updatedAt": new Date().toISOString(),
   "personalIdentification": {
     "fullName": "Admin",
     "dob": "",
@@ -18,8 +24,8 @@ const adminUser = {
     "nationality": "",
     "maritalStatus": ""
   },
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTQwIiwiaWF0IjoxNzU5ODE4NTk0LCJleHAiOjE3NTk5MDQ5OTR9.Q_D7mCXORPTCfFu0RTjUFMNtgx-PKjEr4WNrfxyCv3Q",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTQwIiwidG9rZW5WZXJzaW9uIjozLCJpYXQiOjE3NTk4MTg1OTQsImV4cCI6MTc2MDQyMzM5NH0.yu4Rif5ieMbWpcHRZUeK8g5Pj7TBgD9BeRfNDdfPDrU",
+  "accessToken": jwt.sign({ userId: "2140", loginName: "Admin", email: "admin@admin.com" }, jwtSecret, { expiresIn: '1h' }),
+  "refreshToken": jwt.sign({ userId: "2140", tokenVersion: 3 }, jwtSecret, { expiresIn: '7d' }),
   "role": "Admin"
 };
 
@@ -57,18 +63,20 @@ async function createAdminUser() {
   };
 
   // --- Confirmation Prompt ---
-  console.log('--- Admin User Creation Script ---');
-  console.log('This script will create an Admin user in the database.');
-  console.log('\nDatabase configuration to be used:');
-  console.log(`  URL:      ${dbConfig.url}`);
-  console.log(`  Database: ${dbConfig.databaseName}`);
-  console.log(`  User:     ${dbConfig.auth.username}`);
-  
-  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+  if (!process.env.AUTO_BOOTSTRAP) {
+    console.log('--- Admin User Creation Script ---');
+    console.log('This script will create an Admin user in the database.');
+    console.log('\nDatabase configuration to be used:');
+    console.log(`  URL:      ${dbConfig.url}`);
+    console.log(`  Database: ${dbConfig.databaseName}`);
+    console.log(`  User:     ${dbConfig.auth.username}`);
+    
+    const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
 
-  if (answer.toLowerCase() !== 'y') {
-    console.log('Operation cancelled by user. Exiting.');
-    process.exit(0);
+    if (answer.toLowerCase() !== 'y') {
+      console.log('Operation cancelled by user. Exiting.');
+      process.exit(0);
+    }
   }
   // --- End Confirmation Prompt ---
 

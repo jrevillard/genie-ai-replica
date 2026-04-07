@@ -63,7 +63,7 @@ const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const readline = require('readline');
-require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
 // To support modern ESM-only packages like inquirer v9+, we will dynamically import it.
 let inquirer;

@@ -36,4 +36,4 @@ EXPOSE 8090
 # --- UPDATED THIS CMD ---
 # Replaced the hardcoded "-p 8090" with "${PORT:-8090}"
 # It now uses the PORT environment variable you pass from docker-compose
-CMD ["sh", "-c", "http-server /app/dist -p ${PORT:-8090} --proxy http://kong:8010? -H \"X-Test-Header: test-value\" -H \"Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src $VUE_APP_CSP_CONNECT_SRC; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data:;\""]
+CMD ["sh", "-c", "http-server /app/dist -p ${PORT:-8090} --spa -H \"X-Test-Header: test-value\" -H \"Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src $VUE_APP_CSP_CONNECT_SRC; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data:;\""]

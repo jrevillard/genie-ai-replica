@@ -6,9 +6,19 @@ process.env.KEYCLOAK_REALM = 'genie';
 process.env.KEYCLOAK_PROXY_CLIENT_ID = 'genie-proxy-client';
 process.env.KEYCLOAK_PROXY_CLIENT_SECRET = 'test-secret';
 
-// Mock arangojs
+// Mock arangojs with aql helper that returns proper object structure
+const mockAql = jest.fn((strings, ...values) => {
+  // Simplified mock that returns an object with query property
+  let query = strings.raw[0];
+  for (let i = 0; i < values.length; i++) {
+    // Replace placeholders with actual values for test inspection
+    query += JSON.stringify(values[i]) + strings.raw[i + 1];
+  }
+  return { query, bindVars: {} };
+});
+
 jest.mock('arangojs', () => ({
-  aql: jest.fn()
+  aql: mockAql
 }), { virtual: true });
 
 // Mock shared-lib
@@ -146,7 +156,164 @@ describe('keycloak-proxy-service', () => {
       await keycloakProxyService.deleteUser('user-key');
       expect(db.query).toHaveBeenCalledTimes(2);
     });
+
+    it('should nullify all PII fields (email, name, sub, iss, iss_sub)', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(204));
+
+      const capturedAql = [];
+      const db = {
+        query: jest.fn().mockImplementation((aqlObj) => {
+          capturedAql.push(aqlObj);
+          if (capturedAql.length === 1) return Promise.resolve(mockCursor('uuid-abc'));
+          return Promise.resolve({});
+        })
+      };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      expect(capturedAql).toHaveLength(2);
+      const updateAql = capturedAql[1];
+      expect(updateAql).toHaveProperty('query');
+      expect(updateAql.query).toContain('email: null');
+      expect(updateAql.query).toContain('name: null');
+      expect(updateAql.query).toContain('sub: null');
+      expect(updateAql.query).toContain('iss: null');
+      expect(updateAql.query).toContain('iss_sub: null');
+    });
+
+    it('should set roles, active, deleted, and erasedAt', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(204));
+
+      const capturedAql = [];
+      const db = {
+        query: jest.fn().mockImplementation((aqlObj) => {
+          capturedAql.push(aqlObj);
+          if (capturedAql.length === 1) return Promise.resolve(mockCursor('uuid-abc'));
+          return Promise.resolve({});
+        })
+      };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      const updateAql = capturedAql[1];
+      expect(updateAql.query).toContain('roles: []');
+      expect(updateAql.query).toContain('active: false');
+      expect(updateAql.query).toContain('deleted: true');
+      expect(updateAql.query).toContain('erasedAt: DATE_ISO8601(DATE_NOW())');
+    });
+
+    it('should UNSET personalIdentification custom PII field', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(204));
+
+      const capturedAql = [];
+      const db = {
+        query: jest.fn().mockImplementation((aqlObj) => {
+          capturedAql.push(aqlObj);
+          if (capturedAql.length === 1) return Promise.resolve(mockCursor('uuid-abc'));
+          return Promise.resolve({});
+        })
+      };
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      const updateAql = capturedAql[1];
+      expect(updateAql.query).toContain('UNSET { personalIdentification }');
+    });
+
+    it('should log "User erased" message (distinct from soft-delete)', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(204));
+
+      const { logger } = require('../shared-lib');
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
+      db.query.mockResolvedValueOnce({});
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      await keycloakProxyService.deleteUser('user-key');
+
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('User erased'), expect.any(Object));
+    });
+
+    it('should handle double-erase gracefully (throws on already-deleted user)', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(204)); // First delete
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
+      db.query.mockResolvedValueOnce({});
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      // First delete
+      await keycloakProxyService.deleteUser('user-key');
+      expect(db.query).toHaveBeenCalledTimes(2);
+
+      // Second delete - Keycloak will return 404 (user already gone)
+      // This demonstrates that calling erase twice throws appropriately
+      keycloakProxyService._clearTokenCache();
+      db.query = jest.fn();
+      db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce({ ok: false, status: 404, text: async () => 'Not found' });
+
+      // Keycloak 404 should throw with user not found error
+      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('User not found in Keycloak');
+    });
+
+    it('should throw partial erasure error if ArangoDB update fails after Keycloak delete', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(204)); // Keycloak DELETE succeeds
+
+      const db = { query: jest.fn() };
+      db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
+      db.query.mockRejectedValueOnce(new Error('ArangoDB connection lost')); // ArangoDB fails
+      dbService.getConnection.mockResolvedValue(Promise.resolve(db));
+
+      const { logger } = require('../shared-lib');
+
+      // Should throw partial erasure error
+      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed');
+
+      // Should log the error state
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('ArangoDB erasure failed after Keycloak delete'), expect.objectContaining({
+        arangoUserId: 'user-key',
+        state: 'PARTIAL_ERASURE'
+      }));
+    });
   });
+
+  // Soft-delete vs Erasure Distinction (documented here for reference)
+  //
+  // markUserAsDeleted() in user-provisioning-service.js:
+  //   - Sets: deleted: true, deletedAt: now, updatedAt: now
+  //   - Preserves: sub, iss_sub, email, name, roles (re-activatable via Story 3.6)
+  //
+  // deleteUser() in keycloak-proxy-service.js (this file):
+  //   - Sets: deleted: true, erasedAt: now, AND nullifies all PII including sub, iss_sub
+  //   - Permanent, not re-activatable
+  //
+  // Actual verification of markUserAsDeleted behavior is in user-provisioning-service.test.js
 
   describe('updateOwnProfile', () => {
     it('should proxy profile update using user JWT', async () => {

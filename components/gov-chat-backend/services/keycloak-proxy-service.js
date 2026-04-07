@@ -217,26 +217,49 @@ const keycloakProxyService = {
   },
 
   /**
-   * Delete a user from Keycloak and mark as deleted in ArangoDB
+   * Delete a user from Keycloak and erase personal data in ArangoDB (GDPR right to erasure)
    * @param {string} arangoUserId - ArangoDB _key
+   * @throws {Error} If Keycloak user not found (404) or authentication fails
+   * @throws {Error} If ArangoDB erasure fails after Keycloak delete (partial erasure state)
    */
   async deleteUser(arangoUserId) {
     const uuid = await this._resolveKeycloakUserId(arangoUserId);
     logger.info('[KeycloakProxy] Deleting user', { arangoUserId, uuid });
 
+    // Delete from Keycloak first (authoritative source)
     await this._adminApiCall('DELETE', `/users/${uuid}`);
 
-    // Defense-in-depth: set deleted=true in ArangoDB
+    // Then erase PII from ArangoDB
+    // If ArangoDB update fails, user is already deleted from Keycloak (defense-in-depth)
     const db = await dbService.getConnection('default');
-    await db.query(
-      aql`
-        FOR u IN users
-          FILTER u._key == ${arangoUserId}
-          UPDATE u WITH { deleted: true, updatedAt: DATE_ISO8601(DATE_NOW()) } IN users
-      `
-    );
-
-    logger.info('[KeycloakProxy] User deleted and marked in ArangoDB', { arangoUserId });
+    try {
+      await db.query(
+        aql`
+          FOR u IN users
+            FILTER u._key == ${arangoUserId}
+            UPDATE u WITH {
+              deleted: true,
+              erasedAt: DATE_ISO8601(DATE_NOW()),
+              updatedAt: DATE_ISO8601(DATE_NOW()),
+              email: null,
+              name: null,
+              sub: null,
+              iss: null,
+              iss_sub: null,
+              roles: [],
+              active: false
+            } UNSET { personalIdentification } IN users
+        `
+      );
+      logger.info('[KeycloakProxy] User erased', { arangoUserId });
+    } catch (arangoError) {
+      logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
+        arangoUserId,
+        error: arangoError.message,
+        state: 'PARTIAL_ERASURE'
+      });
+      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed');
+    }
   },
 
   // ---------------------------------------------------------------------------

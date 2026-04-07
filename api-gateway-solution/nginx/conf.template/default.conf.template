@@ -75,7 +75,8 @@ server {
         try_files $uri =404;
     }
 
-    # Backend API traffic also goes to KONG
+    # Backend API traffic — proxied to Kong.
+    # NOTE: No CORS headers here; Kong is the authoritative CORS source.
     location /api/ {
         # --- Copied common headers ---
         add_header X-Content-Type-Options "nosniff" always;
@@ -84,9 +85,6 @@ server {
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
         add_header Referrer-Policy "no-referrer-when-downgrade" always;
         add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
-
-        # NOTE: No CORS headers here — Kong is the authoritative CORS source.
-        # Adding them here would create duplicate headers and cause ERR_FAILED in browsers.
 
         # --- Proxy settings to KONG ---
         proxy_pass http://kong:8000/api/;
@@ -101,12 +99,13 @@ server {
         proxy_connect_timeout 300s;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+        proxy_buffering off;  # Required for LLM token streaming — do not remove.
 
         # --- Location-specific headers (CSP) ---
         add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
     }
 
-    # Frontend Vue.js application
+    # Frontend Vue.js SPA
     location / {
         # --- Copied common headers ---
         add_header X-Content-Type-Options "nosniff" always;
@@ -130,19 +129,29 @@ server {
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
 
-        # Handle SPA fallback - intercept 404s and serve index.html
+        # SPA fallback: serve /index.html on 404 so Vue Router handles deep links.
+        # NOTE: 502/504 are intentionally NOT caught here — infrastructure failures
+        # must stay visible ("loud failures"), not silently serve a broken index page.
         proxy_intercept_errors on;
-        error_page 404 = @frontend_spa;
+        error_page 404 = /index.html;
 
         # --- Location-specific headers (CSP) ---
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ${VUE_APP_CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
     }
 
-    # Named location for SPA fallback
-    location @frontend_spa {
-        proxy_pass http://frontend:8090;
+    # Internal-only SPA entry point — served only via the error_page fallback above.
+    # 'internal' prevents browsers from directly accessing /index.html, which
+    # would bypass Vue Router and potentially break auth guards.
+    location = /index.html {
+        proxy_pass http://frontend:8090/index.html;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
-        rewrite ^ /index.html break;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        internal;
+
+        # Re-apply CSP for the fallback response
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ${VUE_APP_CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
     }
 }

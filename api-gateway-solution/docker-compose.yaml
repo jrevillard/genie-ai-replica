@@ -3,6 +3,9 @@ version: "3.8"
 networks:
   kong-net:
     driver: bridge
+  genieai_network:
+    external: true
+    name: genieai_network
 
 volumes:
   kong_data:
@@ -117,6 +120,7 @@ services:
       - nginx_certs:/etc/ssl/private
     networks:
       - kong-net
+      - genieai_network
     depends_on:
       - kong
 

@@ -891,7 +891,7 @@
   "targets": [
     {
       "id": "7feebc25-b694-408b-a60f-f93493549f71",
-      "target": "e2e-109-51:3000",
+      "target": "backend:3000",
       "weight": 100,
       "upstream": {"id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"}
     }

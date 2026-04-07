@@ -157,7 +157,7 @@ development_status:
 
   # Epic 3: Session Management, User Lifecycle & GDPR
   # Worktrees: epic3-sessions | epic3-keycloak (parallel after Epic 2 merged)
-  epic-3: in-progress
+  epic-3: done
   3-1-user-logout-and-session-termination-across-application: done # worktree: epic3-sessions
   3-2-session-invalidation-on-user-disable-delete: done # worktree: epic3-sessions (after 3-1)
   3-3-role-and-group-management-via-keycloak: done # worktree: epic3-keycloak
@@ -166,7 +166,7 @@ development_status:
   3-6-jit-provisioning-user-profile-updates-on-re-login: done # worktree: epic3-keycloak (after 3-5)
   3-7-right-to-erasure-user-identity-data-deletion: done # worktree: epic3-keycloak (after 3-6)
   3-8-session-data-automatic-purging: done # worktree: epic3-sessions (after 3-1)
-  epic-3-retrospective: optional
+  epic-3-retrospective: done # Retrospective completed 2026-04-07
 
   # Epic 4: Audit Logging & Compliance Reporting
   # Worktree: epic4-logging (after Epic 3 merged)

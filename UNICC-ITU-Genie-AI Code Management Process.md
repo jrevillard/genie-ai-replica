@@ -566,3 +566,27 @@ For questions or clarifications, contact UNICC ITU via GitLab issues or sync mee
 **Last Updated:** March 10, 2026
 **Project:** GENIE.AI
 **Maintained By:** ITU (International Telecommunication Union)
+
+## Deployment from Scratch
+
+To deploy the GENIE-AI stack on a fresh server or after a clean clone, follow these steps:
+
+1. **Prepare Environment**: Create your active environment file from the template:
+   ```bash
+   cp env .env
+   ```
+
+2. **Configure Secrets**: Edit the `.env` file and add your `HUGGINGFACEHUB_API_TOKEN`.
+
+3. **Build and Start Containers**: Launch the infrastructure. This handles the initial image builds and internal networking:
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. **Initialize Infrastructure**: Run the automated deployment script. This handles SSL generation, database bootstrapping, and Kong API Gateway configuration:
+   ```bash
+   ./deploy.sh
+   ```
+
+> [!NOTE]
+> The `deploy.sh` and `api-gateway-solution/nginx/entrypoint.sh` files are marked as executable in the repository. If you encounter permission issues on a new system, run `chmod +x deploy.sh api-gateway-solution/nginx/entrypoint.sh`.

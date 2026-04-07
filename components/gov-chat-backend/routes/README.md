@@ -561,7 +561,7 @@ Routes can be tested using tools like Postman or the Swagger UI.
 Run the integration test script to verify connections between services:
 
 ```bash
-node verify-integration.js
+node tests/verify-integration.js
 ```
 
 This script tests the integration between the query service, analytics service, and other components of the GENIE.AI framework, ensuring that queries and feedback are correctly recorded in analytics.

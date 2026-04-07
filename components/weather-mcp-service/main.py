@@ -5,7 +5,7 @@ Routes
   GET  /health                           — liveness check
   POST /query                            — on-demand natural-language weather query
   GET  /risk/latest?location=&horizon=   — latest stored risk assessment for a location
-  POST /internal/run-daily-pipeline      — manual trigger for the daily ingestion pipeline
+  POST /internal/run-pipeline            — manual trigger for the hourly ingestion pipeline
 
   POST /mcp/tools/list                   — MCP tool registry (called by gov-chat-backend)
   POST /mcp/tools/call                   — execute named MCP tool
@@ -205,12 +205,12 @@ async def get_latest_risk(
     )
 
 
-@app.post("/internal/run-daily-pipeline")
-async def trigger_daily_pipeline(background_tasks: BackgroundTasks):
+@app.post("/internal/run-pipeline")
+async def trigger_pipeline(background_tasks: BackgroundTasks):
     """
-    Manually trigger the daily short-term ingestion + classification pipeline.
+    Manually trigger the hourly ingestion + classification pipeline.
     Runs in a FastAPI background task — returns immediately.
-    Used by ops tooling, cron hooks, and integration tests.
+    Used by ops tooling and integration tests.
     """
     if storage_layer is None or data_ingestor is None:
         return JSONResponse(
@@ -218,16 +218,16 @@ async def trigger_daily_pipeline(background_tasks: BackgroundTasks):
             content={"error": "Pipeline not initialised — storage or ingestor unavailable"},
         )
 
-    from scheduler import run_daily_pipeline
+    from scheduler import run_hourly_pipeline
 
     background_tasks.add_task(
-        run_daily_pipeline,
+        run_hourly_pipeline,
         storage_layer,
         data_ingestor,
         risk_engine,
         notifier,
     )
-    return {"status": "pipeline_started", "message": "Daily pipeline running in background"}
+    return {"status": "pipeline_started", "message": "Hourly pipeline running in background"}
 
 
 # ---------------------------------------------------------------------------

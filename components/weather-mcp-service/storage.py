@@ -49,7 +49,7 @@ class StorageLayer:
         arango_url  = os.getenv("ARANGO_URL",      "http://arango-vector-db:8529")
         arango_db   = os.getenv("ARANGO_DB_NAME",  "node-services")
         arango_user = os.getenv("ARANGO_USER",     "root")
-        arango_pass = os.getenv("ARANGO_PASSWORD", "")
+        arango_pass = os.getenv("ARANGO_PASSWORD", "test")
 
         client = ArangoClient(hosts=arango_url)
         self._db = client.db(arango_db, username=arango_user, password=arango_pass)

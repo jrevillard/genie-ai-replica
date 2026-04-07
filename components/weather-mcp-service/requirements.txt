@@ -27,11 +27,5 @@ python-arango==7.9.1
 # Early warning system — scheduler
 APScheduler==3.10.4
 
-# Optional — long-term ingestion (install if COPERNICUS_API_KEY is set):
-# cdsapi==0.7.2
-# xarray==2024.2.0
-# scipy==1.12.0
-# numpy>=1.26.0
-
 # Optional — Twilio SMS / voice (install if TWILIO_ACCOUNT_SID is set):
 # twilio==9.0.0

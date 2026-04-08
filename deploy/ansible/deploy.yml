@@ -571,6 +571,8 @@
       loop_control:
         label: "{{ item.item.name }}"
       register: build_results
+      async: 300
+      poll: 30
 
     - name: Tag image for registry
       ansible.builtin.command: >

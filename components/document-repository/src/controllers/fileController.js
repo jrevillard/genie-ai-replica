@@ -880,8 +880,8 @@ class FileController {
       const {
           file_name,
           file_type,
-          upload_date_from,
-          upload_date_to,
+          uploaded_date_from,
+          uploaded_date_to,
           create_date_from,
           create_date_to,
           labels,
@@ -889,12 +889,12 @@ class FileController {
           status,
           language
         } = req.query;
-      
+
       const allowedFields = [
         'file_name',
         'file_type',
-        'upload_date_from',
-        'upload_date_to',
+        'uploaded_date_from',
+        'uploaded_date_to',
         'create_date_from',
         'create_date_to',
         'labels',
@@ -924,8 +924,8 @@ class FileController {
       const results = await metadataService.searchMetadata(
         file_name,
         file_type,
-        upload_date_from,
-        upload_date_to,
+        uploaded_date_from,
+        uploaded_date_to,
         create_date_from,
         create_date_to,
         labelsArray,
@@ -1004,7 +1004,7 @@ class FileController {
       fileName: file.file_name,
       fileType: file.file_type,
       fileLabels:file.labels,
-      uploadDate: file.upload_date,
+      uploadDate: file.uploaded_date,
       storagePath: file.storage_path,
       fileBase64: base64String,
     });

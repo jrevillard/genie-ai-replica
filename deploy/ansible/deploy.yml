@@ -635,8 +635,8 @@
     - name: Validate compose configuration
       ansible.builtin.shell: >
         docker compose
-        --env-file {{ deploy_dir }}/.env
         {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
+        --env-file {{ deploy_dir }}/.env
         -f {{ deploy_dir }}/{{ compose_file }} config --quiet
       args:
         chdir: "{{ deploy_dir }}"
@@ -646,12 +646,6 @@
     - name: Deploy Docker stack
       ansible.builtin.shell: |
         set -a
-        while IFS= read -r line; do
-          [[ "$line" =~ ^# ]] && continue
-          [[ -z "$line" ]] && continue
-          key="${line%%=*}"; value="${line#*=}"
-          export "$key=$value"
-        done < {{ deploy_dir }}/.env
         {% if gpu_env_file and gpu_env_file | length > 0 %}
         while IFS= read -r line; do
           [[ "$line" =~ ^# ]] && continue
@@ -660,6 +654,12 @@
           export "$key=$value"
         done < {{ deploy_dir }}/{{ gpu_env_file }}
         {% endif %}
+        while IFS= read -r line; do
+          [[ "$line" =~ ^# ]] && continue
+          [[ -z "$line" ]] && continue
+          key="${line%%=*}"; value="${line#*=}"
+          export "$key=$value"
+        done < {{ deploy_dir }}/.env
         set +a
         docker stack deploy -c {{ deploy_dir }}/{{ compose_file }} {{ stack_name }}
       args:

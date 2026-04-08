@@ -556,7 +556,7 @@ services:
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
     # Internal only
     # ports:
-    #   - "9030:9030"
+    #   - "8888:8888"
     networks:
       - genieai_network
     healthcheck:
@@ -785,7 +785,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/7025' || exit 1"]
+      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/7000' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10

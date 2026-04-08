@@ -1,54 +1,34 @@
-# LLM Prompts Configuration
+# Configuration Directory
 
-This directory contains default LLM behavior prompts for GENIE.AI services.
+This directory contains OPEA (Open Platform for Enterprise AI) configuration files.
 
-## How It Works
+## Contents
 
-Prompts are loaded via Docker secrets mechanism, providing cloud-native configuration that works identically across all environments (Compose, Swarm, Kubernetes).
+- `opea-config/` - OPEA service configuration files
 
-## Three-Tier Priority System
+## LLM Prompts
 
-1. **ENV VAR** (highest) - Override inline in `.env`
-2. **FILE** (medium) - Custom files in `configs/prompts/`
-3. **DEFAULT** (lowest) - Built-in prompts in code
+LLM prompts are now **built into the Python code** with a two-tier override system:
 
-## Available Prompts
+1. **ENV VAR** (highest) - Override in `.env` for deployment-specific customization
+2. **DEFAULT** (lowest) - Built-in prompts in Python code
 
-| File | Service | Purpose |
-|------|---------|---------|
-| `chatqna-system.txt` | ChatQnA | Main LLM system prompt for RAG responses |
-| `chatqna-abstention.txt` | ChatQnA | Instructions when no relevant documents found |
-| `label-selector.txt` | Dataprep | LLM prompt for automatic document labeling |
+### Prompt Variables
 
-**Note:** `label-selector.txt` contains a `{labels_list}` placeholder that is dynamically replaced by the code at runtime with the actual label taxonomy.
-
-## Usage
-
-### Default (Recommended)
-The files in this directory are the defaults. No action needed.
+| Variable | Service | Purpose |
+|----------|---------|---------|
+| `CHATQNA_SYSTEM_PROMPT` | ChatQnA | Main LLM system prompt for RAG responses |
+| `CHATQNA_ABSTENTION_INSTRUCTIONS` | ChatQnA | Instructions when no relevant documents found |
+| `CHATQNA_ENFORCE_ABSTENTION` | ChatQnA | Whether to enforce abstention (default: "true") |
+| `LABEL_SELECTOR_SYSTEM_PROMPT` | Dataprep | LLM prompt for automatic document labeling |
 
 ### Customization
 
-**Option 1 - Edit files directly:**
+**Environment variable override in `.env`:**
 ```bash
-# For ChatQnA prompts
-nano configs/prompts/chatqna-system.txt
-docker compose restart chatqna-xeon-backend-server
-
-# For label selector
-nano configs/prompts/label-selector.txt
-docker compose restart dataprep-arango-service
-```
-
-**Option 2 - Environment variable override:**
-```bash
-# In .env
 CHATQNA_SYSTEM_PROMPT="Your custom prompt here..."
 ```
 
-## Tips
-
-- Keep prompts focused and specific
-- Include clear instructions for edge cases
-- Test changes in development before production
-- These files ARE committed to git (configuration, not secrets)
+**To change built-in defaults**, edit the Python code:
+- `genie-ai-overlay/chatqna/genieai_chatqna.py` - CHATQNA_SYSTEM_PROMPT default
+- `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py` - LABEL_SELECTOR_SYSTEM_PROMPT default

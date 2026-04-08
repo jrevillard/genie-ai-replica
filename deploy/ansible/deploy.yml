@@ -408,28 +408,6 @@
         label: "{{ item.item }}"
       when: not (self_signed_certs | default(false) | bool)
 
-    - name: Verify LLM prompt files exist
-      ansible.builtin.stat:
-        path: "{{ deploy_dir }}/configs/prompts/{{ item }}"
-      register: prompt_files
-      loop:
-        - chatqna-system.txt
-        - chatqna-abstention.txt
-        - label-selector.txt
-      failed_when: false
-
-    - name: Assert prompt files are present
-      ansible.builtin.assert:
-        that:
-          - item.stat.exists
-        fail_msg: >-
-          Missing prompt file: {{ item.item }}.
-          Ensure it exists in the repository at configs/prompts/{{ item.item }}.
-        quiet: true
-      loop: "{{ prompt_files.results }}"
-      loop_control:
-        label: "{{ item.item }}"
-
     - name: Create required directories
       ansible.builtin.file:
         path: "{{ deploy_dir }}/{{ item }}"

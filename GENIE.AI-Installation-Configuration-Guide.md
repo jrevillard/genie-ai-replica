@@ -224,10 +224,8 @@ repository-root/
 │   └── docker-compose.yaml       # Development subset (GENIE.AI only, no OPEA)
 ├── api-gateway-solution/
 │   └── new-config/               # Kong API gateway configuration
-├── configs/prompts/               # LLM system prompts (committed to git)
-│   ├── chatqna-system.txt       # Main system prompt for chat responses
-│   ├── chatqna-abstention.txt   # Instructions for handling out-of-scope queries
-│   └── label-selector.txt       # Rules for automatic document labeling
+├── configs/                      # Configuration files
+│   └── opea-config/              # OPEA service configurations
 ├── secrets/ssl/                  # SSL/TLS certificates (NOT committed)
 └── genie-ai-overlay/             # OPEA microservices build overlays
 
@@ -261,19 +259,31 @@ There are 3 templates in the repository to start with:
 
 **Customizing LLM Prompts**
 
-The `configs/prompts/` directory contains the system prompts that control how the AI responds. GENIE.AI uses a 3-tier priority system:
+GENIE.AI uses a simple two-tier priority system for LLM prompts:
 
-1. **ENV VAR** (highest): Override directly in `.env` by setting `CHATQNA_SYSTEM_PROMPT`, `CHATQNA_ABSTENTION_INSTRUCTIONS`, or `LABEL_SELECTOR_SYSTEM_PROMPT`
-2. **FILE** (medium): Edit the files in `configs/prompts/` — changes are committed to git and shared across the team
-3. **DEFAULT** (lowest): Built-in defaults in the code — used if neither env var nor file is provided
+1. **ENV VAR** (highest): Override in `.env` for deployment-specific customization
+2. **DEFAULT** (lowest): Built-in prompts in Python code (works out-of-the-box)
 
-| File | Purpose |
-| :---- | :---- |
-| `chatqna-system.txt` | Main system prompt defining the AI's behavior and response style |
-| `chatqna-abstention.txt` | Instructions for handling queries outside the knowledge base scope |
-| `label-selector.txt` | Rules for automatic document labeling during ingestion |
+| Variable | Purpose | Default |
+| :---- | :---- | :---- |
+| `CHATQNA_SYSTEM_PROMPT` | Main system prompt defining the AI's behavior | Friendly, information assistant (built-in) |
+| `CHATQNA_ABSTENTION_INSTRUCTIONS` | Instructions when no relevant documents found | Standard abstention message (built-in) |
+| `CHATQNA_ENFORCE_ABSTENTION` | Enable/disable abstention behavior | `"true"` |
+| `LABEL_SELECTOR_SYSTEM_PROMPT` | Rules for automatic document labeling | Rule-based classifier (built-in) |
 
-To customize: either edit the files directly, or override in `.env` without touching the code.
+To customize prompts for your deployment, add the variables to your `.env` file:
+
+```bash
+# Example: Custom system prompt
+CHATQNA_SYSTEM_PROMPT="You are a formal assistant for government inquiries..."
+
+# Example: Disable abstention
+CHATQNA_ENFORCE_ABSTENTION="false"
+```
+
+To change built-in defaults, edit the Python code:
+- `genie-ai-overlay/chatqna/genieai_chatqna.py` - CHATQNA_SYSTEM_PROMPT default
+- `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py` - LABEL_SELECTOR_SYSTEM_PROMPT default
 
 The following tables document all variables found in the .env file, grouped by the service they configure. You can determin the appropriate configuration and use this table to determin the values that you should use. Note that you will need to create access tokens and API keys yourselves for various services. You will also need to establish email infrastructure services and configure the credentials for that. If you are starting with one of the templates, then you can largely skip the settings section other than tailoring some specifics which should be self-evident when you look at the .env file.
 

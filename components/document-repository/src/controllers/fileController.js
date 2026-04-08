@@ -5,7 +5,6 @@ const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('../../shared-lib');
-const { log, error } = require('console');
 const archiver = require('archiver');
 const axios = require('axios');
 

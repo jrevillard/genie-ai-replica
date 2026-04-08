@@ -595,7 +595,7 @@
       "paths": ["/api/files"],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 100,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,

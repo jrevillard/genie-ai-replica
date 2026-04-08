@@ -56,9 +56,10 @@ class SecurityService {
 
     logger.debug(`[SECURITY-SERVICE] Initializing...`);
     try {
-      if (appConfig.virusScanning) 
+      if (appConfig.virusScanning) {
         logger.debug(`[SECURITY-SERVICE] Initializing ClamAV scanner`);
         this.clamscan = await new NodeClam().init(this.clamAVOptions);
+      }
     } catch (error) {
       throw new Error(`Failed to initialize ClamAV: ${error.message}`);
     }
@@ -97,6 +98,11 @@ class SecurityService {
         throw new Error(`Buffer size exceeds maximum allowed size of ${this.maxBufferSize} bytes`);
       }
       await this.ensureInitialized();
+
+      if (!this.clamscan) {
+        logger.debug('[SECURITY-SERVICE] Virus scanning disabled, skipping scan');
+        return { isInfected: false };
+      }
 
       // Scan the buffer using stream scanning
       return await this.clamscan.scanStream(this._convertToStream(buffer));

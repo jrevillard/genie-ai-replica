@@ -823,8 +823,8 @@ class FileService {
       const db = await this.getDb();
       const stats = await db.query(`
         RETURN {
-          totalFiles: LENGTH(files),
-          totalSize: SUM(files[*].size),
+          totalFiles: COUNT(FOR file IN files RETURN 1),
+          totalSize: SUM(FOR file IN files RETURN file.file_size || 0),
           filesByType: (
             FOR file IN files
             COLLECT mimeType = file.file_type WITH COUNT INTO count

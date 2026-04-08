@@ -149,7 +149,7 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
-| `gpu_env_file` | `env.t4` | GPU override file (empty = none) |
+| `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
 | `nginx_public_domain` | `localhost` | Public domain/IP |
 | `nginx_http_port` | `80` | HTTP port (only set if non-default) |
 | `nginx_https_port` | `443` | HTTPS port (only set if non-default) |
@@ -216,11 +216,13 @@ deploy_opea: "0"
 gpu_env_file: ""
 ```
 
-GPU env file options (override model parameters in `docker-compose.yaml`):
+GPU env file options (provide GPU-specific defaults in `docker-compose.yaml`):
 - `env.t4` — NVIDIA T4 (16GB VRAM)
 - `env.rtx6000` — RTX 6000 ADA (24GB VRAM)
 
-The GPU env file is automatically sourced alongside `.env` during `docker stack deploy`.
+The GPU env file is loaded first, then the Ansible-generated `.env` is loaded on top.
+**Ansible `.env` values take precedence** over GPU env file values for any duplicate variables.
+This allows per-environment tuning via Ansible while keeping GPU defaults in the committed files.
 
 ## Port Configuration
 

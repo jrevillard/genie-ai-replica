@@ -23,7 +23,7 @@
       "name": "document-repository",
       "id": "e1a2b3c4-d5e6-4f78-9a0b-1c2d3e4f5a6b",
       "protocol": "http",
-      "host": "backend",
+      "host": "doc-repo-dev",
       "port": 3001,
       "path": null,
       "connect_timeout": 60000,

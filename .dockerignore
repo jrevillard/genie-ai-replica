@@ -1,0 +1,53 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies
+node_modules
+**/node_modules
+
+# Build artifacts
+dist
+**/dist
+
+# Data and logs
+data/
+logs/
+uploads/
+
+# Environment files
+.env
+.env.*
+env
+!.env.t4
+!.env.rtx6000
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose*.yaml
+
+# Deploy
+deploy/
+
+# Docs (exclude all .md except README.md — no Dockerfile COPY references .md)
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+
+# Mobile
+mobile/
+
+# Worktrees and non-essential dirs
+.worktrees/
+.opencode/
+_bmad-output/

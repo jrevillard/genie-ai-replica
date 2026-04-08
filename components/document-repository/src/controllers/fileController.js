@@ -347,11 +347,20 @@ class FileController {
     logger.debug(`[FILE-CONTROLLER] File extension: ${fileExtension}`);
     const fileNameOnDisk = file.file_id + '.' + fileExtension;
     const filePath = file.storage_path || path.join(config.upload.uploadDir, fileNameOnDisk);
-    logger.debug(`[FILE-CONTROLLER] filePath: ${filePath}`);
+    const resolvedPath = path.resolve(filePath);
+    const allowedDir = path.resolve(config.upload.uploadDir);
+    if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) {
+      throw {
+        status: 400,
+        error: 'Invalid file path',
+        message: 'File path is outside the allowed upload directory'
+      };
+    }
+    logger.debug(`[FILE-CONTROLLER] filePath: ${resolvedPath}`);
 
     // Check if file exists
     try {
-      await fs.access(filePath);
+      await fs.access(resolvedPath);
     } catch (error) {
       throw {
         status: 404,
@@ -359,7 +368,7 @@ class FileController {
         message: 'The physical file does not exist'
       };
     }
-    return { file, filePath };
+    return { file, filePath: resolvedPath };
   }
 
   /**

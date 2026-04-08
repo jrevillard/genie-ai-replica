@@ -57,10 +57,6 @@ secrets:
     file: ./secrets/ssl/server.crt
   server_key:
     file: ./secrets/ssl/server.key
-  chatqna_system_prompt:
-    file: ./configs/prompts/chatqna-system.txt
-  chatqna_abstention_instructions:
-    file: ./configs/prompts/chatqna-abstention.txt
 
 services:
 
@@ -750,6 +746,8 @@ services:
       DATAPREP_CHUNK_SIZE_HTML: ${DATAPREP_CHUNK_SIZE_HTML:-500}
       DATAPREP_CHUNK_SIZE_TXT: ${DATAPREP_CHUNK_SIZE_TXT:-500}
       DATAPREP_CHUNK_SIZE_MD: ${DATAPREP_CHUNK_SIZE_MD:-500}
+      LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
     networks:
       - genieai_network
     healthcheck:
@@ -779,6 +777,7 @@ services:
       VLLM_ENDPOINT: http://vllm:8000
       ARANGO_URL: http://arango-vector-db:8529
       TEI_EMBEDDING_ENDPOINT: http://tei:80
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
     networks:
       - genieai_network
     healthcheck:
@@ -803,9 +802,6 @@ services:
     # Internal OPEA service - no host port needed
     # ports:
     #   - "${OPEA_PORT}:${OPEA_PORT}"
-    secrets:
-      - chatqna_system_prompt
-      - chatqna_abstention_instructions
     environment:
       CHATQNA_TYPE: ${CHATQNA_TYPE:-ChatQnA}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
@@ -823,6 +819,8 @@ services:
       TRANSLATION_SERVICE_PORT: 9031
       DOC_REPO_URL: http://document-repository:3001
       GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
+      CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
+      CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
     networks:
       - genieai_network
     healthcheck:

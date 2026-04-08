@@ -94,8 +94,7 @@ GENIE.AI/
 │   └── reranker/                 # Reranking microservice
 ├── api-gateway-solution/         # API Gateway (Kong/NGINX)
 ├── configs/                      # Configuration files
-│   ├── opea-config/              # OPEA infrastructure configuration
-│   └── prompts/                  # LLM behavior prompts (committed to git)
+│   └── opea-config/              # OPEA infrastructure configuration
 ├── data/                         # Country-specific data
 │   ├── el-salvador/              # El Salvador data
 │   ├── gambia/                   # Gambia data

@@ -200,42 +200,29 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `HUGGING_FACE_HUB_TOKEN` - Required for pulling models
 - `VLLM_API_KEY` - Optional, if required by your vLLM deployment
 
-**Prompts (Cloud-Native Configuration):**
+**Prompts (Two-tier priority):**
 
-LLM prompts use a three-tier priority system:
+LLM prompts use a simple two-tier priority system:
 
-1. **ENV VAR** (highest): Override inline in `.env`
-2. **FILE** (medium): Custom files in `configs/prompts/` (committed to git)
-3. **DEFAULT** (lowest): Built-in prompts in code (most deployments)
-
-**Directory Structure:**
-```
-configs/prompts/           # LLM behavior prompts (committed to git)
-├── chatqna-system.txt
-└── chatqna-abstention.txt
-
-secrets/ssl/              # SSL certificates (NOT committed)
-├── server.crt
-└── server.key
-```
+1. **ENV VAR** (highest): Override in `.env` for deployment-specific customization
+2. **DEFAULT** (lowest): Built-in prompts in Python code (works out-of-the-box)
 
 **Prompt Variables:**
-- `CHATQNA_SYSTEM_PROMPT` - LLM system prompt (optional, has default in code and config)
-- `CHATQNA_ABSTENTION_INSTRUCTIONS` - Abstention behavior (optional, has default in code and config)
-- `LABEL_SELECTOR_SYSTEM_PROMPT` - Document labeling (has default in code, detailed version in config)
+- `CHATQNA_SYSTEM_PROMPT` - LLM system prompt (optional, has built-in default)
+- `CHATQNA_ABSTENTION_INSTRUCTIONS` - Abstention behavior (optional, has built-in default)
+- `CHATQNA_ENFORCE_ABSTENTION` - Whether to enforce abstention (default: "true")
+- `LABEL_SELECTOR_SYSTEM_PROMPT` - Document labeling (has built-in default with `{labels_list}` placeholder)
 
 **Customizing Prompts:**
 
-```bash
-# Edit the default prompt files
-nano configs/prompts/chatqna-system.txt
-docker service update --force genieai_chatqna-xeon-backend-server
-```
-
-**Power users:** Override inline in `.env`:
+Override in `.env`:
 ```bash
 CHATQNA_SYSTEM_PROMPT="Custom prompt here..."
 ```
+
+To change built-in defaults, edit the Python code:
+- `genie-ai-overlay/chatqna/genieai_chatqna.py` - CHATQNA_SYSTEM_PROMPT default
+- `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py` - LABEL_SELECTOR_SYSTEM_PROMPT default
 
 **GPU-specific files (`env.t4`, `env.rtx6000`) contain only:**
 - GPU memory utilization settings

@@ -78,9 +78,21 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max tok
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
-CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
-CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "true")
-CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", None)
+# Two-tier priority: ENV VAR (override) > Hardcoded default
+_CHATQNA_SYSTEM_DEFAULT = """You are a friendly and polite information assistant.
+
+Your task is to answer the user's latest question using only the content provided from the knowledge base.
+
+**Instructions:**
+- Do not invent or assume information
+- If the answer is not in the provided content, inform the user that the information is unavailable
+- Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses
+- Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested
+
+In line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided."""
+CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
+CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
+CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################

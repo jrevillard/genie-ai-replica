@@ -221,23 +221,25 @@ HUGGING_FACE_HUB_TOKEN=
 # KONG_DNS_STALE_TTL=
 
 # =============================================================================
-# SECTION 8: LLM PROMPTS (OPTIONAL)
+# SECTION 8: LLM PROMPTS & FLAGS (OPTIONAL)
 # =============================================================================
-# Default prompts are in configs/prompts/ (committed to git)
-# Override here ONLY for production-specific customization.
+# Default prompts and flags are built into the Python code.
+# Override here ONLY for deployment-specific customization.
 #
-# Prompts use Docker secrets for file-based configuration.
-# Files are located in: configs/prompts/
+# **Prompts** (text instructions for AI):
+#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior
+#   - CHATQNA_ABSTENTION_INSTRUCTIONS: Instructions for when to refuse answering
+#   - LABEL_SELECTOR_SYSTEM_PROMPT: Prompt for automatic document labeling
 #
-# Available prompts:
-#   - chatqna-system.txt: Main system prompt for chat behavior
-#   - chatqna-abstention.txt: Instructions for when to refuse answering
-#   - label-selector.txt: Prompt for automatic document labeling
+# **Flags** (behavior toggles):
+#   - CHATQNA_ENFORCE_ABSTENTION: Whether to enforce abstention (default: true)
 #
-# To customize: Edit files in configs/prompts/ OR override inline below:
+# To customize: Uncomment and set values below. To change built-in defaults,
+# edit the Python code in genie-ai-overlay/chatqna/ or genie-ai-overlay/dataprep/
 
 # CHATQNA_SYSTEM_PROMPT="You are a helpful assistant..."
 # CHATQNA_ABSTENTION_INSTRUCTIONS="If no information found in the context..."
+# CHATQNA_ENFORCE_ABSTENTION="false"
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
 
 # =============================================================================

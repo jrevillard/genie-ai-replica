@@ -63,8 +63,10 @@ LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 # New: Concurrency Control for Batches
 MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "5"))
 
-# Spec 5.3: Externalized Prompt
-LABEL_SELECTOR_SYSTEM_PROMPT = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", """
+# Spec 5.3: Externalized Prompt - Two-tier priority
+# Level 1: ENV VAR (highest priority) - override via .env
+# Level 2: Hardcoded default (fallback) - works out-of-the-box
+_LABEL_SELECTOR_DEFAULT = """
 <SYSTEM INSTRUCTIONS>
 You are a precise semantic labeler for a RAG knowledge graph.
 Goal: Assign 1–4 MOST RELEVANT labels from the list below that best match the chunk content.
@@ -82,7 +84,9 @@ Labels:
 Output strict JSON only:
 {"labels": ["Label1", "Label2"]}
 </SYSTEM INSTRUCTIONS>
-""".strip())
+""".strip()
+_env_value = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", "")
+LABEL_SELECTOR_SYSTEM_PROMPT = _env_value.strip() or _LABEL_SELECTOR_DEFAULT
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):

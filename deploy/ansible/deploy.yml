@@ -231,6 +231,14 @@
                 mode: '0644'
               notify: Restart Docker
 
+        - name: Enable NVIDIA GPU access for unprivileged containers (Swarm)
+          ansible.builtin.lineinfile:
+            path: /etc/nvidia-container-runtime/config.toml
+            regexp: '^#?accept-nvidia-visible-devices-envvar-when-unprivileged'
+            line: accept-nvidia-visible-devices-envvar-when-unprivileged = true
+            state: present
+          notify: Restart Docker
+
         - name: Verify NVIDIA runtime
           ansible.builtin.command: docker info --format '{{ "{{" }}.Runtimes{{ "}}" }}'
           register: nvidia_verify

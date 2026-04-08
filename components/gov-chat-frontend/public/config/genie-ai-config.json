@@ -1,424 +1,160 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework with dual-prompt mechanism for quick help buttons",
-  "type": "object",
-  "properties": {
     "app": {
-      "type": "object",
-      "description": "General application settings",
-      "properties": {
-        "title": {
-          "type": "string",
-          "description": "Main application title displayed in the UI",
-          "default": "GENIE.AI"
-        },
+        "title": "AgriConnect",
         "icon": {
-          "type": "object",
-          "description": "Application icon configuration (SVG)",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "file",
-                "inline"
-              ],
-              "description": "Type of icon source",
-              "default": "file"
-            },
-            "value": {
-              "type": "string",
-              "description": "Path to SVG file (for 'file') or inline SVG content (for 'inline')"
-            }
-          },
-          "required": [
-            "type",
-            "value"
-          ]
+            "type": "file",
+            "value": "/config/genie-ai-icon-light.svg"
         }
-      },
-      "required": [
-        "title",
-        "icon"
-      ]
     },
     "theme": {
-      "type": "object",
-      "description": "UI theme and color scheme settings",
-      "properties": {
-        "primaryColor": {
-          "type": "string",
-          "description": "Primary color for buttons and accents",
-          "default": "#4E97D1"
-        },
-        "secondaryColor": {
-          "type": "string",
-          "description": "Secondary color for accents and highlights",
-          "default": "#2C5F8A"
-        },
-        "backgroundColor": {
-          "type": "string",
-          "description": "Background color for main content area",
-          "default": "#f5f7fa"
-        },
-        "textColor": {
-          "type": "string",
-          "description": "Primary text color",
-          "default": "#333333"
-        },
+        "primaryColor": "#033319",
+        "secondaryColor": "#904c27",
+        "backgroundColor": "#fbfbe2",
+        "textColor": "#1b1d0e",
         "navbar": {
-          "type": "object",
-          "description": "Navbar-specific styling",
-          "properties": {
-            "gradientStart": {
-              "type": "string",
-              "description": "Start color for navbar gradient",
-              "default": "#4E97D1"
-            },
-            "gradientEnd": {
-              "type": "string",
-              "description": "End color for navbar gradient",
-              "default": "#2C5F8A"
-            },
-            "textColor": {
-              "type": "string",
-              "description": "Navbar text/icon color",
-              "default": "#ffffff"
-            }
-          }
+            "gradientStart": "#033319",
+            "gradientEnd": "#1e4a2e",
+            "textColor": "#bdeec7"
         }
-      },
-      "required": [
-        "primaryColor",
-        "secondaryColor",
-        "navbar"
-      ]
     },
     "features": {
-      "type": "object",
-      "description": "Feature toggles and configurations",
-      "properties": {
         "chat": {
-          "type": "object",
-          "description": "Chat-specific settings",
-          "properties": {
-            "welcomeMessage": {
-              "type": "string",
-              "description": "Custom welcome message for the chatbot",
-              "default": "Welcome to GENIE.AI!"
-            },
-            "botName": {
-              "type": "string",
-              "description": "Name of the chatbot",
-              "default": "Genie"
-            },
+            "welcomeMessage": "Lumela! Welcome to AgriConnect. I am Keletso, your agricultural advisor for Lesotho. I can help with maize and beans farming, pest management, weather advisories, and market information.",
+            "botName": "Keletso",
             "quickHelp": {
-              "type": "object",
-              "description": "Quick Help button configurations with dual-prompt mechanism",
-              "properties": {
-                "buttons": {
-                  "type": "array",
-                  "description": "List of Quick Help buttons",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "description": "Unique identifier for the button"
-                      },
-                      "title": {
-                        "type": "string",
-                        "description": "i18n key for button label"
-                      },
-                      "icon": {
-                        "type": "object",
-                        "description": "Button icon configuration",
-                        "properties": {
-                          "type": {
-                            "type": "string",
-                            "enum": [
-                              "file",
-                              "inline"
-                            ],
-                            "description": "Type of icon source"
-                          },
-                          "value": {
-                            "type": "string",
-                            "description": "Path to SVG file or inline SVG content"
-                          }
+                "buttons": [
+                    {
+                        "id": "just-chat",
+                        "title": "Just Chat",
+                        "icon": {
+                            "type": "file",
+                            "value": "/config/quickhelp/just-chat.svg"
                         },
-                        "required": [
-                          "type",
-                          "value"
-                        ]
-                      },
-                      "category": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
-                        "description": "Category ID for the button (null for general)"
-                      },
-                      "action": {
-                        "type": "object",
-                        "description": "The dual-prompt mechanism: visibleText for user, hiddenPrompt for LLM",
-                        "properties": {
-                          "visibleText": {
-                            "type": "string",
-                            "description": "i18n key for text user sees in chat"
-                          },
-                          "hiddenPrompt": {
-                            "type": "string",
-                            "description": "i18n key for detailed prompt sent to LLM"
-                          }
+                        "category": null,
+                        "action": {
+                            "visibleText": "I would like to chat about farming in Lesotho",
+                            "hiddenPrompt": "quickhelp.justChatPrompt"
                         },
-                        "required": [
-                          "visibleText",
-                          "hiddenPrompt"
-                        ]
-                      },
-                      "styles": {
-                        "type": "object",
-                        "description": "Custom styles for the button",
-                        "properties": {
-                          "backgroundColor": {
-                            "type": "string",
-                            "description": "Background color"
-                          },
-                          "hoverColor": {
-                            "type": "string",
-                            "description": "Hover background color"
-                          },
-                          "outlineColor": {
-                            "type": "string",
-                            "description": "Border/outline color"
-                          }
-                        },
-                        "required": [
-                          "backgroundColor",
-                          "hoverColor",
-                          "outlineColor"
-                        ]
-                      }
+                        "styles": {
+                            "backgroundColor": "#1e4a2e",
+                            "hoverColor": "#bdeec7",
+                            "outlineColor": "#bdeec7"
+                        }
                     },
-                    "required": [
-                      "id",
-                      "title",
-                      "icon",
-                      "category",
-                      "action",
-                      "styles"
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "buttons"
-              ]
+                    {
+                        "id": "maize-farming",
+                        "title": "\ud83c\udf3d Maize Farming",
+                        "icon": {
+                            "type": "file",
+                            "value": "/config/quickhelp/just-chat.svg"
+                        },
+                        "category": "Maize Farming",
+                        "action": {
+                            "visibleText": "I need advice on growing maize in Lesotho",
+                            "hiddenPrompt": "quickhelp.maizeFarmingPrompt"
+                        },
+                        "styles": {
+                            "backgroundColor": "#1e4a2e",
+                            "hoverColor": "#bdeec7",
+                            "outlineColor": "#bdeec7"
+                        }
+                    },
+                    {
+                        "id": "beans-farming",
+                        "title": "\ud83e\uded8 Beans Farming",
+                        "icon": {
+                            "type": "file",
+                            "value": "/config/quickhelp/just-chat.svg"
+                        },
+                        "category": "Beans Farming",
+                        "action": {
+                            "visibleText": "I need advice on growing beans in Lesotho",
+                            "hiddenPrompt": "quickhelp.beansFarmingPrompt"
+                        },
+                        "styles": {
+                            "backgroundColor": "#1e4a2e",
+                            "hoverColor": "#bdeec7",
+                            "outlineColor": "#bdeec7"
+                        }
+                    },
+                    {
+                        "id": "pest-disease",
+                        "title": "\ud83d\udc1b Pest & Disease",
+                        "icon": {
+                            "type": "file",
+                            "value": "/config/quickhelp/just-chat.svg"
+                        },
+                        "category": "Pest & Disease Management",
+                        "action": {
+                            "visibleText": "I need help identifying and managing crop pests and diseases",
+                            "hiddenPrompt": "quickhelp.pestDiseasePrompt"
+                        },
+                        "styles": {
+                            "backgroundColor": "#1e4a2e",
+                            "hoverColor": "#bdeec7",
+                            "outlineColor": "#bdeec7"
+                        }
+                    },
+                    {
+                        "id": "weather-advisory",
+                        "title": "\ud83c\udf26 Weather",
+                        "icon": {
+                            "type": "file",
+                            "value": "/config/quickhelp/just-chat.svg"
+                        },
+                        "category": "Weather Advisory",
+                        "action": {
+                            "visibleText": "What is the weather forecast and how does it affect my crops?",
+                            "hiddenPrompt": "quickhelp.weatherAdvisoryPrompt"
+                        },
+                        "styles": {
+                            "backgroundColor": "#1e4a2e",
+                            "hoverColor": "#bdeec7",
+                            "outlineColor": "#bdeec7"
+                        }
+                    },
+                    {
+                        "id": "market-linkages",
+                        "title": "\ud83c\udfea Markets",
+                        "icon": {
+                            "type": "file",
+                            "value": "/config/quickhelp/just-chat.svg"
+                        },
+                        "category": "Market Linkages",
+                        "action": {
+                            "visibleText": "What are the current market prices for maize and beans in Lesotho?",
+                            "hiddenPrompt": "quickhelp.marketLinkagesPrompt"
+                        },
+                        "styles": {
+                            "backgroundColor": "#1e4a2e",
+                            "hoverColor": "#bdeec7",
+                            "outlineColor": "#bdeec7"
+                        }
+                    },
+                    {
+                        "id": "government-programs",
+                        "title": "\ud83c\udfdb Gov Programs",
+                        "icon": {
+                            "type": "file",
+                            "value": "/config/quickhelp/just-chat.svg"
+                        },
+                        "category": "Government Programs",
+                        "action": {
+                            "visibleText": "What government agricultural support programs are available for farmers in Lesotho?",
+                            "hiddenPrompt": "quickhelp.governmentProgramsPrompt"
+                        },
+                        "styles": {
+                            "backgroundColor": "#1e4a2e",
+                            "hoverColor": "#bdeec7",
+                            "outlineColor": "#bdeec7"
+                        }
+                    }
+                ]
             }
-          }
         }
-      }
     },
     "custom": {
-      "type": "object",
-      "description": "Custom key-value pairs for use case-specific configurations",
-      "additionalProperties": true
+        "weatherTextColor": "#bdeec7",
+        "weatherLabelColor": "#ffffff"
     }
-  },
-  "required": [
-    "app",
-    "theme"
-  ],
-  "app": {
-    "title": "GENIE.AI",
-    "icon": {
-      "type": "file",
-      "value": "/config/genie-ai-icon-light.svg"
-    }
-  },
-  "theme": {
-    "primaryColor": "#4682B4",
-    "secondaryColor": "#5F9EA0",
-    "backgroundColor": "#D3E0EA",
-    "textColor": "#1C2526",
-    "navbar": {
-      "gradientStart": "#4682B4",
-      "gradientEnd": "#5F9EA0",
-      "textColor": "#F0F8FF"
-    }
-  },
-  "features": {
-    "chat": {
-      "welcomeMessage": "Welcome to GENIE.AI, for Global Empowerment, Intelligence and Equity",
-      "botName": "GENIE.AI",
-      "quickHelp": {
-        "buttons": [
-          {
-            "id": "just-chat",
-            "title": "quickhelp.justChat",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/just-chat.svg"
-            },
-            "category": null,
-            "action": {
-              "visibleText": "quickhelp.justChatUserPrompt",
-              "hiddenPrompt": "quickhelp.justChatPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "identity-civil",
-            "title": "quickhelp.applyForID",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/identity-civil.svg"
-            },
-            "category": "1",
-            "action": {
-              "visibleText": "quickhelp.applyForIDUserPrompt",
-              "hiddenPrompt": "quickhelp.applyForIDPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "taxes-revenue",
-            "title": "quickhelp.payTaxes",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/taxes-revenue.svg"
-            },
-            "category": "5",
-            "action": {
-              "visibleText": "quickhelp.payTaxesUserPrompt",
-              "hiddenPrompt": "quickhelp.payTaxesPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "business-trade",
-            "title": "quickhelp.startBusiness",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/business-trade.svg"
-            },
-            "category": "8",
-            "action": {
-              "visibleText": "quickhelp.startBusinessUserPrompt",
-              "hiddenPrompt": "quickhelp.startBusinessPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "healthcare-social",
-            "title": "quickhelp.findHealthcare",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/healthcare-social.svg"
-            },
-            "category": "2",
-            "action": {
-              "visibleText": "quickhelp.findHealthcareUserPrompt",
-              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "education-learning",
-            "title": "quickhelp.educationServices",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/education-learning.svg"
-            },
-            "category": "3",
-            "action": {
-              "visibleText": "quickhelp.educationServicesUserPrompt",
-              "hiddenPrompt": "quickhelp.educationServicesPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "transportation-mobility",
-            "title": "quickhelp.transportLicenses",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/transportation-mobility.svg"
-            },
-            "category": "7",
-            "action": {
-              "visibleText": "quickhelp.transportLicensesUserPrompt",
-              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "housing-urban",
-            "title": "quickhelp.housingPrograms",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/housing-urban.svg"
-            },
-            "category": "9",
-            "action": {
-              "visibleText": "quickhelp.housingProgramsUserPrompt",
-              "hiddenPrompt": "quickhelp.housingProgramsPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "employment-labor",
-            "title": "quickhelp.findJobs",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/employment-labor.svg"
-            },
-            "category": "4",
-            "action": {
-              "visibleText": "quickhelp.findJobsUserPrompt",
-              "hiddenPrompt": "quickhelp.findJobsPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          }
-        ]
-      }
-    }
-  },
-  "custom": {}
 }

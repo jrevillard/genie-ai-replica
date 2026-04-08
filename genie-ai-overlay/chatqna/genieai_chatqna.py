@@ -6,8 +6,7 @@ import httpx
 import json
 import os
 import re
-import aiohttp # for async http requests
-import requests
+import aiohttp 
 import asyncio
 import copy
 

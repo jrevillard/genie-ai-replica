@@ -44,6 +44,13 @@ repo_url: https://opensource.unicc.org/un/itu/genie-ai.git
 repo_branch: main
 
 # =============================================================================
+# API GATEWAY (defaults)
+# =============================================================================
+nginx_public_domain: "localhost"
+nginx_http_port: "80"
+nginx_https_port: "443"
+
+# =============================================================================
 # SSL CERTIFICATES
 # =============================================================================
 # self_signed_certs: true   -> generate self-signed certs if none exist

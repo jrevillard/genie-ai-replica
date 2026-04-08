@@ -557,15 +557,10 @@ module.exports = (userService) => {
         }
       }
 
-      // Forward JIT fields to Keycloak Account API
+      // Forward JIT fields to Keycloak via Admin API
       if (Object.keys(jitFields).length > 0) {
-        const authHeader = req.headers.authorization;
-        if (!authHeader) {
-          return res.status(401).json({ success: false, message: 'Missing authorization for profile update' });
-        }
-        const accessToken = authHeader.substring(7);
-        await keycloakProxyService.updateOwnProfile(accessToken, jitFields);
-        logger.info(`[PUT /:userId] JIT fields forwarded to Keycloak Account API for user ${targetUserId}`);
+        await keycloakProxyService.updateOwnProfile(targetUserId, jitFields);
+        logger.info(`[PUT /:userId] JIT fields forwarded to Keycloak for user ${targetUserId}`);
       }
 
       // Write custom fields to ArangoDB (JIT fields are stripped by updateUserProfile)

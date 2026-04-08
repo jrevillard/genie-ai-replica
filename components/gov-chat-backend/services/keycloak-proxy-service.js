@@ -19,7 +19,7 @@ let cachedToken = null;
  *
  * Uses two auth modes:
  * 1. Service account (genie-proxy-client) — for admin operations (role assignment, enable/disable, email, delete)
- * 2. User's own JWT — for self-service profile updates (Keycloak Account API)
+ * 2. Self-service profile updates — also uses service account (Keycloak /account is the Console SPA, not a REST API)
  */
 const keycloakProxyService = {
 
@@ -227,7 +227,15 @@ const keycloakProxyService = {
     logger.info('[KeycloakProxy] Deleting user', { arangoUserId, uuid });
 
     // Delete from Keycloak first (authoritative source)
-    await this._adminApiCall('DELETE', `/users/${uuid}`);
+    try {
+      await this._adminApiCall('DELETE', `/users/${uuid}`);
+    } catch (error) {
+      if (error.status === 404) {
+        logger.info('[KeycloakProxy] User already deleted from Keycloak, skipping', { arangoUserId, uuid });
+        return;
+      }
+      throw error;
+    }
 
     // Then erase PII from ArangoDB
     // If ArangoDB update fails, user is already deleted from Keycloak (defense-in-depth)
@@ -247,8 +255,9 @@ const keycloakProxyService = {
               iss: null,
               iss_sub: null,
               roles: [],
-              active: false
-            } UNSET { personalIdentification } IN users
+              active: false,
+              personalIdentification: null
+            } IN users
         `
       );
       logger.info('[KeycloakProxy] User erased', { arangoUserId });
@@ -263,33 +272,20 @@ const keycloakProxyService = {
   },
 
   // ---------------------------------------------------------------------------
-  // Public API — Self-service operations (user's own JWT)
+  // Public API — Self-service operations
   // ---------------------------------------------------------------------------
 
   /**
-   * Update the authenticated user's own profile via Keycloak Account API
-   * @param {string} accessToken - User's own JWT Bearer token
-   * @param {Object} data - Fields to update (e.g. { email: '...', firstName: '...' })
+   * Update a user's own profile fields in Keycloak via Admin API.
+   * Uses the service account token (same as updateUser) because Keycloak's
+   * /account endpoint is the Account Console (React SPA), not a REST API.
+   * @param {string} arangoUserId - ArangoDB _key (self-enforced by caller)
+   * @param {Object} data - JIT fields to update (e.g. { email, firstName, lastName })
    */
-  async updateOwnProfile(accessToken, data) {
-    const url = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/account`;
-
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw this._mapKeycloakError(response.status, text, '/account');
-    }
-
-    logger.info('[KeycloakProxy] User profile updated via Account API', { fields: Object.keys(data) });
+  async updateOwnProfile(arangoUserId, data) {
+    const uuid = await this._resolveKeycloakUserId(arangoUserId);
+    logger.info('[KeycloakProxy] Updating own profile via Admin API', { arangoUserId, uuid, fields: Object.keys(data) });
+    return this._adminApiCall('PUT', `/users/${uuid}`, data);
   }
 };
 

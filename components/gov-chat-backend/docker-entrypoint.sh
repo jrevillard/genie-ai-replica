@@ -13,8 +13,8 @@ ARANGO_PASSWORD="${ARANGO_PASSWORD}"
 
 echo "[entrypoint] Waiting for ArangoDB at ${ARANGO_HOST}:${ARANGO_PORT}..."
 for i in $(seq 1 30); do
-  if curl -sf "http://${ARANGO_HOST}:${ARANGO_PORT}/_api/version" \
-       -u "${ARANGO_USER}:${ARANGO_PASSWORD}" > /dev/null 2>&1; then
+  if wget --no-verbose --tries=1 --timeout=2 -O /dev/null \
+       "http://${ARANGO_HOST}:${ARANGO_PORT}/" > /dev/null 2>&1; then
     echo "[entrypoint] ArangoDB ready (attempt ${i}/30)"
     break
   fi

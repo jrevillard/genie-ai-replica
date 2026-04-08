@@ -58,7 +58,7 @@ const userProvisioningService = {
       name: decodedToken.name || decodedToken.preferred_username || null,
       roles: decodedToken.realm_access?.roles || [],
       updatedAt: now,
-      ...(isReactivation ? { deleted: false, deletedAt: null } : {})
+      ...(isReactivation ? { deleted: false, deletedAt: null, active: true } : {})
     };
 
     const cursor = await db.query(

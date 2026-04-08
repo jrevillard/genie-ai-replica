@@ -560,7 +560,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/9030' || exit 1"]
+      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/8888' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10

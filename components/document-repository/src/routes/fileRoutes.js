@@ -262,6 +262,45 @@ router.get('/search', fileController.searchMetadata);
 
 /**
  * @swagger
+ * /api/files/search/files:
+ *   get:
+ *     summary: Search files by text query
+ *     description: Full-text search across file names, source URLs, and authors
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 2
+ *           maxLength: 100
+ *         description: Search query
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 10
+ *         description: Maximum number of results
+ *       - in: query
+ *         name: mimeType
+ *         schema:
+ *           type: string
+ *         description: Filter by MIME type
+ *     responses:
+ *       '200':
+ *         description: Search results
+ *       '401':
+ *         description: Unauthorized
+ */
+router.get('/search/files', fileController.searchFiles);
+
+/**
+ * @swagger
  * /api/files/{fileId}:
  *   get:
  *     summary: Get file metadata by ID

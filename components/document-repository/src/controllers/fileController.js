@@ -51,7 +51,6 @@ const uploadSchema = Joi.object({
 const searchSchema = Joi.object({
   q: Joi.string().min(2).max(100).required(),
   limit: Joi.number().integer().min(1).max(50).default(10),
-  category: Joi.string().valid('general', 'data', 'reports', 'documents').optional(),
   mimeType: Joi.string().optional()
 });
 

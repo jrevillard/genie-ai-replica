@@ -41,8 +41,12 @@ email_from: "noreply@genie-ai.itu.int"
 # =============================================================================
 vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct
 vllm_max_model_len: "16384"
+vllm_gpu_utilization: "0.35"
 vllm_translation_model_id: google/gemma-3-4b-it
 vllm_translation_max_model_len: "8192"
+vllm_translation_dtype: bfloat16
+vllm_translation_gpu_utilization: "0.35"
+vllm_translation_kv_cache_dtype: auto
 embedding_model_id: BAAI/bge-base-en-v1.5
 reranker_model_id: cross-encoder/ms-marco-MiniLM-L-6-v2
 chatqna_enforce_abstention: "false"

@@ -544,7 +544,7 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *       '404':
  *         description: File not found
  */
-router.delete('/:fileId', fileController.deleteFile);
+router.delete('/:fileId', authorizeRole(['Admin']), fileController.deleteFile);
 
 /**
  * @swagger
@@ -574,7 +574,7 @@ router.delete('/:fileId', fileController.deleteFile);
  *       '401':
  *         description: Unauthorized
  */
-router.delete('/', fileController.deleteMultipleFiles);
+router.delete('/', authorizeRole(['Admin']), fileController.deleteMultipleFiles);
 
 /**
  * @swagger

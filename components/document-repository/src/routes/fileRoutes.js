@@ -1,6 +1,6 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
-const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
+const { uploadSingle, uploadMultiple, validateFiles } = require('../middlewares/fileUpload');
 const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -47,7 +47,7 @@ router.use(authenticateToken);
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
+router.post('/upload', authorizeRole(['Admin']), uploadSingle, validateFiles, fileController.uploadFile);
 
 /**
  * @swagger
@@ -90,7 +90,7 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
+router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, validateFiles, fileController.uploadMultipleFiles);
 
 /**
  * @swagger

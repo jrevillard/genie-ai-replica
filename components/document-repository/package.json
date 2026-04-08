@@ -10,7 +10,9 @@
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
         "format": "prettier --write \"src/**/*.js\"",
-        "format:check": "prettier --check \"src/**/*.js\""
+        "format:check": "prettier --check \"src/**/*.js\"",
+        "lint": "eslint . --max-warnings 999",
+        "lint:fix": "eslint . --fix --max-warnings 999"
     },
     "keywords": [
         "document",
@@ -50,6 +52,9 @@
     },
     "devDependencies": {
         "@types/jest": "^29.5.8",
+        "eslint": "^8.57.1",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-prettier": "^5.5.5",
         "jest": "^29.7.0",
         "nodemon": "^3.0.1",
         "prettier": "^3.8.1",

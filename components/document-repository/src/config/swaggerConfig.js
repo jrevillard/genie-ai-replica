@@ -29,7 +29,10 @@ const swaggerOptions = {
       },
     ],
   },
-  apis: [path.join(__dirname, '../routes/fileRoutes.js')], // Path to the API docs
+  apis: [
+    path.join(__dirname, '../routes/fileRoutes.js'),
+    path.join(__dirname, '../routes/labelRoutes.js'),
+  ],
 };
 
 module.exports = swaggerOptions;

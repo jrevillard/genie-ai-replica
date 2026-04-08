@@ -12,6 +12,25 @@ const axios = require('axios');
 // Constants
 const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
 
+/**
+ * Sanitize a filename for use in Content-Disposition headers.
+ * Strips CRLF characters to prevent header injection and applies
+ * RFC 5987 encoding for non-ASCII characters.
+ * @param {string} filename
+ * @returns {string} Sanitized header value (e.g. `attachment; filename="..."; filename*=UTF-8''...`)
+ */
+function buildContentDisposition(disposition, filename) {
+  // Strip CRLF to prevent header injection
+  const sanitized = filename.replace(/[\r\n]/g, '');
+
+  const hasNonAscii = /[^\x00-\x7F]/.test(sanitized);
+  if (hasNonAscii) {
+    const encoded = encodeURIComponent(sanitized).replace(/['()]/g, escape);
+    return `${disposition}; filename="${sanitized}"; filename*=UTF-8''${encoded}`;
+  }
+  return `${disposition}; filename="${sanitized}"`;
+}
+
 // Schema for file upload validation
 const uploadSchema = Joi.object({
   author: Joi.string().max(200).optional(),
@@ -47,7 +66,7 @@ const getFilesSchema = Joi.object({
 });
 
 const updateFileSchema = Joi.object({
-  file_name: Joi.string().max(255).optional(),
+  file_name: Joi.string().max(255).pattern(/^[^\r\n]*$/).optional(),
   labels: Joi.array().items(Joi.string()).optional(),
   author: Joi.string().max(200).optional(),
   create_date: Joi.date().optional(),
@@ -480,7 +499,7 @@ class FileController {
       const { file, filePath } = await this._getFileAndPath(fileId);
 
       // Set appropriate headers, use file_name as the filename
-      res.setHeader('Content-Disposition', `attachment; filename="${file.file_name}"`);
+      res.setHeader('Content-Disposition', buildContentDisposition('attachment', file.file_name));
       res.setHeader('Content-Type', file.file_type);
 
       // Send file
@@ -599,7 +618,7 @@ class FileController {
       const { file, filePath } = await this._getFileAndPath(fileId);
 
       // Set appropriate headers for viewing in browser
-      res.setHeader('Content-Disposition', `inline; filename="${file.file_name}"`);
+      res.setHeader('Content-Disposition', buildContentDisposition('inline', file.file_name));
       res.setHeader('Content-Type', file.file_type);
 
       // Send file

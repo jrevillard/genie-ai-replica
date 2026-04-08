@@ -308,7 +308,12 @@
           - "{{ registry_port }}:5000"
         restart_policy: unless-stopped
         state: started
-      when: not registry_info.exists
+
+    - name: Wait for registry to be ready
+      ansible.builtin.wait_for:
+        host: localhost
+        port: "{{ registry_port }}"
+        timeout: 60
 
     - name: Verify registry is responding
       ansible.builtin.uri:
@@ -339,7 +344,46 @@
           {{ repo_url | regex_replace('^https://', 'https://' + git_username + ':' + git_token + '@') }}
       no_log: true
 
-    - name: Ensure deploy directory exists with correct ownership
+    - name: Check if git repository exists
+      ansible.builtin.stat:
+        path: "{{ deploy_dir }}/.git"
+      register: git_dir
+
+    - name: Remove stale deploy directory (exists but no .git)
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        state: absent
+      when: git_dir.stat is defined and not git_dir.stat.exists
+
+    - name: Clone or update project repository
+      become_user: root
+      block:
+        - name: Clone project repository
+          ansible.builtin.git:
+            repo: "{{ repo_url_with_credentials }}"
+            dest: "{{ deploy_dir }}"
+            version: "{{ repo_branch }}"
+            accept_hostkey: true
+            depth: 1
+          when: not git_dir.stat.exists
+
+        - name: Pull latest changes
+          ansible.builtin.git:
+            repo: "{{ repo_url_with_credentials }}"
+            dest: "{{ deploy_dir }}"
+            version: "{{ repo_branch }}"
+            force: true
+          when: git_dir.stat.exists
+
+        - name: Fix ownership to ansible_user
+          ansible.builtin.file:
+            path: "{{ deploy_dir }}"
+            owner: "{{ ansible_user }}"
+            group: "{{ ansible_user }}"
+            recurse: true
+
+    - name: Ensure deploy directories exist with correct ownership
       become_user: root
       block:
         - name: Create deploy directories
@@ -349,30 +393,7 @@
             owner: "{{ ansible_user }}"
             group: "{{ ansible_user }}"
           loop:
-            - "{{ deploy_dir }}"
             - "{{ deploy_dir }}/secrets/ssl"
-
-    - name: Check if project directory exists
-      ansible.builtin.stat:
-        path: "{{ deploy_dir }}/.git"
-      register: git_dir
-
-    - name: Clone project repository
-      ansible.builtin.git:
-        repo: "{{ repo_url_with_credentials }}"
-        dest: "{{ deploy_dir }}"
-        version: "{{ repo_branch }}"
-        accept_hostkey: true
-        depth: 1
-      when: not git_dir.stat.exists
-
-    - name: Pull latest changes
-      ansible.builtin.git:
-        repo: "{{ repo_url_with_credentials }}"
-        dest: "{{ deploy_dir }}"
-        version: "{{ repo_branch }}"
-        accept_hostkey: true
-      when: git_dir.stat.exists
 
     - name: Check if SSL certificate files exist
       ansible.builtin.stat:

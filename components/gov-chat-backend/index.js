@@ -492,7 +492,7 @@ try {
 }
 
 // --- CORS ---
-const allowlist = (process.env.CORS_ALLOWED_ORIGINS || '').split(',');
+const allowlist = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').concat(['https://agriconnect.site','https://www.agriconnect.site','http://agriconnect.site']);
 logger.debug('CORS allowlist configured:', { allowlist });
 console.log("allowlist:" + allowlist);
 

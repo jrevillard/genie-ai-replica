@@ -31,6 +31,14 @@ function buildContentDisposition(disposition, filename) {
   return `${disposition}; filename="${sanitized}"`;
 }
 
+// Maximum items allowed in batch fileIds operations
+const MAX_BATCH_SIZE = 50;
+
+// Schema for batch fileIds validation
+const batchFileIdsSchema = Joi.object({
+  fileIds: Joi.array().items(Joi.string().min(1)).min(1).max(MAX_BATCH_SIZE).required()
+});
+
 // Schema for file upload validation
 const uploadSchema = Joi.object({
   author: Joi.string().max(200).optional(),
@@ -525,14 +533,15 @@ class FileController {
 
   async downloadMultipleFiles(req, res) {
     try {
-    const { fileIds } = req.body;
-    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+    const { error, value } = batchFileIdsSchema.validate(req.body);
+    if (error) {
       return res.status(400).json({
         success: false,
-        error: 'No file IDs provided',
-        message: 'Please provide an array of file IDs to download'
+        error: 'Validation error',
+        message: error.details[0].message
       });
     }
+    const { fileIds } = value;
 
     // Set response headers for ZIP
     res.setHeader('Content-Type', 'application/zip');
@@ -696,14 +705,15 @@ class FileController {
    */
   async deleteMultipleFiles(req, res) {
     try {
-      const { fileIds } = req.body;
-      if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      const { error, value } = batchFileIdsSchema.validate(req.body);
+      if (error) {
         return res.status(400).json({
           success: false,
-          error: 'No file IDs provided',
-          message: 'Please provide an array of file IDs to delete'
+          error: 'Validation error',
+          message: error.details[0].message
         });
       }
+      const { fileIds } = value;
 
       const results = [];
       for (const fileId of fileIds) {
@@ -1034,10 +1044,11 @@ class FileController {
   // --- Multiple file ingest ---
   async ingestMultipleFiles(req, res) {
     try {
-      const { fileIds } = req.body;
-      if (!Array.isArray(fileIds) || fileIds.length === 0) {
-        return res.status(400).json({ success: false, error: 'No file IDs provided' });
+      const { error, value } = batchFileIdsSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
+      const { fileIds } = value;
       const results = [];
       for (const fileId of fileIds) {
         try {
@@ -1101,10 +1112,11 @@ class FileController {
   // --- Multiple file retract ---
   async retractMultipleFiles(req, res) {
     try {
-      const { fileIds } = req.body;
-      if (!Array.isArray(fileIds) || fileIds.length === 0) {
-        return res.status(400).json({ success: false, error: 'No file IDs provided' });
+      const { error, value } = batchFileIdsSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
+      const { fileIds } = value;
       const results = [];
       for (const fileId of fileIds) {
         try {

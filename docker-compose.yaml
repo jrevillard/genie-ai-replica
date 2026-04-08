@@ -730,6 +730,8 @@ services:
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH_TEST}
+      ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
@@ -774,8 +776,10 @@ services:
     environment:
       RETRIEVER_COMPONENT_NAME: GENIE_RETRIEVER_ARANGODB
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH_TEST}
-      VLLM_ENDPOINT: http://vllm:8000
       ARANGO_URL: http://arango-vector-db:8529
+      ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      VLLM_ENDPOINT: http://vllm:8000
       TEI_EMBEDDING_ENDPOINT: http://tei:80
       VLLM_API_KEY: ${VLLM_API_KEY:-}
     networks:

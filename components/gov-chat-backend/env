@@ -30,7 +30,7 @@ SESSION_SECRET=${SESSION_SECRET:-default-session-secret}
 SESSION_EXPIRATION_TIME=1800000  # 30 minutes in milliseconds
 
 # CORS Configuration
-CORS_ORIGIN=https://e2e-82-109.ssdcloudindia.net/  # Matches docker-compose.yaml
+CORS_ORIGIN=https://agriconnect.site
 
 # Email configuration
 EMAIL_HOST=smtp.itu.ch
@@ -61,7 +61,7 @@ OPEA_PORT=8000
 CONTEXT_OPTION=single-message
 
 #CORS configuration
-CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
+CORS_ALLOWED_ORIGINS=https://164.52.196.46,https://agriconnect.site,https://www.agriconnect.site
 CSP_CONNECT_SRC="'self' http://localhost:3000 http://localhost:8090 ws://localhost:8090 wss://*.ssdcloudindia.net *.ssdcloudindia.net https://api.open-meteo.com https://ipapi.co https://nominatim.openstreetmap.org wss://genie-ai.itu.int:443'"
 
 OPEA_PATH=/v1/chat/completions

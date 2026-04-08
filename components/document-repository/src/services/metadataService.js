@@ -9,7 +9,7 @@ const fs = require('fs').promises; // For async file operations
 const path = require('path');
 const mime = require('mime-types'); // For MIME type detection
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
-const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount, getFileHash } = require('../utils/fileUtils'); // Utility to ensure directory exists
+const { getFileHash } = require('../utils/fileUtils');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
 

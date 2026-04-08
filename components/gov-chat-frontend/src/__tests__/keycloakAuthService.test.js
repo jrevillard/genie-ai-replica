@@ -231,6 +231,30 @@ describe('keycloakAuthService', () => {
       consoleSpy.mockRestore();
     });
 
+    it('should pass id_token_hint to signoutRedirect for proper Keycloak session termination (L.3 fix)', async () => {
+      mockGetUser.mockResolvedValue(createMockUser({ id_token: 'my-id-token-abc' }));
+      mockRemoveUser.mockResolvedValue(undefined);
+      mockClearStaleState.mockResolvedValue(undefined);
+      mockSignoutRedirect.mockResolvedValue(undefined);
+      await keycloakAuthService.initialize();
+
+      await keycloakAuthService.logout();
+
+      expect(mockSignoutRedirect).toHaveBeenCalledWith({ id_token_hint: 'my-id-token-abc' });
+    });
+
+    it('should pass undefined id_token_hint when user has no id_token', async () => {
+      mockGetUser.mockResolvedValue(createMockUser());
+      mockRemoveUser.mockResolvedValue(undefined);
+      mockClearStaleState.mockResolvedValue(undefined);
+      mockSignoutRedirect.mockResolvedValue(undefined);
+      await keycloakAuthService.initialize();
+
+      await keycloakAuthService.logout();
+
+      expect(mockSignoutRedirect).toHaveBeenCalledWith({ id_token_hint: undefined });
+    });
+
     it('should remove event listeners on logout', async () => {
       mockGetUser.mockResolvedValue(createMockUser());
       mockRemoveUser.mockResolvedValue(undefined);

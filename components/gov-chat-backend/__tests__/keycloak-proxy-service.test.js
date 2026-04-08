@@ -229,7 +229,7 @@ describe('keycloak-proxy-service', () => {
       await keycloakProxyService.deleteUser('user-key');
 
       const updateAql = capturedAql[1];
-      expect(updateAql.query).toContain('UNSET { personalIdentification }');
+      expect(updateAql.query).toContain('personalIdentification: null');
     });
 
     it('should log "User erased" message (distinct from soft-delete)', async () => {
@@ -249,7 +249,7 @@ describe('keycloak-proxy-service', () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('User erased'), expect.any(Object));
     });
 
-    it('should handle double-erase gracefully (throws on already-deleted user)', async () => {
+    it('should handle double-erase gracefully (idempotent on 404)', async () => {
       keycloakProxyService._clearTokenCache();
       global.fetch = jest.fn()
         .mockResolvedValueOnce(mockTokenResponse())
@@ -265,7 +265,7 @@ describe('keycloak-proxy-service', () => {
       expect(db.query).toHaveBeenCalledTimes(2);
 
       // Second delete - Keycloak will return 404 (user already gone)
-      // This demonstrates that calling erase twice throws appropriately
+      // deleteUser() is idempotent: 404 is handled gracefully (no throw)
       keycloakProxyService._clearTokenCache();
       db.query = jest.fn();
       db.query.mockResolvedValueOnce(mockCursor('uuid-abc'));
@@ -275,8 +275,8 @@ describe('keycloak-proxy-service', () => {
         .mockResolvedValueOnce(mockTokenResponse())
         .mockResolvedValueOnce({ ok: false, status: 404, text: async () => 'Not found' });
 
-      // Keycloak 404 should throw with user not found error
-      await expect(keycloakProxyService.deleteUser('user-key')).rejects.toThrow('User not found in Keycloak');
+      // Keycloak 404 should NOT throw — erasure is idempotent
+      await expect(keycloakProxyService.deleteUser('user-key')).resolves.not.toThrow();
     });
 
     it('should throw partial erasure error if ArangoDB update fails after Keycloak delete', async () => {
@@ -316,18 +316,19 @@ describe('keycloak-proxy-service', () => {
   // Actual verification of markUserAsDeleted behavior is in user-provisioning-service.test.js
 
   describe('updateOwnProfile', () => {
-    it('should proxy profile update using user JWT', async () => {
-      global.fetch = jest.fn().mockResolvedValueOnce(mockOkResponse(200));
+    it('should proxy profile update via Admin API (service account)', async () => {
+      keycloakProxyService._clearTokenCache();
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce(mockTokenResponse())
+        .mockResolvedValueOnce(mockOkResponse(200));
 
-      await keycloakProxyService.updateOwnProfile('user-jwt-token', { email: 'new@test.com' });
+      setupDbForResolve('uuid-abc');
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/realms/genie/account'),
-        expect.objectContaining({
-          method: 'PUT',
-          headers: expect.objectContaining({ Authorization: 'Bearer user-jwt-token' })
-        })
-      );
+      await keycloakProxyService.updateOwnProfile('user-key', { email: 'new@test.com' });
+
+      const lastCall = global.fetch.mock.calls[global.fetch.mock.calls.length - 1];
+      expect(lastCall[0]).toContain('/admin/realms/genie/users/uuid-abc');
+      expect(lastCall[1].method).toBe('PUT');
     });
   });
 

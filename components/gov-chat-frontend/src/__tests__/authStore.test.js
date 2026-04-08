@@ -38,6 +38,7 @@ describe('Vuex auth module', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionStorage.removeItem('genie_post_logout');
     state = createAuthenticatedState();
     commit = jest.fn();
   });

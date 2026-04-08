@@ -68,6 +68,11 @@ function createCommit(state) {
 describe('Vuex Auth Module', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Clean up post_logout flag set by logout tests
+    sessionStorage.removeItem('genie_post_logout');
+    // Clean up legacy localStorage items set by logout tests
+    localStorage.removeItem('user');
+    localStorage.removeItem('auth_token');
   });
 
   describe('getters', () => {
@@ -324,6 +329,40 @@ describe('Vuex Auth Module', () => {
         expect(state.isAuthenticated).toBe(true);
       });
 
+      it('blocks session restore when post_logout flag is set (L.3 fix)', async () => {
+        sessionStorage.setItem('genie_post_logout', 'true');
+        mockInitialize.mockResolvedValue(createMockOidcUser());
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.initialize({ commit });
+
+        // initialize() is NOT called — early return when post_logout flag is set
+        expect(mockInitialize).not.toHaveBeenCalled();
+        // State should remain cleared
+        expect(state.isAuthenticated).toBe(false);
+        expect(state.user).toBeNull();
+        expect(state.isInitialized).toBe(true);
+        // Flag should NOT be consumed yet (consumed only on successful login/callback)
+        expect(sessionStorage.getItem('genie_post_logout')).toBe('true');
+      });
+
+      it('handleCallback consumes post_logout flag on successful login (L.3 fix)', async () => {
+        sessionStorage.setItem('genie_post_logout', 'true');
+        const mockUser = createMockOidcUser();
+        mockHandleCallback.mockResolvedValue(mockUser);
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.handleCallback({ commit });
+
+        // Should be authenticated (flag consumed by handleCallback)
+        expect(state.isAuthenticated).toBe(true);
+        expect(state.accessToken).toBe('mock-token');
+        // Flag should be consumed
+        expect(sessionStorage.getItem('genie_post_logout')).toBeNull();
+      });
+
       it('cleans up existing callback before registering new one on re-initialize', async () => {
         mockInitialize.mockResolvedValue(createMockOidcUser());
         const state = createState();
@@ -368,6 +407,17 @@ describe('Vuex Auth Module', () => {
           code: 'LOGIN_ERROR',
           message: 'Login redirect failed'
         });
+      });
+
+      it('clears post_logout flag on explicit login (L.3 fix)', async () => {
+        sessionStorage.setItem('genie_post_logout', 'true');
+        mockLogin.mockResolvedValue(undefined);
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.login({ commit });
+
+        expect(sessionStorage.getItem('genie_post_logout')).toBeNull();
       });
     });
 
@@ -483,12 +533,40 @@ describe('Vuex Auth Module', () => {
 
         // Initialize first (registers callback)
         await authModule.actions.initialize({ commit });
-        // Mock removeAccessTokenUpdatedCallback to return the registered callback
-        mockRemoveAccessTokenUpdatedCallback.mockImplementation(() => {});
+
+        // Capture the registered callback before logout clears it
+        const registeredCallback = mockOnAccessTokenUpdated.mock.calls[0][0];
 
         await authModule.actions.logout({ commit });
 
-        expect(mockRemoveAccessTokenUpdatedCallback).toHaveBeenCalledTimes(1);
+        expect(mockRemoveAccessTokenUpdatedCallback).toHaveBeenCalledWith(registeredCallback);
+      });
+
+      it('removes legacy localStorage items BEFORE Keycloak redirect (L.2 fix)', async () => {
+        mockLogout.mockResolvedValue(undefined);
+        const state = createState();
+        state.isAuthenticated = true;
+        const commit = createCommit(state);
+
+        // Pre-populate legacy localStorage items
+        localStorage.setItem('user', '{"email":"old@test.com"}');
+        localStorage.setItem('auth_token', 'old-token');
+
+        await authModule.actions.logout({ commit });
+
+        // localStorage must be cleared BEFORE signoutRedirect navigates away
+        expect(localStorage.getItem('user')).toBeNull();
+        expect(localStorage.getItem('auth_token')).toBeNull();
+      });
+
+      it('sets post_logout flag to prevent auto re-login (L.3 fix)', async () => {
+        mockLogout.mockResolvedValue(undefined);
+        const state = createState();
+        const commit = createCommit(state);
+
+        await authModule.actions.logout({ commit });
+
+        expect(sessionStorage.getItem('genie_post_logout')).toBe('true');
       });
     });
 

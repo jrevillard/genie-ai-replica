@@ -33,6 +33,7 @@ build/
 logs/
 *.log
 *.log.txt
+*-log.txt
 *.log.gz
 npm-debug.log*
 yarn-debug.log*

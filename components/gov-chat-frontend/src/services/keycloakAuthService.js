@@ -95,6 +95,10 @@ async function logout() {
   }
 
   const manager = getUserManager();
+  // Capture id_token before removeUser() clears stored user —
+  // signoutRedirect needs it as id_token_hint so Keycloak properly ends the session.
+  const user = await manager.getUser().catch(() => null);
+  const idToken = user?.id_token;
   try {
     await manager.removeUser();
   } catch (error) {
@@ -106,7 +110,7 @@ async function logout() {
     console.error('[KeycloakAuth] Error clearing stale state:', error.message);
   }
   try {
-    await manager.signoutRedirect();
+    await manager.signoutRedirect({ id_token_hint: idToken });
   } catch (error) {
     console.error('[KeycloakAuth] Error during logout redirect:', error.message);
   } finally {

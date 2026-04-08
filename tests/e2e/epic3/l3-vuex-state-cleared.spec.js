@@ -75,7 +75,7 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
   ).toBeTruthy();
 
   // Step 5: Click the logout button
-  const logoutButton = page.locator('button.logout-btn');
+  const logoutButton = page.getByRole('button', { name: 'Log out' });
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 

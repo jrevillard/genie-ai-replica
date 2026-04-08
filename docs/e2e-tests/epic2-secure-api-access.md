@@ -1175,13 +1175,19 @@ Note: The error code is `FORBIDDEN`, not `INSUFFICIENT_ROLES`. The frontend reco
 
 Scale Keycloak to 0 replicas. The backend should detect that Keycloak is unreachable and return `TOKEN_INVALID` with a "temporarily unavailable" message.
 
-```bash
-# Scale Keycloak to 0
-docker service scale genieai_keycloak=0
-echo "Waiting 5 seconds for Keycloak to stop..."
-sleep 5
+> **IMPORTANT**: The token must be obtained **before** scaling Keycloak down, and the scale-down + test must run in the **same shell** so the `$USER_TOKEN` variable is preserved.
 
-# Attempt authenticated request
+```bash
+# Step 1: Get a fresh token while Keycloak is still running
+USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Step 2: Scale Keycloak to 0 and test in the SAME shell
+docker service scale genieai_keycloak=0
+echo "Waiting 15 seconds for Keycloak to stop..."
+sleep 15
+
 curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq .
 ```
@@ -1189,7 +1195,7 @@ curl -sk "https://localhost/api/auth/me" \
 **Expected**: `HTTP: 401` with `{"error": "TOKEN_INVALID", "message": "..."}` — the message should indicate the service is temporarily unavailable (not `AUTH_SERVICE_UNAVAILABLE`, which is a frontend-only fallback code).
 
 ```bash
-# Restore Keycloak
+# Step 3: Restore Keycloak
 docker service scale genieai_keycloak=1
 echo "Waiting for Keycloak to recover (60-90 seconds)..."
 sleep 60

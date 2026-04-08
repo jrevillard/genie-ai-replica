@@ -77,10 +77,19 @@ const getters = {
 const actions = {
   /**
    * Initialize OIDC service and restore session if available.
+   * Blocks session restoration after intentional logout (genie_post_logout flag).
    * Registers callback for silent token renew updates.
    */
   async initialize({ commit }) {
     try {
+      // Honor intentional logout — block session restoration until user explicitly re-logs in.
+      // The flag is consumed by handleCallback/login on successful authentication.
+      if (sessionStorage.getItem('genie_post_logout')) {
+        commit('clearAuth');
+        commit('setInitialized');
+        return;
+      }
+
       const user = await keycloakAuthService.initialize();
 
       if (user && !user.expired) {
@@ -116,6 +125,8 @@ const actions = {
   async login({ commit }, options = {}) {
     try {
       commit('clearError');
+      // Explicit login — clear post_logout block
+      sessionStorage.removeItem('genie_post_logout');
       await keycloakAuthService.login(options);
     } catch (error) {
       console.error('[Auth Store] Login error:', error.message);
@@ -125,11 +136,14 @@ const actions = {
   },
 
   /**
-   * Process OIDC callback and set authenticated state
+   * Process OIDC callback and set authenticated state.
+   * Consumes the post_logout flag to allow session restoration on explicit re-login.
    */
   async handleCallback({ commit }) {
     try {
       commit('clearError');
+      // New successful login — clear post_logout block
+      sessionStorage.removeItem('genie_post_logout');
       const user = await keycloakAuthService.handleCallback();
 
       if (user) {
@@ -159,21 +173,23 @@ const actions = {
   async logout({ commit }) {
     try {
       commit('clearError');
+      // Clean up legacy localStorage BEFORE Keycloak redirect
+      // (signoutRedirect navigates away — code after it never executes)
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
+      // Mark session as intentionally terminated to prevent auto re-login
+      sessionStorage.setItem('genie_post_logout', 'true');
+      // Clean up silent renew callback before redirect
+      if (silentRenewCallback) {
+        keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
+        silentRenewCallback = null;
+      }
       await keycloakAuthService.logout();
       commit('clearAuth');
     } catch (error) {
       console.error('[Auth Store] Logout error:', error.message);
       // Always clear local state even if Keycloak redirect fails
       commit('clearAuth');
-    } finally {
-      // Clean up legacy localStorage items not managed by OIDC
-      localStorage.removeItem('user');
-      localStorage.removeItem('auth_token');
-      // Always clean up silent renew callback
-      if (silentRenewCallback) {
-        keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
-        silentRenewCallback = null;
-      }
     }
   },
 

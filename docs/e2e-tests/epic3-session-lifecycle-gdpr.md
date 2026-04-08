@@ -484,73 +484,19 @@ curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" 
 
 ## Phase N: GDPR Compliance (Story 3-7)
 
-Validates GDPR Article 17 compliance: soft-delete, right to erasure, data retention exceptions (Art 17.3.e), and idempotent operations.
+Validates GDPR Article 17 compliance: right to erasure, PII nullification, data retention exceptions (Art 17.3.e), and idempotent operations.
+
+> **Note**: Soft-delete, blocked access, and JIT reactivation are covered by Phase L (L.5, L.6) and Phase M (M.9). Phase N focuses exclusively on the GDPR erasure flow.
 
 **Prerequisite**: Phase M complete (`testuser` recreated and active).
 
-### Test N.1 — Soft-Delete User (Mark as Deleted, Preserve sub)
+### Test N.1 — GDPR Erasure (Delete User Completely)
 
 ```bash
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk -X POST "https://localhost/api/users/delete" \
-  -H "Authorization: Bearer $USER_TOKEN" | python3 -m json.tool
-```
-**Expected**: `{"success": true, ...}`
-
-```bash
-# Verify soft-deleted in ArangoDB (sub preserved)
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
-  arangosh --server.password arangopwd --javascript.execute-string "
-    db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
-    print('deleted: ' + u.deleted);
-    print('sub: ' + (u.sub || 'null'));
-    print('email: ' + (u.email || 'null'));
-  "
-```
-**Expected**: `deleted: true`, `sub` is preserved (not null), `email` preserved
-
-### Test N.2 — Soft-Deleted User Returns 403 on /api/auth/me
-
-```bash
-# Token still valid but user is deleted -> 403
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -m json.tool
-```
-**Expected**: HTTP 403 `{"error": "FORBIDDEN", "message": "User account is deactivated"}`
-
-### Test N.3 — Soft-Deleted User Can Be Reactivated via JIT
-
-```bash
-# Re-login triggers JIT reactivation (Story 3-6)
-USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
-import sys,json
-d = json.load(sys.stdin)
-print(f'success: {d[\"success\"]}')
-"
-```
-**Expected**: `success: true`
-
-```bash
-# Verify reactivated
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
-  arangosh --server.password arangopwd --javascript.execute-string "
-    db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
-    print('deleted: ' + u.deleted + ', active: ' + u.active);
-  "
-```
-**Expected**: `deleted: false`, `active: true`
-
-### Test N.4 — GDPR Erasure (Delete User Completely)
-
-```bash
 # Save user _key before erasure (email will be nullified)
 USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
@@ -566,7 +512,7 @@ curl -sk -X POST "https://localhost/api/users/delete" \
 ```
 **Expected**: `{"success": true, ...}`
 
-### Test N.5 — Erased User Has All PII Nullified in ArangoDB
+### Test N.2 — Erased User Has All PII Nullified in ArangoDB
 
 ```bash
 # Query by _key (email has been nullified, cannot use firstExample by email)
@@ -584,7 +530,7 @@ docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -
 ```
 **Expected**: `deleted: true`, `sub: null`, `email: null`, `name: null`, `iss_sub: null`, `iss: null` — all PII fields nullified
 
-### Test N.6 — Erased User Cannot Log In (Keycloak Returns 401)
+### Test N.3 — Erased User Cannot Log In (Keycloak Returns 401)
 
 ```bash
 curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
@@ -593,13 +539,9 @@ curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/to
 ```
 **Expected**: `{"error": "invalid_grant", "error_description": "Invalid user credentials"}`
 
-### Test N.7 — Erasure is Idempotent
+### Test N.4 — Erasure is Idempotent
 
 ```bash
-# Try to erase again (user already erased)
-# If $TOKEN has expired, re-run the "Get Admin Token" step from Phase 0
-# Recreate testuser to test idempotent erasure
-
 # Recreate testuser to test idempotent erasure
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $TOKEN" \
@@ -629,14 +571,14 @@ curl -sk -X POST "https://localhost/api/users/delete" \
 # Expected: 200 (no error — idempotent)
 ```
 
-### Test N.8 — Audit Log Entry for Erasure Event
+### Test N.5 — Audit Log Entry for Erasure Event
 
 ```bash
-docker service logs genieai_backend --since 60s 2>&1 | grep '"event":"delete"\|"event":"logout"' | tail -3
+docker service logs genieai_backend --since 60s 2>&1 | grep -i 'user erased\|account deleted' | tail -5
 ```
-**Expected**: Log entries containing erasure/deletion event with user identifier
+**Expected**: Log entries containing erasure event with user identifier (e.g. `[KeycloakProxy] User erased`, `[DELETE] Account deleted`)
 
-### Test N.9 — Cleanup: Recreate Test User
+### Test N.6 — Cleanup: Recreate Test User
 
 ```bash
 # Recreate testuser for subsequent test runs
@@ -691,15 +633,12 @@ curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" 
 | M.9 | JIT reactivation of soft-deleted user | | |
 | M.10 | Delete user account (Keycloak + ArangoDB) | | |
 | M.11 | Cleanup: recreate test user | | |
-| N.1 | Soft-delete (mark deleted, preserve sub) | | |
-| N.2 | Soft-deleted user returns 403 | | |
-| N.3 | Soft-deleted user reactivated via JIT | | |
-| N.4 | GDPR erasure (complete deletion) | | |
-| N.5 | Erased user PII nullified in ArangoDB | | |
-| N.6 | Erased user cannot log in | | |
-| N.7 | Erasure is idempotent | | |
-| N.8 | Audit log for erasure event | | |
-| N.9 | Cleanup: recreate test user | | |
+| N.1 | GDPR erasure (complete deletion) | | |
+| N.2 | Erased user PII nullified in ArangoDB | | |
+| N.3 | Erased user cannot log in | | |
+| N.4 | Erasure is idempotent | | |
+| N.5 | Audit log for erasure event | | |
+| N.6 | Cleanup: recreate test user | | |
 
 ## Full Test Run (Autonomous Execution)
 
@@ -708,7 +647,7 @@ To run the entire Epic 3 test suite, execute phases in order:
 ```
 Phase L  -> Session management (logout, session invalidation, user disable/delete)
 Phase M  -> Keycloak proxy & JIT updates (profile, roles, reactivation)
-Phase N  -> GDPR compliance (soft-delete, erasure, data retention)
+Phase N  -> GDPR compliance (erasure, PII nullification, idempotent operations)
 ```
 
 **Prerequisites**: Phase K cleanup completed, `$TOKEN` and `$USER_TOKEN` available.

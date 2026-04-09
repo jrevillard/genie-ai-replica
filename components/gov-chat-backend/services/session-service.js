@@ -23,6 +23,28 @@ class SessionService {
     }
     try {
       this.db = await dbService.getConnection('default');
+
+      // Ensure collections exist before referencing them
+      const existingCollections = (await this.db.listCollections()).map((c) => c.name);
+      const documentCollections = ['sessions', 'sessionQueries'];
+      const edgeCollections = ['userSessions'];
+
+      for (const name of documentCollections) {
+        if (!existingCollections.includes(name)) {
+          logger.info(`Creating ${name} collection...`);
+          await this.db.createCollection(name);
+          logger.info(`Created ${name} collection successfully`);
+        }
+      }
+
+      for (const name of edgeCollections) {
+        if (!existingCollections.includes(name)) {
+          logger.info(`Creating ${name} edge collection...`);
+          await this.db.createCollection(name, { type: 3 }); // 3 = edge collection
+          logger.info(`Created ${name} edge collection successfully`);
+        }
+      }
+
       this.sessions = this.db.collection('sessions');
       this.userSessions = this.db.collection('userSessions');
       this.sessionQueries = this.db.collection('sessionQueries');

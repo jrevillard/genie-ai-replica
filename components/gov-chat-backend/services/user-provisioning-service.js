@@ -1,7 +1,7 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 
 /**
  * User Provisioning Service — JIT user provisioning via ArangoDB UPSERT
@@ -18,6 +18,9 @@ const userProvisioningService = {
    * @throws {Error} On ArangoDB connection or query failure
    */
   async provisionUser(decodedToken) {
+    const db = await dbService.getConnection('default');
+    await ensureCollection(db, 'users');
+
     const issSub = decodedToken.iss_sub;
     if (!issSub) {
       throw new Error('Missing iss_sub in decoded token');
@@ -26,7 +29,6 @@ const userProvisioningService = {
     const now = new Date().toISOString();
 
     // Check if user exists and is soft-deleted before upserting
-    const db = await dbService.getConnection('default');
     const checkCursor = await db.query(
       aql`
         FOR u IN users

@@ -25,6 +25,17 @@ users:
     realmRoles:
       - admin
       - user
+  # Service account user for genie-proxy-client — assigns realm-management client roles
+  # keycloak-config-cli uses serviceAccountClientId to link this user entry to the client's service account
+  - username: service-account-genie-proxy-client
+    enabled: true
+    serviceAccountClientId: genie-proxy-client
+    clientRoles:
+      realm-management:
+        - query-users
+        - view-users
+        - manage-users
+        - view-realm
 
 # OIDC client configuration
 clients:
@@ -68,15 +79,3 @@ clients:
     implicitFlowEnabled: false
     serviceAccountsEnabled: true
     secret: $(env:KC_PROXY_CLIENT_SECRET)
-    defaultClientScopes:
-      - openid
-    optionalClientScopes:
-      - offline_access
-    # Assign realm-management client roles to restrict Admin API access
-    serviceAccountRoles:
-      client:
-        realm-management:
-          - query-users
-          - view-users
-          - manage-users
-          - manage-roles

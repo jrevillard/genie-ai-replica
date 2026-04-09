@@ -259,6 +259,17 @@ The `deploy` tag automatically verifies:
 
 If any running service has 0 replicas, the playbook fails. One-shot services (`kong-config`, `kong-migrations`) and intentionally disabled services (0/0 replicas) are excluded.
 
+### Variable Substitution and Resolved Compose File
+
+Docker Swarm (`docker stack deploy`) does **not** automatically load `.env` files like Docker Compose does. To ensure environment variables are correctly substituted:
+
+1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, POSTGRES_PASSWORD) are set in the `.env` file before deployment
+2. It generates a resolved `docker-compose.yaml` with all variables substituted using `docker compose config`
+3. The resolved file is deployed to the Swarm (overwriting the template from git)
+4. The resolved file is set to mode `0600` since it contains secrets
+
+This means `docker-compose.yaml` on the target server will differ from the one in git — this is expected. The original is restored on each `prepare` run via git clone/pull.
+
 ## Teardown
 
 ```bash

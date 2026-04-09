@@ -94,6 +94,14 @@ fi
 node "${SCRIPTS_DIR}/bootstrap.js" || fail "Bootstrap failed. Check ArangoDB connectivity and .env values."
 log "Bootstrap complete."
 
+# ── Step 3b: Seed knowledge hierarchy (service categories + services) ──────────
+log "Starting knowledge hierarchy setup (interactive)..."
+log "You will be prompted to define your service categories and services."
+log "These labels will appear in the file manager for tagging documents before ingestion."
+echo ""
+node "${SCRIPTS_DIR}/create-knowledge-hierarchy.js" || fail "Knowledge hierarchy setup failed."
+log "Knowledge hierarchy complete."
+
 # ── Step 4: Apply Kong configuration ─────────────────────────────────────────
 log "Applying Kong API Gateway configuration..."
 KONG_CONFIG_DIR="api-gateway-solution/new-config"

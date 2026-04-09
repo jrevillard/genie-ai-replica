@@ -25,7 +25,8 @@ vue_app_csp_connect_src: "'self' https://ai.assembly.govstack.global https://api
 # BACKEND
 # =============================================================================
 cors_allowed_origins: 'https://ai.assembly.govstack.global,http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/'
-csp_connect_src: "'self' https://ai.assembly.govstack.global http://localhost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+csp_connect_src: "'self' https://ai.assembly.govstack.global https://api.worldbank.org http://localhost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+nginx_permissions_policy: "camera=(), microphone=()"
 
 # =============================================================================
 # EMAIL (non-secret)

@@ -104,8 +104,14 @@ export KONG_HOST=${KONG_HOST:-localhost}
 export KONG_PORT=${KONG_PORT:-8001}
 export EXPRESS_API_HOST=${EXPRESS_API_HOST:-backend}
 export EXPRESS_API_PORT=${EXPRESS_API_PORT:-3000}
-export DOC_REPO_HOST=${DOC_REPO_HOST:-document-repository}
+export DOC_REPO_HOST=${DOC_REPO_HOST:-doc-repo-dev}
 export DOC_REPO_PORT=${DOC_REPO_PORT:-3001}
+
+# Load CORS origin from .env for injection into Kong template
+export CORS_ALLOWED_ORIGINS=$(grep -E '^CORS_ALLOWED_ORIGINS=' .env | cut -d= -f2 | tr -d '"' || echo "*")
+
+log "Generating Kong configuration from template..."
+envsubst < "${KONG_CONFIG_DIR}/kong_config.template.json" > "${KONG_CONFIG_DIR}/kong_config.json"
 
 chmod +x "${KONG_CONFIG_DIR}/manage-kong-config.sh"
 (cd "$KONG_CONFIG_DIR" && ./manage-kong-config.sh -a) \

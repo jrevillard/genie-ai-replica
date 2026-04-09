@@ -45,10 +45,10 @@ else
     # Non-interactive mode: apply defaults for any unset variables
     KONG_HOST=${KONG_HOST:-localhost}
     KONG_PORT=${KONG_PORT:-8001}
-    EXPRESS_API_HOST=${EXPRESS_API_HOST:-localhost}
-    EXPRESS_API_PORT=${EXPRESS_API_PORT:-3000}
-    DOC_REPO_HOST=${DOC_REPO_HOST:-localhost}
-    DOC_REPO_PORT=${DOC_REPO_PORT:-3001}
+    export EXPRESS_API_HOST=${EXPRESS_API_HOST:-backend}
+    export EXPRESS_API_PORT=${EXPRESS_API_PORT:-3000}
+    export DOC_REPO_HOST=${DOC_REPO_HOST:-doc-repo-dev}
+    export DOC_REPO_PORT=${DOC_REPO_PORT:-3001}
     echo "Running in non-interactive mode."
     echo "  Kong:               ${KONG_HOST}:${KONG_PORT}"
     echo "  express-api:        ${EXPRESS_API_HOST}:${EXPRESS_API_PORT}"
@@ -192,11 +192,7 @@ apply_config() {
         log "Processing service: $service_name"
         
         modified_service="$service"
-        if [ "$service_name" == "express-api" ]; then
-            modified_service=$(echo "$service" | jq --arg h "$EXPRESS_API_HOST" --argjson p "$EXPRESS_API_PORT" '.host = $h | .port = $p')
-        elif [ "$service_name" == "document-repository" ]; then
-            modified_service=$(echo "$service" | jq --arg h "$DOC_REPO_HOST" --argjson p "$DOC_REPO_PORT" '.host = $h | .port = $p')
-        fi
+        # Host/Port overrides are now handled via kong_config.template.json and envsubst
         
         payload=$(echo "$modified_service" | jq 'del(.id, .created_at, .updated_at)')
         
@@ -259,13 +255,7 @@ apply_config() {
         plugin_name=$(echo "$plugin" | jq -r '.name')
         payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at)')
         
-        # Inject dynamic CORS payload
-        if [ "$plugin_name" == "cors" ]; then
-            log "Injecting dynamic CORS_ALLOWED_ORIGINS '$CORS_ALLOWED_ORIGINS' into plugin 'cors'"
-            # Split comma-separated origins string into a valid JSON array or just insert string if not comma separated
-            origins_array=$(echo "[\"$CORS_ALLOWED_ORIGINS\"]")
-            payload=$(echo "$payload" | jq --argjson origins "$origins_array" '.config.origins = $origins')
-        fi
+        # CORS and dynamic payloads are now handled via kong_config.template.json and envsubst
         
         # Determine scope: service or global
         if jq -e '.service' <<< "$plugin" > /dev/null; then
@@ -325,11 +315,7 @@ apply_config() {
         fi
 
         final_target_address="$target_address"
-        # Override the target address if it belongs to the express-api upstream
-        if [ "$upstream_name" == "express-api-servers" ]; then
-            final_target_address="${EXPRESS_API_HOST}:${EXPRESS_API_PORT}"
-            log "Overriding target for upstream '$upstream_name' to '$final_target_address'"
-        fi
+        # Upstream target overrides are now handled via kong_config.template.json and envsubst
 
         # Clear existing targets for this upstream to ensure a clean state
         log "Clearing existing targets for upstream '$upstream_name'..."

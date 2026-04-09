@@ -643,39 +643,78 @@
       register: compose_validate
       changed_when: false
 
-    - name: Deploy Docker stack
+    - name: Verify critical environment variables in .env file
       ansible.builtin.shell: |
-        set -a
-        {% if gpu_env_file and gpu_env_file | length > 0 %}
-        while IFS= read -r line; do
-          [[ "$line" =~ ^# ]] && continue
-          [[ -z "$line" ]] && continue
-          key="${line%%=*}"; value="${line#*=}"
-          export "$key=$value"
-        done < {{ deploy_dir }}/{{ gpu_env_file }}
-        {% endif %}
-        while IFS= read -r line; do
-          [[ "$line" =~ ^# ]] && continue
-          [[ -z "$line" ]] && continue
-          key="${line%%=*}"; value="${line#*=}"
-          export "$key=$value"
-        done < {{ deploy_dir }}/.env
-        set +a
-        docker stack deploy -c {{ deploy_dir }}/{{ compose_file }} {{ stack_name }}
+        # Verify critical variables exist and are non-empty in .env
+        for var in ARANGO_PASSWORD JWT_SECRET SESSION_SECRET POSTGRES_PASSWORD; do
+          value=$(grep "^${var}=" {{ deploy_dir }}/.env | cut -d'=' -f2-)
+          if [ -z "$value" ]; then
+            echo "ERROR: $var is not set or empty in .env file!"
+            exit 1
+          fi
+          echo "✓ $var is set"
+        done
       args:
         executable: /bin/bash
         chdir: "{{ deploy_dir }}"
+
+    - name: Generate resolved docker-compose file with substituted variables
+      ansible.builtin.shell: |
+        # Generate resolved compose with docker compose, then fix port types
+        # (docker compose config converts port integers to strings, which
+        # docker stack deploy rejects — see docker/cli#1073)
+        docker compose \
+          {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
+          --env-file {{ deploy_dir }}/.env \
+          -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.yaml.tmp
+
+        # Fix port types: convert quoted port numbers to bare integers
+        sed -i 's/published: "\([0-9]*\)"/published: \1/g' {{ deploy_dir }}/docker-compose.yaml.tmp
+
+        # Remove 'name' properties not supported by docker stack deploy
+        sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.yaml.tmp
+
+        # Check if changed and atomically replace
+        if ! diff -q {{ deploy_dir }}/docker-compose.yaml.tmp {{ deploy_dir }}/docker-compose.yaml > /dev/null 2>&1; then
+          mv {{ deploy_dir }}/docker-compose.yaml.tmp {{ deploy_dir }}/docker-compose.yaml
+          echo "COMPOSE_CHANGED"
+        else
+          rm {{ deploy_dir }}/docker-compose.yaml.tmp
+          echo "COMPOSE_UNCHANGED"
+        fi
+      args:
+        executable: /bin/bash
+        chdir: "{{ deploy_dir }}"
+      register: resolved_compose
+      changed_when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
+
+    - name: Set permissions on resolved compose file (contains secrets)
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/docker-compose.yaml"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Deploy Docker stack
+      ansible.builtin.shell: |
+        docker stack deploy -c {{ deploy_dir }}/docker-compose.yaml {{ stack_name }}
+      args:
+        chdir: "{{ deploy_dir }}"
       register: stack_deploy
       changed_when: "'Creating' in stack_deploy.stderr or 'Updating' in stack_deploy.stderr"
+      when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
 
     - name: Stack deploy output
       ansible.builtin.debug:
         var: stack_deploy.stdout_lines
+      when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
 
 - name: GENIE.AI - Post-deploy verification
   hosts: swarm_managers
   tags: [deploy]
   become: true
+  vars:
+    _compose_changed: "{{ resolved_compose is skipped or 'COMPOSE_CHANGED' in resolved_compose.stdout }}"
   tasks:
     - name: Wait for services to stabilize
       ansible.builtin.command: docker service ls --filter label=com.docker.stack.namespace={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
@@ -684,15 +723,18 @@
       retries: "{{ (deploy_stabilization_timeout | int) // 10 }}"
       delay: 10
       changed_when: false
+      when: _compose_changed | bool
 
     - name: Show running services
       ansible.builtin.command: docker service ls
       register: services_output
       changed_when: false
+      when: _compose_changed | bool
 
     - name: Service list
       ansible.builtin.debug:
         var: services_output.stdout_lines
+      when: _compose_changed | bool
 
     - name: Verify all running services are healthy
       ansible.builtin.shell: >
@@ -710,6 +752,7 @@
       retries: "{{ (deploy_stabilization_timeout | int) // 30 }}"
       delay: 30
       changed_when: false
+      when: _compose_changed | bool
 
     - name: Smoke test - backend health
       ansible.builtin.uri:
@@ -721,6 +764,7 @@
       until: health_check.status == 200
       retries: 6
       delay: 15
+      when: _compose_changed | bool
 
     - name: Smoke test - frontend
       ansible.builtin.uri:
@@ -732,6 +776,7 @@
       until: frontend_check.status == 200
       retries: 3
       delay: 10
+      when: _compose_changed | bool
 
     - name: Deployment summary
       ansible.builtin.debug:
@@ -745,3 +790,13 @@
           Frontend: {{ frontend_check.status }}
           Access: https://{{ nginx_public_domain | default('localhost') }}/
           =============================================
+      when: _compose_changed | bool
+
+    - name: Skip deployment notice
+      ansible.builtin.debug:
+        msg: |
+          =============================================
+          GENIE.AI - No changes detected, skipping deployment.
+          =============================================
+      when: not (_compose_changed | bool)
+

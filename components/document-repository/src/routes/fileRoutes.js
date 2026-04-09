@@ -262,31 +262,6 @@ router.get('/search', fileController.searchMetadata);
 
 /**
  * @swagger
- * /api/files/{fileId}:
- *   get:
- *     summary: Get file metadata by ID
- *     tags: [Files]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: fileId
- *         required: true
- *         schema:
- *           type: string
- *         description: File ID
- *     responses:
- *       '200':
- *         description: File metadata
- *       '401':
- *         description: Unauthorized
- *       '404':
- *         description: File not found
- */
-router.get('/:fileId', fileController.getMetadata);
-
-/**
- * @swagger
  * /api/files/{fileId}/crawl-job:
  *   get:
  *     summary: Get the crawl job status for a file
@@ -311,6 +286,31 @@ router.get('/:fileId', fileController.getMetadata);
  *         description: Job not found
  */
 router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCrawlJob);
+
+/**
+ * @swagger
+ * /api/files/{fileId}:
+ *   get:
+ *     summary: Get file metadata by ID
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       '200':
+ *         description: File metadata
+ *       '401':
+ *         description: Unauthorized
+ *       '404':
+ *         description: File not found
+ */
+router.get('/:fileId', fileController.getMetadata);
 
 /**
  * @swagger

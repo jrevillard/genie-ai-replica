@@ -753,7 +753,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost:5000' || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 15s
       timeout: 10s
       retries: 10

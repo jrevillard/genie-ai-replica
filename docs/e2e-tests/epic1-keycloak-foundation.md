@@ -75,39 +75,16 @@ docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -
 # Expected: PASS
 ```
 
-### Test B.4 —Soft-Deleted User Returns 403
+### Test B.4 — REMOVED (Superseded by Epic 3)
 
-```bash
-# Find the user's ArangoDB _key (auto-generated, varies per deployment)
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
-  arangosh --server.password arangopwd --javascript.execute-string "
-    db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
-    print(u._key);
-  " 2>/dev/null | tail -1)
-
-echo "User _key: $USER_KEY"
-
-# Mark deleted
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
-  arangosh --server.password arangopwd --javascript.execute-string "
-    db._useDatabase('genie-ai'); db.users.update('${USER_KEY}', {deleted:true,active:false});
-  "
-
-# Test — should return 403
-TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $TOKEN"
-# Expected: {"error":"FORBIDDEN","message":"User account is deactivated"}
-
-# Restore (cleanup)
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
-  arangosh --server.password arangopwd --javascript.execute-string "
-    db._useDatabase('genie-ai'); db.users.update('${USER_KEY}', {deleted:false,active:true});
-  "
-echo "User restored."
-```
+> **This test has been removed.** The original test checked that soft-deleted users return 403, but Story 3.6 (JIT re-activation) changed the behavior: soft-deleted users with a valid Keycloak token are automatically re-activated on login.
+>
+> The test was also architecturally flawed: it manipulated ArangoDB directly without disabling the user in Keycloak, which allowed the user to still obtain a valid token.
+>
+> **Replacement tests in Epic 3:**
+> - **M.9** — JIT reactivation of soft-deleted user (correct flow: Keycloak disable → soft-delete → Keycloak re-enable → login → re-activation)
+> - **M.10** — Delete user account (Keycloak + ArangoDB)
+> - **N.1** — GDPR erasure (complete PII nullification, permanent)
 
 ---
 
@@ -495,7 +472,7 @@ docker service ls --filter label=com.docker.stack.namespace=genieai
 | B.1 | JIT provisioning via /api/auth/me | | |
 | B.2 | ArangoDB document created | | |
 | B.3 | UPSERT atomic (no duplicates) | | |
-| B.4 | Soft-deleted user -> 403 | | |
+| B.4 | ~~Soft-deleted user -> 403~~ | REMOVED | Superseded by M.9, M.10, N.1 (Story 3.6 changed behavior) |
 | C.1 | Malformed JWT -> TOKEN_INVALID | | |
 | C.2 | Not enough parts -> TOKEN_INVALID | | |
 | C.3 | No token -> TOKEN_INVALID | | |

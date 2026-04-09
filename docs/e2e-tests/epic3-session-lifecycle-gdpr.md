@@ -319,7 +319,7 @@ curl -sk -X PUT "https://localhost/api/users/some-other-user-key" \
   -H "Content-Type: application/json" \
   -d '{"firstName":"Hacked"}' -w "\nHTTP: %{http_code}\n"
 ```
-**Expected**: HTTP 403 `{"error": "FORBIDDEN", ...}`
+**Expected**: HTTP 403 `{"error": "FORBIDDEN", "message": "You can only update your own profile", "details": {}}`
 
 ### Test M.5 — Email Change via Admin Proxy
 

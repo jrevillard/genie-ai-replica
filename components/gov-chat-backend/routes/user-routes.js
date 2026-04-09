@@ -194,13 +194,13 @@ module.exports = (userService) => {
       }
 
       if (!req.user) {
-        return res.status(401).json({ error: 'Authentication required' });
+        return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required', details: {} });
       }
 
       // Self-service: verify the authenticated user matches the target user
       const authenticatedUserId = req.user._key;
       if (userId && userId !== authenticatedUserId) {
-        return res.status(403).json({ success: false, message: 'Cannot modify a different user' });
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Cannot modify a different user', details: {} });
       }
 
       // Proxy to Keycloak via service account
@@ -394,7 +394,7 @@ module.exports = (userService) => {
   router.post('/delete', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
       if (!req.user || !req.user._key) {
-        return res.status(401).json({ success: false, message: 'Authentication required' });
+        return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required', details: {} });
       }
 
       const userId = req.user._key;
@@ -499,7 +499,7 @@ module.exports = (userService) => {
       if (req.body.roles && Array.isArray(req.body.roles)) {
         const isAdmin = req.user && req.user.roles && req.user.roles.includes('admin');
         if (!isAdmin) {
-          return res.status(403).json({ success: false, message: 'Admin privileges required to update user roles' });
+          return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin privileges required to update user roles', details: {} });
         }
 
         await keycloakProxyService.assignRoles(targetUserId, req.body.roles);
@@ -512,7 +512,7 @@ module.exports = (userService) => {
       if (req.body.disabled !== undefined) {
         const isAdmin = req.user && req.user.roles && req.user.roles.includes('admin');
         if (!isAdmin) {
-          return res.status(403).json({ success: false, message: 'Admin privileges required to enable/disable users' });
+          return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin privileges required to enable/disable users', details: {} });
         }
 
         await keycloakProxyService.updateUser(targetUserId, { enabled: !req.body.disabled });
@@ -524,7 +524,7 @@ module.exports = (userService) => {
       // --- Self-service path: profile update ---
       // Enforce self-context: user can only update their own profile
       if (targetUserId !== req.user._key) {
-        return res.status(403).json({ success: false, message: 'You can only update your own profile' });
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'You can only update your own profile', details: {} });
       }
 
       // Reject admin-only fields in self-service context

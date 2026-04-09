@@ -404,7 +404,7 @@ class QueryService {
           }
 
           opeaPayload = {
-            messages: queryText,
+            messages: [{ role: 'user', content: queryText }],
             stream: false
           };
         } else {

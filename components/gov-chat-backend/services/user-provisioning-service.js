@@ -48,6 +48,7 @@ const userProvisioningService = {
       sub: decodedToken.sub,
       email: decodedToken.email || null,
       name: decodedToken.name || decodedToken.preferred_username || null,
+      emailVerified: decodedToken.email_verified || false,
       roles: decodedToken.realm_access?.roles || [],
       active: true,
       deleted: false,
@@ -58,6 +59,7 @@ const userProvisioningService = {
     const updateDoc = {
       email: decodedToken.email || null,
       name: decodedToken.name || decodedToken.preferred_username || null,
+      emailVerified: decodedToken.email_verified || false,
       roles: decodedToken.realm_access?.roles || [],
       updatedAt: now,
       ...(isReactivation ? { deleted: false, deletedAt: null, active: true } : {})

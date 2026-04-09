@@ -200,6 +200,7 @@ services:
       - KONG_PROXY_HOST=${KONG_PROXY_HOST:-kong}
       - NGINX_FRONTEND_HOST=${NGINX_FRONTEND_HOST:-frontend}
       - NGINX_FRONTEND_PORT=${NGINX_FRONTEND_PORT:-8090}
+      - NGINX_PERMISSIONS_POLICY=${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}
     secrets:
       - server_cert
       - server_key

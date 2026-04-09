@@ -156,7 +156,8 @@ Set in `group_vars/<env>/vars.yml`:
 | `registry_port` | `5000` | Local Docker registry port |
 | `vue_app_api_url` | `""` | Frontend API URL |
 | `vue_app_csp_connect_src` | `""` | Frontend CSP connect sources |
-| `csp_connect_src` | `""` | Backend CSP connect sources |
+| `csp_connect_src` | `""` | Nginx CSP connect sources |
+| `nginx_permissions_policy` | `camera=(), microphone=(), geolocation=()` | Nginx Permissions-Policy header |
 | `cors_allowed_origins` | `""` | CORS allowed origins |
 | `email_host` | `""` | SMTP server |
 | `email_port` | `587` | SMTP port |
@@ -265,10 +266,15 @@ Docker Swarm (`docker stack deploy`) does **not** automatically load `.env` file
 
 1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, POSTGRES_PASSWORD) are set in the `.env` file before deployment
 2. It generates a resolved `docker-compose.yaml` with all variables substituted using `docker compose config`
-3. The resolved file is deployed to the Swarm (overwriting the template from git)
-4. The resolved file is set to mode `0600` since it contains secrets
+3. Post-processing fixes known `docker compose config` issues:
+   - **Port integers**: `docker compose config` converts published ports to strings (e.g. `"80"` instead of `80`), which Swarm rejects. A `sed` fix restores them to integers.
+   - **`name:` properties**: `docker compose config` adds `name:` properties that Swarm does not support. A `sed` fix removes them.
+4. The resolved file is deployed to the Swarm (overwriting the template from git)
+5. The resolved file is set to mode `0600` since it contains secrets
 
 This means `docker-compose.yaml` on the target server will differ from the one in git — this is expected. The original is restored on each `prepare` run via git clone/pull.
+
+**Note on CSP values**: Variables containing CSP keywords like `'self'` must be quoted in the `.env` file (e.g. `CSP_CONNECT_SRC="'self' https://example.com"`). Without quotes, `docker compose config`'s YAML parser strips the single quotes, breaking the CSP directive. The Ansible template handles this automatically.
 
 ## Teardown
 

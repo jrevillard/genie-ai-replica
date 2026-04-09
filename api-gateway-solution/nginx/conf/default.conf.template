@@ -30,7 +30,7 @@ server {
     client_max_body_size 50m;
 
     # Permissions Policy (deployment-specific)
-    add_header Permissions-Policy "${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}" always;
+    add_header Permissions-Policy "${NGINX_PERMISSIONS_POLICY}" always;
 
     # Hide server info (server context — not allowed inside if blocks)
     proxy_hide_header X-Powered-By;

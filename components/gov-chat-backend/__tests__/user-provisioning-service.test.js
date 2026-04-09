@@ -16,7 +16,8 @@ jest.mock('../shared-lib', () => ({
   },
   dbService: {
     getConnection: (...args) => mockGetConnection(...args)
-  }
+  },
+  ensureCollection: jest.fn().mockResolvedValue({ name: 'users' })
 }), { virtual: true });
 
 // Mock arangojs aql template tag

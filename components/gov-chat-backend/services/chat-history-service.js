@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 const { NotFoundError, ForbiddenError } = require('../middleware/errors');
 
 //const initDB = dbService.getConnection();
@@ -33,24 +33,36 @@ class ChatHistoryService {
     }
     try {
       this.db = await this.dbService.getConnection();
+
+      // Ensure all collections exist before accessing them
+      await ensureCollection(this.db, 'conversations');
+      await ensureCollection(this.db, 'messages');
+      await ensureCollection(this.db, 'userConversations', { type: 3 });
+      await ensureCollection(this.db, 'conversationCategories', { type: 3 });
+      await ensureCollection(this.db, 'queryMessages');
+      await ensureCollection(this.db, 'conversationFiles');
+      await ensureCollection(this.db, 'folders');
+      await ensureCollection(this.db, 'userFolders', { type: 3 });
+      await ensureCollection(this.db, 'folderConversations', { type: 3 });
+
       this.conversations = this.db.collection('conversations');
       this.messages = this.db.collection('messages');
       this.userConversations = this.db.collection('userConversations');
       this.conversationCategories = this.db.collection('conversationCategories');
       this.queryMessages = this.db.collection('queryMessages');
-      
-      // Initialize conversationFiles as a standard Document collection
+
+      // conversationFiles collection with index for fast lookups by conversationId
       this.conversationFiles = this.db.collection('conversationFiles');
-      if (!(await this.conversationFiles.exists())) {
-        await this.conversationFiles.create({ type: 2 }); // 2 = Document collection
-        logger.info('Created conversationFiles document collection');
-        
-        // Create an index for fast lookups by conversationId
+      try {
         await this.conversationFiles.ensureIndex({
           type: 'persistent',
           fields: ['conversationId']
         });
-        logger.info('Created index on conversationFiles.conversationId');
+      } catch (err) {
+        // Index may already exist; ignore duplicate index errors
+        if (err.errorNum !== 1212) {
+          logger.warn(`Could not create conversationFiles index: ${err.message}`);
+        }
       }
 
       this.initialized = true;

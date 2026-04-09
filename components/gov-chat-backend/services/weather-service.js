@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { Database, aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 
 class WeatherService {
   constructor() {
@@ -41,6 +41,7 @@ class WeatherService {
       logger.info('WeatherService.server_location_set', { serverLocation: this.serverLocation });
 
       this.db = await this.dbService.getConnection('default');
+      await ensureCollection(this.db, 'weatherRequests');
       this.weatherRequests = this.db.collection('weatherRequests');
       this.initialized = true;
       logger.info('WeatherService initialized successfully');

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 const ServiceCategoryService = require('../services/service-category-service');
 
 class AnalyticsService {
@@ -26,6 +26,15 @@ class AnalyticsService {
     }
     try {
       this.db = await this.dbService.getConnection('default');
+
+      // Ensure all collections exist before accessing them
+      await ensureCollection(this.db, 'analytics');
+      await ensureCollection(this.db, 'events');
+      await ensureCollection(this.db, 'queries');
+      await ensureCollection(this.db, 'users');
+      await ensureCollection(this.db, 'sessions');
+      await ensureCollection(this.db, 'serviceCategories');
+
       this.analytics = this.db.collection('analytics');
       this.events = this.db.collection('events');
       this.queriesCollection = this.db.collection('queries');
@@ -34,7 +43,6 @@ class AnalyticsService {
       this.serviceCategoriesCollection = this.db.collection('serviceCategories');
 
       logger.info('Initializing AnalyticsService...');
-      await this.initialize();
       
       // Initialize ServiceCategoryService
       logger.info('Initializing ServiceCategoryService from AnalyticsService...');
@@ -46,42 +54,6 @@ class AnalyticsService {
     } catch (error) {
       logger.error(`Error initializing AnalyticsService: ${error.message}`, { stack: error.stack });
       throw error;
-    }
-  }
-
-  /**
-   * Initialize collections if they don't exist
-   * @returns {Promise<void>}
-   */
-  async initialize() {
-    try {
-      const collections = await this.db.listCollections();
-      const collectionNames = collections.map(c => c.name);
-
-      const ensureCollection = async (name) => {
-        if (!collectionNames.includes(name)) {
-          logger.info(`Creating ${name} collection...`);
-          try {
-            await this.db.createCollection(name);
-            logger.info(`Created ${name} collection successfully`);
-          } catch (err) {
-            if (err.errorNum !== 1207) {
-              throw err;
-            }
-            logger.warn(`Collection ${name} already exists, skipping creation`);
-          }
-        }
-      };
-
-      await ensureCollection('analytics');
-      await ensureCollection('events');
-
-      this.analytics = this.db.collection('analytics');
-      this.events = this.db.collection('events');
-
-      logger.info('Collections initialized successfully');
-    } catch (error) {
-      logger.error(`Error initializing collections: ${error.message}`, { stack: error.stack });
     }
   }
 
@@ -153,7 +125,7 @@ class AnalyticsService {
    */
   async trackEvent(userId, eventType, eventData = {}) {
     try {
-      await this.initialize();
+      await this.init();
 
       const eventDoc = {
         userId,

@@ -2,7 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
@@ -31,6 +31,10 @@ class QueryService {
     }
     try {
       this.db = await this.dbService.getConnection('default');
+      await ensureCollection(this.db, 'queries');
+      await ensureCollection(this.db, 'serviceCategories');
+      await ensureCollection(this.db, 'services');
+      await ensureCollection(this.db, 'queryCategories', { type: 3 });
       this.queries = this.db.collection('queries');
       this.serviceCategories = this.db.collection('serviceCategories');
       this.services = this.db.collection('services');

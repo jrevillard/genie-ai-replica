@@ -87,7 +87,7 @@ server {
         add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
 
         # --- Proxy settings to KONG ---
-        proxy_pass http://kong:8000/api/;
+        proxy_pass http://kong:8000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';

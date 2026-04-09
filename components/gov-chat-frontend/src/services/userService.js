@@ -111,6 +111,26 @@ class UserService {
     localStorage.removeItem(this.tokenKey)
   }
 
+  /**
+   * Reset user profile data while preserving essential account information
+   * @returns {Promise} Promise with reset operation result
+   */
+  async resetUserData() {
+    try {
+      console.log('Calling reset user data endpoint')
+      const response = await httpService.post(`${this.userEndpoint}/reset-data`)
+
+      if (response.data && response.data.success) {
+        await this.refreshUserData()
+      }
+
+      return response.data
+    } catch (error) {
+      console.error('Error resetting user data:', error)
+      throw error
+    }
+  }
+
   // ===== EXISTING USER METHODS =====
 
   /**
@@ -164,6 +184,51 @@ class UserService {
   }
 
   /**
+   * Update user account settings
+   * @param {Object} settings - Account settings to update
+   * @returns {Promise} Updated account settings
+   */
+  async updateAccountSettings(settings) {
+    try {
+      const response = await httpService.put('users/settings', settings)
+      return response.data
+    } catch (error) {
+      console.error('Error updating account settings:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Verify user's email address
+   * @param {string} token - Email verification token
+   * @returns {Promise} Verification result
+   */
+  async verifyEmail(token) {
+    try {
+      const response = await httpService.post('users/verify-email', { token })
+      return response.data
+    } catch (error) {
+      console.error('Error verifying email:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Resend email verification link
+   * @param {string} email - User's email address
+   * @returns {Promise} Operation result
+   */
+  async resendVerificationEmail(email) {
+    try {
+      const response = await httpService.post('users/resend-verification', { email })
+      return response.data
+    } catch (error) {
+      console.error('Error resending verification email:', error)
+      throw error
+    }
+  }
+
+  /**
    * Update user's email address
    * @param {string} newEmail - New email address
    * @param {string} userId - User ID for authentication
@@ -179,6 +244,38 @@ class UserService {
       return response.data
     } catch (error) {
       console.error('Error updating email:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user account activity log
+   * @param {Number} page - Page number (starting from 1)
+   * @param {Number} limit - Results per page
+   * @returns {Promise} User activity log with pagination
+   */
+  async getActivityLog(page = 1, limit = 20) {
+    try {
+      const response = await httpService.get('users/activity', {
+        params: { page, limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching activity log:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user's account status
+   * @returns {Promise} Account status information
+   */
+  async getAccountStatus() {
+    try {
+      const response = await httpService.get('users/status')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching account status:', error)
       throw error
     }
   }

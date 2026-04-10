@@ -36,6 +36,7 @@ ansible-vault create group_vars/my-env/vault.yml
 # 6. Place SSL certificates (or set self_signed_certs: true)
 mkdir -p files/certificates/my-env
 cp server.crt server.key files/certificates/my-env/
+# Alternatively: enable Let's Encrypt in vars.yml (see Let's Encrypt section below)
 
 # 7. Deploy
 ansible-playbook -i inventory/my-env.ini deploy.yml --vault-id my-env@prompt
@@ -76,7 +77,7 @@ cp group_vars/itu_rtx_test/vars.yml group_vars/staging/vars.yml
 ansible-vault create group_vars/staging/vault.yml
 # Fill in all required secrets (see below)
 
-# 4. Place SSL certificates
+# 4. Place SSL certificates (or enable Let's Encrypt in vars.yml)
 mkdir -p files/certificates/staging
 cp server.crt server.key files/certificates/staging/
 
@@ -285,6 +286,34 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `label_selector_system_prompt` | (built-in) | System prompt for automatic document labeling (optional, has built-in default with `{labels_list}` placeholder) |
+
+### Let's Encrypt Certificate Management (optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `certbot_email` | — | Email for Let's Encrypt notifications (required to enable) |
+| `certbot_replicas` | `0` | Set to `1` to deploy the certbot service (Swarm activation) |
+| `certbot_staging` | `false` | Use Let's Encrypt staging server (avoids rate limits) |
+
+To enable automatic SSL certificates via Let's Encrypt, set `certbot_email` and `certbot_replicas: "1"` in `group_vars/<env>/vars.yml`:
+
+```yaml
+certbot_email: "admin@example.com"
+certbot_replicas: "1"
+```
+
+When enabled:
+1. The certbot service starts alongside the stack (on the gateway node)
+2. It obtains a Let's Encrypt certificate for `nginx_public_domain` via HTTP-01 challenge
+3. Certificates are written to `secrets/ssl/server.crt` and `server.key` (replacing self-signed or manual certs)
+4. Automatic renewal runs every 12 hours with nginx reload
+
+**Requirements:**
+- Port 80 must be accessible from the internet (for HTTP-01 challenge)
+- `nginx_public_domain` must be a valid FQDN with DNS A/AAAA record pointing to the server
+- First-time setup: set `certbot_staging: "true"` to test without hitting Let's Encrypt rate limits
+
+**Note:** When Let's Encrypt is enabled, the `self_signed_certs` setting still applies as an initial fallback — Ansible generates self-signed certs during `prepare`, then certbot replaces them after deployment.
 
 ### Docker Swarm Multi-Node
 

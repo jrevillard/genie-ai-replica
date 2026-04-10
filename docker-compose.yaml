@@ -594,7 +594,7 @@ services:
       retries: 10
       start_period: 120s
     deploy:
-      replicas: ${DEPLOY_OPEA:-1}
+      replicas: 0
       placement:
         constraints:
           - node.labels.gpu == true
@@ -867,7 +867,7 @@ services:
         delay: 10s
         max_attempts: 30
 
-  # OPEA UI/Nginx - disabled by default (replicas: 0).
+  # OPEA UI/Nginx/Guardrail - disabled by default (replicas: 0).
   # Activate for OPEA debugging by changing replicas to 1.
   chatqna-xeon-ui-server:
     image: opea/chatqna-ui:latest

@@ -12,7 +12,7 @@
 #
 # Configuration Priority:
 #   1. Environment variables in .env (highest priority - overrides all)
-#   2. Docker secrets (for sensitive files like SSL certificates, prompts)
+#   2. Volume-mounted files (for SSL certificates, prompts)
 #   3. Default values in code/docker-compose
 #   4. Default values in application code (lowest priority)
 #

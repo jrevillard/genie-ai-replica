@@ -29,15 +29,17 @@ Then edit `.env` files with your local values (passwords, API keys, etc.).
 ## Docker Compose
 Services read variables either via `env_file` in `docker-compose.yaml` or via system environment variables.
 
-**IMPORTANT:** Always specify the file explicitly when working in `components/`:
+**IMPORTANT:** Use the root `docker-compose.yaml` for all operations:
 
 ```bash
-# CORRECT
-docker compose -f components/docker-compose.yaml build
-docker compose -f components/docker-compose.yaml up -d
+# Core services only
+docker compose up -d
 
-# AVOID (risk of conflict with root file)
-cd components && docker compose build
+# Full stack with OPEA
+docker compose --profile opea up -d
+
+# Rebuild a specific service
+docker compose build [service_name]
 ```
 
 ## NEVER commit

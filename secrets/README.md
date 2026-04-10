@@ -43,4 +43,4 @@ Use proper certificates from:
 
 ## Cloud-Native Deployment
 
-These files are mounted as Docker secrets in `docker-compose.yaml`, ensuring consistent behavior across all environments (Compose, Swarm, Kubernetes).
+These files are mounted as volumes in `docker-compose.yaml`. The nginx entrypoint loads them from `/etc/nginx/ssl/` at startup. If no certificates are found, self-signed certificates are auto-generated for development.

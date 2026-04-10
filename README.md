@@ -111,7 +111,7 @@ GENIE.AI/
 ├── GENIE.AI-Data-Labelling-Strategy.md           # Data labeling strategy
 ├── UNICC-ITU-Genie-AI Code Management Process.md # Development workflow
 ├── proposed-repo-structure-changes.md            # Repository architecture
-├── docker-compose.yaml          # Main Docker Compose configuration
+├── docker-compose.yaml          # Dual-mode Docker Compose (compose up + Swarm)
 ├── docker-compose-t4.yaml       # T4 GPU variant configuration
 ├── docker-compose-RTX6000-ADA.yaml # RTX 6000 ADA GPU variant
 ├── env                          # Environment configuration (main)
@@ -135,19 +135,21 @@ git clone https://github.com/your-org/GENIE.AI.git
 cd GENIE.AI
 ```
 
-### 2. Start OPEA Infrastructure
+### 2. Configure Environment
 
 ```bash
-cd configs/opea-config
-export HUGGING_FACE_HUB_TOKEN=your_token_here
-docker-compose up -d
+cp env .env
+# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
 ```
 
-### 3. Deploy GENIE.AI Services
+### 3. Start Services
 
 ```bash
-cd ../../components
-docker-compose up -d
+# Core services only
+docker compose up -d
+
+# Full stack with OPEA/AI services
+docker compose --profile opea up -d
 ```
 
 ### 4. Access Applications
@@ -251,24 +253,13 @@ GENIE.AI is built on a microservices architecture with the following layers:
 
 2. **Configure Environment**:
    ```bash
-   # Create .env files for each component
-   cp components/gov-chat-backend/.env.example components/gov-chat-backend/.env
+   cp env .env
    # Edit .env with your configuration
    ```
 
 3. **Start Services**:
    ```bash
-   # Start OPEA services first
-   cd configs/opea-config
-   docker-compose up -d
-
-   # Start backend
-   cd ../../components/gov-chat-backend
-   npm start
-
-   # Start frontend
-   cd ../gov-chat-frontend
-   npm run serve
+   docker compose up -d
    ```
 
 ### Testing
@@ -302,10 +293,12 @@ docker compose up -d
 docker compose --env-file .env --env-file env.t4 up -d
 ```
 
-**Option 2 - GENIE.AI only** (local development):
+**Option 2 - GENIE.AI only** (frontend, backend, arango, redis, doc-repo):
 ```bash
-cd components
-docker compose --env-file ../.env up -d
+docker compose up -d
+
+# Full stack including OPEA/AI services
+docker compose --profile opea up -d
 ```
 
 ### Kubernetes Deployment

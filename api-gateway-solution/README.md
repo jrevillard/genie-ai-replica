@@ -62,7 +62,7 @@ docker compose up -d
   - Ports: `80` (HTTP redirect), `443` (HTTPS).
   - Environment: `NGINX_PUBLIC_DOMAIN`, `CSP_CONNECT_SRC`, `KONG_PROXY_HOST`, `NGINX_FRONTEND_HOST`, `NGINX_FRONTEND_PORT`.
   - Volumes: `./nginx/conf` for templates, `./nginx/entrypoint.sh` for container startup.
-  - Secrets: `server_cert`, `server_key` for SSL (auto-generated in dev if not provided).
+  - SSL: Volume-mounted from `./secrets/ssl/server.crt` and `server.key` (auto-generated self-signed in dev if not provided).
   - Depends on: `kong`.
 
 ### Networks and Volumes
@@ -98,7 +98,7 @@ docker compose up -d
 5. **Configuration Notes**:
    - Customize environment variables in `.env` (see `env` template, Section 7).
    - NGINX renders `default.conf.template` at container startup via `envsubst`.
-   - SSL certs: auto-generated self-signed in development; use Docker secrets for production.
+   - SSL certs: auto-generated self-signed in development; use volume-mounted certificates for production (place in `./secrets/ssl/`).
 
 6. **Troubleshooting**:
    - Check dependencies: Use `docker compose ps` to verify service status.
@@ -168,31 +168,24 @@ This script is a standalone interactive utility for managing Kong configurations
 
 NGINX handles external traffic, enforces security, and routes requests. Config files: `default.conf.template` (source of truth, rendered to `default.conf` at container start) and `security-headers.conf` (shared headers).
 
-### SSL Certificates (Cloud-Native with Docker Secrets)
+### SSL Certificates (Volume-Mounted)
 
-**IMPORTANT**: SSL certificates use Docker secrets for cloud-native deployment.
+**IMPORTANT**: SSL certificates are volume-mounted from `./secrets/ssl/` into the container.
 
 #### Development (Self-Signed)
 
-The nginx container automatically generates self-signed certificates on startup if no Docker secrets are provided. No manual setup required.
+The nginx container automatically generates self-signed certificates on startup if no certificates are found at `./secrets/ssl/`. No manual setup required.
 
-#### Production (Docker Secrets)
+#### Production (Volume Mounts)
 
-For production, provide SSL certificates via Docker secrets:
+For production, place SSL certificates in `./secrets/ssl/`:
 
-```yaml
-secrets:
-  server_cert:
-    file: /path/to/production/certs/server.crt
-  server_key:
-    file: /path/to/production/certs/server.key
-```
-
-Or use Docker Swarm secrets:
 ```bash
-echo "certificate-content" | docker secret create server_cert -
-echo "private-key-content" | docker secret create server_key -
+cp /path/to/production/certs/server.crt ./secrets/ssl/
+cp /path/to/production/certs/server.key ./secrets/ssl/
 ```
+
+The nginx entrypoint loads these files from `/etc/nginx/ssl/` inside the container and copies them to `/etc/nginx/certs/` for nginx to use.
 
 #### Certificate Sources:
 - Let's Encrypt (certbot)
@@ -203,13 +196,13 @@ echo "private-key-content" | docker secret create server_key -
 
 1. Place `default.conf.template` in `/etc/nginx/conf.d/` (or include it in `nginx.conf`).
 2. Place `security-headers.conf` in `/etc/nginx/conf.d/`.
-3. SSL certs are provided via Docker secrets (auto-generated in development).
+3. SSL certs are provided via volume mounts from `./secrets/ssl/` (auto-generated in development).
 4. Reload NGINX: `nginx -s reload`.
 
 ### Key Configuration Details
 
 - **HTTP to HTTPS Redirect**: All HTTP (port 80) redirects to HTTPS (port 443).
-- **SSL/TLS**: Uses modern ciphers, session caching, and Docker secrets (auto-generated in development if not provided).
+- **SSL/TLS**: Uses modern ciphers, session caching, and volume-mounted certificates (auto-generated in development if not provided).
 - **Security Headers**: Included via `security-headers.conf`:
   - X-Content-Type-Options, X-Frame-Options, X-XSS-Protection.
   - Strict-Transport-Security (HSTS with preload).

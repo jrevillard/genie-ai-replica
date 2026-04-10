@@ -73,23 +73,22 @@ docker compose --env-file .env --env-file env.t4 up -d
 docker compose --env-file .env --env-file env.rtx6000 up -d
 ```
 
-**Option 2 - GENIE.AI only** (frontend, backend, arango, redis):
+**Option 2 - GENIE.AI only** (frontend, backend, arango, redis, doc-repo):
 ```bash
-# From project root:
-docker compose --env-file .env -f components/docker-compose.yaml up -d
+# Core services only (no OPEA/AI services)
+docker compose up -d
 
-# OR from components/ directory:
-cd components
-docker compose --env-file ../.env up -d
+# Full stack including OPEA/AI services
+docker compose --profile opea up -d
 ```
 
 **Important notes:**
 - All images must be pre-built and pushed to a registry before deploying (`docker stack deploy` cannot build)
-- `depends_on` removed; services use healthchecks + Swarm restart policy for startup ordering
+- `depends_on` provides startup ordering for `docker compose up`; Swarm ignores it and uses healthchecks + restart policy
 - Node labels control service placement (`gateway=true` for API gateway, `gpu=true` for OPEA/GPU services, `genieai=true` for GENIE.AI core services)
 - Only nginx ports (80, 443) are exposed; all other services are internal
 - Kong config is applied via `kong-config` one-shot Swarm service (auto-runs after deploy)
-- To skip OPEA services: set `DEPLOY_OPEA=0` in `.env`
+- To skip OPEA services in Swarm: set `DEPLOY_OPEA=0` in `.env`; in compose up: simply omit `--profile opea`
 - See `env` template Section 12 for multi-node variable overrides
 
 ### Docker Commands
@@ -252,12 +251,15 @@ To change built-in defaults, edit the Python code:
 
 ## Docker Compose Structure
 
-### Project Docker Compose Files
+### Project Docker Compose File
 
-| File | Scope | Contains | Use Case |
-|------|-------|----------|----------|
-| `docker-compose.yaml` (root) | **Full stack** | OPEA + GENIE.AI + API Gateway | Complete deployment (use `--env-file env.t4` or `env.rtx6000` for GPU) |
-| `components/docker-compose.yaml` | **GENIE.AI only** | frontend, backend, arango, redis, doc-repo | Local development without OPEA |
+| File | Scope | Use Case |
+|------|-------|----------|
+| `docker-compose.yaml` (root) | **Dual-mode** | Single compose file for both `docker compose up` and `docker stack deploy` |
+
+The compose file supports two deployment modes:
+- **Single-node**: `docker compose up -d` (core services) or `docker compose --profile opea up -d` (full stack)
+- **Docker Swarm**: `docker stack deploy` with Ansible (full stack, OPEA controlled by `DEPLOY_OPEA` env var)
 
 **GPU Configuration**: Use GPU-specific env files with your .env:
 ```bash
@@ -270,8 +272,8 @@ docker compose --env-file .env --env-file env.rtx6000 up -d   # RTX 6000 ADA (24
 All services are defined in the root `docker-compose.yaml` with cloud-native configuration:
 
 ```
-docker-compose.yaml (root - single source of truth)
-├── Layer 1: OPEA AI/ML Infrastructure
+docker-compose.yaml (root - single source of truth, dual-mode)
+├── Layer 1: OPEA AI/ML Infrastructure (profiles: [opea])
 │   ├── vLLM (LLM inference)
 │   ├── TEI (embeddings/reranking)
 │   ├── Retriever
@@ -286,23 +288,19 @@ docker-compose.yaml (root - single source of truth)
 └── Layer 3: API Gateway
     ├── Kong
     └── NGINX
-
-components/docker-compose.yaml (development subset)
-└── Layer 2 only: GENIE.AI Services (for local dev)
 ```
 
 ### Usage
 
 ```bash
-# Full production deployment
+# Core services only (local development)
 docker compose up -d
 
-# With GPU-specific configuration
-docker compose --env-file .env --env-file env.t4 up -d
+# Full stack with OPEA/AI services
+docker compose --profile opea up -d
 
-# GENIE.AI only (local development)
-cd components
-docker compose --env-file ../.env up -d
+# With GPU-specific configuration
+docker compose --env-file .env --env-file env.t4 --profile opea up -d
 ```
 
 ## Database Schema (ArangoDB)

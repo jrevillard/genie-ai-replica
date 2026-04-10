@@ -1,36 +1,35 @@
 # =============================================================================
-# GENIE.AI - Docker Swarm Compose File
+# GENIE.AI - Docker Compose File (dual-mode: compose up + Swarm)
 # =============================================================================
 #
-# The single compose file for all GENIE.AI deployments (single-node or
-# multi-node Docker Swarm).
+# This single compose file supports two deployment modes:
 #
-# Key Swarm-specific characteristics:
-#   - No depends_on (Swarm ignores them; healthchecks + restart_policy handle ordering)
-#   - No container_name (Swarm generates names automatically)
-#   - No ipc: "host" or shm_size (not supported by docker stack deploy)
-#   - No runtime: nvidia (replaced by NVIDIA_VISIBLE_DEVICES env var)
-#   - No deploy.resources.reservations.devices (not supported by docker stack deploy;
-#     GPU access relies on NVIDIA Container Toolkit + NVIDIA_VISIBLE_DEVICES env var)
-#   - No build: (all images must be pre-built and pushed to a registry)
-#   - Overlay networking instead of bridge
-#   - deploy sections with placement constraints and restart_policy
+# 1. Single-node (docker compose up):
+#      docker compose up -d                    # Core services only (no OPEA)
+#      docker compose --profile opea up -d     # Full stack with OPEA/GPU
 #
-# OPEA services toggle:
-#   Set DEPLOY_OPEA=0 in .env to skip all OPEA/AI services (vllm, tei,
-#   embedding, reranker, retriever, dataprep, chatqna, guardrail, translation).
-#   Default is 1 (deployed). When 0, only GENIE.AI core services are deployed.
+# 2. Docker Swarm (docker stack deploy):
+#      docker stack deploy -c <resolved> <stack>
+#      OPEA services controlled by DEPLOY_OPEA env var (default: 1).
+#      Placement constraints require node labels (see below).
 #
-# Prerequisites:
+# Dual-mode notes:
+#   - deploy sections (replicas, placement, restart_policy) are Swarm-only;
+#     docker compose up ignores them entirely
+#   - depends_on is for compose up ordering; Swarm ignores it
+#   - restart: is for compose up; Swarm uses deploy.restart_policy
+#   - profiles: [opea] controls OPEA services in compose up; Swarm ignores profiles
+#   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
+#   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
+#
+# Swarm prerequisites:
 #   1. Swarm initialized: docker swarm init
 #   2. Node labels: docker node update --label-add gpu=true <gpu-node>
 #                docker node update --label-add gateway=true <gateway-node>
 #                docker node update --label-add genieai=true <genieai-node>
-#   3. Local registry: docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
-#   4. Images pre-built and pushed (see docs/docker-swarm-setup.md)
+#   3. Local registry: docker run -d -p 5000:5000 --name registry registry:2
+#   4. Images pre-built and pushed to registry
 #   5. .env configured (see env template)
-#
-# See docs/docker-swarm-setup.md for full deployment guide.
 # =============================================================================
 
 # Required directories on each target node (create before deploy):
@@ -51,12 +50,6 @@ volumes:
   hf_cache:
   backend_uploads:
   backend_data:
-
-secrets:
-  server_cert:
-    file: ./secrets/ssl/server.crt
-  server_key:
-    file: ./secrets/ssl/server.key
 
 services:
 
@@ -82,6 +75,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     deploy:
       replicas: 1
       placement:
@@ -95,6 +89,10 @@ services:
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
     image: kong:latest
+    restart: "no"
+    depends_on:
+      kong-database:
+        condition: service_healthy
     networks:
       - genieai_network
     environment:
@@ -120,6 +118,11 @@ services:
 
   # Kong routes/services/plugins configuration (one-shot init, runs after Kong is ready)
   kong-config:
+    restart: "no"
+    depends_on:
+      kong:
+        condition: service_healthy
+    build: api-gateway-solution/new-config/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-kong-config:latest
     networks:
       - genieai_network
@@ -140,6 +143,10 @@ services:
         max_attempts: 5
 
   kong:
+    depends_on:
+      kong-database:
+        condition: service_healthy
+    restart: unless-stopped
     image: kong:latest
     environment:
       - KONG_DATABASE=${KONG_DATABASE:-postgres}
@@ -184,6 +191,13 @@ services:
         max_attempts: 10
 
   nginx:
+    depends_on:
+      kong:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    build: api-gateway-solution/nginx/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-nginx:latest
     ports:
       - target: 80
@@ -201,15 +215,15 @@ services:
       - NGINX_FRONTEND_HOST=${NGINX_FRONTEND_HOST:-frontend}
       - NGINX_FRONTEND_PORT=${NGINX_FRONTEND_PORT:-8090}
       - NGINX_PERMISSIONS_POLICY=${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}
-    secrets:
-      - server_cert
-      - server_key
     healthcheck:
       test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost/ | grep -qE '^[23]' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    volumes:
+      - ./secrets/ssl/server.crt:/etc/nginx/ssl/server.crt:ro
+      - ./secrets/ssl/server.key:/etc/nginx/ssl/server.key:ro
     networks:
       - genieai_network
     deploy:
@@ -227,6 +241,8 @@ services:
   # ===========================================================================
 
   frontend:
+    restart: unless-stopped
+    build: components/gov-chat-frontend/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-frontend:latest
     environment:
       - PORT=8090
@@ -255,6 +271,7 @@ services:
         max_attempts: 10
 
   redis-cache:
+    restart: unless-stopped
     image: redis:7-alpine
     # Internal only - no host port mapping needed
     # ports:
@@ -282,6 +299,15 @@ services:
         max_attempts: 10
 
   backend:
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: components/
+      dockerfile: gov-chat-backend/Dockerfile
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-backend:latest
     # Swarm: internal only - access via Kong proxy
     # ports:
@@ -332,6 +358,13 @@ services:
         max_attempts: 10
 
   document-repository:
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: components/
+      dockerfile: document-repository/Dockerfile
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-document-repository:latest
     environment:
       # Secrets (required, no defaults in code)
@@ -364,6 +397,7 @@ services:
         max_attempts: 10
 
   clamav:
+    restart: unless-stopped
     image: clamav/clamav
     # Internal only
     # ports:
@@ -387,6 +421,7 @@ services:
         max_attempts: 10
 
   arango-vector-db:
+    restart: unless-stopped
     image: arangodb/arangodb:3.12.4
     ports:
       - "${ARANGO_PORT:-8529}:8529"
@@ -414,6 +449,13 @@ services:
         max_attempts: 10
 
   http-service:
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/http-service/Dockerfile
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-http-service:latest
     environment:
       # Internal service URL - uses Docker service name (works across nodes via overlay DNS)
@@ -447,6 +489,8 @@ services:
   # ===========================================================================
 
   vllm:
+    profiles: [opea]
+    restart: unless-stopped
     image: vllm/vllm-openai:latest
     # Swarm: internal only - access via Kong or docker exec
     # ports:
@@ -485,6 +529,11 @@ services:
         max_attempts: 30
 
   textgen:
+    profiles: [opea]
+    depends_on:
+      vllm:
+        condition: service_healthy
+    restart: unless-stopped
     image: opea/llm-textgen:latest
     environment:
       - LLM_ENDPOINT=http://vllm:8000
@@ -511,6 +560,8 @@ services:
         max_attempts: 30
 
   vllm-translation-guardrail:
+    profiles: [opea]
+    restart: unless-stopped
     image: vllm/vllm-openai:latest
     # Internal only
     # ports:
@@ -550,6 +601,11 @@ services:
         max_attempts: 30
 
   translation:
+    profiles: [opea]
+    depends_on:
+      vllm-translation-guardrail:
+        condition: service_healthy
+    restart: unless-stopped
     image: opea/translation:latest
     environment:
       - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
@@ -576,6 +632,11 @@ services:
         max_attempts: 30
 
   guardrail:
+    profiles: [opea]
+    depends_on:
+      vllm-translation-guardrail:
+        condition: service_healthy
+    restart: unless-stopped
     image: opea/guardrails:latest
     environment:
       - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
@@ -604,6 +665,8 @@ services:
         max_attempts: 30
 
   tei:
+    profiles: [opea]
+    restart: unless-stopped
     image: ${TEI_EMBEDDING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-base-en-v1.5} --auto-truncate"
     # Internal only
@@ -633,6 +696,11 @@ services:
         max_attempts: 30
 
   embedding:
+    profiles: [opea]
+    depends_on:
+      tei:
+        condition: service_healthy
+    restart: unless-stopped
     image: opea/embedding:latest
     environment:
       - EMBEDDING_MODEL_ENDPOINT=http://tei:80
@@ -660,6 +728,8 @@ services:
         max_attempts: 30
 
   tei_reranker:
+    profiles: [opea]
+    restart: unless-stopped
     image: ${TEI_RERANKING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-cross-encoder/ms-marco-MiniLM-L-6-v2} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-1024} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-8} --auto-truncate"
     # Internal only
@@ -689,6 +759,14 @@ services:
         max_attempts: 30
 
   reranker:
+    profiles: [opea]
+    depends_on:
+      tei_reranker:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-reranker:latest
     environment:
       - RERANKER_MODEL_ENDPOINT=http://tei_reranker:80
@@ -718,6 +796,14 @@ services:
         max_attempts: 30
 
   dataprep-arango-service:
+    profiles: [opea]
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-dataprep-arango:${OPEA_VERSION:-latest}
     # Internal only
     # ports:
@@ -770,6 +856,14 @@ services:
         max_attempts: 30
 
   retriever-arango-service:
+    profiles: [opea]
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-retriever-arango:${OPEA_VERSION:-latest}
     # Internal only
     # ports:
@@ -824,6 +918,16 @@ services:
         max_attempts: 30
 
   chatqna-xeon-backend-server:
+    profiles: [opea]
+    depends_on:
+      embedding:
+        condition: service_healthy
+      reranker:
+        condition: service_healthy
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-chatqna-server:${OPEA_VERSION:-latest}
     working_dir: /app/ChatQnA
     # Internal OPEA service - no host port needed
@@ -867,9 +971,11 @@ services:
         delay: 10s
         max_attempts: 30
 
-  # OPEA UI/Nginx/Guardrail - disabled by default (replicas: 0).
-  # Activate for OPEA debugging by changing replicas to 1.
+  # OPEA UI/Nginx - disabled by default via profiles: [opea] (compose up) / replicas: 0 (Swarm).
+  # Activate for OPEA debugging: compose up --profile opea / Swarm: change replicas to 1.
   chatqna-xeon-ui-server:
+    profiles: [opea]
+    restart: "no"
     image: opea/chatqna-ui:latest
     # Internal OPEA service - no host port needed
     # ports:
@@ -895,6 +1001,8 @@ services:
         max_attempts: 30
 
   chatqna-xeon-nginx-server:
+    profiles: [opea]
+    restart: "no"
     image: opea/nginx:latest
     # Internal OPEA service - no host port needed
     # ports:
@@ -927,5 +1035,4 @@ services:
 
 networks:
   genieai_network:
-    driver: overlay
     attachable: true

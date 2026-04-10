@@ -1,6 +1,6 @@
 # Docker Swarm Deployment Guide
 
-This is the primary deployment guide for GENIE.AI. It covers both single-node and multi-node Docker Swarm deployments.
+This guide covers Docker Swarm deployments (single-node and multi-node). For local single-node development with `docker compose up`, see [Docker Compose Setup Guide](docker-compose-setup.md).
 
 GENIE.AI uses a single Swarm-compatible `docker-compose.yaml` at the project root. All services are deployed via `docker stack deploy`.
 
@@ -164,9 +164,11 @@ scp secrets/ssl/server.key gateway-node:/path/to/project/secrets/ssl/
 
 **Important:** Bind mount paths in Swarm are resolved relative to where `docker stack deploy` is run, on the manager node. For multi-node deployments, ensure the same directory structure exists at the same relative path on each node. Copy the entire project directory to each node.
 
+**Important:** SSL certificate files (`server.crt`, `server.key`) must exist at `./secrets/ssl/` on the gateway node before deployment. Unlike Docker secrets, bind mounts silently mount an empty directory if the files are missing — the nginx entrypoint will fall back to self-signed certificates, which is not suitable for production.
+
 ## Step 5: Build and Push Images
 
-`docker stack deploy` does NOT support `build:` directives. All images must be pre-built and pushed to the registry.
+`docker stack deploy` does NOT use `build:` directives — it only reads `image:`. All images must be pre-built and pushed to the registry. The `build:` directives in `docker-compose.yaml` are for `docker compose up` only.
 
 ### 5a. Build all images
 
@@ -174,18 +176,20 @@ On the **manager node**, from the project root:
 
 The frontend image is **generic** — it reads its configuration at runtime via `window.APP_CONFIG` (generated from environment variables at container startup). No rebuild needed for different domains or IPs.
 
+Build contexts vary per service (see `build:` directives in `docker-compose.yaml` for reference):
+
 ```bash
-# Frontend (Vue 3) — generic image, no build args needed
+# Frontend (Vue 3) — context is the frontend directory
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
 
-# Backend (Node.js)
-docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
+# Backend (Node.js) — context is components/ (Dockerfile copies gov-chat-backend/ and shared/)
+docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
 
-# Document Repository
-docker build -t genieai_mvp_document-repository:latest components/document-repository/
+# Document Repository — context is components/ (Dockerfile copies document-repository/ and shared/)
+docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
 
-# HTTP Service
-docker build -t genieai_mvp_http-service:latest genie-ai-overlay/http-service/
+# HTTP Service — context is project root (Dockerfile copies genie-ai-overlay/http-service/)
+docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
 
 # Nginx (API gateway reverse proxy)
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
@@ -193,11 +197,11 @@ docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 # Kong Config (one-shot init service)
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 
-# OPEA services (if DEPLOY_OPEA=1)
-docker build -f Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest genie-ai-overlay/dataprep/
-docker build -f Dockerfile-retriever_genie-ai -t genie-ai-retriever-arango:latest genie-ai-overlay/retriever/
-docker build -f Dockerfile-chatqna_genie-ai -t genie-ai-chatqna-server:latest genie-ai-overlay/chatqna/
-docker build -f Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest genie-ai-overlay/reranker/
+# OPEA services (if DEPLOY_OPEA=1) — context is project root for all
+docker build -f genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest .
+docker build -f genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai -t genie-ai-retriever-arango:latest .
+docker build -f genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai -t genie-ai-chatqna-server:latest .
+docker build -f genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest .
 ```
 
 This builds 10 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
@@ -523,9 +527,9 @@ sed -i 's|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=https://10.0.0.110|' .en
 
 # 3. Build all images (same as localhost — frontend is generic)
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
-docker build -t genieai_mvp_document-repository:latest components/document-repository/
-docker build -t genieai_mvp_http-service:latest genie-ai-overlay/http-service/
+docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
+docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
+docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 

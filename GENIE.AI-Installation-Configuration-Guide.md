@@ -867,7 +867,7 @@ nano .env
 
 #### SSL/TLS Certificates
 
-NGINX terminates TLS and serves the application over HTTPS. Certificates are managed via Docker secrets.
+NGINX terminates TLS and serves the application over HTTPS. Certificates are volume-mounted from `./secrets/ssl/`.
 
 **Development (auto-generated):**
 No action needed — a self-signed certificate is generated automatically on first start. Your browser will show a security warning, which is expected.
@@ -887,7 +887,7 @@ cp /path/to/your/private-key.key secrets/ssl/server.key
    - **Your organization's PKI** (internal CA)
    - **Cloud provider:** AWS ACM, GCP Certificate Manager, Azure Key Vault
 
-**Important:** These files are listed in `.gitignore` and must never be committed. The docker-compose.yaml mounts them as Docker secrets to NGINX.
+**Important:** These files are listed in `.gitignore` and must never be committed. The docker-compose.yaml mounts them as volumes into the NGINX container.
 
 Bash
 

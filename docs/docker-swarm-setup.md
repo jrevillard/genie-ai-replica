@@ -322,6 +322,24 @@ On the **manager node**, ensure these files exist:
 ls secrets/ssl/server.crt secrets/ssl/server.key
 ```
 
+### Let's Encrypt (optional — automatic certificates)
+
+Instead of manually placing certificates, you can use Let's Encrypt for automatic provisioning and renewal:
+
+1. Set `CERTBOT_EMAIL` and `CERTBOT_REPLICAS` in `.env`:
+   ```bash
+   CERTBOT_EMAIL=your-email@example.com
+   CERTBOT_REPLICAS=1
+   ```
+2. Ensure `NGINX_PUBLIC_DOMAIN` is set to your public FQDN.
+3. Deploy normally — certbot starts automatically as part of the stack.
+
+Certificates are automatically obtained, written to `secrets/ssl/`, and renewed every 12 hours. Nginx reloads automatically after renewal.
+
+For testing, add `CERTBOT_STAGING=true` to `.env` to use Let's Encrypt's staging server.
+
+**Prerequisites:** Port 80 must be accessible from the internet, and your domain must have a DNS A/AAAA record pointing to the gateway node.
+
 ## Step 8: Deploy
 
 ### 8a. Validate configuration

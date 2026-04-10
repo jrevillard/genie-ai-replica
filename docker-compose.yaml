@@ -50,6 +50,8 @@ volumes:
   hf_cache:
   backend_uploads:
   backend_data:
+  certbot-webroot:
+  certbot-etc:
 
 services:
 
@@ -219,6 +221,7 @@ services:
     volumes:
       - ./secrets/ssl/server.crt:/etc/nginx/ssl/server.crt:ro
       - ./secrets/ssl/server.key:/etc/nginx/ssl/server.key:ro
+      - certbot-webroot:/var/www/certbot:ro
     networks:
       - genieai_network
     deploy:
@@ -232,7 +235,39 @@ services:
         max_attempts: 10
 
   # ===========================================================================
-  # GENIE.AI Stack (node.labels.genieai == true)
+  # Let's Encrypt Certificate Management (optional)
+  # ===========================================================================
+  # Activated via: --profile letsencrypt (compose up) or CERTBOT_REPLICAS=1 (Swarm)
+  # Requires: CERTBOT_EMAIL set in .env
+
+  certbot:
+    profiles: [letsencrypt]
+    restart: unless-stopped
+    image: certbot/certbot:latest
+    entrypoint: ["/certbot-entrypoint.sh"]
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL}
+      - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
+      - CERTBOT_STAGING=${CERTBOT_STAGING:-false}
+    volumes:
+      - ./api-gateway-solution/certbot/entrypoint.sh:/certbot-entrypoint.sh:ro
+      - certbot-webroot:/var/www/certbot
+      - certbot-etc:/etc/letsencrypt
+      - ./secrets/ssl:/secrets/ssl:rw
+    depends_on:
+      nginx:
+        condition: service_healthy
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${CERTBOT_REPLICAS:-0}
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 5
   # ===========================================================================
 
   frontend:

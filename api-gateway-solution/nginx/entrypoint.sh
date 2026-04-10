@@ -84,4 +84,28 @@ nginx -t
 
 # Start nginx
 echo "Starting nginx..."
-exec nginx -g 'daemon off;'
+nginx -g 'daemon off;' &
+NGINX_PID=$!
+
+# Forward signals to nginx for graceful shutdown
+trap 'echo "Received shutdown signal, stopping nginx..."; kill $NGINX_PID; wait $NGINX_PID; exit 0' TERM INT QUIT
+
+# Flag-check loop in foreground (PID 1)
+# Checks every 5 minutes for a reload signal from certbot
+while true; do
+    sleep 300
+
+    # If nginx died, exit so Docker can restart the container
+    if ! kill -0 $NGINX_PID 2>/dev/null; then
+        echo "nginx process died, exiting"
+        exit 1
+    fi
+
+    # Check for reload flag from certbot (shared webroot volume)
+    # Note: cannot rm the flag file because the volume is mounted read-only.
+    # Flag is consumed by writing an empty file (certbot clears it after a delay).
+    if [ -f /var/www/certbot/reload-nginx ]; then
+        echo "Reload signal received, reloading nginx..."
+        nginx -s reload || echo "WARNING: nginx reload failed"
+    fi
+done

@@ -44,6 +44,7 @@ TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_TIMEOUT = int(os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180))  # Timeout in seconds for translation service (default: 3 minutes) 
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
+EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
@@ -874,7 +875,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -917,7 +918,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -950,7 +951,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -996,7 +997,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -1046,7 +1047,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )

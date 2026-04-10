@@ -133,6 +133,10 @@ HUGGING_FACE_HUB_TOKEN=
 # Options: larger models for better translation quality
 # VLLM_TRANSLATION_MODEL_ID=
 
+# Embedding service API endpoint path
+# Default: /v1/embeddings (OpenAI-compatible, used by OPEA embedding microservice)
+# EMBEDDING_SERVER_ENDPOINT=
+
 # Embedding model for vector search
 # Default: BAAI/bge-base-en-v1.5
 # Options: BAAI/bge-large-en-v1.5 (better, slower), multilingual models

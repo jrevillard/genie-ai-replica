@@ -1,30 +1,30 @@
-## **What is GENIE.AI?**
+## **What is AgriConnect?**
 
-GENIE.AI is an advanced AI assistant that uses a technique called Retrieval-Augmented Generation (RAG). Instead of just relying on its pre-trained knowledge, it actively searches a specialized database of documents to find the most relevant, up-to-date information before answering your question. This ensures the answers are accurate and based on the latest data available in the system.
+AgriConnect is an advanced AI assistant that uses a technique called Retrieval-Augmented Generation (RAG). Instead of just relying on its pre-trained knowledge, it actively searches a specialized database of documents to find the most relevant, up-to-date information before answering your question. This ensures the answers are accurate and based on the latest data available in the system.
 
 ## **How can I get the most accurate answers?**
 
 For the best results, provide as much specific context as possible.
 
-* **Use the Service Tree:** Before asking a question, select the most relevant category or service from the tree on the left. This helps GENIE.AI narrow its search to the correct set of documents.  
+* **Use the Service Tree:** Before asking a question, select the most relevant category or service from the tree on the left. This helps AgriConnect narrow its search to the correct set of documents.  
 * **Be Specific:** Instead of asking "What about my application?", ask "What is the status of my business registration application submitted last week?".  
 * **Ask One Question at a Time:** Complex, multi-part questions can sometimes confuse the AI. Try breaking them down into simpler, individual queries.
 
 ## **What are the "Related Documents" in the sidebar?**
 
-The "Related Documents" section shows you the exact source documents that GENIE.AI used to formulate its answer. This is a key feature of the RAG system, providing transparency and allowing you to verify the information. You can click on any document to view the source material directly.
+The "Related Documents" section shows you the exact source documents that AgriConnect used to formulate its answer. This is a key feature of the RAG system, providing transparency and allowing you to verify the information. You can click on any document to view the source material directly.
 
 ## **How does selecting a context help?**
 
-When you select an item from the "Quick Help" or the service tree on the left, you are telling GENIE.AI which specific set of documents to focus on. This significantly improves accuracy by preventing the AI from searching irrelevant information. For example, selecting "Taxation" ensures that your query is only answered using tax-related documents.
+When you select an item from the "Quick Help" or the service tree on the left, you are telling AgriConnect which specific set of documents to focus on. This significantly improves accuracy by preventing the AI from searching irrelevant information. For example, selecting "Taxation" ensures that your query is only answered using tax-related documents.
 
 ## **What does the "Confidence" score mean?**
 
 The confidence score represents the AI's own assessment of how relevant a source document is to your specific question. A higher score (e.g., 95%) indicates that the system is very confident the document contains the information you are looking for. This score helps you quickly identify the most important sources for your answer.
 
-## **Can I trust the answers from GENIE.AI?**
+## **Can I trust the answers from AgriConnect?**
 
-Yes. Because GENIE.AI uses a RAG model, its answers are grounded in the specific documents listed in the "Related Documents" section. Unlike some AIs that can invent information, GENIE.AI's responses are directly tied to its source material. You can always click on the source documents to verify the answer for yourself.
+Yes. Because AgriConnect uses a RAG model, its answers are grounded in the specific documents listed in the "Related Documents" section. Unlike some AIs that can invent information, AgriConnect's responses are directly tied to its source material. You can always click on the source documents to verify the answer for yourself.
 
 ## **Why does clicking a document open a new tab with a complex URL?**
 

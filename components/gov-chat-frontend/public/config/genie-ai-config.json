@@ -7,14 +7,14 @@
         }
     },
     "theme": {
-        "primaryColor": "#033319",
-        "secondaryColor": "#904c27",
-        "backgroundColor": "#fbfbe2",
-        "textColor": "#1b1d0e",
+        "primaryColor": "#4CAF82",
+        "secondaryColor": "#ffa67a",
+        "backgroundColor": "#1a2e1a",
+        "textColor": "#e8f5e9",
         "navbar": {
-            "gradientStart": "#033319",
-            "gradientEnd": "#1e4a2e",
-            "textColor": "#bdeec7"
+            "gradientStart": "#1b5e20",
+            "gradientEnd": "#2e7d32",
+            "textColor": "#c8e6c9"
         }
     },
     "features": {
@@ -33,12 +33,12 @@
                         "category": null,
                         "action": {
                             "visibleText": "I would like to chat about farming in Lesotho",
-                            "hiddenPrompt": "quickhelp.justChatPrompt"
+                            "hiddenPrompt": "Act as Keletso, a friendly agricultural assistant for Lesotho extension workers. Be helpful and practical about maize and beans farming in the Lesotho highlands."
                         },
                         "styles": {
-                            "backgroundColor": "#1e4a2e",
-                            "hoverColor": "#bdeec7",
-                            "outlineColor": "#bdeec7"
+                            "backgroundColor": "#2e7d32",
+                            "hoverColor": "#4CAF82",
+                            "outlineColor": "#81c784"
                         }
                     },
                     {
@@ -51,12 +51,12 @@
                         "category": "Maize Farming",
                         "action": {
                             "visibleText": "I need advice on growing maize in Lesotho",
-                            "hiddenPrompt": "quickhelp.maizeFarmingPrompt"
+                            "hiddenPrompt": "Act as an expert agricultural extension officer for Lesotho. Provide specific, practical advice on maize (poone) farming in the Lesotho highlands. Cover planting times October to December rainy season, soil preparation, seed varieties suited to highland conditions, fertilizer application especially 2:3:2 and LAN, weed management, and harvesting. Always consider Lesotho altitude, climate and smallholder farming conditions. Refer to yourself as Keletso, the AgriConnect AI assistant."
                         },
                         "styles": {
-                            "backgroundColor": "#1e4a2e",
-                            "hoverColor": "#bdeec7",
-                            "outlineColor": "#bdeec7"
+                            "backgroundColor": "#2e7d32",
+                            "hoverColor": "#4CAF82",
+                            "outlineColor": "#81c784"
                         }
                     },
                     {
@@ -69,12 +69,12 @@
                         "category": "Beans Farming",
                         "action": {
                             "visibleText": "I need advice on growing beans in Lesotho",
-                            "hiddenPrompt": "quickhelp.beansFarmingPrompt"
+                            "hiddenPrompt": "Act as an expert agricultural extension officer for Lesotho. Provide specific, practical advice on bean (linaoa) farming in Lesotho. Cover recommended varieties including sugar beans, planting seasons, spacing 30-45cm between rows, soil fertility management, common diseases like bean rust and anthracnose, and post-harvest handling. Always consider Lesotho smallholder farming conditions. Refer to yourself as Keletso, the AgriConnect AI assistant."
                         },
                         "styles": {
-                            "backgroundColor": "#1e4a2e",
-                            "hoverColor": "#bdeec7",
-                            "outlineColor": "#bdeec7"
+                            "backgroundColor": "#2e7d32",
+                            "hoverColor": "#4CAF82",
+                            "outlineColor": "#81c784"
                         }
                     },
                     {
@@ -87,12 +87,12 @@
                         "category": "Pest & Disease Management",
                         "action": {
                             "visibleText": "I need help identifying and managing crop pests and diseases",
-                            "hiddenPrompt": "quickhelp.pestDiseasePrompt"
+                            "hiddenPrompt": "Act as a crop protection specialist for Lesotho. Help extension workers identify and manage pests and diseases affecting maize and beans in Lesotho. Cover Fall Armyworm identification and control, stalk borers, bean stem maggot, angular leaf spot, and other common threats. Recommend integrated pest management approaches suitable for smallholder farmers. Refer to yourself as Keletso, the AgriConnect AI assistant."
                         },
                         "styles": {
-                            "backgroundColor": "#1e4a2e",
-                            "hoverColor": "#bdeec7",
-                            "outlineColor": "#bdeec7"
+                            "backgroundColor": "#2e7d32",
+                            "hoverColor": "#4CAF82",
+                            "outlineColor": "#81c784"
                         }
                     },
                     {
@@ -105,12 +105,12 @@
                         "category": "Weather Advisory",
                         "action": {
                             "visibleText": "What is the weather forecast and how does it affect my crops?",
-                            "hiddenPrompt": "quickhelp.weatherAdvisoryPrompt"
+                            "hiddenPrompt": "Act as an agricultural weather advisor for Lesotho. Provide guidance on how current and forecast weather conditions affect maize and bean farming in the Lesotho highlands. Advise on planting windows, frost risk, drought management, and climate-smart farming practices. Refer to yourself as Keletso, the AgriConnect AI assistant."
                         },
                         "styles": {
-                            "backgroundColor": "#1e4a2e",
-                            "hoverColor": "#bdeec7",
-                            "outlineColor": "#bdeec7"
+                            "backgroundColor": "#2e7d32",
+                            "hoverColor": "#4CAF82",
+                            "outlineColor": "#81c784"
                         }
                     },
                     {
@@ -123,12 +123,12 @@
                         "category": "Market Linkages",
                         "action": {
                             "visibleText": "What are the current market prices for maize and beans in Lesotho?",
-                            "hiddenPrompt": "quickhelp.marketLinkagesPrompt"
+                            "hiddenPrompt": "Act as an agricultural market advisor for Lesotho. Provide information on market prices for maize and beans, nearby buyers, marketing channels, and how smallholder farmers can get better prices. Cover local markets, cooperatives, contract farming opportunities, and post-harvest handling. Refer to yourself as Keletso, the AgriConnect AI assistant."
                         },
                         "styles": {
-                            "backgroundColor": "#1e4a2e",
-                            "hoverColor": "#bdeec7",
-                            "outlineColor": "#bdeec7"
+                            "backgroundColor": "#2e7d32",
+                            "hoverColor": "#4CAF82",
+                            "outlineColor": "#81c784"
                         }
                     },
                     {
@@ -141,20 +141,17 @@
                         "category": "Government Programs",
                         "action": {
                             "visibleText": "What government agricultural support programs are available for farmers in Lesotho?",
-                            "hiddenPrompt": "quickhelp.governmentProgramsPrompt"
+                            "hiddenPrompt": "Act as a government services advisor for Lesotho agriculture. Provide information on agricultural support programs from the Ministry of Agriculture, Food Security and Nutrition. Cover input subsidy programmes, Farmer Support Unit services, irrigation development programs, and FAO initiatives in Lesotho. Refer to yourself as Keletso, the AgriConnect AI assistant."
                         },
                         "styles": {
-                            "backgroundColor": "#1e4a2e",
-                            "hoverColor": "#bdeec7",
-                            "outlineColor": "#bdeec7"
+                            "backgroundColor": "#2e7d32",
+                            "hoverColor": "#4CAF82",
+                            "outlineColor": "#81c784"
                         }
                     }
                 ]
             }
         }
     },
-    "custom": {
-        "weatherTextColor": "#bdeec7",
-        "weatherLabelColor": "#ffffff"
-    }
+    "custom": {}
 }

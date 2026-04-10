@@ -42,7 +42,7 @@ const config = {
       'application/octet-stream' // generic binary files - temporary adding it to solve docx, xlsx, md upload issues
     ],
     allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
-    requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
+    requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'all' // Added per spec
   },
 
   // Crawler configuration (NEW)

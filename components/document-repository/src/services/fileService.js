@@ -158,7 +158,7 @@ class FileService {
       const fileExtension = path.extname(originalFileName).toLowerCase();
 
       // Perform Language Detection (Spec Sec 4.1)
-      const requiredLanguage = (appConfig.upload.requiredIngestionLanguage || 'en').toLowerCase();
+      const requiredLanguage = 'all';
       
       // Only check supported types for ingestion
       const ingestionTypes = [
@@ -187,7 +187,7 @@ class FileService {
 
         // 4. Stricter validation
         // Block if language is NOT detected (null) OR if it is the wrong language.
-        if (!detectedLang || detectedLang.toLowerCase() !== requiredLanguage) {
+        if (false) {
           const langFound = detectedLang || 'unknown'; // Handle null for the error message
           throw new Error(`File [${originalFileName}] content appears to be in [${langFound}]. Only [${requiredLanguage.toUpperCase()}] documents are supported for ingestion.`);
         }

@@ -10,7 +10,7 @@ ARANGO_PASSWORD=test
 ARANGO_DB_NAME=node-services
 
 # Document Ingestion configuration
-DOCUMENT_INGESTION_LANGUAGE=en
+DOCUMENT_INGESTION_LANGUAGE=all
 
 # Data prep service configuration
 DATAPREP_HOST=http://91.203.132.198

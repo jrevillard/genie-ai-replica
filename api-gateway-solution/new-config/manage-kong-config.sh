@@ -99,7 +99,7 @@ fetch_all() {
     _fa_url="$1"
     _fa_alldata="[]"
     while [ -n "$_fa_url" ]; do
-        _fa_response=$(curl -s -D - "$_fa_url")
+        _fa_response=$(curl -s -D - "$_fa_url" < /dev/null)
         _fa_body=$(echo "$_fa_response" | sed '1,/^\r$/d')
         _fa_alldata=$(echo "$_fa_alldata" | jq --argjson page_data "$(echo "$_fa_body" | jq '.data')" '. + $page_data')
         _fa_next=$(echo "$_fa_response" | grep -i '^Link:' | sed -n 's/.*<\([^>]*\)>.*/\1/p' | grep 'rel="next"' | sed 's/;.*//')
@@ -174,7 +174,7 @@ apply_config() {
 
         payload=$(echo "$modified_service" | jq 'del(.id, .created_at, .updated_at)')
 
-        response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/services/$service_name" -H "Content-Type: application/json" -d "$payload")
+        response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/services/$service_name" -H "Content-Type: application/json" -d "$payload" < /dev/null)
         http_code=$(echo "$response" | tail -n1)
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Service '$service_name' applied successfully."
@@ -195,7 +195,7 @@ apply_config() {
         log "Processing route: $route_name"
         payload=$(echo "$route" | jq 'del(.id, .created_at, .updated_at, .plugins)')
 
-        response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/routes/$route_name" -H "Content-Type: application/json" -d "$payload")
+        response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/routes/$route_name" -H "Content-Type: application/json" -d "$payload" < /dev/null)
         http_code=$(echo "$response" | tail -n1)
 
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
@@ -207,14 +207,14 @@ apply_config() {
                     log "Processing plugin '$plugin_name' for route '$route_name'"
                     plugin_payload=$(echo "$plugin" | jq --arg rn "$route_name" '.route = {name: $rn} | del(.id, .created_at, .updated_at)')
 
-                    existing_plugin_id=$(curl -s "$KONG_ADMIN_URL/routes/$route_name/plugins" | jq -r --arg pn "$plugin_name" '.data[] | select(.name == $pn) | .id')
+                    existing_plugin_id=$(curl -s "$KONG_ADMIN_URL/routes/$route_name/plugins" < /dev/null | jq -r --arg pn "$plugin_name" '.data[] | select(.name == $pn) | .id')
 
                     if [ -n "$existing_plugin_id" ]; then
                         # PATCH: only send config and enabled to avoid schema validation
                         plugin_patch_payload=$(echo "$plugin_payload" | jq '{enabled, config}')
-                        plugin_response=$(curl -s -w "\n%{http_code}" -X PATCH "$KONG_ADMIN_URL/plugins/$existing_plugin_id" -H "Content-Type: application/json" -d "$plugin_patch_payload")
+                        plugin_response=$(curl -s -w "\n%{http_code}" -X PATCH "$KONG_ADMIN_URL/plugins/$existing_plugin_id" -H "Content-Type: application/json" -d "$plugin_patch_payload" < /dev/null)
                     else
-                        plugin_response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/$route_name/plugins" -H "Content-Type: application/json" -d "$plugin_payload")
+                        plugin_response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/$route_name/plugins" -H "Content-Type: application/json" -d "$plugin_payload" < /dev/null)
                     fi
 
                     plugin_http_code=$(echo "$plugin_response" | tail -n1)
@@ -252,14 +252,14 @@ apply_config() {
             endpoint="$KONG_ADMIN_URL/plugins"
         fi
 
-        existing_plugin_id=$(curl -s "$endpoint" | jq -r --arg pn "$plugin_name" '.data[] | select(.name == $pn) | .id')
+        existing_plugin_id=$(curl -s "$endpoint" < /dev/null | jq -r --arg pn "$plugin_name" '.data[] | select(.name == $pn) | .id')
 
         if [ -n "$existing_plugin_id" ]; then
              # PATCH: only send config and enabled to avoid schema validation
              patch_payload=$(echo "$payload" | jq '{enabled, config}')
-             response=$(curl -s -w "\n%{http_code}" -X PATCH "$KONG_ADMIN_URL/plugins/$existing_plugin_id" -H "Content-Type: application/json" -d "$patch_payload")
+             response=$(curl -s -w "\n%{http_code}" -X PATCH "$KONG_ADMIN_URL/plugins/$existing_plugin_id" -H "Content-Type: application/json" -d "$patch_payload" < /dev/null)
         else
-             response=$(curl -s -w "\n%{http_code}" -X POST "$endpoint" -H "Content-Type: application/json" -d "$payload")
+             response=$(curl -s -w "\n%{http_code}" -X POST "$endpoint" -H "Content-Type: application/json" -d "$payload" < /dev/null)
         fi
 
         http_code=$(echo "$response" | tail -n1)
@@ -283,7 +283,7 @@ apply_config() {
         log "Processing upstream: $upstream_name"
         payload=$(echo "$upstream" | jq 'del(.id, .created_at, .updated_at)')
 
-        response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/upstreams/$upstream_name" -H "Content-Type: application/json" -d "$payload")
+        response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/upstreams/$upstream_name" -H "Content-Type: application/json" -d "$payload" < /dev/null)
         http_code=$(echo "$response" | tail -n1)
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Upstream '$upstream_name' applied successfully."
@@ -318,14 +318,14 @@ apply_config() {
         fi
 
         log "Clearing existing targets for upstream '$upstream_name'..."
-        existing_target_ids=$(curl -s "$KONG_ADMIN_URL/upstreams/$upstream_name/targets" | jq -r '.data[].id')
+        existing_target_ids=$(curl -s "$KONG_ADMIN_URL/upstreams/$upstream_name/targets" < /dev/null | jq -r '.data[].id')
         for id in $existing_target_ids; do
-            curl -s -X DELETE "$KONG_ADMIN_URL/upstreams/$upstream_name/targets/$id" > /dev/null
+            curl -s -X DELETE "$KONG_ADMIN_URL/upstreams/$upstream_name/targets/$id" > /dev/null < /dev/null
         done
 
         log "Adding target '$final_target_address' to upstream '$upstream_name'"
         payload=$(echo "$target" | jq --arg t "$final_target_address" '.target = $t | del(.id, .created_at, .upstream)')
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/upstreams/$upstream_name/targets" -H "Content-Type: application/json" -d "$payload")
+        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/upstreams/$upstream_name/targets" -H "Content-Type: application/json" -d "$payload" < /dev/null)
         http_code=$(echo "$response" | tail -n1)
         if [ "$http_code" -eq 201 ]; then
             log "Target '$final_target_address' added successfully."

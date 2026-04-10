@@ -111,7 +111,7 @@ GENIE.AI/
 ├── GENIE.AI-Data-Labelling-Strategy.md           # Data labeling strategy
 ├── UNICC-ITU-Genie-AI Code Management Process.md # Development workflow
 ├── proposed-repo-structure-changes.md            # Repository architecture
-├── docker-compose.yaml          # Swarm-compatible Docker Compose configuration
+├── docker-compose.yaml          # Dual-mode Docker Compose (compose up + Swarm)
 ├── env                          # Environment configuration (main)
 ├── env.t4                       # GPU overrides for NVIDIA T4 (16GB VRAM)
 ├── env.rtx6000                  # GPU overrides for RTX 6000 ADA (24GB VRAM)
@@ -140,19 +140,22 @@ cp env .env
 # Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
 ```
 
-### 3. Deploy
+### 3. Start Services
 
 ```bash
-set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+# Core services only
+docker compose up -d
+
+# Full stack with OPEA/AI services
+docker compose --profile opea up -d
 ```
 
 For GPU-specific overrides:
 ```bash
-set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+docker compose --env-file .env --env-file env.t4 --profile opea up -d
 ```
 
-See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for the full deployment guide.
+See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full local development guide and [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for Docker Swarm deployment.
 
 ### 4. Access Applications
 
@@ -173,7 +176,6 @@ See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for the full deploy
 ### Technical Guides
 
 - **[GENIE.AI-Installation-Configuration-Guide.md](GENIE.AI-Installation-Configuration-Guide.md)** - Comprehensive installation, setup, and configuration instructions
-- **[Docker Swarm Deployment Guide](docs/docker-swarm-setup.md)** - Primary deployment guide for Docker Swarm (single-node and multi-node)
 - **[GENIE.AI-Data-Labelling-Strategy.md](GENIE.AI-Data-Labelling-Strategy.md)** - Data labeling process for hybrid RAG systems
 - **[proposed-repo-structure-changes.md](proposed-repo-structure-changes.md)** - Repository architecture and component organization
 
@@ -199,6 +201,7 @@ See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for the full deploy
 
 ### Additional Documentation
 
+- **[Components Docker Setup](components/README.md)** - Docker Compose orchestration
 - **[Database Setup](components/arangodb/README.md)** - ArangoDB configuration and scripts
 
 ## Architecture:
@@ -221,7 +224,7 @@ GENIE.AI is built on a microservices architecture with the following layers:
 | AI/ML | OPEA, vLLM, TEI, ArangoDB |
 | Database | ArangoDB 3.12+ (multi-model) |
 | API Gateway | Kong, NGINX |
-| Containerization | Docker, Docker Swarm |
+| Containerization | Docker, Kubernetes |
 
 ## Features:
 
@@ -255,19 +258,16 @@ GENIE.AI is built on a microservices architecture with the following layers:
 
 2. **Configure Environment**:
    ```bash
-   # Create .env files for each component
-   cp components/gov-chat-backend/.env.example components/gov-chat-backend/.env
+   cp env .env
    # Edit .env with your configuration
    ```
 
 3. **Start Services**:
    ```bash
-   # Deploy the full stack via Docker Swarm
-   set -a && source .env && set +a
-   docker stack deploy -c docker-compose.yaml genieai
-
-   # Or for local development without OPEA, set DEPLOY_OPEA=0 in .env
+   docker compose up -d
    ```
+
+See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full local development guide.
 
 ### Testing
 
@@ -287,15 +287,25 @@ flutter test
 
 ## Deployment:
 
+### Docker Compose (Local Development)
+
+```bash
+cp env .env
+
+# Core services only
+docker compose up -d
+
+# Full stack with OPEA/AI services
+docker compose --profile opea up -d
+```
+
+See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full guide.
+
 ### Docker Swarm Deployment
 
 GENIE.AI is deployed using Docker Swarm. See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for the complete guide.
 
 ```bash
-# First time: create your .env from template
-cp env .env
-# Edit .env with your secrets
-
 # Deploy the stack
 set -a && source .env && set +a
 docker stack deploy -c docker-compose.yaml genieai

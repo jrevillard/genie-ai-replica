@@ -12,6 +12,22 @@ cp env .env
 # Then edit .env with your local values (passwords, API keys, etc.)
 ```
 
+## Docker Compose
+Services read variables via `env_file` in `docker-compose.yaml` or system environment variables.
+
+**IMPORTANT:** Use the root `docker-compose.yaml` for all operations:
+
+```bash
+# Core services only
+docker compose up -d
+
+# Full stack with OPEA
+docker compose --profile opea up -d
+
+# Rebuild a specific service
+docker compose build [service_name]
+```
+
 ## NEVER commit
 - `.env*` files → Contain secrets, are in `.gitignore`
 - `env` files (no extension) → Templates, can be committed

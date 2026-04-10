@@ -2,7 +2,7 @@
 
 This README provides documentation on using the provided scripts to manage and configure Kong (an API gateway) for a Node.js Express backend, and how to set up NGINX as a reverse proxy to route requests correctly between a Vue 3 frontend application and the Express server. The setup assumes a containerized environment where Kong is internal-only (not exposed to host), the Vue app is served on port 8090, and the Express API is on port 3000.
 
-The API gateway services (Kong, NGINX, Kong database) are defined in the root `docker-compose.yaml` (Swarm-compatible) as part of the full GENIE.AI stack.
+The API gateway services (Kong, NGINX, Kong database) are defined in the root `docker-compose.yaml` as part of the full GENIE.AI stack.
 
 ## Introduction
 
@@ -21,18 +21,16 @@ The system is designed for a production-like setup with security best practices 
 - Docker and Docker Compose installed.
 - Tools: `curl`, `jq` (for JSON parsing), `bash`.
 - Environment variables configured in root `.env` file (see `env` template).
-- Custom files: `./nginx/conf/` (NGINX templates, baked into image via Dockerfile).
+- Custom files: `./pg_hba.conf` (Kong Postgres host-based authentication), `./nginx/conf/` (NGINX templates).
 
 ## Docker Compose Setup
 
-The API gateway services are defined in the root `docker-compose.yaml` (Swarm-compatible). Deploy the full stack from the project root:
+The API gateway services are defined in the root `docker-compose.yaml` (not a standalone file in this directory). Deploy the full stack from the project root:
 
 ```bash
 # From project root
 cp env .env   # First time: create your .env
-# Edit .env with your secrets
-set -a && source .env && set +a
-docker stack deploy -c docker-compose.yaml genieai
+docker compose up -d
 ```
 
 ### API Gateway Services
@@ -40,7 +38,7 @@ docker stack deploy -c docker-compose.yaml genieai
 - **kong-database**: Postgres database for Kong.
   - Image: `postgres:13`.
   - Environment: User `kong`, DB `kong`, Password from `POSTGRES_PASSWORD`.
-  - Volume: `kong_data:/var/lib/postgresql/data`.
+  - Volume: `kong_data:/var/lib/postgresql/data`; mounts custom `pg_hba.conf`.
   - Healthcheck: Ensures database readiness.
 
 - **kong**: Kong API gateway.
@@ -54,16 +52,18 @@ docker stack deploy -c docker-compose.yaml genieai
 
 - **kong-config**: Init container that applies Kong configuration.
   - Image: Built from `new-config/Dockerfile` (Alpine + curl + jq).
-  - Runs once on startup, applies `kong_config.json` via Kong Admin API.
-  - Uses restart policy (`on-failure`) to retry until Kong is ready.
-  - Idempotent — safe to re-run with `docker service update --force genieai_kong-config`.
-  - Logs: `docker service logs genieai_kong-config`.
+  - Depends on: `kong` (healthy).
+  - Runs once on startup (`restart: "no"`), applies `kong_config.json` via Kong Admin API.
+  - Idempotent — safe to re-run with `docker compose run kong-config`.
+  - Logs: `docker compose logs kong-config`.
 
 - **nginx**: NGINX reverse proxy.
-  - Image: Built from `nginx/Dockerfile` (includes configs, ModSecurity, entrypoint).
+  - Image: `nginx:latest`.
   - Ports: `80` (HTTP redirect), `443` (HTTPS).
   - Environment: `NGINX_PUBLIC_DOMAIN`, `CSP_CONNECT_SRC`, `KONG_PROXY_HOST`, `NGINX_FRONTEND_HOST`, `NGINX_FRONTEND_PORT`.
-  - Secrets: `server_cert`, `server_key` for SSL (auto-generated in dev if not provided).
+  - Volumes: `./nginx/conf` for templates, `./nginx/entrypoint.sh` for container startup.
+  - SSL: Volume-mounted from `./secrets/ssl/server.crt` and `server.key` (auto-generated self-signed in dev if not provided).
+  - Depends on: `kong`.
 
 ### Networks and Volumes
 
@@ -74,20 +74,19 @@ docker stack deploy -c docker-compose.yaml genieai
 
 1. **Start the Stack**:
    ```bash
-   set -a && source .env && set +a
-   docker stack deploy -c docker-compose.yaml genieai
+   docker compose up -d
    ```
    - Wait for healthchecks (e.g., Kong database) to pass.
 
 2. **Stop the Stack**:
    ```bash
-   docker stack rm genieai
+   docker compose down
    ```
+   - Add `-v` to remove volumes (data loss warning).
 
 3. **Logs**:
    ```bash
-   docker service logs genieai_kong -f
-   docker service logs genieai_nginx -f
+   docker compose logs -f <service_name>  # e.g., kong, nginx
    ```
 
 4. **Access Points**:
@@ -99,10 +98,10 @@ docker stack deploy -c docker-compose.yaml genieai
 5. **Configuration Notes**:
    - Customize environment variables in `.env` (see `env` template, Section 7).
    - NGINX renders `default.conf.template` at container startup via `envsubst`.
-   - SSL certs: auto-generated self-signed in development; use Docker secrets for production.
+   - SSL certs: auto-generated self-signed in development; use volume-mounted certificates for production (place in `./secrets/ssl/`).
 
 6. **Troubleshooting**:
-   - Check dependencies: Use `docker service ls` to verify service status.
+   - Check dependencies: Use `docker compose ps` to verify service status.
    - Database issues: Ensure healthchecks pass; inspect logs.
    - Network: Services communicate via Docker service names (e.g., `kong-database`, `kong`, `frontend`).
 
@@ -151,7 +150,7 @@ Restores Kong config from a backup JSON file and optionally tests endpoints. Use
   - Restores services, routes, plugins, upstreams from backup.
   - Patches global rate-limiting plugin.
   - Tests (if `-t`): Logs in (if needed), tests `/api/auth/logout`, `/api/users/admin/users/$USER_ID/force-logout` (default: 1), `/api/service-categories?locale=en`.
-  - Logs to stdout (captured by Docker via `docker service logs genieai_kong-config`).
+  - Logs to stdout (captured by Docker via `docker compose logs kong-config`).
 
 - **Example**:
   ```bash
@@ -169,31 +168,24 @@ This script is a standalone interactive utility for managing Kong configurations
 
 NGINX handles external traffic, enforces security, and routes requests. Config files: `default.conf.template` (source of truth, rendered to `default.conf` at container start) and `security-headers.conf` (shared headers).
 
-### SSL Certificates (Cloud-Native with Docker Secrets)
+### SSL Certificates (Volume-Mounted)
 
-**IMPORTANT**: SSL certificates use Docker secrets for cloud-native deployment.
+**IMPORTANT**: SSL certificates are volume-mounted from `./secrets/ssl/` into the container.
 
 #### Development (Self-Signed)
 
-The nginx container automatically generates self-signed certificates on startup if no Docker secrets are provided. No manual setup required.
+The nginx container automatically generates self-signed certificates on startup if no certificates are found at `./secrets/ssl/`. No manual setup required.
 
-#### Production (Docker Secrets)
+#### Production (Volume Mounts)
 
-For production, provide SSL certificates via Docker secrets:
+For production, place SSL certificates in `./secrets/ssl/`:
 
-```yaml
-secrets:
-  server_cert:
-    file: /path/to/production/certs/server.crt
-  server_key:
-    file: /path/to/production/certs/server.key
-```
-
-Or use Docker Swarm secrets:
 ```bash
-echo "certificate-content" | docker secret create server_cert -
-echo "private-key-content" | docker secret create server_key -
+cp /path/to/production/certs/server.crt ./secrets/ssl/
+cp /path/to/production/certs/server.key ./secrets/ssl/
 ```
+
+The nginx entrypoint loads these files from `/etc/nginx/ssl/` inside the container and copies them to `/etc/nginx/certs/` for nginx to use.
 
 #### Certificate Sources:
 - Let's Encrypt (certbot)
@@ -204,13 +196,13 @@ echo "private-key-content" | docker secret create server_key -
 
 1. Place `default.conf.template` in `/etc/nginx/conf.d/` (or include it in `nginx.conf`).
 2. Place `security-headers.conf` in `/etc/nginx/conf.d/`.
-3. SSL certs are provided via Docker secrets (auto-generated in development).
+3. SSL certs are provided via volume mounts from `./secrets/ssl/` (auto-generated in development).
 4. Reload NGINX: `nginx -s reload`.
 
 ### Key Configuration Details
 
 - **HTTP to HTTPS Redirect**: All HTTP (port 80) redirects to HTTPS (port 443).
-- **SSL/TLS**: Uses modern ciphers, session caching, and Docker secrets (auto-generated in development if not provided).
+- **SSL/TLS**: Uses modern ciphers, session caching, and volume-mounted certificates (auto-generated in development if not provided).
 - **Security Headers**: Included via `security-headers.conf`:
   - X-Content-Type-Options, X-Frame-Options, X-XSS-Protection.
   - Strict-Transport-Security (HSTS with preload).
@@ -274,9 +266,9 @@ server {
 ## Logs
 
 - Kong scripts output to stdout/stderr (captured by Docker).
-- `docker service logs genieai_kong-config` — init service configuration logs.
-- `docker service logs genieai_kong` — Kong proxy and admin API logs.
-- `docker service logs genieai_nginx` — NGINX access and error logs.
+- `docker compose logs kong-config` — init service configuration logs.
+- `docker compose logs kong` — Kong proxy and admin API logs.
+- `docker compose logs nginx` — NGINX access and error logs.
 - Review for errors (e.g., HTTP 400/404 during apply/restore).
 
 ## Troubleshooting
@@ -287,6 +279,6 @@ server {
 - **Timeouts**: Adjust proxy timeouts if requests hang.
 - **CORS/CSP Blocks**: Inspect browser console; adjust origins/sources in configs.
 - **502 after backend recreate**: Wait up to 5 seconds (DNS stale TTL) or run `docker exec <kong-container> kong reload` for immediate DNS flush.
-- **Docker Issues**: Check `docker service logs` for startup errors; ensure ports are free; verify volume mounts.
+- **Docker Issues**: Check `docker-compose logs` for startup errors; ensure ports are free; verify volume mounts.
 
 For questions, refer to Kong docs (konghq.com) or NGINX docs (nginx.org).

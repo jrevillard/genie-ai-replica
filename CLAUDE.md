@@ -57,35 +57,44 @@ ansible-playbook -i inventory/test.ini teardown.yml --vault-id test@prompt
 
 ### Docker Deployment (Manual)
 
-All deployments use Docker Swarm. The single `docker-compose.yaml` at the project root is Swarm-compatible and is the only compose file.
-
+**Option 1 - Full stack** (GENIE.AI + OPEA infrastructure):
 ```bash
 # First time: create your .env from template
 cp env .env
 # Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
 
-# Deploy (single-node or multi-node Swarm)
-set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
+# Deploy with default settings
+docker compose up -d
 
-# With GPU-specific settings (source GPU env file after .env)
-set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+# Or with GPU-specific settings:
+docker compose --env-file .env --env-file env.t4 up -d
+docker compose --env-file .env --env-file env.rtx6000 up -d
+```
 
-# Remove stack
-docker stack rm genieai
+**Option 2 - GENIE.AI only** (frontend, backend, arango, redis, doc-repo):
+```bash
+# Core services only (no OPEA/AI services)
+docker compose up -d
+
+# Full stack including OPEA/AI services
+docker compose --profile opea up -d
 ```
 
 **Important notes:**
 - All images must be pre-built and pushed to a registry before deploying (`docker stack deploy` cannot build)
-- `depends_on` removed; services use healthchecks + Swarm restart policy for startup ordering
+- `depends_on` provides startup ordering for `docker compose up`; Swarm ignores it and uses healthchecks + restart policy
 - Node labels control service placement (`gateway=true` for API gateway, `gpu=true` for OPEA/GPU services, `genieai=true` for GENIE.AI core services)
 - Only nginx ports (80, 443) are exposed; all other services are internal
 - Kong config is applied via `kong-config` one-shot Swarm service (auto-runs after deploy)
-- To skip OPEA services: set `DEPLOY_OPEA=0` in `.env`
+- To skip OPEA services in Swarm: set `DEPLOY_OPEA=0` in `.env`; in compose up: simply omit `--profile opea`
 - See `env` template Section 12 for multi-node variable overrides
 
 ### Docker Commands
 
 ```bash
+# Rebuild after code changes
+docker compose build [service_name]
+
 # View logs
 docker service logs genieai_<service> -f
 
@@ -245,23 +254,27 @@ To change built-in defaults, edit the Python code:
 
 ### Project Docker Compose File
 
-| File | Scope | Contains | Use Case |
-|------|-------|----------|----------|
-| `docker-compose.yaml` (root) | **Full stack (Swarm-compatible)** | OPEA + GENIE.AI + API Gateway | All deployments (single-node or multi-node Swarm) |
+| File | Scope | Use Case |
+|------|-------|----------|
+| `docker-compose.yaml` (root) | **Dual-mode** | Single compose file for both `docker compose up` and `docker stack deploy` |
 
-**GPU Configuration**: Source GPU-specific env file before deploying:
+The compose file supports two deployment modes:
+- **Single-node**: `docker compose up -d` (core services) or `docker compose --profile opea up -d` (full stack)
+- **Docker Swarm**: `docker stack deploy` with Ansible (full stack, OPEA controlled by `DEPLOY_OPEA` env var)
+
+**GPU Configuration**: Use GPU-specific env files with your .env:
 ```bash
-set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai        # NVIDIA T4 (16GB VRAM)
-set -a && source .env && source env.rtx6000 && set +a && docker stack deploy -c docker-compose.yaml genieai   # RTX 6000 ADA (24GB VRAM)
+docker compose --env-file .env --env-file env.t4 up -d        # NVIDIA T4 (16GB VRAM)
+docker compose --env-file .env --env-file env.rtx6000 up -d   # RTX 6000 ADA (24GB VRAM)
 ```
 
 ### Deployment Architecture
 
-All services are defined in the root `docker-compose.yaml`:
+All services are defined in the root `docker-compose.yaml` with cloud-native configuration:
 
 ```
-docker-compose.yaml (single source of truth, Swarm-compatible)
-├── Layer 1: OPEA AI/ML Infrastructure
+docker-compose.yaml (root - single source of truth, dual-mode)
+├── Layer 1: OPEA AI/ML Infrastructure (profiles: [opea])
 │   ├── vLLM (LLM inference)
 │   ├── TEI (embeddings/reranking)
 │   ├── Retriever
@@ -276,6 +289,19 @@ docker-compose.yaml (single source of truth, Swarm-compatible)
 └── Layer 3: API Gateway
     ├── Kong
     └── NGINX
+```
+
+### Usage
+
+```bash
+# Core services only (local development)
+docker compose up -d
+
+# Full stack with OPEA/AI services
+docker compose --profile opea up -d
+
+# With GPU-specific configuration
+docker compose --env-file .env --env-file env.t4 --profile opea up -d
 ```
 
 ## Database Schema (ArangoDB)

@@ -29,6 +29,10 @@
 #
 # These MUST be set in your .env for production deployment.
 
+# ArangoDB database name (default: genie-ai)
+# Uncomment and set for per-deployment database isolation (e.g. el-salvador)
+# ARANGO_DB=el-salvador
+
 # ArangoDB root password (vector + graph database)
 # Used by: backend, document-repository, dataprep, retriever
 ARANGO_PASSWORD=

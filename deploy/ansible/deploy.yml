@@ -682,6 +682,12 @@
         # Remove 'name' properties not supported by docker stack deploy
         sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.yaml.tmp
 
+        # Remove 'profiles' blocks not supported by docker stack deploy
+        # (profiles is a multi-line YAML block: 'profiles:' + '- xxx' items)
+        awk '/^[[:space:]]*profiles:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \
+          {{ deploy_dir }}/docker-compose.yaml.tmp > {{ deploy_dir }}/docker-compose.yaml.tmp2
+        mv {{ deploy_dir }}/docker-compose.yaml.tmp2 {{ deploy_dir }}/docker-compose.yaml.tmp
+
         # Remove depends_on blocks (not supported by docker stack deploy)
         # docker compose config normalizes depends_on to mapping format which
         # Swarm rejects. Startup ordering relies on healthchecks + restart policy.

@@ -245,6 +245,13 @@ HUGGING_FACE_HUB_TOKEN=
 # All external traffic routes through nginx (80/443).
 # To expose Kong directly for debugging, uncomment in docker-compose.yaml.
 
+# Let's Encrypt certificate management (optional)
+# Set CERTBOT_EMAIL to enable automatic SSL certificate provisioning via Let's Encrypt.
+# Activation requires: CERTBOT_EMAIL + deployment flag (--profile letsencrypt / CERTBOT_REPLICAS)
+# CERTBOT_EMAIL=your-email@example.com
+# CERTBOT_REPLICAS=0
+# CERTBOT_STAGING=false
+
 # Kong DNS stale TTL in seconds (default: 5)
 # Lower values reduce 502 errors after backend container recreate
 # Range: 1-3600. Set to 1 for immediate re-resolution (higher CPU).

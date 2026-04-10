@@ -30,11 +30,40 @@ set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml ge
 ### Development (Self-Signed)
 Auto-generated self-signed certificates will cause browser warnings. This is expected in development.
 
-### Production
+### Production (Manual)
 Use proper certificates from:
-- **Let's Encrypt** (certbot)
 - **Organization PKI** (your certificate authority)
 - **Cloud providers:** AWS ACM, GCP Cert Manager, Azure Key Vault
+
+### Production (Let's Encrypt — Automatic)
+Let's Encrypt certificates are automatically obtained and renewed via the `certbot` service.
+
+**Activation:**
+1. Set `CERTBOT_EMAIL` in `.env`:
+   ```bash
+   CERTBOT_EMAIL=your-email@example.com
+   ```
+2. Deploy with the appropriate flag:
+   - **Docker Compose:** `docker compose --profile letsencrypt up -d`
+   - **Docker Swarm:** Set `CERTBOT_REPLICAS=1` in `.env`, then deploy normally
+3. Ensure `NGINX_PUBLIC_DOMAIN` is set to your public FQDN (not `localhost`)
+
+**How it works:**
+- On first start, certbot obtains a certificate via HTTP-01 challenge
+- Certificates are written to `./secrets/ssl/server.crt` and `server.key`
+- Renewal runs automatically every 12 hours inside the certbot container
+- Nginx is automatically reloaded after renewal (no downtime)
+- The `certbot-etc` named volume persists Let's Encrypt account state across restarts
+
+**Testing (staging server):**
+```bash
+CERTBOT_STAGING=true
+```
+This uses Let's Encrypt's staging server to avoid rate limits during testing.
+
+**Prerequisites:**
+- Port 80 must be accessible from the internet
+- Valid DNS A/AAAA record pointing `NGINX_PUBLIC_DOMAIN` to your server
 
 ## Security
 

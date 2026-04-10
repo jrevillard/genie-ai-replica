@@ -87,12 +87,38 @@ See the `env` template for the full list of variables and their descriptions.
 
 SSL certificates are **optional**. The nginx container automatically generates self-signed certificates on startup if none are found at `secrets/ssl/`.
 
-For production or to avoid browser warnings, place your own certificates:
+### Option A: Self-signed (default)
+
+No action needed. Self-signed certificates are auto-generated. Browser warnings are expected.
+
+### Option B: Manual certificates
+
+Place your own certificates:
 
 ```bash
 cp /path/to/server.crt secrets/ssl/
 cp /path/to/server.key secrets/ssl/
 ```
+
+### Option C: Let's Encrypt (automatic)
+
+For automatic SSL certificate provisioning and renewal:
+
+1. Set `CERTBOT_EMAIL` in `.env`:
+   ```bash
+   CERTBOT_EMAIL=your-email@example.com
+   ```
+2. Ensure `NGINX_PUBLIC_DOMAIN` is set to your public FQDN (not `localhost`).
+3. Deploy with the `letsencrypt` profile:
+   ```bash
+   docker compose --profile letsencrypt up -d
+   ```
+
+Certificates are automatically obtained, written to `secrets/ssl/`, and renewed every 12 hours. Nginx reloads automatically after renewal.
+
+For testing, add `CERTBOT_STAGING=true` to `.env` to use Let's Encrypt's staging server (avoids rate limits).
+
+**Prerequisites:** Port 80 must be accessible from the internet, and your domain must have a DNS A/AAAA record pointing to your server.
 
 ## Step 5: Build Images
 

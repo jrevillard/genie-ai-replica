@@ -3,8 +3,16 @@ server {
     listen [::]:80;
     server_name _;
 
-    # Redirect all HTTP traffic to HTTPS
-    return 301 https://${NGINX_PUBLIC_DOMAIN}$request_uri;
+    # ACME challenge location (Let's Encrypt HTTP-01)
+    # Always present and harmless when certbot is not running (empty dir returns 404)
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Redirect all other HTTP traffic to HTTPS
+    location / {
+        return 301 https://${NGINX_PUBLIC_DOMAIN}$request_uri;
+    }
 }
 
 server {

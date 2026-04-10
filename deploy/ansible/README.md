@@ -146,24 +146,150 @@ Set in `group_vars/<env>/vault.yml`:
 
 Set in `group_vars/<env>/vars.yml`:
 
+### Deployment Options
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `deploy_opea` | `1` | Deploy OPEA/AI services (GPU) |
 | `gpu_env_file` | `env.t4` | GPU defaults file (empty = none). Loaded first; Ansible `.env` takes precedence. |
+
+### API Gateway (NGINX)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `nginx_public_domain` | `localhost` | Public domain/IP |
 | `nginx_http_port` | `80` | HTTP port (only set if non-default) |
 | `nginx_https_port` | `443` | HTTPS port (only set if non-default) |
+| `nginx_permissions_policy` | `camera=(), microphone=(), geolocation=()` | Nginx Permissions-Policy header |
 | `registry_port` | `5000` | Local Docker registry port |
+
+### Frontend Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `vue_app_api_url` | `""` | Frontend API URL |
 | `vue_app_csp_connect_src` | `""` | Frontend CSP connect sources |
-| `csp_connect_src` | `""` | Nginx CSP connect sources |
-| `nginx_permissions_policy` | `camera=(), microphone=(), geolocation=()` | Nginx Permissions-Policy header |
+
+### Backend Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `cors_allowed_origins` | `""` | CORS allowed origins |
+| `csp_connect_src` | `""` | Nginx CSP connect sources |
+
+### Email Configuration (non-secret)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `email_host` | `""` | SMTP server |
 | `email_port` | `587` | SMTP port |
 | `email_secure` | `false` | SMTP TLS (true/false) |
 | `email_user` | `""` | SMTP username |
 | `email_from` | `""` | Sender email address |
+
+### ArangoDB Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `arango_db` | `genie-ai` | ArangoDB database name (default: `genie-ai` in code) |
+| `arango_graph_name` | `knowledge-graph` | ArangoDB graph name |
+
+### LLM Model Configuration (vLLM)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `vllm_llm_model_id` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | Main LLM model for chat |
+| `vllm_max_model_len` | `8192` | Maximum context length |
+| `vllm_gpu_utilization` | `0.9` | GPU memory fraction (0.1-1.0) |
+| `vllm_dtype` | `auto` | Data type (auto, half, bfloat16, float32) |
+| `vllm_api_key` | `""` | Optional vLLM API key |
+
+### Translation Model Configuration (vLLM)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `vllm_translation_model_id` | `google/gemma-3-4b-it` | Translation model |
+| `vllm_translation_max_model_len` | `8192` | Maximum context length |
+| `vllm_translation_dtype` | `auto` | Data type |
+| `vllm_translation_gpu_utilization` | `0.9` | GPU memory fraction |
+| `vllm_translation_kv_cache_dtype` | `auto` | KV cache data type |
+
+### Embedding & Reranking Models (TEI)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `embedding_model_id` | `BAAI/bge-base-en-v1.5` | Embedding model for vector search |
+| `reranker_model_id` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Reranking model |
+| `reranking_strategy` | `hybrid` | Reranker strategy (hybrid, score, all) |
+| `reranking_threshold` | `0.9` | Threshold for reranker strategy |
+
+### ChatQnA Service
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `chatqna_type` | `standard` | ChatQnA service type |
+| `chatqna_system_prompt` | (built-in) | LLM system prompt (optional, has built-in default) |
+| `chatqna_enforce_abstention` | `true` | Whether to enforce abstention |
+
+### Retriever Configuration
+
+#### Vector Search Tuning
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `retriever_arango_k` | `4` | Top-K results before reranking |
+| `retriever_arango_fetch_k` | `20` | K results fetched from ArangoDB |
+| `retriever_arango_score_threshold` | `0.1` | Minimum score for retrieval |
+| `retriever_arango_distance_threshold` | `1` | Maximum distance threshold |
+| `retriever_arango_lambda_mult` | `0.5` | Hybrid search lambda (0=vector only, 1=BM25 only) |
+| `retriever_arango_search_start` | `chunk` | Search start node (chunk, document) |
+| `retriever_arango_search_mode` | `vector` | Search mode (vector, bm25, hybrid) |
+| `retriever_arango_use_approx_search` | `false` | Use approximate search |
+| `retriever_arango_distance_strategy` | `COSINE` | Distance strategy (COSINE, DOT, L2, EUCLIDEAN) |
+| `retriever_arango_num_centroids` | `1` | Number of centroids for approximate search |
+| `retriever_arango_filter_strategy` | `OR` | Filter strategy (OR, AND) |
+| `retriever_summarizer_enabled` | `false` | Enable result summarization |
+
+#### ArangoDB Graph Traversal
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `retriever_arango_traversal_enabled` | `false` | Enable ArangoDB graph traversal |
+| `retriever_arango_traversal_max_depth` | `2` | Max traversal depth |
+| `retriever_arango_traversal_max_returned` | `3` | Max returned results per traversal |
+| `retriever_arango_traversal_score_threshold` | `0.5` | Minimum score threshold for traversal results |
+| `retriever_arango_traversal_concurrent_batches` | `1` | Concurrent traversal batches |
+
+### Dataprep Configuration (Document Ingestion)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `labeling_strategy` | `auto` | Document labeling strategy (auto, manual, none) |
+| `embedding_label_threshold` | `0.7` | Embedding similarity threshold for labeling |
+| `bm25_label_threshold` | `5.0` | BM25 score threshold for labeling |
+| `content_extraction_method` | `docling` | Content extraction method (docling, unstructured) |
+| `docling_device` | `cpu` | Docling processing device (cpu, cuda, mps) |
+| `dataprep_chunk_size_pdf` | `1000` | Chunk size for PDF documents (tokens) |
+| `dataprep_chunk_size_docx` | `1000` | Chunk size for DOCX documents (tokens) |
+| `dataprep_chunk_size_xlsx` | `1000` | Chunk size for XLSX documents (tokens) |
+| `dataprep_chunk_size_pptx` | `1000` | Chunk size for PPTX documents (tokens) |
+| `dataprep_chunk_size_html` | `1000` | Chunk size for HTML documents (tokens) |
+| `dataprep_chunk_size_txt` | `1000` | Chunk size for TXT documents (tokens) |
+| `dataprep_chunk_size_md` | `1000` | Chunk size for Markdown documents (tokens) |
+| `dataprep_max_concurrent_batches` | `1` | Max concurrent processing batches |
+
+### Label Selector Prompt
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `label_selector_system_prompt` | (built-in) | System prompt for automatic document labeling (optional, has built-in default with `{labels_list}` placeholder) |
+
+### Docker Swarm Multi-Node
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `swarm_registry_url` | `localhost:5000` | Docker registry URL (for multi-node Swarm) |
+| `data_dir` | `./data` | Data directory (relative to deploy_dir) |
 
 Shared variables in `group_vars/all.yml`:
 

@@ -251,6 +251,8 @@ Set in `group_vars/<env>/vars.yml`:
 | `retriever_arango_filter_strategy` | `OR` | Filter strategy (OR, AND) |
 | `retriever_summarizer_enabled` | `false` | Enable result summarization |
 
+| `retriever_arango_graph_name` | `GRAPH` | ArangoDB graph name for traversal |
+
 #### ArangoDB Graph Traversal
 
 | Variable | Default | Description |

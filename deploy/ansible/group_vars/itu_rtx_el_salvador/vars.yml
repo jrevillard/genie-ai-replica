@@ -9,6 +9,7 @@ deploy_dir: /opt/genieai-el-salvador
 stack_name: genieai-el-salvador
 gpu_env_file: env.rtx6000
 repo_branch: el-salvador-merge-test
+arango_db: el-salvador
 
 # =============================================================================
 # API GATEWAY

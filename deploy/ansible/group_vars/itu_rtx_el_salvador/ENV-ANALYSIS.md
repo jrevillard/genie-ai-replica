@@ -63,8 +63,8 @@ These are variables present in the user's El Salvador `.env` that will NOT be se
 
 | Variable | Value in .env | Notes |
 |----------|-------------|-------|
-| `ARANGO_DB_NAME` | `el-salvador` | Different from default `genie-ai`. **Currently NOT covered.** |
-| `ARANGO_DB` | `el-salvador` | Same as above, used by some services |
+| `ARANGO_DB_NAME` | `el-salvador` | **Not used in code** — can be removed |
+| `ARANGO_DB` | `el-salvador` | Set via `arango_db` in vars.yml (default: `genie-ai`) |
 | `OPENWEATHERMAP_API_KEY` | `b115ccced35ade4c9a1077b6e5a210dd` | Not in template |
 | `CORS_ORIGIN` | `http://localhost/` | Separate from `CORS_ALLOWED_ORIGINS`, used by backend code |
 | `FRONTEND_URL` | `https://localhost/` | Not in template |

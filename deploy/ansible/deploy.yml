@@ -632,11 +632,18 @@
         mode: '0600'
         owner: "{{ ansible_user }}"
 
+    - name: Build docker compose profiles list
+      ansible.builtin.set_fact:
+        _compose_profiles: >-
+          {% if deploy_opea is not defined or deploy_opea != '0' %}--profile opea {% endif %}-
+          {% if certbot_replicas is defined and certbot_replicas != '0' %}--profile letsencrypt {% endif %}
+
     - name: Validate compose configuration
       ansible.builtin.shell: >
         docker compose
         {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
         --env-file {{ deploy_dir }}/.env
+        {{ _compose_profiles }}
         -f {{ deploy_dir }}/{{ compose_file }} config --quiet
       args:
         chdir: "{{ deploy_dir }}"
@@ -666,6 +673,7 @@
         docker compose \
           {% if gpu_env_file and gpu_env_file | length > 0 %}--env-file {{ deploy_dir }}/{{ gpu_env_file }}{% endif %}
           --env-file {{ deploy_dir }}/.env \
+          {{ _compose_profiles }} \
           -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.yaml.tmp
 
         # Fix port types: convert quoted port numbers to bare integers

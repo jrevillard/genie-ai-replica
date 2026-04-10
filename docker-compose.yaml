@@ -730,6 +730,7 @@ services:
       TEI_EMBEDDING_ENDPOINT: http://tei:80
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
+      ARANGO_DB: ${ARANGO_DB:-genie-ai}
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH_TEST}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
@@ -778,6 +779,7 @@ services:
       RETRIEVER_COMPONENT_NAME: GENIE_RETRIEVER_ARANGODB
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH_TEST}
       ARANGO_URL: http://arango-vector-db:8529
+      ARANGO_DB: ${ARANGO_DB:-genie-ai}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       VLLM_ENDPOINT: http://vllm:8000

@@ -193,6 +193,7 @@ Set in `group_vars/<env>/vars.yml`:
 |----------|---------|-------------|
 | `arango_db` | `genie-ai` | ArangoDB database name (default: `genie-ai` in code) |
 | `arango_graph_name` | `GRAPH` | ArangoDB graph name (used by retriever and dataprep) |
+| `arango_port` | `8529` | ArangoDB port exposed on host |
 
 ### LLM Model Configuration (vLLM)
 
@@ -250,8 +251,6 @@ Set in `group_vars/<env>/vars.yml`:
 | `retriever_arango_num_centroids` | `1` | Number of centroids for approximate search |
 | `retriever_arango_filter_strategy` | `OR` | Filter strategy (OR, AND) |
 | `retriever_summarizer_enabled` | `false` | Enable result summarization |
-
-| `retriever_arango_graph_name` | `GRAPH` | ArangoDB graph name for traversal |
 
 #### ArangoDB Graph Traversal
 

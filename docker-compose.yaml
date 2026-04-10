@@ -388,9 +388,8 @@ services:
 
   arango-vector-db:
     image: arangodb/arangodb:3.12.4
-    # Internal only - no host port mapping needed
-    # ports:
-    #   - "${ARANGO_PORT:-8529}:8529"
+    ports:
+      - "${ARANGO_PORT:-8529}:8529"
     volumes:
       - arango_data:/var/lib/arangodb3
     environment:

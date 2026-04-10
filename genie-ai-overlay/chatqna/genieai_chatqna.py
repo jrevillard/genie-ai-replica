@@ -443,7 +443,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
 
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
-        inputs["inputs"] = inputs["text"]
+        inputs["input"] = inputs["text"]
         del inputs["text"]
 
 
@@ -584,8 +584,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
             logger.debug(f'Raw output of the embedding\n {data}\n')
+        # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
+        if isinstance(data, dict) and "data" in data:
+            data = data["data"]
         assert isinstance(data, list)
-        next_data = {"text": inputs["inputs"], "embedding": data[0]}
+        next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:

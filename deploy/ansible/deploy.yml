@@ -779,24 +779,28 @@
       when: _compose_changed | bool
 
     - name: Deployment summary
-      ansible.builtin.debug:
-        msg: |
-          =============================================
-          GENIE.AI deployment complete
-          =============================================
-          Stack: {{ stack_name }}
-          Services: {{ service_list.stdout_lines | length }}
-          Backend health: {{ health_check.status }}
-          Frontend: {{ frontend_check.status }}
-          Access: https://{{ nginx_public_domain | default('localhost') }}/
-          =============================================
+      ansible.builtin.shell: |
+        echo ""
+        echo "============================================="
+        echo "GENIE.AI deployment complete"
+        echo "============================================="
+        echo "Stack: {{ stack_name }}"
+        echo "Services: {{ service_list.stdout_lines | length }}"
+        echo "Backend health: {{ health_check.status }}"
+        echo "Frontend: {{ frontend_check.status }}"
+        echo "Access: https://{{ nginx_public_domain | default('localhost') }}/"
+        echo "============================================="
+        echo ""
+      changed_when: false
       when: _compose_changed | bool
 
     - name: Skip deployment notice
-      ansible.builtin.debug:
-        msg: |
-          =============================================
-          GENIE.AI - No changes detected, skipping deployment.
-          =============================================
+      ansible.builtin.shell: |
+        echo ""
+        echo "============================================="
+        echo "GENIE.AI - No changes detected, skipping deployment."
+        echo "============================================="
+        echo ""
+      changed_when: false
       when: not (_compose_changed | bool)
 

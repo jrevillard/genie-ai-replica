@@ -41,6 +41,15 @@ email_from: "noreply@genie-ai.itu.int"
 # =============================================================================
 # OPEA / AI SERVICES
 # =============================================================================
+retriever_arango_traversal_enabled: "true"
+retriever_arango_traversal_max_depth: "2"
+retriever_arango_traversal_max_returned: "5"
+retriever_arango_traversal_score_threshold: "0.7"
+retriever_arango_traversal_concurrent_batches: "10"
+retriever_arango_k: "20"
+retriever_arango_fetch_k: "30"
+retriever_arango_score_threshold: "0.2"
+reranking_threshold: "0.6"
 vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct
 vllm_max_model_len: "16384"
 vllm_gpu_utilization: "0.35"

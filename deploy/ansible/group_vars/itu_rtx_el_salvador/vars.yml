@@ -39,6 +39,13 @@ email_user: "genie-ai"
 email_from: "noreply@genie-ai.itu.int"
 
 # =============================================================================
+# LET'S ENCRYPT (automatic SSL certificates)
+# =============================================================================
+certbot_email: "admin@assembly.govstack.global"
+certbot_replicas: "1"
+# certbot_staging: "false"  # Set to "true" to use Let's Encrypt staging (avoids rate limits)
+
+# =============================================================================
 # OPEA / AI SERVICES
 # =============================================================================
 arango_graph_name: "GRAPH_TEST"

@@ -192,7 +192,7 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `arango_db` | `genie-ai` | ArangoDB database name (default: `genie-ai` in code) |
-| `arango_graph_name` | `knowledge-graph` | ArangoDB graph name |
+| `arango_graph_name` | `GRAPH` | ArangoDB graph name (used by retriever and dataprep) |
 
 ### LLM Model Configuration (vLLM)
 

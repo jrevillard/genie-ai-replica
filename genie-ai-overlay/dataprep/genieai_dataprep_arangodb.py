@@ -611,7 +611,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
-                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
+                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
                 
                 documents_to_process = []
                 for i, doc in enumerate(labelled_docs):
@@ -666,7 +666,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._write_ingestion_log(input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
                 
                 # Perform graceful rollback (retraction)
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
                 
                 # Set final status to "Killed" as per state machine specification
                 await self._update_doc_status(input.file_id, "Killed")
@@ -683,7 +683,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._update_doc_status(input.file_id, "Ingestion Error")
                 
                 # Auto-retract created data
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
                 
                 raise HTTPException(status_code=500, detail=error_msg)

@@ -41,6 +41,7 @@ email_from: "noreply@genie-ai.itu.int"
 # =============================================================================
 # OPEA / AI SERVICES
 # =============================================================================
+retriever_arango_graph_name: "GRAPH_TEST"
 retriever_arango_traversal_enabled: "true"
 retriever_arango_traversal_max_depth: "2"
 retriever_arango_traversal_max_returned: "5"

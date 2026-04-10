@@ -91,8 +91,7 @@ services:
     image: kong:latest
     restart: "no"
     depends_on:
-      kong-database:
-        condition: service_healthy
+      - kong-database
     networks:
       - genieai_network
     environment:
@@ -120,8 +119,7 @@ services:
   kong-config:
     restart: "no"
     depends_on:
-      kong:
-        condition: service_healthy
+      - kong
     build: api-gateway-solution/new-config/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-kong-config:latest
     networks:
@@ -144,8 +142,7 @@ services:
 
   kong:
     depends_on:
-      kong-database:
-        condition: service_healthy
+      - kong-database
     restart: unless-stopped
     image: kong:latest
     environment:
@@ -192,10 +189,8 @@ services:
 
   nginx:
     depends_on:
-      kong:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
+      - kong
+      - frontend
     restart: unless-stopped
     build: api-gateway-solution/nginx/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-nginx:latest
@@ -300,10 +295,8 @@ services:
 
   backend:
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
-      redis-cache:
-        condition: service_healthy
+      - arango-vector-db
+      - redis-cache
     restart: unless-stopped
     build:
       context: components/
@@ -359,8 +352,7 @@ services:
 
   document-repository:
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
+      - arango-vector-db
     restart: unless-stopped
     build:
       context: components/
@@ -450,8 +442,7 @@ services:
 
   http-service:
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     restart: unless-stopped
     build:
       context: .
@@ -531,8 +522,7 @@ services:
   textgen:
     profiles: [opea]
     depends_on:
-      vllm:
-        condition: service_healthy
+      - vllm
     restart: unless-stopped
     image: opea/llm-textgen:latest
     environment:
@@ -603,8 +593,7 @@ services:
   translation:
     profiles: [opea]
     depends_on:
-      vllm-translation-guardrail:
-        condition: service_healthy
+      - vllm-translation-guardrail
     restart: unless-stopped
     image: opea/translation:latest
     environment:
@@ -634,8 +623,7 @@ services:
   guardrail:
     profiles: [opea]
     depends_on:
-      vllm-translation-guardrail:
-        condition: service_healthy
+      - vllm-translation-guardrail
     restart: unless-stopped
     image: opea/guardrails:latest
     environment:
@@ -698,8 +686,7 @@ services:
   embedding:
     profiles: [opea]
     depends_on:
-      tei:
-        condition: service_healthy
+      - tei
     restart: unless-stopped
     image: opea/embedding:latest
     environment:
@@ -761,8 +748,7 @@ services:
   reranker:
     profiles: [opea]
     depends_on:
-      tei_reranker:
-        condition: service_healthy
+      - tei_reranker
     restart: unless-stopped
     build:
       context: .
@@ -798,8 +784,7 @@ services:
   dataprep-arango-service:
     profiles: [opea]
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
+      - arango-vector-db
     restart: unless-stopped
     build:
       context: .
@@ -858,8 +843,7 @@ services:
   retriever-arango-service:
     profiles: [opea]
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
+      - arango-vector-db
     restart: unless-stopped
     build:
       context: .
@@ -920,10 +904,8 @@ services:
   chatqna-xeon-backend-server:
     profiles: [opea]
     depends_on:
-      embedding:
-        condition: service_healthy
-      reranker:
-        condition: service_healthy
+      - embedding
+      - reranker
     restart: unless-stopped
     build:
       context: .

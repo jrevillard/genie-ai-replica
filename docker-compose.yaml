@@ -831,6 +831,7 @@ services:
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       EMBEDDING_SERVER_HOST_IP: embedding
       EMBEDDING_SERVER_PORT: 6000
+      EMBEDDING_SERVER_ENDPOINT: ${EMBEDDING_SERVER_ENDPOINT:-/v1/embeddings}
       RETRIEVER_SERVICE_HOST_IP: retriever-arango-service
       RETRIEVER_SERVICE_PORT: 7025
       RERANK_SERVER_HOST_IP: reranker

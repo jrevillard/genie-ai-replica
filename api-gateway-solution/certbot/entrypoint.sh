@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # GENIE.AI - Certbot entrypoint for Let's Encrypt certificate management
 # Manages automatic certificate provisioning and renewal via HTTP-01 challenge.
 # Runs as a foreground process (PID 1) with a renewal loop every 12 hours.
@@ -81,13 +81,12 @@ signal_nginx_reload() {
 
 # Request certificate with retry (exponential backoff: 30s, 60s, 120s)
 request_certificate() {
-    local attempt=0
-    local max_attempts=3
-    local delays=(30 60 120)
+    _attempt=0
+    _max_attempts=3
 
-    while [ ${attempt} -lt ${max_attempts} ]; do
-        attempt=$((attempt + 1))
-        echo "Certificate request attempt ${attempt}/${max_attempts}..."
+    while [ ${_attempt} -lt ${_max_attempts} ]; do
+        _attempt=$((_attempt + 1))
+        echo "Certificate request attempt ${_attempt}/${_max_attempts}..."
 
         if certbot certonly ${CERTBOT_ARGS}; then
             echo "Certificate obtained successfully"
@@ -96,14 +95,18 @@ request_certificate() {
             return 0
         fi
 
-        if [ ${attempt} -lt ${max_attempts} ]; then
-            local delay=${delays[$((attempt - 1))]}
-            echo "Certificate request failed. Retrying in ${delay}s..."
-            sleep ${delay}
+        if [ ${_attempt} -lt ${_max_attempts} ]; then
+            case ${_attempt} in
+                1) _delay=30 ;;
+                2) _delay=60 ;;
+                *) _delay=120 ;;
+            esac
+            echo "Certificate request failed. Retrying in ${_delay}s..."
+            sleep ${_delay}
         fi
     done
 
-    echo "ERROR: Failed to obtain certificate after ${max_attempts} attempts."
+    echo "ERROR: Failed to obtain certificate after ${_max_attempts} attempts."
     echo "Will retry on next renewal cycle (12 hours)."
     return 1
 }

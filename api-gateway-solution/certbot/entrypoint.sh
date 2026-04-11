@@ -39,18 +39,26 @@ fi
 # Helper functions
 # ---------------------------------------------------------------------------
 
-# Check if existing certs in secrets dir are valid (>30 days remaining)
+# Check if existing certs in secrets dir are valid Let's Encrypt certs
+# (>30 days remaining, issued by Let's Encrypt Authority X3)
 check_existing_certs() {
     if [ ! -f "${SECRETS_DIR}/server.crt" ] || [ ! -f "${SECRETS_DIR}/server.key" ]; then
         return 1
     fi
 
+    # Verify the certificate was issued by Let's Encrypt (not self-signed)
+    _issuer=$(openssl x509 -in "${SECRETS_DIR}/server.crt" -noout -issuer 2>/dev/null | head -1)
+    case "${_issuer}" in
+        *Let\'s\ Encrypt*) ;;
+        *) return 1 ;;
+    esac
+
     # Check if certificate is valid and has >30 days remaining (2592000 seconds)
     if openssl x509 -in "${SECRETS_DIR}/server.crt" -checkend 2592000 -noout >/dev/null 2>&1; then
-        echo "Existing certificates in ${SECRETS_DIR} are valid (>30 days remaining)"
+        echo "Existing Let's Encrypt certificates in ${SECRETS_DIR} are valid (>30 days remaining)"
         return 0
     else
-        echo "Existing certificates in ${SECRETS_DIR} are expired or expiring soon"
+        echo "Existing Let's Encrypt certificates in ${SECRETS_DIR} are expired or expiring soon"
         return 1
     fi
 }

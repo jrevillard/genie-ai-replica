@@ -105,7 +105,15 @@ while true; do
     # Note: cannot rm the flag file because the volume is mounted read-only.
     # Flag is consumed by writing an empty file (certbot clears it after a delay).
     if [ -f /var/www/certbot/reload-nginx ]; then
-        echo "Reload signal received, reloading nginx..."
+        echo "Reload signal received from certbot, updating certificates..."
+        # Re-copy certificates from volume mount (nginx does not reload cert files on HUP)
+        if [ -f "${VOLUME_CERT_PATH}/server.crt" ] && [ -f "${VOLUME_CERT_PATH}/server.key" ]; then
+            cp "${VOLUME_CERT_PATH}/server.crt" "${CERT_PATH}/server.crt"
+            cp "${VOLUME_CERT_PATH}/server.key" "${CERT_PATH}/server.key"
+            chmod 644 "${CERT_PATH}/server.crt"
+            chmod 600 "${CERT_PATH}/server.key"
+            echo "Certificates updated from volume mount"
+        fi
         nginx -s reload || echo "WARNING: nginx reload failed"
     fi
 done

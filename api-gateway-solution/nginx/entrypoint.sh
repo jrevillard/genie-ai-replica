@@ -17,8 +17,8 @@ use_volume_certs() {
         exit 1
     fi
 
-    # Validate key format
-    if ! openssl rsa -in "${VOLUME_CERT_PATH}/server.key" -check -noout >/dev/null 2>&1; then
+    # Validate key format (supports RSA, ECDSA, and Ed25519 via pkey)
+    if ! openssl pkey -in "${VOLUME_CERT_PATH}/server.key" -check -noout >/dev/null 2>&1; then
         echo "ERROR: Invalid private key format in ${VOLUME_CERT_PATH}/server.key"
         exit 1
     fi

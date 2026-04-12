@@ -248,7 +248,7 @@ services:
     image: certbot/certbot:latest
     entrypoint: ["/certbot-entrypoint.sh"]
     environment:
-      - CERTBOT_EMAIL=${CERTBOT_EMAIL}
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}
       - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
       - CERTBOT_STAGING=${CERTBOT_STAGING:-false}
     volumes:
@@ -384,7 +384,7 @@ services:
       # Email configuration (required)
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT}
-      - EMAIL_SECURE=${EMAIL_SECURE}
+      - EMAIL_SECURE=${EMAIL_SECURE:-}
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD}
       - EMAIL_FROM=${EMAIL_FROM}

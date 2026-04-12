@@ -7,35 +7,17 @@ This test plan is designed to run from a clean stack. **Phase 0 is MANDATORY and
 ### 0.1 Stop and Remove Existing Stack
 
 ```bash
-docker stack rm genieai
-# Wait for all services to be removed
-echo "Waiting for services to stop..."
-while docker service ls --filter label=com.docker.stack.namespace=genieai -q 2>/dev/null | grep -q .; do sleep 2; done
-echo "Stack removed."
+cd /path/to/genie-ai
+docker compose down -v
 ```
 
-### 0.2 Clean Volumes and Local Registry
+This removes all containers, networks, and volumes. No wait loop needed — `docker compose down` is synchronous.
 
-Remove persistent data and the local Docker registry to ensure a fully clean state. This also catches any image name mismatches during the build step (wrong names will fail to push if the registry is empty).
-
-**Warning**: This deletes all ArangoDB data, Keycloak data, Redis cache, and locally cached images.
-
-```bash
-# Remove volumes
-docker volume ls --filter label=com.docker.stack.namespace=genieai -q | xargs -r docker volume rm
-
-# Remove local registry and its data
-docker container stop registry 2>/dev/null && docker container rm registry 2>/dev/null
-docker volume rm registry_data 2>/dev/null
-echo "Registry cleaned."
-```
-
-### 0.3 Prepare `.env` File
+### 0.2 Prepare `.env` File
 
 The project uses a single `.env` file at the project root. Copy the template and set required secrets:
 
 ```bash
-cd /path/to/genie-ai
 cp env .env
 ```
 
@@ -48,11 +30,22 @@ JWT_SECRET=any-random-string
 SESSION_SECRET=any-random-string
 TRANSLATION_CACHE_PASSWORD=any-random-string
 
-# PostgreSQL (Keycloak + Kong)
-POSTGRES_PASSWORD=keycloakpwd
+# PostgreSQL (superuser)
+POSTGRES_PASSWORD=postgrespwd
+
+# PostgreSQL dedicated users (must differ from POSTGRES_PASSWORD)
+KONG_DB_PASSWORD=kongpwd
+KEYCLOAK_DB_PASSWORD=keycloakpwd
 
 # Keycloak admin
 KEYCLOAK_ADMIN_PASSWORD=admin
+
+# Keycloak OIDC client secrets
+KEYCLOAK_CLIENT_SECRET=any-random-string
+KEYCLOAK_PROXY_CLIENT_SECRET=any-random-string
+
+# OPEA <-> Backend auth
+SERVICE_AUTH_TOKEN=any-random-string
 
 # NGINX_PUBLIC_DOMAIN — defaults to "localhost" in docker-compose.yaml
 # Only set this if deploying to a domain other than localhost
@@ -65,62 +58,17 @@ NODE_TLS_REJECT_UNAUTHORIZED=0
 DEPLOY_OPEA=0
 ```
 
-### 0.4 Build and Push Images
-
-**CRITICAL**: This step is NOT optional. `docker stack deploy` cannot build images — all images must be pre-built and pushed to a local registry. Skipping this step means running tests against stale code, which produces false failures.
-
-For the full build procedure (13 services), see **`docs/docker-swarm-setup.md` Step 5**. For auth testing with `DEPLOY_OPEA=0`, only these 9 images are needed:
+### 0.3 Deploy Stack
 
 ```bash
-# Start local registry if not already running
-docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2 2>/dev/null \
-  || echo "Registry already running."
-
-# Build images
-# NOTE: Some Dockerfiles COPY from a parent directory, so the build context
-# differs from the Dockerfile location. These use -f <dockerfile> <context>.
-docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
-docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
-docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
-docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
-docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
-docker build -t genie-ai-postgres-init:latest config/postgres/
-docker build -t genie-ai-keycloak:latest config/keycloak/
-docker build -f config/keycloak/Dockerfile.config-cli -t genie-ai-keycloak-config:latest config/keycloak/
-
-# Tag for local registry (docker-compose references ${SWARM_REGISTRY_URL}/genie-ai-<name>:latest)
-docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
-docker tag genieai_mvp_backend:latest localhost:5000/genie-ai-backend:latest
-docker tag genieai_mvp_document-repository:latest localhost:5000/genie-ai-document-repository:latest
-docker tag genieai_mvp_http-service:latest localhost:5000/genie-ai-http-service:latest
-docker tag genie-ai-nginx:latest localhost:5000/genie-ai-nginx:latest
-docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:latest
-docker tag genie-ai-postgres-init:latest localhost:5000/genie-ai-postgres-init:latest
-docker tag genie-ai-keycloak:latest localhost:5000/genie-ai-keycloak:latest
-docker tag genie-ai-keycloak-config:latest localhost:5000/genie-ai-keycloak-config:latest
-
-# Push to local registry
-docker push localhost:5000/genie-ai-frontend:latest
-docker push localhost:5000/genie-ai-backend:latest
-docker push localhost:5000/genie-ai-document-repository:latest
-docker push localhost:5000/genie-ai-http-service:latest
-docker push localhost:5000/genie-ai-nginx:latest
-docker push localhost:5000/genie-ai-kong-config:latest
-docker push localhost:5000/genie-ai-postgres-init:latest
-docker push localhost:5000/genie-ai-keycloak:latest
-docker push localhost:5000/genie-ai-keycloak-config:latest
+set -a && source .env && set +a && docker compose up -d
 ```
 
-### 0.5 Deploy Stack
+Images are built automatically via `build:` directives in `docker-compose.yaml` — no manual build or registry needed.
 
-```bash
-set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
-```
+### 0.4 Verify Stack Health
 
-### 0.6 Verify Stack Health
-
-Wait for all services to become healthy. This may take 2-5 minutes depending on image availability.
+Wait for all services to become healthy. This may take 2-5 minutes depending on image build time.
 
 ```bash
 # Wait at least 120 seconds for all services to stabilize
@@ -131,20 +79,20 @@ sleep 120
 ```
 
 ```bash
-# Check service status — all should show "Running" with replicas 1/1
-docker service ls --filter label=com.docker.stack.namespace=genieai
+# Check service status — all should show "running" or "healthy"
+docker compose ps
 
 # Detailed per-service check
 echo "=== Service Health ==="
-for svc in frontend backend keycloak arango nginx kong; do
-  replicas=$(docker service ls --filter name=genieai_${svc} --format '{{.Replicas}}' 2>/dev/null || echo "N/A")
-  echo "  ${svc}: ${replicas}"
+for svc in frontend backend keycloak arango-vector-db nginx kong; do
+  status=$(docker compose ps --services 2>/dev/null | grep "${svc}" || echo "N/A")
+  echo "  ${svc}: ${status}"
 done
 ```
 
-**Expected**: All services show `1/1` replicas.
+**Expected**: All services show `running` or `healthy`.
 
-### 0.7 Verify Individual Services
+### 0.5 Verify Individual Services
 
 ```bash
 # NGINX (reverse proxy)
@@ -161,12 +109,12 @@ curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code
 # Expected: 200
 
 # ArangoDB (internal — run from the backend container)
-docker exec $(docker ps --filter name=genieai_backend --format '{{.ID}}' | head -1) \
-  bash -c 'curl -sk http://genieai_arango:8529/_admin/cluster/health' 2>/dev/null | head -1
+docker exec $(docker ps --filter name=genie-ai-backend-1 --format '{{.ID}}' | head -1) \
+  bash -c 'curl -sk http://arango-vector-db:8529/_admin/cluster/health' 2>/dev/null | head -1
 # Expected: {"clusterId":...,"health":"GOOD",...}
 ```
 
-### 0.7b Create Additional Realms (Phase I Prerequisite)
+### 0.6 Create Additional Realms (Phase I Prerequisite)
 
 If `KEYCLOAK_ADDITIONAL_REALMS` is set in `.env`, the corresponding realms **must** exist in Keycloak **before** the backend starts. The backend initializes JWKS for additional realms at startup (see `keycloak-auth-service.js:initAllRealms()`) — realms created after startup are not recognized.
 
@@ -246,14 +194,14 @@ print('Additional realms setup complete')
 **Important**: After creating additional realms, the backend must be restarted to pick up the new JWKS endpoints:
 
 ```bash
-docker service update --force genieai_backend
+docker compose restart backend
 echo "Waiting 30 seconds for backend to reinitialize with additional realms..."
 sleep 30
 curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code}\n"
 # Expected: 200
 ```
 
-### 0.8 Enable ROPC on genie-app Client (Test Only)
+### 0.7 Enable ROPC on genie-app Client (Test Only)
 
 The `genie-app` client uses authorization code flow for the frontend. ROPC (Direct Access Grants) is only needed for API testing via curl and should **not** be enabled in production.
 
@@ -287,7 +235,7 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/genie/clients/${GENIE_APP_I
 # Expected: 204
 ```
 
-### 0.9 Create Test User and Verify ROPC Token Retrieval
+### 0.8 Create Test User and Verify ROPC Token Retrieval
 
 Create a test user via admin API (no pre-existing user required):
 
@@ -344,7 +292,7 @@ TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-c
 
 ## Prerequisites
 
-- GENIE.AI Docker Swarm stack deployed and healthy (Phase 0 complete)
+- GENIE.AI Docker Compose stack deployed and healthy (Phase 0 complete)
 - Admin access to Keycloak (`KEYCLOAK_ADMIN_PASSWORD` from `.env`)
 - `@playwright/test` installed (`npm install` at project root, then `npx playwright install chromium`)
 - `curl`, `python3`, `jq` available on the host

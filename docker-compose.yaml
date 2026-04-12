@@ -1080,6 +1080,7 @@ services:
 
   # PostgreSQL initialization (creates dedicated databases and users for each service)
   postgres-init:
+    build: config/postgres/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-postgres-init:latest
     environment:
       - PGHOST=postgres
@@ -1103,6 +1104,7 @@ services:
 
   # Keycloak Identity Provider
   keycloak:
+    build: config/keycloak/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-keycloak:latest
     environment:
       - KC_BOOTSTRAP_ADMIN_USERNAME=admin
@@ -1135,6 +1137,9 @@ services:
 
   # Keycloak realm configuration via keycloak-config-cli (runs once after Keycloak is healthy)
   keycloak-config:
+    build:
+      context: config/keycloak/
+      dockerfile: Dockerfile.config-cli
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-keycloak-config:latest
     environment:
       - KEYCLOAK_URL=http://keycloak:8080

@@ -52,10 +52,21 @@ Edit `.env` and set the required secrets:
 ARANGO_PASSWORD=<strong-password>
 JWT_SECRET=<strong-random-string>
 SESSION_SECRET=<strong-random-string>
+TRANSLATION_CACHE_PASSWORD=<strong-password>
 POSTGRES_PASSWORD=<strong-password>
+KONG_DB_PASSWORD=<strong-password>
+KEYCLOAK_ADMIN_PASSWORD=<strong-password>
+KEYCLOAK_DB_PASSWORD=<strong-password>
+KEYCLOAK_CLIENT_SECRET=<strong-random-string>
+KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
+SERVICE_AUTH_TOKEN=<strong-random-string>
 AUTH_SERVICE_USERNAME=<username>
 AUTH_SERVICE_PASSWORD=<strong-password>
 ```
+
+Generate strong passwords with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
+
+**Important:** `KONG_DB_PASSWORD` and `KEYCLOAK_DB_PASSWORD` must differ from `POSTGRES_PASSWORD` — they protect dedicated PostgreSQL users.
 
 Set network/domain variables. Use `localhost` for local development, or your server IP/domain for remote access:
 
@@ -192,7 +203,37 @@ Once you see "Configuration restored successfully", Kong is ready to route traff
 
 **Note:** Kong routes are unavailable until kong-config completes. Services calling Kong during this window will get 404s.
 
-## Step 8: Verify Deployment
+## Step 8: Post-Deploy — Keycloak Identity Provider
+
+Keycloak is started automatically with the core stack and proxied by NGINX at `/auth/*`. The `keycloak-config` one-shot service applies realm configuration (clients, roles, mappers) after Keycloak is healthy.
+
+### Verify Keycloak health:
+
+```bash
+docker compose ps keycloak
+docker compose logs keycloak-config --tail 10
+```
+
+### Admin console:
+
+- **URL**: `https://<NGINX_PUBLIC_DOMAIN>/auth/admin/`
+- **Username**: `admin`
+- **Password**: `<KEYCLOAK_ADMIN_PASSWORD>` from `.env`
+
+### Keycloak environment variables:
+
+See Section 9 of the `env` template for all available variables. Key ones:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KEYCLOAK_REALM` | `genie` | Realm name |
+| `KEYCLOAK_CLIENT_ID` | `genie-app` | OIDC client ID |
+| `KEYCLOAK_URL` | `https://<domain>/auth` | Public URL (auto-set from NGINX_PUBLIC_DOMAIN) |
+| `KEYCLOAK_ADDITIONAL_REALMS` | — | Additional realms (JSON format, optional) |
+
+For external IdP integration (Google, Microsoft, etc.), see [External IdP Integration Guide](keycloak-admin-guide.md).
+
+## Step 9: Verify Deployment
 
 ### Check service status:
 
@@ -219,7 +260,7 @@ curl -sk https://localhost/
 - **Web UI**: `https://localhost/` (self-signed cert warning is expected)
 - **API Docs**: `https://localhost/api-docs`
 
-## Step 9: Useful Commands
+## Step 10: Useful Commands
 
 ```bash
 # View logs (follow mode)
@@ -239,7 +280,7 @@ docker compose down
 docker compose down -v
 ```
 
-## Step 10: Debugging
+## Step 11: Debugging
 
 ### Execute commands inside a running container:
 
@@ -299,7 +340,7 @@ docker compose logs vllm --tail 50
 
 ### Kong routes returning 404
 
-Wait for the `kong-config` service to complete (Step 7). If it failed:
+Wait for the `kong-config` service to complete (Step 7). Also check that `keycloak-config` completed (Step 8). If either failed:
 
 ```bash
 docker compose logs kong-config

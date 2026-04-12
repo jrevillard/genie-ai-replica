@@ -61,7 +61,7 @@ DEPLOY_OPEA=0
 ### 0.3 Deploy Stack
 
 ```bash
-set -a && source .env && set +a && docker compose up -d
+docker compose up -d
 ```
 
 Images are built automatically via `build:` directives in `docker-compose.yaml` — no manual build or registry needed.
@@ -84,10 +84,7 @@ docker compose ps
 
 # Detailed per-service check
 echo "=== Service Health ==="
-for svc in frontend backend keycloak arango-vector-db nginx kong; do
-  status=$(docker compose ps --services 2>/dev/null | grep "${svc}" || echo "N/A")
-  echo "  ${svc}: ${status}"
-done
+docker compose ps --format "table {{.Service}}\t{{.Status}}" | grep -E "frontend|backend|keycloak|arango-vector-db|nginx|kong"
 ```
 
 **Expected**: All services show `running` or `healthy`.
@@ -109,9 +106,9 @@ curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code
 # Expected: 200
 
 # ArangoDB (internal — run from the backend container)
-docker exec $(docker ps --filter name=genie-ai-backend-1 --format '{{.ID}}' | head -1) \
-  bash -c 'curl -sk http://arango-vector-db:8529/_admin/cluster/health' 2>/dev/null | head -1
-# Expected: {"clusterId":...,"health":"GOOD",...}
+docker exec $(docker ps --filter name=backend --format '{{.ID}}' | head -1) \
+  bash -c 'curl -sk -u root:${ARANGO_PASSWORD} http://arango-vector-db:8529/_admin/server/availability' 2>/dev/null | head -1
+# Expected: {"error":false,"code":200,"mode":"default"}
 ```
 
 ### 0.6 Create Additional Realms (Phase I Prerequisite)
@@ -119,7 +116,7 @@ docker exec $(docker ps --filter name=genie-ai-backend-1 --format '{{.ID}}' | he
 If `KEYCLOAK_ADDITIONAL_REALMS` is set in `.env`, the corresponding realms **must** exist in Keycloak **before** the backend starts. The backend initializes JWKS for additional realms at startup (see `keycloak-auth-service.js:initAllRealms()`) — realms created after startup are not recognized.
 
 ```bash
-source .env
+set -a && source .env && set +a
 
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
@@ -142,7 +139,7 @@ token = '$TOKEN'
 for realm_name, client_id in realms.items():
     # Check if realm already exists
     check = subprocess.run([
-        'curl', '-sk', f'https://localhost/auth/admin/realms/{realm_name}',
+        'curl', '-sk', '-f', f'https://localhost/auth/admin/realms/{realm_name}',
         '-H', f'Authorization: Bearer {token}'
     ], capture_output=True, text=True)
 
@@ -195,6 +192,10 @@ print('Additional realms setup complete')
 
 ```bash
 docker compose restart backend
+
+# Reload Kong DNS cache (Kong caches the old backend container IP after restart)
+docker exec $(docker ps --filter name=kong --format '{{.ID}}' | head -1) kong reload
+
 echo "Waiting 30 seconds for backend to reinitialize with additional realms..."
 sleep 30
 curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code}\n"
@@ -205,10 +206,12 @@ curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code
 
 The `genie-app` client uses authorization code flow for the frontend. ROPC (Direct Access Grants) is only needed for API testing via curl and should **not** be enabled in production.
 
+**Note:** On a fresh deploy, `directAccessGrantsEnabled` is always `False` (keycloak-config-cli does not enable it). The PUT command below is **required on every fresh stack**.
+
 Verify and enable for testing:
 
 ```bash
-source .env
+set -a && source .env && set +a
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
   -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
@@ -240,7 +243,7 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/genie/clients/${GENIE_APP_I
 Create a test user via admin API (no pre-existing user required):
 
 ```bash
-source .env
+set -a && source .env && set +a
 
 # Create test user (201 = created, 409 = already exists — OK)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
@@ -263,7 +266,8 @@ TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-co
 echo "$TOKEN" | cut -d. -f2 | python3 -c "
 import sys,base64,json
 p=sys.stdin.read()
-claims = json.loads(base64.urlsafe_b64decode(p+(4-len(p)%4)%4*'='))
+p += '=' * (-len(p) % 4)
+claims = json.loads(base64.urlsafe_b64decode(p))
 print(f'azp: {claims[\"azp\"]}')
 print(f'iss: {claims[\"iss\"]}')
 print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
@@ -282,7 +286,7 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 All API tests require an admin token. Run this once and reuse `$TOKEN` throughout the session:
 
 ```bash
-source .env
+set -a && source .env && set +a
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
   -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")

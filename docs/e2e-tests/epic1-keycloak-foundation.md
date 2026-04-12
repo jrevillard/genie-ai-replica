@@ -41,7 +41,7 @@ curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $TOKEN" | pyt
 ### Test B.2 —ArangoDB Document
 
 ```bash
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
     print(JSON.stringify(db.users.toArray().map(u => ({
@@ -64,7 +64,7 @@ curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $TOKEN" -o /d
 # Expected: 200
 
 # Verify exactly 1 user document in ArangoDB
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
     var count = db.users.count();
@@ -127,7 +127,45 @@ GENIE.AI Frontend -> Keycloak (genie realm) -> Keycloak (external-idp realm) -> 
 
 **Prerequisite chain**: Phases A, B, C must pass before running Phase D. Phase D builds on a working login, provisioning, and token validation flow.
 
+> **Clean state required**: Phase D creates a broker user (`external-test@example.com`) in ArangoDB via JIT provisioning (Step 7b). If this user already exists from a prior run with stale data (e.g., soft-deleted), the broker login will fail. If you encounter this, run `docker compose down -v` and restart from Phase 0 to ensure a clean ArangoDB volume.
+
 **Admin token**: Ensure `$TOKEN` is set from the "Get Admin Token" section above. If the token has expired, re-run it.
+
+## Step 0: Clean Stale Broker User (if present)
+
+Remove any existing broker user from both ArangoDB and Keycloak to prevent the "first-broker-login" interstitial page during Step 7b:
+
+```bash
+# Remove stale broker user from ArangoDB (safe to run — no-op if not found)
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
+  arangosh --server.password arangopwd --javascript.execute-string "
+    db._useDatabase('genie-ai');
+    var stale = db.users.byExample({email: 'external-test@example.com'}).toArray();
+    for (var i = 0; i < stale.length; i++) {
+      db.users.remove(stale[i]._key);
+      print('Removed stale broker user from ArangoDB: ' + stale[i]._key);
+    }
+    if (stale.length === 0) { print('No stale broker user in ArangoDB — OK'); }
+  "
+
+# Remove stale broker user from Keycloak (safe to run — no-op if not found)
+BROKER_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?email=external-test@example.com" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+users = json.load(sys.stdin)
+if users:
+    print(users[0]['id'])
+else:
+    print('')
+" 2>/dev/null)
+
+if [ -n "$BROKER_USER_ID" ]; then
+  curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${BROKER_USER_ID}" \
+    -H "Authorization: Bearer $TOKEN" -w "\nRemoved broker user from Keycloak: %{http_code}\n"
+else
+  echo "No stale broker user in Keycloak — OK"
+fi
+```
 
 ## Step 1: Create the External IdP Realm
 
@@ -426,7 +464,7 @@ Validate data residency by running a complete authentication cycle with external
 sudo iptables -I DOCKER-USER -o eth0 -d ! <internal-subnet> -j DROP
 
 # 2. Verify stack is still running
-docker service ls --filter label=com.docker.stack.namespace=genieai
+docker compose ps
 
 # 3. Run full authentication cycle:
 #    - Open browser to https://<your-domain>
@@ -445,7 +483,7 @@ sudo iptables -D DOCKER-USER -o eth0 -d ! <internal-subnet> -j DROP
 # 1. Disconnect from external network (WiFi off / Ethernet unplugged)
 
 # 2. Verify stack is still running
-docker service ls --filter label=com.docker.stack.namespace=genieai
+docker compose ps
 
 # 3. Run full authentication cycle (same as Method A step 3)
 

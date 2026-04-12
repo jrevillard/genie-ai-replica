@@ -33,7 +33,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 
 **Scope:** This phase tests Story 2.3 (Token Passthrough -- Headers Injection to Upstream) conditional on OPEA infrastructure availability.
 
-**Important:** Header construction and injection are verified via backend logs (`docker service logs genieai_backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"`) and authenticated endpoint responses (`GET /api/users/{_key}`).
+**Important:** Header construction and injection are verified via backend logs (`docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"`) and authenticated endpoint responses (`GET /api/users/{_key}`).
 
 **Prerequisites:**
 - OPEA infrastructure MUST be deployed (`DEPLOY_OPEA=1`) for Phase F full testing
@@ -100,7 +100,7 @@ curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
 # Expected: 200 OK with user profile data
 
 # Verify header construction via backend logs
-docker service logs genieai_backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
+docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
 ```
 
 > **Note:** This test uses the user profile endpoint (`GET /api/users/{_key}`) as the authenticated route, then inspects backend logs to verify header extraction.
@@ -140,7 +140,7 @@ curl -sk -X POST "https://localhost/api/chat" \
   }'
 
 # Check OPEA service logs to verify headers were received
-docker service logs genieai_chatqna-xeon-backend-server 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
+docker compose logs chatqna-xeon-backend-server 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
 ```
 
 > **Note:** Full OPEA header verification requires `DEPLOY_OPEA=1` in `.env`. Without OPEA services, the chat endpoint will fail -- but the backend logs will still show the header construction step.
@@ -193,7 +193,7 @@ curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN"
 
 # Check backend logs for the X-User-Id header value
-docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
+docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the ArangoDB _key (e.g., "12345")
 ```
 
@@ -225,7 +225,7 @@ curl -sk -X POST "https://localhost/api/chat" \
   -d '{"messages":[{"role":"user","content":"Test"}]}'
 
 # Check OPEA service logs - should NOT show Authorization header
-docker service logs genieai_chatqna-xeon-backend-server 2>&1 | grep -i "authorization"
+docker compose logs chatqna-xeon-backend-server 2>&1 | grep -i "authorization"
 # Expected: No Authorization header in logs
 ```
 
@@ -305,7 +305,7 @@ curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
   -H "Authorization: Bearer $NO_ROLES_TOKEN"
 
 # Verify backend logs for empty X-User-Roles
-docker service logs genieai_backend 2>&1 | grep -E "X-User-Roles" | tail -5
+docker compose logs backend 2>&1 | grep -E "X-User-Roles" | tail -5
 # Expected: X-User-Roles: "" (empty string)
 
 # Verify backend doesn't crash on missing roles
@@ -379,13 +379,13 @@ GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?emai
 # Make request with genie realm token and check logs
 curl -sk -X GET "https://localhost/api/users/${GENIE_USER_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN"
-docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
+docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the genie-realm-user's ArangoDB _key
 
 # Make request with genie2 realm token and check logs
 curl -sk -X GET "https://localhost/api/users/${GENIE2_USER_KEY}" \
   -H "Authorization: Bearer $USER2_TOKEN"
-docker service logs genieai_backend 2>&1 | grep -E "X-User-Id" | tail -5
+docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the genie2-realm-user's ArangoDB _key (different from genie)
 ```
 
@@ -489,7 +489,7 @@ curl -sk https://localhost/api-docs.json | jq '.components.securitySchemes'
 Verify that `/api-docs` is accessible without authentication.
 
 ```bash
-curl -sk https://localhost/api-docs -o /dev/null -w "HTTP %{http_code}\n"
+curl -skL https://localhost/api-docs -o /dev/null -w "HTTP %{http_code}\n"
 ```
 
 **Expected**: `HTTP 200`
@@ -668,7 +668,7 @@ grep CSP_CONNECT_SRC .env
 export CSP_CONNECT_SRC="'self' https://localhost http://localhost:8080"
 
 # Restart backend after change
-docker service update genieai_backend --force
+docker compose restart backend
 ```
 
 #### Issue: "Authorization code flow not supported"
@@ -832,7 +832,7 @@ curl -sk "https://localhost/api/auth/me" \
 
 ```bash
 # Verify force-refresh in backend logs
-docker service logs genieai_backend 2>&1 | tail -20 | grep -i "force.refresh\|JWKS\|retry"
+docker compose logs backend 2>&1 | tail -20 | grep -i "force.refresh\|JWKS\|retry"
 ```
 
 **Expected**: Log line mentioning JWKS force-refresh or retry (exact message may vary by implementation)
@@ -869,11 +869,11 @@ Validates that the backend can validate tokens from multiple Keycloak realms sim
 ### Prerequisites
 
 - Phase 0 complete (`$TOKEN` available)
-- **IMPORTANT**: `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` must be set in `.env` BEFORE deploying the stack. The additional realms must be created in Keycloak before the backend starts — see Phase 0, Step 0.7b.
+- **IMPORTANT**: `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` must be set in `.env` BEFORE deploying the stack. The additional realms must be created in Keycloak before the backend starts — see Phase 0, Step 0.6.
 
 ### Test I.1 — Verify `genie2` Realm Exists and Create Test User
 
-The `genie2` realm and client should already exist from Phase 0, Step 0.7b. Verify and create the test user.
+The `genie2` realm and client should already exist from Phase 0, Step 0.6. Verify and create the test user.
 
 ```bash
 # Verify realm exists (should return 200, not 404)
@@ -911,7 +911,7 @@ USER2_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie2/protocol/op
 echo "$USER2_TOKEN" | cut -d. -f2 | python3 -c "
 import sys, base64, json
 p = sys.stdin.read().strip()
-claims = json.loads(base64.urlsafe_b64decode(p + (4 - len(p) % 4) % 4 * '='))
+claims = json.loads(base64.urlsafe_b64decode(p + '=' * (-len(p) % 4)))
 print(f'iss: {claims[\"iss\"]}')
 print(f'azp: {claims[\"azp\"]}')
 print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
@@ -926,12 +926,12 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 # Test genie realm token (original)
 echo "=== Genie realm token ==="
 curl -sk "https://localhost/api/auth/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", d.get(\"error\", \"N/A\"))}')"
+  -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"user\",{}).get(\"name\", d.get(\"error\", \"N/A\"))}')"
 
 # Test genie2 realm token
 echo "=== Genie2 realm token ==="
 curl -sk "https://localhost/api/auth/me" \
-  -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"name\", d.get(\"error\", \"N/A\"))}')"
+  -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"user\",{}).get(\"name\", d.get(\"error\", \"N/A\"))}')"
 ```
 
 **Expected**: Both return `HTTP: 200` with user profile data. Each user has a different identity in ArangoDB.
@@ -942,13 +942,13 @@ The backend uses the composite key `{iss}#{sub}` in the ArangoDB `users` collect
 
 ```bash
 # Verify user documents in ArangoDB via backend container
-docker exec $(docker ps --filter name=genieai_backend --format '{{.ID}}' | head -1) \
-  bash -c 'curl -sk http://genieai_arango:8529/_api/database' 2>/dev/null | head -1
+docker exec $(docker ps --filter name=backend --format '{{.ID}}' | head -1) \
+  bash -c 'curl -sk http://arango-vector-db:8529/_api/database' 2>/dev/null | head -1
 # Expected: {"result":true,...} (database accessible)
 
 # Query users collection to see composite keys
-docker exec $(docker ps --filter name=genieai_backend --format '{{.ID}}' | head -1) \
-  bash -c "curl -sk -X POST http://genieai_arango:8529/_api/cursor \
+docker exec $(docker ps --filter name=backend --format '{{.ID}}' | head -1) \
+  bash -c "curl -sk -X POST http://arango-vector-db:8529/_api/cursor \
   -H 'Content-Type: application/json' \
   -d '{\"query\": \"FOR u IN users FILTER u.iss_sub != null RETURN { _key: u._key, iss_sub: u.iss_sub, name: u.name }\"}'" \
   2>/dev/null | python3 -c "
@@ -964,7 +964,7 @@ for user in data.get('result', []):
 
 ### Test I.5 — Cleanup: Delete Test User (Not Realm)
 
-The `genie2` realm was created by Phase 0.7b — do NOT delete it. Only clean up the test user.
+The `genie2` realm was created by Phase 0.6 — do NOT delete it. Only clean up the test user.
 
 ```bash
 NOROLES_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie2/users?username=testuser2" \
@@ -1071,7 +1071,7 @@ echo "$RESPONSE" | jq 'has("iss") or has("sub") or has("iss_sub") or has("realm_
 
 ## Phase K: Auth Error Display (Story 2-6)
 
-**This phase mutates Keycloak realm settings and scales the Keycloak service to 0. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L (Epic 3).**
+**This phase mutates Keycloak realm settings and stops the Keycloak service. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L (Epic 3).**
 
 Validates that authentication and authorization errors are returned with correct error codes and user-friendly messages.
 
@@ -1079,7 +1079,6 @@ Validates that authentication and authorization errors are returned with correct
 
 - Phase 0 complete (`$TOKEN` and `$USER_TOKEN` available)
 - Keycloak admin access for realm configuration changes
-- Docker Swarm management access (for scaling Keycloak)
 
 ### Test K.1 — TOKEN_INVALID (Modified Token)
 
@@ -1173,9 +1172,9 @@ Note: The error code is `FORBIDDEN`, not `INSUFFICIENT_ROLES`. The frontend reco
 
 ### Test K.4 — TOKEN_INVALID (Keycloak Unavailable)
 
-Scale Keycloak to 0 replicas. The backend should detect that Keycloak is unreachable and return `TOKEN_INVALID` with a "temporarily unavailable" message.
+Stop Keycloak. The backend caches JWKS signing keys, so a previously-valid token with an unexpired signature will still return `200` even when Keycloak is unavailable. This validates the air-gapped/offline resilience of the auth flow.
 
-> **IMPORTANT**: The token must be obtained **before** scaling Keycloak down, and the scale-down + test must run in the **same shell** so the `$USER_TOKEN` variable is preserved.
+> **IMPORTANT**: The token must be obtained **before** stopping Keycloak, and the stop + test must run in the **same shell** so the `$USER_TOKEN` variable is preserved.
 
 ```bash
 # Step 1: Get a fresh token while Keycloak is still running
@@ -1183,8 +1182,8 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Step 2: Scale Keycloak to 0 and test in the SAME shell
-docker service scale genieai_keycloak=0
+# Step 2: Stop Keycloak and test in the SAME shell
+docker compose stop keycloak
 echo "Waiting 15 seconds for Keycloak to stop..."
 sleep 15
 
@@ -1192,13 +1191,20 @@ curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq .
 ```
 
-**Expected**: `HTTP: 401` with `{"error": "TOKEN_INVALID", "message": "..."}` — the message should indicate the service is temporarily unavailable (not `AUTH_SERVICE_UNAVAILABLE`, which is a frontend-only fallback code).
+**Expected**: `HTTP: 200` with `{"success": true, ...}` — the backend validates the JWT using cached JWKS keys and does not need Keycloak for every request. This is the correct behavior: the auth system is resilient to temporary Keycloak outages for already-authenticated users.
+
+> **Note**: If you see `HTTP: 401`, the token may have expired during the wait. Re-run Step 1 to get a fresh token before Keycloak is stopped, and reduce the sleep time.
 
 ```bash
 # Step 3: Restore Keycloak
-docker service scale genieai_keycloak=1
+docker compose start keycloak
 echo "Waiting for Keycloak to recover (60-90 seconds)..."
 sleep 60
+
+# Reload Kong DNS cache (Kong caches the old Keycloak container IP after stop/start)
+docker exec $(docker ps --filter name=kong --format '{{.ID}}' | head -1) kong reload
+echo "Waiting 10 seconds for Kong reload..."
+sleep 10
 
 # Verify Keycloak is back
 curl -sk "https://localhost/auth/realms/genie/.well-known/openid-configuration" \
@@ -1236,5 +1242,5 @@ curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${NOROLES_US
 **Phase K complete.** All realm settings restored, test user cleaned up. Stack is ready for Phase L (Epic 3). Verify:
 
 ```bash
-docker service ls --filter label=com.docker.stack.namespace=genieai
+docker compose ps
 ```

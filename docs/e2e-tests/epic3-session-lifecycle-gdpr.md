@@ -5,6 +5,7 @@ Validates session lifecycle management (Stories 3-1, 3-2), Keycloak Admin API pr
 ### Prerequisites
 
 - Phase K cleanup completed (K.5 + K.6 executed, stack healthy)
+- **Phases MUST run in order: L → M → N**. Phase N is destructive (erases user and creates new _key). Running N before L or M will cause session/user lookups to fail because the ArangoDB `_key` changes after erasure + recreation.
 - `$TOKEN` set (Keycloak master admin token from Phase 0)
 - `$USER_TOKEN` available (get fresh token before starting Phase L)
 
@@ -47,10 +48,10 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Get user _key (required for session creation)
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -115,10 +116,10 @@ print(f'HTTP: 200 (token still valid)')
 
 ```bash
 # Verify user is NOT marked deleted in ArangoDB (no expired-token trigger yet)
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print('deleted: ' + u.deleted);
   "
 ```
@@ -148,10 +149,10 @@ curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" 
 
 ```bash
 # Verify ArangoDB user is active and not deleted
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print('deleted: ' + u.deleted + ', active: ' + u.active);
   "
 ```
@@ -165,10 +166,10 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -179,7 +180,7 @@ curl -sk -X POST "https://localhost/api/sessions" \
 curl -sk -X POST "https://localhost/api/auth/logout" \
   -H "Authorization: Bearer $USER_TOKEN" -o /dev/null
 
-docker service logs genieai_backend --since 30s 2>&1 | grep '"event":"logout"' | tail -1 | python3 -c "
+docker compose logs backend --since 30s 2>&1 | grep '"event":"logout"' | tail -1 | python3 -c "
 import sys,json
 log = json.loads(sys.stdin.readline())
 print(f'event: {log[\"event\"]}')
@@ -209,10 +210,10 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -269,10 +270,10 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 
 ```bash
 # Get user _key from ArangoDB
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -389,24 +390,24 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 
 ```bash
 # Soft-delete user in ArangoDB directly
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
     db.users.update('${USER_KEY}', {deleted:true, active:false, deletedAt:'2026-01-01T00:00:00.000Z'});
   "
 
 # Verify soft-deleted
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print('deleted: ' + u.deleted);
   "
 # Expected: deleted: true
@@ -424,10 +425,10 @@ print(f'success: {d[\"success\"]}')
 # Expected: success: true
 
 # Verify reactivated in ArangoDB
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print('deleted: ' + u.deleted + ', active: ' + u.active);
   "
 ```
@@ -437,10 +438,10 @@ docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -
 
 ```bash
 # Save user _key before deletion (email will be nullified by erasure)
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 
@@ -453,7 +454,7 @@ curl -sk -X POST "https://localhost/api/users/delete" \
 
 ```bash
 # Verify user marked deleted in ArangoDB (query by _key, email is nullified)
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
     var u = db.users.document('${USER_KEY}');
@@ -506,10 +507,10 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Save user _key before erasure (email will be nullified)
-USER_KEY=$(docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
-    var u = db.users.firstExample({email: 'testuser@genie.local'});
+    var u = db.users.firstExample({email: 'testuser@genie.local', deleted: false});
     print(u._key);
   " 2>/dev/null | tail -1)
 echo "User _key: $USER_KEY"
@@ -524,7 +525,7 @@ curl -sk -X POST "https://localhost/api/users/delete" \
 
 ```bash
 # Query by _key (email has been nullified, cannot use firstExample by email)
-docker exec $(docker ps --filter name=genieai_arango --format '{{.ID}}' | head -1) \
+docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
   arangosh --server.password arangopwd --javascript.execute-string "
     db._useDatabase('genie-ai');
     var u = db.users.document('${USER_KEY}');
@@ -582,7 +583,7 @@ curl -sk -X POST "https://localhost/api/users/delete" \
 ### Test N.5 — Audit Log Entry for Erasure Event
 
 ```bash
-docker service logs genieai_backend --since 60s 2>&1 | grep -i 'user erased\|account deleted' | tail -5
+docker compose logs backend --since 60s 2>&1 | grep -i 'user erased\|account deleted' | tail -5
 ```
 **Expected**: Log entries containing erasure event with user identifier (e.g. `[KeycloakProxy] User erased`, `[DELETE] Account deleted`)
 

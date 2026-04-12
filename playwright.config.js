@@ -1,4 +1,5 @@
 const { defineConfig } = require('@playwright/test');
+require('dotenv').config();
 
 module.exports = defineConfig({
   testDir: './tests/e2e',

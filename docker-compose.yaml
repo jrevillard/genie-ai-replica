@@ -1117,6 +1117,15 @@ services:
       - KC_HOSTNAME=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       # Enable HTTP — NGINX handles TLS termination, Keycloak only needs HTTP internally
       - KC_HTTP_ENABLED=true
+      # SMTP (reuses EMAIL_* from Section 2)
+      - KC_SMTP_HOST=${EMAIL_HOST:-}
+      - KC_SMTP_PORT=${EMAIL_PORT:-587}
+      - KC_SMTP_SSL=${EMAIL_SECURE:-false}
+      - KC_SMTP_STARTTLS=true
+      - KC_SMTP_AUTH=${EMAIL_SMTP_AUTH:-${EMAIL_USER:+true}}
+      - KC_SMTP_USER=${EMAIL_USER:-}
+      - KC_SMTP_PASSWORD=${EMAIL_PASSWORD:-}
+      - KC_SMTP_FROM=${EMAIL_FROM:-}
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 15s
@@ -1152,6 +1161,18 @@ services:
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - KC_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
+      # Realm properties (registration, email, security, localization, tokens)
+      - KEYCLOAK_REGISTRATION_ENABLED=${KEYCLOAK_REGISTRATION_ENABLED:-true}
+      - KEYCLOAK_VERIFY_EMAIL=${KEYCLOAK_VERIFY_EMAIL:-true}
+      - KEYCLOAK_RESET_PASSWORD=${KEYCLOAK_RESET_PASSWORD:-true}
+      - KEYCLOAK_LOGIN_WITH_EMAIL=${KEYCLOAK_LOGIN_WITH_EMAIL:-true}
+      - KEYCLOAK_DUPLICATE_EMAILS=${KEYCLOAK_DUPLICATE_EMAILS:-false}
+      - KEYCLOAK_BRUTE_FORCE=${KEYCLOAK_BRUTE_FORCE:-true}
+      - KEYCLOAK_PASSWORD_POLICY=${KEYCLOAK_PASSWORD_POLICY:-"length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)"}
+      - KEYCLOAK_LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-keycloak}
+      - KEYCLOAK_I18N_ENABLED=${KEYCLOAK_I18N_ENABLED:-true}
+      - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}
+      - KEYCLOAK_ACCESS_TOKEN_LIFESPAN=${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300}
     networks:
       - genieai_network
     deploy:

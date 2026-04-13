@@ -375,6 +375,49 @@ KEYCLOAK_DB_PASSWORD=
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KEYCLOAK_PROXY_CLIENT_SECRET=
 
+# --- Realm properties (optional) ---
+# These control registration, email verification, password policy, and more.
+# Uncomment and override only if you need non-default behavior.
+
+# User self-registration (default: true)
+# Requires SMTP configuration for verification emails.
+# KEYCLOAK_REGISTRATION_ENABLED=true
+
+# Require email verification after registration (default: true)
+# Requires SMTP configuration for verification emails to work.
+# KEYCLOAK_VERIFY_EMAIL=true
+
+# Allow "Forgot Password" flow (default: true)
+# Requires SMTP configuration for reset emails to work.
+# KEYCLOAK_RESET_PASSWORD=true
+
+# Allow login with email address (default: true)
+# KEYCLOAK_LOGIN_WITH_EMAIL=true
+
+# Allow multiple accounts with the same email (default: false)
+# KEYCLOAK_DUPLICATE_EMAILS=false
+
+# Brute force detection (lock account after failed attempts, default: true)
+# KEYCLOAK_BRUTE_FORCE=true
+
+# Password policy (Keycloak policy syntax)
+# Recommended: length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
+# Default: length(12) (minimum length only)
+# To override: KEYCLOAK_PASSWORD_POLICY=length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
+# KEYCLOAK_PASSWORD_POLICY=length(12)
+
+# Login page theme (default: keycloak — built-in theme)
+# KEYCLOAK_LOGIN_THEME=keycloak
+
+# Internationalization (default: true)
+# KEYCLOAK_I18N_ENABLED=true
+
+# Default locale for login pages (default: en)
+# KEYCLOAK_LOCALE=en
+
+# Access token lifespan in seconds (default: 300 = 5 minutes)
+# KEYCLOAK_ACCESS_TOKEN_LIFESPAN=300
+
 # =============================================================================
 # SECTION 9B: EXTERNAL IDENTITY PROVIDERS (OPTIONAL)
 # =============================================================================

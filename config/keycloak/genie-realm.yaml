@@ -3,6 +3,19 @@ enabled: true
 # TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
 sslRequired: none
 
+# Realm security and behavior properties
+registrationAllowed: $(env:KEYCLOAK_REGISTRATION_ENABLED)
+verifyEmail: $(env:KEYCLOAK_VERIFY_EMAIL)
+resetPasswordAllowed: $(env:KEYCLOAK_RESET_PASSWORD)
+loginWithEmailAllowed: $(env:KEYCLOAK_LOGIN_WITH_EMAIL)
+duplicateEmailsAllowed: $(env:KEYCLOAK_DUPLICATE_EMAILS)
+bruteForceProtected: $(env:KEYCLOAK_BRUTE_FORCE)
+passwordPolicy: $(env:KEYCLOAK_PASSWORD_POLICY)
+loginTheme: $(env:KEYCLOAK_LOGIN_THEME)
+internationalizationEnabled: $(env:KEYCLOAK_I18N_ENABLED)
+defaultLocale: $(env:KEYCLOAK_LOCALE)
+accessTokenLifespan: $(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)
+
 # Realm roles (must be defined before users that reference them)
 roles:
   realm:

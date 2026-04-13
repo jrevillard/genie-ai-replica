@@ -11,15 +11,15 @@
 
 | Variable | Source | Value (El Salvador) |
 |----------|--------|---------------------|
-| `ARANGO_PASSWORD` | vault | `test` |
-| `JWT_SECRET` | vault | `UJeFROw+yRJeVOPi...` |
-| `SESSION_SECRET` | vault | `default-session-secret` |
-| `TRANSLATION_CACHE_PASSWORD` | vault | `!@#$$5678` |
-| `POSTGRES_PASSWORD` | vault | `k1ngk0ng` |
-| `AUTH_SERVICE_USERNAME` | vault | `genie-ai-manager` |
-| `AUTH_SERVICE_PASSWORD` | vault | `1357924680+Manager` |
-| `EMAIL_PASSWORD` | vault | `gLp+Ek)Vf)` |
-| `HUGGING_FACE_HUB_TOKEN` | vault | `hf_IUQYaWIy...` |
+| `ARANGO_PASSWORD` | vault | *(secret)* |
+| `JWT_SECRET` | vault | *(secret)* |
+| `SESSION_SECRET` | vault | *(secret)* |
+| `TRANSLATION_CACHE_PASSWORD` | vault | *(secret)* |
+| `POSTGRES_PASSWORD` | vault | *(secret)* |
+| `AUTH_SERVICE_USERNAME` | vault | *(secret)* |
+| `AUTH_SERVICE_PASSWORD` | vault | *(secret)* |
+| `EMAIL_PASSWORD` | vault | *(secret)* |
+| `HUGGING_FACE_HUB_TOKEN` | vault | *(secret)* |
 | `EMAIL_HOST` | vars.yml | `smtp.itu.ch` |
 | `EMAIL_PORT` | vars.yml | `587` |
 | `EMAIL_SECURE` | vars.yml | `false` |
@@ -30,6 +30,9 @@
 | `VUE_APP_CSP_CONNECT_SRC` | vars.yml | (fixed triple slash) |
 | `CSP_CONNECT_SRC` | vars.yml | `ai.assembly.govstack.global` + domains |
 | `CORS_ALLOWED_ORIGINS` | vars.yml | `ai.assembly.govstack.global` + domains |
+| `CERTBOT_EMAIL` | env.j2 (conditional) | *(not set — Let's Encrypt not activated)* |
+| `CERTBOT_REPLICAS` | env.j2 (conditional) | *(not set — defaults to 0)* |
+| `CERTBOT_STAGING` | env.j2 (conditional) | *(not set — defaults to false)* |
 
 ## env.rtx6000 Coverage (GPU overrides)
 
@@ -65,11 +68,11 @@ These are variables present in the user's El Salvador `.env` that will NOT be se
 |----------|-------------|-------|
 | `ARANGO_DB_NAME` | `el-salvador` | **Not used in code** — can be removed |
 | `ARANGO_DB` | `el-salvador` | Set via `arango_db` in vars.yml (default: `genie-ai`) |
-| `OPENWEATHERMAP_API_KEY` | `b115ccced35ade4c9a1077b6e5a210dd` | Not in template |
+| `OPENWEATHERMAP_API_KEY` | *(secret)* | Not in template |
 | `CORS_ORIGIN` | `http://localhost/` | Separate from `CORS_ALLOWED_ORIGINS`, used by backend code |
 | `FRONTEND_URL` | `https://localhost/` | Not in template |
-| `HUGGINGFACEHUB_API_TOKEN` | `hf_IUQYaWIy...` | Alias — docker-compose uses `HUGGING_FACE_HUB_TOKEN` |
-| `VLLM_API_KEY` | (long JWT) | Required for vLLM authentication on some deployments |
+| `HUGGINGFACEHUB_API_TOKEN` | *(secret)* | Alias — docker-compose uses `HUGGING_FACE_HUB_TOKEN` |
+| `VLLM_API_KEY` | *(secret)* | Required for vLLM authentication on some deployments |
 | `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-3.3-2b-instruct` | Overrides default model |
 | `VLLM_DTYPE` | `half` | Not in env.rtx6000 |
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | Overrides default |
@@ -77,9 +80,9 @@ These are variables present in the user's El Salvador `.env` that will NOT be se
 | `VLLM_TRANSLATION_DTYPE` | `bfloat16` | Not in env.rtx6000 |
 | `VLLM_TRANSLATION_KV_CACHE_DTYPE` | `auto` | Not in env.rtx6000 |
 | `CHATQNA_ENFORCE_ABSTENTION` | `false` | Overrides default `true` |
-| `CHATQNA_SYSTEM_PROMPT` | (long prompt) | Custom prompt for El Salvador |
-| `CHATQNA_ABSTENTION_INSTRUCTIONS` | (instructions) | Custom |
-| `LABEL_SELECTOR_SYSTEM_PROMPT` | (rule-based classifier) | Custom labeling prompt |
+| `CHATQNA_SYSTEM_PROMPT` | *(custom prompt)* | Custom prompt for El Salvador |
+| `CHATQNA_ABSTENTION_INSTRUCTIONS` | *(custom instructions)* | Custom |
+| `LABEL_SELECTOR_SYSTEM_PROMPT` | *(custom prompt)* | Custom labeling prompt |
 | `LOGFLAG` | `true` | Debug flag |
 
 ### Already covered by docker-compose.yaml defaults (no action needed)
@@ -113,7 +116,7 @@ These are variables present in the user's El Salvador `.env` that will NOT be se
 | `COMPRESS_BACKUPS` | `true` |
 | `OPEA_HOST` | `chatqna-xeon-backend-server` |
 | `OPEA_PORT` | `8888` |
-| `CONTEXT_OPTION` | `conversation-with-context-labels` |
+| `CONTEXT_OPTION` | `conversation-with-context-labels` | Default in docker-compose.yaml backend service |
 | `DOC_REPO_PORT` | `3001` |
 | `DOCUMENT_INGESTION_LANGUAGE` | `en` |
 | `DATAPREP_HOST` | `http://dataprep-arango-service` |
@@ -150,5 +153,5 @@ These are variables present in the user's El Salvador `.env` that will NOT be se
 | `no_proxy` | `noproxy` | Only needed behind proxy |
 | `http_proxy` | (empty) | Not needed |
 | `https_proxy` | (empty) | Not needed |
-| `OPENWEATHERMAP_API_KEY` | `b115ccced...` | Only if weather feature is used |
+| `OPENWEATHERMAP_API_KEY` | *(secret)* | Only if weather feature is used |
 | `JAEGER_IP` | (commented out) | Telemetry, not needed |

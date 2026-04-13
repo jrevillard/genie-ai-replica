@@ -226,7 +226,7 @@ class QueryService {
       logger.info('QueryService.create_query_start');
       logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
-      const backendMode = process.env.CONTEXT_OPTION || 'single-message';
+      const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
       logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
       logger.info('[DEBUG] Starting validation of incoming data...');

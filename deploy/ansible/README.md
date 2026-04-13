@@ -175,6 +175,7 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `context_option` | `conversation-with-context-labels` | Conversation mode: `conversation-with-context-labels` (full context) or `single-message` (legacy) |
 | `cors_allowed_origins` | `""` | CORS allowed origins |
 | `csp_connect_src` | `""` | Nginx CSP connect sources |
 

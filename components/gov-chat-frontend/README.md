@@ -924,7 +924,7 @@ docker-compose up -d --build
 - LOG_LEVEL=debug
 - OPEA_HOST=e2e-109-198
 - OPEA_PORT=8888
-- CONTEXT_OPTION=single-message
+- CONTEXT_OPTION=conversation-with-context-labels
 
 # The backend also loads additional variables from ./gov-chat-backend/.env
 ```

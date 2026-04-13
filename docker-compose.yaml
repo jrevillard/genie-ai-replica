@@ -574,7 +574,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/9000' || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -645,7 +645,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/8888' || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -677,7 +677,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/9090' || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9090/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -739,7 +739,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/6000' || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6000/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -806,7 +806,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/8000' || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -926,7 +926,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/7000' || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:7000/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -978,7 +978,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/8888' || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8888/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10

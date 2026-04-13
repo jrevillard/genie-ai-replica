@@ -17,6 +17,7 @@ FROM python:3.11-slim
 # Install system dependencies required by the original reranker
 RUN apt-get update -y && apt-get install -y --no-install-recommends --fix-missing \
     git \
+    curl \
     libgl1 \
     libglx-mesa0 \
     libjemalloc-dev && \

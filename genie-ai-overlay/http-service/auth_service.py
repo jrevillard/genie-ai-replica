@@ -16,7 +16,7 @@ class AuthService:
 
     async def login(self):
         enc_password = self._hash_password(self.password)
-        data = await self.http.post("/api/auth/login", {
+        data = await self.http.post("/login", {
             "loginName": self.login_name,
             "encPassword": enc_password
         })
@@ -26,7 +26,7 @@ class AuthService:
         return data
 
     async def refresh(self):
-        data = await self.http.post("/auth/refresh-token", {
+        data = await self.http.post("/refresh-token", {
             "refreshToken": self.refresh_token
         })
         self.access_token = data["accessToken"]

@@ -68,8 +68,8 @@ class SecurityMiddleware {
   });
 
   static threatDetectionMiddleware(req, res, next) {
-    // Skip threat detection for authenticated requests or auth endpoints
-    if (req.headers.authorization || req.user || req.path.startsWith('/api/auth')) {
+    // Skip threat detection for authenticated requests, auth endpoints, and health checks
+    if (req.headers.authorization || req.user || req.path.startsWith('/api/auth') || req.path === '/api/health') {
       logger.debug('Skipping threat detection for authenticated request', {
         ip: req.ip,
         path: req.path,
@@ -153,8 +153,8 @@ class SecurityMiddleware {
   }
 
   static updateIPReputation(req) {
-    // Skip reputation scoring for auth endpoints or authenticated requests
-    if (req.path.startsWith('/api/auth') || req.headers.authorization || req.user) {
+    // Skip reputation scoring for auth endpoints, authenticated requests, and health checks
+    if (req.path.startsWith('/api/auth') || req.headers.authorization || req.user || req.path === '/api/health') {
       logger.debug('Skipping IP reputation scoring for authenticated request', {
         ip: req.ip,
         path: req.path,

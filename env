@@ -89,6 +89,8 @@ EMAIL_PORT=
 EMAIL_USER=
 EMAIL_PASSWORD=
 EMAIL_FROM=
+# SMTP AUTH (auto-derived from EMAIL_USER — set to "false" to disable auth while keeping EMAIL_USER)
+# EMAIL_SMTP_AUTH=
 
 # =============================================================================
 # SECTION 3: EXTERNAL API KEYS
@@ -401,10 +403,9 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 # KEYCLOAK_BRUTE_FORCE=true
 
 # Password policy (Keycloak policy syntax)
-# Recommended: length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
-# Default: length(12) (minimum length only)
-# To override: KEYCLOAK_PASSWORD_POLICY=length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
-# KEYCLOAK_PASSWORD_POLICY=length(12)
+# Default (in docker-compose.yaml): length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
+# To simplify: KEYCLOAK_PASSWORD_POLICY=length(8)
+# KEYCLOAK_PASSWORD_POLICY=
 
 # Login page theme (default: keycloak — built-in theme)
 # KEYCLOAK_LOGIN_THEME=keycloak

@@ -105,6 +105,16 @@ docker service scale genieai_<service>=<replicas>
 docker service ls
 ```
 
+### E2E Tests
+
+Multi-phase procedure in `docs/e2e-tests/`:
+1. Read `docs/e2e-tests/README.md` — execution order, prerequisites, conventions
+2. Execute `docs/e2e-tests/00-clean-start.md` — Phase 0 (manual setup, MUST run first)
+3. Execute all phases per their respective docs — mix of manual commands + Playwright
+4. Each phase has prerequisites and cleanup steps — follow strictly, do not skip
+
+**Important**: Phase K mutates realm settings. Cleanup steps K.5+K.6 MUST run after Phase K before proceeding to Phase L.
+
 ## Architecture
 
 ### Layer Stack

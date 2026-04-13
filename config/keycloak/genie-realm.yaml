@@ -70,16 +70,6 @@ clients:
     webOrigins:
       - http://localhost:8090
       - https://localhost
-    defaultClientScopes:
-      - openid
-      - basic
-      - profile
-      - email
-      - roles
-    optionalClientScopes:
-      - address
-      - phone
-      - offline_access
 
   # Service account for GENIE.AI backend → Keycloak Admin API proxy
   # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.

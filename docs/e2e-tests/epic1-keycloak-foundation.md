@@ -372,6 +372,8 @@ npx playwright test tests/e2e/epic1/d7b-external-idp-login-flow.spec.js
 ```
 **Expected**: `hasDashboard: true`, URL is `https://localhost/dashboard`, body contains "GENIE.AI"
 
+> **Note (test environment)**: When `verifyEmail: true` is set on the realm (Section 9), Keycloak adds `VERIFY_EMAIL` as a required action for brokered users. In production, SMTP sends the verification email and the user continues normally. In the test environment (no SMTP), the Playwright spec temporarily disables the `VERIFY_EMAIL` required action via Admin API before the broker login and re-enables it afterwards. Keycloak 26 unregisters built-in required actions when disabled; the action is fully restored by `keycloak-config-cli` on the next deploy. No subsequent test phases depend on `VERIFY_EMAIL` being enabled.
+
 **On failure**: The Playwright spec captures the current URL and page content so you can see where the flow broke (e.g., stuck on external-idp login, broker error page, or redirect loop).
 
 ## Step 8: Cleanup

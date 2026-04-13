@@ -257,8 +257,7 @@ services:
       - certbot-etc:/etc/letsencrypt
       - ./secrets/ssl:/secrets/ssl:rw
     depends_on:
-      nginx:
-        condition: service_healthy
+      - nginx
     networks:
       - genieai_network
     deploy:
@@ -1118,11 +1117,15 @@ services:
       # Enable HTTP — NGINX handles TLS termination, Keycloak only needs HTTP internally
       - KC_HTTP_ENABLED=true
       # SMTP (reuses EMAIL_* from Section 2)
+      # EMAIL_SECURE maps to implicit SSL (port 465); STARTTLS is always enabled separately
+      # If EMAIL_HOST is empty, SMTP is effectively disabled (Keycloak logs warnings but functions without email)
       - KC_SMTP_HOST=${EMAIL_HOST:-}
       - KC_SMTP_PORT=${EMAIL_PORT:-587}
       - KC_SMTP_SSL=${EMAIL_SECURE:-false}
+      # AUTH derived from EMAIL_USER: enabled when user is set, disabled otherwise
+      - KC_SMTP_AUTH=${EMAIL_USER:+true}
+      # STARTTLS=true for default port 587; ignored when KC_SMTP_SSL=true (port 465)
       - KC_SMTP_STARTTLS=true
-      - KC_SMTP_AUTH=${EMAIL_SMTP_AUTH:-${EMAIL_USER:+true}}
       - KC_SMTP_USER=${EMAIL_USER:-}
       - KC_SMTP_PASSWORD=${EMAIL_PASSWORD:-}
       - KC_SMTP_FROM=${EMAIL_FROM:-}
@@ -1156,6 +1159,7 @@ services:
       - KEYCLOAK_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
       - IMPORT_FILES=/config/genie-realm.yaml
       - IMPORT_VARSUBSTITUTION_ENABLED=true
+      - IMPORT_CACHE_ENABLED=true
       # Variables referenced in genie-realm.yaml via $(env:VAR) substitution
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
@@ -1173,6 +1177,8 @@ services:
       - KEYCLOAK_I18N_ENABLED=${KEYCLOAK_I18N_ENABLED:-true}
       - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}
       - KEYCLOAK_ACCESS_TOKEN_LIFESPAN=${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300}
+    depends_on:
+      - keycloak
     networks:
       - genieai_network
     deploy:

@@ -136,6 +136,7 @@ Changes across `main`, `vue-app-cleanup`, `backend-node-cleanup`, `document-repo
 - Fixed `uploaded_date` field standardization across file operations (#484) (`document-repository-cleanup`)
 - Fixed stale comment in `mimeTypeValidator.js` (#485) (`document-repository-cleanup`)
 - Fixed 404 handler — replaced console.log route dump with structured logger (#473) (`document-repository-cleanup`)
+- Fixed Spanish responses in single-message mode when English is selected — include language in payload and handle string-type messages in ChatQnA (#579) (`sprint-21-bug-fixes`)
 
 ---
 

@@ -1067,6 +1067,10 @@ class ChatQnAService:
         3. Sends the string to the translation LLM.
         """
 
+        # Single-message mode sends history as a plain string — translate it
+        if isinstance(history, str):
+            return await self._translate_text_chunk(history, target_language)
+
         max_translation_chars = MAX_TRANSLATION_CHARS
         current_chars = 0
         messages_to_process = []
@@ -1304,10 +1308,13 @@ class ChatQnAService:
 
                 # Attempt to detect language from the last user message
                 last_user_content = ""
-                for msg in reversed(full_chat_history):
-                    if msg.get("role") == "user":
-                        last_user_content = msg.get("content", "")
-                        break
+                if isinstance(full_chat_history, str):
+                    last_user_content = full_chat_history
+                else:
+                    for msg in reversed(full_chat_history):
+                        if msg.get("role") == "user":
+                            last_user_content = msg.get("content", "")
+                            break
 
                 if logflag:
                     logger.info(
@@ -1365,8 +1372,11 @@ class ChatQnAService:
             translated_history_string = await self._get_translated_history_string(full_chat_history, "English")
         else:
             # If already English, flatten without translation
-            parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
-            translated_history_string = " |<-MSG->| ".join(parts)
+            if isinstance(full_chat_history, str):
+                translated_history_string = full_chat_history
+            else:
+                parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
+                translated_history_string = " |<-MSG->| ".join(parts)
 
         if logflag:
             logger.debug(f"Translated History String: {translated_history_string}")

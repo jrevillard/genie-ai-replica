@@ -6,6 +6,7 @@
 # DEPENDENCIES 
 # ------------------------------------------------------------------------------------
 import logging
+import os
 import time
 import requests
 from pathlib import Path
@@ -60,8 +61,10 @@ SYSTEM_PROMPT = (
 
 # vLLM Specific Settings
 # This is leveraging vllm-vllm-translation-guardrail service
-VLLM_ENDPOINT = "http://localhost:9031/v1/chat/completions"
-VLLM_MODEL = "Infomaniak-AI/vllm-translategemma-4b-it"
+# These can be overridden via environment variables (e.g. from .env)
+VLLM_ENDPOINT = os.getenv("VLLM_TRANSLATION_ENDPOINT", "http://localhost:9031/v1/chat/completions")
+VLLM_MODEL = os.getenv("VLLM_TRANSLATION_MODEL_ID", "google/gemma-3-4b-it")
+IS_TRANSLATEGEMMA = "translategemma" in VLLM_MODEL.lower()
 
 
 # ------------------------------------------------------------------------------------
@@ -160,12 +163,28 @@ def attempt_llm_call(text: str) -> str:
         return response["message"]["content"].strip()
         
     elif LLM_BACKEND == "vllm":
-        vllm_prompt = f"<<<source>>>{SOURCE_LANG}<<<target>>>{TARGET_LANG}<<<text>>>{text}"
-        payload = {
-            "model": VLLM_MODEL,
-            "messages": [{"role": "user", "content": vllm_prompt}],
-            "temperature": 0.1
-        }
+        if IS_TRANSLATEGEMMA:
+            payload = {
+                "model": VLLM_MODEL,
+                "messages": [{
+                    "role": "user",
+                    "content": [{
+                        "type": "text",
+                        "source_lang_code": SOURCE_LANG,
+                        "target_lang_code": TARGET_LANG,
+                        "text": text
+                    }]
+                }],
+                "temperature": 0.0,
+                "max_tokens": 4096
+            }
+        else:
+            vllm_prompt = f"Translate the following {SOURCE_LANG} markdown to {TARGET_LANG}. Translate every line, preserve all markdown formatting. Output ONLY the translated text.\n\n{text}"
+            payload = {
+                "model": VLLM_MODEL,
+                "messages": [{"role": "user", "content": vllm_prompt}],
+                "temperature": 0.1
+            }
         
         response = requests.post(
             VLLM_ENDPOINT, 

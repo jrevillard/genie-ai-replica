@@ -33,6 +33,8 @@ TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_TIMEOUT = int(
     os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180)
 )  # Timeout in seconds for translation service (default: 3 minutes)
+TRANSLATION_MODEL_ID = os.getenv("VLLM_TRANSLATION_MODEL_ID", "")
+IS_TRANSLATEGEMMA = "translategemma" in TRANSLATION_MODEL_ID.lower()
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
@@ -1059,17 +1061,26 @@ class ChatQnAService:
         self.megaservice.flow_to(retriever, rerank)
         self.megaservice.flow_to(rerank, llm)
 
-    async def _get_translated_history_string(self, history: list, target_language: str) -> str:
+
+    async def _get_translated_history_string(self, history: list, target_language: str, source_lang_code: str = "en") -> str:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
         2. Flattens the history into a single string.
         3. Sends the string to the translation LLM.
+
+        Automatically uses TranslateGemma structured format or generic prompt format
+        based on the configured VLLM_TRANSLATION_MODEL_ID.
+
+        Args:
+            history: Chat history as list of dicts or plain string (single-message mode).
+            target_language: Target language name (e.g. "English").
+            source_lang_code: Source ISO language code (e.g. "st") for TranslateGemma.
         """
 
         # Single-message mode sends history as a plain string — translate it
         if isinstance(history, str):
-            return await self._translate_text_chunk(history, target_language)
+            return await self._translate_text_chunk(history, target_language, source_lang_code=source_lang_code, iso_code="en")
 
         max_translation_chars = MAX_TRANSLATION_CHARS
         current_chars = 0
@@ -1087,6 +1098,7 @@ class ChatQnAService:
             current_chars += message_chars
         messages_to_process.reverse()
 
+
         flattened_history_parts = []
         for message in messages_to_process:
             role = message.get("role", "unknown").upper()
@@ -1095,17 +1107,31 @@ class ChatQnAService:
 
         flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
 
-        # --- Simple Translation API Call ---
-        prompt = (
-            f"Translate the following chat history to {target_language}. "
-            "Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\n"
-            f"HISTORY:\n{flattened_history_string}"
-        )
-
-        payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
+        # Build payload based on model type
+        if IS_TRANSLATEGEMMA:
+            payload = {
+                "messages": [{
+                    "role": "user",
+                    "content": [{
+                        "type": "text",
+                        "source_lang_code": source_lang_code,
+                        "target_lang_code": "en",
+                        "text": flattened_history_string
+                    }]
+                }],
+                "temperature": 0.0,
+                "stream": False
+            }
+        else:
+            prompt = f"Translate the following chat history to {target_language}. Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\nHISTORY:\n{flattened_history_string}"
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "stream": False
+            }
 
         if logflag:
-            logger.debug(f"Payload for translation service: {payload}")
+            logger.debug(f"Payload for translation service ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
@@ -1164,35 +1190,52 @@ class ChatQnAService:
 
         return chunks
 
-    async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None) -> str:
-        """Translate a single chunk of text."""
-        # More specific prompt to avoid language confusion (e.g., Sesotho vs Afrikaans, Bengali vs Hindi)
-        language_notes = {
-            "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
-            "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
-            "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali).",
-        }
+    async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
+        """Translate a single chunk of text.
 
-        note = language_notes.get(target_lang, "")
+        Automatically uses TranslateGemma structured format or generic prompt format
+        based on the configured VLLM_TRANSLATION_MODEL_ID.
 
-        if iso_code:
-            prompt = (
-                f"Translate the following text to {target_lang} "
-                f"(ISO 639-1 code: {iso_code}). {note} "
-                "Only output the translated text, nothing else.\n\n"
-                f"Text: {text}\n\nTranslation:"
-            )
+        Args:
+            text: Text to translate.
+            target_lang: Target language name (e.g. "Sesotho").
+            iso_code: Target ISO language code (e.g. "st").
+            source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
+        """
+        if IS_TRANSLATEGEMMA:
+            target_lang_code = iso_code.lower() if iso_code else target_lang.lower()
+            payload = {
+                "messages": [{
+                    "role": "user",
+                    "content": [{
+                        "type": "text",
+                        "source_lang_code": source_lang_code,
+                        "target_lang_code": target_lang_code,
+                        "text": text
+                    }]
+                }],
+                "temperature": 0.0,
+                "stream": False
+            }
         else:
-            prompt = (
-                f"Translate the following text to {target_lang}. {note} "
-                "Only output the translated text.\n\n"
-                f"Text: {text}\n\nTranslation:"
-            )
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
-            "stream": False,
-        }
+            language_notes = {
+                "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
+                "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
+                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali)."
+            }
+            note = language_notes.get(target_lang, "")
+            if iso_code:
+                prompt = f"Translate the following text to {target_lang} (ISO 639-1 code: {iso_code}). {note} Only output the translated text, nothing else.\n\nText: {text}\n\nTranslation:"
+            else:
+                prompt = f"Translate the following text to {target_lang}. {note} Only output the translated text.\n\nText: {text}\n\nTranslation:"
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "stream": False
+            }
+
+        if logflag:
+            logger.debug(f"Translation payload ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -1208,7 +1251,7 @@ class ChatQnAService:
             logger.warning(f"Failed to translate chunk, returning original: {e}")
             return text
 
-    async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None) -> str:
+    async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
         """Translate long text by splitting into chunks and translating separately."""
         chunks = self._split_text_into_chunks(text, max_chars=2000)
 
@@ -1217,7 +1260,7 @@ class ChatQnAService:
 
         # Translate chunks concurrently
         translated_chunks = await asyncio.gather(
-            *[self._translate_text_chunk(chunk, target_lang, iso_code) for chunk in chunks]
+            *[self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code) for chunk in chunks]
         )
 
         return " ".join(translated_chunks)
@@ -1369,7 +1412,7 @@ class ChatQnAService:
                 logger.debug(
                     f"Original language detected: {original_language}. Proceeding with translation of chat history."
                 )
-            translated_history_string = await self._get_translated_history_string(full_chat_history, "English")
+            translated_history_string = await self._get_translated_history_string(full_chat_history, "English", source_lang_code=original_language.lower())
         else:
             # If already English, flatten without translation
             if isinstance(full_chat_history, str):

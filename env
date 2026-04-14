@@ -124,9 +124,25 @@ HUGGING_FACE_HUB_TOKEN=
 # VLLM_LLM_MODEL_ID=
 
 # Translation model (OPEA Translation service)
+# The model used for guardrails and translation (Service: vllm-translation-guardrail)
+#
+# --- HOW TO CHANGE THE TRANSLATION MODEL ---
+# The codebase auto-detects the model type and uses the correct prompt format:
+#   - google/translategemma-4b-it  -> uses structured {source_lang_code, target_lang_code, text} format
+#   - google/gemma-3-*             -> uses generic plain-text prompt format
+#   - Any other model               -> uses generic plain-text prompt format
+# To switch, comment out the active line and uncomment the desired model below.
+#
 # Default: google/gemma-3-4b-it
-# Options: larger models for better translation quality
-# VLLM_TRANSLATION_MODEL_ID=
+VLLM_TRANSLATION_MODEL_ID=google/gemma-3-4b-it
+# Option: Purpose-built translation model (requires ~8GB VRAM, supports Sesotho)
+#VLLM_TRANSLATION_MODEL_ID=google/translategemma-4b-it
+#
+VLLM_TRANSLATION_SERVICE_PORT=9031
+VLLM_TRANSLATION_GPU_UTIL=0.35
+VLLM_TRANSLATION_MAX_MODEL_LEN=8192
+VLLM_TRANSLATION_DTYPE=auto
+VLLM_TRANSLATION_KV_CACHE_DTYPE=auto
 
 # Embedding service API endpoint path
 # Default: /v1/embeddings (OpenAI-compatible, used by OPEA embedding microservice)

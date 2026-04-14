@@ -298,6 +298,7 @@ TRANSLATION_CACHE_PASSWORD=<strong-password>
 POSTGRES_PASSWORD=<strong-password>
 KONG_DB_PASSWORD=<strong-password>
 KEYCLOAK_ADMIN_PASSWORD=<strong-password>
+GENIE_ADMIN_PASSWORD=<strong-password>
 KEYCLOAK_DB_PASSWORD=<strong-password>
 KEYCLOAK_CLIENT_SECRET=<strong-password>
 KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
@@ -458,9 +459,14 @@ After verifying deployment, set up user accounts and roles. All user management 
 
 Select the **genie** realm (not `master`) after logging in.
 
+**GENIE realm admin user** (separate from master admin, used for frontend login):
+- **Username**: `genie-admin` (default, configurable via `GENIE_ADMIN_USERNAME`)
+- **Password**: `<GENIE_ADMIN_PASSWORD>` from `.env`
+- Has `admin` realm role — grants admin access in the GENIE.AI frontend
+
 ### First Steps
 
-1. **Change the admin password** (if still using the default from `.env`): Users > admin > Credentials > Set password
+1. **Change the admin password** (if still using the default from `.env`): Users > genie-admin > Credentials > Set password
 2. **Create user accounts**: Users > Add user — set credentials and assign the `user` role
 3. **Grant admin access**: Users > [user] > Role Mapping > Assign `admin` role
 
@@ -470,7 +476,7 @@ The following are configured automatically during deployment via `configs/keyclo
 
 | User | Roles | Purpose |
 |---|---|---|
-| `admin` | `admin`, `user` | Initial administrator account |
+| `genie-admin` | `admin`, `user` | Initial administrator account |
 | — | `user` | Default role for all new users |
 
 ### Documentation

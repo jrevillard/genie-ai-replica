@@ -82,7 +82,7 @@ fi
 ```bash
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Get test user token (use existing test user)
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
@@ -165,7 +165,7 @@ docker compose logs chatqna-xeon-backend-server 2>&1 | grep -E "X-User-Id|X-User
 ```bash
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Create user in genie realm (if not exists)
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \
@@ -284,7 +284,7 @@ echo "$RESPONSE" | jq '.data | keys'
 ```bash
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Look up the test user's _key
 USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@example.com" \
@@ -337,7 +337,7 @@ curl -sk -X POST "https://localhost/api/chat" \
 ```bash
 # Get admin token
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" -d "username=admin" -d "password=\${KEYCLOAK_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "client_id=admin-cli" -d "username=\${GENIE_ADMIN_USERNAME:-genie-admin}" -d "password=\${GENIE_ADMIN_PASSWORD}" -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Create user in genie realm with 'user' role
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/users" \

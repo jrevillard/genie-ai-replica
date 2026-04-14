@@ -139,7 +139,8 @@ Set in `group_vars/<env>/vault.yml`:
 | `translation_cache_password` | Redis cache password |
 | `postgres_password` | PostgreSQL superuser password |
 | `kong_db_password` | PostgreSQL dedicated Kong user password (must differ from `postgres_password`) |
-| `keycloak_admin_password` | Keycloak admin console password |
+| `keycloak_admin_password` | Keycloak master admin console password |
+| `genie_admin_password` | GENIE realm admin user password (frontend admin) |
 | `keycloak_db_password` | PostgreSQL dedicated Keycloak user password |
 | `keycloak_client_secret` | OIDC client secret for genie-app |
 | `keycloak_proxy_client_secret` | Service account secret for admin API proxy |
@@ -447,10 +448,11 @@ After deployment, verify Keycloak is running:
 # Check Keycloak service health
 ssh node "docker service ls --filter name=genieai_keycloak"
 
-# Access admin console
+# Access master admin console
 # URL: https://<NGINX_PUBLIC_DOMAIN>/auth/admin/
 # Username: admin
 # Password: <keycloak_admin_password from vault>
+# Note: GENIE realm admin (genie-admin) has separate credentials (genie_admin_password)
 ```
 
 ### Variable Substitution and Resolved Compose File

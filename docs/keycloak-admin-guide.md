@@ -418,10 +418,12 @@ curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${USER_ID}" 
 
 ### 7.1 Admin Password
 
-The admin password is set via `KEYCLOAK_ADMIN_PASSWORD` in `.env`. This value is:
+The master admin password is set via `KEYCLOAK_ADMIN_PASSWORD` in `.env`. This value is:
 - **Never committed to git** (`.env` is gitignored)
-- Used for both the Keycloak bootstrap admin and the keycloak-config-cli service
+- Used for the Keycloak bootstrap admin (master realm) and keycloak-config-cli service authentication
 - Must be a strong password in production (minimum 16 characters recommended)
+
+The GENIE realm admin user (`genie-admin`) has separate credentials: `GENIE_ADMIN_USERNAME` and `GENIE_ADMIN_PASSWORD` in `.env`.
 
 ### 7.2 Session Timeout
 

@@ -329,10 +329,18 @@ KEYCLOAK_CLIENT_SECRET=
 # Example: KEYCLOAK_ADDITIONAL_REALMS={"partner-org":"partner-app","contractor":"contractor-app"}
 # KEYCLOAK_ADDITIONAL_REALMS=
 
-# Keycloak admin password (REQUIRED — set a strong value)
-# Used by: keycloak-config-cli (realm setup), admin console access
-# WARNING: This is the master admin account password
+# Keycloak master admin password (REQUIRED — set a strong value)
+# Used by: admin console access, keycloak-config-cli (master realm authentication)
+# WARNING: This is the master admin account password (NOT the GENIE realm admin)
 KEYCLOAK_ADMIN_PASSWORD=
+
+# GENIE realm admin username (default: genie-admin)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+# GENIE_ADMIN_USERNAME=genie-admin
+
+# GENIE realm admin password (REQUIRED — must satisfy KEYCLOAK_PASSWORD_POLICY)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+GENIE_ADMIN_PASSWORD=
 
 # Keycloak PostgreSQL password (REQUIRED — must differ from POSTGRES_PASSWORD)
 # Used by: postgres-init (creates dedicated 'keycloak' DB user), keycloak service
@@ -402,7 +410,7 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 # To simplify: KEYCLOAK_PASSWORD_POLICY=length(8)
 # KEYCLOAK_PASSWORD_POLICY=
 
-# Theme for login, account console, and email (default: keycloak — built-in theme)
+# Theme for login, account console, and email (default: genie — custom GENIE.AI theme)
 # KEYCLOAK_THEME=genie
 
 # Internationalization (default: true)

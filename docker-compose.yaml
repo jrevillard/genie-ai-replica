@@ -1129,7 +1129,8 @@ services:
       # Variables referenced in genie-realm.yaml via $(env:VAR) substitution
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
-      - KC_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - GENIE_ADMIN_USERNAME=${GENIE_ADMIN_USERNAME:-genie-admin}
+      - GENIE_ADMIN_PASSWORD=${GENIE_ADMIN_PASSWORD}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
       - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
       # Realm properties (registration, email, security, localization, tokens)

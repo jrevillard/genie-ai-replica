@@ -56,6 +56,7 @@ TRANSLATION_CACHE_PASSWORD=<strong-password>
 POSTGRES_PASSWORD=<strong-password>
 KONG_DB_PASSWORD=<strong-password>
 KEYCLOAK_ADMIN_PASSWORD=<strong-password>
+GENIE_ADMIN_PASSWORD=<strong-password>
 KEYCLOAK_DB_PASSWORD=<strong-password>
 KEYCLOAK_CLIENT_SECRET=<strong-random-string>
 KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
@@ -217,6 +218,11 @@ docker compose logs keycloak-config --tail 10
 - **URL**: `https://<NGINX_PUBLIC_DOMAIN>/auth/admin/`
 - **Username**: `admin`
 - **Password**: `<KEYCLOAK_ADMIN_PASSWORD>` from `.env`
+
+**GENIE realm admin user** (separate from master admin, used for frontend login):
+- **Username**: `genie-admin` (default, configurable via `GENIE_ADMIN_USERNAME`)
+- **Password**: `<GENIE_ADMIN_PASSWORD>` from `.env`
+- Has `admin` realm role — grants admin access in the GENIE.AI frontend
 
 ### Keycloak environment variables:
 

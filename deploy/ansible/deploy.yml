@@ -626,6 +626,7 @@
           - postgres_password is defined and postgres_password | length > 0
           - kong_db_password is defined and kong_db_password | length > 0
           - keycloak_admin_password is defined and keycloak_admin_password | length > 0
+          - genie_admin_password is defined and genie_admin_password | length > 0
           - keycloak_db_password is defined and keycloak_db_password | length > 0
           - keycloak_client_secret is defined and keycloak_client_secret | length > 0
           - keycloak_proxy_client_secret is defined and keycloak_proxy_client_secret | length > 0
@@ -634,8 +635,8 @@
           Edit the vault file for your environment (group_vars/&lt;env&gt;.vault) and set all secrets:
           arango_password, jwt_secret, session_secret, translation_cache_password,
           postgres_password,
-          kong_db_password, keycloak_admin_password, keycloak_db_password,
-          keycloak_client_secret, keycloak_proxy_client_secret.
+          kong_db_password, keycloak_admin_password, genie_admin_password,
+          keycloak_db_password, keycloak_client_secret, keycloak_proxy_client_secret.
         quiet: true
 
     - name: Validate OPEA vault variables

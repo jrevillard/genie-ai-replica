@@ -38,14 +38,14 @@ roles:
 
 # Default admin user
 users:
-  - username: admin
+  - username: $(env:GENIE_ADMIN_USERNAME)
     enabled: true
-    email: admin@genie.local
+    email: $(env:GENIE_ADMIN_USERNAME)@genie.local
     firstName: Admin
     lastName: GENIE
     credentials:
       - type: password
-        value: $(env:KC_ADMIN_PASSWORD)
+        value: $(env:GENIE_ADMIN_PASSWORD)
         temporary: false
     realmRoles:
       - admin

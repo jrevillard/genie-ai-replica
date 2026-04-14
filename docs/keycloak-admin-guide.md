@@ -87,7 +87,7 @@ The user is permanently removed from Keycloak. Their ArangoDB record remains but
 | `admin` | Administrator | Full access to all admin API endpoints |
 | `user` | Standard user | Access to standard user features |
 
-These roles are defined in `config/keycloak/genie-realm.yaml` and applied automatically during Keycloak initialization.
+These roles are defined in `configs/keycloak/genie-realm.yaml` and applied automatically during Keycloak initialization.
 
 ### 3.2 Assign Roles via Admin Console
 
@@ -245,8 +245,8 @@ Admin disables user in Keycloak
 | ArangoDB role persistence | `services/user-provisioning-service.js` | 49 |
 | Role-based access control | `middleware/keycloak-auth-middleware.js` | 174 |
 | User provisioning on login | `services/user-provisioning-service.js` | 63 |
-| Realm roles definition | `config/keycloak/genie-realm.yaml` | 8-12 |
-| Default admin user | `config/keycloak/genie-realm.yaml` | 15-27 |
+| Realm roles definition | `configs/keycloak/genie-realm.yaml` | 8-12 |
+| Default admin user | `configs/keycloak/genie-realm.yaml` | 15-27 |
 
 ## 6. Verification with curl Commands
 
@@ -546,7 +546,7 @@ Users in the `IT` department get `admin` role, users in `Research` get `analyst`
 
 ### 8.5 Adding New Realm Roles
 
-If the mapped attribute requires a role that doesn't exist yet, create it first in `config/keycloak/genie-realm.yaml`:
+If the mapped attribute requires a role that doesn't exist yet, create it first in `configs/keycloak/genie-realm.yaml`:
 
 ```yaml
 roles:

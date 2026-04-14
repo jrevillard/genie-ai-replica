@@ -522,20 +522,20 @@
             registry_tag: genie-ai-kong-config:latest
             opea: false
           - name: postgres-init
-            dockerfile: config/postgres/Dockerfile
-            context: config/postgres/
+            dockerfile: configs/postgres/Dockerfile
+            context: configs/postgres/
             source_tag: genie-ai-postgres-init:latest
             registry_tag: genie-ai-postgres-init:latest
             opea: false
           - name: keycloak
-            dockerfile: config/keycloak/Dockerfile
-            context: config/keycloak/
+            dockerfile: configs/keycloak/Dockerfile
+            context: configs/keycloak/
             source_tag: genie-ai-keycloak:latest
             registry_tag: genie-ai-keycloak:latest
             opea: false
           - name: keycloak-config
-            dockerfile: config/keycloak/Dockerfile.config-cli
-            context: config/keycloak/
+            dockerfile: configs/keycloak/Dockerfile.config-cli
+            context: configs/keycloak/
             source_tag: genie-ai-keycloak-config:latest
             registry_tag: genie-ai-keycloak-config:latest
             opea: false

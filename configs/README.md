@@ -4,7 +4,9 @@ This directory contains OPEA (Open Platform for Enterprise AI) configuration fil
 
 ## Contents
 
+- `keycloak/` - Keycloak Identity Provider (Dockerfiles, realm configuration)
 - `opea-config/` - OPEA service configuration files
+- `postgres/` - PostgreSQL initialization (multi-database setup)
 
 ## LLM Prompts
 

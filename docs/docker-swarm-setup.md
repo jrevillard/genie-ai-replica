@@ -198,13 +198,13 @@ docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 
 # PostgreSQL Init (one-shot — creates dedicated kong/keycloak users)
-docker build -t genie-ai-postgres-init:latest config/postgres/
+docker build -t genie-ai-postgres-init:latest configs/postgres/
 
 # Keycloak (Identity Provider)
-docker build -t genie-ai-keycloak:latest config/keycloak/
+docker build -t genie-ai-keycloak:latest configs/keycloak/
 
 # Keycloak Config CLI (one-shot — applies realm configuration)
-docker build -f config/keycloak/Dockerfile.config-cli -t genie-ai-keycloak-config:latest config/keycloak/
+docker build -f configs/keycloak/Dockerfile.config-cli -t genie-ai-keycloak-config:latest configs/keycloak/
 
 # OPEA services (if DEPLOY_OPEA=1) — context is project root for all
 docker build -f genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest .
@@ -473,7 +473,7 @@ Select the **genie** realm (not `master`) after logging in.
 
 ### Pre-configured Users and Roles
 
-The following are configured automatically during deployment via `config/keycloak/genie-realm.yaml`:
+The following are configured automatically during deployment via `configs/keycloak/genie-realm.yaml`:
 
 | User | Roles | Purpose |
 |---|---|---|

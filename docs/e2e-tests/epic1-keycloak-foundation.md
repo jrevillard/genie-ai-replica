@@ -420,7 +420,7 @@ grep -rn 'fetch\|axios\.|http\.get\|https\.get' \
 Verify the Keycloak realm configuration contains no external URLs.
 
 ```bash
-grep -rn 'http[s]\?://' config/keycloak/genie-realm.yaml
+grep -rn 'http[s]\?://' configs/keycloak/genie-realm.yaml
 ```
 
 **Expected**: Only `localhost` URLs in `redirectUris` and `webOrigins` fields. Zero external URLs.

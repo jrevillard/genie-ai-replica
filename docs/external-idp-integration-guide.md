@@ -229,7 +229,7 @@ Follow the same verification steps as for OIDC providers (navigate to login page
 
 ## Optional: Automated IdP Configuration via keycloak-config-cli
 
-Instead of using the Keycloak admin console, you can define identity providers in `config/keycloak/genie-realm.yaml` for automated provisioning.
+Instead of using the Keycloak admin console, you can define identity providers in `configs/keycloak/genie-realm.yaml` for automated provisioning.
 
 ### Example: Adding Google via YAML
 

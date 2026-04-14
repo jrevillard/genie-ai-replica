@@ -118,7 +118,6 @@ graph TD
     M -->|Calls| Z[Service Category Service]
     N -->|Calls| AA[Session Service]
     O -->|Calls| AB[User Service]
-    O -->|Calls| AC[Email Service]
     P -->|Calls| AD[Weather Service]
 
     Q -->|Accesses| AE[Database]
@@ -133,7 +132,6 @@ graph TD
     Z -->|Accesses| AE
     AA -->|Accesses| AE
     AB -->|Accesses| AE
-    AC -->|Accesses| AE
     AD -->|Accesses| AE
 
     AE -->|Stores| AF[User Data]
@@ -150,16 +148,14 @@ This diagram shows the flow from client requests through the Express router, aut
 
 ## Authentication and Security
 
-All routes, except specific authentication endpoints (e.g., `/auth/login`, `/auth/register`, `/users/check-email`), require JWT-based authentication. The `authMiddleware.authenticate` function validates the JWT token in the `Authorization` header (Bearer scheme). Admin-only routes additionally use `authMiddleware.isAdmin` to restrict access to users with administrative privileges.
+All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, except public routes (`/health`, `/api-docs`, `/api/auth/callback`, `/api/auth/logout/callback`). The OPEA integration endpoint (`/users/:userId/context`) is protected by `X-Service-Token` instead of Keycloak JWT.
 
 - **JWT Token**: Must be included in the `Authorization` header as `Bearer <token>`.
 - **Error Responses**:
   - **401 Unauthorized**: Missing or invalid token.
   - **403 Forbidden**: Insufficient permissions (e.g., non-admin accessing admin routes).
 - **Token Management**:
-  - Tokens are refreshed via `/auth/refresh-token`.
-  - Expired tokens trigger a 401 response, requiring clients to re-authenticate.
-  - Password reset and email verification use secure tokens with expiration.
+  - Tokens are managed by Keycloak OIDC with automatic silent renew.
 
 ## Route Groups
 
@@ -238,35 +234,15 @@ All routes, except specific authentication endpoints (e.g., `/auth/login`, `/aut
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/refresh-token` | Refresh JWT token using a refresh token |
-| POST | `/register` | Register a new user |
-| POST | `/login` | Authenticate user and return access token |
-| POST | `/logout` | Invalidate user token |
+| POST | `/logout` | Invalidate user session |
 | GET | `/me` | Get current user information |
-| GET | `/verify-email/:token` | Verify user email using token |
-| GET | `/verify-email-success` | Display email verification result |
-| POST | `/resend-verification` | Resend verification email |
-| POST | `/reset-password` | Initiate password reset |
-| POST | `/validate-token` | Validate password reset token |
-| POST | `/reset-password/confirm` | Reset password using token |
-| POST | `/change-password` | Change password for authenticated user |
-| POST | `/cleanup-tokens` | Clean up expired tokens (admin only) |
-
-#### Key Parameters
-- `refreshToken`: Required for token refresh.
-- `loginName`, `email`, `encPassword`: Required for registration and login.
-- `token`: Used for email verification and password reset.
-- `currentPassword`, `newPassword`: Required for password changes.
 
 #### Services Called
-- **Auth Service**: Manages user authentication, token generation, and verification processes.
+- **Auth Service**: Manages user authentication via Keycloak OIDC.
 - **Auth Controller**: Handles business logic for authentication routes.
 
 #### Security
-- `/register`, `/login`, `/reset-password`, `/resend-verification`, `/validate-token`, `/verify-email/:token`, `/verify-email-success` do not require authentication.
-- Other routes require JWT authentication (`authMiddleware.authenticate`).
-- `/cleanup-tokens` requires admin privileges (`authMiddleware.isAdmin`).
-- Passwords are encrypted/hashed client-side before transmission.
+- All routes require JWT authentication via Keycloak OIDC (`keycloakAuthMiddleware`).
 
 ### Chat History Routes
 
@@ -474,36 +450,24 @@ All routes, except specific authentication endpoints (e.g., `/auth/login`, `/aut
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/debug-routes` | List all registered user routes for debugging |
-| PUT | `/email` | Update user’s email address with verification |
-| GET | `/check-email` | Check if an email is available |
 | GET | `/:userId` | Get user profile by ID |
 | POST | `/` | Create a new user profile with optional file uploads |
 | DELETE | `/:userId` | Delete user profile by ID |
 | GET | `/` | Search users with pagination and criteria |
 | POST | `/reset-data` | Reset user profile data while preserving account |
-| POST | `/delete` | Permanently delete user account with password verification |
-| PUT | `/:userId` | Update user profile or role (admin only for role updates) |
-| PUT | `/:userId/role` | Update user role (admin only) |
-| POST | `/admin/users/:userId/resend-verification` | Resend verification email (admin only) |
-| POST | `/admin/users/:userId/force-logout` | Force logout a user (admin only) |
+| PUT | `/:userId` | Self-service profile update |
 
 #### Key Parameters
 - `userId`: Identifier for the user being queried or modified.
-- `email`, `password`: Required for email updates and account deletion.
 - `data`, `files`: Profile data and optional file uploads for profile creation/update.
-- `role`: User role (User, Admin, Manager) for role updates.
 - `limit`, `offset`: Pagination for user searches.
-- `email`, `role`: Search criteria for users.
 
 #### Services Called
-- **User Service**: Manages user profile creation, retrieval, updates, and deletion, including role management and email verification.
-- **Email Service**: Sends verification emails for email updates and admin-initiated verification.
+- **User Service**: Manages user profile creation, retrieval, updates, and deletion.
 
 #### Security
-- `/check-email` does not require authentication to allow pre-registration checks.
-- All other routes require JWT authentication (`authMiddleware.authenticate`).
-- Role updates and admin actions (`/admin/users/*`) require admin privileges (`authMiddleware.isAdmin`).
-- Email updates and account deletion require password verification.
+- All routes require JWT authentication via Keycloak OIDC (`keycloakAuthMiddleware`), except public routes (`/health`, `/api-docs`, `/api/auth/callback`).
+- The OPEA integration endpoint (`/users/:userId/context`) is excluded from Keycloak auth and protected by `X-Service-Token` instead.
 - File uploads are limited to 10MB and stored in memory using `multer`.
 
 ### Weather Routes

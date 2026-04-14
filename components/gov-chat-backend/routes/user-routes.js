@@ -5,6 +5,7 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const serviceTokenService = require('../services/service-token-service');
 const { logger } = require('../shared-lib');
 const keycloakProxyService = require('../services/keycloak-proxy-service');
+const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
 
 /**
  * @swagger
@@ -26,13 +27,6 @@ const keycloakProxyService = require('../services/keycloak-proxy-service');
  *           type: string
  *           format: email
  *           description: User's email address
- *         emailVerified:
- *           type: boolean
- *           description: Whether email has been verified
- *         role:
- *           type: string
- *           enum: [User, Admin, Manager]
- *           description: User's role
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -103,7 +97,7 @@ module.exports = (userService) => {
    *                   type: array
    *                   items:
    *                     type: string
-   *                   example: ["GET: /debug-routes", "PUT: /email"]
+   *                   example: ["GET: /debug-routes"]
    *       500:
    *         description: Server error
    */
@@ -128,104 +122,6 @@ module.exports = (userService) => {
       routes: routes
     });
   });
-
-  /**
-   * @swagger
-   * /api/users/email:
-   *   put:
-   *     summary: Update user's email address
-   *     description: Proxies email change to Keycloak Admin API via service account. Self-service only — authenticated user must be the target user.
-   *     tags: [User]
-   *     security:
-   *       - KeycloakOAuth2: ['openid']
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - email
-   *             properties:
-   *               email:
-   *                 type: string
-   *                 format: email
-   *                 description: New email address
-   *                 example: newemail@example.com
-   *               userId:
-   *                 type: string
-   *                 description: User ID (optional, must match authenticated user if provided)
-   *     responses:
-   *       200:
-   *         description: Email updated successfully via Keycloak
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 success:
-   *                   type: boolean
-   *                   example: true
-   *                 message:
-   *                   type: string
-   *                   example: Email updated. Please verify your new email address.
-   *                 shouldLogout:
-   *                   type: boolean
-   *                   example: true
-   *       400:
-   *         description: Bad request, missing email
-   *       401:
-   *         description: Authentication required
-   *       403:
-   *         description: Cannot modify a different user
-   *       404:
-   *         description: User not found in Keycloak
-   *       409:
-   *         description: Email already in use
-   *       500:
-   *         description: Server error
-   */
-  router.put('/email', keycloakAuthMiddleware.authenticate, async (req, res) => {
-    try {
-      const { email, userId } = req.body;
-
-      if (!email) {
-        return res.status(400).json({ error: 'Email is required' });
-      }
-
-      if (!req.user) {
-        return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required', details: {} });
-      }
-
-      // Self-service: verify the authenticated user matches the target user
-      const authenticatedUserId = req.user._key;
-      if (userId && userId !== authenticatedUserId) {
-        return res.status(403).json({ error: 'FORBIDDEN', message: 'Cannot modify a different user', details: {} });
-      }
-
-      // Proxy to Keycloak via service account
-      await keycloakProxyService.updateUser(authenticatedUserId, {
-        email: email,
-        emailVerified: false
-      });
-
-      logger.info(`[EMAIL] Email updated via Keycloak proxy for user ${authenticatedUserId}`);
-      res.json({
-        success: true,
-        message: 'Email updated. Please verify your new email address.',
-        shouldLogout: true
-      });
-    } catch (error) {
-      const status = error.status === 404 ? 404 : error.status === 409 ? 409 : 500;
-      logger.error(`[EMAIL] Error updating email: ${error.message}`, { stack: error.stack });
-      res.status(status).json({ success: false, message: error.message || 'Failed to update email' });
-    }
-  });
-
-
-  
-
-  
 
   /**
    * @swagger
@@ -364,63 +260,10 @@ module.exports = (userService) => {
 
   /**
    * @swagger
-   * /api/users/delete:
-   *   post:
-   *     summary: Delete user account
-   *     description: Deletes user from Keycloak and marks as deleted in ArangoDB (defense-in-depth)
-   *     tags: [User]
-   *     security:
-   *       - KeycloakOAuth2: ['openid']
-   *     requestBody:
-   *       required: false
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               reason:
-   *                 type: string
-   *                 description: Optional reason for account deletion
-   *     responses:
-   *       200:
-   *         description: Account deleted successfully
-   *       401:
-   *         description: Authentication required
-   *       404:
-   *         description: User not found
-   *       500:
-   *         description: Server error
-   */
-  router.post('/delete', keycloakAuthMiddleware.authenticate, async (req, res) => {
-    try {
-      if (!req.user || !req.user._key) {
-        return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required', details: {} });
-      }
-
-      const userId = req.user._key;
-      logger.info(`[DELETE] Account deletion requested for user ${userId}`);
-
-      await keycloakProxyService.deleteUser(userId);
-
-      logger.info(`[DELETE] Account deleted successfully for user ${userId}`);
-      res.json({ success: true, message: 'Account deleted' });
-    } catch (error) {
-      const status = error.status === 404 ? 404 : 500;
-      logger.error(`[DELETE] Error deleting account: ${error.message}`, { stack: error.stack });
-      res.status(status).json({ success: false, message: error.message || 'Failed to delete account' });
-    }
-  });
-
-  /**
-   * @swagger
    * /api/users/{userId}:
    *   put:
-   *     summary: Update user profile, assign roles, or enable/disable user
-   *     description: |-
-   *       Dual-purpose route:
-   *       - Admin path (roles array): Assigns realm roles via Keycloak Admin API
-   *       - Admin path (disabled boolean): Enables/disables user via Keycloak Admin API
-   *       - Self-service path: Updates profile — JIT fields (email, name) forwarded to Keycloak Account API, custom fields saved to ArangoDB
+   *     summary: Update user profile
+   *     description: Self-service profile update. JIT fields (email, name) forwarded to Keycloak Account API, custom fields saved to ArangoDB.
    *     tags: [User]
    *     security:
    *       - KeycloakOAuth2: ['openid']
@@ -439,15 +282,7 @@ module.exports = (userService) => {
    *             properties:
    *               data:
    *                 type: string
-   *                 description: JSON string containing user profile data (for self-service updates)
-   *               roles:
-   *                 type: array
-   *                 items:
-   *                   type: string
-   *                 description: Realm roles to assign (admin only), e.g. ["admin", "user"]
-   *               disabled:
-   *                 type: boolean
-   *                 description: Set true to disable user, false to enable (admin only, inverse boolean)
+   *                 description: JSON string containing user profile data
    *               files:
    *                 type: array
    *                 items:
@@ -457,15 +292,7 @@ module.exports = (userService) => {
    *         application/json:
    *           schema:
    *             type: object
-   *             properties:
-   *               roles:
-   *                 type: array
-   *                 items:
-   *                   type: string
-   *                 description: Realm roles to assign (admin only)
-   *               disabled:
-   *                 type: boolean
-   *                 description: Set true to disable user, false to enable (admin only)
+   *             description: User profile fields to update
    *     responses:
    *       200:
    *         description: User updated successfully
@@ -481,11 +308,11 @@ module.exports = (userService) => {
    *                   type: string
    *                   example: Profile saved successfully
    *       400:
-   *         description: Bad request, invalid profile data or role
+   *         description: Bad request, invalid profile data
    *       401:
    *         description: Authentication required
    *       403:
-   *         description: Forbidden — admin privileges required, or cannot modify another user's profile
+   *         description: Forbidden — cannot modify another user's profile
    *       404:
    *         description: User not found
    *       500:
@@ -495,41 +322,10 @@ module.exports = (userService) => {
     const targetUserId = req.params.userId;
 
     try {
-      // --- Admin path: role assignment ---
-      if (req.body.roles && Array.isArray(req.body.roles)) {
-        const isAdmin = req.user && req.user.roles && req.user.roles.includes('admin');
-        if (!isAdmin) {
-          return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin privileges required to update user roles', details: {} });
-        }
-
-        await keycloakProxyService.assignRoles(targetUserId, req.body.roles);
-        logger.info(`[PUT /:userId] Roles updated via Keycloak for user ${targetUserId}: ${req.body.roles.join(', ')}`);
-
-        return res.json({ success: true, message: 'User roles updated successfully' });
-      }
-
-      // --- Admin path: enable/disable ---
-      if (req.body.disabled !== undefined) {
-        const isAdmin = req.user && req.user.roles && req.user.roles.includes('admin');
-        if (!isAdmin) {
-          return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin privileges required to enable/disable users', details: {} });
-        }
-
-        await keycloakProxyService.updateUser(targetUserId, { enabled: !req.body.disabled });
-        logger.info(`[PUT /:userId] User ${targetUserId} ${!req.body.disabled ? 'enabled' : 'disabled'} via Keycloak`);
-
-        return res.json({ success: true, message: `User ${!req.body.disabled ? 'enabled' : 'disabled'} successfully` });
-      }
-
       // --- Self-service path: profile update ---
       // Enforce self-context: user can only update their own profile
       if (targetUserId !== req.user._key) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'You can only update your own profile', details: {} });
-      }
-
-      // Reject admin-only fields in self-service context
-      if (req.body.roles || req.body.disabled || req.body.active || req.body.deleted) {
-        return res.status(400).json({ success: false, message: 'Cannot modify admin fields' });
       }
 
       // Parse profile data (multipart/form-data sends JSON in req.body.data)
@@ -544,10 +340,10 @@ module.exports = (userService) => {
         profileData = { ...req.body };
       }
 
-      // Split JIT fields (→ Keycloak) from custom fields (→ ArangoDB)
+      // Split JIT fields (-> Keycloak) from custom fields (-> ArangoDB)
       const jitFields = {};
       const customFields = {};
-      const JIT_KEYS = ['email', 'firstName', 'lastName', 'username'];
+      const JIT_KEYS = JIT_FORWARD_FIELDS;
 
       for (const [key, value] of Object.entries(profileData)) {
         if (JIT_KEYS.includes(key)) {
@@ -575,90 +371,6 @@ module.exports = (userService) => {
     }
   });
 
-
-/**
- * @swagger
- * /api/users/admin/users/{userId}/force-logout:
- *   post:
- *     summary: Force logout a user
- *     description: Admin-only endpoint to force logout a user by invalidating their tokens and ending all active sessions
- *     tags: [User Administration]
- *     security:
- *       - KeycloakOAuth2: ['openid']
- *     parameters:
- *       - in: path
- *         name: userId
- *         schema:
- *           type: string
- *         required: true
- *         description: ID of the user to force logout
- *     responses:
- *       200:
- *         description: User logged out successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: User logged out successfully
- *       401:
- *         description: Authentication required
- *       403:
- *         description: Forbidden, admin privileges required
- *       404:
- *         description: User not found
- *       500:
- *         description: Server error
- */
-router.post('/admin/users/:userId/force-logout', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, async (req, res) => {
-  logger.info('\n=======================================================');
-  logger.info('========= POST ADMIN/USERS/:userId/FORCE-LOGOUT ROUTE ACCESSED =========');
-  logger.info(`Method: ${req.method}`);
-  logger.info(`Full URL: ${req.originalUrl}`);
-  logger.info(`User ID from params: ${req.params.userId}`);
-  logger.info(`Authenticated user: ${req.user?._key || 'unknown'}`);
-  logger.info(`User role: ${req.user?.role || 'unknown'}`);
-  logger.info(`Timestamp: ${new Date().toISOString()}`);
-  logger.info('=======================================');
-
-  try {
-    const userId = req.params.userId;
-    const adminId = req.user?._key;
-
-    logger.info(`[FORCE LOGOUT] Admin ${adminId} requested force logout for user ${userId}`);
-
-    if (!userId) {
-      logger.warn(`[FORCE LOGOUT] Missing userId in request`);
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-
-    const result = await userService.forceUserLogout(userId, adminId);
-
-    logger.info(`[FORCE LOGOUT] User ${userId} logged out successfully by admin ${adminId}`);
-    return res.json({
-      success: true,
-      message: 'User logged out successfully'
-    });
-  } catch (error) {
-    logger.error(`[FORCE LOGOUT] Error forcing logout for user ${req.params.userId} by admin ${req.user?._key}: ${error.message}`, {
-      stack: error.stack,
-      userId: req.params.userId,
-      adminId: req.user?._key,
-      timestamp: new Date().toISOString()
-    });
-
-    if (error.message === 'User not found') {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    return res.status(500).json({ success: false, message: 'Failed to force logout' });
-  }
-});
 
 /**
  * Catch-all route for unmatched requests

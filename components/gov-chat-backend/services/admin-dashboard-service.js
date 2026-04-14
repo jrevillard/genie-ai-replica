@@ -1180,6 +1180,7 @@ class AdminDashboardService {
               email: u.email,
               fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
               role: HAS(u, "role") ? u.role : "User",
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }
@@ -1202,6 +1203,7 @@ class AdminDashboardService {
               email: u.email,
               fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
               role: HAS(u, "role") ? u.role : "User",
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }

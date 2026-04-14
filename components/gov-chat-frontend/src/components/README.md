@@ -18,7 +18,7 @@ The GENIE.AI framework is a suite of pre-assembled Vue.js application components
 - A collapsible sidebar with a service tree for navigation and a tab for saved chat history.
 - Multiple analytics dashboards for tracking system and usage metrics.
 - Robust user profile and application settings management.
-- A complete authentication flow including registration, email verification, and password reset.
+- Authentication handled by Keycloak OIDC.
 - Extensive multilingual support.
 
 ## Core Components
@@ -35,12 +35,9 @@ The application is broken down into the following functional categories:
 
 ### Authentication & User Screens
 
--   **`LoginScreen.vue`**: Handles user login with username/password, social login options, and links to registration/password reset.
--   **`RegisterScreen.vue`**: The user registration form for creating a new account.
--   **`RegistrationSuccessScreen.vue`**: A confirmation page shown after a user successfully registers, prompting them to check their email.
--   **`EmailVerificationScreen.vue`**: The screen that handles the verification of a user's email address via a token sent to them.
--   **`PasswordResetInitiateScreen.vue`**: The first step in the password reset process where the user enters their email address.
--   **`PasswordResetConfirmScreen.vue`**: The second step where the user enters a new password after validating a reset token.
+-   **`LoginScreen.vue`**: Handles user login via Keycloak OIDC SSO.
+
+> **Note:** Authentication (registration, email verification, password reset) is handled by Keycloak OIDC. The old registration and verification screens have been removed.
 
 ### Chat Interface
 
@@ -58,11 +55,8 @@ The application is broken down into the following functional categories:
 
 ### User Profile & Settings
 
--   **`UserProfileContainer.vue`**: A container that fetches and manages the data for the user profile, handling loading and error states.
 -   **`UserProfileComponent.vue`**: A comprehensive, multi-tab modal for users to view and edit their extensive personal data, including identity, address, health, and employment information.
--   **`PersonalIdentificationTab.vue`**: A specific tab from the `UserProfileComponent`, handling personal details like name, date of birth, and document uploads.
--   **`OldUserProfileComponent.vue`**: An older, deprecated version of the user profile modal.
--   **`SettingsComponent.vue`**: A dialog for managing application-level settings such as display language, theme (light/dark), font size, and notifications. It also includes account management actions like changing email, resetting data, and deleting the account.
+-   **`SettingsComponent.vue`**: A dialog for managing application-level settings such as display language, theme (light/dark), font size, and notifications.
 
 ### Analytics & Dashboards
 
@@ -82,7 +76,6 @@ The application is broken down into the following functional categories:
 -   **`SearchableCountryDropdown.vue`**: An advanced dropdown component with search functionality specifically for selecting a country.
 -   **`LogSearchDialog.vue`**: A dialog within the Admin Dashboard for searching, filtering, and exporting system logs.
 -   **`OperationResultsModal.vue`**: A modal used in the Admin Dashboard to display the results of administrative operations like database backups or re-indexing.
--   **`UserEditDialog.vue`**: A dialog used within the Admin Dashboard for administrators to view and manage individual user details, status, and roles.
 
 ## Component Interactions
 
@@ -129,8 +122,6 @@ The chat interface allows users to:
 
 -   A secure, multi-tabbed interface for managing extensive personal data across 8 categories, including identity, address, health, and education.
 -   Functionality for users to manage their application experience, including theme (light/dark), language, and font size.
--   Account management features such as changing email, initiating a password reset, resetting all user data, and permanently deleting the account.
-
 ### Multilingual Support
 
 -   The application is fully internationalized using Vue i18n.

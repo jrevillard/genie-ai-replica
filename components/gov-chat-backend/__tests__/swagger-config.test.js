@@ -60,7 +60,6 @@ jest.mock('../middleware/keycloak-auth-middleware', () => ({
 // Mock all services with stub methods that index.js expects
 const createServiceMock = () => ({
   initialize: jest.fn(() => Promise.resolve()),
-  setSessionService: jest.fn(),
   getHealth: jest.fn(() => Promise.resolve({ status: 'ok' }))
 });
 

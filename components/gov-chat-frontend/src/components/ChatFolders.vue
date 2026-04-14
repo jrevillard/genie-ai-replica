@@ -367,9 +367,9 @@ import { mapGetters, mapActions } from 'vuex'
 import ModalDialog from './ModalDialog.vue'
 import ContextMenu from './ContextMenu.vue'
 import chatHistoryService from '@/services/chatHistoryService'
-import userService from '@/services/userService'
 import notificationService from '@/services/notificationService'
 import { eventBus } from '../eventBus.js'
+import { getUserId } from '@/utils/userUtils'
 
 export default {
   name: 'ChatFolders',
@@ -416,7 +416,7 @@ export default {
   },
 
   computed: {
-    ...mapGetters('chatHistory', ['getAllFolders', 'getChatsByFolderId', 'getFolderById', 'getChatById']),
+    ...mapGetters('chatHistory', ['getAllFolders', 'getFolderById', 'getChatById']),
     themeClass() {
       const theme = this.$route.meta.theme || 'light'
       return theme === 'dark' ? 'context-menu-dark' : 'context-menu-light'
@@ -514,6 +514,19 @@ export default {
     },
     searchTerm() {
       this.handleSearchInput()
+    },
+    // Keep local currentUser in sync with the Vuex store
+    '$store.getters.currentUser': {
+      handler(user) {
+        if (user && user !== this.currentUser) {
+          this.currentUser = user
+          // Normalize _key from OIDC sub if missing
+          if (!this.currentUser._key) {
+            this.currentUser._key = getUserId(this.currentUser) || ''
+          }
+        }
+      },
+      immediate: true,
     },
   },
 
@@ -683,19 +696,23 @@ export default {
     async loadCurrentUser() {
       try {
         console.log('Loading current user data')
-        this.currentUser = userService.getCurrentUser()
+        this.currentUser = this.$store.getters.currentUser
         if (!this.currentUser) {
-          this.currentUser = await userService.getCurrentUserInfo()
+          console.warn('No user in Vuex store, cannot load folders')
+          this.errorMessage = this.safeT('sidebar.errorLoadingUser', 'User data is incomplete. Please reload the page.')
+          return
         }
         console.log('Current user loaded:', this.currentUser)
-        if (!this.currentUser || (!this.currentUser._key && !this.currentUser.id)) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           console.error('User data loaded but no valid ID found:', this.currentUser)
           this.errorMessage = this.safeT('sidebar.errorLoadingUser', 'User data is incomplete. Please reload the page.')
           return
         }
-        if (!this.currentUser._key && this.currentUser.id) {
-          this.currentUser._key = this.currentUser.id
-          console.log('Using user.id as user._key:', this.currentUser._key)
+        if (!this.currentUser._key) {
+          this.currentUser._key = getUserId(this.currentUser) || ''
+          if (this.currentUser._key) {
+            console.log('Set user._key from OIDC sub:', this.currentUser._key)
+          }
         }
         this.loadConversationsForCurrentTab()
         this.loadFoldersFromBackend()
@@ -1008,20 +1025,6 @@ export default {
       this.selectedFolderId = folderId
       this.folderSelected = true
       await this.fetchFolderChats(folderId, true)
-    },
-
-    async getChatsByFolderId({ commit }, folderId) {
-      try {
-        console.log(`Fetching chats for folder ${folderId}`)
-        const folder = await chatHistoryService.getFolder(folderId)
-        const chatIds = folder.conversations.map((conv) => conv._key)
-        commit('SET_FOLDER_CHATS', { folderId, chats: chatIds })
-        console.log(`Chat IDs for folder ${folderId}:`, chatIds)
-        return folder.conversations
-      } catch (error) {
-        console.error(`Error fetching chats for folder ${folderId}:`, error)
-        throw error
-      }
     },
 
     getChatCount(folderId) {

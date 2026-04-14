@@ -222,24 +222,7 @@ const swaggerOptions = {
           type: 'object',
           properties: {
             _key: { type: 'string', description: 'Unique identifier' },
-            loginName: { type: 'string', description: 'Username for authentication' },
             email: { type: 'string', format: 'email', description: 'User email address' },
-            accessToken: { type: 'string', description: 'JWT access token' },
-            personalIdentification: {
-              type: 'object',
-              properties: {
-                fullName: { type: 'string' },
-                dob: { type: 'string', format: 'date' },
-                gender: { type: 'string' },
-                nationality: { type: 'string' }
-              }
-            },
-            addressResidency: {
-              type: 'object',
-              properties: {
-                currentAddress: { type: 'string' }
-              }
-            },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' }
           }
@@ -841,20 +824,6 @@ async function initializeServices() {
           throw initError;
         }
       }
-    }
-
-    logger.info('Setting UserProfileService.setSessionService');
-    try {
-      services.userProfileService.setSessionService(services.sessionService);
-      logger.debug('UserProfileService.setSessionService completed');
-    } catch (error) {
-      logger.error('Failed to set UserProfileService.setSessionService:', {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      throw error;
     }
 
     // Set dependencies

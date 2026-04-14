@@ -421,9 +421,9 @@
 
 <script>
 import userProfileService from '@/services/userProfileService'
-import userService from '@/services/userService'
 import notificationService from '@/services/notificationService'
 import { themeManager } from '@/utils/ThemeManager'
+import { getUserId } from '@/utils/userUtils'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import SearchableCountryDropdown from '@/components/SearchableCountryDropdown.vue'
 
@@ -928,12 +928,12 @@ export default {
     },
     getCurrentUserId() {
       try {
-        const userData = userService.getCurrentUser()
+        const userData = this.$store.getters.currentUser
         if (!userData) {
           console.error('No user data available')
           return ''
         }
-        let userId = userData.id || userData.userId || userData._id || ''
+        let userId = getUserId(userData) || userData.userId || userData._id || ''
         if (typeof userId === 'string' && userId.includes('/')) {
           userId = userId.split('/').pop()
         }

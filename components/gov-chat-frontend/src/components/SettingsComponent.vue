@@ -134,25 +134,19 @@
           <div class="account-management-grid">
             <div class="management-row">
               <div class="management-col">
-                <label class="section-label">{{ translate('settings.emailAddress', 'Email Address') }}</label>
-                <div class="input-with-button">
-                  <input
-                    v-model="userData.email"
-                    type="email"
-                    class="text-input"
-                    :disabled="!isEditingEmail"
-                    :placeholder="translate('settings.emailAddressPlaceholder', 'Your email address')"
-                  />
-                  <button class="btn-secondary" :disabled="isEmailUpdating" @click="toggleEmailEdit">
-                    {{ isEditingEmail ? translate('settings.save', 'Save') : translate('settings.edit', 'Edit') }}
-                  </button>
-                </div>
-                <p v-if="emailError" class="error-text">{{ emailError }}</p>
+                <a
+                  :href="accountConsoleUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn-secondary full-width manage-account-btn"
+                >
+                  {{ translate('settings.manageMyAccount', 'Manage my account') }} →
+                </a>
+                <p class="description-text">
+                  {{ translate('settings.manageMyAccountDesc', 'Update your email, password, and account settings.') }}
+                </p>
               </div>
 
-            </div>
-
-            <div class="management-row">
               <div class="management-col">
                 <button class="btn-secondary full-width" @click="confirmResetUserData">
                   {{ translate('settings.resetUserData', 'Reset User Data') }}
@@ -163,134 +157,9 @@
                   }}
                 </p>
               </div>
-
-              <div class="management-col">
-                <button class="btn-danger full-width" @click="confirmDeleteAccount">
-                  {{ translate('settings.deleteAccount', 'Delete Account') }}
-                </button>
-                <p class="description-text danger-text">
-                  {{
-                    translate(
-                      'settings.deleteAccountDesc',
-                      'This will permanently delete your account and all associated data.'
-                    )
-                  }}
-                </p>
-              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div v-if="showEmailConfirmModal" class="modal">
-        <div class="modal-content" :data-theme="settings.theme">
-          <h3 class="modal-title" :data-themed="true">
-            {{ translate('settings.confirmEmailChange', 'Confirm Email Change') }}
-          </h3>
-
-          <div class="modal-body">
-            <p :data-themed="true">
-              {{ translate('settings.changingEmailTo', 'Changing your email to') }}
-              <strong>{{ newEmail }}</strong>
-              {{ translate('settings.will', 'will') }}:
-            </p>
-            <ul>
-              <li>
-                {{ translate('settings.logOutSystem', 'Log you out of the system') }}
-              </li>
-              <li>
-                {{ translate('settings.sendVerificationLink', 'Send a verification link to your new email') }}
-              </li>
-              <li>
-                {{ translate('settings.requireVerification', 'Require verification before you can log in again') }}
-              </li>
-            </ul>
-
-            <div class="form-group">
-              <label for="confirmPassword" :data-themed="true">
-                {{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm') }}:
-              </label>
-              <input
-                id="confirmPassword"
-                v-model="emailChangePassword"
-                type="password"
-                :placeholder="translate('settings.currentPasswordPlaceholder', 'Your current password')"
-                class="text-input"
-                required
-              />
-              <p v-if="emailChangeError" class="error-text">
-                {{ emailChangeError }}
-              </p>
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn-close" @click="cancelEmailChange">
-              {{ translate('settings.cancel', 'Cancel') }}
-            </button>
-            <button class="btn-save" :disabled="!emailChangePassword || isEmailUpdating" @click="confirmEmailChange">
-              {{
-                isEmailUpdating
-                  ? translate('settings.processing', 'Processing...')
-                  : translate('settings.confirmChange', 'Confirm Change')
-              }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <div v-if="showDeleteAccountModal" class="modal">
-    <div class="modal-content">
-      <h3 class="modal-title">
-        {{ translate('settings.confirmAccountDeletion', 'Confirm Account Deletion') }}
-      </h3>
-      <div class="modal-body">
-        <p class="warning-text">
-          {{ translate('settings.accountDeletionWarning', 'Warning: This action is permanent and cannot be undone.') }}
-        </p>
-
-        <div class="form-group">
-          <label for="deleteReason">
-            {{ translate('settings.deletionReason', 'Reason for deletion (optional):') }}
-          </label>
-          <textarea id="deleteReason" v-model="deleteAccountReason" rows="3" class="text-input"></textarea>
-        </div>
-
-        <div class="form-group">
-          <label for="confirmDeletePassword">
-            {{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm:') }}
-          </label>
-          <input
-            id="confirmDeletePassword"
-            v-model="deleteAccountPassword"
-            type="password"
-            class="text-input"
-            required
-          />
-          <p v-if="deleteAccountError" class="error-text">
-            {{ deleteAccountError }}
-          </p>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn-close" @click="cancelAccountDeletion">
-          {{ translate('settings.cancel', 'Cancel') }}
-        </button>
-        <button
-          class="btn-danger"
-          :disabled="!deleteAccountPassword || isDeletingAccount"
-          @click="processAccountDeletion"
-        >
-          {{
-            isDeletingAccount
-              ? translate('settings.deleting', 'Deleting...')
-              : translate('settings.permanentlyDeleteAccount', 'Delete Account')
-          }}
-        </button>
       </div>
     </div>
   </div>
@@ -306,34 +175,15 @@
     @confirm="handleResetDataConfirm"
     @cancel="handleResetDataCancel"
   />
-
-  <ConfirmDialog
-    :visible="showDeleteAccountConfirm"
-    :title="deleteAccountDialog.title"
-    :message="deleteAccountDialog.message"
-    :confirm-text="deleteAccountDialog.confirmText"
-    :cancel-text="deleteAccountDialog.cancelText"
-    :theme="getCurrentTheme()"
-    :parent-styles="{ maxWidth: '450px' }"
-    @confirm="handleDeleteAccountConfirm"
-    @cancel="handleDeleteAccountCancel"
-  />
 </template>
 
 <script>
-// Import the user service to handle user-related API calls and data management
 import userService from '@/services/userService'
-
-// Import the notifications service to display user feedback messages (success, error, info)
 import notificationService from '@/services/notificationService'
-
-// Import the theme manager utilities to handle theme application and persistence
 import { themeManager } from '@/utils/ThemeManager'
-
-// Import the ConfirmDialog component for displaying confirmation dialogs
+import { getUserId } from '@/utils/userUtils'
+import oidcConfig from '@/config/oidcConfig'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-
-// Import LanguageSelector component
 import LanguageSelector from '@/components/LanguageSelector.vue'
 
 export default {
@@ -364,27 +214,8 @@ export default {
         createdAt: '',
       },
       userAvatar: null,
-      isEditingEmail: false,
-      emailError: null,
-      newEmail: '',
-      isEmailUpdating: false,
-      showEmailConfirmModal: false,
-      emailChangePassword: '',
-      emailChangeError: null,
-      showDeleteAccountModal: false,
-      deleteAccountPassword: '',
-      deleteAccountReason: '',
-      deleteAccountError: null,
-      isDeletingAccount: false,
       showResetDataConfirm: false,
-      showDeleteAccountConfirm: false,
       resetDataDialog: {
-        title: '',
-        message: '',
-        confirmText: '',
-        cancelText: '',
-      },
-      deleteAccountDialog: {
         title: '',
         message: '',
         confirmText: '',
@@ -395,6 +226,9 @@ export default {
   computed: {
     isDarkMode() {
       return this.settings.theme === 'dark'
+    },
+    accountConsoleUrl() {
+      return `${oidcConfig.authority}/account/`
     },
     dialogThemeStyles() {
       // Reference settings.theme so Vue re-evaluates when theme changes
@@ -414,10 +248,6 @@ export default {
     'settings.theme'(newTheme) {
       console.log('[SETTINGS] settings.theme changed to:', newTheme)
       this.$forceUpdate()
-    },
-    'settings.language': function () {
-      console.log('[SETTINGS] Language changed, updating dialog texts...')
-      this.updateDialogTexts()
     },
     currentLocale: function () {
       console.log('[SETTINGS] Current locale changed, updating dialog texts...')
@@ -441,6 +271,7 @@ export default {
     console.log('[SETTINGS] Setting up watcher for settings.language...')
     this.$watch('settings.language', (newVal) => {
       console.log('[SETTINGS] settings.language changed to:', newVal)
+      this.updateDialogTexts()
       if (this.$i18n) {
         console.log('[SETTINGS] Updating i18n locale...')
         this.$i18n.locale = newVal
@@ -616,39 +447,23 @@ export default {
         confirmText: this.translate('settings.reset', 'Reset'),
         cancelText: this.translate('settings.cancel', 'Cancel'),
       }
-      this.deleteAccountDialog = {
-        title: this.translate('settings.deleteAccountTitle', 'Delete Account'),
-        message: this.translate(
-          'settings.confirmDeleteAccount',
-          'Are you sure you want to delete your account? This action cannot be undone.'
-        ),
-        confirmText: this.translate('settings.delete', 'Delete'),
-        cancelText: this.translate('settings.cancel', 'Cancel'),
-      }
-      console.log('[SETTINGS] Dialog texts updated:', {
-        resetDataDialog: this.resetDataDialog,
-        deleteAccountDialog: this.deleteAccountDialog,
-      })
+      console.log('[SETTINGS] Dialog texts updated:', this.resetDataDialog)
     },
     async fetchUserData() {
       console.log('[SETTINGS] Fetching user data...')
       this.isLoading = true
       this.errorMessage = null
       try {
-        console.log('[SETTINGS] Checking for cached user data...')
-        let userData = userService.getCurrentUser()
+        console.log('[SETTINGS] Checking Vuex auth store for user data...')
+        let userData = this.$store.getters.currentUser
         if (!userData) {
-          console.log('[SETTINGS] No cached data, fetching from API...')
-          userData = await userService.getCurrentUserInfo()
-          console.log('[SETTINGS] User data fetched from API:', userData)
+          console.log('[SETTINGS] No store data, showing error...')
+          throw new Error('No user data available in store')
         } else {
-          console.log('[SETTINGS] Using cached data, refreshing in background...')
-          userService.refreshUserData().catch((err) => {
-            console.warn('[SETTINGS] Background refresh failed:', err)
-          })
+          console.log('[SETTINGS] Using Vuex store data:', userData)
         }
         console.log('[SETTINGS] Extracting user ID...')
-        let userId = userData.id || userData.userId || userData._id || ''
+        let userId = getUserId(userData) || userData.userId || userData._id || ''
         if (typeof userId === 'string' && userId.includes('/')) {
           userId = userId.split('/').pop()
         }
@@ -656,9 +471,9 @@ export default {
         console.log('[SETTINGS] Stored user ID for authentication:', this.currentUserId)
         console.log('[SETTINGS] Updating userData state...')
         this.userData = {
-          name: userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
+          name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
           email: userData.email || '',
-          accountType: userData.accountType || userData.role || this.translate('settings.standardAccount'),
+          accountType: userData.accountType || (userData.roles && userData.roles[0]) || userData.role || this.translate('settings.standardAccount'),
           userId: this.currentUserId,
           createdAt: userData.createdAt || '',
         }
@@ -670,20 +485,20 @@ export default {
       } catch (error) {
         console.error('[SETTINGS] Error fetching user data:', error)
         notificationService.error(this.translate('settings.unableToLoadUser'))
-        console.log('[SETTINGS] Attempting to use fallback user data...')
-        const fallbackUser = userService.getCurrentUser()
+        console.log('[SETTINGS] Attempting to use Vuex store as fallback...')
+        const fallbackUser = this.$store.getters.currentUser
         if (fallbackUser) {
           console.log('[SETTINGS] Fallback user data found:', fallbackUser)
-          let userId = fallbackUser.id || fallbackUser.userId || fallbackUser._id || ''
+          let userId = getUserId(fallbackUser) || fallbackUser.userId || fallbackUser._id || ''
           if (typeof userId === 'string' && userId.includes('/')) {
             userId = userId.split('/').pop()
           }
           this.currentUserId = userId
           console.log('[SETTINGS] Fallback user ID:', this.currentUserId)
           this.userData = {
-            name: fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
+            name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
-            accountType: fallbackUser.accountType || this.translate('settings.account'),
+            accountType: fallbackUser.accountType || (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
             userId: this.currentUserId,
             createdAt: fallbackUser.createdAt || '',
           }
@@ -793,153 +608,6 @@ export default {
         console.log('[SETTINGS] Setting isLoading to false after reset...')
         this.isLoading = false
       }
-    },
-    toggleEmailEdit() {
-      console.log('[SETTINGS] Toggling email edit state...')
-      if (this.isEditingEmail) {
-        console.log('[SETTINGS] Saving email changes...')
-        this.prepareEmailChange()
-      } else {
-        console.log('[SETTINGS] Enabling email editing...')
-        this.isEditingEmail = true
-        this.newEmail = this.userData.email
-        console.log('[SETTINGS] Original email stored:', this.newEmail)
-      }
-    },
-    confirmDeleteAccount() {
-      console.log('[SETTINGS] Showing delete account confirmation...')
-      this.showDeleteAccountConfirm = true
-    },
-    handleDeleteAccountConfirm() {
-      console.log('[SETTINGS] User confirmed delete account...')
-      this.showDeleteAccountConfirm = false
-      this.showDeleteAccountModal = true
-    },
-    handleDeleteAccountCancel() {
-      console.log('[SETTINGS] User cancelled delete account...')
-      this.showDeleteAccountConfirm = false
-    },
-    async processAccountDeletion() {
-      console.log('[SETTINGS] Processing account deletion...')
-      if (!this.deleteAccountPassword) {
-        console.log('[SETTINGS] Password missing for account deletion')
-        notificationService.error(
-          this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion')
-        )
-        return
-      }
-      try {
-        console.log('[SETTINGS] Initiating account deletion...')
-        this.isDeletingAccount = true
-        this.deleteAccountError = null
-        console.log('[SETTINGS] Calling userService.deleteAccount...')
-        await userService.deleteAccount(this.deleteAccountPassword, this.deleteAccountReason)
-        console.log('[SETTINGS] Account deletion successful')
-        notificationService.success(
-          this.translate(
-            'settings.accountDeletedSuccess',
-            'Your account has been deleted successfully.'
-          )
-        )
-        console.log('[SETTINGS] Closing delete account modal...')
-        this.showDeleteAccountModal = false
-        console.log('[SETTINGS] Redirecting to login page...')
-        window.location.href = '/'
-      } catch (error) {
-        console.error('[SETTINGS] Error deleting account:', error)
-        if (error.response && error.response.status === 403) {
-          console.log('[SETTINGS] Incorrect password for account deletion')
-          notificationService.error(this.translate('settings.incorrectPassword', 'Incorrect password'))
-        } else {
-          console.log('[SETTINGS] General error during account deletion')
-          notificationService.error(
-            this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.')
-          )
-        }
-      } finally {
-        console.log('[SETTINGS] Setting isDeletingAccount to false...')
-        this.isDeletingAccount = false
-      }
-    },
-    cancelAccountDeletion() {
-      console.log('[SETTINGS] Cancelling account deletion...')
-      this.showDeleteAccountModal = false
-      this.deleteAccountPassword = ''
-      this.deleteAccountReason = ''
-      this.deleteAccountError = null
-      console.log('[SETTINGS] Account deletion cancelled, state reset')
-    },
-    async prepareEmailChange() {
-      console.log('[SETTINGS] Preparing email change...')
-      this.emailError = null
-      console.log('[SETTINGS] Validating email format...')
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(this.userData.email)) {
-        console.log('[SETTINGS] Invalid email format:', this.userData.email)
-        notificationService.error(this.translate('settings.enterValidEmail'))
-        return
-      }
-      if (this.userData.email === this.newEmail) {
-        console.log('[SETTINGS] Email unchanged, exiting edit mode...')
-        this.isEditingEmail = false
-        return
-      }
-      // Email change is handled by Keycloak - skip availability check
-      this.newEmail = this.userData.email
-      this.showEmailConfirmModal = true
-    },
-    async confirmEmailChange() {
-      console.log('[SETTINGS] Confirming email change...')
-      if (!this.emailChangePassword) {
-        console.log('[SETTINGS] Password missing for email change')
-        notificationService.error(this.translate('settings.pleaseEnterPassword'))
-        return
-      }
-      console.log('[SETTINGS] Setting isEmailUpdating to true...')
-      this.isEmailUpdating = true
-      this.emailChangeError = null
-      try {
-        console.log('[SETTINGS] Confirming email change to:', this.userData.email)
-        console.log('[SETTINGS] Using userId for authentication:', this.currentUserId)
-        console.log('[SETTINGS] Calling userService.updateEmail...')
-        const response = await userService.updateEmail(
-          this.userData.email,
-          this.emailChangePassword,
-          this.currentUserId
-        )
-        console.log('[SETTINGS] Email update response:', response)
-        notificationService.info(this.translate('settings.checkNewEmailVerification'))
-        console.log('[SETTINGS] Closing email change modal...')
-        this.showEmailConfirmModal = false
-        this.isEditingEmail = false
-        console.log('[SETTINGS] Scheduling logout after email change...')
-        setTimeout(() => {
-          userService
-            .logout()
-            .then(() => {
-              console.log('[SETTINGS] Logout successful, redirecting...')
-              window.location.href = '/'
-            })
-            .catch((err) => {
-              console.error('[SETTINGS] Logout error:', err)
-              console.log('[SETTINGS] Redirecting despite error...')
-              window.location.href = '/'
-            })
-        }, 1500)
-      } catch (error) {
-        console.error('[SETTINGS] Error updating email:', error)
-        notificationService.error(this.translate('settings.failedToUpdateEmail'))
-      } finally {
-        console.log('[SETTINGS] Setting isEmailUpdating to false...')
-        this.isEmailUpdating = false
-      }
-    },
-    cancelEmailChange() {
-      console.log('[SETTINGS] Cancelling email change...')
-      this.showEmailConfirmModal = false
-      this.emailChangePassword = ''
-      this.emailChangeError = null
-      console.log('[SETTINGS] Email change cancelled, state reset')
     },
   },
 }
@@ -1320,15 +988,6 @@ export default {
   border: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
-.input-with-button {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.input-with-button .text-input {
-  flex: 1;
-}
-
 /* Buttons */
 .btn-close,
 .btn-save,
@@ -1356,20 +1015,11 @@ export default {
   width: 100%;
 }
 
-.btn-danger {
-  width: 100%;
-  padding: 0.6rem 1.25rem;
-  border-radius: 4px;
+.manage-account-btn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
-  font-weight: 500;
-  border: none;
-  background-color: var(--bg-danger, #dc3545);
-  color: white;
-  transition: all 0.2s;
-}
-
-.btn-danger:hover {
-  background-color: var(--bg-danger-hover, #c82333);
 }
 
 .btn-save {
@@ -1395,181 +1045,6 @@ export default {
   margin-top: 0.5rem;
   font-size: 0.875rem;
   color: var(--text-tertiary, #767676);
-}
-
-.danger-text {
-  color: var(--text-danger, #dc3545);
-}
-
-/* Modal styling */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-}
-
-.modal-content {
-  width: 450px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  background-color: var(--dialog-background, #ffffff);
-  border-radius: 8px;
-  box-shadow: var(--dialog-box-shadow, 0 4px 12px rgba(0, 0, 0, 0.15));
-}
-
-.modal-title {
-  padding: 1rem 1.5rem;
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  border-bottom: 1px solid var(--dialog-border-color, #dcdfe4);
-  color: var(--dialog-title-color, #333333);
-}
-
-.modal-body {
-  padding: 1.5rem;
-  color: var(--dialog-text-color, #666666);
-}
-
-/* Override text colors for dark mode */
-[data-theme='dark'] .settings-dialog .modal-body {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-
-.modal-body ul {
-  margin-top: 0.5rem;
-  margin-bottom: 1.5rem;
-  padding-left: 1.5rem;
-}
-
-.modal-body ul li {
-  margin-bottom: 0.5rem;
-}
-
-.modal-footer {
-  padding: 1rem 1.5rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  border-top: 1px solid var(--dialog-border-color, #dcdfe4);
-}
-
-/* Password Reset Dialog Styles */
-.password-reset-modal {
-  width: 400px;
-  padding: 1.5rem;
-  color: #fff;
-  background-color: #333;
-}
-
-.logo {
-  text-align: center;
-  margin-bottom: 1rem;
-}
-
-.app-logo {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: var(--bg-button-primary, #4e97d1);
-  margin-bottom: 0.5rem;
-}
-
-.vue-logo {
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-bottom: 16px solid #fff;
-}
-
-.app-name {
-  font-size: 1.5rem;
-  color: #fff;
-  margin: 0;
-  font-weight: 500;
-}
-
-.password-reset-heading {
-  text-align: center;
-  font-size: 1.2rem;
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  font-weight: 500;
-  color: #ddd;
-}
-
-.password-reset-form {
-  margin-bottom: 1rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  color: #ddd;
-  font-weight: 500;
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.625rem 0.75rem;
-  font-size: 0.9375rem;
-  border: none;
-  border-radius: 6px;
-  background-color: #222;
-  color: #fff;
-  transition: background-color 0.2s;
-}
-
-.form-control:focus {
-  outline: none;
-  background-color: #2a2a2a;
-}
-
-.error-message {
-  color: #ff6b6b;
-  font-size: 0.75rem;
-  margin-top: 0.25rem;
-  margin-bottom: 0;
-}
-
-.reset-button {
-  width: 100%;
-  padding: 0.625rem;
-  background-color: var(--bg-button-primary, #4e97d1);
-  color: var(--text-button-primary, #ffffff);
-  font-size: 0.9375rem;
-  font-weight: bold;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.reset-button:hover:not(:disabled) {
-  background-color: var(--bg-button-primary-hover, #3a7da0);
-}
-
-.reset-button:disabled {
-  background-color: #3a7da8;
-  cursor: not-allowed;
-  opacity: 0.7;
 }
 
 /* Responsive adjustments */
@@ -1600,157 +1075,5 @@ export default {
     background-color: var(--dialog-background, #ffffff);
     z-index: 10;
   }
-
-  .input-with-button {
-    flex-wrap: wrap;
-  }
-
-  .input-with-button .text-input {
-    width: calc(100% - 70px);
-  }
-
-  .input-with-button .btn-secondary {
-    width: 60px;
-  }
-}
-
-/* Password strength indicator */
-.password-strength-indicator {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-}
-
-.strength-label {
-  margin-bottom: 0.25rem;
-  color: #ddd;
-}
-
-.strength-0 {
-  color: #ff4d4d;
-}
-
-.strength-1 {
-  color: #ffa64d;
-}
-
-.strength-2 {
-  color: #ffcc00;
-}
-
-.strength-3 {
-  color: #80cc33;
-}
-
-.strength-4 {
-  color: #47d147;
-}
-
-.strength-bar-container {
-  height: 4px;
-  background-color: #444;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.strength-bar {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.strength-bar.strength-0 {
-  background-color: #ff4d4d;
-}
-
-.strength-bar.strength-1 {
-  background-color: #ffa64d;
-}
-
-.strength-bar.strength-2 {
-  background-color: #ffcc00;
-}
-
-.strength-bar.strength-3 {
-  background-color: #80cc33;
-}
-
-.strength-bar.strength-4 {
-  background-color: #47d147;
-}
-
-.strength-suggestions {
-  list-style-type: none;
-  padding-left: 0;
-  margin: 0.5rem 0 0;
-  color: #aaa;
-}
-
-.strength-suggestions li {
-  margin-bottom: 0.25rem;
-  line-height: 1.2;
-  font-size: 0.75rem;
-}
-
-.strength-suggestions li::before {
-  content: '• ';
-  color: var(--bg-button-primary, #4e97d1);
-}
-
-.password-reset-modal-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2001;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
-}
-
-.warning-text {
-  color: var(--text-warning, #f5a623);
-  font-weight: 500;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background-color: rgba(245, 166, 35, 0.1);
-  border-left: 3px solid var(--text-warning, #f5a623);
-  border-radius: 4px;
-}
-
-/* Add themed styles for modal components */
-.modal-content[data-theme='dark'] {
-  background-color: var(--dialog-background, #2a2a2a);
-  color: var(--dialog-text-color, rgba(255, 255, 255, 0.8));
-}
-
-.modal-content[data-theme='dark'] .modal-title,
-.modal-content[data-theme='dark'] label[data-themed='true'] {
-  color: var(--dialog-title-color, #f0f0f0);
-}
-
-.modal-content[data-theme='dark'] .modal-footer {
-  border-top-color: var(--dialog-border-color, #444444);
-}
-
-.modal-content[data-theme='dark'] .modal-title {
-  border-bottom-color: var(--dialog-border-color, #444444);
-}
-
-.modal-content[data-theme='dark'] .text-input {
-  background-color: var(--bg-input, #333333);
-  color: var(--text-primary, #f0f0f0);
-  border-color: var(--dialog-border-color, #555555);
-}
-
-.modal-title[data-themed='true'] {
-  color: var(--dialog-title-color, #333333);
-}
-
-.modal-content[data-theme='dark'] .modal-title[data-themed='true'],
-.modal-content[data-theme='dark'] p[data-themed='true'] {
-  color: var(--dialog-title-color, #f0f0f0);
 }
 </style>

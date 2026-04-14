@@ -21,29 +21,6 @@ class UserProfileService {
   }
 
   /**
-   * Create a new user profile
-   * @param {Object} profileData - Profile data from the form
-   * @returns {Promise} Created user profile
-   */
-  async createProfile(profileData) {
-    try {
-      // Handle file uploads and form data
-      const formData = this.prepareFormData(profileData);
-      
-      const response = await httpService.post('users', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  }
-
- /**
  * Update an existing user profile
  * @param {String} userId - User ID
  * @param {Object} profileData - Updated profile data
@@ -144,29 +121,7 @@ class UserProfileService {
     return formData;
   }
 
-  /**
-   * Search for users based on criteria
-   * @param {Object} criteria - Search criteria
-   * @param {Number} page - Page number (starting from 1)
-   * @param {Number} limit - Results per page
-   * @returns {Promise} Search results with pagination
-   */
-  async searchUsers(criteria, page = 1, limit = 20) {
-    try {
-      const offset = (page - 1) * limit;
-
-      const response = await httpService.get('users/search', {
-        params: { ...criteria, limit, offset }
-      })
-
-      return response.data
-    } catch (error) {
-      console.error('Error searching users:', error)
-      throw error
-    }
-  }
 }
-
 
 
 export default new UserProfileService();

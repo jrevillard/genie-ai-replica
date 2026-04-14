@@ -1,12 +1,9 @@
-const { Database, aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
-const emailService = require('./email-service');
-const crypto = require('crypto');
 const { logger, dbService, ensureCollection } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
+const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');
 
 class UserProfileService {
   constructor() {
@@ -15,19 +12,11 @@ class UserProfileService {
     this.users = null;
     this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'Uploads');
     this.initialized = false;
-    this.sessionService = null; // Initialize sessionService for dependency injection
-
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
       logger.info('UserProfileService.created_upload_dir', { path: this.uploadDir });
     }
     logger.info('UserProfileService.initialized');
-  }
-
-  // Inject SessionService singleton
-  setSessionService(sessionService) {
-    this.sessionService = sessionService;
-    logger.info('UserProfileService.session_service_set');
   }
 
   async init() {
@@ -62,9 +51,7 @@ class UserProfileService {
       }
 
       // Strip JIT-provisioned fields — these are managed by Keycloak, not ArangoDB
-      const JIT_FIELDS = ['email', 'name', 'roles', 'enabled', 'disabled', 'active', 'deleted',
-        'iss', 'iss_sub', 'sub', 'createdAt', 'updatedAt', 'emailVerified', 'pendingEmailChange'];
-      const strippedFields = Object.keys(profileData).filter(k => JIT_FIELDS.includes(k));
+      const strippedFields = Object.keys(profileData).filter(k => JIT_PROTECTED_FIELDS.includes(k));
       if (strippedFields.length > 0) {
         logger.warn('UserProfileService.stripped_jit_fields', { userId, strippedFields });
         strippedFields.forEach(f => delete profileData[f]);
@@ -179,34 +166,6 @@ class UserProfileService {
     }
   }
 
-  async deleteUserProfile(userId) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.delete_user_profile_start', { userId });
-
-      const user = await this.getUserProfile(userId);
-
-      await this.deleteUserFiles(user);
-      logger.info('UserProfileService.user_files_deleted', { userId });
-
-      const result = await this.users.remove(userId);
-      logger.info('UserProfileService.user_profile_deleted', {
-        userId,
-        durationMs: Date.now() - startTime
-      });
-
-      return result;
-    } catch (error) {
-      logger.error('UserProfileService.delete_user_profile_failed', {
-        userId,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      throw error;
-    }
-  }
-
   async userExists(userId) {
     const startTime = Date.now();
     try {
@@ -309,15 +268,7 @@ class UserProfileService {
       '_key',
       'createdAt',
       'updatedAt',
-      'email',
-      'loginName',
-      'encPassword',
-      'role',
-      'emailVerified',
-      'accessToken',
-      'refreshToken',
-      'tokenVersion',
-      'pendingEmailChange'
+      'email'
     ]);
 
     const customSettings = {};
@@ -412,161 +363,6 @@ class UserProfileService {
     }
   }
 
-  async searchUsers(criteria, limit = 20, offset = 0) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.search_users_start', { criteria, limit, offset });
-
-      const bindVars = { limit, offset };
-      let filterConditions = [];
-
-      if (criteria.fullName) {
-        filterConditions.push(aql`LOWER(u.personalIdentification.fullName) LIKE CONCAT("%", LOWER(${criteria.fullName}), "%")`);
-      }
-
-      if (criteria.nationality) {
-        filterConditions.push(aql`LOWER(u.personalIdentification.nationality) LIKE CONCAT("%", LOWER(${criteria.nationality}), "%")`);
-      }
-
-      if (criteria.address) {
-        filterConditions.push(aql`LOWER(u.addressResidency.currentAddress) LIKE CONCAT("%", LOWER(${criteria.address}), "%")`);
-      }
-
-      if (criteria.email) {
-        filterConditions.push(aql`LOWER(u.contactInfo.email) LIKE CONCAT("%", LOWER(${criteria.email}), "%")`);
-      }
-
-      if (criteria.phone) {
-        filterConditions.push(aql`LOWER(u.contactInfo.phone) LIKE CONCAT("%", LOWER(${criteria.phone}), "%")`);
-      }
-
-      if (criteria.idCard) {
-        filterConditions.push(aql`LOWER(u.identityTravel.idCard) LIKE CONCAT("%", LOWER(${criteria.idCard}), "%")`);
-      }
-
-      let filterQuery;
-      if (filterConditions.length > 0) {
-        filterQuery = aql`FILTER `;
-        for (let i = 0; i < filterConditions.length; i++) {
-          if (i > 0) {
-            filterQuery = aql`${filterQuery} AND `;
-          }
-          filterQuery = aql`${filterQuery} ${filterConditions[i]}`;
-        }
-      } else {
-        filterQuery = aql``;
-      }
-
-      const query = aql`
-        FOR u IN users
-          ${filterQuery}
-          SORT u.createdAt DESC
-          LIMIT ${offset}, ${limit}
-          RETURN u
-      `;
-
-      const cursor = await this.db.query(query);
-      const users = await cursor.all();
-
-      const countQuery = aql`
-        FOR u IN users
-          ${filterQuery}
-          COLLECT WITH COUNT INTO total
-          RETURN total
-      `;
-      const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
-
-      logger.info('UserProfileService.search_users_completed', {
-        resultCount: users.length,
-        totalCount,
-        durationMs: Date.now() - startTime
-      });
-      return {
-        users,
-        pagination: {
-          total: totalCount,
-          limit,
-          offset,
-          pages: Math.ceil(totalCount / limit),
-          currentPage: Math.floor(offset / limit) + 1
-        }
-      };
-    } catch (error) {
-      logger.error('UserProfileService.search_users_failed', {
-        criteria,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      throw error;
-    }
-  }
-
-  async isEmailAvailable(email) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.check_email_availability_start', { email });
-
-      const query = aql`
-        FOR u IN users
-          FILTER u.email == ${email}
-          RETURN u
-      `;
-
-      const cursor = await this.db.query(query);
-      const existingUser = await cursor.next();
-
-      const isAvailable = !existingUser;
-      logger.info('UserProfileService.email_availability_checked', {
-        email,
-        isAvailable,
-        durationMs: Date.now() - startTime
-      });
-      return isAvailable;
-    } catch (error) {
-      logger.error('UserProfileService.check_email_availability_failed', {
-        email,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      return false;
-    }
-  }
-
-  async isUsernameAvailable(username) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.check_username_availability_start', { username });
-
-      const query = aql`
-        FOR u IN users
-          FILTER u.loginName == ${username}
-          RETURN u
-      `;
-
-      const cursor = await this.db.query(query);
-      const existingUser = await cursor.next();
-
-      const isAvailable = !existingUser;
-      logger.info('UserProfileService.username_availability_checked', {
-        username,
-        isAvailable,
-        durationMs: Date.now() - startTime
-      });
-      return isAvailable;
-    } catch (error) {
-      logger.error('UserProfileService.check_username_availability_failed', {
-        username,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      return false;
-    }
-  }
-
   /**
    * Reset user profile data while preserving essential account information
    * @param {string} userId - User ID
@@ -584,13 +380,8 @@ class UserProfileService {
       }
 
       const preservedData = {
-        loginName: currentUserDoc.loginName,
-        email: currentUserDoc.email,
-        encPassword: currentUserDoc.encPassword,
-        emailVerified: currentUserDoc.emailVerified || false,
         createdAt: currentUserDoc.createdAt,
-        updatedAt: new Date().toISOString(),
-        accessToken: currentUserDoc.accessToken
+        updatedAt: new Date().toISOString()
       };
 
       logger.debug('UserProfileService.preserving_fields', {
@@ -630,279 +421,6 @@ class UserProfileService {
     } catch (error) {
       logger.error('UserProfileService.reset_user_data_failed', {
         userId,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      throw error;
-    }
-  }
-
-  async deleteUserAccountPermanently(userId) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.delete_user_account_permanently_start', { userId });
-
-      const user = await this.getUserProfile(userId);
-      if (!user) {
-        logger.warn('UserProfileService.user_not_found', { userId });
-        throw new NotFoundError(`User not found`);
-      }
-
-      await this.deleteUserFiles(user);
-      logger.info('UserProfileService.user_files_deleted', { userId });
-
-      try {
-        await ensureCollection(this.db, 'verificationTokens');
-        await ensureCollection(this.db, 'passwordResetTokens');
-        const verificationTokens = this.db.collection('verificationTokens');
-        const passwordResetTokens = this.db.collection('passwordResetTokens');
-
-        const verifyQuery = aql`
-          FOR t IN verificationTokens
-            FILTER t.userId == ${'users/' + userId}
-            REMOVE t IN verificationTokens
-        `;
-        const resetQuery = aql`
-          FOR t IN passwordResetTokens
-            FILTER t.userId == ${'users/' + userId}
-            REMOVE t IN passwordResetTokens
-        `;
-
-        await this.db.query(verifyQuery);
-        await this.db.query(resetQuery);
-        logger.info('UserProfileService.related_tokens_deleted', { userId });
-      } catch (error) {
-        logger.warn('UserProfileService.clean_related_data_failed', {
-          userId,
-          error: error.message
-        });
-      }
-
-      await this.users.remove(userId);
-      logger.info('UserProfileService.user_account_permanently_deleted', {
-        userId,
-        durationMs: Date.now() - startTime
-      });
-
-      return { userId, success: true, deletedAt: new Date().toISOString() };
-    } catch (error) {
-      logger.error('UserProfileService.delete_user_account_permanently_failed', {
-        userId,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime
-      });
-      throw error;
-    }
-  }
-
-
-  /**
-   * Force logout a user by invalidating their tokens and ending all active sessions
-   * @param {string} userId - User ID to force logout
-   * @param {string} adminId - Admin user ID performing the action
-   * @returns {Promise<Object>} Result of the operation
-   */
-  async forceUserLogout(userId, adminId) {
-    const startTime = Date.now();
-    logger.info('UserProfileService.force_user_logout_start', {
-      userId,
-      adminId,
-      timestamp: new Date().toISOString()
-    });
-
-    try {
-      logger.debug('UserProfileService.force_logout_attempt_start', { userId, adminId });
-
-      // Check if user exists
-      const userExists = await this.userExists(userId);
-      if (!userId) {
-        logger.warn('UserProfileService.user_not_found', {
-          userId,
-          adminId,
-          timestamp: new Date().toISOString()
-        });
-        throw new NotFoundError('User not found');
-      }
-
-      logger.info('UserProfileService.user_found_for_force_logout', { userId, adminId, timestamp: new Date().toISOString() });
-
-      // Retrieve user document
-      let user;
-      try {
-        logger.debug('UserProfileService.retrieving_user_doc', { userId });
-        user = await this.users.document(userId);
-        logger.info('UserProfileService.user_document_retrieved', {
-          userId,
-          adminId,
-          email: user.email,
-          hasAccessToken: !!user.accessToken,
-          timestamp: new Date().toISOString()
-        });
-      } catch (err) {
-        logger.error('UserProfileService.user_document_retrieval_failed', {
-          userId,
-          adminId,
-          error: err.message,
-          timestamp: new Date().toISOString()
-        });
-        throw err;
-      }
-
-      // Clear tokens and increment tokenVersion
-      try {
-        logger.debug('UserProfileService.updating_tokens', { userId });
-        await this.users.update(userId, {
-          accessToken: null,
-          refreshToken: null,
-          tokenVersion: (user.tokenVersion || 0) + 1,
-          updatedAt: new Date().toISOString()
-        });
-        logger.info('UserProfileService.tokens_cleared', {
-          userId,
-          adminId,
-          timestamp: new Date().toISOString()
-        });
-      } catch (err) {
-        logger.error('UserProfileService.token_update_failed', {
-          userId,
-          adminId,
-          error: err.message,
-          timestamp: new Date().toISOString()
-        });
-        throw err;
-      }
-
-      // Verify token deletion
-      let updatedUser;
-      try {
-        logger.debug('UserProfileService.verifying_token_clearance', { userId });
-        updatedUser = await this.users.document(userId);
-        logger.info('UserProfileService.token_clearance_verified', {
-          userId,
-          adminId,
-          accessToken: updatedUser.accessToken,
-          refreshToken: updatedUser.refreshToken,
-          tokenVersion: updatedUser.tokenVersion,
-          timestamp: new Date().toISOString()
-        });
-        if (updatedUser.accessToken !== null) {
-          logger.error('UserProfileService.token_clearance_incomplete', {
-            userId,
-            adminId,
-            accessToken: updatedUser.accessToken,
-            timestamp: new Date().toISOString()
-          });
-          throw new Error('Failed to clear accessToken');
-        }
-      } catch (err) {
-        logger.error('UserProfileService.token_verification_failed', {
-          userId,
-          adminId,
-          error: err.message,
-          timestamp: new Date().toISOString()
-        });
-        throw err;
-      }
-
-      // Terminate sessions using sessionService
-      let sessionCount = 0;
-      try {
-        if (this.sessionService && typeof this.sessionService.getUserSessions === 'function') {
-          logger.debug('UserProfileService.retrieving_sessions', { userId });
-          const sessions = await this.sessionService.getUserSessions(userId, true);
-          sessionCount = sessions.length;
-          logger.info('UserProfileService.active_sessions_retrieved', {
-            userId,
-            adminId,
-            sessionCount,
-            sessionIds: sessions.map(s => s._key),
-            timestamp: new Date().toISOString()
-          });
-
-          for (const session of sessions) {
-            logger.debug('UserProfileService.ending_session', { userId, sessionId: session._key });
-            await this.sessionService.endSession(session._key);
-            logger.info('UserProfileService.session_ended', {
-              userId,
-              adminId,
-              sessionId: session._key,
-              timestamp: new Date().toISOString()
-            });
-          }
-        } else {
-          logger.warn('UserProfileService.session_service_unavailable', { userId, adminId });
-        }
-      } catch (err) {
-        logger.error('UserProfileService.session_termination_failed', {
-          userId,
-          adminId,
-          error: err.message,
-          timestamp: new Date().toISOString()
-        });
-        // Continue to ensure logout completes
-      }
-
-      logger.info('UserProfileService.force_user_logout_completed', {
-        userId,
-        adminId,
-        sessionCount,
-        durationMs: Date.now() - startTime,
-        timestamp: new Date().toISOString()
-      });
-
-      return {
-        success: true,
-        message: 'User logged out successfully'
-      };
-    } catch (error) {
-      logger.error('UserProfileService.force_user_logout_failed', {
-        userId,
-        adminId,
-        error: error.message,
-        stack: error.stack,
-        durationMs: Date.now() - startTime,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Send a verification email for a user, storing the token in verificationTokens
-   * @param {Object} user - User object containing _key, email, and optional personalIdentification or loginName
-   * @returns {Promise<Object>} Result of the operation
-   */
-  async sendVerificationEmail(user) {
-    const startTime = Date.now();
-    try {
-      logger.info('UserProfileService.send_verification_email_start', { userId: user._key });
-
-      const token = crypto.randomBytes(32).toString('hex');
-      const userName = user.personalIdentification?.fullName || user.loginName || 'User';
-
-      // Store the token in the verificationTokens collection
-      await ensureCollection(this.db, 'verificationTokens');
-      const verificationTokens = this.db.collection('verificationTokens');
-      const tokenDoc = {
-        userId: `users/${user._key}`,
-        token: token,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24-hour expiry
-      };
-
-      await verificationTokens.save(tokenDoc);
-      logger.info('UserProfileService.verification_token_stored', { userId: user._key, token: token.substring(0, 10) + '...' });
-
-      // Send the verification email
-      await emailService.sendVerificationEmail(user.email, token, userName);
-      logger.info('UserProfileService.verification_email_sent', { userId: user._key, email: user.email });
-
-      return { success: true, message: 'Verification email sent' };
-    } catch (error) {
-      logger.error('UserProfileService.send_verification_email_failed', {
-        userId: user._key,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime

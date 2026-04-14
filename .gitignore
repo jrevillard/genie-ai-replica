@@ -1,5 +1,6 @@
 # playwright-cli working directory (test snapshots)
 .playwright-cli/
+.playwright/
 
 # Playwright test results
 test-results/

@@ -954,8 +954,7 @@ export default {
       }
 
       try {
-        const userDataString = localStorage.getItem('user')
-        const token = userDataString ? JSON.parse(userDataString)?.accessToken : null
+        const token = this.$store.getters.accessToken
 
         if (!token) throw new Error('Authentication token not found.')
         if (!this.fileViewUrl) throw new Error('Could not determine file view URL.')

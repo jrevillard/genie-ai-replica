@@ -312,7 +312,7 @@ export default {
         console.error('handleLogout: Error during logout:', error)
         localStorage.removeItem('chatHistory')
       } finally {
-        window.location.href = '/login'
+        window.location.href = '/'
       }
     },
 

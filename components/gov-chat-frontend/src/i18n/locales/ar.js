@@ -199,7 +199,7 @@ export default {
     'ZW': 'زيمبابوي'
   },
   admin: {
-    manage: 'Manage',
+    manage: 'إدارة',
     huduma: 'Genie AI',
     dashboard: 'لوحة التحكم',
     system: 'النظام',

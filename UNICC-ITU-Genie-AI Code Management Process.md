@@ -60,7 +60,6 @@ The repository is organized to support modularity, shared libraries, and third-p
 │   ├── chatqna/                 # ChatQnA component overlays
 │   ├── core/                    # Core OPEA overlays
 │   ├── dataprep/                # Data preparation overlays
-│   ├── http-service/            # HTTP service overlays
 │   ├── retriever/               # Retriever component overlays
 │   ├── reranker/                # Reranker component overlays
 │   └── build-patches/           # Build modification patches

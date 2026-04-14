@@ -140,7 +140,7 @@ The authentication system implements defense-in-depth with Keycloak as the manda
 - Swagger UI with Keycloak OIDC "Authorize" button
 - Security audit readiness: authentication logs, traceability, auditable configuration
 - GDPR compliance: log retention policies, right to erasure support
-- OPEA microservices integration unchanged — backend uses existing service-to-service JWT and `user_id` payload (OPEA is Keycloak-agnostic)
+- OPEA microservices integration unchanged — backend uses shared secret (`SERVICE_AUTH_TOKEN` / `X-Service-Token` header) and `user_id` payload (OPEA is Keycloak-agnostic)
 
 ### Post-MVP (Phase 2)
 
@@ -339,7 +339,7 @@ Compliance requirements are specified in functional requirements (FR31-FR36) and
 
 ### AI Services Integration
 
-- FR37: The backend communicates with OPEA microservices using the existing service-to-service authentication mechanism — unchanged by Keycloak integration
+- FR37: The backend communicates with OPEA microservices using a shared secret (`SERVICE_AUTH_TOKEN` / `X-Service-Token` header) — unchanged by Keycloak integration
 - FR38: The backend passes authenticated user identity to OPEA microservices via the existing payload structure (including `user_id`) — OPEA remains Keycloak-agnostic
 
 ## Non-Functional Requirements

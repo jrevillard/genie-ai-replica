@@ -9,7 +9,6 @@ import asyncio
 import aiohttp
 import fcntl  # Added for file locking
 from typing import List, Optional, Union, Dict, Any
-from datetime import datetime, timedelta
 
 from numpy import dot
 from numpy.linalg import norm
@@ -48,8 +47,8 @@ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 # 2. Backend Service: Source of Truth for Label Hierarchy
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
-# 3. HTTP Service: Authentication Token Broker
-GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
+# 3. Service Auth Token: Shared secret for backend callbacks
+SERVICE_AUTH_TOKEN = os.getenv("SERVICE_AUTH_TOKEN", "")
 
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
 GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "false").lower() == "true"
@@ -97,11 +96,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        # Token caching state
-        self._cached_token = None
-        self._token_expiry = None
-        # FIX: Async Lock to prevent race conditions where 50 tasks fetch token at once
-        self._token_lock = asyncio.Lock()
+        self._service_token = SERVICE_AUTH_TOKEN
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
         self._log_semaphore = asyncio.Semaphore(100) 
@@ -116,7 +111,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print("="*60)
         print(f" DOCUMENT_REPO_URL    : {DOCUMENT_REPOSITORY_URL}")
         print(f" BACKEND_SERVICE_URL  : {BACKEND_SERVICE_URL}")
-        print(f" AUTH_TOKEN_URL       : {GET_AUTH_TOKEN_URL}")
+        print(f" SERVICE_AUTH_TOKEN   : {'***configured***' if SERVICE_AUTH_TOKEN else '***NOT SET***'}")
         print(f" GUARDRAIL_ENABLED    : {GUARDRAIL_ENABLED} ({GUARDRAIL_URL})")
         print("-" * 60)
         print(f" LABELING_STRATEGY    : {LABELING_STRATEGY}")
@@ -131,54 +126,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
-    async def _get_auth_token(self):
-        """Fetches a fresh JWT from the internal http-service with locking and caching."""
-        now = datetime.now()
-        
-        # 1. Fast Path: Check if valid token exists (No lock needed)
-        if self._cached_token and self._token_expiry and now < self._token_expiry:
-            return self._cached_token
-
-        # 2. Slow Path: Acquire Lock to prevent thundering herd
-        async with self._token_lock:
-            # Check again (Double-Checked Locking) in case another task filled it while we waited
-            if self._cached_token and self._token_expiry and now < self._token_expiry:
-                return self._cached_token
-
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(GET_AUTH_TOKEN_URL) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            token = data.get("accessToken")
-                            if token:
-                                # Cache the token for 50 mins (assuming 1h life)
-                                self._cached_token = token
-                                self._token_expiry = now + timedelta(minutes=50)
-                                return token
-                            logger.error(f"Auth Service returned 200 but no accessToken: {data}")
-                        else:
-                            # Log but don't crash, caller handles None
-                            logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
-            except Exception as e:
-                logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
-            
+    def _service_headers(self):
+        """Return auth headers using X-Service-Token shared secret."""
+        if not self._service_token:
+            logger.warning("SERVICE_AUTH_TOKEN not configured")
             return None
+        return {"X-Service-Token": self._service_token, "Content-Type": "application/json"}
 
     async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
         """Updates file status in Document Repository (Spec 4.1/6.1)."""
-        token = await self._get_auth_token()
-        if not token:
+        headers = self._service_headers()
+        if not headers:
             if logflag:
                 logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
+
         # FIX: chunk_count must be at the ROOT level, not inside dataprep object
         payload = {
             "dataprep": {"status": status}
@@ -198,17 +162,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
-        token = await self._get_auth_token()
-        if not token:
+        headers = self._service_headers()
+        if not headers:
             if logflag:
                 logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
         payload = {
             "level": level, # Sent exactly as passed (INFO, WARN, ERROR)
             "stage": stage,
@@ -231,14 +191,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _fetch_all_labels(self):
         """Fetch full taxonomy from the Backend Service to guide the LLM."""
-        token = await self._get_auth_token()
-        if not token:
+        if not self._service_token:
             logger.warning("Skipping label fetch due to missing auth token.")
             return []
 
         # FIX: Target the Backend Service for the hierarchy
         url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"X-Service-Token": self._service_token}
         
         try:
             async with self._log_semaphore: # Reuse semaphore to be polite to backend

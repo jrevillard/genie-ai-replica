@@ -89,7 +89,6 @@ GENIE.AI/
 │   ├── chatqna/                  # Chat microservice
 │   ├── core/                     # Core libraries and protocols
 │   ├── dataprep/                 # Data preparation service
-│   ├── http-service/             # HTTP client wrapper
 │   ├── retriever/                # Hybrid vector-graph retriever
 │   └── reranker/                 # Reranking microservice
 ├── api-gateway-solution/         # API Gateway (Kong/NGINX)
@@ -191,7 +190,6 @@ See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full lo
 - **[ChatQnA Service](genie-ai-overlay/chatqna/README.md)** - Chat microservice with multilingual support
 - **[Core Library](genie-ai-overlay/core/README.md)** - Service types, API protocols, and constants
 - **[Data Preparation](genie-ai-overlay/dataprep/README.md)** - Document ingestion and processing pipeline
-- **[HTTP Service](genie-ai-overlay/http-service/README.md)** - HTTP client wrapper and authentication
 - **[Retriever Service](genie-ai-overlay/retriever/README.md)** - Hybrid vector-graph search
 
 ### Configuration

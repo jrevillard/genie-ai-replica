@@ -156,7 +156,7 @@ From `docker-compose.yaml` analysis, these external images must be pre-pulled an
 **GENIE.AI custom images** (built locally, pushed to registry):
 - `genie-ai-frontend`, `genie-ai-backend`, `genie-ai-keycloak`, `genie-keycloak-config`
 - `genie-ai-kong-config`, `genie-ai-nginx`, `genie-ai-document-repository`
-- `genie-ai-http-service`, `genie-ai-postgres-init`
+- `genie-ai-postgres-init`
 - `genie-ai-reranker`, `genie-ai-dataprep-arango`, `genie-ai-retriever-arango`, `genie-ai-chatqna-server`
 
 ### Known Limitations for Air-Gapped Deployments

@@ -153,7 +153,6 @@ A manual validation checklist structured in 2 sequential phases:
 - `retriever-arango-service` (port 7025) — depends on arango-vector-db, embedding
 
 **Other:**
-- `http-service` (internal, no exposed port) — depends on backend
 - `chatqna-xeon-ui-server` (port 5173) — depends on chatqna backend
 - `chatqna-xeon-nginx-server` (port 80) — depends on chatqna backend + UI
 
@@ -170,8 +169,6 @@ A manual validation checklist structured in 2 sequential phases:
 | `KEYCLOAK_ADMIN_PASSWORD` | keycloak, keycloak-config |
 | `KEYCLOAK_DB_PASSWORD` | postgres-init, keycloak |
 | `KEYCLOAK_CLIENT_SECRET` | keycloak-config |
-| `AUTH_SERVICE_USERNAME` | http-service |
-| `AUTH_SERVICE_PASSWORD` | http-service |
 | `EMAIL_HOST/PORT/SECURE/USER/PASSWORD/FROM` | backend |
 | `HUGGING_FACE_HUB_TOKEN` | vllm, vllm-translation, tei, tei_reranker |
 
@@ -283,7 +280,7 @@ Since the branch only touches infrastructure, Phase 2 is a lightweight smoke tes
   - PASS/FAIL: _____
 
 - [ ] **Task 1.3.4:** Verify all infrastructure services are healthy
-  - Services: `postgres`, `postgres-init`, `kong-migrations`, `kong`, `keycloak`, `keycloak-config`, `nginx`, `http-service`
+  - Services: `postgres`, `postgres-init`, `kong-migrations`, `kong`, `keycloak`, `keycloak-config`, `nginx`
   - Action: Run `docker compose ps`. Verify all 8 services show "healthy" or "running" (postgres-init and kong-migrations should exit 0). Check logs for errors: `docker compose logs kong`, `docker compose logs keycloak`, `docker compose logs nginx`.
   - Severity: CRITICAL
   - PASS/FAIL: _____

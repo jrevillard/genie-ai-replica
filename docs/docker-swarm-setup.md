@@ -19,7 +19,7 @@ GENIE.AI services are placed on nodes using three labels:
 | Placement | Constraint | Services |
 |-----------|------------|----------|
 | **Gateway** (label) | `node.labels.gateway == true` | Kong, NGINX, PostgreSQL |
-| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, HTTP Service |
+| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak |
 | **GPU** (label) | `node.labels.gpu == true` | vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, Translation, Guardrail |
 
 All three labels (`gateway=true`, `genieai=true`, `gpu=true`) must be applied manually to the target nodes. A single node can have multiple labels.
@@ -188,9 +188,6 @@ docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:la
 # Document Repository — context is components/ (Dockerfile copies document-repository/ and shared/)
 docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
 
-# HTTP Service — context is project root (Dockerfile copies genie-ai-overlay/http-service/)
-docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
-
 # Nginx (API gateway reverse proxy)
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 
@@ -233,7 +230,6 @@ docker tag genie-ai-keycloak-config:latest localhost:5000/genie-ai-keycloak-conf
 docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
 docker tag genieai_mvp_backend:latest localhost:5000/genie-ai-backend:latest
 docker tag genieai_mvp_document-repository:latest localhost:5000/genie-ai-document-repository:latest
-docker tag genieai_mvp_http-service:latest localhost:5000/genie-ai-http-service:latest
 ```
 
 ### 5c. Push to local registry
@@ -242,7 +238,6 @@ docker tag genieai_mvp_http-service:latest localhost:5000/genie-ai-http-service:
 docker push localhost:5000/genie-ai-frontend:latest
 docker push localhost:5000/genie-ai-backend:latest
 docker push localhost:5000/genie-ai-document-repository:latest
-docker push localhost:5000/genie-ai-http-service:latest
 docker push localhost:5000/genie-ai-dataprep-arango:latest
 docker push localhost:5000/genie-ai-retriever-arango:latest
 docker push localhost:5000/genie-ai-chatqna-server:latest
@@ -307,8 +302,6 @@ KEYCLOAK_DB_PASSWORD=<strong-password>
 KEYCLOAK_CLIENT_SECRET=<strong-password>
 KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
 SERVICE_AUTH_TOKEN=<strong-random-string>
-AUTH_SERVICE_USERNAME=<username>
-AUTH_SERVICE_PASSWORD=<strong-password>
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_SECURE=true
@@ -606,7 +599,6 @@ sed -i 's|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=https://10.0.0.110|' .en
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
 docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
 docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
-docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 
@@ -614,14 +606,12 @@ docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
 docker tag genieai_mvp_backend:latest localhost:5000/genie-ai-backend:latest
 docker tag genieai_mvp_document-repository:latest localhost:5000/genie-ai-document-repository:latest
-docker tag genieai_mvp_http-service:latest localhost:5000/genie-ai-http-service:latest
 docker tag genie-ai-nginx:latest localhost:5000/genie-ai-nginx:latest
 docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:latest
 
 docker push localhost:5000/genie-ai-frontend:latest
 docker push localhost:5000/genie-ai-backend:latest
 docker push localhost:5000/genie-ai-document-repository:latest
-docker push localhost:5000/genie-ai-http-service:latest
 docker push localhost:5000/genie-ai-nginx:latest
 docker push localhost:5000/genie-ai-kong-config:latest
 

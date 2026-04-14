@@ -60,8 +60,6 @@ KEYCLOAK_DB_PASSWORD=<strong-password>
 KEYCLOAK_CLIENT_SECRET=<strong-random-string>
 KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
 SERVICE_AUTH_TOKEN=<strong-random-string>
-AUTH_SERVICE_USERNAME=<username>
-AUTH_SERVICE_PASSWORD=<strong-password>
 ```
 
 Generate strong passwords with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
@@ -165,7 +163,7 @@ Fix any errors before proceeding.
 docker compose up -d
 ```
 
-This starts: Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Kong, NGINX, and HTTP Service.
+This starts: Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Kong, NGINX, and Keycloak.
 
 ### 6c. Start full stack with OPEA
 

@@ -501,40 +501,6 @@ services:
         delay: 5s
         max_attempts: 10
 
-  http-service:
-    depends_on:
-      - backend
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: genie-ai-overlay/http-service/Dockerfile
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-http-service:latest
-    environment:
-      # Internal service URL - uses Docker service name (works across nodes via overlay DNS)
-      AUTH_SERVICE_URL: http://backend:3000/api/auth
-      AUTH_SERVICE_USERNAME: ${AUTH_SERVICE_USERNAME:-admin}
-      AUTH_SERVICE_PASSWORD: ${AUTH_SERVICE_PASSWORD}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090}
-    # Internal only
-    # ports:
-    #   - "6666:6666"
-    networks:
-      - genieai_network
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/6666' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.labels.genieai == true
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 10
 
   # ===========================================================================
   # OPEA/GPU Stack (node.labels.gpu == true)
@@ -865,7 +831,7 @@ services:
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
-      GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
+      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       LABELING_STRATEGY: ${LABELING_STRATEGY:-llm}
@@ -1173,7 +1139,7 @@ services:
       - KEYCLOAK_DUPLICATE_EMAILS=${KEYCLOAK_DUPLICATE_EMAILS:-false}
       - KEYCLOAK_BRUTE_FORCE=${KEYCLOAK_BRUTE_FORCE:-true}
       - KEYCLOAK_PASSWORD_POLICY=${KEYCLOAK_PASSWORD_POLICY:-"length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)"}
-      - KEYCLOAK_LOGIN_THEME=${KEYCLOAK_LOGIN_THEME:-keycloak}
+      - KEYCLOAK_THEME=${KEYCLOAK_THEME:-keycloak}
       - KEYCLOAK_I18N_ENABLED=${KEYCLOAK_I18N_ENABLED:-true}
       - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}
       - KEYCLOAK_ACCESS_TOKEN_LIFESPAN=${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300}

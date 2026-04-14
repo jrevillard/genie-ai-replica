@@ -144,8 +144,6 @@ Set in `group_vars/<env>/vault.yml`:
 | `keycloak_client_secret` | OIDC client secret for genie-app |
 | `keycloak_proxy_client_secret` | Service account secret for admin API proxy |
 | `service_auth_token` | OPEA <-> Backend shared authentication secret |
-| `auth_service_username` | Internal microservice auth username |
-| `auth_service_password` | Internal microservice auth password |
 | `email_password` | SMTP password |
 | `hugging_face_hub_token` | Hugging Face Hub token |
 
@@ -368,7 +366,7 @@ Shared variables in `group_vars/all.yml`:
 |-----|-------------|
 | `install` | Docker, NVIDIA toolkit, Swarm init, registry |
 | `prepare` | Git clone, directories, SSL certs |
-| `build` | Build and push 13 images to local registry |
+| `build` | Build and push 12 images to local registry |
 | `deploy` | Generate .env, validate, deploy stack, verify |
 
 ```bash

@@ -412,18 +412,7 @@ Configuration for file ingestion, storage, and security scanning.
 | CLAMSCAN\_LOCAL\_FALLBACK | Fallback to local binary if daemon fails. | true |
 | CLAMSCAN\_PATH | Path to local ClamAV binary. | /usr/bin/clamdscan |
 
-**Authentication Service**  
-Dedicated service for managing user authorization tokens.
-
-| Variable | Description | Example Value |
-| :---- | :---- | :---- |
-| AUTH\_SERVICE\_URL | Base URL for the auth service. | https://localhost/ |
-| AUTH\_SERVICE\_PORT | Port for the auth service. | 6666 |
-| GET\_AUTH\_TOKEN\_URL | Internal URL to retrieve auth tokens. | http://http-service:6666/get-token |
-| AUTH\_SERVICE\_USERNAME | Service account username for token generation. | genie-ai-manager |
-| AUTH\_SERVICE\_PASSWORD | Service account password for token generation. | 1357924680+Manager |
-
-**OPEA & ChatQnA Service Orchestration**  
+**OPEA & ChatQnA Service Orchestration**
 These variables define the internal wiring and ports for the AI microservices.
 
 | Variable | Description | Example Value |
@@ -830,8 +819,6 @@ openssl rand -base64 32
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password | `openssl rand -base64 32` |
 | `KEYCLOAK_DB_PASSWORD` | Keycloak dedicated database user password | `openssl rand -base64 32` |
 | `KEYCLOAK_CLIENT_SECRET` | OIDC client secret for GENIE.AI app | `openssl rand -base64 32` |
-| `AUTH_SERVICE_USERNAME` | Internal microservice auth username | Any string (e.g., `genie-ai-manager`) |
-| `AUTH_SERVICE_PASSWORD` | Internal microservice auth password | `openssl rand -base64 32` |
 
 **Example — set all secrets in one pass:**
 
@@ -845,14 +832,12 @@ sed -i "s/^KONG_DB_PASSWORD=.*/KONG_DB_PASSWORD=$(openssl rand -base64 32)/" .en
 sed -i "s/^KEYCLOAK_ADMIN_PASSWORD=.*/KEYCLOAK_ADMIN_PASSWORD=$(openssl rand -base64 32)/" .env
 sed -i "s/^KEYCLOAK_DB_PASSWORD=.*/KEYCLOAK_DB_PASSWORD=$(openssl rand -base64 32)/" .env
 sed -i "s/^KEYCLOAK_CLIENT_SECRET=.*/KEYCLOAK_CLIENT_SECRET=$(openssl rand -base64 32)/" .env
-sed -i "s/^AUTH_SERVICE_USERNAME=.*/AUTH_SERVICE_USERNAME=genie-ai-manager/" .env
-sed -i "s/^AUTH_SERVICE_PASSWORD=.*/AUTH_SERVICE_PASSWORD=$(openssl rand -base64 32)/" .env
 ```
 
 After running the commands above, review your `.env` to verify all values are set:
 
 ```bash
-grep -E '^(ARANGO_PASSWORD|JWT_SECRET|SESSION_SECRET|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|KONG_DB_PASSWORD|KEYCLOAK_ADMIN_PASSWORD|KEYCLOAK_DB_PASSWORD|KEYCLOAK_CLIENT_SECRET|AUTH_SERVICE)' .env
+grep -E '^(ARANGO_PASSWORD|JWT_SECRET|SESSION_SECRET|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|KONG_DB_PASSWORD|KEYCLOAK_ADMIN_PASSWORD|KEYCLOAK_DB_PASSWORD|KEYCLOAK_CLIENT_SECRET|SERVICE_AUTH_TOKEN)' .env
 ```
 
 #### Additional Required Configuration

@@ -123,7 +123,6 @@ Create an Ansible project (`deploy/ansible/`) that automates the full deployment
 | `components/gov-chat-frontend/Dockerfile` | Frontend image build (multi-stage) |
 | `components/gov-chat-backend/Dockerfile` | Backend image build |
 | `components/document-repository/Dockerfile` | Document repository image build |
-| `genie-ai-overlay/http-service/Dockerfile` | HTTP service image build |
 | `genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai` | Dataprep image build (custom Dockerfile name) |
 | `genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai` | Retriever image build (custom Dockerfile name) |
 | `genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai` | ChatQnA image build (custom Dockerfile name) |
@@ -250,8 +249,7 @@ Create an Ansible project (`deploy/ansible/`) that automates the full deployment
     | 1 | frontend | `components/gov-chat-frontend/Dockerfile` | `components/gov-chat-frontend/` | `{{ swarm_registry_url }}/genie-ai-frontend:latest` |
     | 2 | backend | `components/gov-chat-backend/Dockerfile` | `components/gov-chat-backend/` | `{{ swarm_registry_url }}/genie-ai-backend:latest` |
     | 3 | document-repository | `components/document-repository/Dockerfile` | `components/document-repository/` | `{{ swarm_registry_url }}/genie-ai-document-repository:latest` |
-    | 4 | http-service | `genie-ai-overlay/http-service/Dockerfile` | `genie-ai-overlay/http-service/` | `{{ swarm_registry_url }}/genie-ai-http-service:latest` |
-    | 5 | dataprep-arango | `genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai` | `genie-ai-overlay/dataprep/` | `{{ swarm_registry_url }}/genie-ai-dataprep-arango:latest` |
+    | 4 | dataprep-arango | `genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai` | `genie-ai-overlay/dataprep/` | `{{ swarm_registry_url }}/genie-ai-dataprep-arango:latest` |
     | 6 | retriever-arango | `genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai` | `genie-ai-overlay/retriever/` | `{{ swarm_registry_url }}/genie-ai-retriever-arango:latest` |
     | 7 | chatqna-server | `genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai` | `genie-ai-overlay/chatqna/` | `{{ swarm_registry_url }}/genie-ai-chatqna-server:latest` |
     | 8 | reranker | `genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai` | `genie-ai-overlay/reranker/` | `{{ swarm_registry_url }}/genie-ai-reranker:latest` |
@@ -333,7 +331,7 @@ Create an Ansible project (`deploy/ansible/`) that automates the full deployment
 - [ ] **AC 15:** Given a required vault variable is missing or empty, when the deploy play runs, then the playbook fails immediately with a clear error message identifying the missing variable (before any .env generation or stack deploy).
 - [ ] **AC 16:** Given the prepare play runs, when Docker Secrets files (SSL certs, prompt files) are missing on the node, then the playbook fails immediately with a clear error listing the missing files (before any stack deploy).
 - [ ] **AC 17:** Given the build play runs, when `docker build -f <dockerfile>` executes for each of the 10 services, then each build succeeds and produces a tagged image.
-- [ ] **AC 18:** Given `deploy_opea == 0`, when the build play runs, then only 6 non-OPEA images are built (frontend, backend, document-repository, http-service, nginx, kong-config).
+- [ ] **AC 18:** Given `deploy_opea == 0`, when the build play runs, then only 5 non-OPEA images are built (frontend, backend, document-repository, nginx, kong-config).
 
 ## Additional Context
 

@@ -61,11 +61,6 @@ POSTGRES_PASSWORD=
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KONG_DB_PASSWORD=
 
-# Internal microservice authentication (HTTP service)
-# Used by: http-service (auth token retrieval for microservices)
-AUTH_SERVICE_USERNAME=
-AUTH_SERVICE_PASSWORD=
-
 # Service-to-service shared secret (OPEA → Backend)
 # Used by: OPEA chatqna callback to GET /api/users/:userId/context
 # Must be identical in backend and OPEA chatqna service environment
@@ -407,8 +402,8 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 # To simplify: KEYCLOAK_PASSWORD_POLICY=length(8)
 # KEYCLOAK_PASSWORD_POLICY=
 
-# Login page theme (default: keycloak — built-in theme)
-# KEYCLOAK_LOGIN_THEME=keycloak
+# Theme for login, account console, and email (default: keycloak — built-in theme)
+# KEYCLOAK_THEME=genie
 
 # Internationalization (default: true)
 # KEYCLOAK_I18N_ENABLED=true
@@ -518,7 +513,7 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 #
 # Variables that MUST be identical across all nodes:
 #   ARANGO_PASSWORD, TRANSLATION_CACHE_PASSWORD,
-#   POSTGRES_PASSWORD, AUTH_SERVICE_USERNAME, AUTH_SERVICE_PASSWORD
+#   POSTGRES_PASSWORD, SERVICE_AUTH_TOKEN
 #
 # Variables that MUST be identical (AI model IDs):
 #   EMBEDDING_MODEL_ID, RERANKER_MODEL_ID, VLLM_LLM_MODEL_ID

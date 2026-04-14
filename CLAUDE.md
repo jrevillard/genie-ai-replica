@@ -204,7 +204,6 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `JWT_SECRET` - JWT token signing secret
 - `SESSION_SECRET` - Session encryption secret
 - `POSTGRES_PASSWORD` - Kong database password (creates kong user)
-- `AUTH_SERVICE_USERNAME` / `AUTH_SERVICE_PASSWORD` - Internal microservice auth
 - `EMAIL_*` - SMTP configuration (required for user verification)
 
 **Deployment-Specific:**

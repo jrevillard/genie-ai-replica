@@ -503,12 +503,6 @@
             source_tag: genieai_mvp_document-repository:latest
             registry_tag: genie-ai-document-repository:latest
             opea: false
-          - name: http-service
-            dockerfile: genie-ai-overlay/http-service/Dockerfile
-            context: .
-            source_tag: genieai_mvp_http-service:latest
-            registry_tag: genie-ai-http-service:latest
-            opea: false
           - name: nginx
             dockerfile: api-gateway-solution/nginx/Dockerfile
             context: api-gateway-solution/nginx/
@@ -630,8 +624,6 @@
           - session_secret is defined and session_secret | length > 0
           - translation_cache_password is defined and translation_cache_password | length > 0
           - postgres_password is defined and postgres_password | length > 0
-          - auth_service_username is defined and auth_service_username | length > 0
-          - auth_service_password is defined and auth_service_password | length > 0
           - kong_db_password is defined and kong_db_password | length > 0
           - keycloak_admin_password is defined and keycloak_admin_password | length > 0
           - keycloak_db_password is defined and keycloak_db_password | length > 0
@@ -641,7 +633,7 @@
           Missing required vault variable(s).
           Edit the vault file for your environment (group_vars/&lt;env&gt;.vault) and set all secrets:
           arango_password, jwt_secret, session_secret, translation_cache_password,
-          postgres_password, auth_service_username, auth_service_password,
+          postgres_password,
           kong_db_password, keycloak_admin_password, keycloak_db_password,
           keycloak_client_secret, keycloak_proxy_client_secret.
         quiet: true

@@ -781,14 +781,13 @@ class ChatQnAService:
         if not file_id:
             return {"categoryLabel": None, "serviceLabels": []}
 
-        auth_token = await self.user_profile_client._get_auth_token()
-        if not auth_token:
-            logger.error("Failed to get admin auth token.")
+        service_token = self.user_profile_client._service_token
+        if not service_token:
+            logger.error("SERVICE_AUTH_TOKEN not configured.")
             return None
-            # return ""
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
-        headers = {"Authorization": f"Bearer {auth_token}"}
+        headers = {"X-Service-Token": service_token}
 
         try:
             async with aiohttp.ClientSession() as session:

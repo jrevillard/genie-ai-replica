@@ -54,7 +54,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 - **Existing codebase conventions:** Backend must use CommonJS (`require`/`module.exports`), frontend must use Vue 3 Options API — PRD notes that Issue #218 reference code conflicts with these conventions
 - **Token format dependency:** Architecture is tied to Keycloak JWT format (claims structure, signing algorithm). Multi-issuer support requires dynamic JWKS endpoint resolution per realm. This is a **Keycloak-specific backend validation constraint** — a future provider switch would require middleware changes, even though client-side SDKs are IdP-agnostic
 - **ArangoDB schema evolution:** Current `users` collection must accommodate composite `{iss}#${sub}` key and JWT-derived user profiles. Lookup index must be properly configured for the composite key
-- **OPEA services unchanged:** Backend-to-OPEA communication uses existing service-to-service JWT and `user_id` payload — no changes to AI layer
+- **OPEA services unchanged:** Backend-to-OPEA communication uses shared secret (`SERVICE_AUTH_TOKEN` / `X-Service-Token` header) and `user_id` payload — no changes to AI layer
 - **Kong optional:** Two Docker Compose configurations needed — system must behave identically with and without Kong. **Header names and formats injected by Kong vs Backend must be consistent** to avoid confusing downstream services
 - **Docker single-stage builds:** Per project conventions, each service uses single Dockerfile
 - **No production users:** Clean slate — no migration needed, no backward compatibility with existing auth
@@ -212,11 +212,11 @@ JIT provisioning creates ArangoDB user records on first Keycloak login using `{i
 
 **Caching behavior note (for Story 2.2 dev):** jose's `createRemoteJWKS()` uses HTTP caching based on `Cache-Control` / `JWKS-TTL` headers from the JWKS response. Keycloak 26.x may not always return explicit cache headers — in that case, jose may refetch JWKS on every verification call. Story 2.2 should verify Keycloak's actual caching headers and, if absent, implement an explicit TTL wrapper (5 minutes, per original D3 rationale) around `createRemoteJWKS()`.
 
-**Decision D4 — Multi-realm `user_id` for OPEA: `{iss}#{sub}`**
+**Decision D4 — Multi-realm `user_id` for OPEA: `_key` (ArangoDB primary key, URL-safe)**
 
-- **Rationale:** Guarantees uniqueness across realms. Using `sub` alone risks data corruption when two realms have the same `sub` for different users. Consistent with ArangoDB composite key. Minimal implementation cost (string concatenation) for significant forward compatibility.
-- **Open question:** Verify whether OPEA services process `user_id` format or pass it transparently — may require consumer adaptation.
-- **Affects:** Backend-to-OPEA payload, conversation history, analytics queries
+- **Rationale:** The backend `/api/users/:userId/context` endpoint uses ArangoDB `_key` for user lookup. This is a single opaque string that works across realms without encoding `{iss}#{sub}` in the OPEA payload. The `X-User-Id` downstream header carries this `_key` value.
+- **Open question:** ~~Verify whether OPEA services process `user_id` format or pass it transparently~~ — resolved in Story 2-10: OPEA receives `_key` via `X-User-Id` header and uses it for profile context lookup.
+- **Affects:** Backend-to-OPEA payload (`X-User-Id` header), conversation history, analytics queries
 
 **Decision D7 — Multi-tenancy approach: Keycloak Organizations (v26)**
 
@@ -296,7 +296,7 @@ JIT provisioning creates ArangoDB user records on first Keycloak login using `{i
 **Downstream Headers:**
 - Prefix: `X-` for custom headers
 - Format: SCREAMING_SNAKE_CASE with hyphens
-- `X-User-Id` — `{iss}#{sub}` composite (comma-separated roles)
+- `X-User-Id` — ArangoDB `_key` (URL-safe primary key)
 - `X-User-Roles` — comma-separated role list (e.g., `admin,user`)
 - `X-Issuer` — full issuer URL
 

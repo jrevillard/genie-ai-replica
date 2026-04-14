@@ -1,179 +1,147 @@
----
-title: 'keycloak-theme'
-type: 'feature'
-created: '2026-04-14T00:00:00Z'
-status: 'draft'
-context: []
----
+# Keycloak Theme — GENIE.AI
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+## Overview
 
-## Intent
+Custom Keycloak theme for GENIE.AI providing visual continuity between authentication pages, account console, and email templates. CSS-only approach: override PatternFly v5 CSS custom properties — no custom templates for login (upstream keycloak.v2 used as-is with logo injection), no custom JS.
 
-**Problem:** Keycloak authentication pages use default Keycloak branding, creating visual discontinuity with the GENIE.AI application. Users experience jarring transitions when navigating between the main application and Keycloak login/account pages.
+## Decisions
 
-**Approach:** Create a custom Keycloak theme (login, account console, email) that extends the base Keycloak theme, applying GENIE.AI color palette, typography, and split-panel layout to ensure visual continuity across all authentication touchpoints.
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Layout | Upstream keycloak.v2 2-column grid | Avoids maintenance burden of custom templates |
+| Account console | keycloak.v3 parent, comprehensive PF5 variable override | React SPA — CSS-only theming via `styles` property |
+| Dark mode | Upstream `darkMode=true` (system preference via `prefers-color-scheme`) | Consistent with frontend behavior, no manual toggle needed |
+| i18n | 9 locales matching frontend ∩ Keycloak built-in support | ar, de, en, es, fr, pt, ru, th, zh |
+| Email | Custom HTML template with GENIE.AI branding + 9 locale message files | Professional look, ITU footer |
+| Logo | splash-genie-ai.png (1024x1024) from frontend | Single logo across all theme types |
 
-## Boundaries & Constraints
+## File Structure
 
-**Always:**
-- Extend Keycloak base theme (parent=keycloak in theme.properties)
-- Use CSS custom properties for colors to support dark mode
-- Place theme files in `configs/keycloak/themes/genie/`
-- Copy existing favicon files from `components/gov-chat-frontend/public/`
-- Include English and French message bundles only
-- Maintain responsiveness: desktop (~45/55 split), tablet (~35% brand), mobile (brand collapses to header)
-- Update `configs/keycloak/Dockerfile` to copy themes into `/opt/keycloak/themes/`
-- Set `KEYCLOAK_THEME=genie` in realm YAML (single variable for login, account, email)
-
-**Ask First:**
-- Logo source: Should I create a placeholder GENIE.AI logo or do you have an existing logo file?
-
-**Never:**
-- Modify Keycloak core templates unnecessarily
-- Hardcode colors directly in CSS — use CSS custom properties
-- Create custom message bundles for languages other than EN/FR
-- Implement account console template overrides (React SPA requires CSS-only approach)
-
-## I/O & Edge-Matrix
-
-| Scenario | Input / State | Expected Output / Behavior | Error Handling |
-|----------|--------------|---------------------------|----------------|
-| Desktop view | Screen width >= 1024px | Split panel: 45% brand left, 55% form right | Fallback to single column if layout fails |
-| Tablet view | 768px <= screen width < 1024px | Split panel: 35% brand left, 65% form right | Fallback to single column |
-| Mobile view | Screen width < 768px | Brand collapses to header, form takes full width | Stack vertically if flexbox fails |
-| Light mode | System prefers light mode | Background #f5f7fa, surface #ffffff, text #333333 | Fallback to Keycloak default colors |
-| Dark mode | System prefers dark mode | Background #1e1e1e, surface #252525, text #f0f0f0 | Fallback to light mode if media query unsupported |
-| Email rendering | Email client opens HTML email | Responsive table layout, logo in header, ITU branding footer | Plain text fallback if HTML fails |
-
-</frozen-after-approval>
-
-## Code Map
-
-- `configs/keycloak/Dockerfile` -- Update to copy themes/ directory into container
-- `configs/keycloak/genie-realm.yaml` -- Add accountTheme and emailTheme properties
-- `configs/keycloak/themes/genie/login/theme.properties` -- Parent theme and CSS imports
-- `configs/keycloak/themes/genie/login/resources/css/genie.css` -- Main styles, layout, color palette
-- `configs/keycloak/themes/genie/login/resources/css/dark.css` -- Dark mode overrides
-- `configs/keycloak/themes/genie/login/resources/img/logo.png` -- GENIE.AI logo
-- `configs/keycloak/themes/genie/login/resources/img/favicon.ico` -- Copied from frontend
-- `configs/keycloak/themes/genie/login/resources/js/genie.js` -- Manual dark mode toggle
-- `configs/keycloak/themes/genie/login/messages/messages_en.properties` -- English custom labels
-- `configs/keycloak/themes/genie/login/messages/messages_fr.properties` -- French custom labels
-- `configs/keycloak/themes/genie/login/template.ftl` -- Split panel layout wrapper
-- `configs/keycloak/themes/genie/account/theme.properties` -- Parent theme for account console
-- `configs/keycloak/themes/genie/account/resources/css/genie.css` -- Account console styles
-- `configs/keycloak/themes/genie/account/resources/css/dark.css` -- Dark mode for account console
-- `configs/keycloak/themes/genie/account/messages/messages_en.properties` -- English overrides
-- `configs/keycloak/themes/genie/account/messages/messages_fr.properties` -- French overrides
-- `configs/keycloak/themes/genie/email/theme.properties` -- Parent theme for emails
-- `configs/keycloak/themes/genie/email/resources/img/logo.png` -- Email logo
-- `configs/keycloak/themes/genie/email/text/html.ftl` -- HTML email template (table-based responsive layout)
-- `configs/keycloak/themes/genie/email/text/text.ftl` -- Plain text email template
-- `configs/keycloak/themes/genie/email/messages/messages_en.properties` -- English email labels
-- `configs/keycloak/themes/genie/email/messages/messages_fr.properties` -- French email labels
-- `components/gov-chat-frontend/public/favicon.ico` -- Source favicon to copy
-
-## Tasks & Acceptance
-
-**Execution:**
-- [ ] `configs/keycloak/Dockerfile` -- Add `COPY themes/ /opt/keycloak/themes/` to copy theme directory -- Keycloak container needs theme files to be present
-- [ ] `configs/keycloak/genie-realm.yaml` -- Replace `loginTheme: $(env:KEYCLOAK_LOGIN_THEME)` with `loginTheme: $(env:KEYCLOAK_THEME)`, add `accountTheme: $(env:KEYCLOAK_THEME)` and `emailTheme: $(env:KEYCLOAK_THEME)` -- Single theme variable controls all three
-- [ ] `configs/keycloak/themes/genie/login/theme.properties` -- Create file with `parent=keycloak`, CSS imports in `styles=css/genie.css css/dark.css` -- Extend base theme and load stylesheets
-- [ ] `configs/keycloak/themes/genie/login/resources/css/genie.css` -- Create CSS with CSS custom properties (primary: #4E97D1, background: #f5f7fa, etc.), split-panel flexbox layout, responsive breakpoints for desktop/tablet/mobile -- Apply GENIE.AI visual identity
-- [ ] `configs/keycloak/themes/genie/login/resources/css/dark.css` -- Create CSS with `@media (prefers-color-scheme: dark)` overriding all color custom properties to dark variants -- Enable automatic dark mode
-- [ ] `configs/keycloak/themes/genie/login/resources/js/genie.js` -- Create JS for manual dark mode toggle using theme cookie -- Optional manual override
-- [ ] `configs/keycloak/themes/genie/login/resources/img/logo.png` -- Copy or create GENIE.AI logo -- Brand panel needs logo
-- [ ] `configs/keycloak/themes/genie/login/resources/img/favicon.ico` -- Copy from `components/gov-chat-frontend/public/favicon.ico` -- Use existing favicon
-- [ ] `configs/keycloak/themes/genie/login/messages/messages_en.properties` -- Create English message bundle with custom login heading and tagline -- Customize English labels
-- [ ] `configs/keycloak/themes/genie/login/messages/messages_fr.properties` -- Create French message bundle with custom login heading and tagline -- Customize French labels
-- [ ] `configs/keycloak/themes/genie/login/template.ftl` -- Create FreeMarker template with split panel structure: left brand panel (logo + tagline), right form container -- Replace default single-column layout
-- [ ] `configs/keycloak/themes/genie/account/theme.properties` -- Create file with `parent=keycloak` and `styles=css/genie.css css/dark.css` -- Extend account console theme
-- [ ] `configs/keycloak/themes/genie/account/resources/css/genie.css` -- Create CSS targeting Keycloak account console classes, applying GENIE.AI color palette and typography -- Style account console
-- [ ] `configs/keycloak/themes/genie/account/resources/css/dark.css` -- Create CSS with dark mode overrides for account console -- Enable dark mode in account console
-- [ ] `configs/keycloak/themes/genie/account/messages/messages_en.properties` -- Create English message bundle for account console -- Customize English labels
-- [ ] `configs/keycloak/themes/genie/account/messages/messages_fr.properties` -- Create French message bundle for account console -- Customize French labels
-- [ ] `configs/keycloak/themes/genie/email/theme.properties` -- Create file with `parent=keycloak` -- Extend base email theme
-- [ ] `configs/keycloak/themes/genie/email/resources/img/logo.png` -- Copy logo for email templates -- Email header needs logo
-- [ ] `configs/keycloak/themes/genie/email/text/html.ftl` -- Create FreeMarker HTML email template with responsive table layout, logo header, ITU branding footer -- Style HTML emails
-- [ ] `configs/keycloak/themes/genie/email/text/text.ftl` -- Create plain text email template with logo text header and ITU footer -- Style plain text emails
-- [ ] `configs/keycloak/themes/genie/email/messages/messages_en.properties` -- Create English email label overrides -- Customize English email labels
-- [ ] `configs/keycloak/themes/genie/email/messages/messages_fr.properties` -- Create French email label overrides -- Customize French email labels
-
-**Acceptance Criteria:**
-- Given a user accessing a Keycloak login page, when the page loads, then the split panel layout is displayed with GENIE.AI branding (logo, colors) and the form on the right side
-- Given a user with system preference for dark mode, when accessing any Keycloak page, then the dark color scheme is automatically applied
-- Given a user resizing their browser window, when crossing responsive breakpoints, then the layout adjusts from split panel (desktop) to reduced brand panel (tablet) to brand header (mobile)
-- Given a user accessing the Keycloak account console, when the page loads, then GENIE.AI colors and typography are applied throughout the console
-- Given a Keycloak email being sent, when the email is rendered, then it contains the GENIE.AI logo, uses GENIE.AI colors, and includes an ITU branding footer
-
-## Spec Change Log
-
-## Design Notes
-
-**CSS Custom Properties Strategy:**
-Define colors in `genie.css` at `:root` level for easy overrides:
-```css
-:root {
-  --genie-primary: #4E97D1;
-  --genie-primary-hover: #3a7da0;
-  --genie-bg: #f5f7fa;
-  --genie-surface: #ffffff;
-  --genie-text-primary: #333333;
-  --genie-text-secondary: #888888;
-}
+```
+configs/keycloak/themes/genie/
+├── login/
+│   ├── theme.properties          # parent=keycloak.v2, styles=css/genie.css css/dark.css, darkMode=true
+│   ├── resources/
+│   │   ├── css/
+│   │   │   ├── genie.css         # 14 PF5 global variable overrides + 3 selectors
+│   │   │   └── dark.css          # @media (prefers-color-scheme: dark) overrides
+│   │   └── img/
+│   │       ├── logo.png          # splash-genie-ai.png (1024x1024)
+│   │       └── favicon.ico
+│   └── template.ftl              # Exact copy of upstream keycloak.v2 + <img> in header
+├── account/
+│   ├── theme.properties          # parent=keycloak.v3, styles=css/genie.css css/dark.css, darkMode=true, logo=img/logo.png
+│   ├── resources/
+│   │   ├── css/
+│   │   │   ├── genie.css         # ~90 PF5 variable overrides (global + semantic + layout)
+│   │   │   └── dark.css          # .pf-v5-theme-dark scoped overrides
+│   │   └── img/
+│   │       └── logo.png
+│   └── messages/                 # (not needed — inherits from upstream keycloak.v3)
+└── email/
+    ├── theme.properties          # parent=keycloak
+    ├── html/
+    │   └── template.ftl          # HTML layout with GENIE.AI gradient header, button styles, ITU footer
+    ├── resources/
+    │   └── img/
+    │       └── logo.png
+    └── messages/
+        ├── messages_en.properties
+        ├── messages_fr.properties
+        ├── messages_ar.properties
+        ├── messages_de.properties
+        ├── messages_es.properties
+        ├── messages_pt.properties
+        ├── messages_ru.properties
+        ├── messages_th.properties
+        └── messages_zh_Hans.properties
 ```
 
-Dark mode in `dark.css`:
-```css
-@media (prefers-color-scheme: dark) {
-  :root {
-    --genie-bg: #1e1e1e;
-    --genie-surface: #252525;
-    --genie-text-primary: #f0f0f0;
-    --genie-text-secondary: #999999;
-  }
-}
+## Theme Types
+
+### Login Theme
+
+**Parent:** `keycloak.v2` (PatternFly v5, 2-column CSS grid layout)
+
+**Template:** Exact copy of upstream `keycloak.v2/template.ftl` (Keycloak 26.5.6) with one modification — `<img>` tag added in `#kc-header-wrapper` for logo display.
+
+**CSS approach:** Override PF5 global CSS custom properties only. Components (buttons, forms, links) inherit automatically from globals — no component-level overrides needed.
+
+**Light mode variables (genie.css):**
+- Primary: `--pf-v5-global--primary-color--100: #4E97D1`
+- Background: `--pf-v5-global--BackgroundColor--100: #f5f7fa`
+- Text: `--pf-v5-global--Color--100: #333333`
+- Borders: `--pf-v5-global--BorderColor--100: #dcdfe4`
+- Status: success `#10b981`, warning `#f59e0b`, danger `#ef4444`
+- Header/footer brand color selectors
+
+**Dark mode (dark.css):** `@media (prefers-color-scheme: dark)` — same variable names with dark values.
+
+### Account Console Theme
+
+**Parent:** `keycloak.v3` (React SPA, compiled PF5 bundle)
+
+**Key difference from login:** The account console v3 uses semantic PF5 variables (`dark-100`, `light-100`, `light-300`) in addition to numeric ones. Components reference these semantic variants, so all must be overridden for full color coverage.
+
+**CSS approach:** Comprehensive PF5 override covering:
+- Global variables (`--100`, `--200`, `--300`, `--400`)
+- Semantic variants (`dark-100`, `light-100`, `light-200`, `light-300`)
+- Palette scale (`black-50` through `black-1000`)
+- Icon colors (`icon--Color--dark`, `icon--Color--light`)
+- Link colors (with `--dark--hover`, `--light--hover` variants)
+- Status colors (success, warning, danger)
+- Component-level layout (`page__header--BackgroundColor`, `page__sidebar--BackgroundColor`)
+- Header: `#4E97D1` (blue, matches frontend navbar)
+- Sidebar: `#ffffff` (light) / `#252525` (dark)
+
+**Dark mode (dark.css):** Scoped to `.pf-v5-theme-dark` class (upstream adds this class to `<html>` based on system preference — NOT `@media`).
+
+**Logo:** Set via `logo=img/logo.png` in `theme.properties`. The React SPA reads this property from the inline JSON config to display the logo.
+
+### Email Theme
+
+**Parent:** `keycloak` (HTML email templates)
+
+**Template:** Custom `html/template.ftl` with:
+- Gradient header: `linear-gradient(135deg, #4E97D1, #3a7da0)` with logo and "GENIE.AI" brand name
+- Content area with styled buttons (`class="button"`)
+- ITU footer: "International Telecommunication Union (ITU), Place des Nations, CH-1211 Geneva"
+
+**Messages:** 9 locale files overriding email subjects (append "- GENIE.AI") and HTML bodies (use template CSS classes). Placeholders: `{0}` (link), `{2}` (realm name), `{3}` (expiry), `{4}` (expiry), `{5}` (link).
+
+## Realm Configuration
+
+All theme settings are managed via `genie-realm.yaml` and applied by `keycloak-config-cli`:
+
+```yaml
+loginTheme: genie
+accountTheme: genie
+emailTheme: genie
+internationalizationEnabled: true
+defaultLocale: en
+supportedLocales: [ar, de, en, es, fr, pt, ru, th, zh]
 ```
 
-**Split Panel Layout:**
-Use flexbox with two children:
-```css
-.login-pf-page { display: flex; height: 100vh; }
-.brand-panel { flex: 0 0 45%; background: var(--genie-primary); }
-.form-panel { flex: 1; padding: 2rem; }
-@media (max-width: 1023px) { .brand-panel { flex: 0 0 35%; } }
-@media (max-width: 767px) {
-  .login-pf-page { flex-direction: column; }
-  .brand-panel { flex: 0 0 auto; padding: 1rem; }
-  .form-panel { flex: 1; }
-}
-```
+## Docker Integration
 
-**Email Template Structure:**
-Use table-based layout for email client compatibility:
-```html
-<table role="presentation" width="100%">
-  <tr><td class="header"><img src="cid:logo.png"></td></tr>
-  <tr><td class="content">${message}</td></tr>
-  <tr><td class="footer">ITU International Telecommunication Union</td></tr>
-</table>
-```
+- Theme files live in `configs/keycloak/themes/genie/`
+- `configs/keycloak/Dockerfile` copies `themes/` into the Keycloak image (`COPY themes/ /opt/keycloak/themes/`)
+- Theme is baked into the image — requires `docker compose build keycloak` after changes
+- `configs/keycloak/Dockerfile.config-cli` copies `genie-realm.yaml` for config-cli
+- Account/account-console clients configured with `webOrigins` via `$(env:NGINX_PUBLIC_DOMAIN)`
 
-## Verification
+## i18n Coverage
 
-**Commands:**
-- `grep -q "COPY themes/ /opt/keycloak/themes/" configs/keycloak/Dockerfile` -- expected: Dockerfile copies themes to correct path
-- `grep -q "accountTheme: \$(env:KEYCLOAK_THEME)" configs/keycloak/genie-realm.yaml` -- expected: Realm has account theme set
-- `grep -q "emailTheme: \$(env:KEYCLOAK_THEME)" configs/keycloak/genie-realm.yaml` -- expected: Realm has email theme set
-- `test -f configs/keycloak/themes/genie/login/theme.properties` -- expected: Login theme properties exist
-- `test -f configs/keycloak/themes/genie/login/resources/css/genie.css` -- expected: Login CSS exists
-- `test -f configs/keycloak/themes/genie/login/resources/css/dark.css` -- expected: Login dark CSS exists
-- `test -f configs/keycloak/themes/genie/login/template.ftl` -- expected: Layout template exists
+| Code | Language | Keycloak built-in | Email messages |
+|------|----------|-------------------|----------------|
+| ar | Arabic | Yes | Yes |
+| de | German | Yes | Yes |
+| en | English | Yes | Yes |
+| es | Spanish | Yes | Yes |
+| fr | French | Yes | Yes |
+| pt | Portuguese | Yes | Yes |
+| ru | Russian | Yes | Yes |
+| th | Thai | Yes | Yes |
+| zh | Chinese (Simplified) | Yes (`zh_Hans`) | Yes (`messages_zh_Hans`) |
 
-**Manual checks (if no CLI):**
-- Verify CSS custom properties are defined in genie.css with correct hex colors
-- Verify dark.css contains @media (prefers-color-scheme: dark) with all color overrides
-- Verify template.ftl has split panel structure with brand-panel and form-panel sections
-- Verify message bundles contain custom labels (e.g., login heading, tagline)
-- Verify Dockerfile includes theme copy instruction
+**Excluded frontend locales** (not in Keycloak): `bn` (Bengali), `id` (Indonesian), `man` (Mandingo), `st` (Sesotho), `sw` (Swahili).

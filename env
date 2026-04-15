@@ -128,15 +128,18 @@ HUGGING_FACE_HUB_TOKEN=
 #
 # --- HOW TO CHANGE THE TRANSLATION MODEL ---
 # The codebase auto-detects the model type and uses the correct prompt format:
-#   - google/translategemma-4b-it  -> uses structured {source_lang_code, target_lang_code, text} format
-#   - google/gemma-3-*             -> uses generic plain-text prompt format
-#   - Any other model               -> uses generic plain-text prompt format
+#   - google/translategemma-*       -> uses /v1/completions with manually applied chat template
+#   - google/gemma-3-*              -> uses generic plain-text prompt via /v1/chat/completions
+#   - Any other model               -> uses generic plain-text prompt via /v1/chat/completions
 # To switch, comment out the active line and uncomment the desired model below.
 #
-# Default: google/gemma-3-4b-it
+# Option 1: Generic LLM-based translation (current default, ~8GB VRAM)
 VLLM_TRANSLATION_MODEL_ID=google/gemma-3-4b-it
-# Option: Purpose-built translation model (requires ~8GB VRAM, supports Sesotho)
+# Option 2: Purpose-built translation model, 4b params (~8GB VRAM, supports low-resource languages incl. Sesotho)
 #VLLM_TRANSLATION_MODEL_ID=google/translategemma-4b-it
+# Option 3: Purpose-built translation model, 12b params (~26GB VRAM, better quality for low-resource languages)
+#             Requires gpu_memory_utilization >= 0.6 on 48GB GPU. See issue #581 for quality assessment.
+#VLLM_TRANSLATION_MODEL_ID=google/translategemma-12b-it
 #
 VLLM_TRANSLATION_SERVICE_PORT=9031
 VLLM_TRANSLATION_GPU_UTIL=0.35

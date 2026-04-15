@@ -1,3 +1,6 @@
 FROM adorsys/keycloak-config-cli:6.5.0-26
 
 COPY genie-realm.yaml /config/genie-realm.yaml
+COPY --chmod=755 config-and-sleep.sh /usr/local/bin/config-and-sleep.sh
+
+ENTRYPOINT ["/usr/local/bin/config-and-sleep.sh"]

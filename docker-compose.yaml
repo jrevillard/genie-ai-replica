@@ -93,7 +93,8 @@ services:
     image: kong:latest
     restart: "no"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - genieai_network
     environment:
@@ -123,7 +124,8 @@ services:
   kong-config:
     restart: "no"
     depends_on:
-      - kong
+      kong:
+        condition: service_healthy
     build: api-gateway-solution/new-config/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-kong-config:latest
     networks:
@@ -146,7 +148,10 @@ services:
 
   kong:
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
     restart: unless-stopped
     image: kong:latest
     environment:
@@ -193,8 +198,10 @@ services:
 
   nginx:
     depends_on:
-      - kong
-      - frontend
+      kong:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     restart: unless-stopped
     build: api-gateway-solution/nginx/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-nginx:latest
@@ -257,7 +264,8 @@ services:
       - certbot-etc:/etc/letsencrypt
       - ./secrets/ssl:/secrets/ssl:rw
     depends_on:
-      - nginx
+      nginx:
+        condition: service_healthy
     networks:
       - genieai_network
     deploy:
@@ -331,8 +339,12 @@ services:
 
   backend:
     depends_on:
-      - arango-vector-db
-      - redis-cache
+      arango-vector-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      keycloak-config:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: components/
@@ -362,8 +374,6 @@ services:
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_USER=${ARANGO_USER:-root}
-      - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
@@ -410,7 +420,8 @@ services:
 
   document-repository:
     depends_on:
-      - arango-vector-db
+      arango-vector-db:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: components/
@@ -419,7 +430,6 @@ services:
     environment:
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
-      - JWT_SECRET=${JWT_SECRET}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
     # Internal only - no host port mapping needed
@@ -549,7 +559,8 @@ services:
   textgen:
     profiles: [opea]
     depends_on:
-      - vllm
+      vllm:
+        condition: service_healthy
     restart: unless-stopped
     image: opea/llm-textgen:latest
     environment:
@@ -620,7 +631,8 @@ services:
   translation:
     profiles: [opea]
     depends_on:
-      - vllm-translation-guardrail
+      vllm-translation-guardrail:
+        condition: service_healthy
     restart: unless-stopped
     image: opea/translation:latest
     environment:
@@ -650,7 +662,8 @@ services:
   guardrail:
     profiles: [opea]
     depends_on:
-      - vllm-translation-guardrail
+      vllm-translation-guardrail:
+        condition: service_healthy
     restart: unless-stopped
     image: opea/guardrails:latest
     environment:
@@ -713,7 +726,8 @@ services:
   embedding:
     profiles: [opea]
     depends_on:
-      - tei
+      tei:
+        condition: service_healthy
     restart: unless-stopped
     image: opea/embedding:latest
     environment:
@@ -775,7 +789,8 @@ services:
   reranker:
     profiles: [opea]
     depends_on:
-      - tei_reranker
+      tei_reranker:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: .
@@ -811,7 +826,8 @@ services:
   dataprep-arango-service:
     profiles: [opea]
     depends_on:
-      - arango-vector-db
+      arango-vector-db:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: .
@@ -870,7 +886,8 @@ services:
   retriever-arango-service:
     profiles: [opea]
     depends_on:
-      - arango-vector-db
+      arango-vector-db:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: .
@@ -931,8 +948,10 @@ services:
   chatqna-xeon-backend-server:
     profiles: [opea]
     depends_on:
-      - embedding
-      - reranker
+      embedding:
+        condition: service_healthy
+      reranker:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: .
@@ -1145,8 +1164,15 @@ services:
       - KEYCLOAK_I18N_ENABLED=${KEYCLOAK_I18N_ENABLED:-true}
       - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}
       - KEYCLOAK_ACCESS_TOKEN_LIFESPAN=${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300}
+    healthcheck:
+      test: ["CMD", "sh", "-c", "test -f /tmp/config-done"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
     depends_on:
-      - keycloak
+      keycloak:
+        condition: service_healthy
     networks:
       - genieai_network
     deploy:

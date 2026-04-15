@@ -73,16 +73,15 @@ const server = app.listen(PORT, HOST, () => {
   }
 });
 
-// Handle unhandled promise rejections
+// Handle unhandled promise rejections — log but don't crash
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
 });
 
-// Handle uncaught exceptions
+// Handle uncaught exceptions — graceful shutdown then exit (process state is undefined after this)
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
-  process.exit(1);
+  gracefulShutdown('uncaughtException');
 });
 
 // Handle graceful shutdown

@@ -5,12 +5,38 @@ const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('../../shared-lib');
-const { log, error } = require('console');
 const archiver = require('archiver');
 const axios = require('axios');
 
 // Constants
 const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
+
+/**
+ * Sanitize a filename for use in Content-Disposition headers.
+ * Strips CRLF characters to prevent header injection and applies
+ * RFC 5987 encoding for non-ASCII characters.
+ * @param {string} filename
+ * @returns {string} Sanitized header value (e.g. `attachment; filename="..."; filename*=UTF-8''...`)
+ */
+function buildContentDisposition(disposition, filename) {
+  // Strip CRLF to prevent header injection
+  const sanitized = filename.replace(/[\r\n]/g, '');
+
+  const hasNonAscii = /[^\x00-\x7F]/.test(sanitized);
+  if (hasNonAscii) {
+    const encoded = encodeURIComponent(sanitized).replace(/['()]/g, escape);
+    return `${disposition}; filename="${sanitized}"; filename*=UTF-8''${encoded}`;
+  }
+  return `${disposition}; filename="${sanitized}"`;
+}
+
+// Maximum items allowed in batch fileIds operations
+const MAX_BATCH_SIZE = 50;
+
+// Schema for batch fileIds validation
+const batchFileIdsSchema = Joi.object({
+  fileIds: Joi.array().items(Joi.string().min(1)).min(1).max(MAX_BATCH_SIZE).required()
+});
 
 // Schema for file upload validation
 const uploadSchema = Joi.object({
@@ -24,7 +50,6 @@ const uploadSchema = Joi.object({
 const searchSchema = Joi.object({
   q: Joi.string().min(2).max(100).required(),
   limit: Joi.number().integer().min(1).max(50).default(10),
-  category: Joi.string().valid('general', 'data', 'reports', 'documents').optional(),
   mimeType: Joi.string().optional()
 });
 
@@ -47,7 +72,7 @@ const getFilesSchema = Joi.object({
 });
 
 const updateFileSchema = Joi.object({
-  file_name: Joi.string().max(255).optional(),
+  file_name: Joi.string().max(255).pattern(/^[^\r\n]*$/).optional(),
   labels: Joi.array().items(Joi.string()).optional(),
   author: Joi.string().max(200).optional(),
   create_date: Joi.date().optional(),
@@ -321,11 +346,20 @@ class FileController {
     logger.debug(`[FILE-CONTROLLER] File extension: ${fileExtension}`);
     const fileNameOnDisk = file.file_id + '.' + fileExtension;
     const filePath = file.storage_path || path.join(config.upload.uploadDir, fileNameOnDisk);
-    logger.debug(`[FILE-CONTROLLER] filePath: ${filePath}`);
+    const resolvedPath = path.resolve(filePath);
+    const allowedDir = path.resolve(config.upload.uploadDir);
+    if (!resolvedPath.startsWith(allowedDir + path.sep) && resolvedPath !== allowedDir) {
+      throw {
+        status: 400,
+        error: 'Invalid file path',
+        message: 'File path is outside the allowed upload directory'
+      };
+    }
+    logger.debug(`[FILE-CONTROLLER] filePath: ${resolvedPath}`);
 
     // Check if file exists
     try {
-      await fs.access(filePath);
+      await fs.access(resolvedPath);
     } catch (error) {
       throw {
         status: 404,
@@ -333,7 +367,7 @@ class FileController {
         message: 'The physical file does not exist'
       };
     }
-    return { file, filePath };
+    return { file, filePath: resolvedPath };
   }
 
   /**
@@ -480,7 +514,7 @@ class FileController {
       const { file, filePath } = await this._getFileAndPath(fileId);
 
       // Set appropriate headers, use file_name as the filename
-      res.setHeader('Content-Disposition', `attachment; filename="${file.file_name}"`);
+      res.setHeader('Content-Disposition', buildContentDisposition('attachment', file.file_name));
       res.setHeader('Content-Type', file.file_type);
 
       // Send file
@@ -506,14 +540,15 @@ class FileController {
 
   async downloadMultipleFiles(req, res) {
     try {
-    const { fileIds } = req.body;
-    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+    const { error, value } = batchFileIdsSchema.validate(req.body);
+    if (error) {
       return res.status(400).json({
         success: false,
-        error: 'No file IDs provided',
-        message: 'Please provide an array of file IDs to download'
+        error: 'Validation error',
+        message: error.details[0].message
       });
     }
+    const { fileIds } = value;
 
     // Set response headers for ZIP
     res.setHeader('Content-Type', 'application/zip');
@@ -599,7 +634,7 @@ class FileController {
       const { file, filePath } = await this._getFileAndPath(fileId);
 
       // Set appropriate headers for viewing in browser
-      res.setHeader('Content-Disposition', `inline; filename="${file.file_name}"`);
+      res.setHeader('Content-Disposition', buildContentDisposition('inline', file.file_name));
       res.setHeader('Content-Type', file.file_type);
 
       // Send file
@@ -677,14 +712,15 @@ class FileController {
    */
   async deleteMultipleFiles(req, res) {
     try {
-      const { fileIds } = req.body;
-      if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      const { error, value } = batchFileIdsSchema.validate(req.body);
+      if (error) {
         return res.status(400).json({
           success: false,
-          error: 'No file IDs provided',
-          message: 'Please provide an array of file IDs to delete'
+          error: 'Validation error',
+          message: error.details[0].message
         });
       }
+      const { fileIds } = value;
 
       const results = [];
       for (const fileId of fileIds) {
@@ -843,8 +879,8 @@ class FileController {
       const {
           file_name,
           file_type,
-          upload_date_from,
-          upload_date_to,
+          uploaded_date_from,
+          uploaded_date_to,
           create_date_from,
           create_date_to,
           labels,
@@ -852,12 +888,12 @@ class FileController {
           status,
           language
         } = req.query;
-      
+
       const allowedFields = [
         'file_name',
         'file_type',
-        'upload_date_from',
-        'upload_date_to',
+        'uploaded_date_from',
+        'uploaded_date_to',
         'create_date_from',
         'create_date_to',
         'labels',
@@ -887,8 +923,8 @@ class FileController {
       const results = await metadataService.searchMetadata(
         file_name,
         file_type,
-        upload_date_from,
-        upload_date_to,
+        uploaded_date_from,
+        uploaded_date_to,
         create_date_from,
         create_date_to,
         labelsArray,
@@ -967,7 +1003,7 @@ class FileController {
       fileName: file.file_name,
       fileType: file.file_type,
       fileLabels:file.labels,
-      uploadDate: file.upload_date,
+      uploadDate: file.uploaded_date,
       storagePath: file.storage_path,
       fileBase64: base64String,
     });
@@ -1015,10 +1051,11 @@ class FileController {
   // --- Multiple file ingest ---
   async ingestMultipleFiles(req, res) {
     try {
-      const { fileIds } = req.body;
-      if (!Array.isArray(fileIds) || fileIds.length === 0) {
-        return res.status(400).json({ success: false, error: 'No file IDs provided' });
+      const { error, value } = batchFileIdsSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
+      const { fileIds } = value;
       const results = [];
       for (const fileId of fileIds) {
         try {
@@ -1082,10 +1119,11 @@ class FileController {
   // --- Multiple file retract ---
   async retractMultipleFiles(req, res) {
     try {
-      const { fileIds } = req.body;
-      if (!Array.isArray(fileIds) || fileIds.length === 0) {
-        return res.status(400).json({ success: false, error: 'No file IDs provided' });
+      const { error, value } = batchFileIdsSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
+      const { fileIds } = value;
       const results = [];
       for (const fileId of fileIds) {
         try {

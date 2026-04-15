@@ -1,10 +1,9 @@
-// NOTE: this validation is not used anywhere at the moment
-// TODO: [NORMAL] validate file type and content in fileService.js by calling this function
-// - all functions here are not tested yet
-// - the code's file name should be changed to fileTypeValidator.js?? (not only validate mime type but also file content)
+// File type validation utilities
+// Used by validateFiles middleware in fileUpload.js to perform
+// extension checking and magic-byte validation on uploaded files
 
 const mime = require('mime-types');
-const { fromBuffer } = require('file-type');
+const { fileTypeFromBuffer } = require('file-type');
 const config = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
 
@@ -26,20 +25,19 @@ const validateFileType = async (file) => {
     }
     logger.debug(`File extension ${extension} is allowed.`);
 
-    // Check MIME type from multer
+    // Check MIME type from multer — but only reject if extension is also unrecognized
     logger.debug(`2. Validating MIME type from multer: ${file.mimetype}`);
     if (!config.upload.allowedMimeTypes.includes(file.mimetype)) {
-      logger.warn(`Validation failed for ${file.originalname}: MIME type ${file.mimetype} is not allowed.`);
-      return {
-        isValid: false,
-        error: `MIME type ${file.mimetype} is not allowed`
-      };
+      // Browser may misreport MIME type for valid extensions (e.g., .md as application/octet-stream)
+      // Skip to magic-byte validation instead of rejecting
+      logger.debug(`Multer MIME type ${file.mimetype} not in allowed list, will rely on magic-byte validation.`);
+    } else {
+      logger.debug(`Multer MIME type ${file.mimetype} is allowed.`);
     }
-    logger.debug(`Multer MIME type ${file.mimetype} is allowed.`);
 
     // Double-check MIME type by reading file buffer
     logger.debug('3. Validating MIME type from file buffer...');
-    const detectedType = await fromBuffer(file.buffer);
+    const detectedType = await fileTypeFromBuffer(file.buffer);
     logger.debug(`Detected buffer MIME type: ${detectedType ? detectedType.mime : 'unknown'}`);
     
     if (detectedType && !config.upload.allowedMimeTypes.includes(detectedType.mime)) {

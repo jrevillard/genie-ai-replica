@@ -643,11 +643,12 @@ services:
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
       --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
-      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-fp8}
-      --dtype=${VLLM_TRANSLATION_DTYPE:-half}
+      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-auto}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
       --port ${VLLM_TRANSLATION_SERVICE_PORT:-9031}
       --no-enable-chunked-prefill
       --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
+      --chat-template-content-format openai
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}

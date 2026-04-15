@@ -35,6 +35,14 @@ TRANSLATION_SERVICE_TIMEOUT = int(
 )  # Timeout in seconds for translation service (default: 3 minutes)
 TRANSLATION_MODEL_ID = os.getenv("VLLM_TRANSLATION_MODEL_ID", "")
 IS_TRANSLATEGEMMA = "translategemma" in TRANSLATION_MODEL_ID.lower()
+# Connect directly to vLLM for translation when VLLM_TRANSLATION_ENDPOINT is set,
+# bypassing the OPEA translation microservice which reformats payloads and breaks
+# TranslateGemma's structured chat template. Falls back to OPEA proxy if not set.
+_VLLM_TRANSLATION_ENDPOINT = os.getenv("VLLM_TRANSLATION_ENDPOINT", "")
+if _VLLM_TRANSLATION_ENDPOINT:
+    TRANSLATION_LLM_URL = f"{_VLLM_TRANSLATION_ENDPOINT}/v1/chat/completions"
+else:
+    TRANSLATION_LLM_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions"
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
@@ -1136,7 +1144,7 @@ class ChatQnAService:
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
                 response = await client.post(
-                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
+                    TRANSLATION_LLM_URL,
                     json=payload,
                     headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                 )
@@ -1240,7 +1248,7 @@ class ChatQnAService:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
+                    TRANSLATION_LLM_URL,
                     json=payload,
                     headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                 )

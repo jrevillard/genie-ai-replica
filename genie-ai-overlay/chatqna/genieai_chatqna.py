@@ -41,8 +41,10 @@ IS_TRANSLATEGEMMA = "translategemma" in TRANSLATION_MODEL_ID.lower()
 _VLLM_TRANSLATION_ENDPOINT = os.getenv("VLLM_TRANSLATION_ENDPOINT", "")
 if _VLLM_TRANSLATION_ENDPOINT:
     TRANSLATION_LLM_URL = f"{_VLLM_TRANSLATION_ENDPOINT}/v1/chat/completions"
+    TRANSLATION_COMPLETIONS_URL = f"{_VLLM_TRANSLATION_ENDPOINT}/v1/completions"
 else:
     TRANSLATION_LLM_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions"
+    TRANSLATION_COMPLETIONS_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/completions"
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
@@ -1069,6 +1071,28 @@ class ChatQnAService:
         self.megaservice.flow_to(retriever, rerank)
         self.megaservice.flow_to(rerank, llm)
 
+    @staticmethod
+    def _build_translategemma_prompt(text: str, source_lang_code: str, target_lang_code: str,
+                                      source_lang_name: str = "English", target_lang_name: str = "English") -> str:
+        """Build a prompt for TranslateGemma using the completions API.
+
+        vLLM v0.10.0 cannot pass structured content through the chat completions API
+        to TranslateGemma's Jinja2 template, so we apply the template manually and
+        use the /v1/completions endpoint instead.
+        """
+        return (
+            f"<bos><start_of_turn>user\n"
+            f"You are a professional {source_lang_name} ({source_lang_code}) to "
+            f"{target_lang_name} ({target_lang_code}) translator. Your goal is to "
+            f"accurately convey the meaning and nuances of the original {source_lang_name} "
+            f"text while adhering to {target_lang_name} grammar, vocabulary, and cultural "
+            f"sensitivities.\n"
+            f"Produce only the {target_lang_name} translation, without any additional "
+            f"explanations or commentary. Please translate the following {source_lang_name} "
+            f"text into {target_lang_name}:\n\n\n{text}"
+            f"<end_of_turn>\n<start_of_turn>model\n"
+        )
+
 
     async def _get_translated_history_string(self, history: list, target_language: str, source_lang_code: str = "en") -> str:
         """
@@ -1117,19 +1141,22 @@ class ChatQnAService:
 
         # Build payload based on model type
         if IS_TRANSLATEGEMMA:
+            # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
+            # pass structured content through chat completions to TranslateGemma's template)
+            prompt = self._build_translategemma_prompt(
+                text=flattened_history_string,
+                source_lang_code=source_lang_code,
+                target_lang_code="en",
+                source_lang_name=source_lang_code.upper(),
+                target_lang_name="English"
+            )
             payload = {
-                "messages": [{
-                    "role": "user",
-                    "content": [{
-                        "type": "text",
-                        "source_lang_code": source_lang_code,
-                        "target_lang_code": "en",
-                        "text": flattened_history_string
-                    }]
-                }],
+                "model": TRANSLATION_MODEL_ID,
+                "prompt": prompt,
                 "temperature": 0.0,
-                "stream": False
+                "max_tokens": 4096
             }
+            url = TRANSLATION_COMPLETIONS_URL
         else:
             prompt = f"Translate the following chat history to {target_language}. Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\nHISTORY:\n{flattened_history_string}"
             payload = {
@@ -1137,6 +1164,7 @@ class ChatQnAService:
                 "temperature": 0,
                 "stream": False
             }
+            url = TRANSLATION_LLM_URL
 
         if logflag:
             logger.debug(f"Payload for translation service ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
@@ -1144,13 +1172,16 @@ class ChatQnAService:
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
                 response = await client.post(
-                    TRANSLATION_LLM_URL,
+                    url,
                     json=payload,
                     headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                translated_blob = response_data["choices"][0]["message"]["content"]
+                if IS_TRANSLATEGEMMA:
+                    translated_blob = response_data["choices"][0]["text"]
+                else:
+                    translated_blob = response_data["choices"][0]["message"]["content"]
                 if logflag:
                     logger.debug(f"Translated chat history: {translated_blob.strip()}")
                 return translated_blob.strip()
@@ -1201,8 +1232,8 @@ class ChatQnAService:
     async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
         """Translate a single chunk of text.
 
-        Automatically uses TranslateGemma structured format or generic prompt format
-        based on the configured VLLM_TRANSLATION_MODEL_ID.
+        Automatically uses TranslateGemma completions API (with pre-formatted prompt)
+        or generic chat completions format based on the configured VLLM_TRANSLATION_MODEL_ID.
 
         Args:
             text: Text to translate.
@@ -1212,19 +1243,20 @@ class ChatQnAService:
         """
         if IS_TRANSLATEGEMMA:
             target_lang_code = iso_code.lower() if iso_code else target_lang.lower()
+            prompt = self._build_translategemma_prompt(
+                text=text,
+                source_lang_code=source_lang_code,
+                target_lang_code=target_lang_code,
+                source_lang_name=source_lang_code.upper(),
+                target_lang_name=target_lang
+            )
             payload = {
-                "messages": [{
-                    "role": "user",
-                    "content": [{
-                        "type": "text",
-                        "source_lang_code": source_lang_code,
-                        "target_lang_code": target_lang_code,
-                        "text": text
-                    }]
-                }],
+                "model": TRANSLATION_MODEL_ID,
+                "prompt": prompt,
                 "temperature": 0.0,
-                "stream": False
+                "max_tokens": 4096
             }
+            url = TRANSLATION_COMPLETIONS_URL
         else:
             language_notes = {
                 "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
@@ -1241,6 +1273,7 @@ class ChatQnAService:
                 "temperature": 0,
                 "stream": False
             }
+            url = TRANSLATION_LLM_URL
 
         if logflag:
             logger.debug(f"Translation payload ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
@@ -1248,13 +1281,16 @@ class ChatQnAService:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    TRANSLATION_LLM_URL,
+                    url,
                     json=payload,
                     headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                return response_data["choices"][0]["message"]["content"].strip()
+                if IS_TRANSLATEGEMMA:
+                    return response_data["choices"][0]["text"].strip()
+                else:
+                    return response_data["choices"][0]["message"]["content"].strip()
         except Exception as e:
             logger.warning(f"Failed to translate chunk, returning original: {e}")
             return text

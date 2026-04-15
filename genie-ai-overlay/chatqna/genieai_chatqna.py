@@ -1283,7 +1283,7 @@ class ChatQnAService:
             logger.debug(f"Translation payload ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
                 response = await client.post(
                     url,
                     json=payload,
@@ -1296,7 +1296,7 @@ class ChatQnAService:
                 else:
                     return response_data["choices"][0]["message"]["content"].strip()
         except Exception as e:
-            logger.warning(f"Failed to translate chunk, returning original: {e}")
+            logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
             return text
 
     async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:

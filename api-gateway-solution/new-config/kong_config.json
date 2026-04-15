@@ -5,7 +5,7 @@
       "name": "express-api",
       "id": "453cb927-f3d0-4b68-8791-3165dc046719",
       "protocol": "http",
-      "host": "e2e-109-51",
+      "host": "backend",
       "port": 3000,
       "path": null,
       "connect_timeout": 60000,
@@ -23,7 +23,7 @@
       "name": "document-repository",
       "id": "e1a2b3c4-d5e6-4f78-9a0b-1c2d3e4f5a6b",
       "protocol": "http",
-      "host": "e2e-109-51",
+      "host": "document-repository",
       "port": 3001,
       "path": null,
       "connect_timeout": 60000,
@@ -592,7 +592,7 @@
       "name": "files-route",
       "id": "f0e1d2c3-b4a5-4e6f-8d7c-9b8a7f6e5d4c",
       "service": {"name": "document-repository"},
-      "paths": ["/api/files"],
+      "paths": ["/api/files", "/api/files/"],
       "strip_path": false,
       "preserve_host": true,
       "regex_priority": 0,
@@ -613,7 +613,7 @@
       "name": "labels-route",
       "id": "a9b8c7d6-e5f4-4a3b-9c8d-7e6f5d4c3b2a",
       "service": {"name": "document-repository"},
-      "paths": ["/api/labels"],
+      "paths": ["/api/labels", "/api/labels/"],
       "strip_path": false,
       "preserve_host": true,
       "regex_priority": 0,
@@ -849,7 +849,7 @@
   "targets": [
     {
       "id": "7feebc25-b694-408b-a60f-f93493549f71",
-      "target": "e2e-109-51:3000",
+      "target": "backend:3000",
       "weight": 100,
       "upstream": {"id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"}
     }

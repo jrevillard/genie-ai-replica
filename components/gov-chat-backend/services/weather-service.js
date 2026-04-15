@@ -1,6 +1,6 @@
 const axios = require('axios');
 const { Database, aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 
 class WeatherService {
   constructor() {
@@ -25,7 +25,7 @@ class WeatherService {
     try {
       // Fetch server location from ipapi.co
       logger.debug('WeatherService.fetching_server_location');
-      const geoResponse = await axios.get('https://ipapi.co/json/');
+      const geoResponse = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
       logger.debug('WeatherService.server_location_response', {
         status: geoResponse.status,
         data: geoResponse.data
@@ -41,6 +41,7 @@ class WeatherService {
       logger.info('WeatherService.server_location_set', { serverLocation: this.serverLocation });
 
       this.db = await this.dbService.getConnection('default');
+      await ensureCollection(this.db, 'weatherRequests');
       this.weatherRequests = this.db.collection('weatherRequests');
       this.initialized = true;
       logger.info('WeatherService initialized successfully');
@@ -73,6 +74,7 @@ class WeatherService {
     try {
       logger.debug('WeatherService.fetching_city_name', { latitude, longitude });
       const response = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
+        timeout: 5000,
         params: {
           format: 'json',
           lat: latitude,
@@ -140,7 +142,7 @@ class WeatherService {
 
       // Fetch weather data
       logger.debug('WeatherService.fetching_weather');
-      const response = await axios.get(weatherUrl);
+      const response = await axios.get(weatherUrl, { timeout: 5000 });
       logger.debug('WeatherService.weather_response', {
         status: response.status,
         data: response.data

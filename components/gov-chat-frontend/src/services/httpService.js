@@ -1,5 +1,5 @@
 import axios from 'axios';
-import userService from './userService';
+import AuthService from './authService';
 
 /**
  * Base service for handling HTTP requests
@@ -10,7 +10,10 @@ class HttpService {
    * Initialize the HTTP service
    */
   constructor() {
-    this.baseUrl = process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
+    // Cloud-native: Read from runtime config (generated at container startup)
+    // Falls back to build-time env var for backward compatibility
+    this.baseUrl = window.APP_CONFIG?.apiUrl || process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
+
     this.axios = axios;
 
     // Configure axios
@@ -19,7 +22,7 @@ class HttpService {
     // Token refresh state
     this.isRefreshing = false;
     this.refreshSubscribers = [];
-    this.maxRetries = 2; // Limit interceptor retries to avoid overlap with userService
+    this.maxRetries = 2; // Limit interceptor retries to avoid overlap with authService
     this.retryDelay = 2000; // Delay for 401/403 retries in ms
 
     // Add request interceptor
@@ -41,7 +44,7 @@ class HttpService {
    */
   async refreshToken() {
     try {
-      const response = await userService.refreshToken();
+      const response = await AuthService.refreshToken();
       return response;
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -173,7 +176,7 @@ class HttpService {
 
         if (originalRequest._retryCount >= this.maxRetries) {
           console.error(`[HttpService] Max retries (${this.maxRetries}) reached for ${originalRequest.url}`);
-          userService.clearUserData();
+          AuthService.clearUserData();
           if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
             console.log('[HttpService] Redirecting to login due to max retries');
             window.location.href = '/login?error=session_expired';
@@ -224,7 +227,7 @@ class HttpService {
         } catch (refreshError) {
           console.error('Token refresh error:', refreshError);
           this.isRefreshing = false;
-          userService.clearUserData();
+          AuthService.clearUserData();
           localStorage.removeItem('user');
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');

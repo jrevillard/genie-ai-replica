@@ -243,7 +243,7 @@ Environment variables for translation service:
 
 ```bash
 # Backend Selection
-TRANSLATION_BACKEND=cpu|gpu|auto  # Default: cpu
+TRANSLATION_BACKEND=cpu|gpu|auto  # Default: auto
 
 # CPU Backend Configuration
 TRANSLATION_CPU_MODEL_ID=Xenova/nllb-200-distilled-600M

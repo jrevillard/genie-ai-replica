@@ -2,7 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
@@ -31,6 +31,10 @@ class QueryService {
     }
     try {
       this.db = await this.dbService.getConnection('default');
+      await ensureCollection(this.db, 'queries');
+      await ensureCollection(this.db, 'serviceCategories');
+      await ensureCollection(this.db, 'services');
+      await ensureCollection(this.db, 'queryCategories', { type: 3 });
       this.queries = this.db.collection('queries');
       this.serviceCategories = this.db.collection('serviceCategories');
       this.services = this.db.collection('services');
@@ -222,7 +226,7 @@ class QueryService {
       logger.info('QueryService.create_query_start');
       logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
-      const backendMode = process.env.CONTEXT_OPTION || 'single-message';
+      const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
       logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
       logger.info('[DEBUG] Starting validation of incoming data...');

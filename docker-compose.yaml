@@ -1,226 +1,467 @@
-# Ports Overview:
-# 8090 - gov chat frontend
-# 3000 - gov chat backend
-# 3001 - doc repo dev
-# 3310 - clamav
-# 80 - default OPEA UI nginx server (chatqna-xeon-nginx-server)
-# 5173 - default OPEA UI frontend (chatqna-xeon-ui-server)
-# 6000 - embedding wrapper
-# 6007 - dataprep API endpoint
-# 6100 - reranker wrapper
-# 7000 - TEI (embedding inference server)
-# 7025 - retriever-arango-dev
-# 7100 - TEI reranker (inference server)
-# 8000 - vLLM (main LLM server)
-# 8888 - chatqna backend server
-# 9000 - textgen wrapper
-# 9030 - translation wrapper
-# 9031 - vllm-translation-guardrail (guarded LLM)
-# 9090 - guardrail (guard logic endpoint)
-# 6666 - http-service (for auth token retrieval)
+# =============================================================================
+# GENIE.AI - Docker Compose File (dual-mode: compose up + Swarm)
+# =============================================================================
+#
+# This single compose file supports two deployment modes:
+#
+# 1. Single-node (docker compose up):
+#      docker compose up -d                    # Core services only (no OPEA)
+#      docker compose --profile opea up -d     # Full stack with OPEA/GPU
+#
+# 2. Docker Swarm (docker stack deploy):
+#      docker stack deploy -c <resolved> <stack>
+#      OPEA services controlled by DEPLOY_OPEA env var (default: 1).
+#      Placement constraints require node labels (see below).
+#
+# Dual-mode notes:
+#   - deploy sections (replicas, placement, restart_policy) are Swarm-only;
+#     docker compose up ignores them entirely
+#   - depends_on is for compose up ordering; Swarm ignores it
+#   - restart: is for compose up; Swarm uses deploy.restart_policy
+#   - profiles: [opea] controls OPEA services in compose up; Swarm ignores profiles
+#   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
+#   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
+#
+# Swarm prerequisites:
+#   1. Swarm initialized: docker swarm init
+#   2. Node labels: docker node update --label-add gpu=true <gpu-node>
+#                docker node update --label-add gateway=true <gateway-node>
+#                docker node update --label-add genieai=true <genieai-node>
+#   3. Local registry: docker run -d -p 5000:5000 --name registry registry:2
+#   4. Images pre-built and pushed to registry
+#   5. .env configured (see env template)
+# =============================================================================
 
-name: genieai_mvp
+# Required directories on each target node (create before deploy):
+#
+# All nodes:
+#   ./data/logs/kong            (Kong gateway logs)
+#   ./data/logs/backend         (Backend API logs)
+#   ./data/logs/doc-repo        (Document Repository logs)
+#   ./data/database_backups     (Backend DB dumps)
+#   ./data/huggingface          (TEI model cache, GPU nodes only)
+#   ./secrets/ssl/              (server.crt, server.key)
 
 volumes:
   kong_data:
-  mongo_data:
-  nginx_certs:
-  nginx_conf:
   redis_data:
-  doc_repo_uploads: {}
+  doc_repo_uploads:
+  arango_data: {}
+  hf_cache:
+  backend_uploads:
+  backend_data:
+  certbot-webroot:
+  certbot-etc:
 
 services:
 
-  # Note: after starting this service, execute the following commands:
-  #       docker compose exec kong-database psql -U kong postgres
-  #       CREATE DATABASE kong;
-  #       ALTER USER kong WITH PASSWORD '${KONG_PG_PASSWORD}';
-  #       GRANT ALL PRIVILEGES ON DATABASE kong TO kong;
+  # ===========================================================================
+  # API Gateway Stack (node.labels.gateway == true)
+  # ===========================================================================
+
   kong-database:
     image: postgres:13
-    restart: unless-stopped
     networks:
       - genieai_network
-    command: postgres -c hba_file=/etc/postgresql/pg_hba.conf
-    env_file:
-      - .env
-    ports:
-      - "5432:5432" # Leave the standard PostGres port unchanged as Kong connects to it by default
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-kong}
+      - POSTGRES_DB=${POSTGRES_DB:-kong}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    # PostgreSQL internal only - no external access needed
+    # ports:
+    #   - "5432:5432"
     volumes:
       - kong_data:/var/lib/postgresql/data
-      - ./api-gateway-solution/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "kong"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
-  # Note: before starting up kong you need to create the schema with this command:
-  #       docker compose run --rm kong kong migrations bootstrap
-  kong:
+  # Kong database migrations (one-shot init, runs automatically on first start)
+  kong-migrations:
     image: kong:latest
-    restart: unless-stopped
+    restart: "no"
+    depends_on:
+      - kong-database
     networks:
       - genieai_network
-    depends_on:
-      kong-database:
-        condition: service_healthy
-    env_file:
-      - .env
-    ports:
-      - "8010:8010"  # Note that we had to change this port to 8010 because vLLM runs on 8000
-      - "8443:8443"
-      - "8001:8001"
-    volumes:
-      - ./api-gateway-solution/kong_logs:/var/log/kong
-
-  # Note: before firing up all the other services, the kong configuration needs to be adapted and loaded
-  #       1) Modify the addresses of the node:
-  #          vi api-gateway-solution/new-config/kong_config.json
-  #            -- modify the "host": "e2e-109-51" for the "express-api" service to "host": "backend"
-  #            -- it still runs on port 3000 so no problem
-  #            -- modify the "host": "e2e-109-51" for the document-repository service to "host": "document-repository"i
-  #            -- it still runs on port 3001 so no problem
-  #       2) Prepare to apply the configuration to Kong
-  #          cd api-gateway-solution/new-config/
-  #          chmod +x manage-kong-config.sh
-  #          vi manage-kong-config.sh
-  #            -- modify the KONG_PUBLIC_URL to match the config change KONG_PUBLIC_URL="http://localhost:8010"
-  #       3) Install jq
-  #          apt update
-  #          apt install jq
-  #       4) Apply the configuration to Kong
-  #          ./manage-kong-config.sh -a
-  frontend:
-    build:
-      context: ./components/gov-chat-frontend
-      dockerfile: Dockerfile-single-node # Specify the Dockerfile name
-      args:
-        - VUE_APP_API_URL=${VUE_APP_API_URL}
-        - VUE_PROXY_HOST=${VUE_PROXY_HOST}
-        - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC}
-    restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      - PORT=${FRONTEND_PORT}
-    ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - KONG_DATABASE=${KONG_DATABASE:-postgres}
+      - KONG_PG_HOST=${KONG_PG_HOST:-kong-database}
+      - KONG_PG_USER=${KONG_PG_USER:-kong}
+      - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+    command: >
+      bash -c "
+        kong migrations bootstrap 2>/dev/null ||
+        kong migrations up &&
+        kong migrations finish
+      "
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+
+  # Kong routes/services/plugins configuration (one-shot init, runs after Kong is ready)
+  kong-config:
+    restart: "no"
     depends_on:
-      - backend
+      - kong
+    build: api-gateway-solution/new-config/
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-kong-config:latest
     networks:
       - genieai_network
+    environment:
+      - KONG_ADMIN_URL=http://kong:8001
+      - KONG_PUBLIC_URL=http://kong:8000
+      - TARGET_HOST=backend
+      - TARGET_PORT=3000
+    command: ["-b", "/opt/kong-config/kong_config.json"]
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+
+  kong:
+    depends_on:
+      - kong-database
+    restart: unless-stopped
+    image: kong:latest
+    environment:
+      - KONG_DATABASE=${KONG_DATABASE:-postgres}
+      - KONG_PG_HOST=${KONG_PG_HOST:-kong-database}
+      - KONG_PG_USER=${KONG_PG_USER:-kong}
+      - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_LISTEN=${KONG_ADMIN_LISTEN:-0.0.0.0:8001, 0.0.0.0:8444 ssl}
+      - KONG_DNS_RESOLVER=${KONG_DNS_RESOLVER:-127.0.0.11}
+      - KONG_DNS_ORDER=${KONG_DNS_ORDER:-LAST,A,AAAA,CNAME}
+      - KONG_DNS_STALE_TTL=${KONG_DNS_STALE_TTL:-5}
+      - KONG_NGINX_DAEMON=off
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - genieai_network
+    # Kong proxy - internal only. All external traffic routes through nginx:80/443.
+    # Uncomment for debugging direct Kong access (bypasses nginx security):
+    # ports:
+    #   - "${KONG_PROXY_PORT:-8000}:8000"
+    #   - "${KONG_HTTPS_PORT:-8443}:8443"
+    # Kong admin API - internal only (accessible via docker exec for post-deploy config)
+    # ports:
+    #   - "8001:8001"
+    volumes:
+      - "${DATA_DIR:-./data}/logs/kong:/var/log/kong"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
+
+  nginx:
+    depends_on:
+      - kong
+      - frontend
+    restart: unless-stopped
+    build: api-gateway-solution/nginx/
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-nginx:latest
+    ports:
+      - target: 80
+        published: ${NGINX_HTTP_PORT:-80}
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: ${NGINX_HTTPS_PORT:-443}
+        protocol: tcp
+        mode: host
+    environment:
+      - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
+      - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
+      - KONG_PROXY_HOST=${KONG_PROXY_HOST:-kong}
+      - NGINX_FRONTEND_HOST=${NGINX_FRONTEND_HOST:-frontend}
+      - NGINX_FRONTEND_PORT=${NGINX_FRONTEND_PORT:-8090}
+      - NGINX_PERMISSIONS_POLICY=${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost/ | grep -qE '^[23]' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./secrets/ssl/server.crt:/etc/nginx/ssl/server.crt:ro
+      - ./secrets/ssl/server.key:/etc/nginx/ssl/server.key:ro
+      - certbot-webroot:/var/www/certbot:ro
+    networks:
+      - genieai_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
+
+  # ===========================================================================
+  # Let's Encrypt Certificate Management (optional)
+  # ===========================================================================
+  # Activated via: --profile letsencrypt (compose up) or CERTBOT_REPLICAS=1 (Swarm)
+  # Requires: CERTBOT_EMAIL set in .env
+
+  certbot:
+    profiles: [letsencrypt]
+    restart: unless-stopped
+    image: certbot/certbot:latest
+    entrypoint: ["/certbot-entrypoint.sh"]
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL}
+      - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
+      - CERTBOT_STAGING=${CERTBOT_STAGING:-false}
+    volumes:
+      - ./api-gateway-solution/certbot/entrypoint.sh:/certbot-entrypoint.sh:ro
+      - certbot-webroot:/var/www/certbot
+      - certbot-etc:/etc/letsencrypt
+      - ./secrets/ssl:/secrets/ssl:rw
+    depends_on:
+      nginx:
+        condition: service_healthy
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${CERTBOT_REPLICAS:-0}
+      placement:
+        constraints:
+          - node.labels.gateway == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 5
+  # ===========================================================================
+
+  frontend:
+    restart: unless-stopped
+    build: components/gov-chat-frontend/
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-frontend:latest
+    environment:
+      - PORT=8090
+      - VUE_APP_API_URL=${VUE_APP_API_URL:-/api}
+      - VUE_PROXY_HOST=${VUE_PROXY_HOST:-localhost}
+      - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
+    # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
+    # ports:
+    #   - "${FRONTEND_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8090/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - genieai_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
   redis-cache:
-    image: redis:7-alpine
-    container_name: redis-cache
     restart: unless-stopped
-    ports:
-      - "${TRANSLATION_CACHE_PORT}:${TRANSLATION_CACHE_PORT}"
-    command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "${TRANSLATION_CACHE_PASSWORD}"
+    image: redis:7-alpine
+    # Internal only - no host port mapping needed
+    # ports:
+    #   - "${TRANSLATION_CACHE_PORT:-6379}:6379"
+    environment:
+      - REDISCLI_AUTH=${TRANSLATION_CACHE_PASSWORD}
+    command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass ${TRANSLATION_CACHE_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli ping"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - genieai_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
   backend:
-    build:
-      context: ./components
-      dockerfile: gov-chat-backend/Dockerfile-single-node 
-    restart: unless-stopped
-    ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
-    volumes:
-      - ./database_backups:/app/database_backups
-      - ./logs:/app/logs
-      - ./data:/app/data
-      - ./components/gov-chat-backend/Uploads:/app/Uploads
-    env_file:
-      - .env
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
-      redis-cache:
-        condition: service_healthy
+      - arango-vector-db
+      - redis-cache
+    restart: unless-stopped
+    build:
+      context: components/
+      dockerfile: gov-chat-backend/Dockerfile
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-backend:latest
+    # Swarm: internal only - access via Kong proxy
+    # ports:
+    #   - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - "${DATA_DIR:-./data}/database_backups:/app/database_backups"
+      - "${DATA_DIR:-./data}/logs/backend:/app/logs"
+      - backend_data:/app/data
+      - backend_uploads:/app/Uploads
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     environment:
-      # Database config
-      - ARANGO_URL=${ARANGO_URL}
-      - ARANGO_PORT=${ARANGO_PORT}
-      - ARANGO_DB=${ARANGO_DB}
-      - ARANGO_DB_NAME=${ARANGO_DB_NAME}
-      - ARANGO_USER=${ARANGO_USER}
+      # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
-      - SESSION_SECRET=${SESSION_SECRET:-default-session-secret}
-      - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - CSP_CONNECT_SRC=${CSP_CONNECT_SRC}
-      - PORT=${BACKEND_PORT}
-      # Translation Service Configuration
-      - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-cpu}
-      - TRANSLATION_CPU_MODEL_ID=${TRANSLATION_CPU_MODEL_ID:-Xenova/nllb-200-distilled-600M}
-      - TRANSLATION_THREADS=${TRANSLATION_THREADS:-4}
-      - TRANSLATION_BATCHES=${TRANSLATION_BATCHES:-5}
-      - TRANSLATION_CACHE=${TRANSLATION_CACHE:-on}
-      - TRANSLATION_CACHE_HOST=${TRANSLATION_CACHE_HOST:-redis-cache}
-      - TRANSLATION_CACHE_PORT=${TRANSLATION_CACHE_PORT:-6379}
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      # Translation cache (required, no default in code)
       - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD}
-      # GPU Translation Configuration (vLLM)
-      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
-      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
-      - VLLM_TRANSLATION_SERVICE_PORT=${VLLM_TRANSLATION_SERVICE_PORT:-9031}
+      # Email configuration (required)
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_SECURE=${EMAIL_SECURE}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_FROM=${EMAIL_FROM}
+      # OPEA AI/ML service override (code default is deployment-specific: 'e2e-109-198')
+      - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
+      # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
+      - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
+      # CORS (deployment-specific, localhost defaults)
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost}
+      - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
     networks:
       - genieai_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
   document-repository:
-    build:
-      context: ./components
-      dockerfile: document-repository/Dockerfile
-    container_name: doc-repo-dev
-    environment:
-      # Database config
-      - ARANGO_URL=${ARANGO_URL}
-      - ARANGO_PORT=${ARANGO_PORT}
-      - ARANGO_DB=${ARANGO_DB}
-      - ARANGO_DB_NAME=${ARANGO_DB_NAME}
-      - ARANGO_USER=${ARANGO_USER}
-      - ARANGO_USERNAME=${ARANGO_USERNAME}
-      - PORT=${DOC_REPO_PORT}
-    env_file:
-      - .env
     depends_on:
-      - clamav
-    ports:
-      - "${DOC_REPO_PORT}:${DOC_REPO_PORT}"
+      - arango-vector-db
+    restart: unless-stopped
+    build:
+      context: components/
+      dockerfile: document-repository/Dockerfile
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-document-repository:latest
+    environment:
+      # Secrets (required, no defaults in code)
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_URL=http://arango-vector-db:8529
+    # Internal only - no host port mapping needed
+    # ports:
+    #   - "${DOC_REPO_PORT:-3001}:3001"
     networks:
       - genieai_network
     volumes:
-      - ./logs:/app/logs
+      - "${DATA_DIR:-./data}/logs/doc-repo:/app/logs"
       - doc_repo_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
   clamav:
+    restart: unless-stopped
     image: clamav/clamav
-    container_name: clamav
-    ports:
-      - "3310:3310"
+    # Internal only
+    # ports:
+    #   - "3310:3310"
     networks:
       - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 3310 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
   arango-vector-db:
+    restart: unless-stopped
     image: arangodb/arangodb:3.12.4
-    container_name: arango-vector-db
     ports:
-      - "${ARANGO_PORT}:${ARANGO_PORT}"
+      - target: 8529
+        published: ${ARANGO_PORT:-8529}
+        protocol: tcp
+        mode: host
     volumes:
-      - /root/arango_data:/var/lib/arangodb3
+      - arango_data:/var/lib/arangodb3
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
     command: ["--experimental-vector-index=true"]
-    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password \"${ARANGO_PASSWORD}\" --javascript.execute-string \"db._version();\""]
       interval: 10s
@@ -229,380 +470,242 @@ services:
       start_period: 30s
     networks:
       - genieai_network
-
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    restart: unless-stopped
-    ports:
-      - "443:443" # This will always run on port 443 as port 80 is taken by the OPEA nginx and we only want a https listener
-    volumes:
-      - ./api-gateway-solution/nginx/conf:/etc/nginx/conf.d
-      - ./api-gateway-solution/nginx/certs:/etc/nginx/certs
-      - nginx_conf:/etc/nginx
-      - nginx_certs:/etc/ssl/private
-    networks:
-      - genieai_network
-    depends_on:
-      - kong
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
   http-service:
+    depends_on:
+      - backend
+    restart: unless-stopped
     build:
-      # Set the context to the root of the GENIE-AI repo
       context: .
-      # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./genie-ai-overlay/http-service/Dockerfile-http-service_genie-ai
-    container_name: http-service
-    env_file:
-      - .env
+      dockerfile: genie-ai-overlay/http-service/Dockerfile
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-http-service:latest
     environment:
-      # Mapped variables using shell substitution from .env
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
-      AUTH_SERVICE_USERNAME: ${AUTH_SERVICE_USERNAME}
+      # Internal service URL - uses Docker service name (works across nodes via overlay DNS)
+      AUTH_SERVICE_URL: http://backend:3000/api/auth
+      AUTH_SERVICE_USERNAME: ${AUTH_SERVICE_USERNAME:-admin}
       AUTH_SERVICE_PASSWORD: ${AUTH_SERVICE_PASSWORD}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
-    ports:
-      - "${AUTH_SERVICE_PORT}:${AUTH_SERVICE_PORT}"
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090}
+    # Internal only
+    # ports:
+    #   - "6666:6666"
     networks:
       - genieai_network
-    restart: "no"
-
-  dataprep-arango-service:
-    build:
-      # Set the context to the root of the GENIE-AI repo
-      context: .
-      # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
-      args:
-        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
-        OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
-        HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
-    image: genie-ai-dataprep-arango:${OPEA_VERSION:-latest}
-    container_name: genie-ai-dataprep-arango
-    depends_on:
-      arango-vector-db:
-        condition: service_started
-      embedding:
-        condition: service_started
-      vllm:
-        condition: service_healthy
-      guardrail:
-        condition: service_started
-    ports:
-      - "${DATAPREP_PORT}:5000" # Wondering why the container port is 5000
-    env_file:
-      - .env
-    environment:
-      DATAPREP_COMPONENT_NAME: ${DATAPREP_COMPONENT_NAME}
-      VLLM_LLM_MODEL_ID: ${VLLM_LLM_MODEL_ID}
-      VLLM_MODEL_ID: ${VLLM_MODEL_ID}
-      VLLM_ENDPOINT: ${VLLM_ENDPOINT}
-      TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
-      GUARDRAIL_URL: ${GUARDRAIL_URL}
-      E2E_CPU_URL: ${E2E_CPU_URL}
-      ARANGO_URL: ${ARANGO_URL}
-      ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME}
-      GET_AUTH_TOKEN_URL: ${GET_AUTH_TOKEN_URL}
-      DOCUMENT_REPOSITORY_URL: ${DOCUMENT_REPOSITORY_URL}
-      BACKEND_SERVICE_URL: ${BACKEND_SERVICE_URL}
-      LABELING_STRATEGY: ${LABELING_STRATEGY}
-      EMBEDDING_LABEL_THRESHOLD: ${EMBEDDING_LABEL_THRESHOLD}
-      BM25_LABEL_THRESHOLD: ${BM25_LABEL_THRESHOLD}
-      CONTENT_EXTRACTION_METHOD: ${CONTENT_EXTRACTION_METHOD}
-      LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT}
-      MAX_CONCURRENT_BATCHES: ${MAX_CONCURRENT_BATCHES}
-      DOCLING_DEVICE: ${DOCLING_DEVICE}
-      DATAPREP_CHUNK_SIZE_PDF: ${DATAPREP_CHUNK_SIZE_PDF}
-      DATAPREP_CHUNK_SIZE_DOCX: ${DATAPREP_CHUNK_SIZE_DOCX}
-      DATAPREP_CHUNK_SIZE_XLSX: ${DATAPREP_CHUNK_SIZE_XLSX}
-      DATAPREP_CHUNK_SIZE_PPTX: ${DATAPREP_CHUNK_SIZE_PPTX}
-      DATAPREP_CHUNK_SIZE_HTML: ${DATAPREP_CHUNK_SIZE_HTML}
-      DATAPREP_CHUNK_SIZE_TXT: ${DATAPREP_CHUNK_SIZE_TXT}
-      DATAPREP_CHUNK_SIZE_MD: ${DATAPREP_CHUNK_SIZE_MD}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    networks:
-      - genieai_network
-    ipc: "host"
-    restart: "no"
-
-  retriever-arango-service:
-    build:
-      # Set the context to the root of the GENIE-AI repo
-      context: .
-      # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
-      args:
-        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
-        OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
-    image: genie-ai-retriever-arango:${OPEA_VERSION:-latest}
-    container_name: genie-ai-retriever-arango
-    depends_on:
-      arango-vector-db:
-        condition: service_started
-      embedding:
-        condition: service_started
-    ports:
-      - "${RETRIEVER_SERVICE_PORT}:${RETRIEVER_SERVICE_PORT}"
-    ipc: host
-    env_file:
-      - .env
-    environment:
-      RETRIEVER_COMPONENT_NAME: ${RETRIEVER_COMPONENT_NAME}
-      ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME}
-      VLLM_ENDPOINT: ${VLLM_ENDPOINT}
-      ARANGO_URL: ${ARANGO_URL}
-      TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
-    networks:
-      - genieai_network
-    restart: "no"
-
-  chatqna-xeon-backend-server:
-    build:
-      # Set the context to the root of the GENIE-AI repo
-      context: .
-      # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
-      args:
-        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
-        OPEA_REPO_URL: ${OPEA_EXAMPLES_URL}
-    image: genie-ai-chatqna-server:${OPEA_VERSION:-latest}
-    container_name: genie-ai-chatqna-server
-    working_dir: /app/ChatQnA
-    depends_on:
-      vllm:
-        condition: service_healthy
-      embedding:
-        condition: service_started
-      retriever-arango-service:
-        condition: service_started
-      reranker:
-        condition: service_started
-    ports:
-      - "${OPEA_PORT}:${OPEA_PORT}"
-    env_file:
-      - .env
-    environment:
-      CHATQNA_TYPE: ${CHATQNA_TYPE}
-      MEGA_SERVICE_HOST_IP: ${MEGA_SERVICE_HOST_IP}
-      EMBEDDING_SERVER_HOST_IP: ${EMBEDDING_SERVER_HOST_IP}
-      EMBEDDING_SERVER_PORT: ${EMBEDDING_SERVER_PORT}
-      RETRIEVER_SERVICE_HOST_IP: ${RETRIEVER_SERVICE_HOST_IP}
-      RETRIEVER_SERVICE_PORT: ${RETRIEVER_SERVICE_PORT}
-      RERANK_SERVER_HOST_IP: ${RERANK_SERVER_HOST_IP}
-      RERANK_SERVER_PORT: ${RERANK_SERVER_PORT}
-      LLM_SERVER_HOST_IP: ${LLM_SERVER_HOST_IP}
-      LLM_SERVER_PORT: ${LLM_SERVER_PORT}
-      CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT}
-      GUARDRAIL_SERVICE_HOST_IP: ${GUARDRAIL_SERVICE_HOST_IP}
-      GUARDRAIL_SERVICE_PORT: ${GUARDRAIL_SERVICE_PORT}
-      TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
-      TRANSLATION_SERVICE_PORT: ${VLLM_TRANSLATION_SERVICE_PORT}
-      DOC_REPO_URL: ${DOC_REPO_URL}
-      GET_AUTH_TOKEN_URL: ${GET_AUTH_TOKEN_URL}
-    networks:
-      - genieai_network
-    ipc: "host"
-    restart: "no"
-
-  chatqna-xeon-ui-server:
-    image: opea/chatqna-ui:latest
-    container_name: chatqna-xeon-ui-server
-    depends_on:
-      - chatqna-xeon-backend-server
-    ports:
-      - "${FRONTEND_SERVICE_PORT}:${FRONTEND_SERVICE_PORT}"
-    env_file:
-      - .env
-    environment:
-      UPLOAD_FILE_BASE_URL: http://localhost:6007/v1/dataprep/ingest
-    ipc: "host"
-    networks:
-      - genieai_network
-    restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173/"]
+      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/6666' || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 10
 
-  chatqna-xeon-nginx-server:
-    image: opea/nginx:latest
-    container_name: chatqna-xeon-nginx-server
-    depends_on:
-      chatqna-xeon-backend-server:
-        condition: service_started
-      chatqna-xeon-ui-server:
-        condition: service_healthy
-    ports:
-      - "${NGINX_PORT}:${NGINX_PORT}"
-    env_file:
-      - .env
-    environment:
-      FRONTEND_SERVICE_IP: ${FRONTEND_SERVICE_IP}
-      FRONTEND_SERVICE_PORT: ${FRONTEND_SERVICE_PORT}
-      BACKEND_SERVICE_NAME: ${BACKEND_SERVICE_NAME}
-      BACKEND_SERVICE_IP: ${BACKEND_SERVICE_IP}
-      BACKEND_SERVICE_PORT: ${BACKEND_SERVICE_PORT}
-      DATAPREP_SERVICE_IP: ${DATAPREP_SERVICE_IP}
-      DATAPREP_SERVICE_PORT: ${DATAPREP_SERVICE_PORT}
-    ipc: "host"
-    networks:
-      - genieai_network
-    restart: "no"
+  # ===========================================================================
+  # OPEA/GPU Stack (node.labels.gpu == true)
+  # ===========================================================================
 
   vllm:
-    container_name: vllm-vllm-2
+    profiles: [opea]
+    restart: unless-stopped
     image: vllm/vllm-openai:latest
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    ports:
-      - "${LLM_SERVER_PORT}:${LLM_SERVER_PORT}"
+    # Swarm: internal only - access via Kong or docker exec
+    # ports:
+    #   - "${LLM_SERVER_PORT:-8000}:8000"
     command: >
-      --model ${VLLM_LLM_MODEL_ID}
-      --gpu_memory_utilization ${VLLM_GPU_UTIL:-0.6}
-      --served-model-name ${VLLM_LLM_MODEL_ID}
-      --max_model_len ${VLLM_MAX_MODEL_LEN:-4096}
-      --max_num_seqs 1024
-      --kv-cache-dtype auto
-      --dtype=${VLLM_DTYPE:-auto}
+      --model ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.4}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --max_model_len ${VLLM_MAX_MODEL_LEN:-2048}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-64}
+      --dtype=${VLLM_DTYPE:-half}
+      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA
       - VLLM_USE_FLASHINFER_SAMPLER=0
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
-      - /root/.cache/huggingface:/root/.cache/huggingface
+      - hf_cache:/root/.cache/huggingface
     networks:
       - genieai_network
-    ipc: "host"
-    restart: "no"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 20
       start_period: 30s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   textgen:
-    container_name: llm-textgen
-    image: opea/llm-textgen:latest
+    profiles: [opea]
     depends_on:
-      vllm:
-        condition: service_healthy
+      - vllm
+    restart: unless-stopped
+    image: opea/llm-textgen:latest
     environment:
-      - LLM_ENDPOINT=${VLLM_ENDPOINT}
-      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID}
-    ports:
-      - "${TEXTGEN_PORT}:${TEXTGEN_PORT}"
-    ipc: "host"
+      - LLM_ENDPOINT=http://vllm:8000
+      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+    # Internal only
+    # ports:
+    #   - "9000:9000"
     networks:
       - genieai_network
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/health', timeout=3)\" || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   vllm-translation-guardrail:
-    container_name: vllm-vllm-translation-guardrail
+    profiles: [opea]
+    restart: unless-stopped
     image: vllm/vllm-openai:latest
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    ports:
-      - "${VLLM_TRANSLATION_SERVICE_PORT}:${VLLM_TRANSLATION_SERVICE_PORT}"
+    # Internal only
+    # ports:
+    #   - "9031:9031"
     command: >
-      --model ${VLLM_TRANSLATION_MODEL_ID}
-      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.3}
-      --served-model-name ${VLLM_TRANSLATION_MODEL_ID}
+      --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
+      --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
-      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-auto}
-      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
-      --port ${VLLM_TRANSLATION_SERVICE_PORT}
+      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-fp8}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-half}
+      --port ${VLLM_TRANSLATION_SERVICE_PORT:-9031}
       --no-enable-chunked-prefill
-      --max-num-seqs 16
+      --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA
-    depends_on:
-      vllm:
-        condition: service_healthy
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
-      - /root/.cache/huggingface:/root/.cache/huggingface
+      - hf_cache:/root/.cache/huggingface
     networks:
       - genieai_network
-    ipc: "host"
-    restart: "no"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9031/health"]
       interval: 10s
       timeout: 5s
       retries: 20
       start_period: 300s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   translation:
+    profiles: [opea]
+    depends_on:
+      - vllm-translation-guardrail
+    restart: unless-stopped
     image: opea/translation:latest
-    container_name: translation-microservice
     environment:
-      - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}  
-      - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
-    ports:
-      - "${TRANSLATION_SERVICE_PORT}:${TRANSLATION_SERVICE_PORT}"
-    ipc: "host"
+      - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
+      - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+    # Internal only
+    # ports:
+    #   - "8888:8888"
     networks:
       - genieai_network
-    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)\" || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   guardrail:
-    container_name: llm-guardrail
+    profiles: [opea]
+    depends_on:
+      - vllm-translation-guardrail
+    restart: unless-stopped
     image: opea/guardrails:latest
     environment:
-      - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
-      - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
-      - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
+      - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
+      - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       - GUARDRAILS_COMPONENT_NAME=OPEA_LLM_GUARD
-    ports:
-      - "${GUARDRAIL_SERVICE_PORT}:${GUARDRAIL_SERVICE_PORT}"
-    ipc: "host"
+    # Internal only
+    # ports:
+    #   - "${GUARDRAIL_SERVICE_PORT}:${GUARDRAIL_SERVICE_PORT}"
     networks:
       - genieai_network
-    restart: "no"
-  
-  tei:
-    image: ghcr.io/huggingface/text-embeddings-inference:latest
-    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
-    container_name: tei-embedding-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --auto-truncate"
-    runtime: nvidia
-    ports:
-      - "7000:80"
-    volumes:
-      - "${DATA_PATH:-./data}:/data"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9090/health', timeout=3)\" || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
     deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      replicas: 0
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
+
+  tei:
+    profiles: [opea]
+    restart: unless-stopped
+    image: ${TEI_EMBEDDING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-base-en-v1.5} --auto-truncate"
+    # Internal only
+    # ports:
+    #   - "${TEI_EMBEDDING_PORT:-7000}:80"
+    volumes:
+      - "${DATA_DIR:-./data}/huggingface:/data"
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=${RUST_BACKTRACE}
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
-    depends_on:
-      vllm-translation-guardrail:
-        condition: service_healthy
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
@@ -610,49 +713,61 @@ services:
       retries: 48
     networks:
       - genieai_network
-    restart: "no"
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   embedding:
-    container_name: embedding
-    image: opea/embedding:latest
+    profiles: [opea]
     depends_on:
-      tei:
-        condition: service_healthy
+      - tei
+    restart: unless-stopped
+    image: opea/embedding:latest
     environment:
-      - EMBEDDING_MODEL_ENDPOINT=${EMBEDDING_MODEL_ENDPOINT}
-      - TEI_EMBEDDING_ENDPOINT=${TEI_EMBEDDING_ENDPOINT}
-      - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID}
-    ports:
-      - "6000:6000"
-    ipc: "host"
+      - EMBEDDING_MODEL_ENDPOINT=http://tei:80
+      - TEI_EMBEDDING_ENDPOINT=http://tei:80
+      - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-BAAI/bge-base-en-v1.5}
+    # Internal only
+    # ports:
+    #   - "6000:6000"
     networks:
       - genieai_network
-    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6000/health', timeout=3)\" || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   tei_reranker:
-    image: ghcr.io/huggingface/text-embeddings-inference:latest
-    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
-    container_name: tei-reranker-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 32768 --max-concurrent-requests 256 --auto-truncate"
-    runtime: nvidia
-    ports:
-      - "7100:80"
+    profiles: [opea]
+    restart: unless-stopped
+    image: ${TEI_RERANKING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-cross-encoder/ms-marco-MiniLM-L-6-v2} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-1024} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-8} --auto-truncate"
+    # Internal only
+    # ports:
+    #   - "7100:80"
     volumes:
-      - "${DATA_PATH:-./data}:/data"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - "${DATA_DIR:-./data}/huggingface:/data"
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=1${RUST_BACKTRACE}
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
-    depends_on:
-      vllm-translation-guardrail:
-        condition: service_healthy
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
@@ -660,36 +775,286 @@ services:
       retries: 48
     networks:
       - genieai_network
-    restart: "no"
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   reranker:
+    profiles: [opea]
+    depends_on:
+      - tei_reranker
+    restart: unless-stopped
     build:
       context: .
-      dockerfile: ./genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
-      args:
-        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
-        OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
-    image: genie-ai-reranker:${OPEA_VERSION:-latest}
-    container_name: genie-ai-reranker
-    depends_on:
-      tei_reranker:
-        condition: service_healthy
-    env_file:
-      - .env
+      dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-reranker:latest
     environment:
-      - RERANKER_MODEL_ENDPOINT=${RERANKER_MODEL_ENDPOINT}
-      - TEI_RERANKING_ENDPOINT=${TEI_RERANKING_ENDPOINT}
-      - RERANK_COMPONENT_NAME=${RERANK_COMPONENT_NAME:-GENIE_TEI_RERANKING}
-      - RERANKING_STRATEGY=${RERANKING_STRATEGY}
-      - RERANKING_THRESHOLD=${RERANKING_THRESHOLD}
-    ports:
-      - "6100:8000"
-    ipc: "host"
+      - RERANKER_MODEL_ENDPOINT=http://tei_reranker:80
+      - TEI_RERANKING_ENDPOINT=http://tei_reranker:80
+      - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
+      - RERANKING_STRATEGY=${RERANKING_STRATEGY:-threshold}
+      - RERANKING_THRESHOLD=${RERANKING_THRESHOLD:-0.5}
+    # Internal only
+    # ports:
+    #   - "6100:8000"
     networks:
       - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
+
+  dataprep-arango-service:
+    profiles: [opea]
+    depends_on:
+      - arango-vector-db
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-dataprep-arango:${OPEA_VERSION:-latest}
+    # Internal only
+    # ports:
+    #   - "5000:5000"
+    environment:
+      DATAPREP_COMPONENT_NAME: GENIE_DATAPREP_ARANGODB
+      VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      VLLM_ENDPOINT: http://vllm:8000
+      TEI_EMBEDDING_ENDPOINT: http://tei:80
+      GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
+      ARANGO_URL: http://arango-vector-db:8529
+      ARANGO_DB: ${ARANGO_DB:-genie-ai}
+      ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
+      ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
+      DOCUMENT_REPOSITORY_URL: http://document-repository:3001
+      BACKEND_SERVICE_URL: http://backend:3000
+      LABELING_STRATEGY: ${LABELING_STRATEGY:-llm}
+      EMBEDDING_LABEL_THRESHOLD: ${EMBEDDING_LABEL_THRESHOLD:-0.75}
+      BM25_LABEL_THRESHOLD: ${BM25_LABEL_THRESHOLD:-2.00}
+      CONTENT_EXTRACTION_METHOD: ${CONTENT_EXTRACTION_METHOD:-docling}
+      DATAPREP_MAX_CONCURRENT_BATCHES: ${DATAPREP_MAX_CONCURRENT_BATCHES:-5}
+      DOCLING_DEVICE: ${DOCLING_DEVICE:-cpu}
+      DATAPREP_CHUNK_SIZE_PDF: ${DATAPREP_CHUNK_SIZE_PDF:-500}
+      DATAPREP_CHUNK_SIZE_DOCX: ${DATAPREP_CHUNK_SIZE_DOCX:-1000}
+      DATAPREP_CHUNK_SIZE_XLSX: ${DATAPREP_CHUNK_SIZE_XLSX:-1500}
+      DATAPREP_CHUNK_SIZE_PPTX: ${DATAPREP_CHUNK_SIZE_PPTX:-500}
+      DATAPREP_CHUNK_SIZE_HTML: ${DATAPREP_CHUNK_SIZE_HTML:-500}
+      DATAPREP_CHUNK_SIZE_TXT: ${DATAPREP_CHUNK_SIZE_TXT:-500}
+      DATAPREP_CHUNK_SIZE_MD: ${DATAPREP_CHUNK_SIZE_MD:-500}
+      LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
+
+  retriever-arango-service:
+    profiles: [opea]
+    depends_on:
+      - arango-vector-db
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-retriever-arango:${OPEA_VERSION:-latest}
+    # Internal only
+    # ports:
+    #   - "7025:7025"
+    environment:
+      # ArangoDB connection
+      ARANGO_URL: http://arango-vector-db:8529
+      ARANGO_DB: ${ARANGO_DB:-genie-ai}
+      ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
+      # Vector search tuning
+      RETRIEVER_COMPONENT_NAME: GENIE_RETRIEVER_ARANGODB
+      RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-4}
+      RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-20}
+      RETRIEVER_ARANGO_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_SCORE_THRESHOLD:-0.1}
+      RETRIEVER_ARANGO_DISTANCE_THRESHOLD: ${RETRIEVER_ARANGO_DISTANCE_THRESHOLD:-1}
+      RETRIEVER_ARANGO_LAMBDA_MULT: ${RETRIEVER_ARANGO_LAMBDA_MULT:-0.5}
+      RETRIEVER_ARANGO_SEARCH_START: ${RETRIEVER_ARANGO_SEARCH_START:-chunk}
+      RETRIEVER_ARANGO_SEARCH_MODE: ${RETRIEVER_ARANGO_SEARCH_MODE:-vector}
+      RETRIEVER_ARANGO_USE_APPROX_SEARCH: ${RETRIEVER_ARANGO_USE_APPROX_SEARCH:-false}
+      RETRIEVER_ARANGO_DISTANCE_STRATEGY: ${RETRIEVER_ARANGO_DISTANCE_STRATEGY:-COSINE}
+      RETRIEVER_ARANGO_NUM_CENTROIDS: ${RETRIEVER_ARANGO_NUM_CENTROIDS:-1}
+      RETRIEVER_ARANGO_FILTER_STRATEGY: ${RETRIEVER_ARANGO_FILTER_STRATEGY:-OR}
+      RETRIEVER_SUMMARIZER_ENABLED: ${RETRIEVER_SUMMARIZER_ENABLED:-false}
+      # Graph traversal
+      RETRIEVER_ARANGO_TRAVERSAL_ENABLED: ${RETRIEVER_ARANGO_TRAVERSAL_ENABLED:-false}
+      RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH:-2}
+      RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED:-3}
+      RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD: ${RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD:-0.5}
+      RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES: ${RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES:-1}
+      # AI services endpoints
+      VLLM_ENDPOINT: http://vllm:8000
+      TEI_EMBEDDING_ENDPOINT: http://tei:80
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
+
+  chatqna-xeon-backend-server:
+    profiles: [opea]
+    depends_on:
+      - embedding
+      - reranker
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-chatqna-server:${OPEA_VERSION:-latest}
+    working_dir: /app/ChatQnA
+    # Internal OPEA service - no host port needed
+    # ports:
+    #   - "${OPEA_PORT}:${OPEA_PORT}"
+    environment:
+      CHATQNA_TYPE: ${CHATQNA_TYPE:-ChatQnA}
+      MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
+      EMBEDDING_SERVER_HOST_IP: embedding
+      EMBEDDING_SERVER_PORT: 6000
+      EMBEDDING_SERVER_ENDPOINT: ${EMBEDDING_SERVER_ENDPOINT:-/v1/embeddings}
+      RETRIEVER_SERVICE_HOST_IP: retriever-arango-service
+      RETRIEVER_SERVICE_PORT: 7000
+      RERANK_SERVER_HOST_IP: reranker
+      RERANK_SERVER_PORT: 8000
+      LLM_SERVER_HOST_IP: vllm
+      LLM_SERVER_PORT: 8000
+      GUARDRAIL_SERVICE_HOST_IP: guardrail
+      GUARDRAIL_SERVICE_PORT: 9090
+      TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
+      TRANSLATION_SERVICE_PORT: 9031
+      DOC_REPO_URL: http://document-repository:3001
+      GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
+      CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
+      CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8888/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
+
+  # OPEA UI/Nginx - disabled by default via profiles: [opea] (compose up) / replicas: 0 (Swarm).
+  # Activate for OPEA debugging: compose up --profile opea / Swarm: change replicas to 1.
+  chatqna-xeon-ui-server:
+    profiles: [opea]
     restart: "no"
+    image: opea/chatqna-ui:latest
+    # Internal OPEA service - no host port needed
+    # ports:
+    #   - "${FRONTEND_SERVICE_PORT}:${FRONTEND_SERVICE_PORT}"
+    environment:
+      UPLOAD_FILE_BASE_URL: http://dataprep-arango-service:5000/v1/dataprep/ingest
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/5173' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      replicas: 0
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
+
+  chatqna-xeon-nginx-server:
+    profiles: [opea]
+    restart: "no"
+    image: opea/nginx:latest
+    # Internal OPEA service - no host port needed
+    # ports:
+    #   - "${NGINX_PORT}:${NGINX_PORT}"
+    environment:
+      FRONTEND_SERVICE_IP: chatqna-xeon-ui-server
+      FRONTEND_SERVICE_PORT: 5173
+      BACKEND_SERVICE_NAME: chatqna-xeon-backend-server
+      BACKEND_SERVICE_IP: chatqna-xeon-backend-server
+      BACKEND_SERVICE_PORT: 8888
+      DATAPREP_SERVICE_IP: dataprep-arango-service
+      DATAPREP_SERVICE_PORT: 5000
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/80' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 0
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
 networks:
   genieai_network:
-    name: genieai_mvp_genieai_network
-    driver: bridge
+    attachable: true

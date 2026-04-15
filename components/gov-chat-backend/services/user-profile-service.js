@@ -5,7 +5,7 @@ const fs = require('fs');
 const emailService = require('./email-service');
 const crypto = require('crypto');
 const authService = require('./auth-service');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, ensureCollection } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
 
@@ -38,6 +38,7 @@ class UserProfileService {
     }
     try {
       this.db = await this.dbService.getConnection('default');
+      await ensureCollection(this.db, 'users');
       this.users = this.db.collection('users');
       this.initialized = true;
       logger.info('UserProfileService database initialized');
@@ -782,6 +783,8 @@ class UserProfileService {
       logger.info('UserProfileService.user_files_deleted', { userId });
 
       try {
+        await ensureCollection(this.db, 'verificationTokens');
+        await ensureCollection(this.db, 'passwordResetTokens');
         const verificationTokens = this.db.collection('verificationTokens');
         const passwordResetTokens = this.db.collection('passwordResetTokens');
 
@@ -1114,6 +1117,7 @@ class UserProfileService {
       const userName = user.personalIdentification?.fullName || user.loginName || 'User';
 
       // Store the token in the verificationTokens collection
+      await ensureCollection(this.db, 'verificationTokens');
       const verificationTokens = this.db.collection('verificationTokens');
       const tokenDoc = {
         userId: `users/${user._key}`,

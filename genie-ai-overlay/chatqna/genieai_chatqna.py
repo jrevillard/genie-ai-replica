@@ -44,6 +44,7 @@ TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_TIMEOUT = int(os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180))  # Timeout in seconds for translation service (default: 3 minutes) 
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
+EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
@@ -59,7 +60,7 @@ RETRIEVER_K = int(os.getenv("RETRIEVER_ARANGO_K", 4))
 RETRIEVER_FETCH_K = int(os.getenv("RETRIEVER_ARANGO_FETCH_K", 20)) 
 RETRIEVER_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1)) 
 RETRIEVER_DISTANCE_THRESHOLD = int(os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", 1)) 
-RETRIEVER_TRAVERSAL_ENABLED = os.getenv("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", None)
+RETRIEVER_TRAVERSAL_ENABLED = os.getenv("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", "false")
 RETRIEVER_TRAVERSAL_MAX_DEPTH = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH", 2))
 RETRIEVER_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED", 3))
 RETRIEVER_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
@@ -78,9 +79,21 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max tok
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
-CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
-CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "true")
-CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", None)
+# Two-tier priority: ENV VAR (override) > Hardcoded default
+_CHATQNA_SYSTEM_DEFAULT = """You are a friendly and polite information assistant.
+
+Your task is to answer the user's latest question using only the content provided from the knowledge base.
+
+**Instructions:**
+- Do not invent or assume information
+- If the answer is not in the provided content, inform the user that the information is unavailable
+- Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses
+- Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested
+
+In line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided."""
+CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
+CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
+CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -430,7 +443,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
 
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
-        inputs["inputs"] = inputs["text"]
+        inputs["input"] = inputs["text"]
         del inputs["text"]
 
 
@@ -571,8 +584,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
             logger.debug(f'Raw output of the embedding\n {data}\n')
+        # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
+        if isinstance(data, dict) and "data" in data:
+            data = data["data"]
         assert isinstance(data, list)
-        next_data = {"text": inputs["inputs"], "embedding": data[0]}
+        next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
@@ -862,7 +878,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -905,7 +921,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -938,7 +954,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -984,7 +1000,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -1034,7 +1050,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )

@@ -13,7 +13,7 @@ const DEFAULT_BATCHES = 5;
 const intraOpNumThreads = parseInt(process.env.TRANSLATION_THREADS, 10) || DEFAULT_THREADS;
 const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFAULT_BATCHES;
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
-const translationBackend = process.env.TRANSLATION_BACKEND || 'cpu'; // Default to CPU for backward compatibility
+const translationBackend = process.env.TRANSLATION_BACKEND || 'auto'; // Default to auto (tries GPU, falls back to CPU)
 
 // --- Get Redis cache settings from env ---
 const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';

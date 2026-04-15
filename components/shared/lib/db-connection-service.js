@@ -407,6 +407,26 @@ class DatabaseService {
 
             db = new Database(connectionConfig);
 
+            // Ensure database exists before connecting (first deployment)
+            const systemDb = new Database({
+                url: connectionConfig.url,
+                auth: connectionConfig.auth,
+            });
+            try {
+                await systemDb.login(connectionConfig.auth.username, connectionConfig.auth.password);
+                const dbExists = (await systemDb.listDatabases()).includes(connectionConfig.databaseName);
+                if (!dbExists) {
+                    logger.info(`[DB_CONNECTION] Database '${connectionConfig.databaseName}' does not exist, creating...`);
+                    await systemDb.createDatabase(connectionConfig.databaseName);
+                    logger.info(`[DB_CONNECTION] Database '${connectionConfig.databaseName}' created successfully`);
+                }
+                systemDb.close();
+            } catch (error) {
+                logger.error(`[DB_CONNECTION] Failed to ensure database exists: ${error.message}`);
+                systemDb.close();
+                throw error;
+            }
+
             await retry(async () => {
                 try {
                     logger.info(`[DB_CONNECTION] Attempting ArangoDB login for ${name}`);

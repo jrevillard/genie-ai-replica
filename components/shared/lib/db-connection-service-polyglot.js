@@ -67,7 +67,7 @@ class DatabaseService {
             const url = process.env.ARANGO_URL || 'http://arango-vector-db:8529';
             const databaseName = process.env.ARANGO_DB || 'node-services';
             const username = process.env.ARANGO_USER || 'root';
-            const password = process.env.ARANGO_PASSWORD || 'test';
+            const password = process.env.ARANGO_PASSWORD;
 
             logger.info(`process.env.ARANGO_URL:` + process.env.ARANGO_URL);
             logger.info(`process.env.ARANGO_DB:` + process.env.ARANGO_DB);

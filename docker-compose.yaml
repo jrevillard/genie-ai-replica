@@ -650,8 +650,10 @@ services:
       --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    depends_on:
+      vllm:
+        condition: service_healthy
     volumes:
       - hf_cache:/root/.cache/huggingface
     networks:

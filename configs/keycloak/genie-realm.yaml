@@ -25,7 +25,7 @@ supportedLocales:
   - pt
   - ru
   - th
-  - zh
+  - zh-Hans
 accessTokenLifespan: $(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)
 
 # Realm roles (must be defined before users that reference them)

@@ -634,10 +634,10 @@ services:
   vllm-translation-guardrail:
     profiles: [opea]
     restart: unless-stopped
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.10.0
     # Internal only
     # ports:
-    #   - "9031:9031"
+    #   - "${VLLM_TRANSLATION_SERVICE_PORT:-9031}:${VLLM_TRANSLATION_SERVICE_PORT:-9031}"
     command: >
       --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}

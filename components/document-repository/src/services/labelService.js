@@ -127,7 +127,7 @@ class LabelService {
         if (err.errorNum === 1202) {
           throw new Error(`Parent label with key ${labelData.parentId} not found.`);
         }
-        throw err.message; 
+        throw err;
       }
     }
 

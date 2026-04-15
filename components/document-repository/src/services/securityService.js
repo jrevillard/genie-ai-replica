@@ -26,7 +26,7 @@ class SecurityService {
     
     this.clamscan = null;
     this.isInitialized = false;
-    this.maxBufferSize = 100 * 1024 * 1024; // 100MB
+    this.maxBufferSize = 50 * 1024 * 1024; // 50MB — must match MAX_FILE_SIZE
   }
 
   async getDb() {
@@ -56,9 +56,10 @@ class SecurityService {
 
     logger.debug(`[SECURITY-SERVICE] Initializing...`);
     try {
-      if (appConfig.virusScanning) 
+      if (appConfig.virusScanning) {
         logger.debug(`[SECURITY-SERVICE] Initializing ClamAV scanner`);
         this.clamscan = await new NodeClam().init(this.clamAVOptions);
+      }
     } catch (error) {
       throw new Error(`Failed to initialize ClamAV: ${error.message}`);
     }
@@ -97,6 +98,11 @@ class SecurityService {
         throw new Error(`Buffer size exceeds maximum allowed size of ${this.maxBufferSize} bytes`);
       }
       await this.ensureInitialized();
+
+      if (!this.clamscan) {
+        logger.debug('[SECURITY-SERVICE] Virus scanning disabled, skipping scan');
+        return { isInfected: false };
+      }
 
       // Scan the buffer using stream scanning
       return await this.clamscan.scanStream(this._convertToStream(buffer));

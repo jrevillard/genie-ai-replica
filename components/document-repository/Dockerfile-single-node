@@ -34,8 +34,6 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm install --verbose --fetch-timeout 600000 || \
     npm install --prefer-offline || \
     npm ci
-RUN ls -la /app/node_modules | head -n 20  # List first 20 items in node_modules (should include 'dotenv')
-RUN npm list dotenv  # Confirm dotenv is installed
 
 # Copy app source
 COPY document-repository/src/ ./src/
@@ -47,11 +45,9 @@ COPY shared/lib/ /app/src/shared-lib/
 # Create directories for uploads and logs
 RUN mkdir -p uploads logs
 
-# Debug: List contents of directories
-RUN ls -la /app && \
-    ls -la /app/src/shared-lib
-RUN [ -f /app/src/shared-lib/logger.js ] || { echo "logger.js missing!"; exit 1; }
-RUN [ -f /app/src/shared-lib/db-connection-service.js ] || { echo "db-connection-service.js missing!"; exit 1; }
+# Verify shared-lib was copied correctly
+RUN [ -f /app/src/shared-lib/logger.js ] && [ -f /app/src/shared-lib/db-connection-service.js ] || \
+    { echo "shared-lib files missing!"; exit 1; }
 
 # Expose the port the app runs on
 EXPOSE 3001 3310
@@ -65,7 +61,7 @@ ENV ARANGO_DB=node-services
 ENV ARANGO_USER=root
 ENV ARANGO_PASSWORD=$ARANGO_PASSWORD
 ENV UPLOAD_DIR=./uploads
-ENV MAX_FILE_SIZE=524288000
+ENV MAX_FILE_SIZE=52428800
 ENV MAX_FILES_UPLOAD=10
 
 # Start the application

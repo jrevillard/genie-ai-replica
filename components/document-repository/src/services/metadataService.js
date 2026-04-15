@@ -9,7 +9,7 @@ const fs = require('fs').promises; // For async file operations
 const path = require('path');
 const mime = require('mime-types'); // For MIME type detection
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
-const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount, getFileHash } = require('../utils/fileUtils'); // Utility to ensure directory exists
+const { getFileHash } = require('../utils/fileUtils');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
 
@@ -26,7 +26,7 @@ async function extractMetadata(filePath, fileInfo = {}) {
         file_hash: fileInfo.file_hash || await getFileHash(filePath),
         labels: fileInfo.labels || [],
         author: fileInfo.author || '',
-        upload_date: fileInfo.upload_date || new Date().toISOString(),
+        uploaded_date: fileInfo.uploaded_date || new Date().toISOString(),
         create_date: fileInfo.create_date || stats.birthtime.toISOString(),
         crawl_date: fileInfo.crawl_date || '',
         source_url: fileInfo.source_url || '',
@@ -56,16 +56,16 @@ class MetadataService {
             // Save metadata to ArangoDB
             const db = await this.getDb();
             await db.collection('files').save(metadata);
-            console.log(`Metadata for ${filePath} added successfully.`);
+            logger.info(`Metadata for ${filePath} added successfully.`);
             return metadata; // Return the saved metadata
         } catch (error) {
-            console.error(`Failed to add metadata for ${filePath}: ${error.message}`);
+            logger.error(`Failed to add metadata for ${filePath}: ${error.message}`);
             throw error;
         }
     }
 
     // 2. Search/query metadata (by filename, MIME type, date range, etc.) by scanning all *_metadata.json files in uploads directory
-    async searchMetadata(file_name, file_type, upload_date_from, upload_date_to, create_date_from, create_date_to, labels, author, status, language) {
+    async searchMetadata(file_name, file_type, uploaded_date_from, uploaded_date_to, create_date_from, create_date_to, labels, author, status, language) {
         try {
             const db = await this.getDb();
             let query = `FOR file IN files`;
@@ -80,13 +80,13 @@ class MetadataService {
                 filters.push('file.file_type == @file_type');
                 bindVars.file_type = file_type;
             }
-            if (upload_date_from) {
-                filters.push('file.upload_date >= @upload_date_from');
-                bindVars.upload_date_from = upload_date_from;
+            if (uploaded_date_from) {
+                filters.push('file.uploaded_date >= @uploaded_date_from');
+                bindVars.uploaded_date_from = uploaded_date_from;
             }
-            if (upload_date_to) {
-                filters.push('file.upload_date <= @upload_date_to');
-                bindVars.upload_date_to = upload_date_to;
+            if (uploaded_date_to) {
+                filters.push('file.uploaded_date <= @uploaded_date_to');
+                bindVars.uploaded_date_to = uploaded_date_to;
             }
             if (create_date_from) {
                 filters.push('file.create_date >= @create_date_from');
@@ -116,14 +116,14 @@ class MetadataService {
             if (filters.length > 0) { // Only add FILTER clause if there are filters
                 query += ' FILTER ' + filters.join(' AND ');
             }
-            query += ' SORT file.upload_date DESC RETURN file';
+            query += ' SORT file.uploaded_date DESC RETURN file';
 
             logger.debug(`Searching metadata with query: ${query} and bindVars: ${JSON.stringify(bindVars)}`);
 
             const cursor = await db.query(query, bindVars);
             return await cursor.all();
         } catch (error) {
-            console.error(`Failed to search metadata: ${error.message}`);
+            logger.error(`Failed to search metadata: ${error.message}`);
             throw error;
         }
     }
@@ -138,7 +138,7 @@ class MetadataService {
             );
             return await cursor.next() || null; // Return the first matching metadata
         } catch (error) {
-            console.error(`Failed to get metadata by ID: ${error.message}`);
+            logger.error(`Failed to get metadata by ID: ${error.message}`);
             throw error;
         }
     }
@@ -159,7 +159,7 @@ class MetadataService {
             await db.collection('files').remove(metadata._key);
             return true;
         } catch (error) {
-            console.error(`Failed to delete metadata: ${error.message}`);
+            logger.error(`Failed to delete metadata: ${error.message}`);
             throw error;
         }
     }
@@ -206,10 +206,10 @@ class MetadataService {
             // Update the metadata in the database
             await db.collection('files').update(metadata._key, updateObj);
             const updated = await db.collection('files').document(metadata._key);
-            console.log(`Metadata (dataprep part) for file_id ${file_id} updated successfully.`);
+            logger.info(`Metadata (dataprep part) for file_id ${file_id} updated successfully.`);
             return updated;
         } catch (error) {
-            console.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
+            logger.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
             throw error;
         }
     }

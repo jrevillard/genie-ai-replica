@@ -780,30 +780,25 @@ class FileService {
    */
   async searchFiles(query, options = {}) {
     try {
-      const { limit = 10, category, mimeType } = options;
+      const { limit = 10, mimeType } = options;
 
-      // Build search query
+      // Build search query against actual schema fields
       let searchQuery = `
         FOR file IN files
-        FILTER CONTAINS(LOWER(file.originalName), LOWER(@query)) 
-            OR CONTAINS(LOWER(file.description), LOWER(@query))
-            OR CONTAINS(LOWER(file.metadata.content), LOWER(@query))
+        FILTER (CONTAINS(LOWER(file.file_name), LOWER(@query))
+            OR CONTAINS(LOWER(file.source_url), LOWER(@query))
+            OR CONTAINS(LOWER(file.author), LOWER(@query)))
       `;
 
       const bindVars = { query };
 
-      // Add additional filters
-      if (category) {
-        searchQuery += ' AND file.category == @category';
-        bindVars.category = category;
-      }
       if (mimeType) {
-        searchQuery += ' AND file.mimeType == @mimeType';
+        searchQuery += ' AND file.file_type == @mimeType';
         bindVars.mimeType = mimeType;
       }
 
-      searchQuery += ' SORT BM25(file) DESC';
-      searchQuery += ` LIMIT ${limit}`;
+      searchQuery += ' SORT file.file_id DESC';
+      searchQuery += ` LIMIT ${parseInt(limit, 10)}`;
       searchQuery += ' RETURN file';
 
       // Execute search
@@ -828,8 +823,8 @@ class FileService {
       const db = await this.getDb();
       const stats = await db.query(`
         RETURN {
-          totalFiles: LENGTH(files),
-          totalSize: SUM(files[*].size),
+          totalFiles: COUNT(FOR file IN files RETURN 1),
+          totalSize: SUM(FOR file IN files RETURN file.file_size || 0),
           filesByType: (
             FOR file IN files
             COLLECT mimeType = file.file_type WITH COUNT INTO count

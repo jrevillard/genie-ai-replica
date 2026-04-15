@@ -159,7 +159,7 @@ app.use('/uploads', express.static(uploadDir, {
 
 // 404 handler for undefined routes
 app.use('*', (req, res) => {
-  console.log('Registered routes:', app._router.stack);
+  logger.warn(`Route not found: ${req.originalUrl}`);
 
   const availableRoutes = app._router.stack
     .filter(r => r.route)

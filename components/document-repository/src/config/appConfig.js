@@ -37,9 +37,10 @@ const config = {
       'application/vnd.ms-excel', // excel files .xls
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // excel files .xlsx
       'text/markdown',  // markdown files .md, .markdown
+      'text/plain',  // text files .txt (also sent by some browsers for .md)
       'text/html',   // html files .html
-      'text/plain',  // text files .txt
-      'application/octet-stream' // generic binary files - temporary adding it to solve docx, xlsx, md upload issues
+      'application/zip', // browsers sometimes report .docx/.xlsx as zip
+      'application/x-zip-compressed' // Windows browsers sometimes report Office files as this
     ],
     allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
     requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec

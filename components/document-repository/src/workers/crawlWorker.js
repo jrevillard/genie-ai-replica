@@ -271,14 +271,14 @@ const processJob = async (job, db) => {
         storage_path: @storagePath,
         file_size: @fileSize,
         file_hash: @fileHash,
-        upload_date: @uploadDate
+        uploaded_date: @uploadedDate
       } IN files
     `, {
       fileId: fileId,
       storagePath: storagePath,
       fileSize: stats.size,
       fileHash: fileHash,
-      uploadDate: new Date().toISOString()
+      uploadedDate: new Date().toISOString()
     });
 
     await db.collection('crawl_job').update(job._key, {
@@ -307,8 +307,8 @@ const processJob = async (job, db) => {
             const fileDb = await dbService.getConnection('files');
             await fileDb.query(`
                 FOR f IN files FILTER f.file_id == @fileId
-                UPDATE f WITH { storage_path: @storagePath, file_size: @fileSize, upload_date: @uploadDate } IN files
-            `, { fileId, storagePath, fileSize: stats.size, uploadDate: new Date().toISOString() });
+                UPDATE f WITH { storage_path: @storagePath, file_size: @fileSize, uploaded_date: @uploadedDate } IN files
+            `, { fileId, storagePath, fileSize: stats.size, uploadedDate: new Date().toISOString() });
 
             await db.collection('crawl_job').update(job._key, {
                 status: 'Succeeded',

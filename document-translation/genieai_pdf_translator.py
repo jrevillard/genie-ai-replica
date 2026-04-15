@@ -202,7 +202,8 @@ def attempt_llm_call(text: str) -> str:
                 "model": VLLM_MODEL,
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": 4096
+                "max_tokens": 2048,
+                "repetition_penalty": 1.2
             }
             endpoint = VLLM_COMPLETIONS_ENDPOINT
         else:

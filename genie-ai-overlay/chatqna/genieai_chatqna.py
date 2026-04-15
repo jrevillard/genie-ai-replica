@@ -1158,7 +1158,8 @@ class ChatQnAService:
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": 4096
+                "max_tokens": 2048,
+                "repetition_penalty": 1.2
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:
@@ -1258,7 +1259,8 @@ class ChatQnAService:
                 "model": TRANSLATION_MODEL_ID,
                 "prompt": prompt,
                 "temperature": 0.0,
-                "max_tokens": 4096
+                "max_tokens": 2048,
+                "repetition_penalty": 1.2
             }
             url = TRANSLATION_COMPLETIONS_URL
         else:

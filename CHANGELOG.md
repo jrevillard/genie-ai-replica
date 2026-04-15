@@ -137,6 +137,14 @@ Changes across `main`, `vue-app-cleanup`, `backend-node-cleanup`, `document-repo
 - Fixed stale comment in `mimeTypeValidator.js` (#485) (`document-repository-cleanup`)
 - Fixed 404 handler — replaced console.log route dump with structured logger (#473) (`document-repository-cleanup`)
 - Fixed Spanish responses in single-message mode when English is selected — include language in payload and handle string-type messages in ChatQnA (#579) (`sprint-21-bug-fixes`)
+- Fixed wrong i18n key in SatisfactionHeatmap and removed restrictive locale enum (#580) (`sprint-21-bug-fixes`)
+
+### Changed
+
+- Translation pipeline now supports both `google/gemma-3-*` (generic LLM translation) and `google/translategemma-4b-it` (purpose-built translation with Sesotho support) — model auto-detected from `VLLM_TRANSLATION_MODEL_ID` env var, no code changes needed to switch (#581) (`sprint-21-bug-fixes`)
+- ChatQnA translation now calls vLLM directly (bypassing OPEA translation proxy) when `VLLM_TRANSLATION_ENDPOINT` is set (#581) (`sprint-21-bug-fixes`)
+- Pinned `vllm-translation-guardrail` to v0.10.0 — the only version that loads TranslateGemma-4b-it correctly (#581) (`sprint-21-bug-fixes`)
+- TranslateGemma uses `/v1/completions` API with manually applied chat template to bypass vLLM v0.10.0 bug that normalizes structured content before Jinja2 rendering (#581) (`sprint-21-bug-fixes`)
 
 ---
 

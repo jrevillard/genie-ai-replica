@@ -739,6 +739,10 @@ async function initializeServices() {
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
 
+    // Initialize user provisioning schema (indexes, legacy cleanup)
+    const userProvisioningService = require('./services/user-provisioning-service');
+    await userProvisioningService.initialize();
+
     logger.info('Constructing service map');
     const serviceMap = {
       serviceCategoryService: { instance: serviceCategoryService, name: 'ServiceCategoryService' },

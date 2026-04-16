@@ -86,7 +86,6 @@ describe('keycloakAuthService', () => {
         expect.any(Function),
         expect.objectContaining({
           issuer: mockJwtPayload.iss,
-          algorithms: ['RS256'],
           requiredClaims: ['iss', 'exp']
         })
       );

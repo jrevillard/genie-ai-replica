@@ -17,7 +17,12 @@ jest.mock('../shared-lib', () => ({
   dbService: {
     getConnection: (...args) => mockGetConnection(...args)
   },
-  ensureCollection: jest.fn().mockResolvedValue({ name: 'users' })
+  ensureCollection: jest.fn().mockResolvedValue({
+    name: 'users',
+    ensureIndex: jest.fn().mockResolvedValue({ id: 'idx-1' }),
+    indexes: jest.fn().mockResolvedValue([]),
+    dropIndex: jest.fn().mockResolvedValue()
+  })
 }), { virtual: true });
 
 // Mock arangojs aql template tag
@@ -39,10 +44,67 @@ describe('userProvisioningService', () => {
     mockQuery.mockReset();
     mockCursor.next.mockReset();
     mockGetConnection.mockResolvedValue(mockDb);
+    userProvisioningService._reset();
     // Default: first query (soft-delete check) returns empty, second (upsert) returns user
     mockQuery
       .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
       .mockResolvedValue(mockCursor); // upsert: returns { new, old }
+  });
+
+  describe('initialize', () => {
+    it('should create iss_sub unique index and email index', async () => {
+      const { ensureCollection } = require('../shared-lib');
+      const mockCollection = await ensureCollection();
+
+      await userProvisioningService.initialize();
+
+      expect(ensureCollection).toHaveBeenCalledWith(expect.any(Object), 'users');
+      expect(mockCollection.ensureIndex).toHaveBeenCalledWith({
+        type: 'persistent', fields: ['iss_sub'], unique: true, sparse: true
+      });
+      expect(mockCollection.ensureIndex).toHaveBeenCalledWith({
+        type: 'persistent', fields: ['email'], unique: false, sparse: true
+      });
+    });
+
+    it('should drop legacy unique email index if present', async () => {
+      const { ensureCollection } = require('../shared-lib');
+      const mockCollection = await ensureCollection();
+      mockCollection.indexes.mockResolvedValue([
+        { type: 'persistent', fields: ['email'], unique: true, id: 'legacy-email-idx', name: 'idx_email_unique' }
+      ]);
+
+      await userProvisioningService.initialize();
+
+      expect(mockCollection.dropIndex).toHaveBeenCalledWith('legacy-email-idx');
+    });
+
+    it('should not drop email index if it is non-unique', async () => {
+      userProvisioningService._reset();
+      const { ensureCollection } = require('../shared-lib');
+      ensureCollection.mockClear();
+      const mockCollection = await ensureCollection();
+      mockCollection.dropIndex.mockClear();
+      mockCollection.indexes.mockResolvedValue([
+        { type: 'persistent', fields: ['email'], unique: false, id: 'email-idx', name: 'idx_email' }
+      ]);
+
+      await userProvisioningService.initialize();
+
+      expect(mockCollection.dropIndex).not.toHaveBeenCalled();
+    });
+
+    it('should run only once even when called multiple times', async () => {
+      userProvisioningService._reset();
+      const { ensureCollection } = require('../shared-lib');
+      ensureCollection.mockClear();
+
+      await userProvisioningService.initialize();
+      await userProvisioningService.initialize();
+      await userProvisioningService.initialize();
+
+      expect(ensureCollection).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('provisionUser', () => {
@@ -536,6 +598,7 @@ describe('userProvisioningService', () => {
       mockQuery.mockReset();
       mockCursor.next.mockReset();
       mockGetConnection.mockResolvedValue(mockDb);
+      userProvisioningService._reset();
       // Default: query returns a deleted user
       mockQuery.mockResolvedValue(mockCursor);
       mockCursor.next.mockResolvedValue({ _key: 'users/123', deleted: true });

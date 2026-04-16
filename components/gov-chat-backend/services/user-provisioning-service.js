@@ -33,7 +33,50 @@ function evictExpired() {
   }
 }
 
+let _initialized = false;
+
 const userProvisioningService = {
+
+  /**
+   * Clear cache and reset initialization flag.
+   * For testing only.
+   */
+  _reset() {
+    _cache.clear();
+    _locks.clear();
+    _initialized = false;
+  },
+
+  /**
+   * One-time schema initialization — ensures indexes and drops legacy indexes.
+   * Called once at application startup from initializeServices().
+   */
+  async initialize() {
+    if (_initialized) return;
+    const db = await dbService.getConnection('default');
+    const usersCollection = await ensureCollection(db, 'users');
+
+    await usersCollection.ensureIndex({ type: 'persistent', fields: ['iss_sub'], unique: true, sparse: true });
+    await usersCollection.ensureIndex({ type: 'persistent', fields: ['email'], unique: false, sparse: true });
+
+    // Drop legacy unique email index from pre-Keycloak auth
+    try {
+      const indexes = await usersCollection.indexes();
+      const legacyIdx = indexes.find(
+        idx => idx.type === 'persistent' && idx.fields.length === 1 &&
+          idx.fields[0] === 'email' && idx.unique === true
+      );
+      if (legacyIdx) {
+        logger.info(`[UserProvisioning] Dropping legacy unique email index "${legacyIdx.name}"`);
+        await usersCollection.dropIndex(legacyIdx.id);
+      }
+    } catch (err) {
+      logger.warn(`[UserProvisioning] Could not check/drop legacy email index: ${err.message}`);
+    }
+
+    _initialized = true;
+    logger.info('[UserProvisioning] Schema initialization complete');
+  },
 
   /**
    * Provision or update a user from a verified JWT payload
@@ -74,7 +117,6 @@ const userProvisioningService = {
   async _doProvision(decodedToken) {
     const issSub = decodedToken.iss_sub;
     const db = await dbService.getConnection('default');
-    await ensureCollection(db, 'users');
 
     const now = new Date().toISOString();
 

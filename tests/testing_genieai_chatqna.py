@@ -124,22 +124,18 @@ class GenieUserProfileClient:
         self._token = token
 
 
-    async def get_user_profile(self, user_id: str):
+    async def get_user_profile(self):
         """
         Fetches the sanitized user profile from the backend for context enrichment.
-        Target: GET /api/users/{userId}/context
+        Target: GET /api/me/context
         Auth: Authorization Bearer token (forwarded from incoming request)
         """
-        if not user_id:
-            logger.warning("get_user_profile called with empty user_id")
-            return None
-
         if not self._token:
             logger.warning("Bearer token not set, skipping profile fetch")
             return None
 
         # Construct URL
-        url = f"{BACKEND_SERVICE_URL}/api/users/{user_id}/context"
+        url = f"{BACKEND_SERVICE_URL}/api/me/context"
 
         # Prepare Headers
         headers = {
@@ -153,12 +149,12 @@ class GenieUserProfileClient:
 
                     if response.status == 200:
                         profile_data = await response.json()
-                        logger.info(f"Successfully retrieved profile for user {user_id}")
+                        logger.info(f"Successfully retrieved user profile")
 
                         return profile_data
 
                     elif response.status == 404:
-                        logger.warning(f"User profile not found for ID {user_id}")
+                        logger.warning(f"User profile not found")
                         return None
 
                     else:
@@ -1113,14 +1109,12 @@ class ChatQnAService:
         # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
         logger.info(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")
 
-        user_id_header = data.get("user_id")
         user_details = {}
 
-        if user_id_header:
-            try: 
-                user_details = await self.user_profile_client.get_user_profile(user_id_header)
-            except Exception as e:
-                logger.error(f"USER PROFILE ERROR: {e}")
+        try:
+            user_details = await self.user_profile_client.get_user_profile()
+        except Exception as e:
+            logger.error(f"USER PROFILE ERROR: {e}")
 
         # -----------------------------------------------
 

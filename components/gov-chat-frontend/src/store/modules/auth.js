@@ -14,6 +14,17 @@ function mapOidcUserToState(oidcUser) {
   }
 
   const profile = oidcUser.profile;
+
+  // realm_access.roles lives in the access token, not the ID token.
+  const accessTokenClaims = keycloakAuthService.getAccessTokenClaims();
+  if (accessTokenClaims && !accessTokenClaims.realm_access) {
+    console.warn('[Auth Store] No realm_access in access token — "roles" scope may not be requested in OIDC config');
+  }
+  const roles = accessTokenClaims?.realm_access?.roles || [];
+  if (roles.length === 0 && accessTokenClaims?.realm_access) {
+    console.warn('[Auth Store] User has no realm roles — every user should have at least the "user" role assigned in Keycloak');
+  }
+
   return {
     iss_sub: `${profile.iss}#${profile.sub}`,
     sub: profile.sub,
@@ -21,7 +32,7 @@ function mapOidcUserToState(oidcUser) {
     email: profile.email || null,
     name: profile.name || profile.preferred_username || null,
     preferred_username: profile.preferred_username || null,
-    roles: profile.realm_access?.roles || []
+    roles
   };
 }
 

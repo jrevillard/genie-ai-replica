@@ -6,6 +6,7 @@
  */
 
 import { UserManager } from 'oidc-client-ts';
+import { jwtDecode } from 'jwt-decode';
 import oidcConfig from '@/config/oidcConfig';
 
 let userManager = null;
@@ -179,6 +180,22 @@ function removeAccessTokenUpdatedCallback(callback) {
 }
 
 /**
+ * Decode claims from the current access token.
+ * Uses jwt-decode (same library used internally by oidc-client-ts).
+ * @returns {Object|null} Decoded JWT claims or null
+ */
+function getAccessTokenClaims() {
+  const token = currentUser?.access_token;
+  if (!token) return null;
+  try {
+    return jwtDecode(token);
+  } catch (error) {
+    console.warn('[KeycloakAuth] Failed to decode access token claims:', error.message);
+    return null;
+  }
+}
+
+/**
  * Get the internal UserManager (for advanced usage)
  * @returns {UserManager}
  */
@@ -193,6 +210,7 @@ export default {
   logout,
   getUser,
   getAccessToken,
+  getAccessTokenClaims,
   isAuthenticated,
   signinSilent,
   onAccessTokenUpdated,

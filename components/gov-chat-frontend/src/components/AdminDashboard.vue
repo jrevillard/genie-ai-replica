@@ -1721,7 +1721,7 @@ export default {
       const keycloakUrl = window.location.origin + '/auth/admin';
       // Extract realm from runtime OIDC config (authority = "https://host/auth/realms/{realm}")
       const realm = (oidcConfig.authority.match(/\/realms\/([^/]+)$/)||[])[1] || 'genie';
-      return `${keycloakUrl}/${realm}/console/${realm}/users`;
+      return `${keycloakUrl}/${realm}/console/#/${realm}/users`;
     },
 
     // Test if there are unsaved changes
@@ -2466,13 +2466,13 @@ export default {
 
     /**
      * Build the admin console URL for managing a specific user.
-     * Keycloak 26+ admin console URL format:
-     *   {base}/admin/{realm}/console/{realm}/users/{userId}
+     * Keycloak 26+ admin console URL format (hash-based SPA):
+     *   {base}/admin/{realm}/console/#/{realm}/users/{userId}/settings
      * Falls back to the generic user list if the Keycloak user ID (sub) is unavailable.
      */
     getUserManageUrl(user) {
       if (user.sub) {
-        return `${this.keycloakAdminUrl}/${user.sub}`;
+        return `${this.keycloakAdminUrl}/${user.sub}/settings`;
       }
       return this.keycloakAdminUrl;
     },

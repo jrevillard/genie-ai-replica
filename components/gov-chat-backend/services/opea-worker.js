@@ -7,9 +7,9 @@ const https = require('https');
  * OPEA Worker Thread
  *
  * Service-to-Service Authentication:
- * - User identity is passed via X-User-Id, X-User-Roles, X-Issuer headers (injected by middleware)
- * - User's Bearer token (Authorization header) is forwarded for defense-in-depth JWKS validation
+ * - User's Bearer token (Authorization header) is forwarded for JWKS validation
  *   by downstream services (ChatQnA, document-repository)
+ * - Each service validates the token independently against Keycloak JWKS
  */
 
 // Dedicated HTTP Agents to prevent socket starvation on the main pool

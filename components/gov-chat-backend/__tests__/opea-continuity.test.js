@@ -6,7 +6,6 @@
  * Covers:
  * - OPEA payload user_id uses URL-safe _key (not composite iss_sub)
  * - Query route forwards Authorization Bearer token to OPEA
- * - X-User-Id header still uses composite key (unchanged, for audit)
  * - Fallback to queryData.userId when not authenticated
  */
 
@@ -34,7 +33,7 @@ jest.mock('../services/user-provisioning-service', () => ({
   provisionUser: (...args) => mockProvisionUser(...args)
 }));
 
-const { keycloakAuthMiddleware, buildUserHeaders, isPublicRoute } = require('../middleware/keycloak-auth-middleware');
+const { keycloakAuthMiddleware, isPublicRoute } = require('../middleware/keycloak-auth-middleware');
 const { mockJwtPayload } = require('../test-fixtures/mockJwtPayload');
 
 describe('Story 2-10: OPEA Continuity', () => {
@@ -114,68 +113,8 @@ describe('Story 2-10: OPEA Continuity', () => {
     });
   });
 
-  describe('X-User-Id header still uses composite key (unchanged for audit)', () => {
-    it('should use composite {iss}#{sub} for X-User-Id header', async () => {
-      req.headers.authorization = 'Bearer valid-token';
-      const decodedPayload = {
-        ...mockJwtPayload,
-        sub: 'user-uuid-789',
-        iss: 'http://localhost:8080/realms/genie'
-      };
-      mockVerifyToken.mockResolvedValue(decodedPayload);
-      mockProvisionUser.mockResolvedValue({
-        _key: 'users/user-uuid-789',
-        iss_sub: 'http://localhost:8080/realms/genie#user-uuid-789',
-        email: 'test@example.com',
-        name: 'Test User',
-        roles: ['user'],
-        active: true,
-        deleted: false
-      });
-
-      await keycloakAuthMiddleware.authenticate(req, res, next);
-
-      // X-User-Id header uses composite key (unchanged from Story 2-3)
-      expect(req.user.opeaHeaders['X-User-Id']).toBe('http://localhost:8080/realms/genie#user-uuid-789');
-      // X-Issuer is also set
-      expect(req.user.opeaHeaders['X-Issuer']).toBe('http://localhost:8080/realms/genie');
-      // X-User-Roles from realm_access
-      expect(req.user.opeaHeaders['X-User-Roles']).toBe('user,admin');
-    });
-  });
-
-  describe('OPEA worker receives Authorization Bearer token', () => {
-    it('should include Authorization in opeaHeaders for defense-in-depth', async () => {
-      req.headers.authorization = 'Bearer user-jwt-token';
-      const decodedPayload = {
-        ...mockJwtPayload,
-        sub: 'user-uuid',
-        iss: 'http://localhost:8080/realms/genie'
-      };
-      mockVerifyToken.mockResolvedValue(decodedPayload);
-      mockProvisionUser.mockResolvedValue({
-        _key: 'users/user-uuid',
-        iss_sub: 'http://localhost:8080/realms/genie#user-uuid',
-        email: 'test@example.com',
-        name: 'Test User',
-        roles: ['user'],
-        active: true,
-        deleted: false
-      });
-
-      await keycloakAuthMiddleware.authenticate(req, res, next);
-
-      expect(req.user.opeaHeaders).toBeDefined();
-      // query-routes.js adds Authorization from req.headers to opeaHeaders
-      // The middleware provides the base headers; the route adds the bearer token
-      expect(req.user.opeaHeaders['X-User-Id']).toBeDefined();
-      expect(req.user.opeaHeaders['X-Issuer']).toBeDefined();
-      expect(req.user.opeaHeaders['X-User-Roles']).toBeDefined();
-    });
-  });
-
-  describe('query-routes passes req.user?.opeaHeaders and req.user?._key', () => {
-    it('should attach opeaHeaders and _key to req.user for query route consumption', async () => {
+  describe('query-routes passes req.user?._key', () => {
+    it('should attach _key to req.user for query route consumption', async () => {
       req.headers.authorization = 'Bearer valid-token';
       const decodedPayload = {
         ...mockJwtPayload,
@@ -195,14 +134,13 @@ describe('Story 2-10: OPEA Continuity', () => {
 
       await keycloakAuthMiddleware.authenticate(req, res, next);
 
-      // query-routes.js line 187 uses: req.user?.opeaHeaders and req.user?._key
+      // query-routes.js uses req.user?._key for OPEA payload user_id
       expect(req.user).toBeDefined();
-      expect(req.user.opeaHeaders).toBeDefined();
       expect(typeof req.user._key).toBe('string');
       expect(req.user._key.length).toBeGreaterThan(0);
     });
 
-    it('should have undefined opeaHeaders and _key when not authenticated', () => {
+    it('should have undefined _key when not authenticated', () => {
       req.headers.authorization = undefined;
       // No token = 401 response, but req.user remains undefined
       keycloakAuthMiddleware.authenticate(req, res, next);

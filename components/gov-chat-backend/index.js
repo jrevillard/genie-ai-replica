@@ -957,7 +957,7 @@ async function startApp() {
   // Define routes with paths and services
   // keycloakAuth: true means the route group is protected by Keycloak JWT middleware
   const routeConfigs = [
-    { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService, keycloakAuth: true },
+    { file: 'user-routes', paths: ['/api/me'], service: services.userProfileService, keycloakAuth: true },
     { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService, keycloakAuth: true },
     { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService, keycloakAuth: true },
     { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService, keycloakAuth: true },

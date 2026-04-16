@@ -185,7 +185,7 @@ module.exports = (queryService) => {
   router.post('/', async (req, res) => {
     try {
       logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
-      const query = await queryService.createQuery(req.body, { authorization: req.headers.authorization }, req.user?._key);
+      const query = await queryService.createQuery(req.body, { authorization: req.headers.authorization });
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });

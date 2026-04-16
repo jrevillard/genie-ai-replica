@@ -64,17 +64,14 @@ button:active{transform:scale(.97)}
 .input-field:focus{border-bottom-color:var(--primary)}
 .input-field::placeholder{color:rgba(113,121,113,.5)}
 .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-c));color:#fff;border-radius:16px;padding:16px;font-weight:900;font-size:16px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(3,51,25,.3);transition:all .2s;cursor:pointer}
-.sync-chip{position:fixed;top:12px;right:12px;z-index:100;background:rgba(251,251,226,.9);backdrop-filter:blur(20px);padding:5px 12px;border-radius:999px;display:flex;align-items:center;gap:6px;border:1px solid rgba(193,201,191,.3);font-size:10px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;pointer-events:none}
+
 .dot{width:7px;height:7px;border-radius:50%}
 .sp-y2>*+*{margin-top:8px}
 </style>
 </head>
 <body>
 
-<div class="sync-chip" id="sync-chip">
-  <div class="dot pulse" id="sync-dot" style="background:var(--error)"></div>
-  <span id="sync-label">Offline</span>
-</div>
+<!-- sync moved to headers -->
 
 <!-- LOGIN -->
 <div id="screen-login" class="screen active">
@@ -137,83 +134,174 @@ button:active{transform:scale(.97)}
 
 <!-- DASHBOARD -->
 <div id="screen-dashboard" class="screen">
-  <header class="app-header">
-    <div style="flex:1;text-align:center">
+  <header class="app-header" style="padding:10px 16px">
+    <div style="display:flex;flex-direction:column;align-items:center;flex:1">
       <h1 style="font-size:18px;font-weight:900;color:var(--primary);line-height:1">AgriConnect</h1>
-      <p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.45);margin-top:1px">Agricultural Extension Services</p>
-    </div>
-    <div style="position:absolute;right:16px;display:flex;align-items:center;gap:4px;background:rgba(189,238,199,.2);border:1px solid rgba(3,51,25,.1);border-radius:999px;padding:4px 10px">
-      <span style="font-size:11px">☁️</span><span style="font-size:9px;font-weight:900;text-transform:uppercase;color:var(--primary)">Synced</span>
-    </div>
-  </header>
-  <main style="flex:1;overflow-y:auto;padding:14px 16px 90px;display:flex;flex-direction:column;gap:16px">
-    <!-- Weather -->
-    <div style="background:rgba(255,166,122,.8);border-radius:14px;padding:13px;display:flex;align-items:center;gap:12px">
-      <div style="background:var(--on-sc);padding:8px;border-radius:10px;font-size:18px;flex-shrink:0">☀️</div>
-      <div style="flex:1;min-width:0">
-        <h3 id="w-title" style="color:var(--on-sc);font-weight:900;font-size:13px;line-height:1.2">Loading weather...</h3>
-        <p id="w-sub" style="color:rgba(120,57,22,.75);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Maseru, Lesotho</p>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+        <div class="dot pulse" id="sync-dot" style="background:var(--error)"></div>
+        <span id="sync-label" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:rgba(3,51,25,.5)">Offline</span>
       </div>
     </div>
-    <!-- Stats -->
+    <button onclick="goTo('more')" style="position:absolute;right:16px;width:36px;height:36px;background:var(--surf-low);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:1px solid rgba(3,51,25,.08)" id="dash-avatar-btn">👤</button>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:14px 16px 90px;display:flex;flex-direction:column;gap:16px">
+
+    <!-- 1. GREETING -->
+    <div style="background:linear-gradient(135deg,var(--primary-c),var(--primary));border-radius:16px;padding:16px 20px;position:relative;overflow:hidden">
+      <div style="position:absolute;right:-10px;top:-10px;font-size:80px;opacity:.08">🌾</div>
+      <p style="font-size:10px;font-weight:700;color:rgba(189,238,199,.6);text-transform:uppercase;letter-spacing:.15em" id="dash-greeting">Good morning</p>
+      <h2 id="dash-username" style="font-size:20px;font-weight:900;color:var(--primary-fixed);margin-top:2px">Extension Worker</h2>
+      <p style="font-size:11px;color:rgba(189,238,199,.55);margin-top:4px" id="dash-date-full">Loading...</p>
+    </div>
+
+    <!-- 2. TODAY'S SCHEDULE -->
     <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">
         <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">Today's Schedule</h2>
         <span id="dash-date" style="font-size:10px;font-weight:700;color:var(--secondary)"></span>
       </div>
       <div class="scroll-x" style="display:flex;gap:10px">
-        <div class="card" style="flex:none;width:148px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:18px">🌱</span><span class="tag" style="background:var(--primary);color:#fff">Priority</span></div>
+        <div class="card" style="flex:none;width:148px;cursor:pointer" onclick="goTo('farmers')">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:18px">👥</span><span class="tag" style="background:var(--primary);color:#fff">Priority</span></div>
           <p style="font-size:28px;font-weight:900;line-height:1">3</p>
           <p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase;margin-top:4px">Farmer Visits</p>
         </div>
-        <div class="card" style="flex:none;width:148px">
+        <div class="card" style="flex:none;width:148px;cursor:pointer" onclick="goTo('reports')">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:18px">📋</span><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">2 Pending</span></div>
           <p style="font-size:28px;font-weight:900;line-height:1">2</p>
           <p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase;margin-top:4px">Field Reports</p>
         </div>
-        <div class="card" style="flex:none;width:148px">
+        <div class="card" style="flex:none;width:148px;cursor:pointer" onclick="sendQ('What are the recommended soil pH levels for maize and beans in Lesotho?');goTo('ai')">
           <div style="margin-bottom:4px"><span style="font-size:18px">🧪</span></div>
           <p style="font-size:28px;font-weight:900;line-height:1">5</p>
           <p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase;margin-top:4px">Soil Samples</p>
         </div>
       </div>
     </div>
-    <!-- Actions -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <button onclick="goTo('farmers')" style="display:flex;align-items:center;gap:10px;background:var(--primary-c);border-radius:14px;padding:14px;cursor:pointer">
-        <div style="width:38px;height:38px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>
-        <span style="font-weight:900;font-size:12px;text-align:left;line-height:1.3;color:var(--primary-fixed)">Visit<br/>Farmer</span>
-      </button>
-      <button onclick="goTo('knowledge')" style="display:flex;align-items:center;gap:10px;background:var(--surf-highest);border-radius:14px;padding:14px;cursor:pointer">
-        <div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📚</div>
-        <span style="font-weight:900;font-size:12px;text-align:left;line-height:1.3;color:var(--primary)">Knowledge<br/>Hub</span>
-      </button>
-      <button onclick="goTo('ai')" style="grid-column:span 2;background:var(--primary);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 16px rgba(3,51,25,.3);cursor:pointer">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="width:42px;height:42px;background:rgba(255,255,255,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🤖</div>
-          <div>
-            <div style="font-size:8px;font-weight:900;color:var(--primary-fixed);text-transform:uppercase;letter-spacing:.1em">AI Assistant</div>
-            <h3 style="color:#fff;font-size:15px;font-weight:700;margin-top:2px">Ask for Advice</h3>
-            <p style="color:rgba(255,255,255,.55);font-size:10px">Beans & Maize Crop Management</p>
+
+    <!-- 3. PEST ALERTS -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">Active Pest Alerts</h2>
+        <span style="font-size:8px;font-weight:700;color:var(--error);text-transform:uppercase;background:var(--error-c);padding:2px 7px;border-radius:4px">3 Active</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:linear-gradient(135deg,#7f1d1d,#991b1b);border-radius:13px;padding:13px 14px;display:flex;align-items:center;gap:11px;cursor:pointer" onclick="sendQ('How do I identify and control Fall Armyworm in maize in Lesotho?');goTo('ai')">
+          <div style="width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+              <p style="font-size:12px;font-weight:800;color:#fff">Fall Armyworm</p>
+              <span style="font-size:7px;font-weight:800;background:rgba(255,255,255,.2);color:#fca5a5;padding:1px 6px;border-radius:4px;text-transform:uppercase">HIGH</span>
+            </div>
+            <p style="font-size:10px;color:rgba(255,255,255,.65);line-height:1.4">Leribe, Maseru, Butha-Buthe. Check maize leaves weekly.</p>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:#fef3c7;border-radius:11px;padding:11px;cursor:pointer;border:1px solid rgba(217,119,6,.12)" onclick="sendQ('What is bean rust and how do I treat it in Lesotho?');goTo('ai')">
+            <p style="font-size:10px;font-weight:800;color:#d97706;margin-bottom:4px">Bean Rust</p>
+            <p style="font-size:9px;color:rgba(120,53,15,.7);line-height:1.4">Mafeteng &amp; Quthing. Moderate.</p>
+            <p style="font-size:8px;font-weight:700;color:#d97706;margin-top:5px">Tap for advice</p>
+          </div>
+          <div style="background:#dcfce7;border-radius:11px;padding:11px;cursor:pointer;border:1px solid rgba(22,163,74,.12)" onclick="sendQ('What aphid management works for beans in Lesotho?');goTo('ai')">
+            <p style="font-size:10px;font-weight:800;color:#16a34a;margin-bottom:4px">Aphids</p>
+            <p style="font-size:9px;color:rgba(22,101,52,.7);line-height:1.4">Low activity. Monitor only.</p>
+            <p style="font-size:8px;font-weight:700;color:#16a34a;margin-top:5px">Low risk</p>
           </div>
         </div>
-        <span style="color:rgba(255,255,255,.7);font-size:24px;font-weight:300">›</span>
-      </button>
+      </div>
     </div>
-    <!-- Farmers -->
+
+    <!-- 4. QUICK ACTIONS -->
+    <div>
+      <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;padding:0 2px">Quick Actions</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="goTo('farmers')" style="display:flex;align-items:center;gap:10px;background:var(--primary-c);border-radius:14px;padding:14px;cursor:pointer">
+          <div style="width:38px;height:38px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👥</div>
+          <span style="font-weight:900;font-size:12px;text-align:left;line-height:1.3;color:var(--primary-fixed)">My Farmers</span>
+        </button>
+        <button onclick="showAddFarmer()" style="display:flex;align-items:center;gap:10px;background:var(--surf-highest);border-radius:14px;padding:14px;cursor:pointer">
+          <div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">➕</div>
+          <span style="font-weight:900;font-size:12px;text-align:left;line-height:1.3;color:var(--primary)">Add Farmer</span>
+        </button>
+        <button onclick="goTo('reports')" style="display:flex;align-items:center;gap:10px;background:var(--surf-highest);border-radius:14px;padding:14px;cursor:pointer">
+          <div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📋</div>
+          <span style="font-weight:900;font-size:12px;text-align:left;line-height:1.3;color:var(--primary)">Field Reports</span>
+        </button>
+        <button onclick="goTo('knowledge')" style="display:flex;align-items:center;gap:10px;background:var(--surf-highest);border-radius:14px;padding:14px;cursor:pointer">
+          <div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📚</div>
+          <span style="font-weight:900;font-size:12px;text-align:left;line-height:1.3;color:var(--primary)">Knowledge Hub</span>
+        </button>
+        <button onclick="goTo('ai')" style="grid-column:span 2;background:var(--primary);border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 16px rgba(3,51,25,.3);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:42px;height:42px;background:rgba(255,255,255,.12);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🤖</div>
+            <div>
+              <div style="font-size:8px;font-weight:900;color:var(--primary-fixed);text-transform:uppercase;letter-spacing:.1em">Keletso AI</div>
+              <h3 style="color:#fff;font-size:15px;font-weight:700;margin-top:2px">Ask for Farming Advice</h3>
+              <p style="color:rgba(255,255,255,.55);font-size:10px">Maize · Beans · Pests · Weather</p>
+            </div>
+          </div>
+          <span style="color:rgba(255,255,255,.7);font-size:24px;font-weight:300">›</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 5. YOUR FARMERS -->
     <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">
         <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">Your Farmers</h2>
         <button onclick="goTo('farmers')" style="font-size:10px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">View All</button>
       </div>
       <div class="sp-y2">
-        <div class="list-item"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:var(--primary-c);color:var(--primary-fixed);font-size:12px">TM</div><div><h4 style="font-weight:700;font-size:13px">Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Leribe District</p></div></div><div style="text-align:right"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary);display:block;margin-bottom:2px">Visited</span><span style="font-size:10px">2d ago</span></div></div>
-        <div class="list-item"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:rgba(255,166,122,.3);color:var(--secondary);font-size:12px">MS</div><div><h4 style="font-weight:700;font-size:13px">Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Butha-Buthe</p></div></div><div style="text-align:right"><span class="tag" style="background:var(--error-c);color:var(--error);display:block;margin-bottom:2px">⚠ Alert</span><span style="font-size:10px;color:var(--error)">Low Yield</span></div></div>
-        <div class="list-item"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:rgba(189,238,199,.4);color:var(--primary);font-size:12px">KN</div><div><h4 style="font-weight:700;font-size:13px">Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Maseru</p></div></div><div style="text-align:right"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary);display:block;margin-bottom:2px">Due</span><span style="font-size:10px;color:var(--primary)">Today</span></div></div>
+        <div class="list-item" style="cursor:pointer" onclick="viewFarmer('TM','Thabo Mokoena','Maize','Leribe','2.5','+266 5812 3456','Active','2 days ago','Crops look healthy. Needs fertilizer check next visit.')">
+          <div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:var(--primary-c);color:var(--primary-fixed);font-size:12px">TM</div><div><h4 style="font-weight:700;font-size:13px">Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv)">Maize · Leribe District</p></div></div>
+          <div style="text-align:right"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary);display:block;margin-bottom:2px">Visited</span><span style="font-size:10px">2d ago</span></div>
+        </div>
+        <div class="list-item" style="cursor:pointer;border-color:rgba(186,26,26,.1)" onclick="viewFarmer('MS','Mampoi Sebata','Beans','Butha-Buthe','1.8','+266 5823 4567','Alert — Low Yield','5 days ago','Low yield observed. Possible soil nutrient deficiency. Needs urgent attention.')">
+          <div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:rgba(255,166,122,.3);color:var(--secondary);font-size:12px">MS</div><div><h4 style="font-weight:700;font-size:13px">Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv)">Beans · Butha-Buthe</p></div></div>
+          <div style="text-align:right"><span class="tag" style="background:var(--error-c);color:var(--error);display:block;margin-bottom:2px">⚠ Alert</span><span style="font-size:10px;color:var(--error)">Low Yield</span></div>
+        </div>
+        <div class="list-item" style="cursor:pointer" onclick="viewFarmer('KN','Khauhelo Nkosi','Beans','Maseru','3.1','+266 5834 5678','Due Today','1 week ago','First season beans farmer. Needs guidance on spacing.')">
+          <div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:rgba(189,238,199,.4);color:var(--primary);font-size:12px">KN</div><div><h4 style="font-weight:700;font-size:13px">Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv)">Beans · Maseru</p></div></div>
+          <div style="text-align:right"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary);display:block;margin-bottom:2px">Due</span><span style="font-size:10px;color:var(--primary)">Today</span></div>
+        </div>
       </div>
     </div>
-  </main>
+
+    <!-- 6. WEATHER -->
+    <div style="background:rgba(255,166,122,.85);border-radius:14px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="sendQ('What is the weather forecast for the next 3 days in Maseru Lesotho and how does it affect maize and beans farming?');goTo('ai')">
+      <div style="background:var(--on-sc);padding:9px;border-radius:11px;font-size:20px;flex-shrink:0" id="w-icon">☀️</div>
+      <div style="flex:1;min-width:0">
+        <h3 id="w-title" style="color:var(--on-sc);font-weight:900;font-size:13px;line-height:1.2">Loading weather...</h3>
+        <p id="w-sub" style="color:rgba(120,57,22,.75);font-size:11px">Maseru, Lesotho · Tap to ask AI</p>
+      </div>
+      <p style="font-size:16px;color:rgba(120,57,22,.5);flex-shrink:0">›</p>
+    </div>
+
+    <!-- 7. MARKET PRICES (bottom - useful context for extension workers) -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">
+        <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">Market Prices</h2>
+        <button onclick="goTo('market')" style="font-size:10px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">View All</button>
+      </div>
+      <div class="sp-y2">
+        <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🌽</span><div><h4 style="font-weight:700;font-size:13px">Maize (50kg)</h4><p style="font-size:10px;color:var(--on-sv)">Maseru Market</p></div></div>
+          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 180</p><p style="font-size:10px;color:#22c55e;font-weight:700">↑ +5%</p></div>
+        </div>
+        <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🫘</span><div><h4 style="font-weight:700;font-size:13px">Beans (25kg)</h4><p style="font-size:10px;color:var(--on-sv)">Maseru Market</p></div></div>
+          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 320</p><p style="font-size:10px;color:var(--error);font-weight:700">↓ -2%</p></div>
+        </div>
+        <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🌾</span><div><h4 style="font-weight:700;font-size:13px">Sorghum (50kg)</h4><p style="font-size:10px;color:var(--on-sv)">Ha Matala Market</p></div></div>
+          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 160</p><p style="font-size:10px;color:var(--on-sv);font-weight:700">→ Stable</p></div>
+        </div>
+      </div>
+    </div>
+    </main>
   <button onclick="goTo('ai')" style="position:fixed;bottom:82px;right:16px;width:48px;height:48px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(3,51,25,.35);z-index:40">🎙️</button>
   <nav class="bottom-nav">
     <button class="nav-btn active" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
@@ -290,27 +378,27 @@ button:active{transform:scale(.97)}
   <header class="app-header">
     <button onclick="goTo('dashboard')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
     <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1">Farmer Management</h1>
-    <button style="width:36px;height:36px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(3,51,25,.3)">+</button>
+    <button onclick="showAddFarmer()" style="width:36px;height:36px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(3,51,25,.3)">+</button>
   </header>
   <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
-    <input type="text" placeholder="🔍  Search farmers..." style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:16px;outline:none"/>
+    <input type="text" id="farmer-search" placeholder="🔍  Search by name or district..." oninput="searchFarmers(this.value)" style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:16px;outline:none;color:var(--on-surface)"/>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
       <div style="background:var(--primary-c);border-radius:14px;padding:12px;text-align:center"><p style="font-size:26px;font-weight:900;color:var(--primary-fixed)">24</p><p style="font-size:9px;font-weight:700;color:rgba(189,238,199,.6);text-transform:uppercase">Total</p></div>
       <div class="card" style="text-align:center"><p style="font-size:26px;font-weight:900;color:var(--primary)">18</p><p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase">Active</p></div>
       <div style="background:var(--error-c);border-radius:14px;padding:12px;text-align:center"><p style="font-size:26px;font-weight:900;color:var(--error)">3</p><p style="font-size:9px;font-weight:700;color:rgba(186,26,26,.55);text-transform:uppercase">Alerts</p></div>
     </div>
     <div class="scroll-x" style="display:flex;gap:8px;margin-bottom:16px">
-      <button style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--primary);color:#fff">All Farmers</button>
-      <button style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)">Maize</button>
-      <button style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)">Beans</button>
-      <button style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)">Needs Visit</button>
+      <button id="ft-all" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--primary);color:#fff" onclick="filterFarmers('all')">All Farmers</button>
+      <button id="ft-maize" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)" onclick="filterFarmers('maize')">Maize</button>
+      <button id="ft-beans" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)" onclick="filterFarmers('beans')">Beans</button>
+      <button id="ft-alert" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)" onclick="filterFarmers('alert')">Needs Visit</button>
     </div>
     <div class="sp-y2">
-      <div class="list-item"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--primary-c);color:var(--primary-fixed)">TM</div><div><h4 style="font-weight:700;font-size:13px">Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Leribe • 2.5ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">Visited 2d</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item" style="border-color:rgba(186,26,26,.1)"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(255,166,122,.3);color:var(--secondary)">MS</div><div><h4 style="font-weight:700;font-size:13px">Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Butha-Buthe • 1.8ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:var(--error-c);color:var(--error)">⚠ Alert</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(189,238,199,.4);color:var(--primary)">KN</div><div><h4 style="font-weight:700;font-size:13px">Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Maseru • 3.1ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Due Today</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--surf-highest);color:var(--on-sv)">LP</div><div><h4 style="font-weight:700;font-size:13px">Lineo Pitso</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Mohale's Hoek • 1.2ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="color:var(--outline)">1w ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(30,74,46,.4);color:var(--primary-fixed)">SM</div><div><h4 style="font-weight:700;font-size:13px">Selloane Mafoso</h4><p style="font-size:10px;color:var(--on-sv)">Beans + Maize • Maseru • 4.0ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">3d ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item" style="cursor:pointer" data-crop="maize" data-status="active" onclick="viewFarmer('TM','Thabo Mokoena','Maize','Leribe','2.5','+266 5812 3456','Active','2 days ago','Crops look healthy. Needs fertilizer check next visit.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--primary-c);color:var(--primary-fixed)">TM</div><div><h4 style="font-weight:700;font-size:13px">Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Leribe • 2.5ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">Visited 2d</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item" style="border-color:rgba(186,26,26,.1);cursor:pointer" data-crop="beans" data-status="alert" onclick="viewFarmer('MS','Mampoi Sebata','Beans','Butha-Buthe','1.8','+266 5823 4567','Alert - Low Yield','5 days ago','Low yield observed. Possible soil nutrient deficiency. Needs urgent attention.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(255,166,122,.3);color:var(--secondary)">MS</div><div><h4 style="font-weight:700;font-size:13px">Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Butha-Buthe • 1.8ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:var(--error-c);color:var(--error)">⚠ Alert</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item" style="cursor:pointer" data-crop="beans" data-status="due" onclick="viewFarmer('KN','Khauhelo Nkosi','Beans','Maseru','3.1','+266 5834 5678','Due for visit','1 week ago','First season beans farmer. Needs guidance on spacing and pest management.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(189,238,199,.4);color:var(--primary)">KN</div><div><h4 style="font-weight:700;font-size:13px">Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Maseru • 3.1ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Due Today</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item" style="cursor:pointer" data-crop="maize" data-status="active" onclick="viewFarmer('LP','Lineo Pitso','Maize','Mohale's Hoek','1.2','+266 5845 6789','Active','1 week ago','Small plot but well maintained. Interested in intercropping with beans.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--surf-highest);color:var(--on-sv)">LP</div><div><h4 style="font-weight:700;font-size:13px">Lineo Pitso</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Mohale's Hoek • 1.2ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="color:var(--outline)">1w ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item" style="cursor:pointer" data-crop="beans" data-status="active" onclick="viewFarmer('SM','Selloane Mafoso','Beans + Maize','Maseru','4.0','+266 5856 7890','Active','3 days ago','Experienced farmer with intercropping. Model farmer for the district.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(30,74,46,.4);color:var(--primary-fixed)">SM</div><div><h4 style="font-weight:700;font-size:13px">Selloane Mafoso</h4><p style="font-size:10px;color:var(--on-sv)">Beans + Maize • Maseru • 4.0ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">3d ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
     </div>
   </main>
   <nav class="bottom-nav">
@@ -330,37 +418,60 @@ button:active{transform:scale(.97)}
     <span style="font-size:18px">🔄</span>
   </header>
   <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px;max-width:672px;width:100%;margin:0 auto">
-    <input type="text" placeholder="🔍  Search beans, maize, soil..." style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:20px;outline:none"/>
-    <div style="margin-bottom:24px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px">
-        <h2 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55)">Core Domains</h2>
-        <span style="font-size:10px;font-weight:700;color:var(--secondary);text-transform:uppercase">View All</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="domain-card" style="border-left:4px solid var(--primary)" onclick="sendQ('Tell me about maize and beans farming in Lesotho highlands');goTo('ai')">
-          <div style="font-size:20px;margin-bottom:6px">🌽</div><h3 style="font-size:13px;font-weight:700">Crops</h3><p style="font-size:11px;color:var(--on-sv);line-height:1.4;margin-top:2px">Beans, Maize & tuber management.</p>
-        </div>
-        <div class="domain-card" style="border-left:4px solid var(--secondary)" onclick="sendQ('Tell me about livestock management in Lesotho');goTo('ai')">
-          <div style="font-size:20px;margin-bottom:6px">🐄</div><h3 style="font-size:13px;font-weight:700">Livestock</h3><p style="font-size:11px;color:var(--on-sv);line-height:1.4;margin-top:2px">Health, nutrition & breeding.</p>
-        </div>
-        <div class="domain-card" style="border-left:4px solid var(--tertiary-t)" onclick="sendQ('What are climate-smart farming techniques for Lesotho?');goTo('ai')">
-          <div style="font-size:20px;margin-bottom:6px">☀️</div><h3 style="font-size:13px;font-weight:700">Climate-Smart</h3><p style="font-size:11px;color:var(--on-sv);line-height:1.4;margin-top:2px">Resilience & conservation.</p>
-        </div>
-        <div class="domain-card" style="border-left:4px solid var(--primary-c)" onclick="sendQ('What are current market prices for crops in Lesotho?');goTo('ai')">
-          <div style="font-size:20px;margin-bottom:6px">🏪</div><h3 style="font-size:13px;font-weight:700">Markets</h3><p style="font-size:11px;color:var(--on-sv);line-height:1.4;margin-top:2px">Price index & trade info.</p>
+    <input type="text" id="knowledge-search" placeholder="🔍  Search guides..." oninput="searchKnowledge(this.value)" style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:20px;outline:none;color:var(--on-surface)"/>
+    <!-- Challenge-relevant knowledge only -->
+    <div id="knowledge-items" style="margin-bottom:12px">
+
+      <!-- MAIZE -->
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🌽 Maize (Poone)</h2>
+        <div class="sp-y2">
+          <div class="knowledge-item list-item" data-tags="maize planting season highlands" style="cursor:pointer" onclick="sendQ('When and how should I plant maize in Lesotho highlands?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📅</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Planting Season &amp; Spacing</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Oct–Dec · 75cm row spacing</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+          <div class="knowledge-item list-item" data-tags="maize fertilizer soil npk" style="cursor:pointer" onclick="sendQ('What fertilizer should I use for maize in Lesotho and how much?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧪</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Fertilizer &amp; Soil Management</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">NPK ratios · Soil pH 5.5–7.0</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+          <div class="knowledge-item list-item" data-tags="maize harvest storage yield" style="cursor:pointer" onclick="sendQ('How do I know when maize is ready to harvest in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌾</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Harvesting &amp; Storage</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Timing · Drying · Safe storage</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
         </div>
       </div>
+
+      <!-- BEANS -->
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🫘 Beans (Linaoa)</h2>
+        <div class="sp-y2">
+          <div class="knowledge-item list-item" data-tags="beans planting varieties highlands" style="cursor:pointer" onclick="sendQ('What are the best bean varieties for Lesotho highlands and when to plant?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,166,122,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌱</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Varieties &amp; Planting</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Oct–Nov · Highlands-adapted</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+          <div class="knowledge-item list-item" data-tags="beans intercropping maize soil nitrogen" style="cursor:pointer" onclick="sendQ('How do I intercrop beans with maize in Lesotho for better yield?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,166,122,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔄</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Intercropping with Maize</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Nitrogen fixation · Better yields</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+          <div class="knowledge-item list-item" data-tags="beans disease rust blight treatment" style="cursor:pointer" onclick="sendQ('What are common bean diseases in Lesotho and how do I treat them?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,166,122,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔬</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Bean Diseases</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Rust · Blight · Angular leaf spot</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        </div>
+      </div>
+
+      <!-- PESTS -->
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🐛 Pest Management</h2>
+        <div class="sp-y2">
+          <div class="knowledge-item list-item" data-tags="fall armyworm FAW maize pest identify control" style="cursor:pointer" onclick="sendQ('How do I identify and control Fall Armyworm in maize in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--error-c);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⚠️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Fall Armyworm (FAW)</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Identify · Report · Control</p></div></div><span class="tag" style="background:var(--error-c);color:var(--error)">HIGH RISK</span></div>
+          <div class="knowledge-item list-item" data-tags="stalk borer pest maize control" style="cursor:pointer" onclick="sendQ('How do I identify and control stalk borers in maize in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(144,76,39,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌿</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Stalk Borers</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Chilo partellus · Early detection</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+          <div class="knowledge-item list-item" data-tags="aphids beans pest control spray" style="cursor:pointer" onclick="sendQ('How do I control aphids on beans in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔍</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Aphids on Beans</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Monitoring · Organic control</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        </div>
+      </div>
+
+      <!-- SOIL & WATER -->
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🌍 Soil &amp; Water</h2>
+        <div class="sp-y2">
+          <div class="knowledge-item list-item" data-tags="soil pH testing maize beans" style="cursor:pointer" onclick="sendQ('How do I test soil pH for maize and beans in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧪</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Soil pH Testing</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Ideal range 5.5–7.0 · Lime application</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">ESSENTIAL</span></div>
+          <div class="knowledge-item list-item" data-tags="conservation agriculture water basin contour" style="cursor:pointer" onclick="sendQ('What conservation agriculture practices work best in Lesotho highlands?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏗️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Conservation Agriculture</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Basin construction · Contour farming</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        </div>
+      </div>
+
+      <!-- GOVERNMENT PROGRAMS -->
+      <div style="margin-bottom:12px">
+        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🏛️ Government Support</h2>
+        <div class="sp-y2">
+          <div class="knowledge-item list-item" data-tags="input subsidy seeds fertilizer government program" style="cursor:pointer" onclick="goTo('programs')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌱</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Input Subsidy Programme</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Seeds &amp; fertilizer · Deadline May 31</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">ACTIVE</span></div>
+          <div class="knowledge-item list-item" data-tags="FAO extension support farmer program" style="cursor:pointer" onclick="sendQ('What government agricultural support programs are available in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏛️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Farmer Support Unit</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Free advisory · +266 2231 4990</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        </div>
+      </div>
+
     </div>
-    <div>
-      <h2 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:12px">Priority Learning</h2>
-      <div class="sp-y2">
-        <div class="list-item" style="cursor:pointer" onclick="sendQ('How do I test soil pH for maize and beans farming?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--surf-highest);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧪</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><h4 style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Soil pH Testing</h4><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary);margin-left:8px;flex-shrink:0">ESSENTIAL</span></div><p style="font-size:10px;color:var(--on-sv);margin-top:2px">4 modules • Manual included</p></div></div><span style="font-size:18px;color:var(--outline);margin-left:8px">›</span></div>
-        <div class="list-item" style="cursor:pointer" onclick="sendQ('How to identify Fall Armyworm and other pests in maize?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--surf-highest);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🐛</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><h4 style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Pest Identification</h4><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary);margin-left:8px;flex-shrink:0">CRITICAL</span></div><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Visual identification guide</p></div></div><span style="font-size:18px;color:var(--outline);margin-left:8px">›</span></div>
-        <div class="list-item" style="cursor:pointer" onclick="sendQ('What are the best bean varieties for Lesotho highlands?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--surf-highest);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🫘</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><h4 style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Bean Varieties</h4><span class="tag" style="background:var(--primary);color:#fff;margin-left:8px;flex-shrink:0">NEW</span></div><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Highlands-adapted varieties</p></div></div><span style="font-size:18px;color:var(--outline);margin-left:8px">›</span></div>
-        <div class="list-item" style="cursor:pointer" onclick="sendQ('What is basin construction for water conservation in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--surf-highest);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏗️</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><h4 style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Basin Construction</h4><span class="tag" style="background:rgba(255,146,56,.15);color:var(--tertiary-t);margin-left:8px;flex-shrink:0">CONSERVE</span></div><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Step-by-step layout guide</p></div></div><span style="font-size:18px;color:var(--outline);margin-left:8px">›</span></div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:center;margin-top:20px"><div style="background:rgba(30,74,46,.08);border:1px solid rgba(3,51,25,.1);border-radius:999px;padding:6px 16px;display:flex;align-items:center;gap:6px"><span style="font-size:12px">✅</span><span style="font-size:10px;font-weight:700;color:var(--on-pf-var)">All Content Synced Offline</span></div></div>
+    <div style="display:flex;justify-content:center;margin-top:8px"><div style="background:rgba(30,74,46,.08);border:1px solid rgba(3,51,25,.1);border-radius:999px;padding:6px 16px;display:flex;align-items:center;gap:6px"><span style="font-size:12px">✅</span><span style="font-size:10px;font-weight:700;color:var(--on-pf-var)">26+ Lesotho documents synced</span></div></div>
   </main>
   <nav class="bottom-nav">
     <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
@@ -382,20 +493,38 @@ button:active{transform:scale(.97)}
       <div class="avatar" id="prof-av" style="width:54px;height:54px;background:var(--primary);color:var(--primary-fixed);font-size:20px;font-weight:900;flex-shrink:0">RS</div>
       <div><h3 id="prof-name" style="font-weight:900;color:var(--primary-fixed);font-size:15px">Extension Worker</h3><p style="color:rgba(189,238,199,.65);font-size:12px;margin-top:2px">Maseru District Office</p><p style="color:rgba(189,238,199,.45);font-size:10px;margin-top:2px">Ministry of Agriculture</p></div>
     </div>
-    <div class="menu-group" style="margin-bottom:12px">
-      <button class="menu-item"><span style="font-size:18px;width:24px;text-align:center">📋</span><span style="font-weight:600;font-size:13px;flex:1">Farm Visit Reports</span><span style="color:var(--outline)">›</span></button>
-      <button class="menu-item"><span style="font-size:18px;width:24px;text-align:center">🏪</span><span style="font-weight:600;font-size:13px;flex:1">Market Linkages</span><span style="color:var(--outline)">›</span></button>
-      <button class="menu-item"><span style="font-size:18px;width:24px;text-align:center">🏛️</span><span style="font-weight:600;font-size:13px;flex:1">Government Programs</span><span style="color:var(--outline)">›</span></button>
+    <!-- Worker menu (shown by default) -->
+    <div id="menu-worker">
+      <div class="menu-group" style="margin-bottom:12px">
+        <button class="menu-item" onclick="goTo('reports')"><span style="font-size:18px;width:24px;text-align:center">📋</span><span style="font-weight:600;font-size:13px;flex:1">Farm Visit Reports</span><span class="tag" style="background:rgba(3,51,25,.1);color:var(--primary)">Soon</span></button>
+        <button class="menu-item" onclick="goTo('market')"><span style="font-size:18px;width:24px;text-align:center">🏪</span><span style="font-weight:600;font-size:13px;flex:1">Market Linkages</span><span class="tag" style="background:rgba(3,51,25,.1);color:var(--primary)">Soon</span></button>
+        <button class="menu-item" onclick="goTo('programs')"><span style="font-size:18px;width:24px;text-align:center">🏛️</span><span style="font-weight:600;font-size:13px;flex:1">Government Programs</span><span class="tag" style="background:rgba(3,51,25,.1);color:var(--primary)">Soon</span></button>
+      </div>
+      <div class="menu-group" style="margin-bottom:12px">
+        <button class="menu-item" onclick="goTo('farmers')"><span style="font-size:18px;width:24px;text-align:center">👥</span><span style="font-weight:600;font-size:13px;flex:1">My Farmers</span><span style="color:var(--outline)">›</span></button>
+        <button class="menu-item" onclick="goTo('knowledge')"><span style="font-size:18px;width:24px;text-align:center">📚</span><span style="font-weight:600;font-size:13px;flex:1">Knowledge Hub</span><span style="color:var(--outline)">›</span></button>
+        <button class="menu-item" onclick="goTo('ai')"><span style="font-size:18px;width:24px;text-align:center">🤖</span><span style="font-weight:600;font-size:13px;flex:1">AI Assistant</span><span style="color:var(--outline)">›</span></button>
+      </div>
+    </div>
+    <!-- Admin menu (shown for admin role) -->
+    <div id="menu-admin" style="display:none">
+      <div class="menu-group" style="margin-bottom:12px">
+        <button class="menu-item" onclick="goTo('users')"><span style="font-size:18px;width:24px;text-align:center">👤</span><span style="font-weight:600;font-size:13px;flex:1">User Management</span><span class="tag" style="background:rgba(3,51,25,.1);color:var(--primary)">Soon</span></button>
+        <button class="menu-item" onclick="goTo('analytics')"><span style="font-size:18px;width:24px;text-align:center">📊</span><span style="font-weight:600;font-size:13px;flex:1">Analytics Dashboard</span><span class="tag" style="background:rgba(3,51,25,.1);color:var(--primary)">Soon</span></button>
+        <button class="menu-item" onclick="goTo('upload')"><span style="font-size:18px;width:24px;text-align:center">📄</span><span style="font-weight:600;font-size:13px;flex:1">Upload Documents</span><span class="tag" style="background:rgba(3,51,25,.1);color:var(--primary)">Soon</span></button>
+        <button class="menu-item" onclick="goTo('farmers')"><span style="font-size:18px;width:24px;text-align:center">👥</span><span style="font-weight:600;font-size:13px;flex:1">All Farmers</span><span style="color:var(--outline)">›</span></button>
+      </div>
     </div>
     <div class="menu-group">
-      <button class="menu-item"><span style="font-size:18px;width:24px;text-align:center">🔄</span><span style="font-weight:600;font-size:13px;flex:1">Sync Settings</span><span style="color:var(--outline)">›</span></button>
-      <button class="menu-item"><span style="font-size:18px;width:24px;text-align:center">⚙️</span><span style="font-weight:600;font-size:13px;flex:1">Settings</span><span style="color:var(--outline)">›</span></button>
+      <button class="menu-item" onclick="showToast('Sync complete')"><span style="font-size:18px;width:24px;text-align:center">🔄</span><span style="font-weight:600;font-size:13px;flex:1">Sync Now</span><span style="color:var(--outline)">›</span></button>
+      <button class="menu-item" onclick="showToast('Settings coming soon')"><span style="font-size:18px;width:24px;text-align:center">⚙️</span><span style="font-weight:600;font-size:13px;flex:1">Settings</span><span style="color:var(--outline)">›</span></button>
       <button class="menu-item" onclick="doLogout()"><span style="font-size:18px;width:24px;text-align:center">🚪</span><span style="font-weight:600;font-size:13px;flex:1;color:var(--error)">Sign Out</span><span style="color:var(--error)">›</span></button>
     </div>
     <div style="text-align:center;margin-top:24px">
       <p style="font-size:10px;color:var(--outline);text-transform:uppercase;letter-spacing:.2em;font-weight:700">AgriConnect v2.4.0</p>
-      <p style="font-size:10px;color:var(--outline);margin-top:4px">Ministry of Agriculture · Lesotho</p>
-      <p style="font-size:10px;color:var(--outline);margin-top:2px">Powered by IBM Granite AI 🌾</p>
+      <p style="font-size:10px;color:var(--outline);margin-top:6px">© 2026 Ministry of Agriculture, Food Security & Nutrition · Lesotho</p>
+      <p style="font-size:10px;color:var(--outline);margin-top:2px">In partnership with FAO · IEEE · ITU</p>
+      <p style="font-size:10px;color:var(--outline);margin-top:2px">IEEE/ITU GenAI for Good Challenge 🌾</p>
     </div>
   </main>
   <nav class="bottom-nav">
@@ -437,19 +566,26 @@ async function doLogin(){
     const d=await res.json();
     console.log("Login response:", JSON.stringify(d)); if(d.accessToken){
       token=d.accessToken;
+      localStorage.setItem('ac_token',token);
+      localStorage.setItem('ac_loginName',u.value);
+      localStorage.setItem('ac_loginHash',hash);
       userId=d._key?'users/'+d._key:'users/105329';
+      localStorage.setItem('ac_userId',userId);
       const name=d.personalIdentification?.fullName||u.value;
       const ini=name.split(' ').map(n=>n[0]||'').join('').toUpperCase().substring(0,2)||'EW';
-      document.getElementById('prof-name').textContent=name;
+      document.getElementById('prof-name').textContent=name;const ug=document.getElementById('dash-username');if(ug)ug.textContent=name;const pun=document.getElementById('prof-name-users');if(pun)pun.textContent=name;
       document.getElementById('prof-av').textContent=ini;
-      setSync(true);initDash();goTo('dashboard');
+      localStorage.setItem('ac_name',name);
+      localStorage.setItem('ac_ini',ini);
+      localStorage.setItem('ac_role',d.role||'worker');
+      applyRole(d.role||'worker');setSync(true);initDash();goTo('dashboard');
     }else{console.log("Login failed:", d); showErr(d.message||'Invalid credentials.');}
   }catch(err){showErr('Connection error. Please try again.');}
   if(b)b.textContent='Login';
 }
 
 function showErr(m){const e=document.getElementById('login-err');if(e){e.textContent=m;e.style.display='block';}}
-function doLogout(){token=null;setSync(false);goTo('login');}
+function doLogout(){token=null;['ac_token','ac_userId','ac_name','ac_ini','ac_role','ac_loginName','ac_loginHash'].forEach(k=>localStorage.removeItem(k));setSync(false);goTo('login');}
 
 function setSync(on){
   const dot=document.getElementById('sync-dot'),lbl=document.getElementById('sync-label');
@@ -465,6 +601,17 @@ function initDash(){
   if(t0)t0.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   const dl=document.getElementById('chat-date-lbl');
   if(dl)dl.textContent='Today • Kajeno — '+now.toLocaleDateString('en-GB',{weekday:'long'});
+  // Greeting
+  const hr=now.getHours();
+  const greet=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening';
+  const gel=document.getElementById('dash-greeting');if(gel)gel.textContent=greet;
+  const dfl=document.getElementById('dash-date-full');
+  if(dfl)dfl.textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  // Alert banner
+  const ab=document.getElementById('alert-banner');
+  if(ab){ab.style.display='flex';}
+  const am=document.getElementById('alert-msg');
+  if(am)am.textContent='Mampoi Sebata — Low yield alert in Butha-Buthe. Tap to view.';
   loadWeather();
 }
 
@@ -490,6 +637,39 @@ function setTopic(t){
 
 function sendQ(txt){const inp=document.getElementById('chat-inp');if(inp)inp.value=txt;sendMsg();}
 
+function saveChatHistory(){
+  try{
+    const m=document.getElementById('chat-msgs');if(!m)return;
+    const items=[];
+    m.querySelectorAll('div[style*="align-items"]').forEach(el=>{
+      const u=el.querySelector('.chat-user');const a=el.querySelector('.chat-ai');
+      if(u)items.push({t:'u',h:u.innerHTML});
+      if(a)items.push({t:'a',h:a.outerHTML});
+    });
+    localStorage.setItem('ac_chat',JSON.stringify(items.slice(-30)));
+  }catch(e){}
+}
+
+function loadChatHistory(){
+  try{
+    const saved=localStorage.getItem('ac_chat');if(!saved)return;
+    const m=document.getElementById('chat-msgs');if(!m)return;
+    JSON.parse(saved).forEach(b=>{
+      const d=document.createElement('div');
+      d.className='fade-in';
+      if(b.t==='u'){
+        d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-end;align-self:flex-end;max-width:92%';
+        d.innerHTML='<div class="chat-user">'+b.h+'</div>';
+      }else{
+        d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-start;max-width:92%';
+        d.innerHTML=b.h;
+      }
+      m.appendChild(d);
+    });
+    m.scrollTop=m.scrollHeight;
+  }catch(e){}
+}
+
 async function sendMsg(){
   const inp=document.getElementById('chat-inp');
   const txt=inp?inp.value.trim():'';
@@ -504,9 +684,20 @@ async function sendMsg(){
     const d=await r.json();
     rmTyping(tid);
     if(d.response)addBubble(d.response,'ai',!!(d.metadata?.source_documents?.length));
-    else addBubble('Sorry, encountered an error: '+(d.message||'Unknown'),'ai');
+    else if(d.error==='Unauthorized'||d.message?.includes('log in')){
+      const su=localStorage.getItem('ac_loginName'),sh=localStorage.getItem('ac_loginHash');
+      if(su&&sh){
+        try{
+          const rr=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginName:su,encPassword:sh})});
+          const dd=await rr.json();
+          if(dd.accessToken){token=dd.accessToken;localStorage.setItem('ac_token',token);addBubble('Session refreshed — please ask your question again.','ai');}
+          else addBubble('Session expired. Please reload the page.','ai');
+        }catch(e2){addBubble('Session expired. Please reload the page.','ai');}
+      } else addBubble('Session expired. Please reload the page.','ai');
+    } else addBubble('Sorry, encountered an error: '+(d.message||'Unknown'),'ai');
   }catch(e){rmTyping(tid);addBubble('Connection error. Please check your network.','ai');}
   const m=document.getElementById('chat-msgs');if(m)m.scrollTop=m.scrollHeight;
+  saveChatHistory();
 }
 
 function addBubble(txt,sender,src=false){
@@ -536,11 +727,636 @@ function rmTyping(id){const el=document.getElementById(id);if(el)el.remove();}
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmt(t){return esc(t).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n\n/g,'</p><p style="font-size:13px;font-weight:500;line-height:1.6;color:var(--on-surface);margin-top:8px">').replace(/\n/g,'<br/>');}
 
+// ── FARMER FUNCTIONS ──
+let currentFarmer = null;
+
+function searchFarmers(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('#screen-farmers .sp-y2 .list-item').forEach(el=>{
+    const txt=el.textContent.toLowerCase();
+    el.style.display=(!q||txt.includes(q))?'flex':'none';
+  });
+}
+
+function searchKnowledge(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.knowledge-item').forEach(el=>{
+    const tags=(el.dataset.tags||'').toLowerCase();
+    const txt=el.textContent.toLowerCase();
+    el.style.display=(!q||txt.includes(q)||tags.includes(q))?'flex':'none';
+  });
+  // Show/hide section headers based on visible items
+  document.querySelectorAll('#knowledge-items > div').forEach(section=>{
+    const visible=section.querySelectorAll('.knowledge-item[style*="flex"],.knowledge-item:not([style])').length;
+    section.style.display=(!q||visible>0)?'block':'none';
+  });
+}
+
+function filterFarmers(type){
+  ['all','maize','beans','alert'].forEach(t=>{
+    const b=document.getElementById('ft-'+t);
+    if(!b)return;
+    b.style.background=t===type?'var(--primary)':'var(--surf-mid)';
+    b.style.color=t===type?'#fff':'var(--on-sv)';
+  });
+  document.querySelectorAll('.sp-y2 .list-item[data-crop]').forEach(el=>{
+    const crop=el.dataset.crop||'';
+    const status=el.dataset.status||'';
+    let show=false;
+    if(type==='all') show=true;
+    else if(type==='maize') show=crop==='maize';
+    else if(type==='beans') show=crop==='beans';
+    else if(type==='alert') show=status==='alert'||status==='due';
+    el.style.display=show?'flex':'none';
+  });
+}
+
+function viewFarmer(initials, name, crop, district, plot, phone, status, lastVisit, notes) {
+  currentFarmer = {initials, name, crop, district, plot, phone, status, lastVisit, notes};
+  document.getElementById('detail-av').textContent = initials;
+  document.getElementById('detail-name').textContent = name;
+  document.getElementById('detail-fullname').textContent = name;
+  document.getElementById('detail-crop').textContent = '🌱 ' + crop + ' Farmer';
+  document.getElementById('detail-district').textContent = '📍 ' + district + ' District';
+  document.getElementById('detail-plot').textContent = plot + ' ha';
+  document.getElementById('detail-phone').textContent = phone;
+  document.getElementById('detail-status').textContent = status;
+  document.getElementById('detail-visit').textContent = lastVisit;
+  document.getElementById('detail-notes').textContent = notes;
+  goTo('farmer-detail');
+}
+
+function showAddFarmer() {
+  currentFarmer = null;
+  document.getElementById('modal-title').textContent = 'Add New Farmer';
+  document.getElementById('save-btn-txt').textContent = 'Save Farmer';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-phone').value = '';
+  document.getElementById('f-plot').value = '';
+  document.getElementById('f-notes').value = '';
+  document.getElementById('modal-farmer').style.display = 'flex';
+}
+
+function showEditFarmer() {
+  if(!currentFarmer) return;
+  document.getElementById('modal-title').textContent = 'Edit Farmer';
+  document.getElementById('save-btn-txt').textContent = 'Update Farmer';
+  document.getElementById('f-name').value = currentFarmer.name;
+  document.getElementById('f-phone').value = currentFarmer.phone;
+  document.getElementById('f-plot').value = currentFarmer.plot;
+  document.getElementById('f-notes').value = currentFarmer.notes;
+  document.getElementById('modal-farmer').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modal-farmer').style.display = 'none';
+}
+
+function saveFarmer() {
+  const name = document.getElementById('f-name').value.trim();
+  const phone = document.getElementById('f-phone').value.trim();
+  const district = document.getElementById('f-district').value;
+  const crop = document.getElementById('f-crop').value;
+  const plot = document.getElementById('f-plot').value;
+  const notes = document.getElementById('f-notes').value.trim();
+  if(!name){ showToast('Please enter farmer name'); return; }
+  if(!phone){ showToast('Please enter phone number'); return; }
+  if(!plot){ showToast('Please enter plot size'); return; }
+  const ini = name.split(' ').map(n=>n[0]||'').join('').toUpperCase().substring(0,2)||'FM';
+  if(currentFarmer){
+    // Update existing — refresh detail view
+    currentFarmer = {initials:ini, name, crop, district, plot, phone, status:currentFarmer.status, lastVisit:currentFarmer.lastVisit, notes};
+    document.getElementById('detail-fullname').textContent = name;
+    document.getElementById('detail-name').textContent = name;
+    document.getElementById('detail-av').textContent = ini;
+    document.getElementById('detail-crop').textContent = '🌱 ' + crop + ' Farmer';
+    document.getElementById('detail-district').textContent = '📍 ' + district + ' District';
+    document.getElementById('detail-plot').textContent = plot + ' ha';
+    document.getElementById('detail-phone').textContent = phone;
+    document.getElementById('detail-notes').textContent = notes;
+    closeModal();
+    showToast('Farmer updated ✓');
+  } else {
+    // Add new farmer to list
+    const list = document.querySelector('#screen-farmers .sp-y2');
+    if(list){
+      const div = document.createElement('div');
+      div.className = 'list-item';
+      div.dataset.crop = crop.toLowerCase();
+      div.dataset.status = 'active';
+      div.style.cursor = 'pointer';
+      div.onclick = () => viewFarmer(ini,name,crop,district,plot,phone,'Active','Just added',notes||'No notes yet.');
+      div.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--primary-c);color:var(--primary-fixed);font-size:12px">'+ini+'</div><div><h4 style="font-weight:700;font-size:13px">'+name+'</h4><p style="font-size:10px;color:var(--on-sv)">'+crop+' · '+district+' · '+plot+'ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">New</span><span style="font-size:18px;color:var(--outline)">›</span></div>';
+      list.insertBefore(div, list.firstChild);
+    }
+    closeModal();
+    showToast('Farmer added ✓');
+    goTo('farmers');
+  }
+}
+
+function confirmDeleteFarmer() {
+  if(confirm('Delete ' + (currentFarmer?.name || 'this farmer') + '? This cannot be undone.')) {
+    showToast('Farmer record deleted');
+    goTo('farmers');
+  }
+}
+
+function askAboutFarmer() {
+  if(!currentFarmer) return;
+  const q = 'I am visiting ' + currentFarmer.name + ' who grows ' + currentFarmer.crop + ' on ' + currentFarmer.plot + ' hectares in ' + currentFarmer.district + '. Note: ' + currentFarmer.notes + '. What advice can you give?';
+  document.getElementById('chat-inp').value = q;
+  goTo('ai');
+  sendMsg();
+}
+
+// ── TOAST ──
+function showNewReport() {
+  showToast('New report form coming in next update');
+}
+function submitReport() {
+  showToast('Report submitted successfully ✓');
+}
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if(file) showToast('Uploading: ' + file.name + ' ✓');
+}
+function showAddWorker() {
+  document.getElementById('modal-worker').style.display = 'flex';
+}
+function saveWorker() {
+  document.getElementById('modal-worker').style.display = 'none';
+  showToast('Extension worker added ✓');
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 3000);
+}
+
+// ── ROLE-BASED UI ──
+function applyRole(role) {
+  const isAdmin = role === 'Admin';
+  const workerMenu = document.getElementById('menu-worker');
+  const adminMenu = document.getElementById('menu-admin');
+  if(workerMenu) workerMenu.style.display = isAdmin ? 'none' : 'block';
+  if(adminMenu) adminMenu.style.display = isAdmin ? 'block' : 'none';
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
+  const st=localStorage.getItem('ac_token');
+  if(st){
+    token=st;
+    userId=localStorage.getItem('ac_userId')||'users/105329';
+    const sn=localStorage.getItem('ac_name'),si=localStorage.getItem('ac_ini'),sr=localStorage.getItem('ac_role');
+    if(sn){const e=document.getElementById('prof-name');if(e)e.textContent=sn;const e2=document.getElementById('dash-username');if(e2)e2.textContent=sn;}
+    if(si){const e=document.getElementById('prof-av');if(e)e.textContent=si;}
+    applyRole(sr||'worker');setSync(true);initDash();goTo('dashboard');setTimeout(loadChatHistory,150);
+  }
   const now=new Date();
   const t0=document.getElementById('chat-t0');if(t0)t0.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   const dl=document.getElementById('chat-date-lbl');if(dl)dl.textContent='Today • Kajeno — '+now.toLocaleDateString('en-GB',{weekday:'long'});
 });
 </script>
+
+<!-- FARMER DETAIL -->
+<div id="screen-farmer-detail" class="screen">
+  <header class="app-header">
+    <button onclick="goTo('farmers')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
+    <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1" id="detail-name">Farmer Detail</h1>
+    <button onclick="showEditFarmer()" style="font-size:13px;font-weight:700;color:var(--primary);padding:6px 12px;background:var(--primary-fixed);border-radius:10px">Edit</button>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
+    <!-- Profile card -->
+    <div style="background:var(--primary-c);border-radius:20px;padding:20px;display:flex;align-items:center;gap:16px;margin-bottom:16px">
+      <div class="avatar" id="detail-av" style="width:64px;height:64px;background:var(--primary);color:var(--primary-fixed);font-size:22px;font-weight:900;flex-shrink:0">TM</div>
+      <div>
+        <h2 id="detail-fullname" style="font-weight:900;color:var(--primary-fixed);font-size:17px">Thabo Mokoena</h2>
+        <p id="detail-crop" style="color:rgba(189,238,199,.7);font-size:12px;margin-top:2px">🌽 Maize Farmer</p>
+        <p id="detail-district" style="color:rgba(189,238,199,.5);font-size:11px;margin-top:2px">📍 Leribe District</p>
+      </div>
+    </div>
+    <!-- Farm info -->
+    <div class="card" style="margin-bottom:12px">
+      <h3 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--on-sv);margin-bottom:12px">Farm Information</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><p style="font-size:10px;color:var(--on-sv);font-weight:600;text-transform:uppercase;letter-spacing:.1em">Plot Size</p><p id="detail-plot" style="font-size:15px;font-weight:700;color:var(--primary);margin-top:2px">2.5 ha</p></div>
+        <div><p style="font-size:10px;color:var(--on-sv);font-weight:600;text-transform:uppercase;letter-spacing:.1em">Last Visit</p><p id="detail-visit" style="font-size:15px;font-weight:700;color:var(--primary);margin-top:2px">2 days ago</p></div>
+        <div><p style="font-size:10px;color:var(--on-sv);font-weight:600;text-transform:uppercase;letter-spacing:.1em">Phone</p><p id="detail-phone" style="font-size:15px;font-weight:700;color:var(--primary);margin-top:2px">+266 5800 0000</p></div>
+        <div><p style="font-size:10px;color:var(--on-sv);font-weight:600;text-transform:uppercase;letter-spacing:.1em">Status</p><p id="detail-status" style="font-size:15px;font-weight:700;color:var(--primary);margin-top:2px">Active</p></div>
+      </div>
+    </div>
+    <!-- AI advisory -->
+    <button onclick="askAboutFarmer()" style="width:100%;background:var(--primary);border-radius:14px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <span style="font-size:20px">🤖</span>
+      <div style="text-align:left">
+        <p style="color:rgba(255,255,255,.6);font-size:10px;font-weight:700;text-transform:uppercase">AI Assistant</p>
+        <p style="color:#fff;font-size:13px;font-weight:700;margin-top:1px">Get advice for this farmer</p>
+      </div>
+      <span style="color:rgba(255,255,255,.6);font-size:20px;margin-left:auto">›</span>
+    </button>
+    <!-- Notes -->
+    <div class="card">
+      <h3 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--on-sv);margin-bottom:8px">Notes</h3>
+      <p id="detail-notes" style="font-size:13px;color:var(--on-surface);line-height:1.6">No notes recorded yet.</p>
+    </div>
+    <!-- Delete -->
+    <button onclick="confirmDeleteFarmer()" style="width:100%;margin-top:16px;padding:14px;border-radius:14px;background:var(--error-c);color:var(--error);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px">
+      🗑️ Delete Farmer Record
+    </button>
+  </main>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn active" onclick="goTo('farmers')"><span class="ni">👥</span>Farmers</button>
+    <button class="nav-btn" onclick="goTo('ai')"><span class="ni">🤖</span>AI</button>
+    <button class="nav-btn" onclick="goTo('knowledge')"><span class="ni">📚</span>Learn</button>
+    <button class="nav-btn" onclick="goTo('more')"><span class="ni">⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- ADD/EDIT FARMER MODAL -->
+<div id="modal-farmer" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center">
+  <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:24px;width:100%;max-width:600px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 id="modal-title" style="font-size:17px;font-weight:900;color:var(--primary)">Add Farmer</h2>
+      <button onclick="closeModal()" style="font-size:22px;color:var(--outline);width:32px;height:32px;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Full Name</label><input id="f-name" type="text" placeholder="e.g. Thabo Mokoena" class="input-field"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Phone Number</label><input id="f-phone" type="tel" placeholder="+266 5800 0000" class="input-field"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">District</label>
+        <select id="f-district" class="input-field" style="appearance:none">
+          <option>Maseru</option><option>Leribe</option><option>Butha-Buthe</option><option>Berea</option><option>Mafeteng</option><option>Mohale's Hoek</option><option>Qacha's Nek</option><option>Quthing</option><option>Thaba-Tseka</option><option>Mokhotlong</option>
+        </select>
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Primary Crop</label>
+        <select id="f-crop" class="input-field" style="appearance:none">
+          <option>Maize</option><option>Beans</option><option>Maize + Beans</option><option>Sorghum</option><option>Wheat</option><option>Vegetables</option>
+        </select>
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Plot Size (hectares)</label><input id="f-plot" type="number" placeholder="e.g. 2.5" step="0.1" class="input-field"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Notes</label><textarea id="f-notes" placeholder="Any important notes about this farmer..." style="width:100%;min-height:80px;padding:12px;background:var(--surf-mid);border:none;border-bottom:2px solid var(--outline-v);border-radius:8px 8px 0 0;font-size:13px;font-family:inherit;outline:none;resize:none"></textarea></div>
+    </div>
+    <button onclick="saveFarmer()" style="width:100%;margin-top:20px;background:linear-gradient(135deg,var(--primary),var(--primary-c));color:#fff;border-radius:14px;padding:16px;font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px">
+      <span id="save-btn-txt">Save Farmer</span> ✓
+    </button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" style="display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;padding:10px 20px;border-radius:999px;font-size:13px;font-weight:700;z-index:300;box-shadow:0 4px 16px rgba(3,51,25,.3);white-space:nowrap"></div>
+
+
+<!-- FIELD REPORTS SCREEN -->
+<div id="screen-reports" class="screen">
+  <header class="app-header">
+    <button onclick="goTo('dashboard')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
+    <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1">Field Reports</h1>
+    <button onclick="showNewReport()" style="font-size:13px;font-weight:700;color:#fff;background:var(--primary);padding:6px 12px;border-radius:10px">+ New</button>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
+    <!-- Summary -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div class="card" style="text-align:center"><p style="font-size:22px;font-weight:900;color:var(--primary)">8</p><p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase">Total</p></div>
+      <div style="background:rgba(144,76,39,.15);border-radius:14px;padding:12px;text-align:center"><p style="font-size:22px;font-weight:900;color:var(--secondary)">2</p><p style="font-size:9px;font-weight:700;color:var(--secondary);text-transform:uppercase">Pending</p></div>
+      <div style="background:rgba(189,238,199,.4);border-radius:14px;padding:12px;text-align:center"><p style="font-size:22px;font-weight:900;color:var(--primary)">6</p><p style="font-size:9px;font-weight:700;color:var(--primary);text-transform:uppercase">Submitted</p></div>
+    </div>
+    <div class="sp-y2">
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center">
+          <div><h4 style="font-weight:700;font-size:13px">Visit — Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Maize • Leribe • Apr 2, 2026</p></div>
+          <span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Submitted</span>
+        </div>
+        <p style="font-size:12px;color:var(--on-sv);line-height:1.5">Crop health: Good. Soil moisture adequate. Recommended additional nitrogen fertilizer.</p>
+      </div>
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px;border-color:rgba(186,26,26,.1)">
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center">
+          <div><h4 style="font-weight:700;font-size:13px">Visit — Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Beans • Butha-Buthe • Apr 1, 2026</p></div>
+          <span class="tag" style="background:var(--error-c);color:var(--error)">Pending</span>
+        </div>
+        <p style="font-size:12px;color:var(--on-sv);line-height:1.5">Low yield observed. Possible nutrient deficiency. Soil sample taken. Awaiting results.</p>
+        <button onclick="submitReport()" style="background:var(--primary);color:#fff;border-radius:10px;padding:8px 16px;font-size:12px;font-weight:700">Submit Report</button>
+      </div>
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center">
+          <div><h4 style="font-weight:700;font-size:13px">Visit — Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Beans • Maseru • Mar 28, 2026</p></div>
+          <span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">Pending</span>
+        </div>
+        <p style="font-size:12px;color:var(--on-sv);line-height:1.5">First visit. Farmer needs guidance on bean spacing and pest prevention.</p>
+        <button onclick="submitReport()" style="background:var(--primary);color:#fff;border-radius:10px;padding:8px 16px;font-size:12px;font-weight:700">Submit Report</button>
+      </div>
+    </div>
+  </main>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn" onclick="goTo('farmers')"><span class="ni">👥</span>Farmers</button>
+    <button class="nav-btn" onclick="goTo('ai')"><span class="ni">🤖</span>AI</button>
+    <button class="nav-btn" onclick="goTo('knowledge')"><span class="ni">📚</span>Learn</button>
+    <button class="nav-btn" onclick="goTo('more')"><span class="ni">⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- MARKET LINKAGES SCREEN -->
+<div id="screen-market" class="screen">
+  <header class="app-header">
+    <button onclick="goTo('more')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
+    <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1">Market Linkages</h1>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
+    <p style="font-size:11px;font-weight:700;color:var(--on-sv);text-transform:uppercase;letter-spacing:.15em;margin-bottom:12px">Current Prices — Maseru Market</p>
+    <div class="sp-y2" style="margin-bottom:20px">
+      <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🌽</span><div><h4 style="font-weight:700;font-size:13px">Maize (50kg bag)</h4><p style="font-size:10px;color:var(--on-sv)">Updated: Today</p></div></div>
+        <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 180</p><p style="font-size:10px;color:#22c55e;font-weight:700">↑ +5%</p></div>
+      </div>
+      <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🫘</span><div><h4 style="font-weight:700;font-size:13px">Beans (25kg bag)</h4><p style="font-size:10px;color:var(--on-sv)">Updated: Today</p></div></div>
+        <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 320</p><p style="font-size:10px;color:var(--error);font-weight:700">↓ -2%</p></div>
+      </div>
+      <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🌾</span><div><h4 style="font-weight:700;font-size:13px">Sorghum (50kg bag)</h4><p style="font-size:10px;color:var(--on-sv)">Updated: Yesterday</p></div></div>
+        <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 160</p><p style="font-size:10px;color:var(--on-sv);font-weight:700">→ Stable</p></div>
+      </div>
+    </div>
+    <p style="font-size:11px;font-weight:700;color:var(--on-sv);text-transform:uppercase;letter-spacing:.15em;margin-bottom:12px">Nearby Buyers</p>
+    <div class="sp-y2">
+      <div class="list-item">
+        <div><h4 style="font-weight:700;font-size:13px">Lesotho Flour Mills</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">📍 Maseru Industrial Area • Buys: Maize, Sorghum</p></div>
+        <span style="font-size:18px;color:var(--outline)">›</span>
+      </div>
+      <div class="list-item">
+        <div><h4 style="font-weight:700;font-size:13px">Shoprite Suppliers</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">📍 Maseru • Buys: Beans, Vegetables</p></div>
+        <span style="font-size:18px;color:var(--outline)">›</span>
+      </div>
+      <div class="list-item">
+        <div><h4 style="font-weight:700;font-size:13px">Ha Matala Market</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">📍 Ha Matala • All crops accepted</p></div>
+        <span style="font-size:18px;color:var(--outline)">›</span>
+      </div>
+    </div>
+    <button onclick="sendQ('What are the best strategies for farmers in Lesotho to get better prices for their maize and beans?');goTo('ai')" style="width:100%;margin-top:16px;background:var(--primary);color:#fff;border-radius:14px;padding:14px;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px">🤖 Ask AI for Market Strategy</button>
+  </main>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn" onclick="goTo('farmers')"><span class="ni">👥</span>Farmers</button>
+    <button class="nav-btn" onclick="goTo('ai')"><span class="ni">🤖</span>AI</button>
+    <button class="nav-btn" onclick="goTo('knowledge')"><span class="ni">📚</span>Learn</button>
+    <button class="nav-btn" onclick="goTo('more')"><span class="ni">⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- GOVERNMENT PROGRAMS SCREEN -->
+<div id="screen-programs" class="screen">
+  <header class="app-header">
+    <button onclick="goTo('more')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
+    <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1">Government Programs</h1>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
+    <div class="sp-y2">
+      <div class="card" style="border-left:4px solid var(--primary)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div><h4 style="font-weight:700;font-size:14px;color:var(--primary)">Input Subsidy Programme</h4><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary);margin-top:4px;display:inline-block">Active</span></div>
+          <span style="font-size:22px">🌱</span>
+        </div>
+        <p style="font-size:12px;color:var(--on-sv);line-height:1.6">Subsidized seeds and fertilizer for registered smallholder farmers. Register at district office.</p>
+        <p style="font-size:10px;font-weight:700;color:var(--primary);margin-top:8px">Deadline: May 31, 2026</p>
+      </div>
+      <div class="card" style="border-left:4px solid var(--secondary)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div><h4 style="font-weight:700;font-size:14px;color:var(--primary)">Farmer Support Unit (FSU)</h4><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary);margin-top:4px;display:inline-block">Ongoing</span></div>
+          <span style="font-size:22px">🏛️</span>
+        </div>
+        <p style="font-size:12px;color:var(--on-sv);line-height:1.6">Technical advisory services from Ministry extension officers. Free consultations available.</p>
+        <p style="font-size:10px;font-weight:700;color:var(--secondary);margin-top:8px">Contact: +266 2231 4990</p>
+      </div>
+      <div class="card" style="border-left:4px solid var(--tertiary-t)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div><h4 style="font-weight:700;font-size:14px;color:var(--primary)">Irrigation Development</h4><span class="tag" style="background:rgba(255,146,56,.15);color:var(--tertiary-t);margin-top:4px;display:inline-block">Applications Open</span></div>
+          <span style="font-size:22px">💧</span>
+        </div>
+        <p style="font-size:12px;color:var(--on-sv);line-height:1.6">Government support for small-scale irrigation systems. Priority given to highland areas.</p>
+        <p style="font-size:10px;font-weight:700;color:var(--tertiary-t);margin-top:8px">Deadline: Jun 15, 2026</p>
+      </div>
+      <div class="card" style="border-left:4px solid var(--primary-c)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div><h4 style="font-weight:700;font-size:14px;color:var(--primary)">FAO School Garden Initiative</h4><span class="tag" style="background:rgba(30,74,46,.15);color:var(--primary-c);margin-top:4px;display:inline-block">New</span></div>
+          <span style="font-size:22px">🏫</span>
+        </div>
+        <p style="font-size:12px;color:var(--on-sv);line-height:1.6">FAO programme establishing school gardens to teach children sustainable farming practices.</p>
+        <p style="font-size:10px;font-weight:700;color:var(--primary);margin-top:8px">Partner: FAO Lesotho Office</p>
+      </div>
+    </div>
+    <button onclick="sendQ('What government agricultural support programs are available for farmers in Lesotho?');goTo('ai')" style="width:100%;margin-top:16px;background:var(--primary);color:#fff;border-radius:14px;padding:14px;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px">🤖 Ask AI About Programs</button>
+  </main>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn" onclick="goTo('farmers')"><span class="ni">👥</span>Farmers</button>
+    <button class="nav-btn" onclick="goTo('ai')"><span class="ni">🤖</span>AI</button>
+    <button class="nav-btn" onclick="goTo('knowledge')"><span class="ni">📚</span>Learn</button>
+    <button class="nav-btn" onclick="goTo('more')"><span class="ni">⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- ANALYTICS SCREEN (Admin) -->
+<div id="screen-analytics" class="screen">
+  <header class="app-header">
+    <button onclick="goTo('more')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
+    <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1">Analytics Dashboard</h1>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="card" style="text-align:center;padding:16px">
+        <p style="font-size:32px;font-weight:900;color:var(--primary)">24</p>
+        <p style="font-size:10px;font-weight:700;color:var(--on-sv);text-transform:uppercase;margin-top:2px">Registered Farmers</p>
+        <p style="font-size:10px;color:#22c55e;font-weight:700;margin-top:4px">↑ +3 this month</p>
+      </div>
+      <div class="card" style="text-align:center;padding:16px">
+        <p style="font-size:32px;font-weight:900;color:var(--secondary)">8</p>
+        <p style="font-size:10px;font-weight:700;color:var(--on-sv);text-transform:uppercase;margin-top:2px">Field Reports</p>
+        <p style="font-size:10px;color:var(--secondary);font-weight:700;margin-top:4px">2 pending</p>
+      </div>
+      <div class="card" style="text-align:center;padding:16px">
+        <p style="font-size:32px;font-weight:900;color:var(--primary)">4</p>
+        <p style="font-size:10px;font-weight:700;color:var(--on-sv);text-transform:uppercase;margin-top:2px">Extension Workers</p>
+        <p style="font-size:10px;color:var(--on-sv);font-weight:700;margin-top:4px">All active</p>
+      </div>
+      <div class="card" style="text-align:center;padding:16px">
+        <p style="font-size:32px;font-weight:900;color:var(--primary)">147</p>
+        <p style="font-size:10px;font-weight:700;color:var(--on-sv);text-transform:uppercase;margin-top:2px">AI Queries</p>
+        <p style="font-size:10px;color:#22c55e;font-weight:700;margin-top:4px">↑ +22 this week</p>
+      </div>
+    </div>
+    <!-- Crop distribution -->
+    <div class="card" style="margin-bottom:12px">
+      <h3 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--on-sv);margin-bottom:14px">Crop Distribution</h3>
+      <div class="sp-y2">
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">🌽 Maize</span><span style="font-size:12px;font-weight:700;color:var(--primary)">58%</span></div>
+          <div style="background:var(--surf-highest);border-radius:999px;height:8px"><div style="background:var(--primary);height:8px;border-radius:999px;width:58%"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">🫘 Beans</span><span style="font-size:12px;font-weight:700;color:var(--secondary)">29%</span></div>
+          <div style="background:var(--surf-highest);border-radius:999px;height:8px"><div style="background:var(--secondary);height:8px;border-radius:999px;width:29%"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">🌾 Mixed</span><span style="font-size:12px;font-weight:700;color:var(--on-sv)">13%</span></div>
+          <div style="background:var(--surf-highest);border-radius:999px;height:8px"><div style="background:var(--outline-v);height:8px;border-radius:999px;width:13%"></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- District coverage -->
+    <div class="card" style="margin-bottom:12px">
+      <h3 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--on-sv);margin-bottom:12px">District Coverage</h3>
+      <div class="sp-y2">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:600">Maseru</span><div style="display:flex;align-items:center;gap:8px"><div style="background:var(--surf-highest);border-radius:999px;height:6px;width:80px"><div style="background:var(--primary);height:6px;border-radius:999px;width:75%"></div></div><span style="font-size:11px;font-weight:700;color:var(--primary)">9</span></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:600">Leribe</span><div style="display:flex;align-items:center;gap:8px"><div style="background:var(--surf-highest);border-radius:999px;height:6px;width:80px"><div style="background:var(--primary);height:6px;border-radius:999px;width:50%"></div></div><span style="font-size:11px;font-weight:700;color:var(--primary)">6</span></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:600">Butha-Buthe</span><div style="display:flex;align-items:center;gap:8px"><div style="background:var(--surf-highest);border-radius:999px;height:6px;width:80px"><div style="background:var(--primary);height:6px;border-radius:999px;width:38%"></div></div><span style="font-size:11px;font-weight:700;color:var(--primary)">4</span></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:600">Other</span><div style="display:flex;align-items:center;gap:8px"><div style="background:var(--surf-highest);border-radius:999px;height:6px;width:80px"><div style="background:var(--outline-v);height:6px;border-radius:999px;width:42%"></div></div><span style="font-size:11px;font-weight:700;color:var(--on-sv)">5</span></div></div>
+      </div>
+    </div>
+  </main>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn" onclick="goTo('farmers')"><span class="ni">👥</span>Farmers</button>
+    <button class="nav-btn" onclick="goTo('ai')"><span class="ni">🤖</span>AI</button>
+    <button class="nav-btn" onclick="goTo('knowledge')"><span class="ni">📚</span>Learn</button>
+    <button class="nav-btn active" onclick="goTo('more')"><span class="ni">⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- UPLOAD DOCUMENTS SCREEN (Admin) -->
+<div id="screen-upload" class="screen">
+  <header class="app-header">
+    <button onclick="goTo('more')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
+    <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1">Upload Documents</h1>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
+    <p style="font-size:12px;color:var(--on-sv);line-height:1.6;margin-bottom:16px">Upload agricultural documents to train the AI knowledge base. Supported formats: PDF, DOCX, TXT.</p>
+    <!-- Upload area -->
+    <div style="border:2px dashed var(--outline-v);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;background:var(--surf-low);cursor:pointer" onclick="document.getElementById('file-input').click()">
+      <div style="font-size:48px;margin-bottom:12px">📄</div>
+      <h3 style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:6px">Tap to upload document</h3>
+      <p style="font-size:12px;color:var(--on-sv)">PDF, DOCX, TXT up to 50MB</p>
+      <input id="file-input" type="file" accept=".pdf,.docx,.txt" style="display:none" onchange="handleFileSelect(event)"/>
+    </div>
+    <!-- Category selection -->
+    <div style="margin-bottom:16px">
+      <label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px">Document Category</label>
+      <select id="doc-category" class="input-field" style="appearance:none">
+        <option>Maize Farming Guide</option>
+        <option>Beans Farming Guide</option>
+        <option>Pest & Disease Management</option>
+        <option>Soil Management</option>
+        <option>Climate-Smart Agriculture</option>
+        <option>Market Prices & Trade</option>
+        <option>Government Policies</option>
+        <option>FAO Guidelines</option>
+      </select>
+    </div>
+    <!-- Uploaded docs list -->
+    <h3 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--on-sv);margin-bottom:10px">Knowledge Base Documents</h3>
+    <div class="sp-y2">
+      <div class="list-item">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">📄</span><div><h4 style="font-weight:700;font-size:12px">FAO_Maize_Lesotho_2024.pdf</h4><p style="font-size:10px;color:var(--on-sv)">Maize Farming Guide • 2.4MB</p></div></div>
+        <span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Active</span>
+      </div>
+      <div class="list-item">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">📄</span><div><h4 style="font-weight:700;font-size:12px">Beans_Production_Guide.pdf</h4><p style="font-size:10px;color:var(--on-sv)">Beans Farming Guide • 1.8MB</p></div></div>
+        <span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Active</span>
+      </div>
+      <div class="list-item" style="border-color:rgba(186,26,26,.1)">
+        <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">📄</span><div><h4 style="font-weight:700;font-size:12px">Pest_Management_Guide.docx</h4><p style="font-size:10px;color:var(--on-sv)">Pest & Disease • 890KB</p></div></div>
+        <span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">Processing</span>
+      </div>
+    </div>
+  </main>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn" onclick="goTo('farmers')"><span class="ni">👥</span>Farmers</button>
+    <button class="nav-btn" onclick="goTo('ai')"><span class="ni">🤖</span>AI</button>
+    <button class="nav-btn" onclick="goTo('knowledge')"><span class="ni">📚</span>Learn</button>
+    <button class="nav-btn active" onclick="goTo('more')"><span class="ni">⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- USER MANAGEMENT SCREEN (Admin) -->
+<div id="screen-users" class="screen">
+  <header class="app-header">
+    <button onclick="goTo('more')" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--outline);font-size:22px;flex-shrink:0">←</button>
+    <h1 style="font-size:17px;font-weight:900;color:var(--primary);margin-left:8px;flex:1">User Management</h1>
+    <button onclick="showAddWorker()" style="font-size:13px;font-weight:700;color:#fff;background:var(--primary);padding:6px 12px;border-radius:10px">+ Add</button>
+  </header>
+  <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div class="card" style="text-align:center"><p style="font-size:26px;font-weight:900;color:var(--primary)">4</p><p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase">Extension Workers</p></div>
+      <div class="card" style="text-align:center"><p style="font-size:26px;font-weight:900;color:var(--secondary)">1</p><p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase">Admins</p></div>
+    </div>
+    <p style="font-size:11px;font-weight:700;color:var(--on-sv);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px">Extension Workers</p>
+    <div class="sp-y2">
+      <div class="list-item">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:42px;height:42px;background:var(--primary-c);color:var(--primary-fixed);font-size:12px">RS</div>
+          <div><h4 style="font-weight:700;font-size:13px" id="prof-name-users">Reitumetse Sehloho</h4><p style="font-size:10px;color:var(--on-sv)">Maseru District • Admin</p></div>
+        </div>
+        <span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Active</span>
+      </div>
+      <div class="list-item">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:42px;height:42px;background:var(--surf-highest);color:var(--on-sv);font-size:12px">NM</div>
+          <div><h4 style="font-weight:700;font-size:13px">Nthabiseng Mokhesi</h4><p style="font-size:10px;color:var(--on-sv)">Leribe District • Worker</p></div>
+        </div>
+        <span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Active</span>
+      </div>
+      <div class="list-item">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:42px;height:42px;background:var(--surf-highest);color:var(--on-sv);font-size:12px">TL</div>
+          <div><h4 style="font-weight:700;font-size:13px">Teboho Leteka</h4><p style="font-size:10px;color:var(--on-sv)">Butha-Buthe District • Worker</p></div>
+        </div>
+        <span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Active</span>
+      </div>
+      <div class="list-item">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:42px;height:42px;background:var(--surf-highest);color:var(--on-sv);font-size:12px">MP</div>
+          <div><h4 style="font-weight:700;font-size:13px">Maleshoane Phiri</h4><p style="font-size:10px;color:var(--on-sv)">Maseru District • Worker</p></div>
+        </div>
+        <span class="tag" style="background:var(--error-c);color:var(--error)">Inactive</span>
+      </div>
+    </div>
+  </main>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn" onclick="goTo('farmers')"><span class="ni">👥</span>Farmers</button>
+    <button class="nav-btn" onclick="goTo('ai')"><span class="ni">🤖</span>AI</button>
+    <button class="nav-btn" onclick="goTo('knowledge')"><span class="ni">📚</span>Learn</button>
+    <button class="nav-btn active" onclick="goTo('more')"><span class="ni">⋯</span>More</button>
+  </nav>
+</div>
+
+<!-- ADD WORKER MODAL -->
+<div id="modal-worker" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center">
+  <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:24px;width:100%;max-width:600px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 style="font-size:17px;font-weight:900;color:var(--primary)">Add Extension Worker</h2>
+      <button onclick="document.getElementById('modal-worker').style.display='none'" style="font-size:22px;color:var(--outline)">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Full Name</label><input type="text" placeholder="e.g. Nthabiseng Mokhesi" class="input-field"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Email</label><input type="email" placeholder="worker@agriculture.gov.ls" class="input-field"/></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">District</label>
+        <select class="input-field" style="appearance:none">
+          <option>Maseru</option><option>Leribe</option><option>Butha-Buthe</option><option>Berea</option><option>Mafeteng</option><option>Mohale's Hoek</option><option>Qacha's Nek</option><option>Quthing</option><option>Thaba-Tseka</option><option>Mokhotlong</option>
+        </select>
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px">Role</label>
+        <select class="input-field" style="appearance:none"><option>Extension Worker</option><option>District Manager</option><option>Admin</option></select>
+      </div>
+    </div>
+    <button onclick="saveWorker()" style="width:100%;margin-top:20px;background:linear-gradient(135deg,var(--primary),var(--primary-c));color:#fff;border-radius:14px;padding:16px;font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px">
+      Add Worker ✓
+    </button>
+  </div>
+</div>
+
 </body>
 </html>

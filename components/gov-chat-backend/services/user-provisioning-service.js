@@ -8,7 +8,31 @@ const { logger, dbService, ensureCollection } = require('../shared-lib');
  *
  * Creates or updates a user record in ArangoDB on each successful
  * Keycloak authentication. Uses atomic UPSERT to prevent duplicates.
+ *
+ * An in-memory cache avoids hitting ArangoDB on every authenticated request.
+ * The cache TTL is short (60s) so profile changes from Keycloak propagate
+ * within a minute without repeated DB writes on every API call.
  */
+
+/** In-memory cache: iss_sub → { user, expiresAt } */
+const _cache = new Map();
+const CACHE_TTL_MS = 60_000;
+
+/** In-flight locks: iss_sub → Promise — prevents concurrent upserts for the same user */
+const _locks = new Map();
+
+/**
+ * Evict expired entries from the provisioning cache.
+ */
+function evictExpired() {
+  const now = Date.now();
+  for (const [key, entry] of _cache) {
+    if (entry.expiresAt <= now) {
+      _cache.delete(key);
+    }
+  }
+}
+
 const userProvisioningService = {
 
   /**
@@ -18,13 +42,39 @@ const userProvisioningService = {
    * @throws {Error} On ArangoDB connection or query failure
    */
   async provisionUser(decodedToken) {
-    const db = await dbService.getConnection('default');
-    await ensureCollection(db, 'users');
-
     const issSub = decodedToken.iss_sub;
     if (!issSub) {
       throw new Error('Missing iss_sub in decoded token');
     }
+
+    // Check cache first — avoids ArangoDB round-trip on every request
+    evictExpired();
+    const cached = _cache.get(issSub);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.user;
+    }
+
+    // If a provisioning is already in-flight for this user, wait for it
+    const inFlight = _locks.get(issSub);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    // Create provisioning promise and lock it so concurrent requests share the result
+    const provisionPromise = this._doProvision(decodedToken).finally(() => {
+      _locks.delete(issSub);
+    });
+    _locks.set(issSub, provisionPromise);
+    return provisionPromise;
+  },
+
+  /**
+   * Internal provisioning logic — called once per user per cache cycle
+   */
+  async _doProvision(decodedToken) {
+    const issSub = decodedToken.iss_sub;
+    const db = await dbService.getConnection('default');
+    await ensureCollection(db, 'users');
 
     const now = new Date().toISOString();
 
@@ -82,6 +132,9 @@ const userProvisioningService = {
 
     const user = result.new;
 
+    // Store in cache
+    _cache.set(issSub, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+
     // Log differentiated events
     if (!isReactivation && !result.old) {
       logger.info(`[UserProvisioning] User provisioned: ${issSub}`);
@@ -99,6 +152,9 @@ const userProvisioningService = {
    * @returns {Promise<void>}
    */
   async markUserAsDeleted(issSub) {
+    // Invalidate cache so next request re-provisions (and hits deleted check)
+    _cache.delete(issSub);
+
     const db = await dbService.getConnection('default');
     const now = new Date().toISOString();
 

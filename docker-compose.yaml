@@ -389,6 +389,9 @@ services:
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
       # Translation cache (required, no default in code)
+      - TRANSLATION_CACHE=${TRANSLATION_CACHE:-on}
+      - TRANSLATION_CACHE_HOST=${TRANSLATION_CACHE_HOST:-redis-cache}
+      - TRANSLATION_CACHE_PORT=${TRANSLATION_CACHE_PORT:-6379}
       - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD}
       # Email configuration (required)
       - EMAIL_HOST=${EMAIL_HOST}

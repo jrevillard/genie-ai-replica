@@ -1,7 +1,7 @@
 // src/store/chatHistoryStore.js
 import { v4 as uuidv4 } from 'uuid';
 import chatHistoryService from '@/services/chatHistoryService'; // Adjust path
-import userService from '@/services/userService';
+import { getUserId } from '@/utils/userUtils';
 
 export default {
   namespaced: true,
@@ -202,11 +202,11 @@ export default {
     },
 
     // Enhanced moveChat action to sync with backend
-    async moveChat({ commit, state }, { chatId, fromFolderId, toFolderId }) {
+    async moveChat({ commit, state, rootGetters }, { chatId, fromFolderId, toFolderId }) {
       console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);
       try {
-        const user = userService.getCurrentUser();
-        const userId = user?._key || user?.id;
+        const currentUser = rootGetters['auth/currentUser'];
+        const userId = getUserId(currentUser);
         if (!userId) throw new Error('User ID is missing');
         await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId, userId);
         const folder = await chatHistoryService.getFolder(toFolderId);

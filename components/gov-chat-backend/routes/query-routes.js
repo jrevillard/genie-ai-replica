@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger
@@ -14,6 +14,8 @@ module.exports = (queryService) => {
    *     summary: Update query response time
    *     description: Updates the response time of a specific query.
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -85,6 +87,8 @@ module.exports = (queryService) => {
    *     summary: Create a new query
    *     description: Creates a new query and records it in analytics. Supports single-message or full conversation modes.
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -181,7 +185,7 @@ module.exports = (queryService) => {
   router.post('/', async (req, res) => {
     try {
       logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
-      const query = await queryService.createQuery(req.body);
+      const query = await queryService.createQuery(req.body, { authorization: req.headers.authorization }, req.user?._key);
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
@@ -196,6 +200,8 @@ module.exports = (queryService) => {
    *     summary: Get query by ID
    *     description: Retrieves a query by its unique identifier
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -256,6 +262,8 @@ module.exports = (queryService) => {
    *     summary: Add feedback to a query
    *     description: Adds user feedback to a query and records it in analytics
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -342,6 +350,8 @@ module.exports = (queryService) => {
    *     summary: Mark query as answered
    *     description: Marks a query as answered and updates response time
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -409,6 +419,8 @@ module.exports = (queryService) => {
    *     summary: Search queries
    *     description: Searches queries based on various criteria with pagination
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: limit
@@ -534,6 +546,8 @@ module.exports = (queryService) => {
    *     summary: Get conversations for a query
    *     description: Retrieves all conversations associated with a specific query
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -573,6 +587,8 @@ module.exports = (queryService) => {
    *     summary: Create conversation from query
    *     description: Creates a new conversation based on an existing query
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -634,6 +650,8 @@ module.exports = (queryService) => {
    *     summary: Link query to message
    *     description: Creates a link between a query and an existing message
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId

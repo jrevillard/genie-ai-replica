@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const AnalyticsController = require('../controllers/analyticsController');
 const { logger } = require('../shared-lib');
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 
 module.exports = (analyticsService) => {
   try {
@@ -16,7 +16,7 @@ module.exports = (analyticsService) => {
     // Instantiate controller with singleton analyticsService
     const analyticsController = new AnalyticsController(analyticsService);
 
-    router.use(authMiddleware.authenticate);
+    router.use(keycloakAuthMiddleware.authenticate);
 
     /**
      * @swagger
@@ -25,6 +25,8 @@ module.exports = (analyticsService) => {
      *     summary: Get dashboard analytics
      *     description: Retrieves analytics data for the dashboard within a date range
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate
@@ -132,6 +134,8 @@ module.exports = (analyticsService) => {
      *     summary: Get specific metric data
      *     description: Retrieves data for a specific analytics metric
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: path
      *         name: metric
@@ -183,6 +187,8 @@ module.exports = (analyticsService) => {
      *     summary: Get general analytics
      *     description: Retrieves general analytics data with optional filters and date range
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate
@@ -257,6 +263,8 @@ module.exports = (analyticsService) => {
      *     summary: Get time series data
      *     description: Retrieves time series data for a specific metric, interval, and date range
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: path
      *         name: metricType
@@ -316,6 +324,8 @@ module.exports = (analyticsService) => {
      *     summary: Track an event
      *     description: Records a user event for analytics
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     requestBody:
      *       required: true
      *       content:
@@ -372,6 +382,8 @@ module.exports = (analyticsService) => {
      *     summary: Get analytics records
      *     description: Retrieves analytics records with pagination
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: limit
@@ -426,6 +438,8 @@ module.exports = (analyticsService) => {
      *     summary: Get events records
      *     description: Retrieves event records with pagination
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: limit
@@ -480,6 +494,8 @@ module.exports = (analyticsService) => {
      *     summary: Get satisfaction gauge data
      *     description: Retrieves satisfaction percentage data for the gauge visualization
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate
@@ -540,6 +556,8 @@ module.exports = (analyticsService) => {
      *     summary: Get satisfaction heatmap data
      *     description: Retrieves satisfaction percentage data by knowledge area over time
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate

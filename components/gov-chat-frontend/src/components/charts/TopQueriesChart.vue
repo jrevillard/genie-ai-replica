@@ -3,13 +3,13 @@
   <div class="top-queries-chart">
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ $t("analytics.status.loading") }}</span>
+      <span>{{ $t('analytics.status.loading') }}</span>
     </div>
     <div v-else-if="error" class="error-message">
       {{ error }}
     </div>
     <div v-else-if="!data || data.length === 0" class="no-data">
-      {{ $t("analytics.status.noData") }}
+      {{ $t('analytics.status.noData') }}
     </div>
     <div v-else>
       <!-- Compressed table view -->
@@ -18,14 +18,14 @@
           <thead>
             <tr>
               <th class="rank" :style="textStyle">
-                {{ $t("analytics.table.rank") }}
+                {{ $t('analytics.table.rank') }}
               </th>
-              <th :style="textStyle">{{ $t("analytics.table.query") }}</th>
+              <th :style="textStyle">{{ $t('analytics.table.query') }}</th>
               <th class="count" :style="textStyle">
-                {{ $t("analytics.table.count") }}
+                {{ $t('analytics.table.count') }}
               </th>
               <th class="avg-time" :style="textStyle">
-                {{ $t("analytics.table.avgTime") }}
+                {{ $t('analytics.table.avgTime') }}
               </th>
             </tr>
           </thead>
@@ -50,18 +50,18 @@
           height="140"
           :options="chartOptions"
           :series="chartSeries"
-        ></apexchart>
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import analyticsService from "../../services/analyticsService";
-import { useChartTheme } from "@/composables/useChartTheme";
+import analyticsService from '../../services/analyticsService'
+import { useChartTheme } from '../../composables/useChartTheme'
 
 export default {
-  name: "TopQueriesChart",
+  name: 'TopQueriesChart',
   props: {
     // Data can be provided by parent component
     data: {
@@ -76,11 +76,11 @@ export default {
     // Period and date for API fetching if not using external data
     period: {
       type: String,
-      default: "daily",
+      default: 'daily',
     },
     selectedDate: {
       type: String,
-      default: () => new Date().toISOString().split("T")[0],
+      default: () => new Date().toISOString().split('T')[0],
     },
     // Added to force re-render when language or theme changes
     renderKey: {
@@ -93,8 +93,8 @@ export default {
       onThemeChange: () => {
         // Chart will re-render via the theme watcher
       },
-    });
-    return { theme, getTheme };
+    })
+    return { theme, getTheme }
   },
   data() {
     return {
@@ -104,22 +104,20 @@ export default {
       chartOptions: null,
       chartSeries: [],
       isMobile: false,
-      tooltipId: "top-queries-chart-tooltip", // Store tooltip ID for reference
-    };
+      tooltipId: 'top-queries-chart-tooltip', // Store tooltip ID for reference
+    }
   },
   computed: {
     tableStyle() {
       // Apply inline style to force correct background color
       // Dark mode uses transparent to blend with UnifiedAnalytics.vue .analytics-content (#414141)
-      return this.theme === "light"
-        ? { backgroundColor: "#ffffff !important" }
-        : { backgroundColor: "transparent !important" };
+      return this.theme === 'light'
+        ? { backgroundColor: '#ffffff !important' }
+        : { backgroundColor: 'transparent !important' }
     },
     textStyle() {
       // Apply inline style to force correct text color
-      return this.theme === "light"
-        ? { color: "#333333 !important" }
-        : { color: "#ffffff !important" };
+      return this.theme === 'light' ? { color: '#333333 !important' } : { color: '#ffffff !important' }
     },
   },
   watch: {
@@ -127,8 +125,8 @@ export default {
     data: {
       handler(newData) {
         if (this.externalData && newData && newData.length > 0) {
-          this.chartData = newData;
-          this.updateChart();
+          this.chartData = newData
+          this.updateChart()
         }
       },
       deep: true,
@@ -137,14 +135,14 @@ export default {
     period: {
       handler() {
         if (!this.externalData) {
-          this.fetchData();
+          this.fetchData()
         }
       },
     },
     selectedDate: {
       handler() {
         if (!this.externalData) {
-          this.fetchData();
+          this.fetchData()
         }
       },
     },
@@ -153,19 +151,19 @@ export default {
       handler() {
         this.$nextTick(() => {
           if (this.chartData && this.chartData.length > 0) {
-            this.updateChart();
+            this.updateChart()
           }
-        });
+        })
       },
     },
     // Watch for locale changes directly
-    "$i18n.locale": {
+    '$i18n.locale': {
       handler() {
         this.$nextTick(() => {
           if (this.chartData && this.chartData.length > 0) {
-            this.updateChart();
+            this.updateChart()
           }
-        });
+        })
       },
       immediate: false,
     },
@@ -173,50 +171,48 @@ export default {
     theme: {
       handler() {
         this.$nextTick(() => {
-          this.injectGlobalStyleForTheme();
+          this.injectGlobalStyleForTheme()
           if (this.chartData && this.chartData.length > 0) {
-            this.updateChart();
+            this.updateChart()
           }
-        });
+        })
       },
     },
   },
   mounted() {
     // Check if mobile on mount
-    this.checkMobile();
+    this.checkMobile()
 
     // Use data from props or fetch from API
     if (this.externalData && this.data.length > 0) {
-      this.chartData = this.data;
-      this.updateChart();
+      this.chartData = this.data
+      this.updateChart()
     } else if (!this.externalData) {
-      this.fetchData();
+      this.fetchData()
     }
 
     // Add resize listener
-    window.addEventListener("resize", this.handleResize);
+    window.addEventListener('resize', this.handleResize)
 
     // Create custom tooltip element
-    this.ensureCustomTooltipExists();
+    this.ensureCustomTooltipExists()
 
     // Force re-render after parent theme sync
     setTimeout(() => {
-      this.injectGlobalStyleForTheme();
-      this.updateChart();
-    }, 300); // Increased delay for parent theme sync
+      this.injectGlobalStyleForTheme()
+      this.updateChart()
+    }, 300) // Increased delay for parent theme sync
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener('resize', this.handleResize)
 
     // Clean up tooltip
-    this.cleanupTooltip();
+    this.cleanupTooltip()
 
     // Remove the injected style if it exists
-    const injectedStyle = document.getElementById(
-      "top-queries-chart-theme-style"
-    );
+    const injectedStyle = document.getElementById('top-queries-chart-theme-style')
     if (injectedStyle) {
-      document.head.removeChild(injectedStyle);
+      document.head.removeChild(injectedStyle)
     }
   },
   methods: {
@@ -224,19 +220,15 @@ export default {
      * Inject a global stylesheet that targets ApexCharts data labels and chart elements
      */
     injectGlobalStyleForTheme() {
-      let styleEl = document.getElementById("top-queries-chart-theme-style");
+      let styleEl = document.getElementById('top-queries-chart-theme-style')
       if (!styleEl) {
-        styleEl = document.createElement("style");
-        styleEl.id = "top-queries-chart-theme-style";
-        document.head.appendChild(styleEl);
+        styleEl = document.createElement('style')
+        styleEl.id = 'top-queries-chart-theme-style'
+        document.head.appendChild(styleEl)
       }
 
-      const theme = this.getTheme();
-      console.log(
-        `[TopQueriesChart] Injected ${
-          theme.isDarkMode ? "dark" : "light"
-        } mode style`
-      );
+      const theme = this.getTheme()
+      console.log(`[TopQueriesChart] Injected ${theme.isDarkMode ? 'dark' : 'light'} mode style`)
 
       if (theme.isDarkMode) {
         styleEl.textContent = `
@@ -268,7 +260,7 @@ export default {
             background-color: #414141 !important;
             fill: #FFFFFF !important;
           }
-        `;
+        `
       } else {
         styleEl.textContent = `
           /* Force ApexCharts data labels to be black in light mode */
@@ -302,7 +294,7 @@ export default {
             background-color: #ffffff !important;
             fill: #333333 !important;
           }
-        `;
+        `
       }
     },
 
@@ -310,44 +302,39 @@ export default {
      * Check if the device is mobile based on screen width
      */
     checkMobile() {
-      this.isMobile = window.innerWidth < 768;
-      console.log(
-        `[DEBUG] Device detected as ${this.isMobile ? "mobile" : "desktop"}`
-      );
+      this.isMobile = window.innerWidth < 768
+      console.log(`[DEBUG] Device detected as ${this.isMobile ? 'mobile' : 'desktop'}`)
     },
 
     /**
      * Fetch top queries data if not provided externally
      */
     async fetchData() {
-      if (this.externalData) return;
+      if (this.externalData) return
 
-      this.loading = true;
-      this.error = null;
+      this.loading = true
+      this.error = null
 
       try {
         try {
-          const dashboardData = await analyticsService.getDashboardAnalytics(
-            this.period,
-            this.selectedDate
-          );
+          const dashboardData = await analyticsService.getDashboardAnalytics(this.period, this.selectedDate)
           if (dashboardData && dashboardData.topQueries) {
-            this.chartData = dashboardData.topQueries;
+            this.chartData = dashboardData.topQueries
           } else {
-            throw new Error(this.$t("analytics.status.noData"));
+            throw new Error(this.$t('analytics.status.noData'))
           }
         } catch (apiError) {
-          console.error("Error calling API:", apiError);
-          console.log("No top queries data available from API");
-          this.chartData = [];
+          console.error('Error calling API:', apiError)
+          console.log('No top queries data available from API')
+          this.chartData = []
         }
 
-        this.updateChart();
+        this.updateChart()
       } catch (error) {
-        console.error("Error fetching top queries data:", error);
-        this.error = this.$t("analytics.status.error");
+        console.error('Error fetching top queries data:', error)
+        this.error = this.$t('analytics.status.error')
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
 
@@ -355,25 +342,25 @@ export default {
      * Handle window resize
      */
     handleResize() {
-      this.checkMobile();
-      this.updateChart();
+      this.checkMobile()
+      this.updateChart()
     },
 
     /**
      * Truncate text to fit in available space
      */
     truncateText(text, maxLength) {
-      if (!text) return "";
-      return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
+      if (!text) return ''
+      return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
     },
 
     /**
      * Create a custom tooltip element with a unique ID
      */
     ensureCustomTooltipExists() {
-      this.cleanupTooltip();
-      const tooltip = document.createElement("div");
-      tooltip.id = this.tooltipId;
+      this.cleanupTooltip()
+      const tooltip = document.createElement('div')
+      tooltip.id = this.tooltipId
       tooltip.style.cssText = `
         position: absolute;
         background: rgba(0, 0, 0, 0.65);
@@ -386,17 +373,17 @@ export default {
         display: none;
         min-width: 160px;
         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-      `;
-      document.body.appendChild(tooltip);
+      `
+      document.body.appendChild(tooltip)
     },
 
     /**
      * Clean up the tooltip element
      */
     cleanupTooltip() {
-      const tooltip = document.getElementById(this.tooltipId);
+      const tooltip = document.getElementById(this.tooltipId)
       if (tooltip) {
-        tooltip.remove();
+        tooltip.remove()
       }
     },
 
@@ -404,94 +391,84 @@ export default {
      * Add tooltip event handlers to chart bars
      */
     addTooltipHandlers() {
-      const tooltip = document.getElementById(this.tooltipId);
+      const tooltip = document.getElementById(this.tooltipId)
       if (!tooltip) {
-        this.ensureCustomTooltipExists();
-        return;
+        this.ensureCustomTooltipExists()
+        return
       }
 
-      const chartContainer = this.$refs.chart;
-      if (!chartContainer) return;
+      const chartContainer = this.$refs.chart
+      if (!chartContainer) return
 
       const barSelectors = [
-        ".apexcharts-bar-area",
-        ".apexcharts-bar-series rect",
-        ".apexcharts-bar rect",
-        ".apexcharts-series rect",
-      ];
+        '.apexcharts-bar-area',
+        '.apexcharts-bar-series rect',
+        '.apexcharts-bar rect',
+        '.apexcharts-series rect',
+      ]
 
-      let bars = [];
+      let bars = []
       for (const selector of barSelectors) {
-        bars = chartContainer.querySelectorAll(selector);
+        bars = chartContainer.querySelectorAll(selector)
         if (bars.length > 0) {
-          console.log(
-            `[DEBUG] Found ${bars.length} bars using selector: ${selector}`
-          );
-          break;
+          console.log(`[DEBUG] Found ${bars.length} bars using selector: ${selector}`)
+          break
         }
       }
 
       if (bars.length === 0) {
         for (const selector of barSelectors) {
-          bars = document.querySelectorAll(selector);
+          bars = document.querySelectorAll(selector)
           if (bars.length > 0) {
-            console.log(
-              `[DEBUG] Found ${bars.length} bars in document using selector: ${selector}`
-            );
-            break;
+            console.log(`[DEBUG] Found ${bars.length} bars in document using selector: ${selector}`)
+            break
           }
         }
       }
 
       if (bars.length > 0) {
         bars.forEach((bar, index) => {
-          if (index >= this.chartData.length) return;
+          if (index >= this.chartData.length) return
 
-          bar.style.cursor = "pointer";
-          bar.setAttribute("data-bar-index", index);
+          bar.style.cursor = 'pointer'
+          bar.setAttribute('data-bar-index', index)
 
-          bar.addEventListener("mouseenter", (e) => {
-            const barIndex = parseInt(e.target.getAttribute("data-bar-index"));
-            const item =
-              this.chartData[barIndex !== undefined ? barIndex : index];
-            if (!item) return;
+          bar.addEventListener('mouseenter', (e) => {
+            const barIndex = parseInt(e.target.getAttribute('data-bar-index'))
+            const item = this.chartData[barIndex !== undefined ? barIndex : index]
+            if (!item) return
 
             tooltip.innerHTML = `
-              <div style="font-weight: bold; margin-bottom: 6px;">${this.truncateText(
-                item.text,
-                40
-              )}</div>
+              <div style="font-weight: bold; margin-bottom: 6px;">${this.truncateText(item.text, 40)}</div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span>${this.$t("analytics.table.count")}:</span>
+                <span>${this.$t('analytics.table.count')}:</span>
                 <span style="font-weight: 500;">${item.count.toLocaleString()}</span>
               </div>
               <div style="display: flex; justify-content: space-between;">
-                <span>${this.$t("analytics.table.avgTime")}:</span>
+                <span>${this.$t('analytics.table.avgTime')}:</span>
                 <span style="font-weight: 500;">${item.avgTime}s</span>
               </div>
-            `;
-            tooltip.style.display = "block";
-          });
+            `
+            tooltip.style.display = 'block'
+          })
 
-          bar.addEventListener("mousemove", (e) => {
-            const offset = 15;
-            tooltip.style.left = e.pageX + offset + "px";
-            tooltip.style.top = e.pageY + offset + "px";
-          });
+          bar.addEventListener('mousemove', (e) => {
+            const offset = 15
+            tooltip.style.left = e.pageX + offset + 'px'
+            tooltip.style.top = e.pageY + offset + 'px'
+          })
 
-          bar.addEventListener("mouseleave", () => {
-            tooltip.style.display = "none";
-          });
-        });
+          bar.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none'
+          })
+        })
 
-        console.log("[DEBUG] Successfully added tooltip handlers to bars");
+        console.log('[DEBUG] Successfully added tooltip handlers to bars')
       } else {
-        console.log(
-          "[DEBUG] No bars found to attach tooltips, trying again later"
-        );
+        console.log('[DEBUG] No bars found to attach tooltips, trying again later')
         setTimeout(() => {
-          this.addTooltipHandlers();
-        }, 1000);
+          this.addTooltipHandlers()
+        }, 1000)
       }
     },
 
@@ -500,51 +477,51 @@ export default {
      */
     updateChart() {
       if (!this.chartData || this.chartData.length === 0) {
-        this.error = this.$t("analytics.status.noData");
-        return;
+        this.error = this.$t('analytics.status.noData')
+        return
       }
 
       // FINAL FIX: Stop ApexCharts from exploding when container collapses (mobile resize)
-      const chartContainer = this.$refs.chart;
+      const chartContainer = this.$refs.chart
       if (chartContainer) {
-        const width = Math.max(0, chartContainer.offsetWidth);
+        const width = Math.max(0, chartContainer.offsetWidth)
         if (width < 50) {
-          return; // Silently skip — no negative width, no errors
+          return // Silently skip — no negative width, no errors
         }
       }
 
-      const theme = this.getTheme();
-      const textColor = theme.isDarkMode ? "#FFFFFF" : "#333333";
+      const theme = this.getTheme()
+      const textColor = theme.isDarkMode ? '#FFFFFF' : '#333333'
 
-      const topQueries = this.chartData.slice(0, 5);
+      const topQueries = this.chartData.slice(0, 5)
 
       this.chartSeries = [
         {
-          name: this.$t("analytics.table.count"),
+          name: this.$t('analytics.table.count'),
           data: topQueries.map((query) => query.count),
         },
-      ];
+      ]
 
       this.chartOptions = {
         chart: {
-          type: "bar",
+          type: 'bar',
           height: 140,
-          fontFamily: "inherit",
+          fontFamily: 'inherit',
           toolbar: { show: false },
-          background: "transparent",
+          background: 'transparent',
           foreColor: textColor,
           events: {
             mounted: () => {
               setTimeout(() => {
-                this.addTooltipHandlers();
-                this.fixLabelColors(textColor);
-              }, 100);
+                this.addTooltipHandlers()
+                this.fixLabelColors(textColor)
+              }, 100)
             },
             updated: () => {
               setTimeout(() => {
-                this.addTooltipHandlers();
-                this.fixLabelColors(textColor);
-              }, 100);
+                this.addTooltipHandlers()
+                this.fixLabelColors(textColor)
+              }, 100)
             },
           },
         },
@@ -552,19 +529,19 @@ export default {
           bar: {
             horizontal: false, // ← VERTICAL BARS (this was the fuckup)
             borderRadius: 2,
-            columnWidth: "45%",
-            dataLabels: { position: "top" },
+            columnWidth: '45%',
+            dataLabels: { position: 'top' },
           },
         },
-        colors: [theme.accentColor || "#4E97D1"],
+        colors: [theme.accentColor || '#4E97D1'],
         dataLabels: {
           enabled: true,
           formatter: (val) => val.toLocaleString(),
           offsetY: -20,
           style: {
-            fontSize: "10px",
+            fontSize: '10px',
             colors: [textColor],
-            fontWeight: "600",
+            fontWeight: '600',
           },
         },
         grid: {
@@ -573,7 +550,7 @@ export default {
         xaxis: {
           categories: topQueries.map((q, i) => `#${i + 1}`),
           labels: {
-            style: { colors: textColor, fontSize: "11px" },
+            style: { colors: textColor, fontSize: '11px' },
           },
           axisBorder: { show: false },
           axisTicks: { show: false },
@@ -585,61 +562,59 @@ export default {
         },
         tooltip: { enabled: false },
         states: {
-          hover: { filter: { type: "none" } },
+          hover: { filter: { type: 'none' } },
           active: {
             allowMultipleDataPointsSelection: false,
-            filter: { type: "none" },
+            filter: { type: 'none' },
           },
         },
         theme: {
-          mode: theme.isDarkMode ? "dark" : "light",
+          mode: theme.isDarkMode ? 'dark' : 'light',
         },
-      };
+      }
     },
 
     /**
      * Fix label colors after chart render to ensure they match the theme
      */
     fixLabelColors(textColor) {
-      const chartContainer = this.$refs.chart;
-      if (!chartContainer) return;
+      const chartContainer = this.$refs.chart
+      if (!chartContainer) return
 
-      const textElements = chartContainer.querySelectorAll("text");
+      const textElements = chartContainer.querySelectorAll('text')
       textElements.forEach((element) => {
-        element.setAttribute("fill", textColor);
-      });
+        element.setAttribute('fill', textColor)
+      })
 
-      const dataLabels = chartContainer.querySelectorAll(
-        ".apexcharts-datalabels text"
-      );
+      const dataLabels = chartContainer.querySelectorAll('.apexcharts-datalabels text')
       dataLabels.forEach((label) => {
-        label.setAttribute("fill", textColor);
-        const children = label.querySelectorAll("*");
+        label.setAttribute('fill', textColor)
+        const children = label.querySelectorAll('*')
         children.forEach((child) => {
-          if (child.tagName === "tspan") {
-            child.setAttribute("fill", textColor);
+          if (child.tagName === 'tspan') {
+            child.setAttribute('fill', textColor)
           }
-        });
-      });
+        })
+      })
 
       const topDataLabels = chartContainer.querySelectorAll(
-        ".apexcharts-bar-top-datalabels text, .apexcharts-datalabel-value"
-      );
+        '.apexcharts-bar-top-datalabels text, .apexcharts-datalabel-value'
+      )
       topDataLabels.forEach((label) => {
-        label.setAttribute("fill", textColor);
-      });
+        label.setAttribute('fill', textColor)
+      })
 
-      if (textColor === "#FFFFFF") {
+      if (textColor === '#FFFFFF') {
         const allDataLabelElements = chartContainer.querySelectorAll(
-          ".apexcharts-datalabels text, .apexcharts-datalabel, .apexcharts-datalabel-label, .apexcharts-datalabel-value"
-        );
+          '.apexcharts-datalabels text, .apexcharts-datalabel, .apexcharts-datalabel-label, .apexcharts-datalabel-value'
+        )
         allDataLabelElements.forEach((el) => {
-          el.setAttribute("fill", "#FFFFFF");
-        });
+          el.setAttribute('fill', '#FFFFFF')
+        })
       }
     },
   },
-};
+}
 </script>
 
 <style scoped>
@@ -760,110 +735,110 @@ export default {
 }
 
 /* Force data labels to be white in dark mode */
-:deep([data-theme="dark"]) .apexcharts-datalabels text,
-:deep([data-theme="dark"]) .apexcharts-datalabel-value,
-:deep([data-theme="dark"]) .apexcharts-datalabel-label {
+:deep([data-theme='dark']) .apexcharts-datalabels text,
+:deep([data-theme='dark']) .apexcharts-datalabel-value,
+:deep([data-theme='dark']) .apexcharts-datalabel-label {
   fill: white !important;
 }
 
 /* Target specifically the data labels above the bars */
-:deep([data-theme="dark"]) .apexcharts-bar-series .apexcharts-datalabels text {
+:deep([data-theme='dark']) .apexcharts-bar-series .apexcharts-datalabels text {
   fill: white !important;
 }
 
 /* Force all text in charts to follow theme colors */
-:deep([data-theme="dark"]) .apexcharts-text {
+:deep([data-theme='dark']) .apexcharts-text {
   fill: white !important;
 }
 
-:deep([data-theme="light"]) .apexcharts-text {
+:deep([data-theme='light']) .apexcharts-text {
   fill: #333333 !important;
 }
 
 /* Target x-axis and y-axis labels */
-:deep([data-theme="dark"]) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
-:deep([data-theme="dark"]) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
+:deep([data-theme='dark']) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
+:deep([data-theme='dark']) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
   fill: white !important;
   color: white !important;
 }
 
-:deep([data-theme="light"]) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
-:deep([data-theme="light"]) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
+:deep([data-theme='light']) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
+:deep([data-theme='light']) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
   fill: #333333 !important;
   color: #333333 !important;
 }
 
 /* Target data value labels on top of bars */
-:deep([data-theme="dark"]) .apexcharts-datalabels text {
+:deep([data-theme='dark']) .apexcharts-datalabels text {
   fill: white !important;
   color: white !important;
 }
 
-:deep([data-theme="light"]) .apexcharts-datalabels text {
+:deep([data-theme='light']) .apexcharts-datalabels text {
   fill: #333333 !important;
   color: #333333 !important;
 }
 
 /* Dark mode overrides */
-[data-theme="dark"] .top-queries-chart {
+[data-theme='dark'] .top-queries-chart {
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table th {
+[data-theme='dark'] .top-queries-table th {
   background-color: #414141 !important;
   color: white !important;
 }
 
-[data-theme="dark"] .bar-chart-container {
+[data-theme='dark'] .bar-chart-container {
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table td {
+[data-theme='dark'] .top-queries-table td {
   border-top: 1px solid #555 !important;
   color: white !important;
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .table-container {
+[data-theme='dark'] .table-container {
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table .query-text {
+[data-theme='dark'] .top-queries-table .query-text {
   color: white !important;
 }
 
-[data-theme="dark"] .top-queries-table {
+[data-theme='dark'] .top-queries-table {
   background-color: #414141 !important;
 }
 
 /* Light mode overrides */
-[data-theme="light"] .top-queries-chart {
+[data-theme='light'] .top-queries-chart {
   background-color: #ffffff !important;
 }
 
-[data-theme="light"] .top-queries-table {
+[data-theme='light'] .top-queries-table {
   background-color: #ffffff !important;
 }
 
-[data-theme="light"] .top-queries-table th {
+[data-theme='light'] .top-queries-table th {
   background-color: #f5f7fa !important;
   color: #333333 !important;
 }
 
-[data-theme="light"] .top-queries-table td {
+[data-theme='light'] .top-queries-table td {
   background-color: #ffffff !important;
   color: #333333 !important;
 }
 
-[data-theme="light"] .table-container {
+[data-theme='light'] .table-container {
   background-color: #ffffff !important;
 }
 
-[data-theme="light"] .top-queries-table .query-text {
+[data-theme='light'] .top-queries-table .query-text {
   color: #333333 !important;
 }
 
-[data-theme="light"] .bar-chart-container {
+[data-theme='light'] .bar-chart-container {
   background-color: transparent !important;
 }
 </style>

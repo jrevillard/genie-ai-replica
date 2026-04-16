@@ -1,7 +1,6 @@
-// NOTE: this validation is not used anywhere at the moment
-// TODO: [NORMAL] validate file type and content in fileService.js by calling this function
-// - all functions here are not tested yet
-// - the code's file name should be changed to fileTypeValidator.js?? (not only validate mime type but also file content)
+// File type validation utilities
+// Used by validateFiles middleware in fileUpload.js to perform
+// extension checking and magic-byte validation on uploaded files
 
 const mime = require('mime-types');
 const { fileTypeFromBuffer } = require('file-type');

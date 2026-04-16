@@ -74,10 +74,9 @@
 </template>
 
 <script>
-import authService from "@/services/authService";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
-import { formatFileSize } from '../utils/fileUtils.js';
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import { formatFileSize } from '../utils/fileUtils.js'
 
 export default {
   name: 'RightSideBarComponent',
@@ -280,8 +279,7 @@ export default {
     },
 
     getAuthToken() {
-      const user = authService.getCurrentUser();
-      return user ? user.accessToken : null;
+      return this.$store.getters.accessToken || null
     },
 
     getDisplayUrl(doc) {

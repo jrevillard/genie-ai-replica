@@ -403,7 +403,6 @@ export default {
   data() {
     return {
       isStatusDropdownOpen: false,
-      currentUser: null,
       // Sample system status data - would be fetched from an API
       systemStatus: {
         overall: 'degraded', // 'operational', 'degraded', or 'outage'
@@ -460,23 +459,13 @@ export default {
           return this.$t('systemStatus.checking')
       }
     },
-    // Compute if the user has admin role
+    // Compute if the user has admin role — reads directly from Vuex store to stay reactive
     isAdmin() {
-      // Debug the user object and its role value
-      console.log('Current user:', this.currentUser)
+      const user = this.$store.getters.currentUser;
+      if (!user) return false;
 
-      if (!this.currentUser) {
-        console.log('No user found')
-        return false
-      }
-
-      // Check for role in various formats/locations
-      const userRole = this.currentUser.role || (this.currentUser.user && this.currentUser.user.role) || ''
-
-      console.log('User role:', userRole)
-
-      // Case-insensitive comparison for 'admin', 'Admin', etc.
-      return typeof userRole === 'string' && userRole.toLowerCase() === 'admin'
+      const roles = user.roles || [];
+      return roles.map(r => r.toLowerCase()).includes('admin');
     },
   },
   watch: {
@@ -506,39 +495,21 @@ export default {
     // Close dropdown when clicking outside
     document.addEventListener('click', this.handleClickOutside)
 
-    // Get current user from local storage
-    this.getCurrentUserFromStorage()
-
-    // In a real app, you would fetch the system status from an API here
-    // this.fetchSystemStatus();
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleClickOutside)
   },
 
   methods: {
-    // Get current user info from localStorage
-    getCurrentUserFromStorage() {
+    //Logout handler — delegates to Vuex store (keycloakAuthService handles Keycloak redirect)
+    async handleLogout() {
       try {
-        console.log('Checking localStorage for user data...')
-
-        // Try the standard 'user' key first
-        let userStr = localStorage.getItem('user')
-
-        if (!userStr) {
-          userStr = localStorage.getItem('token')
-        }
-
-        if (userStr) {
-          this.currentUser = JSON.parse(userStr)
-        }
+        this.$emit('logout');
+        await this.$store.dispatch('logout');
       } catch (error) {
-        console.error('Error parsing user from localStorage:', error)
+        console.error('Logout error:', error.message);
+        this.$emit('logout');
       }
-    },
-
-    handleLogout() {
-      this.$emit('logout')
     },
     toggleSidebar() {
       this.$emit('toggleSidebar')

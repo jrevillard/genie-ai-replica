@@ -30,7 +30,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.prompts import PromptTemplate
 
 from langdetect import detect
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from transformers import AutoTokenizer
 
 
@@ -67,7 +67,6 @@ RERANKER_TOP_N = os.getenv("RERANKER_TOP_N", 2)
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Frontend backend service URL
-GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
 
@@ -111,106 +110,53 @@ class GenieUserProfileClient:
     """
     Client for fetching User Profile data from the Backend Service.
     Designed to be used within the ChatQnA orchestrator.
+    Uses Bearer token (forwarded from incoming request) for authentication.
     """
 
     def __init__(self):
-        # Token caching state (Reused from GenieArangoDataprep pattern)
-        self._cached_token = None
-        self._token_expiry = None
-        self._token_lock = asyncio.Lock()
-        
+        self._token = None
+
         # Log initialization
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
 
 
-    async def _get_auth_token(self):
-        """
-        Fetches a fresh JWT from the internal http-service with locking and caching.
-        (Identical logic to GenieArangoDataprep for consistency)
-        """
-        now = datetime.now()
-        
-        # 1. Fast Path: Check if valid token exists (No lock needed)
-        if self._cached_token and self._token_expiry and now < self._token_expiry:
-            return self._cached_token
+    def set_token(self, token: str):
+        self._token = token
 
-        # 2. Slow Path: Acquire Lock to prevent thundering herd
-        async with self._token_lock:
-            # Check again (Double-Checked Locking)
-            if self._cached_token and self._token_expiry and now < self._token_expiry:
-                return self._cached_token
-
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(GET_AUTH_TOKEN_URL) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            token = data.get("accessToken")
-                            if token:
-                                # Cache the token for 50 mins (assuming 1h life)
-                                self._cached_token = token
-                                self._token_expiry = now + timedelta(minutes=50)
-                                return token
-                            logger.error(f"Auth Service returned 200 but no accessToken: {data}")
-                        else:
-                            logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
-            except Exception as e:
-                logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
-            
-            return None
 
     async def get_user_profile(self, user_id: str):
         """
-        Fetches the full user profile from the backend for context enrichment.
-        Target: GET /api/users/{userId}
+        Fetches the sanitized user profile from the backend for context enrichment.
+        Target: GET /api/users/{userId}/context
+        Auth: Authorization Bearer token (forwarded from incoming request)
         """
         if not user_id:
             logger.warning("get_user_profile called with empty user_id")
             return None
 
-        # 1. Get Authentication Token
-        token = await self._get_auth_token()
-        if not token:
-            logger.warning(f"Skipping profile fetch for user {user_id} due to missing auth token.")
+        if not self._token:
+            logger.warning("Bearer token not set, skipping profile fetch")
             return None
 
-        # 2. Construct URL based on user-routes.js definition
-        # Route in JS: router.get('/:userId', ...) mounted at /api/users
+        # Construct URL
         url = f"{BACKEND_SERVICE_URL}/api/users/{user_id}/context"
-        
-        # 3. Prepare Headers
+
+        # Prepare Headers
         headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json"
         }
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers) as response:
 
-                    if response.status == 401:
-                        logger.warning("Cached token rejected (401). Fetching fresh token and retrying...")
-                        self._cached_token = None
-                        token = await self._get_auth_token()
-
-                        if not token:
-                            return None
-                        
-                        headers["Authorization"] = f"Bearer {token}"
-
-                        async with session.get(url, headers=headers) as retry_response:
-                            response = retry_response
-
                     if response.status == 200:
                         profile_data = await response.json()
                         logger.info(f"Successfully retrieved profile for user {user_id}")
-                        
-                        # Optional: Mask sensitive fields before returning to LLM context
-                        if 'password' in profile_data: del profile_data['password']
-                        if 'salt' in profile_data: del profile_data['salt']
-                        
+
                         return profile_data
-                    
+
                     elif response.status == 404:
                         logger.warning(f"User profile not found for ID {user_id}")
                         return None
@@ -218,7 +164,7 @@ class GenieUserProfileClient:
                     else:
                         logger.error(f"Failed to fetch user profile. Status: {response.status}, Body: {await response.text()}")
                         return None
-                        
+
         except Exception as e:
             logger.error(f"Error connecting to Backend Service for profile: {e}")
             return None
@@ -770,13 +716,13 @@ class ChatQnAService:
         if not file_id:
             return {"categoryLabel": None, "serviceLabels": []}
 
-        auth_token = await self.user_profile_client._get_auth_token()
-        if not auth_token:
-            logger.error("Failed to get admin auth token.")
+        service_token = self.user_profile_client._token
+        if not service_token:
+            logger.error("Bearer token not set.")
             return None
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
-        headers = {"Authorization": f"Bearer {auth_token}"}
+        headers = {"Authorization": f"Bearer {service_token}"}
 
         try:
             async with aiohttp.ClientSession() as session:

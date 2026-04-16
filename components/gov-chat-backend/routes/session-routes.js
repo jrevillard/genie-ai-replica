@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (sessionService) => {
@@ -11,6 +11,8 @@ module.exports = (sessionService) => {
    *     summary: Create a new session
    *     description: Creates a new session for a user
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -47,6 +49,9 @@ module.exports = (sessionService) => {
    *       500:
    *         description: Server error
    */
+  // Apply authentication middleware to all routes
+  router.use(keycloakAuthMiddleware.authenticate);
+
   router.post('/', async (req, res) => {
     try {
       logger.info(`Creating session with body: ${JSON.stringify(req.body)}, IP: ${req.ip}`);
@@ -58,9 +63,6 @@ module.exports = (sessionService) => {
     }
   });
 
-  // Apply authentication middleware to all remaining routes
-  router.use(authMiddleware.authenticate);
-
   /**
    * @swagger
    * /sessions/{sessionId}:
@@ -68,6 +70,8 @@ module.exports = (sessionService) => {
    *     summary: Get session by ID
    *     description: Retrieves a session by its unique identifier
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: sessionId
@@ -105,6 +109,8 @@ module.exports = (sessionService) => {
    *     summary: End a session
    *     description: Marks a session as ended
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: sessionId
@@ -142,6 +148,8 @@ module.exports = (sessionService) => {
    *     summary: Keep a session alive
    *     description: Updates the last activity time of a session to prevent expiration
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: sessionId
@@ -179,6 +187,8 @@ module.exports = (sessionService) => {
    *     summary: Get user's sessions
    *     description: Retrieves all sessions for a specific user
    *     tags: [Sessions]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: userId

@@ -186,44 +186,26 @@
                 <label class="section-label">{{
                   translate("settings.emailAddress", "Email Address")
                 }}</label>
-                <div class="input-with-button">
-                  <input
-                    type="email"
-                    class="text-input"
-                    v-model="userData.email"
-                    :disabled="!isEditingEmail"
-                    :placeholder="
-                      translate(
-                        'settings.emailAddressPlaceholder',
-                        'Your email address'
-                      )
-                    "
-                  />
-                  <button
-                    class="btn-secondary"
-                    @click="toggleEmailEdit"
-                    :disabled="isEmailUpdating"
-                  >
-                    {{
-                      isEditingEmail
-                        ? translate("settings.save", "Save")
-                        : translate("settings.edit", "Edit")
-                    }}
-                  </button>
-                </div>
-                <p v-if="emailError" class="error-text">{{ emailError }}</p>
+                <input
+                  type="email"
+                  class="text-input"
+                  v-model="userData.email"
+                  disabled
+                />
               </div>
 
               <div class="management-col">
                 <label class="section-label">{{
-                  translate("settings.password", "Password")
+                  translate("settings.account", "Account")
                 }}</label>
-                <button
+                <a
                   class="btn-secondary full-width"
-                  @click="initiatePasswordChange"
+                  :href="keycloakAccountUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  {{ translate("settings.changePassword", "Change Password") }}
-                </button>
+                  {{ translate("settings.manageAccount", "Manage Account") }}
+                </a>
               </div>
             </div>
 
@@ -245,200 +227,11 @@
                 </p>
               </div>
 
-              <div class="management-col">
-                <button
-                  class="btn-danger full-width"
-                  @click="confirmDeleteAccount"
-                >
-                  {{ translate("settings.deleteAccount", "Delete Account") }}
-                </button>
-                <p class="description-text danger-text">
-                  {{
-                    translate(
-                      "settings.deleteAccountDesc",
-                      "This will permanently delete your account and all associated data."
-                    )
-                  }}
-                </p>
-              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="modal" v-if="showEmailConfirmModal">
-        <div class="modal-content" :data-theme="settings.theme">
-          <h3 class="modal-title" :data-themed="true">
-            {{
-              translate("settings.confirmEmailChange", "Confirm Email Change")
-            }}
-          </h3>
-
-          <div class="modal-body">
-            <p :data-themed="true">
-              {{
-                translate("settings.changingEmailTo", "Changing your email to")
-              }}
-              <strong>{{ newEmail }}</strong>
-              {{ translate("settings.will", "will") }}:
-            </p>
-            <ul>
-              <li>
-                {{
-                  translate(
-                    "settings.logOutSystem",
-                    "Log you out of the system"
-                  )
-                }}
-              </li>
-              <li>
-                {{
-                  translate(
-                    "settings.sendVerificationLink",
-                    "Send a verification link to your new email"
-                  )
-                }}
-              </li>
-              <li>
-                {{
-                  translate(
-                    "settings.requireVerification",
-                    "Require verification before you can log in again"
-                  )
-                }}
-              </li>
-            </ul>
-
-            <div class="form-group">
-              <label for="confirmPassword" :data-themed="true"
-                >{{
-                  translate(
-                    "settings.enterPasswordConfirm",
-                    "Enter your password to confirm"
-                  )
-                }}:</label
-              >
-              <input
-                v-model="emailChangePassword"
-                type="password"
-                id="confirmPassword"
-                :placeholder="
-                  translate(
-                    'settings.currentPasswordPlaceholder',
-                    'Your current password'
-                  )
-                "
-                class="text-input"
-                required
-              />
-              <p v-if="emailChangeError" class="error-text">
-                {{ emailChangeError }}
-              </p>
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn-close" @click="cancelEmailChange">
-              {{ translate("settings.cancel", "Cancel") }}
-            </button>
-            <button
-              class="btn-save"
-              @click="confirmEmailChange"
-              :disabled="!emailChangePassword || isEmailUpdating"
-            >
-              {{
-                isEmailUpdating
-                  ? translate("settings.processing", "Processing...")
-                  : translate("settings.confirmChange", "Confirm Change")
-              }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal" v-if="showPasswordReset">
-        <PasswordResetInitiateScreen
-          :prefilledEmail="userData.email"
-          :isEmbedded="true"
-          :theme="settings.theme"
-          @reset-initiated="handlePasswordResetInitiated"
-          @cancel="cancelPasswordReset"
-        />
-      </div>
-    </div>
-  </div>
-
-  <div class="modal" v-if="showDeleteAccountModal">
-    <div class="modal-content">
-      <h3 class="modal-title">
-        {{
-          translate(
-            "settings.confirmAccountDeletion",
-            "Confirm Account Deletion"
-          )
-        }}
-      </h3>
-      <div class="modal-body">
-        <p class="warning-text">
-          {{
-            translate(
-              "settings.accountDeletionWarning",
-              "Warning: This action is permanent and cannot be undone."
-            )
-          }}
-        </p>
-
-        <div class="form-group">
-          <label for="deleteReason">{{
-            translate(
-              "settings.deletionReason",
-              "Reason for deletion (optional):"
-            )
-          }}</label>
-          <textarea
-            v-model="deleteAccountReason"
-            id="deleteReason"
-            rows="3"
-            class="text-input"
-          ></textarea>
-        </div>
-
-        <div class="form-group">
-          <label for="confirmDeletePassword">{{
-            translate(
-              "settings.enterPasswordConfirm",
-              "Enter your password to confirm:"
-            )
-          }}</label>
-          <input
-            v-model="deleteAccountPassword"
-            type="password"
-            id="confirmDeletePassword"
-            class="text-input"
-            required
-          />
-          <p v-if="deleteAccountError" class="error-text">
-            {{ deleteAccountError }}
-          </p>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn-close" @click="cancelAccountDeletion">
-          {{ translate("settings.cancel", "Cancel") }}
-        </button>
-        <button
-          class="btn-danger"
-          @click="processAccountDeletion"
-          :disabled="!deleteAccountPassword || isDeletingAccount"
-        >
-          {{
-            isDeletingAccount
-              ? translate("settings.deleting", "Deleting...")
-              : translate("settings.permanentlyDeleteAccount", "Delete Account")
-          }}
-        </button>
-      </div>
     </div>
   </div>
 
@@ -454,25 +247,14 @@
     @cancel="handleResetDataCancel"
   />
 
-  <ConfirmDialog
-    :visible="showDeleteAccountConfirm"
-    :title="deleteAccountDialog.title"
-    :message="deleteAccountDialog.message"
-    :confirm-text="deleteAccountDialog.confirmText"
-    :cancel-text="deleteAccountDialog.cancelText"
-    :theme="getCurrentTheme()"
-    :parent-styles="{ maxWidth: '450px' }"
-    @confirm="handleDeleteAccountConfirm"
-    @cancel="handleDeleteAccountCancel"
-  />
 </template>
 
 <script>
 // Import the user service to handle user-related API calls and data management
 import userService from "@/services/userService";
 
-// Import the PasswordResetInitiateScreen component for initiating password reset flows
-import PasswordResetInitiateScreen from "@/components/PasswordResetInitiateScreen.vue";
+// Import OIDC config for Keycloak account console URL
+import oidcConfig from "@/config/oidcConfig";
 
 // Import the notifications service to display user feedback messages (success, error, info)
 import notificationService from "@/services/notificationService";
@@ -486,10 +268,10 @@ import ConfirmDialog from "@/components/ConfirmDialog.vue";
 // Import LanguageSelector component
 import LanguageSelector from "@/components/LanguageSelector.vue";
 
+
 export default {
   name: "SettingsComponent",
   components: {
-    PasswordResetInitiateScreen,
     ConfirmDialog,
     LanguageSelector,
   },
@@ -515,28 +297,8 @@ export default {
         createdAt: "",
       },
       userAvatar: null,
-      isEditingEmail: false,
-      emailError: null,
-      newEmail: "",
-      isEmailUpdating: false,
-      showEmailConfirmModal: false,
-      emailChangePassword: "",
-      emailChangeError: null,
-      showPasswordReset: false,
-      showDeleteAccountModal: false,
-      deleteAccountPassword: "",
-      deleteAccountReason: "",
-      deleteAccountError: null,
-      isDeletingAccount: false,
       showResetDataConfirm: false,
-      showDeleteAccountConfirm: false,
       resetDataDialog: {
-        title: "",
-        message: "",
-        confirmText: "",
-        cancelText: "",
-      },
-      deleteAccountDialog: {
         title: "",
         message: "",
         confirmText: "",
@@ -563,6 +325,9 @@ export default {
         "--dialog-box-shadow": theme.modal.boxShadow,
         "--dialog-overlay-background": theme.overlay.background,
       };
+    },
+    keycloakAccountUrl() {
+      return `${oidcConfig.authority}/account/`;
     },
   },
   created() {
@@ -652,11 +417,6 @@ export default {
 
     console.log("Current locale:", this.$i18n.locale);
     console.log("Available locales:", this.$i18n.availableLocales);
-    console.log(
-      "Sample translation for deleteAccount:",
-      this.$i18n.t("settings.deleteAccount"),
-      this.$i18n.te("settings.deleteAccount") ? "exists" : "missing"
-    );
   },
   beforeUnmount() {
     console.log("[SETTINGS] Removing theme change event listener...");
@@ -810,18 +570,8 @@ export default {
         confirmText: this.translate("settings.reset", "Reset"),
         cancelText: this.translate("settings.cancel", "Cancel"),
       };
-      this.deleteAccountDialog = {
-        title: this.translate("settings.deleteAccountTitle", "Delete Account"),
-        message: this.translate(
-          "settings.confirmDeleteAccount",
-          "Are you sure you want to delete your account? This action cannot be undone."
-        ),
-        confirmText: this.translate("settings.delete", "Delete"),
-        cancelText: this.translate("settings.cancel", "Cancel"),
-      };
       console.log("[SETTINGS] Dialog texts updated:", {
         resetDataDialog: this.resetDataDialog,
-        deleteAccountDialog: this.deleteAccountDialog,
       });
     },
     async fetchUserData() {
@@ -1031,220 +781,6 @@ export default {
         console.log("[SETTINGS] Setting isLoading to false after reset...");
         this.isLoading = false;
       }
-    },
-    toggleEmailEdit() {
-      console.log("[SETTINGS] Toggling email edit state...");
-      if (this.isEditingEmail) {
-        console.log("[SETTINGS] Saving email changes...");
-        this.prepareEmailChange();
-      } else {
-        console.log("[SETTINGS] Enabling email editing...");
-        this.isEditingEmail = true;
-        this.newEmail = this.userData.email;
-        console.log("[SETTINGS] Original email stored:", this.newEmail);
-      }
-    },
-    confirmDeleteAccount() {
-      console.log("[SETTINGS] Showing delete account confirmation...");
-      this.showDeleteAccountConfirm = true;
-    },
-    handleDeleteAccountConfirm() {
-      console.log("[SETTINGS] User confirmed delete account...");
-      this.showDeleteAccountConfirm = false;
-      this.showDeleteAccountModal = true;
-    },
-    handleDeleteAccountCancel() {
-      console.log("[SETTINGS] User cancelled delete account...");
-      this.showDeleteAccountConfirm = false;
-    },
-    async processAccountDeletion() {
-      console.log("[SETTINGS] Processing account deletion...");
-      if (!this.deleteAccountPassword) {
-        console.log("[SETTINGS] Password missing for account deletion");
-        notificationService.error(
-          this.translate(
-            "settings.pleaseEnterPassword",
-            "Please enter your password to confirm deletion"
-          )
-        );
-        return;
-      }
-      try {
-        console.log("[SETTINGS] Initiating account deletion...");
-        this.isDeletingAccount = true;
-        this.deleteAccountError = null;
-        console.log("[SETTINGS] Calling userService.deleteAccount...");
-        await userService.deleteAccount(
-          this.deleteAccountPassword,
-          this.deleteAccountReason
-        );
-        console.log("[SETTINGS] Account deletion successful");
-        notificationService.success(
-          this.translate(
-            "settings.accountDeletedSuccess",
-            "Your account has been deleted successfully."
-          )
-        );
-        console.log("[SETTINGS] Closing delete account modal...");
-        this.showDeleteAccountModal = false;
-        console.log("[SETTINGS] Redirecting to login page...");
-        window.location.href = "/login";
-      } catch (error) {
-        console.error("[SETTINGS] Error deleting account:", error);
-        if (error.response && error.response.status === 403) {
-          console.log("[SETTINGS] Incorrect password for account deletion");
-          notificationService.error(
-            this.translate("settings.incorrectPassword", "Incorrect password")
-          );
-        } else {
-          console.log("[SETTINGS] General error during account deletion");
-          notificationService.error(
-            this.translate(
-              "settings.accountDeletionFailed",
-              "Failed to delete account. Please try again later."
-            )
-          );
-        }
-      } finally {
-        console.log("[SETTINGS] Setting isDeletingAccount to false...");
-        this.isDeletingAccount = false;
-      }
-    },
-    cancelAccountDeletion() {
-      console.log("[SETTINGS] Cancelling account deletion...");
-      this.showDeleteAccountModal = false;
-      this.deleteAccountPassword = "";
-      this.deleteAccountReason = "";
-      this.deleteAccountError = null;
-      console.log("[SETTINGS] Account deletion cancelled, state reset");
-    },
-    initiatePasswordChange() {
-      console.log("[SETTINGS] Initiating password change...");
-      this.showPasswordReset = true;
-    },
-    handlePasswordResetInitiated(email) {
-      console.log("[SETTINGS] Password reset initiated for:", email);
-      setTimeout(() => {
-        console.log("[SETTINGS] Closing password reset modal...");
-        this.showPasswordReset = false;
-        notificationService.success(
-          this.translate(
-            "settings.passwordResetInitiated",
-            "A password reset link has been sent to your email address."
-          )
-        );
-      }, 1500);
-    },
-    cancelPasswordReset() {
-      console.log("[SETTINGS] Cancelling password reset...");
-      this.showPasswordReset = false;
-    },
-    async prepareEmailChange() {
-      console.log("[SETTINGS] Preparing email change...");
-      this.emailError = null;
-      console.log("[SETTINGS] Validating email format...");
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(this.userData.email)) {
-        console.log("[SETTINGS] Invalid email format:", this.userData.email);
-        notificationService.error(this.translate("settings.enterValidEmail"));
-        return;
-      }
-      if (this.userData.email === this.newEmail) {
-        console.log("[SETTINGS] Email unchanged, exiting edit mode...");
-        this.isEditingEmail = false;
-        return;
-      }
-      try {
-        console.log(
-          `[SETTINGS] Checking availability for ${this.userData.email}`
-        );
-        const isAvailable = await userService.checkEmailAvailability(
-          this.userData.email
-        );
-        console.log("[SETTINGS] Email availability check result:", isAvailable);
-        if (!isAvailable) {
-          console.log("[SETTINGS] Email already in use:", this.userData.email);
-          notificationService.error(
-            this.translate("settings.emailAlreadyInUse")
-          );
-          return;
-        }
-        console.log("[SETTINGS] Email available, proceeding with change...");
-        this.newEmail = this.userData.email;
-        this.showEmailConfirmModal = true;
-      } catch (error) {
-        console.error("[SETTINGS] Error checking email availability:", error);
-        notificationService.error(
-          this.translate("settings.unableToVerifyEmail")
-        );
-      }
-    },
-    async confirmEmailChange() {
-      console.log("[SETTINGS] Confirming email change...");
-      if (!this.emailChangePassword) {
-        console.log("[SETTINGS] Password missing for email change");
-        notificationService.error(
-          this.translate("settings.pleaseEnterPassword")
-        );
-        return;
-      }
-      console.log("[SETTINGS] Setting isEmailUpdating to true...");
-      this.isEmailUpdating = true;
-      this.emailChangeError = null;
-      try {
-        console.log(
-          "[SETTINGS] Confirming email change to:",
-          this.userData.email
-        );
-        console.log(
-          "[SETTINGS] Using userId for authentication:",
-          this.currentUserId
-        );
-        console.log("[SETTINGS] Calling userService.updateEmail...");
-        const response = await userService.updateEmail(
-          this.userData.email,
-          this.emailChangePassword,
-          this.currentUserId
-        );
-        console.log("[SETTINGS] Email update response:", response);
-        notificationService.info(
-          this.translate("settings.checkNewEmailVerification")
-        );
-        console.log("[SETTINGS] Closing email change modal...");
-        this.showEmailConfirmModal = false;
-        this.isEditingEmail = false;
-        console.log("[SETTINGS] Scheduling logout after email change...");
-        setTimeout(() => {
-          userService
-            .logout()
-            .then(() => {
-              console.log(
-                "[SETTINGS] Logout successful, redirecting to login..."
-              );
-              window.location.href = "/login";
-            })
-            .catch((err) => {
-              console.error("[SETTINGS] Logout error:", err);
-              console.log("[SETTINGS] Redirecting to login despite error...");
-              window.location.href = "/login";
-            });
-        }, 1500);
-      } catch (error) {
-        console.error("[SETTINGS] Error updating email:", error);
-        notificationService.error(
-          this.translate("settings.failedToUpdateEmail")
-        );
-      } finally {
-        console.log("[SETTINGS] Setting isEmailUpdating to false...");
-        this.isEmailUpdating = false;
-      }
-    },
-    cancelEmailChange() {
-      console.log("[SETTINGS] Cancelling email change...");
-      this.showEmailConfirmModal = false;
-      this.emailChangePassword = "";
-      this.emailChangeError = null;
-      console.log("[SETTINGS] Email change cancelled, state reset");
     },
   },
   watch: {

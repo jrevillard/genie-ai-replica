@@ -193,7 +193,7 @@ To change styles like navbar gradients, button colors, or other UI elements:
 3. **Deploy**:
    - Run `npm run build` to include updated config.
    - Deploy `/public/config/*` to the server, ensuring accessibility.
-   - preferrably just use the docker-compose.yaml (docker compose up --build -d)
+   - For Docker Swarm deployment, rebuild images and push to registry, then redeploy from the project root: `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
 
 ### Configuring Quick Help Buttons
 Quick Help buttons provide quick access to specific knowledge areas and predefined prompts, enhancing user interaction with the chatbot. These buttons are configured in the `features.chat.quickHelp.buttons` array and are displayed in the chat interface (e.g., `ChatScreen.vue`).
@@ -378,7 +378,7 @@ To configure a new chatbot (e.g., "EcoChat"):
     - **Spinners**: Loading indicators in `EmailVerificationScreen.vue` (`.spinner`).
   - Quick Help buttons use their own `styles` properties (`backgroundColor`, `hoverColor`, `outlineColor`) defined in the config, applied via inline styles or component-specific CSS in `ChatScreen.vue`.
   - This ensures a consistent primary color for interactive elements and customizable styles for Quick Help buttons throughout the application, including:
-    - **Authentication Screens**: `LoginScreen.vue`, `PasswordResetInitiateScreen.vue`, `RegistrationSuccessScreen.vue`, `EmailVerificationScreen.vue`, `PasswordResetConfirmScreen.vue`, `RegisterScreen.vue`.
+    - **Authentication Screens**: `LoginScreen.vue`, `PasswordResetInitiateScreen.vue`, `EmailVerificationScreen.vue`, `PasswordResetConfirmScreen.vue`, `RegisterScreen.vue`.
     - **Navigation Components**: `SideBarComponent.vue` (tabs), `NavBarComponent.vue` (potential buttons).
     - **Chat Interface**: `ChatScreen.vue` (Quick Help buttons).
     - **SettingsComponent.vue**: Buttons for saving theme/language settings.
@@ -425,15 +425,7 @@ Configuration changes, including Quick Help buttons, affect the following screen
      - Login link (`.login-link-text`): `--bg-button-primary`.
      - Background: `--bg-primary`.
      - Text: `--text-primary`, `--text-secondary`.
-3. **RegistrationSuccessScreen.vue**:
-   - **Title**: `app.title`.
-   - **Icon**: `app.icon.value`.
-   - **Colors**:
-     - Back to Login button (`.primary-button`): `--bg-button-primary`.
-     - Resend Verification link (`.text-button`): `--bg-button-primary`.
-     - Background: `--bg-primary`.
-     - Text: `--text-primary`, `--text-secondary`.
-4. **EmailVerificationScreen.vue**:
+3. **EmailVerificationScreen.vue**:
    - **Title**: `app.title`.
    - **Icon**: `app.icon.value`.
    - **Colors**:
@@ -441,7 +433,7 @@ Configuration changes, including Quick Help buttons, affect the following screen
      - Spinner (`.spinner`): `border-top-color: --bg-button-primary`.
      - Background: `--bg-primary`.
      - Text: `--text-primary`, `--text-secondary`.
-5. **PasswordResetConfirmScreen.vue**:
+4. **PasswordResetConfirmScreen.vue**:
    - **Title**: `app.title`.
    - **Icon**: `app.icon.value`.
    - **Colors**:
@@ -449,7 +441,7 @@ Configuration changes, including Quick Help buttons, affect the following screen
      - Login link (`.login-link-text`): `--bg-button-primary`.
      - Background: `--bg-primary`.
      - Text: `--text-primary`, `--text-secondary`.
-6. **RegisterScreen.vue**:
+5. **RegisterScreen.vue**:
    - **Title**: `app.title`.
    - **Icon**: `app.icon.value`.
    - **Colors**:
@@ -458,34 +450,34 @@ Configuration changes, including Quick Help buttons, affect the following screen
      - Login/Terms links (`.login-link-text`, `.terms-link`): `--bg-button-primary`.
      - Background: `--bg-primary`.
      - Text: `--text-primary`, `--text-secondary`.
-7. **ChatScreen.vue**:
+6. **ChatScreen.vue**:
    - **Quick Help Buttons**:
      - Rendered from `features.chat.quickHelp.buttons`, displaying label (`title`), icon, and applying `styles`.
      - Clicking a button sends the `prompt` to the chatbot, filtered by `category` for specific knowledge areas.
    - **Colors**:
      - Chat interface background: `--bg-primary` (`theme.backgroundColor`).
      - Text: `--text-primary` (`theme.textColor`), `--text-secondary` (`theme.secondaryColor`).
-8. **SideBarComponent.vue**:
+7. **SideBarComponent.vue**:
    - **Colors**:
      - Active tabs (`.tab-button-active` for "Government Services", "Saved Chats"): `--bg-button-primary`.
      - Background: `--bg-primary`.
      - Text: `--text-primary`.
-9. **SettingsComponent.vue**:
+8. **SettingsComponent.vue**:
    - **Colors**:
      - Save buttons (e.g., for theme/language settings, typically `.primary-button`): `--bg-button-primary`.
      - Background: `--bg-primary`.
      - Text: `--text-primary`, `--text-secondary`.
-10. **UserProfileComponent.vue**:
+9. **UserProfileComponent.vue**:
     - **Colors**:
       - Update profile buttons (e.g., `.primary-button`): `--bg-button-primary`.
       - Background: `--bg-primary`.
       - Text: `--text-primary`, `--text-secondary`.
-11. **Modal Dialogs**:
+10. **Modal Dialogs**:
     - **Colors**:
       - Action buttons (e.g., "Confirm", "Cancel" in `.primary-button`): `--bg-button-primary`.
       - Background: `--bg-primary`.
       - Text: `--text-primary`, `--text-secondary`.
-12. **AdminDashboard.vue and Related Components**:
+11. **AdminDashboard.vue and Related Components**:
     - **Colors**:
       - Administrative buttons (e.g., user management, analytics, typically `.primary-button`): `--bg-button-primary`.
       - Background: `--bg-primary`.

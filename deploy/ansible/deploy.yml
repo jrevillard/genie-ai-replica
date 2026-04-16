@@ -503,12 +503,6 @@
             source_tag: genieai_mvp_document-repository:latest
             registry_tag: genie-ai-document-repository:latest
             opea: false
-          - name: http-service
-            dockerfile: genie-ai-overlay/http-service/Dockerfile
-            context: .
-            source_tag: genieai_mvp_http-service:latest
-            registry_tag: genie-ai-http-service:latest
-            opea: false
           - name: nginx
             dockerfile: api-gateway-solution/nginx/Dockerfile
             context: api-gateway-solution/nginx/
@@ -520,6 +514,24 @@
             context: api-gateway-solution/new-config/
             source_tag: genie-ai-kong-config:latest
             registry_tag: genie-ai-kong-config:latest
+            opea: false
+          - name: postgres-init
+            dockerfile: configs/postgres/Dockerfile
+            context: configs/postgres/
+            source_tag: genie-ai-postgres-init:latest
+            registry_tag: genie-ai-postgres-init:latest
+            opea: false
+          - name: keycloak
+            dockerfile: configs/keycloak/Dockerfile
+            context: configs/keycloak/
+            source_tag: genie-ai-keycloak:latest
+            registry_tag: genie-ai-keycloak:latest
+            opea: false
+          - name: keycloak-config
+            dockerfile: configs/keycloak/Dockerfile.config-cli
+            context: configs/keycloak/
+            source_tag: genie-ai-keycloak-config:latest
+            registry_tag: genie-ai-keycloak-config:latest
             opea: false
           - name: dataprep-arango
             dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
@@ -608,17 +620,24 @@
       ansible.builtin.assert:
         that:
           - arango_password is defined and arango_password | length > 0
-          - jwt_secret is defined and jwt_secret | length > 0
-          - session_secret is defined and session_secret | length > 0
           - translation_cache_password is defined and translation_cache_password | length > 0
           - postgres_password is defined and postgres_password | length > 0
-          - auth_service_username is defined and auth_service_username | length > 0
-          - auth_service_password is defined and auth_service_password | length > 0
+          - kong_db_password is defined and kong_db_password | length > 0
+          - keycloak_admin_password is defined and keycloak_admin_password | length > 0
+          - genie_admin_password is defined and genie_admin_password | length > 0
+          - genie_admin_email is defined and genie_admin_email | length > 0
+          - keycloak_db_password is defined and keycloak_db_password | length > 0
+          - keycloak_client_secret is defined and keycloak_client_secret | length > 0
+          - keycloak_proxy_client_secret is defined and keycloak_proxy_client_secret | length > 0
+          - kc_dataprep_client_secret is defined and kc_dataprep_client_secret | length > 0
         fail_msg: >-
           Missing required vault variable(s).
           Edit the vault file for your environment (group_vars/&lt;env&gt;.vault) and set all secrets:
-          arango_password, jwt_secret, session_secret, translation_cache_password,
-          postgres_password, auth_service_username, auth_service_password.
+          arango_password, translation_cache_password,
+          postgres_password,
+          kong_db_password, keycloak_admin_password, genie_admin_password, genie_admin_email,
+          keycloak_db_password, keycloak_client_secret, keycloak_proxy_client_secret,
+          kc_dataprep_client_secret.
         quiet: true
 
     - name: Set swarm registry URL
@@ -653,7 +672,7 @@
     - name: Verify critical environment variables in .env file
       ansible.builtin.shell: |
         # Verify critical variables exist and are non-empty in .env
-        for var in ARANGO_PASSWORD JWT_SECRET SESSION_SECRET POSTGRES_PASSWORD; do
+        for var in ARANGO_PASSWORD POSTGRES_PASSWORD KC_DATAPREP_CLIENT_SECRET; do
           value=$(grep "^${var}=" {{ deploy_dir }}/.env | cut -d'=' -f2-)
           if [ -z "$value" ]; then
             echo "ERROR: $var is not set or empty in .env file!"
@@ -767,6 +786,8 @@
         replica_check.stdout_lines
         | reject('search', 'kong-config')
         | reject('search', 'kong-migrations')
+        | reject('search', 'postgres-init')
+        | reject('search', 'keycloak-config')
         | reject('search', '0/0')
         | select('search', '0/')
         | length == 0

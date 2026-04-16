@@ -3,25 +3,17 @@
   <div class="modal-container">
     <!-- Backdrop/overlay with click to dismiss -->
     <div class="modal-overlay" @click="$emit('close')"></div>
-    
+
     <!-- The actual modal dialog -->
-    <div 
-      class="modal-dialog"
-      :class="[size, { 'modal-scrollable': scrollable }]"
-      ref="modalDialog"
-    >
+    <div ref="modalDialog" class="modal-dialog" :class="[size, { 'modal-scrollable': scrollable }]">
       <!-- Header section with title and close button -->
       <div class="modal-header">
-        <h2 class="modal-title" v-if="title">{{ isTranslationKey ? $t(title) : title }}</h2>
-        <button 
-          class="close-button" 
-          @click="$emit('close')" 
-          aria-label="Close"
-        >
+        <h2 v-if="title" class="modal-title">{{ isTranslationKey ? $t(title) : title }}</h2>
+        <button class="close-button" aria-label="Close" @click="$emit('close')">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
-      
+
       <!-- Main content area -->
       <div class="modal-body">
         <slot name="body">
@@ -29,9 +21,9 @@
           <slot></slot>
         </slot>
       </div>
-      
+
       <!-- Footer with action buttons -->
-      <div class="modal-footer" v-if="$slots.footer">
+      <div v-if="$slots.footer" class="modal-footer">
         <slot name="footer"></slot>
       </div>
     </div>
@@ -44,43 +36,43 @@ export default {
   props: {
     title: {
       type: String,
-      default: ''
+      default: '',
     },
     size: {
       type: String,
       default: 'medium',
-      validator: (value) => ['small', 'medium', 'large', 'xl'].includes(value)
+      validator: (value) => ['small', 'medium', 'large', 'xl'].includes(value),
     },
     scrollable: {
       type: Boolean,
-      default: true
+      default: true,
     },
     isTranslationKey: {
       type: Boolean,
-      default: false
-    }
-  },
-  data() {
-    return {
-      originalOverflow: null
-    }
+      default: false,
+    },
   },
   emits: ['close'],
+  data() {
+    return {
+      originalOverflow: null,
+    }
+  },
   mounted() {
     // Prevent body scrolling when modal is open
     this.originalOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    
+
     // Trap focus inside modal
     this.trapFocus()
-    
+
     // Add escape key listener
     document.addEventListener('keydown', this.handleEscKey)
   },
   beforeUnmount() {
     // Restore body scrolling when component is destroyed
     document.body.style.overflow = this.originalOverflow
-    
+
     // Remove escape key listener
     document.removeEventListener('keydown', this.handleEscKey)
   },
@@ -95,21 +87,21 @@ export default {
       const focusableElements = this.$refs.modalDialog.querySelectorAll(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       )
-      
+
       if (focusableElements.length > 0) {
         const firstElement = focusableElements[0]
         const lastElement = focusableElements[focusableElements.length - 1]
-        
+
         // Focus the first element initially
         firstElement.focus()
-        
+
         this.$refs.modalDialog.addEventListener('keydown', (e) => {
           if (e.key === 'Tab') {
             // Shift + Tab on first element -> move to last
             if (e.shiftKey && document.activeElement === firstElement) {
               e.preventDefault()
               lastElement.focus()
-            } 
+            }
             // Tab on last element -> move to first
             else if (!e.shiftKey && document.activeElement === lastElement) {
               e.preventDefault()
@@ -118,8 +110,8 @@ export default {
           }
         })
       }
-    }
-  }
+    },
+  },
 }
 </script>
 
@@ -246,15 +238,15 @@ export default {
     width: 95% !important;
     margin: 1rem auto;
   }
-  
+
   .modal-header {
     padding: 12px 16px;
   }
-  
+
   .modal-body {
     padding: 16px;
   }
-  
+
   .modal-footer {
     padding: 12px 16px;
   }

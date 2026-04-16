@@ -2601,18 +2601,9 @@ export default {
       this.showOperationResults = false
     },
 
-    // Get current user information
+    // Get current user information from Vuex store (OIDC)
     getCurrentUser() {
-      // Get current user data from localStorage or other source
-      const userData = localStorage.getItem('user')
-      if (userData) {
-        try {
-          this.currentUser = JSON.parse(userData)
-        } catch (e) {
-          console.error('Error parsing user data:', e)
-          this.currentUser = {}
-        }
-      }
+      this.currentUser = this.$store.getters.currentUser || {};
     },
 
     // Open user edit dialog

@@ -5,15 +5,8 @@
     "module": "esnext",
     "baseUrl": ".",
     "moduleResolution": "bundler",
-    "types": [],
     "paths": {
       "@/*": ["./src/*"]
-    },
-    "lib": [
-      "esnext",
-      "dom",
-      "dom.iterable",
-      "scripthost"
-    ]
+    }
   }
 }

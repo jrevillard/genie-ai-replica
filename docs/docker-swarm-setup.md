@@ -14,12 +14,14 @@ GENIE.AI uses a single Swarm-compatible `docker-compose.yaml` at the project roo
 
 ## Architecture Overview
 
+For the full system architecture with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](architecture.md).
+
 GENIE.AI services are placed on nodes using three labels:
 
 | Placement | Constraint | Services |
 |-----------|------------|----------|
 | **Gateway** (label) | `node.labels.gateway == true` | Kong, NGINX, PostgreSQL |
-| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, HTTP Service |
+| **GENIE.AI** (label) | `node.labels.genieai == true` | Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV, Keycloak |
 | **GPU** (label) | `node.labels.gpu == true` | vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, Translation, Guardrail |
 
 All three labels (`gateway=true`, `genieai=true`, `gpu=true`) must be applied manually to the target nodes. A single node can have multiple labels.
@@ -188,14 +190,20 @@ docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:la
 # Document Repository — context is components/ (Dockerfile copies document-repository/ and shared/)
 docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
 
-# HTTP Service — context is project root (Dockerfile copies genie-ai-overlay/http-service/)
-docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
-
 # Nginx (API gateway reverse proxy)
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 
 # Kong Config (one-shot init service)
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
+
+# PostgreSQL Init (one-shot — creates dedicated kong/keycloak users)
+docker build -t genie-ai-postgres-init:latest configs/postgres/
+
+# Keycloak (Identity Provider)
+docker build -t genie-ai-keycloak:latest configs/keycloak/
+
+# Keycloak Config CLI (one-shot — applies realm configuration)
+docker build -f configs/keycloak/Dockerfile.config-cli -t genie-ai-keycloak-config:latest configs/keycloak/
 
 # OPEA services (if DEPLOY_OPEA=1) — context is project root for all
 docker build -f genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest .
@@ -204,7 +212,7 @@ docker build -f genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai -t genie-ai
 docker build -f genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest .
 ```
 
-This builds 10 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
+This builds 13 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
 
 ### 5b. Tag images for local registry
 
@@ -216,12 +224,14 @@ docker tag genie-ai-chatqna-server:latest localhost:5000/genie-ai-chatqna-server
 docker tag genie-ai-reranker:latest localhost:5000/genie-ai-reranker:latest
 docker tag genie-ai-nginx:latest localhost:5000/genie-ai-nginx:latest
 docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:latest
+docker tag genie-ai-postgres-init:latest localhost:5000/genie-ai-postgres-init:latest
+docker tag genie-ai-keycloak:latest localhost:5000/genie-ai-keycloak:latest
+docker tag genie-ai-keycloak-config:latest localhost:5000/genie-ai-keycloak-config:latest
 
 # Services tagged by Compose project name (genieai_mvp)
 docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
 docker tag genieai_mvp_backend:latest localhost:5000/genie-ai-backend:latest
 docker tag genieai_mvp_document-repository:latest localhost:5000/genie-ai-document-repository:latest
-docker tag genieai_mvp_http-service:latest localhost:5000/genie-ai-http-service:latest
 ```
 
 ### 5c. Push to local registry
@@ -230,13 +240,15 @@ docker tag genieai_mvp_http-service:latest localhost:5000/genie-ai-http-service:
 docker push localhost:5000/genie-ai-frontend:latest
 docker push localhost:5000/genie-ai-backend:latest
 docker push localhost:5000/genie-ai-document-repository:latest
-docker push localhost:5000/genie-ai-http-service:latest
 docker push localhost:5000/genie-ai-dataprep-arango:latest
 docker push localhost:5000/genie-ai-retriever-arango:latest
 docker push localhost:5000/genie-ai-chatqna-server:latest
 docker push localhost:5000/genie-ai-reranker:latest
 docker push localhost:5000/genie-ai-nginx:latest
 docker push localhost:5000/genie-ai-kong-config:latest
+docker push localhost:5000/genie-ai-postgres-init:latest
+docker push localhost:5000/genie-ai-keycloak:latest
+docker push localhost:5000/genie-ai-keycloak-config:latest
 ```
 
 ### 5d. (Optional) Pre-pull external images for air-gapped deployments
@@ -259,6 +271,8 @@ docker pull opea/chatqna-ui:latest
 docker pull opea/nginx:latest
 docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
 docker pull nginx:alpine
+docker pull quay.io/keycloak/keycloak:26.5.6
+docker pull adorsys/keycloak-config-cli:6.5.0-26
 
 # Tag and push (example for each)
 docker tag vllm/vllm-openai:latest localhost:5000/vllm/vllm-openai:latest
@@ -280,12 +294,14 @@ Set **all required secrets** (Section 1-2 in the env template):
 
 ```bash
 ARANGO_PASSWORD=<strong-password>
-JWT_SECRET=<strong-random-string>
-SESSION_SECRET=<strong-random-string>
 TRANSLATION_CACHE_PASSWORD=<strong-password>
 POSTGRES_PASSWORD=<strong-password>
-AUTH_SERVICE_USERNAME=<username>
-AUTH_SERVICE_PASSWORD=<strong-password>
+KONG_DB_PASSWORD=<strong-password>
+KEYCLOAK_ADMIN_PASSWORD=<strong-password>
+GENIE_ADMIN_PASSWORD=<strong-password>
+KEYCLOAK_DB_PASSWORD=<strong-password>
+KEYCLOAK_CLIENT_SECRET=<strong-password>
+KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_SECURE=true
@@ -427,6 +443,47 @@ curl -sk https://localhost/
 # Use the web UI at https://<gateway-domain>/
 ```
 
+## Step 10b: User & Role Management (Post-Deploy)
+
+After verifying deployment, set up user accounts and roles. All user management is performed through the Keycloak admin console — no GENIE.AI-specific interface is needed.
+
+### Keycloak Admin Console
+
+| Deployment | URL |
+|---|---|
+| Localhost (dev) | `https://localhost/auth/admin` |
+| Domain | `https://<NGINX_PUBLIC_DOMAIN>/auth/admin` |
+
+**Credentials**: username `admin`, password from `KEYCLOAK_ADMIN_PASSWORD` in `.env`.
+
+Select the **genie** realm (not `master`) after logging in.
+
+**GENIE realm admin user** (separate from master admin, used for frontend login):
+- **Username**: `genie-admin` (default, configurable via `GENIE_ADMIN_USERNAME`)
+- **Password**: `<GENIE_ADMIN_PASSWORD>` from `.env`
+- Has `admin` realm role — grants admin access in the GENIE.AI frontend
+
+### First Steps
+
+1. **Change the admin password** (if still using the default from `.env`): Users > genie-admin > Credentials > Set password
+2. **Create user accounts**: Users > Add user — set credentials and assign the `user` role
+3. **Grant admin access**: Users > [user] > Role Mapping > Assign `admin` role
+
+### Pre-configured Users and Roles
+
+The following are configured automatically during deployment via `configs/keycloak/genie-realm.yaml`:
+
+| User | Roles | Purpose |
+|---|---|---|
+| `genie-admin` | `admin`, `user` | Initial administrator account |
+| — | `user` | Default role for all new users |
+
+### Documentation
+
+For complete user management instructions (CRUD operations, role assignment, group management, verification commands, security considerations), see the [Keycloak Admin Operations Guide](keycloak-admin-guide.md).
+
+For connecting external identity providers (Google, Microsoft, SAML/OIDC), see the [External IdP Integration Guide](external-idp-integration-guide.md).
+
 ## Step 11: Debugging Internal Services
 
 Internal services are not exposed to the host. Use these methods:
@@ -475,7 +532,7 @@ echo "Waiting for services to stop..."
 sleep 30
 
 # Named volumes persist after stack removal. To remove:
-docker volume rm genieai_kong_data
+docker volume rm genieai_postgres_data
 docker volume rm genieai_redis_data
 docker volume rm genieai_doc_repo_uploads
 docker volume rm genieai_arango_data
@@ -506,7 +563,7 @@ docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
 
 # Build and push images (see Step 5a for explicit commands)
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
-docker build -t genieai_mvp_backend:latest components/gov-chat-backend/
+docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
 # ... tag and push (see Step 5b-5c)
 
 # Configure .env (use localhost defaults)
@@ -535,7 +592,7 @@ docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
 
 # 2. Configure environment
 cp env .env
-# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+# Edit .env with your secrets (ARANGO_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.)
 # Set network variables for remote access:
 sed -i 's/^NGINX_PUBLIC_DOMAIN=.*/NGINX_PUBLIC_DOMAIN=10.0.0.110/' .env
 sed -i "s|^VUE_APP_API_URL=.*|VUE_APP_API_URL=https://10.0.0.110/api|" .env
@@ -547,7 +604,6 @@ sed -i 's|^CORS_ALLOWED_ORIGINS=.*|CORS_ALLOWED_ORIGINS=https://10.0.0.110|' .en
 docker build -t genieai_mvp_frontend:latest components/gov-chat-frontend/
 docker build -f components/gov-chat-backend/Dockerfile -t genieai_mvp_backend:latest components/
 docker build -f components/document-repository/Dockerfile -t genieai_mvp_document-repository:latest components/
-docker build -f genie-ai-overlay/http-service/Dockerfile -t genieai_mvp_http-service:latest .
 docker build -t genie-ai-nginx:latest api-gateway-solution/nginx/
 docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 
@@ -555,14 +611,12 @@ docker build -t genie-ai-kong-config:latest api-gateway-solution/new-config/
 docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
 docker tag genieai_mvp_backend:latest localhost:5000/genie-ai-backend:latest
 docker tag genieai_mvp_document-repository:latest localhost:5000/genie-ai-document-repository:latest
-docker tag genieai_mvp_http-service:latest localhost:5000/genie-ai-http-service:latest
 docker tag genie-ai-nginx:latest localhost:5000/genie-ai-nginx:latest
 docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:latest
 
 docker push localhost:5000/genie-ai-frontend:latest
 docker push localhost:5000/genie-ai-backend:latest
 docker push localhost:5000/genie-ai-document-repository:latest
-docker push localhost:5000/genie-ai-http-service:latest
 docker push localhost:5000/genie-ai-nginx:latest
 docker push localhost:5000/genie-ai-kong-config:latest
 
@@ -574,6 +628,18 @@ docker stack deploy -c docker-compose.yaml genieai
 docker service ls
 # Access https://10.0.0.110/ in your browser (self-signed cert warning is expected)
 ```
+
+## External Identity Provider Support
+
+GENIE.AI supports connecting external identity providers (Google, Microsoft Entra ID, institutional IdPs, any standard OIDC/SAML provider) through Keycloak. No GENIE.AI code or configuration changes are required.
+
+See [External IdP Integration Guide](external-idp-integration-guide.md) for step-by-step instructions.
+
+**Key points:**
+- External IdPs are configured entirely within Keycloak (admin console or keycloak-config-cli)
+- The Keycloak container must have network connectivity to the external IdP endpoints
+- NGINX does not proxy external IdP traffic; Keycloak makes direct outbound connections
+- External IdPs are **not available** in air-gapped deployments — only local Keycloak credentials work without internet connectivity
 
 ## Known Limitations
 

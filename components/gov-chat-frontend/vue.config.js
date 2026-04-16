@@ -1,19 +1,6 @@
 // vue.config.js
 const { DefinePlugin } = require('webpack');
-
-// ==============================================================================
-// DEBUGGING CODE STARTS HERE
-// ==============================================================================
-console.log("\n\n\n============================================================");
-console.log("!!! VUE.CONFIG.JS IS LOADING. CHECKING ENV VARS... !!!");
-console.log("============================================================");
-console.log(`process.env.VUE_APP_API_URL IS: [${process.env.VUE_APP_API_URL}]`);
-console.log(`process.env.VUE_APP_CSP_CONNECT_SRC IS: [${process.env.VUE_APP_CSP_CONNECT_SRC}]`);
-console.log(`process.env.VUE_PROXY_HOST IS: [${process.env.VUE_PROXY_HOST}]`);
-console.log("============================================================\n\n\n");
-// ==============================================================================
-// DEBUGGING CODE ENDS HERE
-// ==============================================================================
+const isProduction = process.env.NODE_ENV === 'production';
 
 const cspConnectSrc = process.env.VUE_APP_CSP_CONNECT_SRC || "'self' http://localhost:3000 ws://localhost:8090";
 const vueProxyHost = process.env.VUE_PROXY_HOST || "localhost:3000";
@@ -43,14 +30,14 @@ module.exports = {
       }
     }
   },
-  // *** ADD THIS TO DISABLE CACHE-LOADER ***
   chainWebpack: config => {
     config.module.rule('vue').uses.delete('cache-loader');
     config.module.rule('js').uses.delete('cache-loader');
     config.module.rule('ts').uses.delete('cache-loader');
     config.module.rule('tsx').uses.delete('cache-loader');
 
-    if (process.env.NODE_ENV === 'production') {
+    // Strip debug console calls in production (keep error/warn for diagnostics)
+    if (isProduction) {
       config.optimization.minimizer('terser').tap(args => {
         args[0].terserOptions.compress.pure_funcs = ['console.log', 'console.debug', 'console.info'];
         return args;
@@ -85,5 +72,3 @@ module.exports = {
     ]
   }
 };
-console.log('DEBUG: Final constructed CSP string:');
-console.log(module.exports.devServer.headers['Content-Security-Policy']);

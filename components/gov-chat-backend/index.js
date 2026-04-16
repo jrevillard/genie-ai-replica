@@ -11,6 +11,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const { Server: SocketIOServer } = require('socket.io');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
+const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middleware');
 
 // Initialize Express app
 const app = express();
@@ -221,24 +222,7 @@ const swaggerOptions = {
           type: 'object',
           properties: {
             _key: { type: 'string', description: 'Unique identifier' },
-            loginName: { type: 'string', description: 'Username for authentication' },
             email: { type: 'string', format: 'email', description: 'User email address' },
-            accessToken: { type: 'string', description: 'JWT access token' },
-            personalIdentification: {
-              type: 'object',
-              properties: {
-                fullName: { type: 'string' },
-                dob: { type: 'string', format: 'date' },
-                gender: { type: 'string' },
-                nationality: { type: 'string' }
-              }
-            },
-            addressResidency: {
-              type: 'object',
-              properties: {
-                currentAddress: { type: 'string' }
-              }
-            },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' }
           }
@@ -404,15 +388,25 @@ const swaggerOptions = {
         }
       },
       securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT'
+        KeycloakOAuth2: {
+          type: 'oauth2',
+          description: 'Keycloak OAuth2 authentication (Authorization Code + PKCE)',
+          flows: {
+            authorizationCode: {
+              authorizationUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
+              tokenUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
+              scopes: {
+                openid: 'OpenID Connect scope',
+                profile: 'User profile information',
+                email: 'User email address'
+              }
+            }
+          }
         }
       }
     },
     security: [
-      { bearerAuth: [] }
+      { KeycloakOAuth2: ['openid', 'profile'] }
     ],
     tags: [
       {
@@ -437,7 +431,14 @@ try {
   logger.info('Swagger specification generated successfully');
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }'
+    customCss: '.swagger-ui .topbar { display: none }',
+    swaggerOptions: {
+      oauth: {
+        clientId: process.env.KEYCLOAK_CLIENT_ID,
+        usePkceWithAuthorizationCodeGrant: true,
+        scopes: 'openid profile email'
+      }
+    }
   }));
   app.get('/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -453,7 +454,7 @@ try {
 }
 
 // --- HELMET CSP ---
-const connectSrcUrls = (process.env.CSP_CONNECT_SRC || "'self' http://localhost:3000 ws://localhost:3000").split(' ');
+const connectSrcUrls = (process.env.CSP_CONNECT_SRC || `'self' http://localhost:3000 ws://localhost:3000 ${process.env.KEYCLOAK_URL}`).split(' ');
 
 const cspOptions = {
   directives: {
@@ -644,7 +645,7 @@ async function initializeServices() {
   logger.debug('Logger level:', logger.level || 'unknown');
 
   // Validate environment variables
-  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USER', 'ARANGO_PASSWORD'];
+  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USER', 'ARANGO_PASSWORD', 'KEYCLOAK_URL', 'KEYCLOAK_REALM', 'KEYCLOAK_CLIENT_ID'];
   const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
   if (missingEnvVars.length > 0) {
     logger.error('Missing required environment variables:', { missing: missingEnvVars });
@@ -654,7 +655,7 @@ async function initializeServices() {
   // Validate required secrets in production
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction) {
-    const requiredSecrets = ['JWT_SECRET', 'SESSION_SECRET', 'TRANSLATION_CACHE_PASSWORD'];
+    const requiredSecrets = ['TRANSLATION_CACHE_PASSWORD'];
     const missingSecrets = requiredSecrets.filter(key => !process.env[key] || process.env[key].includes('default') || process.env[key].includes('change'));
     if (missingSecrets.length > 0) {
       logger.error('Missing or insecure secrets in production:', { missing: missingSecrets });
@@ -703,7 +704,7 @@ async function initializeServices() {
   const services = {};
 
   // Import services individually with error handling
-  let authService, userProfileService, adminDashboardService, analyticsService, queryService;
+  let userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, sessionService, logsService;
   let databaseOperationsService, weatherService, securityScanService, translationService;
 
@@ -725,7 +726,6 @@ async function initializeServices() {
   };
 
   try {
-    authService = await importService('AuthService', './services/auth-service');
     userProfileService = await importService('UserProfileService', './services/user-profile-service');
     adminDashboardService = await importService('AdminDashboardService', './services/admin-dashboard-service');
     analyticsService = await importService('AnalyticsService', './services/analytics-service');
@@ -739,9 +739,12 @@ async function initializeServices() {
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
 
+    // Initialize user provisioning schema (indexes, legacy cleanup)
+    const userProvisioningService = require('./services/user-provisioning-service');
+    await userProvisioningService.initialize();
+
     logger.info('Constructing service map');
     const serviceMap = {
-      authService: { instance: authService, name: 'AuthService' },
       serviceCategoryService: { instance: serviceCategoryService, name: 'ServiceCategoryService' },
       userProfileService: { instance: userProfileService, name: 'UserProfileService' },
       adminDashboardService: { instance: adminDashboardService, name: 'AdminDashboardService' },
@@ -791,7 +794,6 @@ async function initializeServices() {
     logger.info('Initializing services');
     const initPromises = [
       { service: services.sessionService, name: 'SessionService' },
-      { service: services.authService, name: 'AuthService', preInit: () => services.authService.setSessionService(services.sessionService) },
       { service: services.serviceCategoryService, name: 'ServiceCategoryService' },
       { service: services.userProfileService, name: 'UserProfileService' },
       { service: services.adminDashboardService, name: 'AdminDashboardService' },
@@ -828,44 +830,30 @@ async function initializeServices() {
       }
     }
 
-    logger.info('Setting UserProfileService.setSessionService');
-    try {
-      services.userProfileService.setSessionService(services.sessionService);
-      logger.debug('UserProfileService.setSessionService completed');
-    } catch (error) {
-      logger.error('Failed to set UserProfileService.setSessionService:', {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      throw error;
-    }
-
     // Set dependencies
     logger.info('Setting service dependencies');
     try {
-      if (services.queryService && services.analyticsService) {
+      if (services.queryService && services.analyticsService && typeof services.queryService.setAnalyticsService === 'function') {
         services.queryService.setAnalyticsService(services.analyticsService);
         logger.debug('QueryService.setAnalyticsService completed');
       }
-      if (services.queryService && services.chatHistoryService) {
+      if (services.queryService && services.chatHistoryService && typeof services.queryService.setChatHistoryService === 'function') {
         services.queryService.setChatHistoryService(services.chatHistoryService);
         logger.debug('QueryService.setChatHistoryService completed');
       }
-      if (services.chatHistoryService && services.analyticsService) {
+      if (services.chatHistoryService && services.analyticsService && typeof services.chatHistoryService.setAnalyticsService === 'function') {
         services.chatHistoryService.setAnalyticsService(services.analyticsService);
         logger.debug('ChatHistoryService.setAnalyticsService completed');
       }
-      if (services.adminDashboardService && services.logsService) {
+      if (services.adminDashboardService && services.logsService && typeof services.adminDashboardService.setLogsService === 'function') {
         services.adminDashboardService.setLogsService(services.logsService);
         logger.debug('AdminDashboardService.setLogsService completed');
       }
-      if (services.adminDashboardService && services.securityScanService) {
+      if (services.adminDashboardService && services.securityScanService && typeof services.adminDashboardService.setSecurityScanService === 'function') {
         services.adminDashboardService.setSecurityScanService(services.securityScanService);
         logger.debug('AdminDashboardService.setSecurityScanService completed');
       }
-      if (services.weatherService && services.analyticsService) {
+      if (services.weatherService && services.analyticsService && typeof services.weatherService.setAnalyticsService === 'function') {
         services.weatherService.setAnalyticsService(services.analyticsService);
         logger.debug('WeatherService.setAnalyticsService completed');
       }
@@ -967,20 +955,21 @@ async function startApp() {
   }
 
   // Define routes with paths and services
+  // keycloakAuth: true means the route group is protected by Keycloak JWT middleware
   const routeConfigs = [
-    { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService },
-    { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService },
-    { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService },
-    { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService },
-    { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService },
-    { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService },
-    { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService },
-    { file: 'auth-routes', paths: ['/api/auth'], service: services.authService },
-    { file: 'logger-routes', paths: ['/api/logger'], service: null },
-    { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
-    { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService },
-    { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService },
-    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService }
+    { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService, keycloakAuth: true },
+    { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService, keycloakAuth: true },
+    { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService, keycloakAuth: true },
+    { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService, keycloakAuth: true },
+    { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService, keycloakAuth: true },
+    { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService, keycloakAuth: true },
+    { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService, keycloakAuth: true },
+    { file: 'auth-routes', paths: ['/api/auth'], service: null },
+    { file: 'logger-routes', paths: ['/api/logger'], service: null, keycloakAuth: true },
+    { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService, keycloakAuth: true },
+    { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService, keycloakAuth: true },
+    { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService, keycloakAuth: true },
+    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService, keycloakAuth: true }
   ];
 
   // Log route configurations
@@ -1050,6 +1039,9 @@ async function startApp() {
         routeInstance = routeModule(config.service, analyticsController);
       } else if (config.file === 'admin-routes') {
         routeInstance = routeModule(config.service, config.extraService);
+      } else if (config.file === 'auth-routes') {
+        // auth-routes exports a plain router (no factory function)
+        routeInstance = routeModule;
       } else {
         routeInstance = routeModule(config.service);
       }
@@ -1078,7 +1070,11 @@ async function startApp() {
     for (const path of config.paths) {
       try {
         logger.info(`Mounting ${config.file} at ${path}`);
-        app.use(path, routeInstance);
+        if (config.keycloakAuth) {
+          app.use(path, keycloakAuthMiddleware.authenticate, routeInstance);
+        } else {
+          app.use(path, routeInstance);
+        }
         logger.info(`${config.file.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Module: LOADED`);
         logger.debug(`Route ${config.file} mounted at ${path} with service: ${config.service ? config.service.constructor.name : 'no service'}`);
         logger.info('Total routes in stack:', app._router.stack.length);
@@ -1100,22 +1096,6 @@ async function startApp() {
     }
   }
 
-  // Email verification redirect
-  app.get('/verify-email/:token', (req, res) => {
-    try {
-      logger.debug(`Redirecting to /api/auth/verify-email/${req.params.token}`);
-      res.redirect(`/api/auth/verify-email/${req.params.token}`);
-    } catch (error) {
-      logger.error('Email verification redirect error:', {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      res.status(500).json({ message: 'Failed to process email verification redirect' });
-    }
-  });
-
   // Root route
   app.get('/', (req, res) => {
     try {
@@ -1133,22 +1113,6 @@ async function startApp() {
         errorType: error?.constructor?.name || 'Unknown'
       });
       res.status(500).json({ message: 'Failed to serve root endpoint' });
-    }
-  });
-
-  // Verification success redirect
-  app.get('/verify-email-success', (req, res) => {
-    try {
-      logger.debug('Serving verify-email-success page');
-      res.sendFile(path.join(__dirname, 'dist/index.html'));
-    } catch (error) {
-      logger.error('Verify email success endpoint error:', {
-        error: error.message,
-        stack: error.stack,
-        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        errorType: error?.constructor?.name || 'Unknown'
-      });
-      res.status(500).json({ message: 'Failed to serve verification success page' });
     }
   });
 
@@ -1190,7 +1154,9 @@ async function startApp() {
       logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
     });
     // Set server timeout to 300 seconds
-    server.setTimeout(300000);
+    if (typeof server.setTimeout === 'function') {
+      server.setTimeout(300000);
+    }
     logger.info(`Server timeout set to 300 seconds`);
   } catch (error) {
     logger.error('Failed to start server:', {

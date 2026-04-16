@@ -60,7 +60,6 @@ graph TB
         CHAT[ChatQnA Service]
         DATAPREP[Data Preparation]
         RETRIEVER[Retriever Service]
-        HTTP[HTTP Service]
     end
 
     CONSTANTS --> ENUMS
@@ -79,8 +78,6 @@ graph TB
     DATAPREP --> PROTOCOL
     RETRIEVER --> CONSTANTS
     RETRIEVER --> PROTOCOL
-    HTTP --> CONSTANTS
-    HTTP --> PROTOCOL
 
     style CONSTANTS fill:#4E97D1
     style PROTOCOL fill:#99ccff

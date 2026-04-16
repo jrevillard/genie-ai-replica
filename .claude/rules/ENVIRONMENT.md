@@ -1,33 +1,19 @@
 # Environment Files Convention
 
 ## Standard
-- **`env`** (no extension) = Configuration template, committed to git
-- **`.env`** (with dot) = Local variables, **NEVER committed** (gitignored)
-
-## Per-service structure
-Each service has its own `env` file in its folder:
-
-```
-components/
-├── gov-chat-backend/env      # Committed template
-├── gov-chat-frontend/env     # Committed template
-└── document-repository/env   # Committed template
-```
+- **`env`** (no extension, project root) = Configuration template, committed to git
+- **`.env`** (with dot, project root) = Local variables, **NEVER committed** (gitignored)
 
 ## Local initialization
 On first start or after cloning the repo:
 
 ```bash
-# For each service that has secrets
-cp components/gov-chat-backend/env components/gov-chat-backend/.env
-cp components/gov-chat-frontend/env components/gov-chat-frontend/.env
-cp components/document-repository/env components/document-repository/.env
+cp env .env
+# Then edit .env with your local values (passwords, API keys, etc.)
 ```
 
-Then edit `.env` files with your local values (passwords, API keys, etc.).
-
 ## Docker Compose
-Services read variables either via `env_file` in `docker-compose.yaml` or via system environment variables.
+Services read variables via `env_file` in `docker-compose.yaml` or system environment variables.
 
 **IMPORTANT:** Use the root `docker-compose.yaml` for all operations:
 
@@ -56,9 +42,5 @@ All ignore rules are in the root `.gitignore` - no per-service `.gitignore` file
 | Backend | 3000 |
 | Document Repository | 3001 |
 | ArangoDB | 8529 |
-| Redis | 6380 (host) / 6379 (container) |
+| Redis | 6379 (container, internal only) |
 | ClamAV | 3310 |
-
-## Test account
-- **Username:** jrevillard
-- **Password:** Test1234!

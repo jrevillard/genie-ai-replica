@@ -34,8 +34,6 @@ cp env .env
 # Then edit .env with your local values (API keys, passwords, etc.)
 ```
 
-**Note:** The per-service `env` files in `components/` are deprecated - use the root `env` file.
-
 ### Ansible Deployment (Recommended)
 
 Automated Docker Swarm deployment via Ansible with per-environment secrets. See `deploy/ansible/README.md` for full documentation.
@@ -63,7 +61,7 @@ ansible-playbook -i inventory/test.ini teardown.yml --vault-id test@prompt
 ```bash
 # First time: create your .env from template
 cp env .env
-# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+# Edit .env with your secrets (ARANGO_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.)
 
 # Deploy with default settings
 docker compose up -d
@@ -98,13 +96,28 @@ docker compose --profile opea up -d
 docker compose build [service_name]
 
 # View logs
-docker compose logs -f [service_name]
+docker service logs genieai_<service> -f
 
-# Stop all services
-docker compose down
+# Scale a service
+docker service scale genieai_<service>=<replicas>
+
+# List services
+docker service ls
 ```
 
+### E2E Tests
+
+Multi-phase procedure in `docs/e2e-tests/`:
+1. Read `docs/e2e-tests/README.md` — execution order, prerequisites, conventions
+2. Execute `docs/e2e-tests/00-clean-start.md` — Phase 0 (manual setup, MUST run first)
+3. Execute all phases per their respective docs — mix of manual commands + Playwright
+4. Each phase has prerequisites and cleanup steps — follow strictly, do not skip
+
+**Important**: Phase K mutates realm settings. Cleanup steps K.5+K.6 MUST run after Phase K before proceeding to Phase L.
+
 ## Architecture
+
+For the full architecture overview with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](docs/architecture.md).
 
 ### Layer Stack
 
@@ -190,10 +203,13 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 
 **Secrets (required, no defaults in code):**
 - `ARANGO_PASSWORD` - ArangoDB root password
-- `JWT_SECRET` - JWT token signing secret
-- `SESSION_SECRET` - Session encryption secret
-- `POSTGRES_PASSWORD` - Kong database password (creates kong user)
-- `AUTH_SERVICE_USERNAME` / `AUTH_SERVICE_PASSWORD` - Internal microservice auth
+- `POSTGRES_PASSWORD` - PostgreSQL superuser password
+- `KONG_DB_PASSWORD` - PostgreSQL dedicated Kong user password
+- `KEYCLOAK_DB_PASSWORD` - PostgreSQL dedicated Keycloak user password
+- `KEYCLOAK_ADMIN_PASSWORD` - Keycloak master admin console password
+- `KEYCLOAK_CLIENT_SECRET` - OIDC client secret for genie-app
+- `KEYCLOAK_PROXY_CLIENT_SECRET` - Service account secret for admin API proxy
+- `KC_DATAPREP_CLIENT_SECRET` - Dataprep service account secret (client_credentials grant)
 - `EMAIL_*` - SMTP configuration (required for user verification)
 
 **Deployment-Specific:**

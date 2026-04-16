@@ -81,14 +81,13 @@ Create a new `docker-compose.swarm.yaml` file dedicated to Docker Swarm deployme
 ### Codebase Patterns
 
 - Root `docker-compose.yaml` contains **26 services** with 20 `depends_on` blocks — all must be removed in Swarm version (Swarm ignores `depends_on`)
-- **9 services use `build:` directives** — `docker stack deploy` cannot build images. Must pre-build and push to a registry before deployment: `kong-config`, `frontend`, `backend`, `document-repository`, `http-service`, `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `reranker`
+- **8 services use `build:` directives** — `docker stack deploy` cannot build images. Must pre-build and push to a registry before deployment: `kong-config`, `frontend`, `backend`, `document-repository`, `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `reranker`
 - **12 services have `ipc: "host"`** — Swarm does not support per-container `ipc: host`. Must replace with `shm_size: '1g'` in `deploy.resources.limits`: `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `chatqna-xeon-ui-server`, `chatqna-xeon-nginx-server`, `vllm`, `textgen`, `vllm-translation-guardrail`, `translation`, `guardrail`, `embedding`, `reranker`
 - **~20 services have `container_name`** — Swarm ignores `container_name` and generates its own names. Remove all to avoid confusion.
 - **`kong-config` uses `network_mode: "service:kong"`** — Incompatible with Swarm overlay networking. Convert to a post-deploy shell script executed via `docker exec` on the kong container.
 - **12 services lack healthchecks** and need them added (excludes 2 one-shot init services):
   - `document-repository` — TCP check on port 3001
   - `clamav` — TCP check on clamd socket or port, start_period: 300s (initial DB download)
-  - `http-service` — TCP check on port 6666 (no HTTP health endpoint exists)
   - `dataprep-arango-service` — TCP check on port 5000 (no documented HTTP health endpoint)
   - `retriever-arango-service` — TCP check on port 7025 (no documented HTTP health endpoint)
   - `chatqna-xeon-backend-server` — TCP check on port 8888 (port 8088 was wrong; actual port is 8888 per BACKEND_SERVICE_PORT)
@@ -152,7 +151,7 @@ Variables that differ between docker and swarm deployment:
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,...` | `https://<gateway-node-fqdn>` |
 
 Variables that must be identical across all nodes:
-- All secrets: `ARANGO_PASSWORD`, `JWT_SECRET`, `SESSION_SECRET`, `TRANSLATION_CACHE_PASSWORD`, `POSTGRES_PASSWORD`, `AUTH_SERVICE_USERNAME`, `AUTH_SERVICE_PASSWORD`
+- All secrets: `ARANGO_PASSWORD`, `JWT_SECRET`, `SESSION_SECRET`, `TRANSLATION_CACHE_PASSWORD`, `POSTGRES_PASSWORD`
 - AI model IDs: `EMBEDDING_MODEL_ID`, `RERANKER_MODEL_ID`, `VLLM_LLM_MODEL_ID`
 
 Note: In Swarm, `.env` variables are resolved once at deploy time on the manager. Changing a variable requires redeploying the entire stack.
@@ -204,9 +203,9 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
 - [ ] **Task 4: Add deploy.placement.constraints to all services**
   - File: `docker-compose.swarm.yaml`
   - Action: Add `deploy` section to each service with placement constraints:
-    - **API Gateway stack** (`node.role == manager`): `kong-database`, `kong-migrations`, `kong`, `nginx`
+    - **API Gateway stack** (`node.role == manager`): `postgres`, `kong-migrations`, `kong`, `nginx`
     - **OPEA/GPU stack** (`node.labels.gpu == true`): `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker`, `embedding`, `reranker`, `textgen`, `translation`, `guardrail`, `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `chatqna-xeon-ui-server`, `chatqna-xeon-nginx-server`
-    - **GENIE.AI stack** (no constraint): `frontend`, `backend`, `arango-vector-db`, `redis-cache`, `document-repository`, `clamav`, `http-service`
+    - **GENIE.AI stack** (no constraint): `frontend`, `backend`, `arango-vector-db`, `redis-cache`, `document-repository`, `clamav`
   - Notes: Services with existing `deploy` sections (GPU services) — extend them. Services without — add new `deploy` section. Single-node Swarm requires `docker node update --label-add gpu=true <node>` for OPEA services to be scheduled.
 
 - [ ] **Task 5: Normalize restart_policy and add shm_size**
@@ -225,7 +224,6 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
   - Action: Add `healthcheck` to each service lacking one. Use TCP checks for services without verified HTTP health endpoints:
     - `document-repository`: `curl -f http://localhost:3001/health` (10s/5s/10/30s start) — verified endpoint exists
     - `clamav`: `timeout 5 bash -c 'echo > /dev/tcp/localhost/3310'` (30s/10s/5/**300s start**) — first run downloads DB (~3 min)
-    - `http-service`: `timeout 5 bash -c 'echo > /dev/tcp/localhost/6666'` (10s/5s/5/30s start) — no HTTP health endpoint
     - `dataprep-arango-service`: `timeout 5 bash -c 'echo > /dev/tcp/localhost/5000'` (15s/10s/10/120s start) — no documented HTTP health endpoint
     - `retriever-arango-service`: `timeout 5 bash -c 'echo > /dev/tcp/localhost/7025'` (15s/10s/10/120s start) — no documented HTTP health endpoint
     - `chatqna-xeon-backend-server`: `timeout 5 bash -c 'echo > /dev/tcp/localhost/8888'` (15s/10s/10/120s start) — port 8888 (not 8088)
@@ -345,7 +343,6 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
 - **No shared volumes**: if a node goes down, its stack goes down. No data migration between nodes.
 - **DNS timing**: Swarm overlay DNS entries may not resolve immediately on first container start. Services with healthchecks handle this via restart cycles.
 - **Redis healthcheck**: existing bug where `redis-cli ping` does not pass `TRANSLATION_CACHE_PASSWORD`. Not Swarm-specific, not in scope.
-- **Cross-node dependency**: `http-service` (GENIE.AI node) is called by `dataprep-arango-service` and `chatqna-xeon-backend-server` (OPEA node). If http-service is down, document ingestion fails. Swarm restart policy handles recovery.
 - **kong-config as post-deploy script**: Kong routes are not available until the post-deploy script runs. Services calling Kong during this window will get 404s. This is a brief gap (~10-30 seconds after Kong starts).
 
 ### Notes
@@ -353,7 +350,6 @@ Note: In Swarm, `.env` variables are resolved once at deploy time on the manager
 - The 3-node architecture: (1) API Gateway node — Kong + NGINX + PostgreSQL, (2) OPEA/GPU node — vLLM, TEI embedding, TEI reranking, Retriever, Dataprep, ChatQnA, (3) GENIE.AI node — Frontend, Backend, ArangoDB, Redis, Document Repository, ClamAV
 - Single-node deployment: requires `docker node update --label-add gpu=true <node>` even on a single node
 - `chatqna-xeon-ui-server` and `chatqna-xeon-nginx-server` — set `replicas: 0` by default. Open question whether to keep in production.
-- `http-service` belongs to the GENIE.AI node (it depends on `backend` which is on GENIE.AI node)
 - First deployment may take 5-15 minutes for all services to stabilize (GPU model loading + restart cycles)
 - The `components/docker-compose.yaml` references `chatqna_default` as external network while root compose creates `genieai_network` — this discrepancy exists in the current codebase and is not in scope for this spec.
 - Swarm secret paths: nginx secrets are mounted at `/run/secrets/<name>` in Swarm. Verify nginx config references these paths.

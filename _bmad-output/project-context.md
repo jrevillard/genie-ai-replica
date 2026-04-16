@@ -110,13 +110,36 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Framework**: Jest (in devDependencies, CommonJS mode)
 - **Module system**: CommonJS — test files use `require()`/`module.exports`
 - **File location**: `__tests__/` directory alongside code, or `.test.js` co-located
-- **Naming**: `*.test.js` (e.g., `authController.test.js`)
+- **Naming**: `*.test.js` (e.g., `keycloak-auth-middleware.test.js`)
 - **Structure**: `describe()` / `it()` / `expect()`
 - **Mocks**: Mock external services (ArangoDB, Redis, external APIs) at module level
-- **No existing tests** — follow the conventions above when writing new ones
+- **Shared fixtures**: `__tests__/mocks/mockJwtPayload.js` for JWT token fixtures
+- **Error format tests**: Verify `{ error, message, details }` structure, not raw errors
 
 #### Frontend (Vue)
-- No test framework configured yet — do not write tests until one is added
+- **Framework**: Jest with jsdom environment
+- **Module system**: ES modules — test files use `require()`/`module.exports` (Jest CommonJS interop)
+- **File location**: `src/__tests__/` directory (mirrors src structure)
+- **Naming**: `*.test.js` (e.g., `keycloakAuthService.test.js`)
+- **Structure**: `describe()` / `it()` / `expect()`
+- **Vue SFC**: `@vue/vue3-jest` transformer, `babel-jest` for JS
+- **Mocks**: `jest.mock()` for services and external libraries (`oidc-client-ts`)
+- **Config**: `jest.config.js` at service root, `setup.js` for global test setup
+- **Path alias**: `moduleNameMapper` maps `@/` to `<rootDir>/src/`
+
+#### Test File Location Convention
+
+| Component | Test Directory | Example |
+|-----------|---------------|---------|
+| Backend (gov-chat-backend) | `__tests__/` | `__tests__/keycloak-auth-middleware.test.js` |
+| Frontend (gov-chat-frontend) | `src/__tests__/` | `src/__tests__/userService.test.js` |
+| Backend mock fixtures | `__tests__/mocks/` | `__tests__/mocks/mockJwtPayload.js` |
+
+#### Authentication Test Conventions
+
+- **JWT auth fields**: Always verify `iss_sub`, `sub`, `iss` (JWT claims), NOT `_key` (ArangoDB internal)
+- **Error codes**: All auth errors use `{ error, message, details }` format
+- **Error codes to test**: TOKEN_INVALID, TOKEN_EXPIRED, FORBIDDEN, PROVISIONING_FAILED, AUTH_SERVICE_UNAVAILABLE
 
 ### Code Quality & Style Rules
 
@@ -138,16 +161,25 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ### Development Workflow Rules
 
+#### Keycloak Config CLI — Variable Substitution Syntax
+
+- keycloak-config-cli uses `$(env:VARIABLE)` syntax — NOT `${env:VARIABLE}`
+- The prefix `$(env:` and suffix `)` are configurable via `IMPORT_VARSUBSTITUTION_PREFIX`/`IMPORT_VARSUBSTITUTION_SUFFIX`
+- `IMPORT_VARSUBSTITUTION_ENABLED=true` must be set in the keycloak-config service environment
+- Never change `$(env:VAR)` to `${env:VAR}` in `genie-realm.yaml` — this breaks variable substitution at runtime
+- When reviewing `genie-realm.yaml`, preserve the `$(env:...)` syntax exactly as-is
+
 #### Environment & Config
 - Single `.env` at project root (copy from `env` template). Per-service `env` files are deprecated.
 - Secrets in `.env` are gitignored; `env` (no dot) is committed as template
 - LLM prompts: 3-tier priority — ENV VAR > FILE (`configs/prompts/`) > DEFAULT (code)
 
 #### Docker
-- Full stack: `docker compose --env-file .env up -d` (from root)
-- GENIE.AI only: `docker compose --env-file ../.env up -d` (from components/)
-- GPU: add `--env-file env.t4` or `--env-file env.rtx6000`
-- Rebuild: `docker compose build [service_name]`
+- Deploy: `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
+- GPU: `set -a && source .env && source env.t4 && docker stack deploy -c docker-compose.yaml genieai`
+- Remove: `docker stack rm genieai`
+- Build images: `docker build -t <tag> <context>` (see docs/docker-swarm-setup.md Step 5)
+- Validate: `set -a && source .env && set +a && docker compose config > /dev/null`
 
 #### Git
 - Main branch: `main` (use for PRs)

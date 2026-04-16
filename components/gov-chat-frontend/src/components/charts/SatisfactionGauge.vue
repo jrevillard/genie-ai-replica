@@ -4,19 +4,12 @@
     <!-- Debug panel for troubleshooting -->
     <pre
       v-if="debug"
-      style="
-        font-size: 10px;
-        max-height: 150px;
-        overflow: auto;
-        background: #333;
-        color: #fff;
-        padding: 5px;
-      "
+      style="font-size: 10px; max-height: 150px; overflow: auto; background: #333; color: #fff; padding: 5px"
     >
       Loading: {{ loading }}
       Error: {{ error }}
       Value: {{ actualSatisfactionValue }}
-      Chart Options: {{ chartOptions ? "Set" : "Not Set" }}
+      Chart Options: {{ chartOptions ? 'Set' : 'Not Set' }}
       externalData: {{ externalData }}
       Last Error: {{ lastError }}
       ChartKey: {{ chartKey }}
@@ -58,7 +51,7 @@
                 value: {
                   ...chartOptions.plotOptions.radialBar.dataLabels.value,
                   formatter: function (val) {
-                    return val.toFixed(2) + '%';
+                    return val.toFixed(2) + '%'
                   },
                 },
               },
@@ -66,22 +59,15 @@
           },
         }"
         :series="[actualSatisfactionValue]"
-      ></apexchart>
+      />
     </div>
 
     <!-- Historical trends section -->
-    <div
-      class="historical-trends"
-      v-if="!loading && !error && computedHistoricalData.length > 0"
-    >
+    <div v-if="!loading && !error && computedHistoricalData.length > 0" class="historical-trends">
       <h3>
-        {{ translate("analytics.gauge.historical", "Historical Trends") }}
+        {{ translate('analytics.gauge.historical', 'Historical Trends') }}
       </h3>
-      <div
-        class="trend-item"
-        v-for="(item, index) in computedHistoricalData"
-        :key="index"
-      >
+      <div v-for="(item, index) in computedHistoricalData" :key="index" class="trend-item">
         <span class="label">{{ item.label }}</span>
         <span class="value">{{ item.value.toFixed(2) }}%</span>
         <div class="progress" :style="{ width: `${item.value}%` }"></div>
@@ -94,27 +80,20 @@
       class="change-indicator"
       :class="computedChangeIndicator >= 0 ? 'positive' : 'negative'"
     >
-      <span class="change-arrow">{{
-        computedChangeIndicator >= 0 ? "↑" : "↓"
-      }}</span>
+      <span class="change-arrow">{{ computedChangeIndicator >= 0 ? '↑' : '↓' }}</span>
       <span>{{ Math.abs(computedChangeIndicator).toFixed(1) }}%</span>
-      <span class="change-period">{{
-        translate("analytics.gauge.vsPrevious", "vs previous period")
-      }}</span>
+      <span class="change-period">{{ translate('analytics.gauge.vsPrevious', 'vs previous period') }}</span>
     </div>
 
     <!-- Target indicator -->
-    <div class="target-indicator" v-if="!loading && !error">
-      <span
-        >{{ translate("analytics.gauge.target", "Target") }}:
-        {{ actualTarget }}%</span
-      >
+    <div v-if="!loading && !error" class="target-indicator">
+      <span>{{ translate('analytics.gauge.target', 'Target') }}: {{ actualTarget }}%</span>
     </div>
 
     <!-- Loading overlay -->
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ translate("analytics.status.loading", "Loading...") }}</span>
+      <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
     </div>
 
     <!-- Error message -->
@@ -125,11 +104,12 @@
 </template>
 
 <script>
-import analyticsService from "../../services/analyticsService";
-import { useChartTheme } from "@/composables/useChartTheme";
+import { nextTick } from 'vue'
+import analyticsService from '../../services/analyticsService'
+import { useChartTheme } from '../../composables/useChartTheme'
 
 export default {
-  name: "SatisfactionGauge",
+  name: 'SatisfactionGauge',
   props: {
     // Current satisfaction value provided by parent
     value: {
@@ -159,11 +139,11 @@ export default {
     // Period and date for API fetching if not using external data
     period: {
       type: String,
-      default: "monthly",
+      default: 'monthly',
     },
     selectedDate: {
       type: String,
-      default: () => new Date().toISOString().split("T")[0],
+      default: () => new Date().toISOString().split('T')[0],
     },
     // Force re-render when language changes
     renderKey: {
@@ -176,8 +156,8 @@ export default {
       onThemeChange: () => {
         // Chart will re-render via the theme watcher
       },
-    });
-    return { theme, getTheme };
+    })
+    return { theme, getTheme }
   },
   data() {
     return {
@@ -192,115 +172,98 @@ export default {
       chartKey: 0, // Force re-renders
       lastError: null,
       mountCount: 0,
-    };
+    }
   },
   computed: {
     // Compute the actual satisfaction value to display
     actualSatisfactionValue() {
       if (this.externalData && this.value !== null) {
-        console.log("[SatisfactionGauge] Using external value:", this.value);
-        return this.value >= 0 ? this.value : 0;
+        console.log('[SatisfactionGauge] Using external value:', this.value)
+        return this.value >= 0 ? this.value : 0
       }
-      const value = this.satisfactionValue;
-      console.log("[SatisfactionGauge] Using internal value:", value);
-      return value !== null && value >= 0 ? value : 0;
+      const value = this.satisfactionValue
+      console.log('[SatisfactionGauge] Using internal value:', value)
+      return value !== null && value >= 0 ? value : 0
     },
     // Compute the target value
     actualTarget() {
-      return this.target || this.internalTarget || 85;
+      return this.target || this.internalTarget || 85
     },
     // Compute historical data for trends
     computedHistoricalData() {
-      let data =
-        this.externalData && this.historicalData
-          ? this.historicalData
-          : this.internalHistoricalData;
-      data = data.filter(
-        (item) => item && typeof item.value === "number" && item.value >= 0
-      );
+      let data = this.externalData && this.historicalData ? this.historicalData : this.internalHistoricalData
+      data = data.filter((item) => item && typeof item.value === 'number' && item.value >= 0)
       if (!data.length) {
         // Fallback data if historicalData is empty
         data = [
           {
-            label: "Current",
+            label: 'Current',
             value: this.actualSatisfactionValue || 0,
             periodStart: new Date().toISOString(),
             periodEnd: new Date().toISOString(),
           },
           {
-            label: "Last Week",
+            label: 'Last Week',
             value: 0,
-            periodStart: new Date(
-              Date.now() - 7 * 24 * 60 * 60 * 1000
-            ).toISOString(),
-            periodEnd: new Date(
-              Date.now() - 7 * 24 * 60 * 60 * 1000
-            ).toISOString(),
+            periodStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+            periodEnd: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
           },
           {
-            label: "2 Weeks Ago",
+            label: '2 Weeks Ago',
             value: 0,
-            periodStart: new Date(
-              Date.now() - 14 * 24 * 60 * 60 * 1000
-            ).toISOString(),
-            periodEnd: new Date(
-              Date.now() - 14 * 24 * 60 * 60 * 1000
-            ).toISOString(),
+            periodStart: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+            periodEnd: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
           },
           {
-            label: "3 Weeks Ago",
+            label: '3 Weeks Ago',
             value: 0,
-            periodStart: new Date(
-              Date.now() - 21 * 24 * 60 * 60 * 1000
-            ).toISOString(),
-            periodEnd: new Date(
-              Date.now() - 21 * 24 * 60 * 60 * 1000
-            ).toISOString(),
+            periodStart: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
+            periodEnd: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
           },
           {
-            label: "4 Weeks Ago",
+            label: '4 Weeks Ago',
             value: 0,
-            periodStart: new Date(
-              Date.now() - 28 * 24 * 60 * 60 * 1000
-            ).toISOString(),
-            periodEnd: new Date(
-              Date.now() - 28 * 24 * 60 * 60 * 1000
-            ).toISOString(),
+            periodStart: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
+            periodEnd: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
           },
-        ];
-        console.log(
-          "[SatisfactionGauge] Using fallback historical data:",
-          JSON.stringify(data)
-        );
+        ]
+        console.log('[SatisfactionGauge] Using fallback historical data:', JSON.stringify(data))
       }
-      console.log(
-        "[SatisfactionGauge] Computed historical data:",
-        JSON.stringify(data)
-      );
-      return data;
+      console.log('[SatisfactionGauge] Computed historical data:', JSON.stringify(data))
+      return data
     },
     // Compute change percentage for indicator
     computedChangeIndicator() {
       const change =
-        this.externalData && this.changePercentage !== null
-          ? this.changePercentage
-          : this.internalChangeIndicator;
-      console.log("[SatisfactionGauge] Computed change percentage:", change);
-      return change !== null ? change : 0; // Default to 0 if null
+        this.externalData && this.changePercentage !== null ? this.changePercentage : this.internalChangeIndicator
+      console.log('[SatisfactionGauge] Computed change percentage:', change)
+      return change !== null ? change : 0 // Default to 0 if null
     },
   },
   watch: {
+    // Watch for theme changes from the composable
+    theme: {
+      handler(newTheme) {
+        console.log(`[SatisfactionGauge] Theme changed to ${newTheme}`)
+        this.injectGlobalStyleForTheme()
+        this.chartOptions = null
+        nextTick(() => {
+          this.chartKey++
+          this.initChart()
+        })
+      },
+    },
     // Watch for changes in value prop
     value: {
       handler(newValue) {
-        console.log(`[SatisfactionGauge] value prop changed to ${newValue}`);
+        console.log(`[SatisfactionGauge] value prop changed to ${newValue}`)
         if (this.externalData && newValue !== null) {
-          this.satisfactionValue = newValue;
-          this.chartOptions = null;
+          this.satisfactionValue = newValue
+          this.chartOptions = null
           this.$nextTick(() => {
-            this.chartKey++;
-            this.initChart();
-          });
+            this.chartKey++
+            this.initChart()
+          })
         }
       },
       immediate: true,
@@ -309,10 +272,7 @@ export default {
     historicalData: {
       handler(newData) {
         if (this.externalData && newData) {
-          console.log(
-            "[SatisfactionGauge] historicalData prop changed:",
-            JSON.stringify(newData)
-          );
+          console.log('[SatisfactionGauge] historicalData prop changed:', JSON.stringify(newData))
         }
       },
       deep: true,
@@ -322,10 +282,7 @@ export default {
     changePercentage: {
       handler(newValue) {
         if (this.externalData && newValue !== null) {
-          console.log(
-            "[SatisfactionGauge] changePercentage prop changed:",
-            newValue
-          );
+          console.log('[SatisfactionGauge] changePercentage prop changed:', newValue)
         }
       },
       immediate: true,
@@ -333,82 +290,67 @@ export default {
     // Watch for changes in period
     period: {
       handler(newValue) {
-        console.log(`[SatisfactionGauge] period changed to ${newValue}`);
+        console.log(`[SatisfactionGauge] period changed to ${newValue}`)
         if (!this.externalData) {
-          this.fetchData();
+          this.fetchData()
         }
       },
     },
     // Watch for changes in selectedDate
     selectedDate: {
       handler(newValue) {
-        console.log(`[SatisfactionGauge] selectedDate changed to ${newValue}`);
+        console.log(`[SatisfactionGauge] selectedDate changed to ${newValue}`)
         if (!this.externalData) {
-          this.fetchData();
+          this.fetchData()
         }
       },
     },
     // Watch for changes in renderKey (locale)
     renderKey: {
       handler(newValue) {
-        console.log(`[SatisfactionGauge] renderKey changed to ${newValue}`);
-        this.chartOptions = null;
+        console.log(`[SatisfactionGauge] renderKey changed to ${newValue}`)
+        this.chartOptions = null
         this.$nextTick(() => {
-          this.chartKey++;
-          this.initChart();
-        });
+          this.chartKey++
+          this.initChart()
+        })
         if (!this.externalData) {
-          this.fetchData();
+          this.fetchData()
         }
-      },
-    },
-    // Watch for theme changes from useChartTheme composable
-    theme: {
-      handler() {
-        this.injectGlobalStyleForTheme();
-        this.chartOptions = null;
-        this.$nextTick(() => {
-          this.chartKey++;
-          this.initChart();
-        });
       },
     },
   },
   mounted() {
-    console.log(
-      `[SatisfactionGauge] MOUNTED (${++this.mountCount}) externalData=${
-        this.externalData
-      }`
-    );
+    console.log(`[SatisfactionGauge] MOUNTED (${++this.mountCount}) externalData=${this.externalData}`)
 
-    this.injectGlobalStyleForTheme(); // Set initial theme styles
+    // Initial theme detection via composable (theme ref is already set by useChartTheme)
+    this.injectGlobalStyleForTheme()
+
     if (!this.externalData) {
-      console.log("[SatisfactionGauge] Fetching data from API");
-      this.fetchData();
+      console.log('[SatisfactionGauge] Fetching data from API')
+      this.fetchData()
     } else {
-      console.log("[SatisfactionGauge] Using external data:", {
+      console.log('[SatisfactionGauge] Using external data:', {
         value: this.value,
         historicalData: this.historicalData,
         changePercentage: this.changePercentage,
-      });
-      this.chartOptions = null;
+      })
+      this.chartOptions = null
       this.$nextTick(() => {
-        this.chartKey++;
-        this.initChart();
-      });
+        this.chartKey++
+        this.initChart()
+      })
     }
 
-    window.addEventListener("error", this.handleGlobalError);
+    window.addEventListener('error', this.handleGlobalError)
   },
   beforeUnmount() {
-    window.removeEventListener("error", this.handleGlobalError);
-    const injectedStyle = document.getElementById(
-      "satisfaction-gauge-theme-style"
-    );
+    window.removeEventListener('error', this.handleGlobalError)
+    const injectedStyle = document.getElementById('satisfaction-gauge-theme-style')
     if (injectedStyle) {
-      document.head.removeChild(injectedStyle);
+      document.head.removeChild(injectedStyle)
     }
-    console.log("[SatisfactionGauge] UNMOUNTED");
+    console.log('[SatisfactionGauge] UNMOUNTED')
   },
   methods: {
     /**
@@ -416,20 +358,20 @@ export default {
      */
     translate(key, defaultValue) {
       if (this.$i18n && this.$t) {
-        const translation = this.$t(key);
-        return translation === key ? defaultValue : translation;
+        const translation = this.$t(key)
+        return translation === key ? defaultValue : translation
       }
-      return defaultValue;
+      return defaultValue
     },
 
     /**
      * Handle global chart errors
      */
     handleGlobalError(event) {
-      if (event.message && event.message.includes("chart")) {
-        this.lastError = event.message;
-        console.warn("[SatisfactionGauge] Chart error caught:", event.message);
-        this.chartKey++;
+      if (event.message && event.message.includes('chart')) {
+        this.lastError = event.message
+        console.warn('[SatisfactionGauge] Chart error caught:', event.message)
+        this.chartKey++
       }
     },
 
@@ -438,69 +380,57 @@ export default {
      */
     async fetchData() {
       if (this.externalData) {
-        console.log(
-          "[SatisfactionGauge] Skipping fetchData due to externalData=true"
-        );
-        return;
+        console.log('[SatisfactionGauge] Skipping fetchData due to externalData=true')
+        return
       }
-      console.log("[SatisfactionGauge] Starting fetchData()");
-      this.loading = true;
-      this.error = null;
+      console.log('[SatisfactionGauge] Starting fetchData()')
+      this.loading = true
+      this.error = null
 
       try {
         console.log(
           `[SatisfactionGauge] Calling analyticsService.getSatisfactionGauge(${this.period}, ${this.selectedDate})`
-        );
+        )
         const data = await analyticsService.getSatisfactionGauge(
           this.period,
           this.selectedDate,
           this.$i18n ? this.$i18n.locale : null
-        );
+        )
 
-        console.log(
-          "[SatisfactionGauge] Satisfaction data received:",
-          JSON.stringify(data)
-        );
+        console.log('[SatisfactionGauge] Satisfaction data received:', JSON.stringify(data))
 
-        if (data && typeof data.currentValue === "number") {
-          console.log(
-            `[SatisfactionGauge] Setting satisfactionValue to ${data.currentValue}`
-          );
-          this.satisfactionValue = data.currentValue;
-          this.internalChangeIndicator = data.changePercentage;
-          this.internalHistoricalData = data.historicalData || [];
-          this.internalTarget = data.target || 85;
+        if (data && typeof data.currentValue === 'number') {
+          console.log(`[SatisfactionGauge] Setting satisfactionValue to ${data.currentValue}`)
+          this.satisfactionValue = data.currentValue
+          this.internalChangeIndicator = data.changePercentage
+          this.internalHistoricalData = data.historicalData || []
+          this.internalTarget = data.target || 85
         } else {
-          console.warn(
-            "[SatisfactionGauge] Invalid data received, setting defaults"
-          );
-          this.satisfactionValue = 0;
-          this.internalHistoricalData = [];
-          this.internalChangeIndicator = null;
+          console.warn('[SatisfactionGauge] Invalid data received, setting defaults')
+          this.satisfactionValue = 0
+          this.internalHistoricalData = []
+          this.internalChangeIndicator = null
         }
 
-        this.chartOptions = null;
+        this.chartOptions = null
         this.$nextTick(() => {
-          this.chartKey++;
-          this.initChart();
-        });
+          this.chartKey++
+          this.initChart()
+        })
       } catch (error) {
-        console.error("[SatisfactionGauge] Error fetching data:", error);
-        this.error = this.translate(
-          "analytics.errors.loading",
-          "Failed to load satisfaction data"
-        );
-        this.satisfactionValue = 0;
-        this.internalHistoricalData = [];
-        this.internalChangeIndicator = null;
+        console.error('[SatisfactionGauge] Error fetching data:', error)
+        this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data')
+        this.satisfactionValue = 0
+        this.internalHistoricalData = []
+        this.internalChangeIndicator = null
 
-        this.chartOptions = null;
+        this.chartOptions = null
         this.$nextTick(() => {
-          this.chartKey++;
-          this.initChart();
-        });
+          this.chartKey++
+          this.initChart()
+        })
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
 
@@ -508,63 +438,59 @@ export default {
      * Get gauge color based on value
      */
     getGaugeColor(value) {
-      const isDarkMode = this.theme === "dark";
+      const isDarkMode = this.theme === 'dark'
 
-      if (value >= 90) return "#22C55E"; // Green
-      if (value >= 80) return "#84CC16"; // Light green
-      if (value >= 70) return "#F59E0B"; // Orange
-      return "#EF4444"; // Red
+      if (value >= 90) return '#22C55E' // Green
+      if (value >= 80) return '#84CC16' // Light green
+      if (value >= 70) return '#F59E0B' // Orange
+      return '#EF4444' // Red
     },
 
     /**
      * Initialize chart with speedometer options
      */
     initChart() {
-      console.log(
-        `[SatisfactionGauge] initChart called with value: ${this.actualSatisfactionValue}`
-      );
+      console.log(`[SatisfactionGauge] initChart called with value: ${this.actualSatisfactionValue}`)
 
       if (this.actualSatisfactionValue < 0) {
-        console.warn(
-          "[SatisfactionGauge] Cannot initialize chart - invalid value"
-        );
-        return;
+        console.warn('[SatisfactionGauge] Cannot initialize chart - invalid value')
+        return
       }
 
-      const isDarkMode = this.theme === "dark";
+      const isDarkMode = this.theme === 'dark'
 
-      const textColor = isDarkMode ? "#FFFFFF" : "#333333";
-      const backgroundColor = isDarkMode ? "transparent" : "#FFFFFF"; // Transparent in dark mode to blend with UnifiedAnalytics.vue
-      const trackColor = isDarkMode ? "#666666" : "#E5E7EB";
+      const textColor = isDarkMode ? '#FFFFFF' : '#333333'
+      const backgroundColor = isDarkMode ? 'transparent' : '#FFFFFF' // Transparent in dark mode to blend with UnifiedAnalytics.vue
+      const trackColor = isDarkMode ? '#666666' : '#E5E7EB'
 
       const getGradientColors = (value) => {
         const colors = {
-          poor: "#EF4444",
-          low: "#F59E0B",
-          medium: "#84CC16",
-          high: "#22C55E",
-        };
+          poor: '#EF4444',
+          low: '#F59E0B',
+          medium: '#84CC16',
+          high: '#22C55E',
+        }
 
-        if (value < 60) return [colors.poor, colors.poor];
-        if (value < 70) return [colors.poor, colors.low];
-        if (value < 80) return [colors.low, colors.medium];
-        if (value < 90) return [colors.medium, colors.high];
-        return [colors.high, colors.high];
-      };
+        if (value < 60) return [colors.poor, colors.poor]
+        if (value < 70) return [colors.poor, colors.low]
+        if (value < 80) return [colors.low, colors.medium]
+        if (value < 90) return [colors.medium, colors.high]
+        return [colors.high, colors.high]
+      }
 
-      const gradientColors = getGradientColors(this.actualSatisfactionValue);
+      const gradientColors = getGradientColors(this.actualSatisfactionValue)
 
       this.chartOptions = {
         chart: {
-          type: "radialBar",
+          type: 'radialBar',
           background: backgroundColor,
           foreColor: textColor,
           animations: {
             enabled: true,
-            easing: "easeinout",
+            easing: 'easeinout',
             speed: 800,
           },
-          fontFamily: "inherit",
+          fontFamily: 'inherit',
         },
         plotOptions: {
           radialBar: {
@@ -572,12 +498,12 @@ export default {
             endAngle: 135,
             hollow: {
               margin: 0,
-              size: "65%",
+              size: '65%',
               background: backgroundColor,
             },
             track: {
               background: trackColor,
-              strokeWidth: "97%",
+              strokeWidth: '97%',
               margin: 5,
               dropShadow: {
                 enabled: false,
@@ -587,29 +513,29 @@ export default {
               show: true,
               name: {
                 show: true,
-                fontSize: "16px",
+                fontSize: '16px',
                 fontWeight: 600,
                 color: textColor,
                 offsetY: -10,
               },
               value: {
                 show: true,
-                fontSize: "24px",
+                fontSize: '24px',
                 fontWeight: 700,
                 color: textColor,
                 offsetY: 5,
                 formatter: function (val) {
-                  return val.toFixed(2) + "%";
+                  return val.toFixed(2) + '%'
                 },
               },
             },
           },
         },
         fill: {
-          type: "gradient",
+          type: 'gradient',
           gradient: {
-            shade: "dark",
-            type: "horizontal",
+            shade: 'dark',
+            type: 'horizontal',
             gradientToColors: [gradientColors[1]],
             stops: [0, 100],
             colorStops: [
@@ -627,39 +553,37 @@ export default {
           },
         },
         stroke: {
-          lineCap: "round",
+          lineCap: 'round',
           dashArray: 0,
         },
-        labels: [
-          this.translate("analytics.metrics.satisfaction", "User Satisfaction"),
-        ],
+        labels: [this.translate('analytics.metrics.satisfaction', 'User Satisfaction')],
         tooltip: {
           enabled: false,
         },
-      };
+      }
 
-      console.log("[SatisfactionGauge] Chart options initialized");
+      console.log('[SatisfactionGauge] Chart options initialized')
 
       this.$nextTick(() => {
         setTimeout(() => {
-          this.forceTextColorUpdate();
-        }, 300);
-      });
+          this.forceTextColorUpdate()
+        }, 300)
+      })
     },
 
     /**
      * Inject global styles for the current theme
      */
     injectGlobalStyleForTheme() {
-      const styleId = "satisfaction-gauge-theme-style";
-      let styleEl = document.getElementById(styleId);
+      const styleId = 'satisfaction-gauge-theme-style'
+      let styleEl = document.getElementById(styleId)
       if (styleEl) {
-        styleEl.remove(); // Remove existing style to prevent duplicates
+        styleEl.remove() // Remove existing style to prevent duplicates
       }
 
-      styleEl = document.createElement("style");
-      styleEl.id = styleId;
-      if (this.theme === "dark") {
+      styleEl = document.createElement('style')
+      styleEl.id = styleId
+      if (this.theme === 'dark') {
         styleEl.textContent = `
           [data-theme="dark"] .apexcharts-text,
           [data-theme="dark"] .apexcharts-datalabel-label,
@@ -668,8 +592,8 @@ export default {
           [data-theme="dark"] .apexcharts-radialbar text {
             fill: #FFFFFF !important;
           }
-        `;
-        console.log("[SatisfactionGauge] Injected dark mode style");
+        `
+        console.log('[SatisfactionGauge] Injected dark mode style')
       } else {
         styleEl.textContent = `
           [data-theme="light"] .apexcharts-text,
@@ -679,54 +603,49 @@ export default {
           [data-theme="light"] .apexcharts-radialbar text {
             fill: #333333 !important;
           }
-        `;
-        console.log("[SatisfactionGauge] Injected light mode style");
+        `
+        console.log('[SatisfactionGauge] Injected light mode style')
       }
 
-      document.head.appendChild(styleEl);
+      document.head.appendChild(styleEl)
     },
 
     /**
      * Force ApexCharts text color in dark mode
      */
     forceTextColorUpdate() {
-      console.log("[SatisfactionGauge] Attempting to force text color update");
-      const isDarkMode = this.theme === "dark";
+      console.log('[SatisfactionGauge] Attempting to force text color update')
+      const isDarkMode = this.theme === 'dark'
 
       if (isDarkMode) {
-        const chartElement = this.$refs.chart;
+        const chartElement = this.$refs.chart
         if (!chartElement) {
-          console.warn("[SatisfactionGauge] Chart element not found");
-          return;
+          console.warn('[SatisfactionGauge] Chart element not found')
+          return
         }
 
         setTimeout(() => {
           try {
             const textElements = chartElement.querySelectorAll(
-              ".apexcharts-text, .apexcharts-datalabel-label, .apexcharts-datalabel-value"
-            );
-            console.log(
-              `[SatisfactionGauge] Found ${textElements.length} text elements to update`
-            );
+              '.apexcharts-text, .apexcharts-datalabel-label, .apexcharts-datalabel-value'
+            )
+            console.log(`[SatisfactionGauge] Found ${textElements.length} text elements to update`)
 
             textElements.forEach((el) => {
-              el.setAttribute("fill", "#FFFFFF");
-              const tspans = el.querySelectorAll("tspan");
+              el.setAttribute('fill', '#FFFFFF')
+              const tspans = el.querySelectorAll('tspan')
               tspans.forEach((tspan) => {
-                tspan.setAttribute("fill", "#FFFFFF");
-              });
-            });
+                tspan.setAttribute('fill', '#FFFFFF')
+              })
+            })
           } catch (error) {
-            console.error(
-              "[SatisfactionGauge] Error updating text colors:",
-              error
-            );
+            console.error('[SatisfactionGauge] Error updating text colors:', error)
           }
-        }, 300);
+        }, 300)
       }
     },
   },
-};
+}
 </script>
 
 <style scoped>
@@ -878,27 +797,24 @@ export default {
 }
 
 /* Dark mode text fixes */
-:deep([data-theme="dark"]) .apexcharts-text,
-:deep([data-theme="dark"]) .apexcharts-datalabel-label,
-:deep([data-theme="dark"]) .apexcharts-datalabel-value {
+:deep([data-theme='dark']) .apexcharts-text,
+:deep([data-theme='dark']) .apexcharts-datalabel-label,
+:deep([data-theme='dark']) .apexcharts-datalabel-value {
   fill: white !important;
 }
 
-:deep([data-theme="dark"]) text tspan {
+:deep([data-theme='dark']) text tspan {
   fill: white !important;
 }
 
 /* Dark mode track color */
-:deep([data-theme="dark"])
-  .apexcharts-radialbar
-  .apexcharts-radialbar-track
-  .apexcharts-radialbar-area {
+:deep([data-theme='dark']) .apexcharts-radialbar .apexcharts-radialbar-track .apexcharts-radialbar-area {
   stroke: #666666 !important;
 }
 
-[data-theme="dark"] .historical-trends h3,
-[data-theme="dark"] .label,
-[data-theme="dark"] .value {
+[data-theme='dark'] .historical-trends h3,
+[data-theme='dark'] .label,
+[data-theme='dark'] .value {
   color: white !important;
   -webkit-text-fill-color: white !important;
   text-shadow: 0 0 1px rgba(255, 255, 255, 0.5) !important;

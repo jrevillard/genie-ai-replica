@@ -21,29 +21,6 @@ class UserProfileService {
   }
 
   /**
-   * Create a new user profile
-   * @param {Object} profileData - Profile data from the form
-   * @returns {Promise} Created user profile
-   */
-  async createProfile(profileData) {
-    try {
-      // Handle file uploads and form data
-      const formData = this.prepareFormData(profileData);
-      
-      const response = await httpService.post('users', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  }
-
- /**
  * Update an existing user profile
  * @param {String} userId - User ID
  * @param {Object} profileData - Updated profile data
@@ -145,5 +122,6 @@ class UserProfileService {
   }
 
 }
+
 
 export default new UserProfileService();

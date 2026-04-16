@@ -16,7 +16,18 @@ const config = {
         '/api/auth/me'
       ]
     },
-    
+
+    // Keycloak configuration
+    keycloak: {
+      url: process.env.KEYCLOAK_URL,
+      realm: process.env.KEYCLOAK_REALM,
+      clientId: process.env.KEYCLOAK_CLIENT_ID,
+      additionalRealms: (() => {
+        try { return JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || '{}'); }
+        catch (e) { return {}; }
+      })()
+    },
+
     // Security scan configuration
     security: {
       hiddenFiles: [
@@ -28,5 +39,5 @@ const config = {
       ]
     }
   };
-  
+
   module.exports = config;

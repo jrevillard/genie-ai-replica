@@ -149,7 +149,7 @@ class SecurityMiddleware {
       user: req.user || null
     });
 
-    SecurityMiddleware.blockIP(req.ip, 'Threat detected');
+    SecurityMiddleware.blockIP(req.ip, 'Threat detected', req);
   }
 
   static updateIPReputation(req) {
@@ -185,7 +185,7 @@ class SecurityMiddleware {
     });
 
     if (reputation.score > 100) {
-      SecurityMiddleware.blockIP(ip, 'High threat score');
+      SecurityMiddleware.blockIP(ip, `High threat score (${reputation.score})`, req);
     }
   }
 
@@ -195,7 +195,7 @@ class SecurityMiddleware {
 
     // Apply general API rate limiter, skipping auth endpoints
     app.use('/api/', (req, res, next) => {
-      if (req.path.startsWith('/api/auth')) {
+      if (req.path.startsWith('/api/auth') || req.path === '/api/health') {
         return next();
       }
       SecurityMiddleware.apiLimiter(req, res, next);
@@ -225,10 +225,14 @@ class SecurityMiddleware {
     });
   }
 
-  static blockIP(ip, reason) {
-    logger.warn('IP Blocked', { 
-      ip, 
-      reason 
+  static blockIP(ip, reason, req = null) {
+    logger.warn('IP Blocked', {
+      ip,
+      reason,
+      path: req?.path || null,
+      method: req?.method || null,
+      userAgent: req?.headers?.['user-agent'] || null,
+      user: req?.user || null
     });
   }
 

@@ -35,16 +35,16 @@ docker compose up -d
 
 ### API Gateway Services
 
-- **kong-database**: Postgres database for Kong.
+- **postgres**: Shared PostgreSQL database for Kong and Keycloak.
   - Image: `postgres:13`.
-  - Environment: User `kong`, DB `kong`, Password from `POSTGRES_PASSWORD`.
-  - Volume: `kong_data:/var/lib/postgresql/data`; mounts custom `pg_hba.conf`.
+  - Environment: Superuser `${POSTGRES_USER:-genieai}`, DB `kong`, Password from `POSTGRES_PASSWORD`.
+  - Volume: `postgres_data:/var/lib/postgresql/data`; mounts custom `pg_hba.conf`.
   - Healthcheck: Ensures database readiness.
 
 - **kong**: Kong API gateway.
   - Image: `kong:latest`.
-  - Depends on: `kong-database` (healthy), `kong-migrations` (completed).
-  - Environment: Connects to Postgres via `POSTGRES_PASSWORD`; logs to stdout/stderr; `KONG_DNS_STALE_TTL=5` for DNS cache mitigation.
+  - Startup ordering: Healthchecks + restart_policy (Swarm ignores depends_on).
+  - Environment: Connects to Postgres as dedicated `kong` user via `KONG_DB_PASSWORD`; logs to stdout/stderr; `KONG_DNS_STALE_TTL=5` for DNS cache mitigation.
   - Healthcheck: `kong health` (built-in CLI, checks DB and internal services).
   - Ports: Internal only (not exposed to host). Proxy listens on `8000` (HTTP) / `8443` (HTTPS) within Docker network. Admin API on `0.0.0.0:8001` (internal only, used by kong-config service).
   - Volume: `./data/logs/kong` for logs.
@@ -67,8 +67,8 @@ docker compose up -d
 
 ### Networks and Volumes
 
-- **Network**: All services connected to `genieai_network` (bridge driver).
-- **Volumes**: `kong_data` (Kong Postgres), `./data/logs/kong` (Kong logs).
+- **Network**: All services connected to `genieai_network` (overlay driver, attachable).
+- **Volumes**: `postgres_data` (shared Postgres), `./data/logs/kong` (Kong logs).
 
 ### Usage
 
@@ -103,7 +103,7 @@ docker compose up -d
 6. **Troubleshooting**:
    - Check dependencies: Use `docker compose ps` to verify service status.
    - Database issues: Ensure healthchecks pass; inspect logs.
-   - Network: Services communicate via Docker service names (e.g., `kong-database`, `kong`, `frontend`).
+   - Network: Services communicate via Docker service names (e.g., `postgres`, `kong`, `frontend`).
 
 ## Kong Configuration Scripts
 

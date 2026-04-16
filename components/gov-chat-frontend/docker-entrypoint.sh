@@ -14,11 +14,25 @@ case "$API_URL" in
     ;;
 esac
 
+
+# Keycloak URL (defaults to current origin + /auth for NGINX proxy setups)
+if [ -n "$VUE_APP_KEYCLOAK_URL" ]; then
+  KEYCLOAK_URL="${VUE_APP_KEYCLOAK_URL}"
+else
+  KEYCLOAK_URL=""
+fi
+
+# Keycloak client ID (defaults to genie-app)
+KEYCLOAK_CLIENT_ID="${VUE_APP_KEYCLOAK_CLIENT_ID:-genie-app}"
 cat > /app/dist/config.js << EOF
 window.APP_CONFIG = {
   apiUrl: "${API_URL}",
   proxyHost: "${VUE_PROXY_HOST:-localhost}",
-  cspConnectSrc: "${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}"
+  cspConnectSrc: "${VUE_APP_CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}",
+  keycloak: {
+    url: "${KEYCLOAK_URL}",
+    client_id: "${KEYCLOAK_CLIENT_ID}"
+  }
 };
 EOF
 

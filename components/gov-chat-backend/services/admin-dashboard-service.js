@@ -409,7 +409,7 @@ class AdminDashboardService {
             loginName: u.loginName,
             email: u.email,
             fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-            role: HAS(u, "role") ? u.role : "User"
+            roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : [])
           }
       `);
       const users = await usersCursor.all();
@@ -1147,7 +1147,7 @@ class AdminDashboardService {
             break;
           case 'role':
             queryParams.term = `%${term.toLowerCase()}%`;
-            filterCondition = `HAS(u, "role") AND LOWER(u.role) LIKE @term`;
+            filterCondition = `HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0`;
             break;
           case 'all':
           default:
@@ -1156,7 +1156,7 @@ class AdminDashboardService {
               LOWER(u.loginName) LIKE @term
               OR LOWER(u.email) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
-              OR (HAS(u, "role") AND LOWER(u.role) LIKE @term)
+              OR (HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0)
             `;
             break;
         }
@@ -1179,7 +1179,8 @@ class AdminDashboardService {
               loginName: u.loginName,
               email: u.email,
               fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }
@@ -1201,7 +1202,8 @@ class AdminDashboardService {
               loginName: u.loginName,
               email: u.email,
               fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }

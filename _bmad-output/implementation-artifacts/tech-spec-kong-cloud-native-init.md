@@ -56,7 +56,7 @@ Add an init service (`kong-config`) to docker-compose that automatically applies
 ### Codebase Patterns
 
 - Kong Admin API management via `curl` + `jq` — scripts construct JSON payloads and POST/PUT to `KONG_ADMIN_URL`
-- Docker Compose dependency chaining: `kong-database` (healthy) → `kong-migrations` (completed) → `kong` (running)
+- Docker Compose dependency chaining: `postgres` (healthy) → `kong-migrations` (completed) → `kong` (running)
 - Environment variables use `${VAR:-default}` pattern in docker-compose.yaml
 - Init service pattern: `restart: "no"`, runs once and exits
 - Config source: `kong_config.json` (857 lines) contains services, routes, plugins, upstreams, targets

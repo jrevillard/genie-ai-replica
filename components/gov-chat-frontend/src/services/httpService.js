@@ -181,6 +181,7 @@ class HttpService {
   async handleResponseError(error) {
     if (error.response) {
       const status = error.response.status;
+      const { statusText } = error.response;
       const originalRequest = error.config;
 
       // Handle 401 — attempt silent token refresh then retry once
@@ -205,7 +206,7 @@ class HttpService {
 
         return Promise.reject({
           status,
-          statusText: error.response.statusText,
+          statusText,
           data: error.response.data,
           message: error.response.data?.message || 'Unauthorized access'
         });
@@ -214,7 +215,7 @@ class HttpService {
       // Non-auth errors or already retried
       const errorData = {
         status,
-        statusText: error.response.statusText,
+        statusText,
         data: error.response.data,
         message: error.response.data?.message || 'An error occurred'
       };

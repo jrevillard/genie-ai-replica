@@ -219,24 +219,6 @@ export default {
 
   /**
    * Get user usage statistics
-   * @param {String} userId - User ID
-   * @param {String} startDate - Start date (ISO string)
-   * @param {String} endDate - End date (ISO string)
-   * @returns {Promise} User usage statistics
-   */
-  async getUserStats(userId, startDate, endDate) {
-    try {
-      const response = await httpService.get(`analytics/users/${userId}`, {
-        params: { startDate, endDate }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching user statistics:', error);
-      throw error;
-    }
-  },
-
   /**
    * Get session information
    * @param {String} sessionId - Session ID

@@ -8,7 +8,7 @@ import httpService from './httpService'
  */
 class UserService {
   constructor() {
-    this.userEndpoint = 'users'
+    this.userEndpoint = 'me'
   }
 
   /**

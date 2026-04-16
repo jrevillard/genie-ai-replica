@@ -181,7 +181,6 @@
 import userService from '@/services/userService'
 import notificationService from '@/services/notificationService'
 import { themeManager } from '@/utils/ThemeManager'
-import { getUserId } from '@/utils/userUtils'
 import oidcConfig from '@/config/oidcConfig'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import LanguageSelector from '@/components/LanguageSelector.vue'
@@ -198,7 +197,6 @@ export default {
       isLoading: true,
       errorMessage: null,
       isThemeReady: false,
-      currentUserId: '',
       settings: {
         language: this.getCurrentLanguage(),
         theme: this.getCurrentTheme(),
@@ -462,19 +460,11 @@ export default {
         } else {
           console.log('[SETTINGS] Using Vuex store data:', userData)
         }
-        console.log('[SETTINGS] Extracting user ID...')
-        let userId = getUserId(userData) || userData.userId || userData._id || ''
-        if (typeof userId === 'string' && userId.includes('/')) {
-          userId = userId.split('/').pop()
-        }
-        this.currentUserId = userId
-        console.log('[SETTINGS] Stored user ID for authentication:', this.currentUserId)
         console.log('[SETTINGS] Updating userData state...')
         this.userData = {
           name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
           email: userData.email || '',
           accountType: (userData.roles && userData.roles[0]) || this.translate('settings.standardAccount'),
-          userId: this.currentUserId,
           createdAt: userData.createdAt || '',
         }
         console.log('[SETTINGS] userData updated:', this.userData)
@@ -489,17 +479,10 @@ export default {
         const fallbackUser = this.$store.getters.currentUser
         if (fallbackUser) {
           console.log('[SETTINGS] Fallback user data found:', fallbackUser)
-          let userId = getUserId(fallbackUser) || fallbackUser.userId || fallbackUser._id || ''
-          if (typeof userId === 'string' && userId.includes('/')) {
-            userId = userId.split('/').pop()
-          }
-          this.currentUserId = userId
-          console.log('[SETTINGS] Fallback user ID:', this.currentUserId)
           this.userData = {
             name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
             accountType: (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
-            userId: this.currentUserId,
             createdAt: fallbackUser.createdAt || '',
           }
           console.log('[SETTINGS] Fallback userData set:', this.userData)

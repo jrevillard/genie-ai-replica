@@ -436,8 +436,8 @@ services:
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
-      - KC_REALM=${KC_REALM:-genie}
-      - KC_CLIENT_ID=${KC_CLIENT_ID:-genie-app}
+      - KC_REALM=${KEYCLOAK_REALM:-genie}
+      - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
     # Internal only - no host port mapping needed
     # ports:
     #   - "${DOC_REPO_PORT:-3001}:3001"
@@ -858,7 +858,7 @@ services:
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: http://keycloak:8080
-      KC_REALM: ${KC_REALM:-genie}
+      KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_DATAPREP_CLIENT_ID: ${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
       KC_DATAPREP_CLIENT_SECRET: ${KC_DATAPREP_CLIENT_SECRET:-}
       LABELING_STRATEGY: ${LABELING_STRATEGY:-llm}
@@ -991,8 +991,8 @@ services:
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
-      KC_REALM: ${KC_REALM:-genie}
-      KC_CLIENT_ID: ${KC_CLIENT_ID:-genie-app}
+      KC_REALM: ${KEYCLOAK_REALM:-genie}
+      KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
     networks:

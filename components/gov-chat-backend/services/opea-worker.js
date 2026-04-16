@@ -27,13 +27,13 @@ parentPort.on('message', async (task) => {
 
   try {
     const start = Date.now();
-    
+
     // Build headers: Content-Type + user identity headers
-    const requestHeaders = { 
+    const requestHeaders = {
       'Content-Type': 'application/json',
       ...(headers || {})
     };
-    
+
     // Perform the long-running request
     const response = await axiosInstance.post(url, payload, {
       headers: requestHeaders

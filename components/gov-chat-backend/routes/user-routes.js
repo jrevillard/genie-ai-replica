@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const serviceTokenService = require('../services/service-token-service');
 const { logger } = require('../shared-lib');
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
@@ -168,8 +167,10 @@ module.exports = (userService) => {
    * /api/users/{userId}/context:
    *   get:
    *     summary: Get safe user context for AI enrichment
-   *     description: Returns a sanitized subset of user data for OPEA AI context enrichment. Protected by X-Service-Token (shared secret), not Keycloak JWT.
+   *     description: Returns a sanitized subset of user data for OPEA AI context enrichment. Protected by Keycloak JWT.
    *     tags: [User]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: userId
@@ -181,27 +182,30 @@ module.exports = (userService) => {
    *       200:
    *         description: Sanitized user context for AI
    *       401:
-   *         description: Missing or invalid X-Service-Token
+   *         description: Missing or invalid Keycloak token
    *       404:
    *         description: User not found
    *       500:
    *         description: Server error
    */
-  router.get('/:userId/context', async (req, res) => {
-    // Validate service shared secret
-    const tokenError = serviceTokenService.validateServiceToken(req.headers['x-service-token']);
-    if (tokenError) {
-      return res.status(tokenError.status).json(tokenError.body);
-    }
-
+  router.get('/:userId/context', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
+      // IDOR protection: only allow users to access their own context
+      if (req.user._key !== req.params.userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
       const user = await userService.getUserProfile(req.params.userId);
 
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      res.json(serviceTokenService.buildUserContext(user));
+      res.json({
+        name: user.name || 'User',
+        role: user.roles || [],
+        emailVerified: user.emailVerified || false
+      });
     } catch (error) {
       logger.error(`Error getting user context ${req.params.userId}: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });

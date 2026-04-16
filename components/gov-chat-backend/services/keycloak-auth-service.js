@@ -269,7 +269,6 @@ const keycloakAuthService = {
     const verifyWithJwt = async () => {
       const { payload: verifiedPayload } = await jwtVerify(token, jwks, {
         issuer: unverifiedIss,
-        algorithms: ['RS256'],
         requiredClaims: ['iss', 'exp']
       });
 

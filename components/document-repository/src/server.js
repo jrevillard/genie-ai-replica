@@ -10,7 +10,7 @@ const appConfig = require('./config/appConfig');
 const { logger } = require('../shared-lib');
 
 // Validate required environment variables
-const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_PASSWORD', 'JWT_SECRET'];
+const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_PASSWORD'];
 const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
 if (missingEnvVars.length > 0) {
   logger.error('Missing required environment variables:', { missing: missingEnvVars });
@@ -20,7 +20,7 @@ if (missingEnvVars.length > 0) {
 // Validate required secrets in production
 const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) {
-  const requiredSecrets = ['ARANGO_PASSWORD', 'JWT_SECRET'];
+  const requiredSecrets = ['ARANGO_PASSWORD'];
   const missingSecrets = requiredSecrets.filter(key => !process.env[key] || process.env[key].includes('default') || process.env[key].includes('change'));
   if (missingSecrets.length > 0) {
     logger.error('Missing or insecure secrets in production:', { missing: missingSecrets });

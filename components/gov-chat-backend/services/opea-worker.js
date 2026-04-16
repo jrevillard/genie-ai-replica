@@ -7,10 +7,9 @@ const https = require('https');
  * OPEA Worker Thread
  *
  * Service-to-Service Authentication:
- * - OPEA services communicate via internal Docker network with NO authentication
- * - This is "network isolation" trust model (not formal auth mechanisms like JWT/mTLS)
  * - User identity is passed via X-User-Id, X-User-Roles, X-Issuer headers (injected by middleware)
- * - Authorization header is NEVER forwarded to OPEA (worker cannot access req.headers)
+ * - User's Bearer token (Authorization header) is forwarded for defense-in-depth JWKS validation
+ *   by downstream services (ChatQnA, document-repository)
  */
 
 // Dedicated HTTP Agents to prevent socket starvation on the main pool

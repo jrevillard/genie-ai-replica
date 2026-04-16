@@ -32,15 +32,6 @@ function isPublicRoute(path) {
   });
   if (isStaticPublic) return true;
 
-  // OPEA user context endpoint: /users/:userId/context
-  // Protected by X-Service-Token in route handler, not Keycloak JWT
-  // Match with or without /api prefix: /api/users/X/context (4 segments) or /users/X/context (3 segments)
-  const segments = path.split('/').filter(Boolean);
-  const offset = segments.length >= 3 && segments[0] === 'api' ? 1 : 0;
-  if (segments.length - offset === 3 && segments[offset] === 'users' && segments[offset + 2] === 'context') {
-    return true;
-  }
-
   return false;
 }
 

@@ -397,8 +397,6 @@ services:
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD}
       - EMAIL_FROM=${EMAIL_FROM}
-      # OPEA service shared secret for /api/users/:userId/context endpoint
-      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN}
       # OPEA AI/ML service override (code default is deployment-specific: 'e2e-109-198')
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
@@ -422,6 +420,8 @@ services:
     depends_on:
       arango-vector-db:
         condition: service_healthy
+      keycloak-config:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: components/
@@ -432,6 +432,9 @@ services:
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KC_REALM=${KC_REALM:-genie}
+      - KC_CLIENT_ID=${KC_CLIENT_ID:-genie-app}
     # Internal only - no host port mapping needed
     # ports:
     #   - "${DOC_REPO_PORT:-3001}:3001"
@@ -828,6 +831,8 @@ services:
     depends_on:
       arango-vector-db:
         condition: service_healthy
+      keycloak:
+        condition: service_healthy
     restart: unless-stopped
     build:
       context: .
@@ -847,9 +852,12 @@ services:
       ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME:-GRAPH}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
-      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
+      KEYCLOAK_URL: http://keycloak:8080
+      KC_REALM: ${KC_REALM:-genie}
+      KC_DATAPREP_CLIENT_ID: ${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
+      KC_DATAPREP_CLIENT_SECRET: ${KC_DATAPREP_CLIENT_SECRET:-}
       LABELING_STRATEGY: ${LABELING_STRATEGY:-llm}
       EMBEDDING_LABEL_THRESHOLD: ${EMBEDDING_LABEL_THRESHOLD:-0.75}
       BM25_LABEL_THRESHOLD: ${BM25_LABEL_THRESHOLD:-2.00}
@@ -979,7 +987,9 @@ services:
       TRANSLATION_SERVICE_PORT: 9031
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
-      SERVICE_AUTH_TOKEN: ${SERVICE_AUTH_TOKEN}
+      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      KC_REALM: ${KC_REALM:-genie}
+      KC_CLIENT_ID: ${KC_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
     networks:
@@ -1150,7 +1160,9 @@ services:
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - GENIE_ADMIN_USERNAME=${GENIE_ADMIN_USERNAME:-genie-admin}
       - GENIE_ADMIN_PASSWORD=${GENIE_ADMIN_PASSWORD}
+      - GENIE_ADMIN_EMAIL=${GENIE_ADMIN_EMAIL}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
+      - KC_DATAPREP_CLIENT_SECRET=${KC_DATAPREP_CLIENT_SECRET}
       - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
       # Realm properties (registration, email, security, localization, tokens)
       - KEYCLOAK_REGISTRATION_ENABLED=${KEYCLOAK_REGISTRATION_ENABLED:-true}
@@ -1164,6 +1176,15 @@ services:
       - KEYCLOAK_I18N_ENABLED=${KEYCLOAK_I18N_ENABLED:-true}
       - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}
       - KEYCLOAK_ACCESS_TOKEN_LIFESPAN=${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300}
+      # SMTP (reuses EMAIL_* — required because realm smtpServer overrides server-level KC_SMTP_*)
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_SECURE=${EMAIL_SECURE:-false}
+      - EMAIL_SMTP_AUTH=${EMAIL_USER:+true}
+      - EMAIL_SMTP_STARTTLS=true
+      - EMAIL_USER=${EMAIL_USER:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
     healthcheck:
       test: ["CMD", "sh", "-c", "test -f /tmp/config-done"]
       interval: 10s

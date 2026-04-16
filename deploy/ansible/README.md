@@ -134,17 +134,17 @@ Set in `group_vars/<env>/vault.yml`:
 | Variable | Description |
 |----------|-------------|
 | `arango_password` | ArangoDB root password |
-| `jwt_secret` | JWT token signing secret |
 | `session_secret` | Session encryption secret |
 | `translation_cache_password` | Redis cache password |
 | `postgres_password` | PostgreSQL superuser password |
 | `kong_db_password` | PostgreSQL dedicated Kong user password (must differ from `postgres_password`) |
 | `keycloak_admin_password` | Keycloak master admin console password |
 | `genie_admin_password` | GENIE realm admin user password (frontend admin) |
+| `genie_admin_email` | GENIE realm admin user email (required for email verification) |
 | `keycloak_db_password` | PostgreSQL dedicated Keycloak user password |
 | `keycloak_client_secret` | OIDC client secret for genie-app |
 | `keycloak_proxy_client_secret` | Service account secret for admin API proxy |
-| `service_auth_token` | OPEA <-> Backend shared authentication secret |
+| `kc_dataprep_client_secret` | Dataprep service account secret (client_credentials grant) |
 | `email_password` | SMTP password |
 | `hugging_face_hub_token` | Hugging Face Hub token |
 
@@ -459,7 +459,7 @@ ssh node "docker service ls --filter name=genieai_keycloak"
 
 Docker Swarm (`docker stack deploy`) does **not** automatically load `.env` files like Docker Compose does. To ensure environment variables are correctly substituted:
 
-1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, POSTGRES_PASSWORD) are set in the `.env` file before deployment
+1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, POSTGRES_PASSWORD, KC_DATAPREP_CLIENT_SECRET) are set in the `.env` file before deployment
 2. It generates a resolved `docker-compose.yaml` with all variables substituted using `docker compose config`
 3. Post-processing fixes known `docker compose config` issues:
    - **Port integers**: `docker compose config` converts published ports to strings (e.g. `"80"` instead of `80`), which Swarm rejects. A `sed` fix restores them to integers.

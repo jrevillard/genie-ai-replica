@@ -13,7 +13,17 @@ bruteForceProtected: $(env:KEYCLOAK_BRUTE_FORCE)
 passwordPolicy: $(env:KEYCLOAK_PASSWORD_POLICY)
 loginTheme: $(env:KEYCLOAK_THEME)
 accountTheme: $(env:KEYCLOAK_THEME)
+adminTheme: $(env:KEYCLOAK_THEME)
 emailTheme: $(env:KEYCLOAK_THEME)
+smtpServer:
+  from: $(env:EMAIL_FROM)
+  host: $(env:EMAIL_HOST)
+  port: $(env:EMAIL_PORT)
+  ssl: $(env:EMAIL_SECURE)
+  starttls: $(env:EMAIL_SMTP_STARTTLS)
+  auth: $(env:EMAIL_SMTP_AUTH)
+  user: $(env:EMAIL_USER)
+  password: $(env:EMAIL_PASSWORD)
 internationalizationEnabled: $(env:KEYCLOAK_I18N_ENABLED)
 defaultLocale: $(env:KEYCLOAK_LOCALE)
 supportedLocales:
@@ -35,12 +45,14 @@ roles:
       description: Administrator role with full access
     - name: user
       description: Standard user role
+    - name: dataprep-service
+      description: Service account role for Dataprep ingestion pipeline
 
 # Default admin user
 users:
   - username: $(env:GENIE_ADMIN_USERNAME)
     enabled: true
-    email: $(env:GENIE_ADMIN_USERNAME)@genie.local
+    email: $(env:GENIE_ADMIN_EMAIL)
     firstName: Admin
     lastName: GENIE
     credentials:
@@ -50,6 +62,33 @@ users:
     realmRoles:
       - admin
       - user
+    clientRoles:
+      realm-management:
+        # Realm
+        - view-realm
+        - manage-realm
+        - query-realms
+        # Users
+        - view-users
+        - manage-users
+        - query-users
+        - impersonation
+        # Groups
+        - query-groups
+        # Clients
+        - view-clients
+        - manage-clients
+        - query-clients
+        - create-client
+        # Events
+        - view-events
+        - manage-events
+        # Identity Providers
+        - view-identity-providers
+        - manage-identity-providers
+        # Authorization
+        - view-authorization
+        - manage-authorization
   # Service account user for genie-proxy-client — assigns realm-management client roles
   # keycloak-config-cli uses serviceAccountClientId to link this user entry to the client's service account
   - username: service-account-genie-proxy-client
@@ -61,6 +100,12 @@ users:
         - view-users
         - manage-users
         - view-realm
+  # Service account user for dataprep-service-client — assigns realm role for document-repository authorization
+  - username: service-account-dataprep-service-client
+    enabled: true
+    serviceAccountClientId: dataprep-service-client
+    realmRoles:
+      - dataprep-service
 
 # OIDC client configuration
 clients:
@@ -106,3 +151,15 @@ clients:
     implicitFlowEnabled: false
     serviceAccountsEnabled: true
     secret: $(env:KC_PROXY_CLIENT_SECRET)
+
+  # Service account for Dataprep ingestion pipeline → document-repository
+  # Uses client_credentials grant to obtain tokens for service-to-service calls.
+  # The dataprep-service realm role authorizes PATCH /api/files/:fileId/status in document-repository.
+  - clientId: dataprep-service-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_DATAPREP_CLIENT_SECRET)

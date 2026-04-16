@@ -1,0 +1,119 @@
+/* GENIE.AI Keycloak Admin Console Theme — Dark Mode */
+/* Activated by upstream keycloak.v2 darkMode=true via pf-v5-theme-dark class on <html> */
+
+.pf-v5-theme-dark {
+  /* ── Primary ── */
+  --pf-v5-global--primary-color--100: #4E97D1;
+  --pf-v5-global--primary-color--200: #5aa8e0;
+  --pf-v5-global--primary-color--300: #6ab5e8;
+  --pf-v5-global--primary-color--400: #ffffff;
+  --pf-v5-global--primary-color--500: #4E97D1;
+  --pf-v5-global--primary-color--dark-100: #4E97D1;
+  --pf-v5-global--primary-color--light-100: #4E97D1;
+
+  /* ── Active color ── */
+  --pf-v5-global--active-color--100: #4E97D1;
+  --pf-v5-global--active-color--200: rgba(78, 151, 209, 0.25);
+  --pf-v5-global--active-color--300: #5aa8e0;
+  --pf-v5-global--active-color--400: #6ab5e8;
+
+  /* ── Background ── */
+  --pf-v5-global--BackgroundColor--100: #1e1e1e;
+  --pf-v5-global--BackgroundColor--150: #212427;
+  --pf-v5-global--BackgroundColor--200: #252525;
+  --pf-v5-global--BackgroundColor--300: #2a2a2a;
+  --pf-v5-global--BackgroundColor--400: #36373a;
+  --pf-v5-global--BackgroundColor--dark-100: #4E97D1;
+  --pf-v5-global--BackgroundColor--dark-200: #3a7da0;
+  --pf-v5-global--BackgroundColor--dark-300: #2C5F8A;
+  --pf-v5-global--BackgroundColor--dark-400: #2C5F8A;
+  --pf-v5-global--BackgroundColor--light-100: #1e1e1e;
+  --pf-v5-global--BackgroundColor--light-200: #252525;
+  --pf-v5-global--BackgroundColor--light-300: #2a2a2a;
+
+  /* ── Text ── */
+  --pf-v5-global--Color--100: #f0f0f0;
+  --pf-v5-global--Color--200: #b3b3b3;
+  --pf-v5-global--Color--300: #8c8c8c;
+  --pf-v5-global--Color--400: #9ca3af;
+  --pf-v5-global--Color--dark-100: #f0f0f0;
+  --pf-v5-global--Color--dark-200: #b3b3b3;
+  --pf-v5-global--Color--light-100: #f0f0f0;
+  --pf-v5-global--Color--light-200: #b3b3b3;
+  --pf-v5-global--Color--light-300: #8c8c8c;
+
+  /* ── Borders ── */
+  --pf-v5-global--BorderColor--100: #3a3a3a;
+  --pf-v5-global--BorderColor--200: #3a3a3a;
+  --pf-v5-global--BorderColor--300: #4d4d4d;
+  --pf-v5-global--BorderColor--400: #6c757d;
+  --pf-v5-global--BorderColor--dark-100: #3a3a3a;
+  --pf-v5-global--BorderColor--light-100: #3a3a3a;
+
+  /* ── Link ── */
+  --pf-v5-global--link--Color: #4E97D1;
+  --pf-v5-global--link--Color--hover: #5aa8e0;
+  --pf-v5-global--link--Color--visited: #a18fff;
+  --pf-v5-global--link--Color--dark: #4E97D1;
+  --pf-v5-global--link--Color--dark--hover: #5aa8e0;
+  --pf-v5-global--link--Color--light: #4E97D1;
+  --pf-v5-global--link--Color--light--hover: #5aa8e0;
+
+  /* ── Status ── */
+  --pf-v5-global--success-color--100: #10b981;
+  --pf-v5-global--success-color--200: #059669;
+  --pf-v5-global--warning-color--100: #f59e0b;
+  --pf-v5-global--warning-color--200: #d97706;
+  --pf-v5-global--danger-color--100: #ef4444;
+  --pf-v5-global--danger-color--200: #ff7468;
+  --pf-v5-global--danger-color--300: #991b1b;
+
+  /* ── Info ── */
+  --pf-v5-global--info-color--100: #4E97D1;
+  --pf-v5-global--info-color--200: #2C5F8A;
+
+  /* ── Disabled ── */
+  --pf-v5-global--disabled-color--100: #8c8c8c;
+  --pf-v5-global--disabled-color--200: #4d4d4d;
+  --pf-v5-global--disabled-color--300: #6c757d;
+
+  /* ── Icon ── */
+  --pf-v5-global--icon--Color--dark: #f0f0f0;
+  --pf-v5-global--icon--Color--light: #b3b3b3;
+  --pf-v5-global--icon--Color--dark--dark: #f0f0f0;
+  --pf-v5-global--icon--Color--dark--light: #b3b3b3;
+  --pf-v5-global--icon--Color--light--dark: #8c8c8c;
+  --pf-v5-global--icon--Color--light--light: #9ca3af;
+
+  /* ── Secondary ── */
+  --pf-v5-global--secondary-color--100: #8c8c8c;
+
+  /* ── Palette — black scale (grays) ── */
+  --pf-v5-global--palette--black-50: #e0e0e0;
+  --pf-v5-global--palette--black-100: #c6c7c8;
+  --pf-v5-global--palette--black-150: #aaabac;
+  --pf-v5-global--palette--black-200: #868789;
+  --pf-v5-global--palette--black-300: #6c757d;
+  --pf-v5-global--palette--black-400: #4d4d4d;
+  --pf-v5-global--palette--black-500: #3a3a3a;
+  --pf-v5-global--palette--black-600: #2a2a2a;
+  --pf-v5-global--palette--black-700: #252525;
+  --pf-v5-global--palette--black-800: #1e1e1e;
+  --pf-v5-global--palette--black-850: #1b1d21;
+  --pf-v5-global--palette--black-900: #0f1214;
+  --pf-v5-global--palette--black-1000: #030303;
+
+  /* ── Page layout ── */
+  --pf-v5-c-page__header--BackgroundColor: #4E97D1;
+  --pf-v5-c-page__header-brand-link--c-brand--Color: #ffffff;
+  --pf-v5-c-page__sidebar--BackgroundColor: #252525;
+  --pf-v5-c-page__sidebar--m-light--BackgroundColor: #252525;
+  --pf-v5-c-page__sidebar--m-light--BorderRightColor: #3a3a3a;
+  --pf-v5-c-page--BackgroundColor: #1e1e1e;
+}
+
+/* ── Nav: selected item — white text on dark blue background ── */
+.pf-v5-theme-dark .pf-v5-c-nav__link.pf-m-current,
+.pf-v5-theme-dark .pf-v5-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-v5-c-nav__link {
+  color: #ffffff !important;
+}

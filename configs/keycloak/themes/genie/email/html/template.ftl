@@ -1,5 +1,7 @@
 <#macro emailLayout>
-<html lang="${locale.language}" dir="${locale.rtl?string('rtl','ltr')}">
+<#assign rtlLocales = ["ar","he","fa","ur"]>
+<#assign isRtl = rtlLocales?seq_contains(locale.language)>
+<html lang="${locale.language}" dir="${isRtl?string('rtl','ltr')}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

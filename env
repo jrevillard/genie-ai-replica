@@ -61,11 +61,6 @@ POSTGRES_PASSWORD=
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KONG_DB_PASSWORD=
 
-# Service-to-service shared secret (OPEA → Backend)
-# Used by: OPEA chatqna callback to GET /api/users/:userId/context
-# Must be identical in backend and OPEA chatqna service environment
-SERVICE_AUTH_TOKEN=
-
 # =============================================================================
 # SECTION 2: EMAIL CONFIGURATION (REQUIRED)
 # =============================================================================
@@ -380,6 +375,12 @@ KEYCLOAK_DB_PASSWORD=
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KEYCLOAK_PROXY_CLIENT_SECRET=
 
+# Dataprep service account client (client_credentials grant for service-to-service auth)
+# Used by: Dataprep → Document Repository and Backend API calls
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KC_DATAPREP_CLIENT_ID=dataprep-service-client
+KC_DATAPREP_CLIENT_SECRET=
+
 # --- Realm properties (optional) ---
 # These control registration, email verification, password policy, and more.
 # Uncomment and override only if you need non-default behavior.
@@ -521,7 +522,7 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 #
 # Variables that MUST be identical across all nodes:
 #   ARANGO_PASSWORD, TRANSLATION_CACHE_PASSWORD,
-#   POSTGRES_PASSWORD, SERVICE_AUTH_TOKEN
+#   POSTGRES_PASSWORD, KC_DATAPREP_CLIENT_SECRET
 #
 # Variables that MUST be identical (AI model IDs):
 #   EMBEDDING_MODEL_ID, RERANKER_MODEL_ID, VLLM_LLM_MODEL_ID

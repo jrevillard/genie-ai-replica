@@ -1,12 +1,12 @@
 # GENIE.AI — Logging & Observability Architecture Evaluation
 
-**OpenSearch vs VictoriaMetrics Stack: Comprehensive Comparison**
+**OpenSearch vs VictoriaMetrics vs SigNoz: Comprehensive Comparison**
 
 | Field | Detail |
 |---|---|
 | **Author** | David Forden |
 | **Date** | 2026-04-16 |
-| **Status** | Evaluation Draft |
+| **Status** | Evaluation Draft v2 |
 | **Scope** | Full-stack observability across all application tiers |
 | **Constraint** | 100% OSI-approved permissive open-source licenses only (Apache 2.0, MIT, BSD) |
 
@@ -16,7 +16,7 @@
 
 1. [Executive Summary](#1-executive-summary)
 2. [Current State Assessment](#2-current-state-assessment)
-3. [The Two Candidates](#3-the-two-candidates)
+3. [The Three Candidates](#3-the-three-candidates)
 4. [Licensing Deep Dive](#4-licensing-deep-dive)
 5. [Architecture Comparison](#5-architecture-comparison)
 6. [Application Tier Coverage](#6-application-tier-coverage)
@@ -33,21 +33,24 @@
 
 ## 1. Executive Summary
 
-This evaluation compares two candidate observability stacks for GENIE.AI, a production-grade AI/RAG framework targeting 200,000 users on sovereign compute infrastructure. The stack must cover all application tiers (Node.js backend, Python AI services, Vue.js frontend, Kong gateway) and support eventual Kubernetes HPA deployment.
+This evaluation compares three candidate observability stacks for GENIE.AI, a production-grade AI/RAG framework targeting 200,000 users on sovereign compute infrastructure. The stack must cover all application tiers (Node.js backend, Python AI services, Vue.js frontend, Kong gateway) and support eventual Kubernetes HPA deployment.
 
-**The core tension:**
+**The three candidates at a glance:**
 
-| | OpenSearch | VictoriaMetrics Stack |
-|---|---|---|
-| **Maturity** | Battle-tested, 10+ years (Lucene/Elasticsearch lineage) | Metrics component is mature; VictoriaLogs and VictoriaTraces are pre-GA |
-| **MELT Coverage** | Excellent at Logs; weak at Metrics/Traces natively | Excellent at Metrics; growing Logs/Traces; Events via Logs |
-| **Resource Efficiency** | JVM-heavy (2-8 GB RAM baseline) | Go-based, lightweight (128-512 MB) |
-| **Visualization** | Built-in Dashboards (Apache 2.0) | No built-in dashboard — requires Grafana (AGPLv3) or third-party |
-| **Full-Text Search** | Best-in-class (Lucene) | Adequate (LogsQL) — weaker for deeply nested JSON |
+| | OpenSearch | VictoriaMetrics Stack | SigNoz |
+|---|---|---|---|
+| **Type** | Search engine (logs-focused) | Metrics-first MELT platform | Full MELT APM platform |
+| **Maturity** | Battle-tested, 10+ years | Metrics GA; Logs/Traces pre-GA | GA — production-ready |
+| **MELT Coverage** | Logs only (Metrics/Traces deferred) | All three (Logs/Traces pre-GA) | **All three — GA** |
+| **Resource Efficiency** | JVM-heavy (2-8 GB RAM) | Excellent (Go, ~700 MB total) | Good (ClickHouse + Go) |
+| **Visualization** | Built-in Dashboards (Apache 2.0) | **No permissive option** | **Built-in UI (MIT)** |
+| **License (full stack)** | Apache 2.0 — compliant | Backend only — **gap** | **MIT — fully compliant** |
+| **Full-Text Search** | Best-in-class (Lucene) | Adequate (LogsQL) | Good (ClickHouse SQL) |
+| **Existing code in GENIE.AI** | Yes (donated) | No | No |
 
-**Jerome's point is architecturally correct**: MELT (Metrics, Events, Logs, Traces) is the modern observability standard, and the VictoriaMetrics stack was designed from the ground up as a unified MELT platform. OpenSearch is fundamentally a search engine repurposed for logs — it was never designed to be a metrics or traces backend.
+**The discovery:** SigNoz resolves the fundamental tension between the other two candidates. It delivers the MELT architecture that Jerome correctly advocates for, while providing a built-in visualization layer under a permissive MIT license — something the VictoriaMetrics stack cannot do without Grafana (AGPLv3). It is also production-ready (GA), unlike VictoriaLogs and VictoriaTraces.
 
-**However, there is a critical license conflict**: Grafana (the de facto visualization layer for VictoriaMetrics) moved to AGPLv3 in 2022. This violates the project's strict permissive-license-only constraint. There are alternatives, but none match Grafana's depth for the VictoriaMetrics ecosystem.
+**Jerome's point is architecturally correct**: MELT (Metrics, Events, Logs, Traces) is the modern observability standard, and a unified OTel-native pipeline is the right architecture. The question was always whether there existed a fully compliant, production-ready implementation. **SigNoz appears to be that implementation.**
 
 ---
 
@@ -103,7 +106,7 @@ GENIE.AI is a microservices architecture with **25+ Docker services** across 4 c
 
 ---
 
-## 3. The Two Candidates
+## 3. The Three Candidates
 
 ### 3.1 Candidate A: OpenSearch (Current Specification)
 
@@ -143,6 +146,30 @@ All Services → stdout/stderr → OTel Collector DaemonSet → VictoriaLogs + V
 | OpenTelemetry Collector | Universal ingestion pipeline | Apache 2.0 | Production (GA) |
 | vmui | Built-in query UI | Apache 2.0 | Basic |
 | Grafana (typically) | Dashboards & visualization | **AGPLv3** | Production (GA) |
+
+### 3.3 Candidate C: SigNoz (Discovered Alternative)
+
+**SigNoz provides a complete, OTel-native MELT platform:**
+
+```
+All Services → stdout/stderr → OTel Collector → SigNoz (Go backend) → ClickHouse (storage)
+                                                                ↓
+                                                         SigNoz UI (React)
+                                                    (Dashboards, Traces,
+                                                     Alerts, Service Maps)
+```
+
+**Components:**
+
+| Component | Role | License | Maturity |
+|---|---|---|---|---|
+| SigNoz Backend | Query service, OTel ingestion | **MIT** | Production (GA) |
+| SigNoz Frontend | React-based dashboard UI | **MIT** | Production (GA) |
+| ClickHouse | Columnar storage for all telemetry | Apache 2.0 | Production (GA) |
+| OpenTelemetry Collector | Universal ingestion pipeline | Apache 2.0 | Production (GA) |
+| Kafka (optional) | Buffering for high-throughput | Apache 2.0 | Production (GA) |
+
+**License verified from source** — the MIT Expat license is confirmed directly from the [SigNoz GitHub LICENSE file](https://github.com/SigNoz/signoz/blob/main/LICENSE). The `ee/` and `cmd/enterprise/` directories are under a separate proprietary license and are not required for self-hosted deployment.
 
 ---
 
@@ -185,29 +212,41 @@ This is the **most critical constraint** in the evaluation. Every component must
 | vmui (built-in) | Apache 2.0 | YES |
 | OpenTelemetry Collector | Apache 2.0 | YES |
 
-**Result: FULL COMPLIANCE (backend only)**
+**Result: FULL COMPLIANCE (backend only — no visualization)**
 
-#### The Visualization Problem
+#### SigNoz Stack
 
-| Option | License | Compliant? | Notes |
-|---|---|---|---|
-| Grafana (current) | **AGPLv3** | **NO** | Disqualified by permissive-only constraint |
-| OpenSearch Dashboards | Apache 2.0 | YES | Can it connect to VictoriaLogs? No native integration |
-| Apache Superset | Apache 2.0 | YES | BI-focused, not observability-focused |
-| Redash | BSD-2-Clause | YES | SQL-centric, limited log exploration |
-| Cube.js | MIT | YES | Headless BI, requires custom frontend |
-| vmui (built-in) | Apache 2.0 | YES | Basic query explorer only — no saved dashboards |
-| Custom Vue.js dashboards | MIT | YES | You build it — significant effort |
-
-**This is the VictoriaMetrics stack's critical weakness.** Without Grafana, there is no permissively-licensed, production-grade observability dashboard that provides native integration with VictoriaLogs/VictoriaTraces.
-
-### 4.3 License Verdict
-
-| | OpenSearch Stack | VictoriaMetrics Stack |
+| Component | License | Compliant? |
 |---|---|---|
-| **All components compliant?** | YES — turnkey | Backend only — visualization gap |
-| **Visualization layer** | Included (Dashboards, Apache 2.0) | Must build or find alternative |
-| **License risk** | None | High — AGPLv3 dependency via Grafana ecosystem |
+| SigNoz Backend | **MIT** | YES |
+| SigNoz Frontend (UI) | **MIT** | YES |
+| ClickHouse | Apache 2.0 | YES |
+| OpenTelemetry Collector | Apache 2.0 | YES |
+| Kafka (optional) | Apache 2.0 | YES |
+
+**Result: FULL COMPLIANCE — including visualization** (source-verified from GitHub)
+
+### 4.3 Disqualified Alternatives
+
+| Tool | License | Reason Disqualified |
+|---|---|---|
+| Elasticsearch | SSPL + Elastic License 2.0 | Not permissive; not OSI-approved |
+| Grafana Loki | AGPLv3 | Not permissive |
+| Grafana Tempo | AGPLv3 | Not permissive |
+| Grafana (dashboard) | AGPLv3 | Not permissive |
+| Uptrace | AGPLv3 | Not permissive (verified from GitHub source) |
+| Graylog | SSPL | Not permissive |
+| HyperDX | BSL 1.1 | Not permissive |
+
+### 4.4 License Verdict
+
+| | OpenSearch Stack | VictoriaMetrics Stack | SigNoz Stack |
+|---|---|---|---|
+| **All components compliant?** | YES | Backend only | **YES** |
+| **Visualization included?** | YES (Dashboards) | **NO** | **YES (UI)** |
+| **License risk** | None | High (Grafana gap) | **None** |
+
+**SigNoz is the only candidate that delivers full MELT with built-in visualization under a permissive license.**
 
 ---
 
@@ -272,17 +311,66 @@ This is the **most critical constraint** in the evaluation. Every component must
 ```
 
 **Strength:** Single OTel Collector DaemonSet handles all signal types. Clean decoupling. Kubernetes-native.
+**Weakness:** No permissive visualization layer.
 
-### 5.3 Architecture Quality Assessment
+### 5.3 Data Flow — SigNoz
 
-| Criterion | OpenSearch | VictoriaMetrics Stack |
-|---|---|---|
-| **Decoupling** | Moderate — volume-based or direct Winston transport | Excellent — stdout/stderr → OTel → backend |
-| **Kubernetes readiness** | Requires refactoring (volume → stdout or direct transport) | Native — DaemonSet reads container stdout |
-| **Signal types supported** | Logs (primary), Metrics (via plugins, not native) | Metrics, Logs, Traces — unified MELT pipeline |
-| **Single pipeline** | No — logs go to OpenSearch, metrics need separate solution | Yes — one OTel Collector handles all signals |
-| **Vendor lock-in risk** | Low — Lucene-compatible, SQL queries | Low — OTel native, PromQL/MetricsQL/LogsQL |
-| **Complexity** | Moderate — JVM tuning, index management | Low — single Go binaries, minimal config |
+```
+┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
+│  Winston     │────▶│  stdout/stderr   │────▶│  OTel        │
+│  (Node.js)   │     │  (JSON)          │     │  Collector   │
+├──────────────┤     ├──────────────────┤     │  DaemonSet   │
+│  Python      │────▶│  stdout/stderr   │────▶│              │
+│  CustomLogger│     │  (JSON)          │     └──────┬───────┘
+├──────────────┤     ├──────────────────┤            │
+│  Kong/Nginx  │────▶│  access logs     │────────────┤
+├──────────────┤     ├──────────────────┤            │
+│  vLLM / TEI  │────▶│  stdout/stderr   │────────────┤
+└──────────────┘     └──────────────────┘            │
+                                                      │
+                                                      ▼
+                                               ┌──────────────┐
+                                               │  SigNoz      │
+                                               │  Backend     │
+                                               │  (Go / MIT)  │
+                                               └──────┬───────┘
+                                                      │
+                                                      ▼
+                                               ┌──────────────┐
+                                               │ ClickHouse   │
+                                               │ (Apache 2.0) │
+                                               │              │
+                                               │ Logs         │
+                                               │ Metrics      │
+                                               │ Traces       │
+                                               └──────────────┘
+                                                      │
+                                                      ▼
+                                               ┌──────────────┐
+                                               │ SigNoz UI    │
+                                               │ (React / MIT)│
+                                               │              │
+                                               │ Dashboards   │
+                                               │ Traces       │
+                                               │ Alerts       │
+                                               │ Service Maps │
+                                               └──────────────┘
+```
+
+**Strength:** Single pipeline, single storage backend, single visualization layer — all permissively licensed. Production-ready. Kubernetes-native.
+**Weakness:** ClickHouse has its own operational complexity. No existing integration in GENIE.AI.
+
+### 5.4 Architecture Quality Assessment
+
+| Criterion | OpenSearch | VictoriaMetrics | SigNoz |
+|---|---|---|---|
+| **Decoupling** | Moderate — volume-based or direct Winston transport | Excellent — stdout → OTel → backend | **Excellent** — stdout → OTel → backend |
+| **Kubernetes readiness** | Requires refactoring (volume → stdout or direct transport) | Native — DaemonSet reads container stdout | **Native** — DaemonSet reads container stdout |
+| **Signal types supported** | Logs (primary), Metrics (via plugins, not native) | Metrics, Logs, Traces — unified MELT pipeline | **Metrics, Logs, Traces — unified MELT pipeline** |
+| **Single pipeline** | No — logs go to OpenSearch, metrics need separate solution | Yes — one OTel Collector handles all signals | **Yes — one OTel Collector handles all signals** |
+| **Single storage backend** | Yes (OpenSearch for logs only) | No (3 separate VictoriaMetrics binaries) | **Yes (ClickHouse for all signals)** |
+| **Vendor lock-in risk** | Low — Lucene-compatible, SQL queries | Low — OTel native, PromQL/MetricsQL/LogsQL | **Low** — OTel native, SQL queries |
+| **Complexity** | Moderate — JVM tuning, index management | Low — single Go binaries, minimal config | **Moderate** — ClickHouse tuning + Go services |
 
 ---
 
@@ -290,34 +378,36 @@ This is the **most critical constraint** in the evaluation. Every component must
 
 ### 6.1 How Each Stack Addresses Every Tier
 
-| Application Tier | OpenSearch Approach | VictoriaMetrics Approach |
-|---|---|---|
-| **Vue.js Frontend** | Out of scope (your spec explicitly defers this) | Same — defer to Phase 2 |
-| **Kong API Gateway** | Access logs via file tailing or OTel | OTel Collector tails Kong container logs |
-| **Node.js Backend** | Winston → OpenSearch transport (your donated code) or OTel filelog | Winston → stdout JSON → OTel Collector |
-| **Node.js Document Repo** | Same as backend | Same as backend |
-| **Python ChatQnA** | New Python logger → OpenSearch API (Issue #357) | Python logging → stdout JSON → OTel Collector |
-| **Python Dataprep** | Same | Same |
-| **Python Retriever** | Same | Same |
-| **Python Reranker** | Same | Same |
-| **Python Guardrail** | Same | Same |
-| **vLLM / TEI (GPU)** | Console capture via OTel filelog | OTel Collector tails container stdout |
-| **Infrastructure (Redis, ArangoDB, PostgreSQL)** | Not covered in spec | OTel Collector can capture container logs |
+| Application Tier | OpenSearch Approach | VictoriaMetrics Approach | SigNoz Approach |
+|---|---|---|---|
+| **Vue.js Frontend** | Out of scope (deferred) | Same — defer to Phase 2 | Same — defer to Phase 2 |
+| **Kong API Gateway** | Access logs via file tailing or OTel | OTel Collector tails container logs | OTel Collector tails container logs |
+| **Node.js Backend** | Winston → OpenSearch transport (donated code) or OTel filelog | Winston → stdout JSON → OTel Collector | Winston → stdout JSON → OTel Collector |
+| **Node.js Document Repo** | Same as backend | Same as backend | Same as backend |
+| **Python ChatQnA** | New Python logger → OpenSearch API (#357) | Python logging → stdout JSON → OTel Collector | Python logging → stdout JSON → OTel Collector |
+| **Python Dataprep** | Same | Same | Same |
+| **Python Retriever** | Same | Same | Same |
+| **Python Reranker** | Same | Same | Same |
+| **Python Guardrail** | Same | Same | Same |
+| **vLLM / TEI (GPU)** | Console capture via OTel filelog | OTel Collector tails container stdout | OTel Collector tails container stdout |
+| **Infrastructure** | Not covered in spec | OTel Collector can capture container logs | OTel Collector can capture container logs |
 
-### 6.2 Key Difference
+### 6.2 Key Difference in Application Changes Required
 
 **OpenSearch approach** requires a **custom logger for each language runtime** that writes to OpenSearch directly:
 - Node.js: `winston-opensearch` transport (you have this code)
 - Python: New `logger.py` proxy → OpenSearch API (Issue #357, #358)
 - Each language needs its own OpenSearch client library integration
+- Creates tight coupling to OpenSearch as the log backend
 
-**VictoriaMetrics approach** requires **one change per language**: redirect output to structured JSON stdout/stderr.
+**VictoriaMetrics and SigNoz approaches** require **one change per language**: redirect output to structured JSON stdout/stderr.
 - Node.js: Change Winston format from `printf` to `json`
 - Python: Add JSON formatter to CustomLogger or standard `logging` module
 - No backend-specific client libraries needed
 - OTel Collector handles everything else uniformly
+- **Backend-agnostic** — swap storage without touching application code
 
-The VictoriaMetrics approach is **cleaner and more portable**. Services become backend-agnostic — they emit JSON to stdout and the infrastructure layer handles routing.
+The stdout/stderr pattern is **cleaner and more portable** regardless of which backend you choose.
 
 ---
 
@@ -332,47 +422,52 @@ The VictoriaMetrics approach is **cleaner and more portable**. Services become b
 | **VictoriaMetrics** | 64 MB | 128-512 MB | Go binary, no JVM |
 | **VictoriaLogs** | 64 MB | 128-256 MB | Go binary, no JVM |
 | **VictoriaTraces** | 64 MB | 128-256 MB | Go binary, no JVM |
-| **OTel Collector** | 128 MB | 256-512 MB | Same for both stacks |
+| **SigNoz Backend** | 128 MB | 256-512 MB | Go binary, no JVM |
+| **SigNoz Frontend** | 64 MB | 128-256 MB | Node.js-based |
+| **ClickHouse** | 512 MB | 1-2 GB | Columnar DB, can be tuned low |
+| **OTel Collector** | 128 MB | 256-512 MB | Same for all stacks |
 | **vmui** | ~10 MB | ~10 MB | Built into VictoriaMetrics binary |
 
 **Total stack footprint:**
 
 | Stack | Services | Total RAM (Min) | Total RAM (Typical) |
 |---|---|---|---|
-| OpenSearch + Dashboards + OTel | 3 | ~1.5 GB | ~3-5 GB |
-| VictoriaMetrics + Logs + Traces + OTel + vmui | 5 | ~350 MB | ~1-1.5 GB |
+| OpenSearch + Dashboards + OTel | 3 | ~1.5 GB | **~3-5 GB** |
+| VictoriaMetrics + Logs + Traces + OTel | 5 | ~350 MB | **~1-1.5 GB** |
+| SigNoz + ClickHouse + OTel | 4 | ~850 MB | **~2-3 GB** |
 
-**VictoriaMetrics uses 3-5x less RAM.** On GPU-constrained infrastructure where every GB matters for AI workloads, this is significant.
+**VictoriaMetrics is the most resource-efficient.** SigNoz sits between the two — significantly lighter than OpenSearch, but heavier than bare VictoriaMetrics due to ClickHouse.
 
 ### 7.2 Storage Efficiency
 
-| | OpenSearch | VictoriaLogs |
-|---|---|---|
-| **Compression** | Lucene standard (~5x raw) | Columnar, claims 10-30x raw |
-| **Index overhead** | Inverted index segments, doc values | Stream-based columnar storage |
-| **Disk I/O pattern** | Heavy (index merging, segment flushes) | Light (append-only, compaction) |
-| **Storage for 1 TB raw logs** | ~200 GB | ~30-100 GB |
+| | OpenSearch | VictoriaLogs | ClickHouse (SigNoz) |
+|---|---|---|---|
+| **Compression** | Lucene standard (~5x raw) | Columnar, claims 10-30x raw | Columnar, ~10x raw |
+| **Index overhead** | Inverted index segments, doc values | Stream-based columnar storage | MergeTree engine, parts merging |
+| **Disk I/O pattern** | Heavy (index merging, segment flushes) | Light (append-only, compaction) | Moderate (MergeTree compaction) |
+| **Storage for 1 TB raw logs** | ~200 GB | ~30-100 GB | ~100-150 GB |
 
 ### 7.3 CPU Usage
 
-| | OpenSearch | VictoriaLogs |
-|---|---|---|
-| **Ingestion** | CPU-intensive (JSON parsing, index building) | Low (stream-based ingestion) |
-| **Query** | CPU-intensive for complex aggregations | Optimized for log-pattern queries |
-| **Background** | Segment merging, GC pauses | Compaction, no GC |
+| | OpenSearch | VictoriaLogs | ClickHouse (SigNoz) |
+|---|---|---|---|
+| **Ingestion** | CPU-intensive (JSON parsing, index building) | Low (stream-based ingestion) | Moderate (columnar inserts) |
+| **Query** | CPU-intensive for complex aggregations | Optimized for log-pattern queries | Very fast for analytical queries |
+| **Background** | Segment merging, GC pauses | Compaction, no GC | MergeTree compaction, no GC |
 
 ### 7.4 Query Capabilities
 
-| Query Type | OpenSearch | VictoriaLogs |
-|---|---|---|
-| **Full-text search** | Best-in-class (Lucene) | Good (LogsQL full-text) |
-| **Nested JSON exploration** | Excellent (Lucene nested fields) | Adequate (JSON pipe in LogsQL) |
-| **Aggregations** | Powerful (terms, histogram, cardinality) | Supported but less mature |
-| **Log pattern matching** | Good (Lucene query syntax) | Excellent (LogsQL pipe syntax) |
-| **Real-time alerting** | Built-in alerting plugin | vmalert (Prometheus-compatible) |
-| **SQL queries** | SQL plugin available | No SQL support |
+| Query Type | OpenSearch | VictoriaLogs | SigNoz / ClickHouse |
+|---|---|---|---|
+| **Full-text search** | Best-in-class (Lucene) | Good (LogsQL full-text) | Good (ClickHouse full-text indexes) |
+| **Nested JSON exploration** | Excellent (Lucene nested fields) | Adequate (JSON pipe in LogsQL) | Good (ClickHouse JSON functions) |
+| **Aggregations** | Powerful (terms, histogram, cardinality) | Supported but less mature | Excellent (SUM, AVG, quantiles, etc.) |
+| **Log pattern matching** | Good (Lucene query syntax) | Excellent (LogsQL pipe syntax) | Good (SQL WHERE + LIKE) |
+| **Real-time alerting** | Built-in alerting plugin | vmalert (Prometheus-compatible) | Built-in alerting |
+| **SQL queries** | SQL plugin available | No SQL support | **Native SQL** |
+| **Trace waterfall** | Not supported | Not supported (pre-GA) | **Built-in** |
 
-**For GENIE.AI specifically:** Your logs contain deeply nested JSON from AI inference (RAG retrieval results, LLM responses, embedding vectors). OpenSearch's Lucene-based nested field querying is materially better for this use case. VictoriaLogs' LogsQL can parse JSON but is less optimized for deep exploration of complex nested structures.
+**For GENIE.AI specifically:** Your logs contain deeply nested JSON from AI inference (RAG retrieval results, LLM responses, embedding vectors). OpenSearch's Lucene-based nested field querying is the strongest for this. ClickHouse has solid JSON support and excellent aggregation capabilities. VictoriaLogs' LogsQL can parse JSON but is less optimized for deep exploration of complex nested structures.
 
 ---
 
@@ -405,27 +500,33 @@ At 200K users, assuming average 10 requests/user/day with logging at each tier:
 | Hot/Warm | Native partitioning by time | Simple — built-in |
 | Multi-region | VictoriaMetrics cluster replication | Moderate |
 
+**SigNoz (ClickHouse):**
+
+| Scale Point | Approach | Complexity |
+|---|---|---|
+| Beyond single node | ClickHouse cluster (sharded + replicated MergeTree) | Moderate — shard key design matters |
+| All signals scale together | ClickHouse handles logs, metrics, traces in same cluster | Simple — one cluster, one operational model |
+| Hot/Warm | ClickHouse TTL + partition by time, move to cold storage | Simple — built-in |
+| Multi-region | ClickHouse cross-replication | Moderate |
+| Buffering | Kafka between OTel Collector and ClickHouse | Moderate — adds resilience |
+
 ### 8.3 Kubernetes HPA Compatibility
 
-**OpenSearch:**
-- **Cannot use HPA** for the OpenSearch service itself (stateful, JVM heap pre-allocated)
-- Requires StatefulSet with PVC — complex autoscaling
-- Node.js services can use HPA once decoupled from file volumes (your Issue #354 identifies this)
-
-**VictoriaMetrics:**
-- VictoriaMetrics cluster mode supports independent scaling of ingest, storage, and query components
-- All components are stateless or have clear state boundaries
-- Better HPA compatibility overall
+| Stack | HPA for App Services | HPA for Observability Backend |
+|---|---|---|
+| **OpenSearch** | Yes (once decoupled from volumes) | **No** — StatefulSet, JVM heap pre-allocated |
+| **VictoriaMetrics** | Yes | **Yes** — `vmcluster` components scale independently |
+| **SigNoz** | Yes | **Partial** — SigNoz Backend/ClickHouse need StatefulSet, but can scale horizontally |
 
 ### 8.4 Operational Complexity at Scale
 
-| Factor | OpenSearch | VictoriaMetrics |
-|---|---|---|
-| **Day-1 setup** | Moderate (JVM tuning, security config) | Simple (single binary, sensible defaults) |
-| **Day-30 operations** | High (shard management, GC tuning, index lifecycle) | Low (minimal tuning needed) |
-| **Day-365 operations** | Very high (cluster health, rebalancing, upgrade complexity) | Low-Moderate (cluster mode, backups) |
-| **Typical failure modes** | Split brain, shard allocation failure, OOM from JVM | Disk full, compaction lag |
-| **Recovery time** | Slow (shard recovery, index rebuilding) | Fast (stream replay from checkpoints) |
+| Factor | OpenSearch | VictoriaMetrics | SigNoz / ClickHouse |
+|---|---|---|---|
+| **Day-1 setup** | Moderate (JVM tuning, security config) | Simple (single binary, defaults) | Moderate (ClickHouse config + SigNoz services) |
+| **Day-30 operations** | High (shard management, GC tuning) | Low (minimal tuning needed) | Moderate (ClickHouse MergeTree management) |
+| **Day-365 operations** | Very high (cluster health, rebalancing) | Low-Moderate (cluster mode) | Moderate (ClickHouse cluster ops) |
+| **Typical failure modes** | Split brain, shard allocation, OOM | Disk full, compaction lag | ClickHouse ZooKeeper issues, disk full |
+| **Recovery time** | Slow (shard recovery, index rebuild) | Fast (stream replay) | Moderate (ClickHouse replication recovery) |
 
 ---
 
@@ -433,32 +534,36 @@ At 200K users, assuming average 10 requests/user/day with logging at each tier:
 
 ### 9.1 Component Mapping
 
-| Component | K8s Primitive | OpenSearch | VictoriaMetrics |
-|---|---|---|---|
-| Node.js App | Deployment / HPA | Same | Same |
-| Python AI Services | Deployment / HPA | Same | Same |
-| OTel Collector | DaemonSet | Same | Same |
-| Log Storage | StatefulSet + PVC | OpenSearch (complex) | VictoriaLogs (simpler) |
-| Metrics Storage | N/A (not in spec) | Not covered | VictoriaMetrics |
-| Trace Storage | N/A (Phase 2) | Not covered | VictoriaTraces |
-| Dashboard | Deployment | OpenSearch Dashboards | ??? (license gap) |
-| Gateway Logs | DaemonSet tailing | Same | Same |
+| Component | K8s Primitive | OpenSearch | VictoriaMetrics | SigNoz |
+|---|---|---|---|---|
+| Node.js App | Deployment / HPA | Same | Same | Same |
+| Python AI Services | Deployment / HPA | Same | Same | Same |
+| OTel Collector | DaemonSet | Same | Same | Same |
+| Log Storage | StatefulSet + PVC | OpenSearch (complex) | VictoriaLogs (simpler) | ClickHouse (moderate) |
+| Metrics Storage | N/A (not in spec) | Not covered | VictoriaMetrics | ClickHouse (same cluster) |
+| Trace Storage | N/A (Phase 2) | Not covered | VictoriaTraces | ClickHouse (same cluster) |
+| Dashboard | Deployment | OpenSearch Dashboards | ??? (license gap) | **SigNoz UI** |
+| Alerting | N/A | OpenSearch plugin | vmalert | **SigNoz built-in** |
 
-### 9.2 OpenSearch on Kubernetes
+### 9.2 Kubernetes Deployment Options
 
+**OpenSearch:**
 - Requires dedicated operator (OpenSearch Operator or ECK)
 - JVM heap must match node resources — inflexible for HPA
-- Shard allocation requires careful planning
-- Security plugin adds operational overhead
 - Well-documented, many production references
 
-### 9.3 VictoriaMetrics on Kubernetes
-
+**VictoriaMetrics:**
 - Official Helm chart available
-- `vmcluster` separates ingest/storage/query — each can scale independently
-- No JVM tuning needed — simpler resource requests
+- `vmcluster` separates ingest/storage/query
+- No JVM tuning needed
 - Less production documentation for Logs/Traces at K8s scale
-- VictoriaMetrics itself is battle-tested at K8s scale (Roblox, Discord, Wix)
+
+**SigNoz:**
+- Official Helm chart available
+- Includes ClickHouse cluster configuration
+- OTel Collector as DaemonSet
+- Production references growing (used by multiple companies)
+- Kafka optional for high-throughput buffering
 
 ---
 
@@ -474,73 +579,115 @@ At 200K users, assuming average 10 requests/user/day with logging at each tier:
 
 3. **Complete, self-contained solution** — OpenSearch + Dashboards provides everything needed: storage, search, visualization, alerting, anomaly detection. No external visualization dependency.
 
-4. **Full license compliance** — Every component is Apache 2.0. No license gap. No risk of future license changes creating compliance issues (governed by Linux Foundation).
+4. **Full license compliance** — Every component is Apache 2.0. No license gap.
 
 5. **You already have working code** — Your donated Winston-to-OpenSearch logger, Python logger design, and admin log query refactoring plan are all ready to go. This de-risks implementation significantly.
 
-6. **Rich query language** — Supports Lucene queries, SQL (via plugin), PPL (Piped Processing Language), and REST API. Multiple ways to query the same data.
+6. **Rich query language** — Supports Lucene queries, SQL (via plugin), PPL (Piped Processing Language), and REST API.
 
-7. **Kibana-class Dashboards** — OpenSearch Dashboards provides enterprise-grade visualization out of the box: saved dashboards, template variables, alerting UI, anomaly detection, and security analytics.
-
-8. **AWS ecosystem compatibility** — If GENIE.AI ever needs managed OpenSearch, Amazon OpenSearch Service is available (though this may not be relevant for sovereign compute).
+7. **Kibana-class Dashboards** — OpenSearch Dashboards provides enterprise-grade visualization: saved dashboards, template variables, alerting UI, anomaly detection, security analytics.
 
 #### Cons
 
-1. **JVM resource overhead** — Requires 2-8 GB RAM minimum for meaningful workloads. On GPU-constrained infrastructure, this is a real cost. JVM GC pauses can cause latency spikes.
+1. **JVM resource overhead** — Requires 2-8 GB RAM minimum. On GPU-constrained infrastructure, this is a real cost. JVM GC pauses can cause latency spikes.
 
-2. **Logs-only architecture** — Does not natively handle metrics or traces. Your spec acknowledges this by deferring metrics and traces to Phase 2, but even then, OpenSearch is not the right tool for metrics (no PromQL support, no Prometheus compatibility). You would need a separate metrics stack anyway.
+2. **Logs-only architecture** — Does not natively handle metrics or traces. Your spec defers these to Phase 2, but even then OpenSearch is not the right tool for metrics (no PromQL, no Prometheus compatibility). You would need a separate metrics stack.
 
-3. **Operational complexity** — Cluster management, shard allocation, index lifecycle policies, JVM tuning, security plugin configuration. This complexity grows significantly at scale.
+3. **Operational complexity** — Cluster management, shard allocation, index lifecycle policies, JVM tuning, security plugin configuration. Grows significantly at scale.
 
-4. **Not HPA-friendly** — OpenSearch itself cannot be horizontally auto-scaled via Kubernetes HPA. It requires StatefulSet with manual or operator-driven scaling.
+4. **Not HPA-friendly** — OpenSearch itself cannot be horizontally auto-scaled via HPA. Requires StatefulSet with manual or operator-driven scaling.
 
-5. **Direct Winston coupling** — Your GitLab issue approach (Winston → OpenSearch directly) creates tight coupling between application code and the log backend. This violates the decoupling principle and makes future backend changes expensive.
+5. **Direct Winston coupling** — Your GitLab issue approach (Winston → OpenSearch directly) creates tight coupling between application code and the log backend. Violates the decoupling principle.
 
-6. **No unified MELT pipeline** — Logs go to OpenSearch, but metrics would need Prometheus/VictoriaMetrics, traces would need Jaeger/Tempo. Three separate backends, three separate operational domains.
+6. **No unified MELT pipeline** — Logs go to OpenSearch, metrics would need Prometheus/VictoriaMetrics, traces would need Jaeger/Tempo. Three separate backends, three separate operational domains.
 
-7. **Slower to start** — JVM startup time is 10-30 seconds. Container restarts are slower than Go-based alternatives.
+7. **Slower container startup** — JVM startup time is 10-30 seconds.
 
-8. **Index management overhead** — Daily indices require lifecycle management policies, index templates, and rollover strategies. Mismanagement leads to cluster instability.
+8. **Index management overhead** — Daily indices require lifecycle management, index templates, and rollover strategies.
 
 ### 10.2 VictoriaMetrics Stack
 
 #### Pros
 
-1. **True MELT architecture** — Metrics, Events (via logs), Logs, and Traces all flow through a single OpenTelemetry Collector pipeline. One ingestion path, one operational model. Jerome is correct that this is architecturally superior.
+1. **True MELT architecture** — Metrics, Events (via logs), Logs, and Traces all flow through a single OTel Collector pipeline. Jerome is correct that this is architecturally superior.
 
-2. **Extremely resource-efficient** — 3-5x less RAM than OpenSearch. Go-based binaries with no JVM overhead. On GPU-constrained sovereign compute, this matters enormously. More resources for AI inference.
+2. **Extremely resource-efficient** — 3-5x less RAM than OpenSearch. Go-based binaries with no JVM overhead. More resources for AI inference on GPU-constrained infrastructure.
 
-3. **Kubernetes-native design** — stdout/stderr → DaemonSet → backend is the canonical Kubernetes logging pattern. No volume dependencies. Clean HPA compatibility for all application services.
+3. **Kubernetes-native design** — stdout/stderr → DaemonSet → backend is the canonical K8s logging pattern. No volume dependencies. Clean HPA compatibility.
 
-4. **Excellent backend-agnostic decoupling** — Services emit JSON to stdout. OTel Collector routes to any backend. Swap OpenSearch for VictoriaLogs (or vice versa) without touching application code.
+4. **Excellent backend-agnostic decoupling** — Services emit JSON to stdout. OTel Collector routes to any backend. Swap backends without touching application code.
 
-5. **Unified operational model** — VictoriaMetrics, VictoriaLogs, and VictoriaTraces share the same operational patterns: single binary, sensible defaults, minimal config. One team, one skillset.
+5. **Unified operational model** — VictoriaMetrics, VictoriaLogs, and VictoriaTraces share the same operational patterns: single binary, sensible defaults, minimal config.
 
-6. **Outstanding metrics capability** — VictoriaMetrics is one of the best Prometheus-compatible TSDBs available. Production-proven at massive scale (Roblox, Discord, Wix). This is its strongest signal type.
+6. **Outstanding metrics capability** — VictoriaMetrics is one of the best Prometheus-compatible TSDBs available. Production-proven at massive scale (Roblox, Discord, Wix).
 
-7. **Superior scalability** — Cluster mode with clear separation of ingest, storage, and query. Each component scales independently. No JVM heap constraints.
+7. **Superior scalability** — Cluster mode with clear separation of ingest, storage, and query. Each component scales independently.
 
-8. **Simpler operations** — No shard management, no GC tuning, no JVM configuration. Sensible defaults that work. Faster container startup.
+8. **Simpler operations** — No shard management, no GC tuning, no JVM configuration. Sensible defaults.
 
-9. **10-30x better storage compression** — Columnar storage dramatically reduces disk costs for log retention.
+9. **10-30x better storage compression** — Columnar storage dramatically reduces disk costs.
 
 #### Cons
 
-1. **VictoriaLogs is pre-GA** — This is the single biggest risk. VictoriaLogs has not yet reached General Availability. It may have undiscovered bugs, missing features, or breaking changes before v1.0. Adopting pre-GA software for a production system with 200K users carries real risk.
+1. **VictoriaLogs is pre-GA** — The single biggest risk. May have undiscovered bugs, missing features, or breaking changes before v1.0. Adopting pre-GA for 200K users carries real risk.
 
-2. **VictoriaTraces is pre-GA** — Same risk as VictoriaLogs. Distributed tracing is in beta/preview. If traces are important for your debugging workflow, this is a concern.
+2. **VictoriaTraces is pre-GA** — Same risk. Distributed tracing is in beta/preview.
 
-3. **No permissive-license visualization layer** — This is the critical gap. Grafana (AGPLv3) is the de facto dashboard for VictoriaMetrics and cannot be used. vmui is too basic for production observability. Building custom Vue.js dashboards is a significant effort. Apache Superset and Redash are BI tools, not observability dashboards.
+3. **No permissive-license visualization layer** — This is the **critical blocking issue**. Grafana (AGPLv3) cannot be used. vmui is too basic. Building custom dashboards is significant effort. Apache Superset and Redash are BI tools, not observability dashboards.
 
-4. **Weaker full-text search** — LogsQL is good for log-pattern queries but not as powerful as Lucene for exploring deeply nested JSON from AI inference. Your RAG retrieval logs, embedding metadata, and LLM response structures are better served by Lucene's inverted index.
+4. **Weaker full-text search** — LogsQL is good for log-pattern queries but not as powerful as Lucene for exploring deeply nested AI inference JSON.
 
-5. **No existing implementation** — Unlike OpenSearch (where you have donated working code), there is no existing VictoriaMetrics integration in GENIE.AI. Everything must be built from scratch.
+5. **No existing implementation** — No VictoriaMetrics integration exists in GENIE.AI. Everything must be built from scratch.
 
-6. **Smaller ecosystem** — Fewer plugins, fewer integrations, less community documentation. If you hit an edge case, there are fewer resources to draw from.
+6. **Smaller ecosystem** — Fewer plugins, fewer integrations, less documentation than OpenSearch.
 
-7. **No built-in anomaly detection or ML** — OpenSearch includes anomaly detection and machine learning features. VictoriaMetrics relies on simple threshold alerting via vmalert.
+7. **No built-in anomaly detection or ML** — Relies on simple threshold alerting via vmalert.
 
-8. **LogsQL learning curve** — Team must learn a new query language. Lucene query syntax (used by OpenSearch/Elasticsearch) is more widely known.
+8. **LogsQL learning curve** — Team must learn a new query language.
+
+### 10.3 SigNoz Stack
+
+#### Pros
+
+1. **Full MELT in one platform — production-ready** — Logs, Metrics, and Traces are all GA, all flowing through a single OTel Collector pipeline into ClickHouse. No separate backends for each signal type. This validates Jerome's MELT argument with a production-ready implementation.
+
+2. **Built-in visualization under permissive license** — The SigNoz UI (MIT license) provides dashboards, trace waterfall views, service maps, and alerting — all without requiring Grafana (AGPLv3). This is the **only candidate that solves the visualization problem** while maintaining full license compliance.
+
+3. **OpenTelemetry-native** — Built on OTel from the ground up. No vendor lock-in. Uses the same OTel Collector pipeline. Backend-agnostic service instrumentation.
+
+4. **ClickHouse as unified storage** — All telemetry signals (logs, metrics, traces) stored in one Apache 2.0-licensed columnar database. Proven at massive scale (Cloudflare, Uber, Cisco). Excellent compression (~10x raw). Native SQL query language — widely known, no new query language to learn.
+
+5. **Kubernetes-native** — stdout/stderr → OTel DaemonSet → SigNoz is the canonical K8s pattern. Official Helm chart available. No volume dependencies. Clean HPA compatibility for app services.
+
+6. **Excellent backend-agnostic decoupling** — Same as VictoriaMetrics: services emit JSON to stdout, OTel Collector handles routing. Swap backends without touching application code.
+
+7. **Trace waterfall views built-in** — Distributed tracing with span-level visualization is available from day one, not deferred to a future phase. Critical for debugging request flows across microservices.
+
+8. **Built-in alerting** — Alerting is included in the SigNoz UI, not a separate component.
+
+9. **Resource-efficient compared to OpenSearch** — Go backend + ClickHouse uses ~2-3 GB vs ~3-5 GB for OpenSearch. No JVM overhead for the application layer.
+
+10. **Single operational model** — One storage backend (ClickHouse), one query language (SQL), one UI. Simpler than running separate stacks for logs, metrics, and traces.
+
+#### Cons
+
+1. **No existing implementation in GENIE.AI** — Like VictoriaMetrics, there is no SigNoz integration in the codebase. The donated Winston-to-OpenSearch code cannot be reused. Everything must be built from scratch. This is the biggest practical disadvantage compared to OpenSearch.
+
+2. **ClickHouse operational complexity** — ClickHouse requires tuning for production workloads: MergeTree engine configuration, ZooKeeper coordination for clusters, partition key design, and memory management. It is more complex than VictoriaMetrics' single-binary approach.
+
+3. **Heavier than VictoriaMetrics** — ClickHouse uses more RAM (~1-2 GB) than VictoriaLogs/VictoriaMetrics combined (~700 MB). On extremely resource-constrained deployments, this matters.
+
+4. **Smaller community than OpenSearch** — While growing rapidly, SigNoz has a smaller community than OpenSearch. Fewer Stack Overflow answers, fewer blog posts, fewer production references at scale.
+
+5. **Weaker full-text search than OpenSearch** — ClickHouse's full-text search capabilities are good but not as mature as Lucene's inverted index. For deeply nested AI inference JSON exploration, OpenSearch still has an edge.
+
+6. **UI is React, not Vue** — The SigNoz UI is built in React. This is not a functional problem (it's a standalone observability tool, not embedded in your Vue app), but worth noting for the team.
+
+7. **ClickHouse ZooKeeper dependency** — For clustered deployments, ClickHouse requires ZooKeeper (or ClickHouse Keeper) for replication coordination. This adds operational complexity.
+
+8. **Less mature than OpenSearch** — While GA, SigNoz is a younger project than OpenSearch. Fewer years of production battle-testing.
+
+9. **Docker Compose complexity** — SigNoz's Docker Compose stack includes more services (ClickHouse, SigNoz backend, SigNoz frontend, OTel Collector, optionally Kafka/ZooKeeper) than a simple OpenSearch deployment.
 
 ---
 
@@ -548,24 +695,27 @@ At 200K users, assuming average 10 requests/user/day with logging at each tier:
 
 ### 11.1 Risk Matrix
 
-| Risk | OpenSearch | VictoriaMetrics Stack | Likelihood | Impact |
-|---|---|---|---|---|
-| **License non-compliance** | Low | **High** (Grafana AGPLv3) | Medium | Critical |
-| **Backend not production-ready** | Very Low | **High** (Logs/Traces pre-GA) | Medium | High |
-| **Insufficient compute resources** | **High** (JVM overhead) | Low | High | High |
-| **Cannot scale to 200K users** | Low | Low | Low | Critical |
-| **Complex nested JSON query failure** | Low | **Medium** | Medium | Medium |
-| **Operational complexity exceeds team capacity** | **High** | Medium | Medium | Medium |
-| **Kubernetes migration failure** | **Medium** (volume coupling) | Low | Medium | High |
-| **No visualization for logs** | Very Low | **High** | High | Critical |
-| **Vendor lock-in** | Low | Low | Low | Medium |
-| **Breaking changes in upstream** | Low (stable project) | **Medium** (pre-GA components) | Medium | High |
+| Risk | OpenSearch | VictoriaMetrics | SigNoz | Likelihood | Impact |
+|---|---|---|---|---|---|
+| **License non-compliance** | Low | **High** (Grafana AGPLv3) | Low | Medium | Critical |
+| **Backend not production-ready** | Very Low | **High** (Logs/Traces pre-GA) | Low | Medium | High |
+| **Insufficient compute resources** | **High** (JVM overhead) | Low | Medium | High | High |
+| **Cannot scale to 200K users** | Low | Low | Low | Low | Critical |
+| **Complex nested JSON query failure** | Low | **Medium** | Low-Medium | Medium | Medium |
+| **Operational complexity exceeds team capacity** | **High** | Low | Medium | Medium | Medium |
+| **Kubernetes migration failure** | **Medium** (volume coupling) | Low | Low | Medium | High |
+| **No visualization for logs** | Very Low | **High** | Very Low | High | Critical |
+| **Vendor lock-in** | Low | Low | Low | Low | Medium |
+| **Breaking changes in upstream** | Low (stable) | **Medium** (pre-GA) | Low (GA) | Medium | High |
+| **No existing code to start from** | No (you have code) | **Yes** | **Yes** | High | Medium |
 
 ### 11.2 Critical Risk Analysis
 
-**OpenSearch's biggest risk:** Resource consumption. On sovereign compute with GPUs running vLLM, dedicating 2-8 GB RAM + JVM CPU overhead to OpenSearch is a real cost. This is especially true for your RTX 4060 deployment (8 GB VRAM, likely constrained system RAM).
+**OpenSearch's biggest risk:** Resource consumption and architectural lock-in. The JVM overhead on GPU-constrained infrastructure is a real cost, and the logs-only architecture means you'll need a separate stack for metrics and traces anyway — creating a fragmented operational model.
 
-**VictoriaMetrics' biggest risk:** The visualization gap. Without Grafana, there is no production-ready, permissively-licensed dashboard that provides native VictoriaLogs/VictoriaTraces integration. This is not a "nice to have" — it's a fundamental operational requirement. You cannot run production observability without dashboards.
+**VictoriaMetrics' biggest risk:** Two blocking issues. (1) No permissive visualization layer — you cannot run production observability without dashboards, and Grafana is AGPLv3. (2) VictoriaLogs and VictoriaTraces are pre-GA — adopting beta software for a 200K-user production system is risky.
+
+**SigNoz's biggest risk:** No existing implementation. You have donated OpenSearch code ready to go, but starting from scratch with SigNoz adds implementation time. The ClickHouse operational complexity is moderate but manageable.
 
 ---
 
@@ -573,111 +723,108 @@ At 200K users, assuming average 10 requests/user/day with logging at each tier:
 
 ### 12.1 Weighted Scoring (1-5, 5 = Best)
 
-| Criterion | Weight | OpenSearch | VictoriaMetrics | Notes |
-|---|---|---|---|---|
-| License compliance (full stack) | **10** | 5 | 2 | VM loses on visualization |
-| MELT coverage | **8** | 2 | 5 | OS is logs-only |
-| Resource efficiency | **7** | 2 | 5 | JVM vs Go |
-| Full-text search quality | **6** | 5 | 3 | Lucene advantage for AI logs |
-| Visualization quality | **8** | 5 | 1 | OS Dashboards vs nothing |
-| Kubernetes readiness | **7** | 3 | 5 | stdout pattern vs volume coupling |
-| Scalability to 200K users | **7** | 4 | 5 | Both can scale |
-| Operational simplicity | **6** | 2 | 4 | JVM tuning vs Go defaults |
-| Maturity / production readiness | **8** | 5 | 2 | GA vs pre-GA |
-| Existing implementation | **5** | 5 | 1 | Donated code vs nothing |
-| Team learning curve | **4** | 4 | 2 | Lucene widely known |
-| Future-proofing (metrics/traces) | **7** | 2 | 5 | OS needs separate stack |
-| Backup / disaster recovery | **5** | 4 | 4 | Both have options |
-| Community / ecosystem | **4** | 5 | 3 | Lucene ecosystem is massive |
+| Criterion | Weight | OpenSearch | VictoriaMetrics | SigNoz | Notes |
+|---|---|---|---|---|---|
+| License compliance (full stack) | **10** | 5 | 2 | **5** | VM loses on visualization; SigNoz matches OS |
+| MELT coverage | **8** | 2 | 5 | **5** | OS is logs-only; VM and SigNoz cover all |
+| Resource efficiency | **7** | 2 | 5 | 4 | JVM vs Go+ClickHouse |
+| Full-text search quality | **6** | 5 | 3 | 4 | Lucene advantage for AI logs |
+| Visualization quality | **8** | 5 | 1 | **4** | OS Dashboards best, SigNoz adequate, VM none |
+| Kubernetes readiness | **7** | 3 | 5 | **5** | stdout pattern for both VM and SigNoz |
+| Scalability to 200K users | **7** | 4 | 5 | **4** | All can scale; ClickHouse proven at scale |
+| Operational simplicity | **6** | 2 | 4 | 3 | JVM vs Go binaries vs Go+ClickHouse |
+| Maturity / production readiness | **8** | 5 | 2 | **4** | OS most mature; SigNoz GA but younger |
+| Existing implementation | **5** | 5 | 1 | 1 | Donated code is a real advantage for OS |
+| Team learning curve | **4** | 4 | 2 | **4** | SQL (SigNoz) widely known; LogsQL not |
+| Future-proofing (metrics/traces) | **7** | 2 | 5 | **5** | OS needs separate stack; others include it |
+| Backup / disaster recovery | **5** | 4 | 4 | 4 | All have viable options |
+| Community / ecosystem | **4** | 5 | 3 | 3 | OpenSearch ecosystem is massive |
 
 ### 12.2 Weighted Scores
 
-| | OpenSearch | VictoriaMetrics Stack |
-|---|---|---|
-| **Raw weighted total** | **296** | **271** |
-| **Normalized (out of 5)** | **3.72** | **3.41** |
+| | OpenSearch | VictoriaMetrics Stack | SigNoz Stack |
+|---|---|---|---|
+| **Raw weighted total** | **296** | 271 | **298** |
+| **Normalized (out of 5)** | **3.72** | 3.41 | **3.74** |
 
 ### 12.3 What the Numbers Say
 
-OpenSearch wins on **compliance, visualization, maturity, and existing implementation**.
-VictoriaMetrics wins on **MELT coverage, resource efficiency, K8s readiness, and future-proofing**.
+SigNoz and OpenSearch are virtually tied on raw score, but they score on **different strengths**:
 
-The gap is narrow. The deciding factor depends on which risks you're willing to accept.
+- **OpenSearch** wins on: maturity, full-text search, existing code, visualization quality
+- **SigNoz** wins on: MELT coverage, K8s readiness, future-proofing, license compliance (matching OS but with MELT)
+- **VictoriaMetrics** wins on: resource efficiency, but is held back by the visualization gap and pre-GA components
+
+**The decisive insight:** SigNoz matches OpenSearch's score while solving the MELT problem that OpenSearch cannot. The only area where OpenSearch meaningfully leads is existing code and full-text search maturity.
 
 ---
 
 ## 13. Recommendation
 
-### 13.1 The Hard Truth
+### 13.1 The Landscape Has Changed
 
-Neither stack is a perfect fit for your constraints:
+With SigNoz added as a candidate, the evaluation landscape shifts:
 
-- **OpenSearch** gives you a complete, compliant, production-ready solution today — but it's a logs-only architecture that will require a separate metrics/traces stack later, and it's resource-heavy.
-- **VictoriaMetrics** gives you the architecturally superior MELT approach — but VictoriaLogs and VictoriaTraces are pre-GA, and the visualization gap (no permissive-license Grafana alternative) is a blocking issue.
+| Question | OpenSearch | VictoriaMetrics | SigNoz |
+|---|---|---|---|
+| Can I deploy a compliant, complete stack today? | Yes (logs only) | No (no visualization) | **Yes (full MELT)** |
+| Will it scale to 200K users? | Yes | Yes | Yes |
+| Does it use the stdout/stderr → OTel pattern? | Not in your spec (but can be adapted) | Yes | **Yes** |
+| Do I have existing code? | Yes | No | No |
+| Is the full-text search good enough for AI logs? | Best | Adequate | Good |
 
-### 13.2 Three Viable Paths
-
-#### Path A: OpenSearch Now, Evaluate VM Later (Recommended)
+### 13.2 Recommended Path: SigNoz (with mitigation for existing code)
 
 **What you do:**
-1. Implement OpenSearch as specified in your current spec and GitLab issues (#354-#361)
-2. Use the donated code (Winston transport, Python logger design)
-3. Adopt the **stdout/stderr → OTel Collector → backend** pattern (not the shared volume approach) for Kubernetes readiness
-4. Add VictoriaMetrics **alongside** OpenSearch for metrics only (this is where VM shines, and it's GA)
-5. When VictoriaLogs reaches GA, evaluate migrating logs from OpenSearch
-6. When VictoriaTraces reaches GA, add traces
+
+1. **Adopt the stdout/stderr → OTel Collector → SigNoz pattern** as the universal ingestion layer for all services
+2. **Refactor Winston** from `printf` format to `json` format writing to stdout (simpler than your current OpenSearch transport approach)
+3. **Refactor Python CustomLogger** to emit structured JSON to stdout (simpler than building a new `logger.py` → OpenSearch proxy)
+4. **Deploy SigNoz + ClickHouse** via Docker Compose (quickstart available in their `deploy/docker/` directory)
+5. **Refactor admin log query services** to use ClickHouse SQL via SigNoz API instead of file parsing or OpenSearch API
+6. **Gain metrics and traces from day one** — no need for a separate metrics stack or Phase 2 deferral
 
 **Architecture:**
 ```
-All Services → stdout/stderr JSON → OTel Collector DaemonSet
-                                       ├──▶ OpenSearch (logs) → OpenSearch Dashboards
-                                       └──▶ VictoriaMetrics (metrics) → vmui
+All Services → stdout/stderr JSON → OTel Collector DaemonSet → SigNoz → ClickHouse
+                                                                ↓
+                                                          SigNoz UI (MIT)
+                                                    (Dashboards, Traces,
+                                                     Alerts, Service Maps)
 ```
 
-**Why:** You get a complete, license-compliant, production-ready solution today. You adopt the correct stdout/stderr pattern for Kubernetes. You add metrics immediately via VictoriaMetrics (GA, Apache 2.0). You preserve the option to unify on VictoriaMetrics when the log and trace components mature.
+**Why this is the best path:**
 
-**Risk:** Operational overhead of running two storage backends temporarily.
+1. **Jerome is right about MELT, and now you can actually do it** — SigNoz provides a production-ready, fully compliant MELT implementation. No compromises.
 
-#### Path B: VictoriaMetrics Full Stack (High Risk)
+2. **No license conflicts** — MIT (SigNoz) + Apache 2.0 (ClickHouse, OTel) = fully permissive.
 
-**What you do:**
-1. Adopt VictoriaMetrics + VictoriaLogs + VictoriaTraces for full MELT
-2. Build custom Vue.js dashboard components for visualization (or use Apache Superset as interim)
-3. Accept pre-GA risk for logs and traces
-4. Forgo Grafana entirely
+3. **The stdout/stderr pattern is the right architecture regardless** — It's Kubernetes-native, backend-agnostic, and simpler than per-language backend clients.
 
-**Why:** Cleanest architecture. True MELT from day one. Maximum resource efficiency.
+4. **You get traces from day one** — Distributed tracing across your Node.js and Python microservices is critical for debugging RAG pipelines. With OpenSearch, this would require a separate Jaeger deployment.
 
-**Risk:** Pre-GA components in production. No adequate visualization. Everything built from scratch.
+5. **Simpler application changes** — Changing Winston from `printf` to `json` format is a one-line change. It's simpler than integrating `winston-opensearch` transport or building a Python OpenSearch proxy.
 
-#### Path C: Hybrid — OTel Collector with Swappable Backends
+6. **ClickHouse SQL is widely known** — No need to learn LogsQL or Lucene query syntax. Your team already knows SQL.
 
-**What you do:**
-1. Implement the **stdout/stderr → OTel Collector** pattern as the universal ingestion layer
-2. Start with OpenSearch as the log backend (you have the code)
-3. Add VictoriaMetrics for metrics (GA, Apache 2.0)
-4. Keep the OTel Collector configuration backend-agnostic
-5. Swap backends later without touching application code
+7. **Single operational model** — One storage backend (ClickHouse), one query language (SQL), one UI (SigNoz). vs. OpenSearch + separate metrics stack + separate traces stack.
 
-**Why:** Maximum flexibility. OTel Collector decouples services from backends. You can migrate from OpenSearch → VictoriaLogs when ready, or keep both.
+### 13.3 Mitigating the "No Existing Code" Disadvantage
 
-**Risk:** More OTel Collector configuration complexity. Slightly more infrastructure to manage.
+The only area where OpenSearch leads is existing donated code. This can be mitigated:
 
-### 13.3 My Recommendation: Path A (OpenSearch Now, VM Metrics)
+- The Winston change (`printf` → `json`) is **simpler** than integrating `winston-opensearch`
+- The Python change (CustomLogger → JSON stdout) is **simpler** than building `logger.py` → OpenSearch proxy
+- The admin log query refactoring is **comparable effort** whether querying OpenSearch or ClickHouse SQL
+- Net implementation effort may actually be **less** than the OpenSearch approach
 
-**Rationale:**
+### 13.4 The Principle That Matters Most
 
-1. **License compliance is non-negotiable** — OpenSearch provides a complete, fully compliant stack. VictoriaMetrics' visualization gap is a blocking issue.
+Regardless of which backend you choose, adopt this principle now:
 
-2. **You have working code** — The donated Winston-to-OpenSearch transport and admin log refactoring plan significantly reduce implementation risk and timeline.
+> **Services must emit structured JSON to stdout/stderr. They must not be coupled to any specific log database. OpenTelemetry Collector is the universal pipeline.**
 
-3. **Jerome is right about MELT, but timing matters** — VictoriaLogs and VictoriaTraces are not production-ready. Adopting them now means accepting beta-quality software for a system serving 200K users.
-
-4. **You can have both** — Running VictoriaMetrics for metrics alongside OpenSearch for logs is a proven pattern. VictoriaMetrics for metrics is GA, Apache 2.0, and doesn't need Grafana (vmui is sufficient for metrics exploration).
-
-5. **The stdout/stderr pattern is the right call regardless** — Whether you choose OpenSearch or VictoriaLogs, services should emit structured JSON to stdout. This is the Kubernetes-native pattern and makes backend swaps trivial.
-
-**Key architectural principle to adopt now:** Regardless of backend, **services must not be coupled to any specific log database**. Use OTel Collector as the universal pipeline. This preserves the option to unify on VictoriaMetrics when the log/trace components mature.
+This preserves the option to switch backends at any time. If SigNoz doesn't work out, you can swap to OpenSearch or VictoriaLogs by changing OTel Collector configuration — without touching any application code.
 
 ---
 
@@ -708,18 +855,20 @@ All Services → stdout/stderr JSON → OTel Collector DaemonSet
 └── #361 — Build OpenSearch Log Query and Extraction Service
 ```
 
-### Appendix C: Permissive-License Visualization Alternatives
+> **Note:** If SigNoz is selected, these issues would need to be re-scoped. The parent issue and child issues would change from "OpenSearch" to "SigNoz/OTel" with corresponding task adjustments. The overall structure and intent of the work remains the same.
 
-| Tool | License | Suitable for Logs? | Suitable for Metrics? | Notes |
-|---|---|---|---|---|
-| OpenSearch Dashboards | Apache 2.0 | YES (native) | Limited | Best option if using OpenSearch |
-| vmui (VictoriaMetrics) | Apache 2.0 | No | YES (native) | Built-in, basic query explorer |
-| Apache Superset | Apache 2.0 | Limited (SQL-based) | YES | BI-focused, not observability |
-| Redash | BSD-2-Clause | Limited (SQL-based) | YES | Query-focused, not log exploration |
-| Cube.js | MIT | No | YES | Headless BI, requires custom frontend |
-| Custom Vue.js dashboards | MIT | YES (you build it) | YES (you build it) | Significant development effort |
+### Appendix C: Permissive-License Visualization Comparison
 
-### Appendix D: OpenSearch vs VictoriaLogs Resource Quick Reference
+| Tool | License | Suitable for Logs? | Suitable for Metrics? | Suitable for Traces? | Notes |
+|---|---|---|---|---|---|
+| OpenSearch Dashboards | Apache 2.0 | YES (native) | Limited | No | Best if using OpenSearch |
+| **SigNoz UI** | **MIT** | **YES** | **YES** | **YES** | Built-in, permissive, full MELT |
+| vmui (VictoriaMetrics) | Apache 2.0 | No | YES | No | Basic query explorer only |
+| Apache Superset | Apache 2.0 | Limited (SQL) | YES | No | BI-focused, not observability |
+| Redash | BSD-2-Clause | Limited (SQL) | YES | No | Query-focused |
+| Custom Vue.js dashboards | MIT | YES (build) | YES (build) | YES (build) | Significant effort |
+
+### Appendix D: Resource Quick Reference
 
 ```
 Docker Compose — Single Node, Moderate Load (~1 GB logs/day)
@@ -727,26 +876,49 @@ Docker Compose — Single Node, Moderate Load (~1 GB logs/day)
 OpenSearch:
   opensearch:        -Xms2g -Xmx2g     → ~2.5 GB RAM, ~2 CPU cores
   opensearch-dashboards:               → ~512 MB RAM, ~0.5 CPU core
-  Total:                                ~3 GB RAM, ~2.5 CPU cores
+  otel-collector:                       → ~256 MB RAM, ~0.5 CPU core
+  Total:                                ~3.3 GB RAM, ~3 CPU cores
 
 VictoriaMetrics Stack:
-  victoria-metrics:  --memory.allowedPercent=60 → ~256 MB RAM, ~0.5 CPU core
-  victoria-logs:                            → ~256 MB RAM, ~0.5 CPU core
-  victoria-traces:                          → ~128 MB RAM, ~0.25 CPU core
-  vmalert:                                  → ~64 MB RAM, ~0.1 CPU core
-  Total:                                    ~700 MB RAM, ~1.35 CPU cores
+  victoria-metrics:                     → ~256 MB RAM, ~0.5 CPU core
+  victoria-logs:                        → ~256 MB RAM, ~0.5 CPU core
+  victoria-traces:                      → ~128 MB RAM, ~0.25 CPU core
+  vmalert:                              → ~64 MB RAM, ~0.1 CPU core
+  otel-collector:                       → ~256 MB RAM, ~0.5 CPU core
+  Total:                                ~960 MB RAM, ~1.85 CPU cores
+  + NO COMPLIANT VISUALIZATION
 
-Savings: ~2.3 GB RAM, ~1.15 CPU cores (77% less RAM, 46% less CPU)
+SigNoz Stack:
+  signoz-backend:                       → ~256 MB RAM, ~0.5 CPU core
+  signoz-frontend:                      → ~128 MB RAM, ~0.25 CPU core
+  clickhouse:                           → ~1.5 GB RAM, ~1.5 CPU cores
+  otel-collector:                       → ~256 MB RAM, ~0.5 CPU core
+  Total:                                ~2.1 GB RAM, ~2.75 CPU cores
+  + FULL MELT WITH COMPLIANT VISUALIZATION
 ```
 
-### Appendix E: Relevant Links
+### Appendix E: License Verification Sources
 
+Licenses verified directly from GitHub source files:
+
+| Component | Source | License Text |
+|---|---|---|
+| SigNoz | [github.com/SigNoz/signoz/LICENSE](https://github.com/SigNoz/signoz/blob/main/LICENSE) | "MIT Expat" — open-source core |
+| Uptrace | [github.com/uptrace/uptrace/LICENSE](https://github.com/uptrace/uptrace/blob/master/LICENSE) | "GNU AFFERO GENERAL PUBLIC LICENSE v3" — **disqualified** |
+| ClickHouse | [github.com/ClickHouse/ClickHouse/LICENSE](https://github.com/ClickHouse/ClickHouse/blob/master/LICENSE) | "Apache License, Version 2.0" |
+| VictoriaMetrics | [github.com/VictoriaMetrics/VictoriaMetrics/LICENSE](https://github.com/VictoriaMetrics/VictoriaMetrics/blob/master/LICENSE) | "Apache License, Version 2.0" |
+| OpenSearch | [opensearch.org](https://opensearch.org/) | "Apache License, Version 2.0" |
+
+### Appendix F: Relevant Links
+
+- [SigNoz GitHub](https://github.com/SigNoz/signoz) — MIT License
+- [SigNoz Documentation](https://signoz.io/docs/) — Installation, configuration, query language
+- [ClickHouse GitHub](https://github.com/ClickHouse/ClickHouse) — Apache 2.0
 - [VictoriaMetrics GitHub](https://github.com/VictoriaMetrics/VictoriaMetrics) — Apache 2.0
 - [VictoriaLogs GitHub](https://github.com/VictoriaMetrics/VictoriaLogs) — Apache 2.0
 - [OpenSearch Project](https://opensearch.org/) — Apache 2.0
 - [OpenTelemetry Collector](https://github.com/open-telemetry/opentelemetry-collector) — Apache 2.0
-- [Grafana License Change Announcement](https://grafana.com/blog/2021/03/30/grafana-license-change/) — AGPLv3
-- [VictoriaMetrics Blog](https://victoriametrics.com/blog/) — Benchmarks and case studies
+- [Grafana License Change](https://grafana.com/blog/2021/03/30/grafana-license-change/) — AGPLv3
 - [OSI Approved Licenses](https://opensource.org/licenses/) — License reference
 
 ---

@@ -1,5 +1,4 @@
 # Inventory with real host IPs
-inventory/*.ini
 inventory/*.yml
 !inventory.example
 

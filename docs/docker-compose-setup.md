@@ -12,6 +12,8 @@ GENIE.AI uses a single dual-mode `docker-compose.yaml` at the project root that 
 
 ## Architecture Overview
 
+For the full system architecture with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](architecture.md).
+
 All services run on a single host. Two deployment profiles are available:
 
 | Profile | Command | Services |

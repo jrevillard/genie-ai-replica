@@ -117,6 +117,8 @@ Multi-phase procedure in `docs/e2e-tests/`:
 
 ## Architecture
 
+For the full architecture overview with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](docs/architecture.md).
+
 ### Layer Stack
 
 1. **Client Layer**: Vue 3 web app (`components/gov-chat-frontend`), Flutter mobile (`mobile/genie_ai_mobile`)

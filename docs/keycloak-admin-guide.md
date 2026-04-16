@@ -198,7 +198,7 @@ sequenceDiagram
     B-->>U: 200 OK (authenticated)
 ```
 
-For the complete system architecture diagrams (C4 Context, C4 Container, OIDC sequence, JWKS validation), see [Keycloak IdP Integration Diagrams](_bmad-output/planning-artifacts/keycloak-idp-integration-diagrams.md).
+For the complete system architecture diagrams (C4 Context, C4 Container, OIDC sequence, JWKS validation), see [Architecture Overview](architecture.md).
 
 ### 5.1 User Creation Flow
 

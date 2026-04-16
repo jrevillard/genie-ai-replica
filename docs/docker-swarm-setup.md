@@ -14,6 +14,8 @@ GENIE.AI uses a single Swarm-compatible `docker-compose.yaml` at the project roo
 
 ## Architecture Overview
 
+For the full system architecture with diagrams (C4 context/container, authentication flows, service auth matrix, token lifecycle, RAG pipeline), see [Architecture Overview](architecture.md).
+
 GENIE.AI services are placed on nodes using three labels:
 
 | Placement | Constraint | Services |

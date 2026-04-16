@@ -328,8 +328,8 @@ docker compose --env-file .env --env-file env.t4 --profile opea up -d
 ## API Structure
 
 Backend routes are organized by domain:
-- `/api/auth/*` - Authentication (JWT-based)
-- `/api/users/*` - User management
+- `/api/auth/*` - Authentication (Keycloak OIDC)
+- `/api/me/*` - User profile (singleton)
 - `/api/chat/*` - Chat and conversation handling
 - `/api/analytics/*` - Usage analytics
 - `/api/admin/*` - Admin dashboard functions

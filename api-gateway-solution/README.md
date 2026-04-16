@@ -149,7 +149,7 @@ Restores Kong config from a backup JSON file and optionally tests endpoints. Use
   - Cleans up existing JWT plugins/credentials.
   - Restores services, routes, plugins, upstreams from backup.
   - Patches global rate-limiting plugin.
-  - Tests (if `-t`): Logs in (if needed), tests `/api/auth/logout`, `/api/users/admin/users/$USER_ID/force-logout` (default: 1), `/api/service-categories?locale=en`.
+  - Tests (if `-t`): Logs in (if needed), tests `/api/auth/logout`, `/api/me` (default: 1), `/api/service-categories?locale=en`.
   - Logs to stdout (captured by Docker via `docker compose logs kong-config`).
 
 - **Example**:

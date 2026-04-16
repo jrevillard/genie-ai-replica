@@ -33,7 +33,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 
 **Scope:** This phase tests Story 2.3 (Token Passthrough -- Headers Injection to Upstream) conditional on OPEA infrastructure availability.
 
-**Important:** Header construction and injection are verified via backend logs (`docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"`) and authenticated endpoint responses (`GET /api/users/{_key}`).
+**Important:** Header construction and injection are verified via backend logs (`docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"`) and authenticated endpoint responses (`GET /api/me`).
 
 **Prerequisites:**
 - OPEA infrastructure MUST be deployed (`DEPLOY_OPEA=1`) for Phase F full testing
@@ -94,7 +94,7 @@ USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=testu
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Make authenticated request to the user profile endpoint
-curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
+curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json"
 # Expected: 200 OK with user profile data
@@ -103,7 +103,7 @@ curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
 docker compose logs backend 2>&1 | grep -E "X-User-Id|X-User-Roles|X-Issuer"
 ```
 
-> **Note:** This test uses the user profile endpoint (`GET /api/users/{_key}`) as the authenticated route, then inspects backend logs to verify header extraction.
+> **Note:** This test uses the user profile endpoint (`GET /api/me`) as the authenticated route, then inspects backend logs to verify header extraction.
 
 **Expected Behavior:**
 - Headers are correctly constructed using ArangoDB `_key` for `X-User-Id`
@@ -189,7 +189,7 @@ USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@e
 echo "User _key: $USER_KEY"
 
 # Make request and verify X-User-Id in backend logs
-curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
+curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN"
 
 # Check backend logs for the X-User-Id header value
@@ -291,7 +291,7 @@ USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?email=e2e@e
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Remove roles (Keycloak 26 specific approach)
-curl -sk -X PATCH "https://localhost/api/users/$USER_KEY" \
+curl -sk -X PATCH "https://localhost/api/me" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"roles": []}'
@@ -301,7 +301,7 @@ NO_ROLES_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/
   -d 'client_id=genie-app&username=e2e@example.com&password=e2epass123&grant_type=password' | jq -r '.access_token')
 
 # Make request and check X-User-Roles in backend logs
-curl -sk -X GET "https://localhost/api/users/${USER_KEY}" \
+curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $NO_ROLES_TOKEN"
 
 # Verify backend logs for empty X-User-Roles
@@ -377,13 +377,13 @@ GENIE2_USER_KEY=$(curl -sk -X GET "https://localhost/api/admin/users/search?emai
   -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
 
 # Make request with genie realm token and check logs
-curl -sk -X GET "https://localhost/api/users/${GENIE_USER_KEY}" \
+curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN"
 docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the genie-realm-user's ArangoDB _key
 
 # Make request with genie2 realm token and check logs
-curl -sk -X GET "https://localhost/api/users/${GENIE2_USER_KEY}" \
+curl -sk -X GET "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN"
 docker compose logs backend 2>&1 | grep -E "X-User-Id" | tail -5
 # Expected: X-User-Id contains the genie2-realm-user's ArangoDB _key (different from genie)
@@ -741,7 +741,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Get the authenticated user's profile (any authenticated endpoint)
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Status: OK, User: {d.get(\"name\", \"N/A\")}')"
 ```
 
@@ -823,7 +823,7 @@ Use the SAME `$USER_TOKEN` from H.1 (signed with the old key). The backend shoul
 
 ```bash
 # Use the SAME token from H.1 (signed with old key, not yet expired)
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -w "\nHTTP: %{http_code}\n"
 ```
@@ -847,7 +847,7 @@ A corrupted token (invalid signature) should be rejected immediately with `TOKEN
 # Corrupt the token by modifying characters near the end
 CORRUPTED_TOKEN=$(echo "$USER_TOKEN" | sed 's/.\{5\}$/XXXXX/')
 
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $CORRUPTED_TOKEN" | jq .
 ```
 
@@ -925,12 +925,12 @@ print(f'preferred_username: {claims.get(\"preferred_username\", \"N/A\")}')
 ```bash
 # Test genie realm token (original)
 echo "=== Genie realm token ==="
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"user\",{}).get(\"name\", d.get(\"error\", \"N/A\"))}')"
 
 # Test genie2 realm token
 echo "=== Genie2 realm token ==="
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $USER2_TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'User: {d.get(\"user\",{}).get(\"name\", d.get(\"error\", \"N/A\"))}')"
 ```
 
@@ -1006,16 +1006,11 @@ echo "Service account token obtained: ${SERVICE_ACCOUNT_TOKEN:0:20}..."
 
 ### Test J.2 — Verify Context Endpoint with Service Account Token
 
-Get the authenticated user's ArangoDB `_key`, then call the context endpoint with the service account token.
+Call the context endpoint with the service account Bearer token.
 
 ```bash
-# Get user id (ArangoDB _key exposed as 'id') from authenticated response
-USER_KEY=$(curl -sk "https://localhost/api/auth/me" \
-  -H "Authorization: Bearer $USER_TOKEN" | jq -r '.user.id')
-echo "User key: $USER_KEY"
-
 # Call context endpoint with service account Bearer token
-curl -sk "https://localhost/api/users/${USER_KEY}/context" \
+curl -sk "https://localhost/api/me/context" \
   -H "Authorization: Bearer $SERVICE_ACCOUNT_TOKEN" | jq .
 ```
 
@@ -1036,7 +1031,7 @@ The endpoint must reject requests without a valid Keycloak JWT.
 
 ```bash
 # Test 1: No auth header → 401
-curl -sk "https://localhost/api/users/${USER_KEY}/context" \
+curl -sk "https://localhost/api/me/context" \
   -w "\nHTTP: %{http_code}\n"
 ```
 
@@ -1044,7 +1039,7 @@ curl -sk "https://localhost/api/users/${USER_KEY}/context" \
 
 ```bash
 # Test 2: Invalid token → 401
-curl -sk "https://localhost/api/users/${USER_KEY}/context" \
+curl -sk "https://localhost/api/me/context" \
   -H "Authorization: Bearer invalid-token-value" \
   -w "\nHTTP: %{http_code}\n"
 ```
@@ -1057,7 +1052,7 @@ The context response must contain ONLY the three sanitized fields. No JWT claims
 
 ```bash
 # Get response and verify it contains ONLY safe fields
-RESPONSE=$(curl -sk "https://localhost/api/users/${USER_KEY}/context" \
+RESPONSE=$(curl -sk "https://localhost/api/me/context" \
   -H "Authorization: Bearer $SERVICE_ACCOUNT_TOKEN")
 
 echo "$RESPONSE" | jq 'keys'
@@ -1092,7 +1087,7 @@ Send a token with a modified payload character. The backend should detect the si
 ```bash
 # Modify one character in the token payload
 MODIFIED_TOKEN=$(echo "$USER_TOKEN" | sed 's/./X/4')
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $MODIFIED_TOKEN" | jq .
 ```
 
@@ -1132,7 +1127,7 @@ echo "Waiting 12 seconds for token to expire..."
 sleep 12
 
 # Send expired token
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $EXPIRED_TOKEN" | jq .
 ```
 
@@ -1192,7 +1187,7 @@ docker compose stop keycloak
 echo "Waiting 15 seconds for Keycloak to stop..."
 sleep 15
 
-curl -sk "https://localhost/api/auth/me" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq .
 ```
 

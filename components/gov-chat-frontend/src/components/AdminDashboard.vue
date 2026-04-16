@@ -1418,13 +1418,15 @@
                       <td>{{ user.email }}</td>
                       <td>{{ user.role }}</td>
                       <td>
-                        <button
+                        <a
+                          :href="getUserManageUrl(user)"
+                          target="_blank"
+                          rel="noopener noreferrer"
                           class="btn btn-outline"
-                          style="padding: 0.25rem 0.5rem"
-                          @click="openUserEditDialog(user._key)"
+                          style="padding: 0.25rem 0.5rem; text-decoration: none; display: inline-block"
                         >
-                          {{ translate('admin.edit', 'Edit') }}
-                        </button>
+                          {{ translate('admin.manage', 'Manage') }} →
+                        </a>
                       </td>
                     </tr>
                     <tr v-if="displayedUsers.length === 0">
@@ -1491,13 +1493,6 @@
       @close="closeOperationResults"
     />
 
-    <UserEditDialog
-      v-if="showUserEditDialog"
-      :userId="selectedUserId"
-      @close="showUserEditDialog = false"
-      @user-updated="handleUserUpdated"
-    />
-
     <UploadFilesDialog
       v-if="showUploadDialog"
       @close="showUploadDialog = false"
@@ -1533,12 +1528,12 @@ import databaseOperationsService from '../services/databaseOperationsService'
 import adminDashboardService from '../services/adminDashboardService'
 import OperationResultsModal from './OperationResultsModal.vue'
 import LogSearchDialog from './LogSearchDialog.vue'
-import UserEditDialog from './UserEditDialog.vue'
 import UploadFilesDialog from './UploadFilesDialog.vue'
 import AddFromLinkDialog from './AddFromLinkDialog.vue'
 import FileDetailsDialog from './FileDetailsDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue' // IMPORT ConfirmDialog
 import { eventBus } from '../eventBus.js'
+import oidcConfig from '../config/oidcConfig.js'
 import { availableLanguages } from '../config/languageConfig.js'
 import documentFileService from '../services/documentFileService.js'
 import labelService from '../services/labelService.js'
@@ -1550,7 +1545,6 @@ export default {
   components: {
     OperationResultsModal,
     LogSearchDialog,
-    UserEditDialog,
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
@@ -1719,8 +1713,6 @@ export default {
         users: [],
       },
 
-      showUserEditDialog: false,
-      selectedUserId: null,
       currentUser: {},
 
       searchResults: [],
@@ -1786,6 +1778,12 @@ export default {
     }
   },
   computed: {
+    keycloakAdminUrl() {
+      const keycloakUrl = window.location.origin + '/auth/admin'
+      const realm = (oidcConfig.authority.match(/\/realms\/([^/]+)$/) || [])[1] || 'genie'
+      return `${keycloakUrl}/${realm}/console/#/${realm}/users`
+    },
+
     // Test if there are unsaved changes
     isFormDirty() {
       if (!this.originalHierarchyFormState) {
@@ -2603,29 +2601,14 @@ export default {
 
     // Get current user information from Vuex store (OIDC)
     getCurrentUser() {
-      this.currentUser = this.$store.getters.currentUser || {};
+      this.currentUser = this.$store.getters.currentUser || {}
     },
 
-    // Open user edit dialog
-    openUserEditDialog(userId) {
-      console.log(`UserId clicked:`, userId)
-      this.selectedUserId = userId
-      console.log(`this.selectedUserId:`, this.selectedUserId)
-      this.showUserEditDialog = true
-      console.log(`this.showUserEditDialog`, this.showUserEditDialog)
-    },
-
-    // Handle user updated event from dialog
-    handleUserUpdated(updatedData) {
-      console.log('User updated:', updatedData)
-
-      // Refresh user list if we're on the Users tab
-      if (this.activeTab === 'users') {
-        this.loadUserStats()
+    getUserManageUrl(user) {
+      if (user.sub) {
+        return `${this.keycloakAdminUrl}/${user.sub}/settings`
       }
-
-      // Show notification
-      this.showNotification(this.translate('admin.userEdit.userUpdated', 'User updated successfully'), 'success')
+      return this.keycloakAdminUrl
     },
 
     /**

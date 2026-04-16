@@ -59,15 +59,8 @@
       </modal-dialog>
 
       <!-- Chart Dialog -->
-      <ChartDialog
-        v-if="chartDialog.visible"
-        :title="chartDialog.title"
-        @close="closeChartDialog"
-      >
-        <CropHealthChart
-          v-if="chartDialog.type === 'crop-health'"
-          region="El Salvador"
-        />
+      <ChartDialog v-if="chartDialog.visible" :title="chartDialog.title" @close="closeChartDialog">
+        <CropHealthChart v-if="chartDialog.type === 'crop-health'" region="El Salvador" />
         <PestAlertChart
           v-if="chartDialog.type === 'pest-alert'"
           region="Central America"
@@ -149,11 +142,9 @@
         <span class="loading-text">Thinking...</span>
       </div>
       <!-- Quick Help Overlay -->
-      <div
-        class="quick-help-overlay"
-        v-if="showQuickHelp && chatMessages.length <= 1"
-      >
-        <div class="welcome-header">          <h2 class="quick-help-heading">
+      <div v-if="showQuickHelp && chatMessages.length <= 1" class="quick-help-overlay">
+        <div class="welcome-header">
+          <h2 class="quick-help-heading">
             {{ translate('chatbot.whatCanIHelp') }}
           </h2>
         </div>
@@ -175,18 +166,18 @@
             <h3 class="section-title">{{ t('charts.fastActions') }}</h3>
           </div>
           <div class="quick-help-content">
-          <div class="quick-help-grid">
-            <div
-              v-for="button in quickHelpButtons"
-              :key="button.id"
-              class="quick-help-item"
-              :class="{ 'just-chat': !button.category }"
-              @click="selectQuickHelpOption(button)"
-            >
-              <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
-              <div class="quick-help-text">{{ $t(button.textKey) }}</div>
+            <div class="quick-help-grid">
+              <div
+                v-for="button in quickHelpButtons"
+                :key="button.id"
+                class="quick-help-item"
+                :class="{ 'just-chat': !button.category }"
+                @click="selectQuickHelpOption(button)"
+              >
+                <img class="quick-help-icon" :src="button.icon" alt="Quick Help Icon" />
+                <div class="quick-help-text">{{ $t(button.textKey) }}</div>
+              </div>
             </div>
-          </div>
           </div>
         </div>
 
@@ -197,39 +188,15 @@
           </div>
           <div class="market-cards">
             <!-- Row 1 -->
-            <MarketPriceSummaryCard
-              category="maize"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="cropProtection"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="vegetables"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="livestock"
-              @open-chart="openChart"
-            />
+            <MarketPriceSummaryCard category="maize" @open-chart="openChart" />
+            <MarketPriceSummaryCard category="cropProtection" @open-chart="openChart" />
+            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart" />
+            <MarketPriceSummaryCard category="livestock" @open-chart="openChart" />
             <!-- Row 2 -->
-            <MarketPriceSummaryCard
-              category="fertilizer"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="apiary"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="aquaculture"
-              @open-chart="openChart"
-            />
-            <MarketPriceSummaryCard
-              category="harvestStorage"
-              @open-chart="openChart"
-            />
+            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart" />
+            <MarketPriceSummaryCard category="apiary" @open-chart="openChart" />
+            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart" />
+            <MarketPriceSummaryCard category="harvestStorage" @open-chart="openChart" />
           </div>
         </div>
       </div>
@@ -281,11 +248,10 @@
       <!-- Save Chat Dialog -->
       <modal-dialog
         v-if="saveChatDialog.visible"
-        @close="isSaving ? null : (saveChatDialog.visible = false)"
         :close-on-click-modal="!isSaving"
         :close-on-press-escape="!isSaving"
-        :close-on-click-modal="!isSaving"
-        :close-on-press-escape="!isSaving"      >
+        @close="isSaving ? null : (saveChatDialog.visible = false)"
+      >
         <template #header>
           <h3>{{ translate('chatbot.saveChat') }}</h3>
         </template>
@@ -301,39 +267,30 @@
             />
           </div>
           <div class="form-group">
-            <label for="chatFolder">{{
-              translate("chatbot.selectFolder")
-            }}</label>
+            <label for="chatFolder">{{ translate('chatbot.selectFolder') }}</label>
             <select id="chatFolder" v-model="saveChatDialog.folderId" :disabled="isSaving">
-              <option
-                v-for="folder in folders"
-                :key="folder.id"
-                :value="folder.id"
-              >                {{ folder.name }}
+              <option v-for="folder in folders" :key="folder.id" :value="folder.id">
+                {{ folder.name }}
               </option>
             </select>
           </div>
           <!-- Loading Indicator -->
           <div v-if="isSaving" class="saving-indicator">
             <i class="fas fa-spinner fa-spin"></i>
-            <span>{{ translate("chatbot.savingConversation") }}</span>
+            <span>{{ translate('chatbot.savingConversation') }}</span>
           </div>
         </template>
-        <template v-slot:footer>
-          <button
-            @click="saveChatDialog.visible = false"
-            class="cancel-btn"
-            :disabled="isSaving"
-          >
-            {{ translate("common.cancel") }}
+        <template #footer>
+          <button class="cancel-btn" :disabled="isSaving" @click="saveChatDialog.visible = false">
+            {{ translate('common.cancel') }}
           </button>
-          <button
-            @click="handleSaveChat"
-            class="primary-btn"
-            :disabled="isSaving || !saveChatDialog.title.trim()"
-          >
-            <span v-if="isSaving"><i class="fas fa-spinner fa-spin"></i> {{ translate("chatbot.saving") }}</span>
-            <span v-else>{{ translate("common.save") }}</span>          </button>
+          <button class="primary-btn" :disabled="isSaving || !saveChatDialog.title.trim()" @click="handleSaveChat">
+            <span v-if="isSaving">
+              <i class="fas fa-spinner fa-spin"></i>
+              {{ translate('chatbot.saving') }}
+            </span>
+            <span v-else>{{ translate('common.save') }}</span>
+          </button>
         </template>
       </modal-dialog>
     </div>
@@ -351,27 +308,26 @@
 </template>
 
 <script>
-import { eventBus } from "../eventBus.js";
-import notificationService from "../services/notificationService";
-import { mapGetters, mapActions } from "vuex";
-import ChatResponseFeedbackDialog from "./ChatResponseFeedbackDialog.vue";
-import ModalDialog from "./ModalDialog.vue";
-import RightSideBarComponent from "./RightSideBarComponent.vue";
-import chatbotService from "../services/chatbotService";
-import serviceTreeService from "../services/serviceTreeService"; // *** NEW: Import serviceTreeService
-import ConfirmDialog from "@/components/ConfirmDialog.vue";
-import chatHistoryService from "../services/chatHistoryService";
-import analyticsService from "../services/analyticsService";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
-import jsPDF from "jspdf";
-import CropHealthSummaryCard from "./charts/CropHealthSummaryCard.vue";
-import PestAlertSummaryCard from "./charts/PestAlertSummaryCard.vue";
-import MarketPriceSummaryCard from "./charts/MarketPriceSummaryCard.vue";
-import CropHealthChart from "./charts/CropHealthChart.vue";
-import PestAlertChart from "./charts/PestAlertChart.vue";
-import MarketPriceChart from "./charts/MarketPriceChart.vue";
-import ChartDialog from "./charts/ChartDialog.vue";
+import { eventBus } from '../eventBus.js'
+import notificationService from '../services/notificationService'
+import { mapGetters, mapActions } from 'vuex'
+import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
+import ModalDialog from './ModalDialog.vue'
+import RightSideBarComponent from './RightSideBarComponent.vue'
+import chatbotService from '../services/chatbotService'
+import serviceTreeService from '../services/serviceTreeService' // *** NEW: Import serviceTreeService
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import chatHistoryService from '../services/chatHistoryService'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import jsPDF from 'jspdf'
+import CropHealthSummaryCard from './charts/CropHealthSummaryCard.vue'
+import PestAlertSummaryCard from './charts/PestAlertSummaryCard.vue'
+import MarketPriceSummaryCard from './charts/MarketPriceSummaryCard.vue'
+import CropHealthChart from './charts/CropHealthChart.vue'
+import PestAlertChart from './charts/PestAlertChart.vue'
+import MarketPriceChart from './charts/MarketPriceChart.vue'
+import ChartDialog from './charts/ChartDialog.vue'
 export default {
   name: 'ChatBotComponent',
   components: {
@@ -411,7 +367,7 @@ export default {
       chartDialog: {
         visible: false,
         type: null,
-        title: "",
+        title: '',
         category: null,
       },
       currentChatId: null,
@@ -602,31 +558,7 @@ export default {
 
     checkContextConfig(context) {
       const user = this.$store.getters.currentUser
-      if (!user || !(user.roles || []).map(r => r.toLowerCase()).includes('admin')) return
-
-      const warnings = []
-      if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
-        warnings.push(`Category "${context.categoryLabel}" not found in knowledge hierarchy`)
-      }
-      if (context.serviceLabels?.length > 0) {
-        for (const label of context.serviceLabels) {
-          const item = this.selectedContextItems.find((i) => i.service === label)
-          if (item?.serviceKey?.startsWith('quickhelp.') && item.serviceKey !== 'quickhelp.justChat') {
-            warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`)
-          }
-        }
-      }
-      if (warnings.length > 0) {
-        notificationService.warning(
-          `Configuration mismatch: ${warnings.join('; ')}. Please check the Quick Help and knowledge hierarchy configuration.`,
-          8000
-        )
-      }
-    },
-
-    checkContextConfig(context) {
-      const user = this.$store.getters.currentUser
-      if (!user || user.role !== 'Admin') return
+      if (!user || !(user.roles || []).map((r) => r.toLowerCase()).includes('admin')) return
 
       const warnings = []
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
@@ -742,14 +674,14 @@ export default {
     },
 
     t(key) {
-      return this.$t(key);
+      return this.$t(key)
     },
 
     openChart(type, category = null) {
       const titles = {
         'crop-health': this.t('charts.cropHealth'),
-        'pest-alert': this.t('charts.pestAlertTitle')
-      };
+        'pest-alert': this.t('charts.pestAlertTitle'),
+      }
 
       // For market prices, use category-specific title
       if (type === 'market-price' && category) {
@@ -761,23 +693,23 @@ export default {
           fertilizer: this.t('charts.market.fertilizer'),
           apiary: this.t('charts.market.apiary'),
           aquaculture: this.t('charts.market.aquaculture'),
-          harvestStorage: this.t('charts.market.harvestStorage')
-        };
-        this.chartDialog.title = categoryTitles[category] || 'Market Price';
+          harvestStorage: this.t('charts.market.harvestStorage'),
+        }
+        this.chartDialog.title = categoryTitles[category] || 'Market Price'
       } else {
-        this.chartDialog.title = titles[type] || 'Chart';
+        this.chartDialog.title = titles[type] || 'Chart'
       }
 
-      this.chartDialog.type = type;
-      this.chartDialog.category = category;
-      this.chartDialog.visible = true;
+      this.chartDialog.type = type
+      this.chartDialog.category = category
+      this.chartDialog.visible = true
     },
 
     closeChartDialog() {
-      this.chartDialog.visible = false;
-      this.chartDialog.type = null;
-      this.chartDialog.category = null;
-      this.chartDialog.title = "";
+      this.chartDialog.visible = false
+      this.chartDialog.type = null
+      this.chartDialog.category = null
+      this.chartDialog.title = ''
     },
 
     selectQuickHelpOption(option) {
@@ -928,19 +860,15 @@ export default {
       const startTime = performance.now() // Start timing
 
       try {
-        const useConversationContext = this.selectedContextItems.length > 0;
-        const contextOption = useConversationContext
-          ? "conversation-with-labels"
-          : "single-message";
-        let queryData;
-        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-        console.log(
-          `[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`
-        );
-        if (contextOption === "conversation-with-labels") {
+        const useConversationContext = this.selectedContextItems.length > 0
+        const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message'
+        let queryData
+        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId)
+        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`)
+        if (contextOption === 'conversation-with-labels') {
           const serviceLabels = this.selectedContextItems
             .filter((item) => !item.serviceKey?.startsWith('quickhelp.'))
-            .map((item) => item.service);          // Build messages array, replacing last user message with hidden prompt if available
+            .map((item) => item.service) // Build messages array, replacing last user message with hidden prompt if available
           const messagesForQuery = this.chatMessages.map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.content,
@@ -976,9 +904,9 @@ export default {
         }
         console.log('Submitting query with data:', JSON.stringify(queryData, null, 2))
 
-        this.checkContextConfig(queryData.context);
+        this.checkContextConfig(queryData.context)
 
-        const result = await chatbotService.submitQuery(queryData);
+        const result = await chatbotService.submitQuery(queryData)
         // --- Success State Update ---
         const endTime = performance.now()
         this.systemStatus.lastResponseTime = Math.round(endTime - startTime)
@@ -1291,12 +1219,12 @@ export default {
     async handleSaveChat() {
       // Prevent double-save
       if (this.isSaving) {
-        console.log("Save already in progress, ignoring duplicate click");
-        return;
+        console.log('Save already in progress, ignoring duplicate click')
+        return
       }
 
-      console.log("handleSaveChat called");
-      this.isSaving = true;
+      console.log('handleSaveChat called')
+      this.isSaving = true
       try {
         console.log('Saving chat with data:', {
           title: this.saveChatDialog.title,
@@ -1405,11 +1333,12 @@ export default {
         console.log(`Emitting conversation-saved event for conversation ${conversation._key}`)
         eventBus.$emit('conversation-saved', conversation._key)
       } catch (error) {
-        console.error("Error saving chat:", error);
-        notificationService.error("Failed to save chat. Please try again.");
-        throw error;
+        console.error('Error saving chat:', error)
+        notificationService.error('Failed to save chat. Please try again.')
+        throw error
       } finally {
-        this.isSaving = false;      }
+        this.isSaving = false
+      }
     },
 
     async updateExistingChat() {
@@ -2348,7 +2277,7 @@ html[data-theme='dark'] .loading-spinner .loading-text {
   margin: 0;
 }
 
-[data-theme="dark"] .section-title {
+[data-theme='dark'] .section-title {
   color: var(--text-primary-dark, #f9fafb);
 }
 
@@ -2662,18 +2591,19 @@ html[data-theme='dark'] .quick-help-heading {
   color: white !important;
 }
 
-[data-theme="dark"] .section-title,
-html[data-theme="dark"] .section-title {
+[data-theme='dark'] .section-title,
+html[data-theme='dark'] .section-title {
   color: white !important;
 }
 
-[data-theme="dark"] .quick-help-subtitle,
-html[data-theme="dark"] .quick-help-subtitle {
+[data-theme='dark'] .quick-help-subtitle,
+html[data-theme='dark'] .quick-help-subtitle {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
-[data-theme="dark"] .quick-help-overlay,
-html[data-theme="dark"] .quick-help-overlay {  background: var(--bg-primary, #1e1e1e) !important;
+[data-theme='dark'] .quick-help-overlay,
+html[data-theme='dark'] .quick-help-overlay {
+  background: var(--bg-primary, #1e1e1e) !important;
 }
 
 [data-theme='dark'] .confidence-score {
@@ -2711,11 +2641,12 @@ html[data-theme="dark"] .quick-help-overlay {  background: var(--bg-primary, #1e
   cursor: not-allowed;
 }
 
-[data-theme="dark"] .saving-indicator {  background-color: var(--bg-tertiary, #2d3748);
+[data-theme='dark'] .saving-indicator {
+  background-color: var(--bg-tertiary, #2d3748);
   color: var(--text-secondary, #e2e8f0);
 }
 
-[data-theme="dark"] .saving-indicator i {
+[data-theme='dark'] .saving-indicator i {
   color: var(--accent-color, #4e97d1);
 }
 </style>

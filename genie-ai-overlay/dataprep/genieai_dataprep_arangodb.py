@@ -47,8 +47,9 @@ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 # 2. Backend Service: Source of Truth for Label Hierarchy
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
-# 3. Service Auth Token: Shared secret for backend callbacks
-SERVICE_AUTH_TOKEN = os.getenv("SERVICE_AUTH_TOKEN", "")
+
+# 3. Keycloak Service Account for OIDC authentication
+from keycloak_service_account import get_service_account_token
 
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
 GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "false").lower() == "true"
@@ -96,11 +97,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        self._service_token = SERVICE_AUTH_TOKEN
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
-        self._log_semaphore = asyncio.Semaphore(100) 
-        
+        self._log_semaphore = asyncio.Semaphore(100)
+
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
 
@@ -111,7 +111,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print("="*60)
         print(f" DOCUMENT_REPO_URL    : {DOCUMENT_REPOSITORY_URL}")
         print(f" BACKEND_SERVICE_URL  : {BACKEND_SERVICE_URL}")
-        print(f" SERVICE_AUTH_TOKEN   : {'***configured***' if SERVICE_AUTH_TOKEN else '***NOT SET***'}")
+        print(f" OIDC_AUTH            : Keycloak service account (client_credentials)")
         print(f" GUARDRAIL_ENABLED    : {GUARDRAIL_ENABLED} ({GUARDRAIL_URL})")
         print("-" * 60)
         print(f" LABELING_STRATEGY    : {LABELING_STRATEGY}")
@@ -126,16 +126,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
-    def _service_headers(self):
-        """Return auth headers using X-Service-Token shared secret."""
-        if not self._service_token:
-            logger.warning("SERVICE_AUTH_TOKEN not configured")
+    async def _service_headers(self):
+        """Return auth headers using Keycloak service account Bearer token."""
+        try:
+            token = await get_service_account_token()
+            return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        except Exception as e:
+            logger.error(f"Failed to obtain service account token: {e}")
             return None
-        return {"X-Service-Token": self._service_token, "Content-Type": "application/json"}
 
     async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
         """Updates file status in Document Repository (Spec 4.1/6.1)."""
-        headers = self._service_headers()
+        headers = await self._service_headers()
         if not headers:
             if logflag:
                 logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
@@ -162,7 +164,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
-        headers = self._service_headers()
+        headers = await self._service_headers()
         if not headers:
             if logflag:
                 logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
@@ -191,13 +193,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _fetch_all_labels(self):
         """Fetch full taxonomy from the Backend Service to guide the LLM."""
-        if not self._service_token:
-            logger.warning("Skipping label fetch due to missing auth token.")
+        headers = await self._service_headers()
+        if not headers:
+            logger.warning("Skipping label fetch due to missing service account token.")
             return []
 
         # FIX: Target the Backend Service for the hierarchy
         url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
-        headers = {"X-Service-Token": self._service_token}
         
         try:
             async with self._log_semaphore: # Reuse semaphore to be polite to backend

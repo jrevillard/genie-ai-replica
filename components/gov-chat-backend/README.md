@@ -948,16 +948,10 @@ sequenceDiagram
 
 ### Security Features
 
-#### JWT Token Security
+#### Token Security
 ```javascript
-// JWT token generation with user context
-const token = jwt.sign({
-  userId: user._key,
-  loginName: user.loginName,
-  email: user.email
-}, process.env.JWT_SECRET, { 
-  expiresIn: process.env.JWT_EXPIRES_IN || '24h' 
-});
+// OIDC token validation with user context via Keycloak
+const userInfo = await keycloak.grantManager.validateAccessToken(token);
 ```
 
 #### Role-Based Authorization

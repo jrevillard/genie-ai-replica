@@ -12,7 +12,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
 ```
 - Keycloak admin access (`$TOKEN`)
 - Test user token (`$USER_TOKEN`)
-- For Phase J: `SERVICE_AUTH_TOKEN` set in `.env`
+- For Phase J: `KC_DATAPREP_CLIENT_ID` and `KC_DATAPREP_CLIENT_SECRET` set in `.env`
 
 ## Phase Execution Order
 
@@ -25,7 +25,7 @@ F -> G -> H -> I -> J -> K (Phase K MUST be last)
 | `$TOKEN` | Keycloak master admin token | Phase 0 |
 | `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | Phase 0 |
 | `$USER2_TOKEN` | ROPC token for `testuser2` in `genie2` realm | Phase I |
-| `$SERVICE_AUTH_TOKEN` | Service-to-service shared secret | `.env` |
+| `$SERVICE_ACCOUNT_TOKEN` | Keycloak service account token (client_credentials grant) | Phase J |
 
 ---
 
@@ -978,21 +978,35 @@ curl -sk -X DELETE "https://localhost/auth/admin/realms/genie2/users/${NOROLES_U
 
 ---
 
-## Phase J: OPEA Continuity (Story 2-10)
+## Phase J: OIDC Token Propagation (Service-to-Service Auth)
 
-**Playwright spec**: `npx playwright test tests/e2e/epic2/j1-opea-continuity.spec.js`
-
-Validates that the backend-to-OPEA authentication uses `X-Service-Token` (shared secret), not Keycloak JWT. The OPEA callback endpoint returns a sanitized user profile with no Keycloak artifacts. These tests do NOT require OPEA services (`DEPLOY_OPEA=0` is fine).
+Validates that service-to-service calls use Keycloak OIDC tokens (Bearer token via client_credentials grant) instead of shared secrets. The context endpoint is now protected by Keycloak JWT like all other routes.
 
 ### Prerequisites
 
 - Phase 0 complete (`$USER_TOKEN` available)
-- `SERVICE_AUTH_TOKEN` set in `.env` (the endpoint returns 503 without it)
+- `KC_DATAPREP_CLIENT_ID` and `KC_DATAPREP_CLIENT_SECRET` set in `.env`
 - `DEPLOY_OPEA=0` is fine — tests the backend endpoint directly
 
-### Test J.1 — Verify OPEA Callback Returns Sanitized Profile
+### Test J.1 — Obtain Service Account Token
 
-Get the authenticated user's ArangoDB `_key`, then call the OPEA context endpoint.
+Use Keycloak's token endpoint to obtain a service account token via client_credentials grant.
+
+```bash
+# Obtain service account token
+SERVICE_ACCOUNT_TOKEN=$(curl -sk "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}" \
+  -d "client_secret=${KC_DATAPREP_CLIENT_SECRET}" | jq -r '.access_token')
+
+echo "Service account token obtained: ${SERVICE_ACCOUNT_TOKEN:0:20}..."
+```
+
+**Expected**: A JWT access token is returned (non-empty string).
+
+### Test J.2 — Verify Context Endpoint with Service Account Token
+
+Get the authenticated user's ArangoDB `_key`, then call the context endpoint with the service account token.
 
 ```bash
 # Get user id (ArangoDB _key exposed as 'id') from authenticated response
@@ -1000,9 +1014,9 @@ USER_KEY=$(curl -sk "https://localhost/api/auth/me" \
   -H "Authorization: Bearer $USER_TOKEN" | jq -r '.user.id')
 echo "User key: $USER_KEY"
 
-# Call OPEA callback endpoint with service token
+# Call context endpoint with service account Bearer token
 curl -sk "https://localhost/api/users/${USER_KEY}/context" \
-  -H "X-Service-Token: $SERVICE_AUTH_TOKEN" | jq .
+  -H "Authorization: Bearer $SERVICE_ACCOUNT_TOKEN" | jq .
 ```
 
 **Expected**: `HTTP: 200` with response containing only sanitized fields:
@@ -1014,11 +1028,11 @@ curl -sk "https://localhost/api/users/${USER_KEY}/context" \
 }
 ```
 
-Note: `user_id` in the OPEA payload uses ArangoDB `_key` (e.g., `12345`), NOT the composite `iss#sub` string. This was changed in Story 2-10 for URL safety.
+Note: `user_id` in the payload uses ArangoDB `_key` (e.g., `12345`), NOT the composite `iss#sub` string.
 
-### Test J.2 — Verify OPEA Callback Uses X-Service-Token (Not Keycloak JWT)
+### Test J.3 — Verify Context Endpoint Rejects Requests Without Token
 
-The endpoint must reject Keycloak JWT tokens and only accept the shared service secret.
+The endpoint must reject requests without a valid Keycloak JWT.
 
 ```bash
 # Test 1: No auth header → 401
@@ -1026,34 +1040,25 @@ curl -sk "https://localhost/api/users/${USER_KEY}/context" \
   -w "\nHTTP: %{http_code}\n"
 ```
 
-**Expected**: `HTTP: 401` with `{"error": "Invalid or missing service token"}`
+**Expected**: `HTTP: 401`
 
 ```bash
-# Test 2: Keycloak JWT (should be rejected)
+# Test 2: Invalid token → 401
 curl -sk "https://localhost/api/users/${USER_KEY}/context" \
-  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Authorization: Bearer invalid-token-value" \
   -w "\nHTTP: %{http_code}\n"
 ```
 
-**Expected**: `HTTP: 401` — the endpoint ignores `Authorization` header; requires `X-Service-Token`
+**Expected**: `HTTP: 401`
 
-```bash
-# Test 3: Wrong service token
-curl -sk "https://localhost/api/users/${USER_KEY}/context" \
-  -H "X-Service-Token: wrong-token-value" \
-  -w "\nHTTP: %{http_code}\n"
-```
+### Test J.4 — Verify No Keycloak Artifacts Leak to OPEA
 
-**Expected**: `HTTP: 401` — timing-safe comparison rejects invalid tokens
-
-### Test J.3 — Verify No Keycloak Artifacts Leak to OPEA
-
-The OPEA callback response must contain ONLY the three sanitized fields. No JWT claims, no issuer, no subject, no tokens.
+The context response must contain ONLY the three sanitized fields. No JWT claims, no issuer, no subject.
 
 ```bash
 # Get response and verify it contains ONLY safe fields
 RESPONSE=$(curl -sk "https://localhost/api/users/${USER_KEY}/context" \
-  -H "X-Service-Token: $SERVICE_AUTH_TOKEN")
+  -H "Authorization: Bearer $SERVICE_ACCOUNT_TOKEN")
 
 echo "$RESPONSE" | jq 'keys'
 ```

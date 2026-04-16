@@ -1416,7 +1416,7 @@
                     <tr v-for="user in displayedUsers" :key="user._key">
                       <td>{{ user.fullName || user.loginName }}</td>
                       <td>{{ user.email }}</td>
-                      <td>{{ user.role }}</td>
+                      <td>{{ (user.roles || []).join(', ') || user.role }}</td>
                       <td>
                         <a
                           :href="getUserManageUrl(user)"

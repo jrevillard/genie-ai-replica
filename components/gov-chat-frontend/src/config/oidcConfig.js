@@ -31,7 +31,7 @@ function getOidcConfig() {
     redirect_uri: `${origin}/callback`,
     post_logout_redirect_uri: origin,
     response_type: 'code',
-    scope: 'openid profile email',
+    scope: 'openid profile email roles',
     automaticSilentRenew: true,
     storeAuthStateInCookie: false
   };

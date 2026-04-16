@@ -67,7 +67,6 @@ RERANKER_TOP_N = os.getenv("RERANKER_TOP_N", 2)
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Frontend backend service URL
-SERVICE_AUTH_TOKEN = os.getenv("SERVICE_AUTH_TOKEN", "")
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
 
@@ -111,28 +110,32 @@ class GenieUserProfileClient:
     """
     Client for fetching User Profile data from the Backend Service.
     Designed to be used within the ChatQnA orchestrator.
-    Uses X-Service-Token shared secret for authentication.
+    Uses Bearer token (forwarded from incoming request) for authentication.
     """
 
     def __init__(self):
-        self._service_token = SERVICE_AUTH_TOKEN
+        self._token = None
 
         # Log initialization
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
+
+
+    def set_token(self, token: str):
+        self._token = token
 
 
     async def get_user_profile(self, user_id: str):
         """
         Fetches the sanitized user profile from the backend for context enrichment.
         Target: GET /api/users/{userId}/context
-        Auth: X-Service-Token header (shared secret with backend)
+        Auth: Authorization Bearer token (forwarded from incoming request)
         """
         if not user_id:
             logger.warning("get_user_profile called with empty user_id")
             return None
 
-        if not self._service_token:
-            logger.warning("SERVICE_AUTH_TOKEN not configured, skipping profile fetch")
+        if not self._token:
+            logger.warning("Bearer token not set, skipping profile fetch")
             return None
 
         # Construct URL
@@ -140,7 +143,7 @@ class GenieUserProfileClient:
 
         # Prepare Headers
         headers = {
-            "X-Service-Token": self._service_token,
+            "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json"
         }
 
@@ -713,13 +716,13 @@ class ChatQnAService:
         if not file_id:
             return {"categoryLabel": None, "serviceLabels": []}
 
-        service_token = self.user_profile_client._service_token
+        service_token = self.user_profile_client._token
         if not service_token:
-            logger.error("SERVICE_AUTH_TOKEN not configured.")
+            logger.error("Bearer token not set.")
             return None
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
-        headers = {"X-Service-Token": service_token}
+        headers = {"Authorization": f"Bearer {service_token}"}
 
         try:
             async with aiohttp.ClientSession() as session:

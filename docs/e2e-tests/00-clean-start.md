@@ -26,8 +26,6 @@ Edit `.env` and set at minimum these values:
 ```bash
 # Required secrets (generate with: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 ARANGO_PASSWORD=arangopwd
-JWT_SECRET=any-random-string
-SESSION_SECRET=any-random-string
 TRANSLATION_CACHE_PASSWORD=any-random-string
 
 # PostgreSQL (superuser)
@@ -44,8 +42,9 @@ KEYCLOAK_ADMIN_PASSWORD=admin
 KEYCLOAK_CLIENT_SECRET=any-random-string
 KEYCLOAK_PROXY_CLIENT_SECRET=any-random-string
 
-# OPEA <-> Backend auth
-SERVICE_AUTH_TOKEN=any-random-string
+# Dataprep service account (client_credentials grant)
+KC_DATAPREP_CLIENT_ID=dataprep-service-client
+KC_DATAPREP_CLIENT_SECRET=any-random-string
 
 # NGINX_PUBLIC_DOMAIN — defaults to "localhost" in docker-compose.yaml
 # Only set this if deploying to a domain other than localhost

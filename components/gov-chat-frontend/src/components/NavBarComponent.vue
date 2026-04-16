@@ -464,8 +464,8 @@ export default {
       const user = this.$store.getters.currentUser;
       if (!user) return false;
 
-      const userRole = user.role || (user.user && user.user.role) || '';
-      return typeof userRole === 'string' && userRole.toLowerCase() === 'admin';
+      const roles = user.roles || [];
+      return roles.map(r => r.toLowerCase()).includes('admin');
     },
   },
   watch: {

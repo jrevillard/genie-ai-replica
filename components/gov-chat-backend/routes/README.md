@@ -148,7 +148,7 @@ This diagram shows the flow from client requests through the Express router, aut
 
 ## Authentication and Security
 
-All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, except public routes (`/health`, `/api-docs`, `/api/auth/callback`, `/api/auth/logout/callback`). The OPEA integration endpoint (`/users/:userId/context`) is protected by `X-Service-Token` instead of Keycloak JWT.
+All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, except public routes (`/health`, `/api-docs`, `/api/auth/callback`, `/api/auth/logout/callback`). The OPEA integration endpoint (`/users/:userId/context`) uses OIDC token propagation for service-to-service authentication.
 
 - **JWT Token**: Must be included in the `Authorization` header as `Bearer <token>`.
 - **Error Responses**:
@@ -467,7 +467,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 #### Security
 - All routes require JWT authentication via Keycloak OIDC (`keycloakAuthMiddleware`), except public routes (`/health`, `/api-docs`, `/api/auth/callback`).
-- The OPEA integration endpoint (`/users/:userId/context`) is excluded from Keycloak auth and protected by `X-Service-Token` instead.
+- The OPEA integration endpoint (`/users/:userId/context`) uses OIDC token propagation for service-to-service authentication.
 - File uploads are limited to 10MB and stored in memory using `multer`.
 
 ### Weather Routes

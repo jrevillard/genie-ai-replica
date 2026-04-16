@@ -764,7 +764,7 @@ nano /public/config/genie-ai-config.json
 
 cd /path/to/project/root
 cp env .env
-# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+# Edit .env with your secrets (ARANGO_PASSWORD, etc.)
 set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # Access the application

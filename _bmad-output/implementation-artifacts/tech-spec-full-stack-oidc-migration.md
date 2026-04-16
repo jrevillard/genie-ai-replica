@@ -2,8 +2,8 @@
 title: 'Full Stack OIDC Migration — Eliminate JWT_SECRET and SERVICE_AUTH_TOKEN'
 slug: 'full-stack-oidc-migration'
 created: '2026-04-15'
-status: 'ready-for-dev'
-stepsCompleted: [1, 2, 3, 4]
+status: 'Completed'
+stepsCompleted: [1, 2, 3, 4, 5, 6]
 tech_stack:
   - Node.js 22 (document-repository, backend) — CommonJS only
   - Python 3.10 (ChatQnA, Dataprep) — aiohttp for HTTP
@@ -210,7 +210,7 @@ Dataprep → Document Repository
 
 #### Phase 1: Foundation — Keycloak Service Account Client
 
-- [ ] Task 1: Add `dataprep-service-client` to Keycloak realm config
+- [x] Task 1: Add `dataprep-service-client` to Keycloak realm config
   - File: `configs/keycloak/genie-realm.yaml`
   - Action: Add new client entry under `clients:` section:
     ```yaml
@@ -225,7 +225,7 @@ Dataprep → Document Repository
     ```
   - Notes: Uses `$(env:KC_DATAPREP_CLIENT_SECRET)` for variable substitution. Dataprep uses this client to obtain service account tokens via `client_credentials` grant. Also add `KC_DATAPREP_CLIENT_SECRET` validation to `configs/keycloak/config-and-sleep.sh` — if this env var is missing, keycloak-config-cli will create a client with an empty secret, causing runtime authentication errors in Dataprep.
 
-- [ ] Task 2: Add `dataprep-service` realm role for service account authorization
+- [x] Task 2: Add `dataprep-service` realm role for service account authorization
   - File: `configs/keycloak/genie-realm.yaml`
   - Action: Add role to the existing `roles.realm` section:
     ```yaml
@@ -234,7 +234,7 @@ Dataprep → Document Repository
     ```
   - Notes: This role will be assigned to the dataprep-service-client service account via the `users` section, allowing document-repository to identify service-to-service calls by role.
 
-- [ ] Task 3: Assign realm role to dataprep service account user
+- [x] Task 3: Assign realm role to dataprep service account user
   - File: `configs/keycloak/genie-realm.yaml`
   - Action: Add service account user entry under `users:` section:
     ```yaml
@@ -248,7 +248,7 @@ Dataprep → Document Repository
 
 #### Phase 2: Document Repository OIDC Migration
 
-- [ ] Task 4: Create Keycloak OIDC auth middleware for document-repository
+- [x] Task 4: Create Keycloak OIDC auth middleware for document-repository
   - File: `components/document-repository/src/middlewares/keycloak-auth-middleware.js` (NEW)
   - Action: Create new middleware adapted from `components/gov-chat-backend/middleware/keycloak-auth-middleware.js`:
     - Use `jose` library for JWKS validation (`jwtVerify`, `createRemoteJWKSet`)
@@ -268,7 +268,7 @@ Dataprep → Document Repository
     - **No graceful degradation**: if JWKS fetch fails and cache is cold → request fails (503)
   - Notes: This REPLACES `authMiddleware.js`. Export same function names (`authenticateToken`, `authorizeRole`) so `fileRoutes.js` and `labelRoutes.js` imports work without change. Add comment `// Adapted from gov-chat-backend/middleware/keycloak-auth-middleware.js` to trace origin.
 
-- [ ] Task 5: Remove dead JWT code from securityService.js
+- [x] Task 5: Remove dead JWT code from securityService.js
   - File: `components/document-repository/src/services/securityService.js`
   - Action:
     - Remove `const jwt = require('jsonwebtoken');` (line 1)
@@ -277,7 +277,7 @@ Dataprep → Document Repository
     - Keep all ClamAV-related code (constructor, initialize, scanBuffer, etc.)
   - Notes: File name stays `securityService.js`. No import changes needed in `fileService.js`.
 
-- [ ] Task 6: Replace auth middleware import in fileRoutes.js
+- [x] Task 6: Replace auth middleware import in fileRoutes.js
   - File: `components/document-repository/src/routes/fileRoutes.js`
   - Action: Change import from:
     ```javascript
@@ -289,18 +289,18 @@ Dataprep → Document Repository
     ```
   - Notes: The exported function names are the same, so all route-level usage of `authorizeRole(['Admin'])` works unchanged.
 
-- [ ] Task 7: Replace auth middleware import in labelRoutes.js
+- [x] Task 7: Replace auth middleware import in labelRoutes.js
   - File: `components/document-repository/src/routes/labelRoutes.js`
   - Action: Same import change as Task 6.
 
-- [ ] Task 8: Remove JWT_SECRET from server.js required env vars
+- [x] Task 8: Remove JWT_SECRET from server.js required env vars
   - File: `components/document-repository/src/server.js`
   - Action:
     - Remove `'JWT_SECRET'` from `requiredEnvVars` array (line 13)
     - Remove `'JWT_SECRET'` from `requiredSecrets` array (line 23)
   - Notes: Keycloak OIDC doesn't need a local secret. JWKS uses public key validation.
 
-- [ ] Task 9: Replace JWT config with Keycloak config in appConfig.js
+- [x] Task 9: Replace JWT config with Keycloak config in appConfig.js
   - File: `components/document-repository/src/config/appConfig.js`
   - Action: Replace `security.jwtSecret` section with:
     ```javascript
@@ -312,19 +312,19 @@ Dataprep → Document Repository
     ```
   - Notes: Remove `jwtExpiration` and `bcryptRounds` (no longer used). Keep `rateLimit` section. Also remove `'jwtsecret'` from `sensitiveKeys` array in `getFormattedConfiguration()` (line 120) — no longer applicable.
 
-- [ ] Task 10: Update package.json dependencies
+- [x] Task 10: Update package.json dependencies
   - File: `components/document-repository/package.json`
   - Action:
     - Add `"jose": "^5.0.0"` to `dependencies`
     - Remove `"jsonwebtoken": "^9.0.2"` from `dependencies`
   - Notes: `jose` is the same library used by the backend.
 
-- [ ] Task 11: Remove old authMiddleware.js
+- [x] Task 11: Remove old authMiddleware.js
   - File: `components/document-repository/src/middlewares/authMiddleware.js` (DELETE)
   - Action: Delete file after verifying all imports have been updated.
   - Notes: Only safe after Tasks 6 and 7 are complete. Must be done before Tasks 12-13 (tests reference the old middleware pattern).
 
-- [ ] Task 12: Create keycloak-auth-middleware unit tests
+- [x] Task 12: Create keycloak-auth-middleware unit tests
   - File: `components/document-repository/src/__tests__/unit/middlewares/keycloak-auth-middleware.test.js` (NEW)
   - Action: Create comprehensive unit tests covering:
     - Valid token → user object attached with correct userId and role from `realm_access.roles`
@@ -337,14 +337,14 @@ Dataprep → Document Repository
     - JWKS fetch failure (Keycloak unreachable) → 503 when cache is cold
   - Notes: Follow existing test patterns in `jest.config.js` (10s timeout, shared-lib mocked globally). Mock `jose` library for deterministic testing.
 
-- [ ] Task 13: Update securityService.test.js — remove JWT tests
+- [x] Task 13: Update securityService.test.js — remove JWT tests
   - File: `components/document-repository/src/__tests__/unit/services/securityService.test.js`
   - Action: Remove the 4 test cases that test JWT functionality (verifyToken with valid/invalid token). Remove the `require('jsonwebtoken')` mock from test setup. Keep all ClamAV test cases (initialize, scanBuffer, etc.).
   - Notes: Direct deletion — no `.skip()`. Dead code is always removed.
 
 #### Phase 3: Backend Token Propagation + Cleanup
 
-- [ ] Task 14: Forward Authorization header to ChatQnA via HTTP headers
+- [x] Task 14: Forward Authorization header to ChatQnA via HTTP headers
   - File: `components/gov-chat-backend/services/query-service.js`
   - Action: In `createQuery()` method, pass the Authorization header to the OPEA worker:
     ```javascript
@@ -362,7 +362,7 @@ Dataprep → Document Repository
     ```
   - Notes: `opeaHeaders` is built by `buildUserHeaders()` in `keycloak-auth-middleware.js:69-76` and does NOT include the raw Authorization header. The fix explicitly merges `req.headers.authorization` into the headers object at the call site. The worker thread's `axiosInstance.post(url, payload, { headers })` sends this as a standard HTTP Authorization header — ChatQnA's FastAPI reads it via `request.headers.get("Authorization")`.
 
-- [ ] Task 15: Verify OPEA worker forwards Authorization header via HTTP
+- [x] Task 15: Verify OPEA worker forwards Authorization header via HTTP
   - File: `components/gov-chat-backend/services/opea-worker.js`
   - Action:
     - The Authorization header is already forwarded via `...(headers || {})` spread (line 33-36). Verify this works by checking that `headers.authorization` is passed correctly. No code change expected — the existing spread operator already forwards all headers as HTTP headers to ChatQnA.
@@ -375,7 +375,7 @@ Dataprep → Document Repository
       ```
   - Notes: The worker does `const requestHeaders = { 'Content-Type': 'application/json', ...(headers || {}) };` — if `headers.authorization` is set in Task 14, it will be forwarded as a standard HTTP Authorization header to ChatQnA. ChatQnA reads it via `request.headers.get("Authorization")`.
 
-- [ ] Task 16: Secure context endpoint and delete service-token-service.js
+- [x] Task 16: Secure context endpoint and delete service-token-service.js
   - File: `components/gov-chat-backend/middleware/keycloak-auth-middleware.js`
     - Remove the OPEA context endpoint bypass from `isPublicRoute()` (lines 35-42: the segment-matching logic for `/users/:userId/context`). This endpoint must NO LONGER be public — it will be protected by Keycloak JWT like all other routes.
   - File: `components/gov-chat-backend/routes/user-routes.js`
@@ -388,7 +388,7 @@ Dataprep → Document Repository
   - Notes: After this change, ChatQnA must send the user's Bearer token (instead of X-Service-Token) when calling `GET /api/users/:userId/context`. The Keycloak middleware validates the token before the route handler executes.
   - **Sub-task: preserve `buildUserContext()`** — The function `service-token-service.js:45-51` (6 lines, returns `{name, role, emailVerified}`) is used in `user-routes.js:204` and tested in `opea-continuity.test.js:320-356`. Inline it in the route handler (it's trivial) and update the test to import from `user-routes.js` instead of `service-token-service.js`.
 
-- [ ] Task 17: Update backend opea-continuity.test.js
+- [x] Task 17: Update backend opea-continuity.test.js
   - File: `components/gov-chat-backend/__tests__/opea-continuity.test.js`
   - Action:
     - Remove `const serviceTokenService = require('../services/service-token-service')` import (line 41)
@@ -400,7 +400,7 @@ Dataprep → Document Repository
 
 #### Phase 4: ChatQnA JWKS Validation
 
-- [ ] Task 18: Replace SERVICE_AUTH_TOKEN with propagated token + JWKS validation in ChatQnA
+- [x] Task 18: Replace SERVICE_AUTH_TOKEN with propagated token + JWKS validation in ChatQnA
   - File: `genie-ai-overlay/chatqna/genieai_chatqna.py`
   - Action:
     - **Add JWKS validation helper**: Create a function/class that validates JWT tokens using `python-jose[cryptography]` with `jwk_client` and JWKS caching (TTL-based). Reuse same pattern as Dataprep's service account module (Task 20) but for user token validation.
@@ -411,14 +411,14 @@ Dataprep → Document Repository
     - Remove `SERVICE_AUTH_TOKEN` env var usage entirely.
   - Notes: ChatQnA receives requests from the backend via `axios.post(url, payload, { headers })`. The Authorization header is a standard HTTP header — FastAPI reads it via `request.headers.get("Authorization")`. ChatQnA validates the token via JWKS before forwarding it to document-repository and backend (defense in depth).
 
-- [ ] Task 19: Add python-jose to ChatQnA Dockerfile
+- [x] Task 19: Add python-jose to ChatQnA Dockerfile
   - File: `genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai`
   - Action: Add `pip install python-jose[cryptography]` to the build steps.
   - Notes: Must be installed before the final image layer.
 
 #### Phase 5: Dataprep Service Account
 
-- [ ] Task 20: Create Keycloak service account module for Dataprep
+- [x] Task 20: Create Keycloak service account module for Dataprep
   - File: `genie-ai-overlay/dataprep/keycloak_service_account.py` (NEW)
   - Action: Create module with:
     - `get_service_account_token()`: POST to Keycloak token endpoint with `grant_type=client_credentials`
@@ -428,7 +428,7 @@ Dataprep → Document Repository
     - Uses env vars: `KEYCLOAK_URL`, `KC_REALM`, `KC_DATAPREP_CLIENT_ID`, `KC_DATAPREP_CLIENT_SECRET`
   - Notes: ~80-100 lines. The token endpoint is `{KEYCLOAK_URL}/realms/{KC_REALM}/protocol/openid-connect/token`. Response: `{ "access_token": "...", "expires_in": 300 }`.
 
-- [ ] Task 21: Replace SERVICE_AUTH_TOKEN with service account token in Dataprep
+- [x] Task 21: Replace SERVICE_AUTH_TOKEN with service account token in Dataprep
   - File: `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`
   - Action:
     - Import `keycloak_service_account` module
@@ -440,14 +440,14 @@ Dataprep → Document Repository
     - Remove `self._service_token = SERVICE_AUTH_TOKEN` assignment (line 99)
   - Notes: `_service_headers()` is called by `_update_doc_status()` and `_write_ingestion_log()`. `_fetch_all_labels()` has its own inline headers — must be updated to use `_service_headers()` too. **Important**: `_fetch_all_labels()` calls the **Backend** (`BACKEND_SERVICE_URL/api/service-categories/categories`), not document-repository. Verify that the Backend's `service-category-routes.js` only uses `authenticate` (no `authorizeRole` check) — if it does, any valid Keycloak token (including Dataprep service account) will pass. If it uses `authorizeRole`, the `dataprep-service` role must be added to the allowed roles list. The service account module handles token caching and auto-renewal transparently.
 
-- [ ] Task 22: Add python-jose to Dataprep Dockerfile
+- [x] Task 22: Add python-jose to Dataprep Dockerfile
   - File: `genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai`
   - Action: Add `pip install python-jose[cryptography]` to the build steps.
   - Notes: Must be installed before the final image layer.
 
 #### Phase 6: Infrastructure Updates
 
-- [ ] Task 23: Update docker-compose.yaml environment variables
+- [x] Task 23: Update docker-compose.yaml environment variables
   - File: `docker-compose.yaml`
   - Action:
     - **document-repository service**: Add `KEYCLOAK_URL`, `KC_REALM`, `KC_CLIENT_ID`. Add `depends_on: keycloak-config: condition: service_healthy` (currently only depends on `arango-vector-db` — document-repository needs Keycloak configured before it can validate tokens).
@@ -458,7 +458,7 @@ Dataprep → Document Repository
     - Add `depends_on: keycloak: condition: service_healthy` to dataprep service (consistent with all other services that depend on Keycloak). Note: `depends_on` only affects initial startup order — if Keycloak dies after startup, no dependent service is restarted.
   - Notes: JWT_SECRET has already been removed from `docker-compose.yaml` and `env` template in a prior migration. Only SERVICE_AUTH_TOKEN needs removal here. The backend already has Keycloak vars. Search entire docker-compose.yaml for any remaining `SERVICE_AUTH_TOKEN` references to ensure complete removal.
 
-- [ ] Task 24: Update env template
+- [x] Task 24: Update env template
   - File: `env`
   - Action:
     - Remove `SERVICE_AUTH_TOKEN` entry and all references
@@ -467,13 +467,13 @@ Dataprep → Document Repository
     - Add `KC_DATAPREP_CLIENT_SECRET` with placeholder
   - Notes: Search entire file for any remaining SERVICE_AUTH_TOKEN references in comments or conditional blocks.
 
-- [ ] Task 25: Update Ansible deployment
+- [x] Task 25: Update Ansible deployment
   - File: `deploy/ansible/templates/env.j2`
   - Action: Remove SERVICE_AUTH_TOKEN and JWT_SECRET template entries. Add KC_DATAPREP_CLIENT_ID/SECRET entries.
   - File: `deploy/ansible/deploy.yml`
   - Action: Update required secrets validation (remove SERVICE_AUTH_TOKEN/JWT_SECRET, add KC_DATAPREP_CLIENT_SECRET).
 
-- [ ] Task 26: Update documentation — remove JWT_SECRET and SERVICE_AUTH_TOKEN references
+- [x] Task 26: Update documentation — remove JWT_SECRET and SERVICE_AUTH_TOKEN references
   - File: `CLAUDE.md`
     - Line 64: Remove JWT_SECRET from secrets example (`"ARANGO_PASSWORD, JWT_SECRET, etc."`)
     - Line 204: Remove `JWT_SECRET - JWT token signing secret` from environment variables table
@@ -497,7 +497,7 @@ Dataprep → Document Repository
   - Action: For each file, remove JWT_SECRET and SERVICE_AUTH_TOKEN references. Update auth architecture descriptions to reflect OIDC-only model. Do NOT add new documentation — only remove/update existing references.
   - Notes: Line numbers are approximate (may shift after prior edits). Verify each file before editing.
 
-- [ ] Task 27: Update E2E tests — environment setup and Phase J
+- [x] Task 27: Update E2E tests — environment setup and Phase J
   - File: `docs/e2e-tests/00-clean-start.md`
     - Line 29: Remove `JWT_SECRET=any-random-string` from env setup
     - Line 48: Remove `SERVICE_AUTH_TOKEN=any-random-string` from env setup
@@ -627,4 +627,15 @@ Phases must be deployed in this exact sequence:
 2. **Phase 2 (Doc Repo)** — Can be deployed independently after Phase 1. Removes JWT_SECRET dependency, adds OIDC middleware. **Breaking change**: existing SERVICE_AUTH_TOKEN calls from OPEA services (Dataprep `_update_doc_status`, `_write_ingestion_log`) will fail until Phase 5 deploys. **Operational impact**: Dataprep ingestion will be broken between Phase 2 and Phase 5. Plan deployment during a maintenance window or deploy Phase 2+5 together.
 3. **Phase 3 + 4 (Backend + ChatQnA)** — Must be deployed together. Backend starts forwarding Authorization token in OPEA payload, ChatQnA reads token from payload. Deploying Phase 3 without Phase 4 would break ChatQnA → document-repository calls.
 4. **Phase 5 (Dataprep)** — Can be deployed independently but should follow Phase 2 promptly (see breaking window above). Replaces SERVICE_AUTH_TOKEN with service account token. Requires `KC_DATAPREP_CLIENT_ID` and `KC_DATAPREP_CLIENT_SECRET` in environment.
+
+---
+
+## Review Notes
+
+- Adversarial review completed
+- Findings: 15 total, 12 fixed, 3 accepted by design (then 2 additional fixed during walkthrough)
+- Resolution approach: walk-through (interactive discussion of each finding)
+- Additional fixes during review: IDOR protection on context endpoint, ChatQnA contextvars for race condition, asyncio.Lock for dataprep token cache
+- All services now validate tokens consistently: signature + issuer + azp (no algorithm restriction per user request)
+- Zero references to SERVICE_AUTH_TOKEN, JWT_SECRET, or X-Service-Token remain in code
 5. **Phase 6 (Infrastructure + Tests + Docs)** — Cleanup. Remove JWT_SECRET and SERVICE_AUTH_TOKEN from `env`, docker-compose, Ansible templates. Update documentation and E2E tests. Deploy last to avoid breaking running services.

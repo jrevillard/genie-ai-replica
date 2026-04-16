@@ -10,7 +10,6 @@ process.env.ARANGO_URL = 'http://localhost:8529';
 process.env.ARANGO_DB = 'genie';
 process.env.ARANGO_USER = 'root';
 process.env.ARANGO_PASSWORD = 'testpass';
-process.env.JWT_SECRET = 'test-secret';
 
 // Capture swagger-jsdoc and swagger-ui-express setup options
 let capturedSwaggerOptions = null;

@@ -811,8 +811,6 @@ openssl rand -base64 32
 | Variable | Purpose | How to Generate |
 |----------|---------|-----------------|
 | `ARANGO_PASSWORD` | Root password for ArangoDB | `openssl rand -base64 32` |
-| `JWT_SECRET` | Signs JSON Web Tokens (user sessions) | `openssl rand -base64 32` |
-| `SESSION_SECRET` | Encrypts session cookies | `openssl rand -base64 32` |
 | `TRANSLATION_CACHE_PASSWORD` | Redis cache password | `openssl rand -base64 32` |
 | `POSTGRES_PASSWORD` | PostgreSQL superuser password | `openssl rand -base64 32` |
 | `KONG_DB_PASSWORD` | Kong dedicated database user password | `openssl rand -base64 32` |
@@ -824,8 +822,6 @@ openssl rand -base64 32
 
 ```bash
 sed -i "s/^ARANGO_PASSWORD=.*/ARANGO_PASSWORD=$(openssl rand -base64 32)/" .env
-sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -base64 32)/" .env
-sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -base64 32)/" .env
 sed -i "s/^TRANSLATION_CACHE_PASSWORD=.*/TRANSLATION_CACHE_PASSWORD=$(openssl rand -base64 32)/" .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -base64 32)/" .env
 sed -i "s/^KONG_DB_PASSWORD=.*/KONG_DB_PASSWORD=$(openssl rand -base64 32)/" .env
@@ -837,7 +833,7 @@ sed -i "s/^KEYCLOAK_CLIENT_SECRET=.*/KEYCLOAK_CLIENT_SECRET=$(openssl rand -base
 After running the commands above, review your `.env` to verify all values are set:
 
 ```bash
-grep -E '^(ARANGO_PASSWORD|JWT_SECRET|SESSION_SECRET|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|KONG_DB_PASSWORD|KEYCLOAK_ADMIN_PASSWORD|KEYCLOAK_DB_PASSWORD|KEYCLOAK_CLIENT_SECRET|SERVICE_AUTH_TOKEN)' .env
+grep -E '^(ARANGO_PASSWORD|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|KONG_DB_PASSWORD|KEYCLOAK_ADMIN_PASSWORD|KEYCLOAK_DB_PASSWORD|KEYCLOAK_CLIENT_SECRET)' .env
 ```
 
 #### Additional Required Configuration

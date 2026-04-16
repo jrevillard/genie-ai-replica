@@ -4,12 +4,8 @@ const { getUserToken, request: authRequest } = require('../helpers/auth');
 test.describe('Phase J: OPEA Continuity', () => {
   let userToken;
   let userKey;
-  const serviceToken = process.env.SERVICE_AUTH_TOKEN;
 
   test.beforeAll(async () => {
-    if (!serviceToken) {
-      throw new Error('SERVICE_AUTH_TOKEN env var is required for Phase J tests');
-    }
     userToken = await getUserToken('testuser', 'TestPass123!');
 
     // Get user id (ArangoDB _key) from authenticated profile
@@ -22,9 +18,9 @@ test.describe('Phase J: OPEA Continuity', () => {
     }
   });
 
-  test('J.1 — OPEA callback returns sanitized profile', async () => {
+  test('J.1 — OPEA callback returns sanitized profile via Bearer token', async () => {
     const res = await authRequest('GET', `/api/users/${userKey}/context`, {
-      headers: { 'X-Service-Token': serviceToken },
+      headers: { Authorization: `Bearer ${userToken}` },
     });
     expect(res.status).toBe(200);
     expect(res.data).toHaveProperty('name');
@@ -35,27 +31,21 @@ test.describe('Phase J: OPEA Continuity', () => {
     expect(keys).toEqual(['emailVerified', 'name', 'role'].sort());
   });
 
-  test('J.2 — OPEA callback rejects requests without valid X-Service-Token', async () => {
+  test('J.2 — OPEA callback rejects unauthenticated requests', async () => {
     // No auth header
     const res1 = await authRequest('GET', `/api/users/${userKey}/context`);
     expect(res1.status).toBe(401);
 
-    // Keycloak JWT (should be ignored)
+    // Wrong token
     const res2 = await authRequest('GET', `/api/users/${userKey}/context`, {
-      headers: { Authorization: `Bearer ${userToken}` },
+      headers: { Authorization: 'Bearer invalid-token' },
     });
     expect(res2.status).toBe(401);
-
-    // Wrong service token
-    const res3 = await authRequest('GET', `/api/users/${userKey}/context`, {
-      headers: { 'X-Service-Token': 'wrong-token-value' },
-    });
-    expect(res3.status).toBe(401);
   });
 
   test('J.3 — no Keycloak artifacts leak to OPEA', async () => {
     const res = await authRequest('GET', `/api/users/${userKey}/context`, {
-      headers: { 'X-Service-Token': serviceToken },
+      headers: { Authorization: `Bearer ${userToken}` },
     });
     expect(res.status).toBe(200);
 

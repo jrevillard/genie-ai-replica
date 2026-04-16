@@ -19,7 +19,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 - Playwright: run `npm install` at project root, then `npx playwright install chromium`
 - Phase F requires `DEPLOY_OPEA=1` (OPEA services must be running for header injection tests)
 - Phases G–K work with `DEPLOY_OPEA=0`
-- Phase J requires `SERVICE_AUTH_TOKEN` in `.env`
+- Phase J requires Keycloak service account credentials (`KC_DATAPREP_CLIENT_ID`, `KC_DATAPREP_CLIENT_SECRET`) in `.env`
 - Phase I requires `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` in `.env` — additional realms must be created **before** backend starts (Phase 0, Step 0.6)
 - Phases L–N require Phase K cleanup completed (K.5 + K.6 executed, stack healthy)
 
@@ -46,7 +46,7 @@ Each step follows this format:
 | `$TOKEN` | Keycloak master admin token | Phase 0 |
 | `$USER_TOKEN` | ROPC token for `testuser` in `genie` realm | Phase 0 |
 | `$USER2_TOKEN` | ROPC token for `testuser2` in `genie2` realm | Phase I |
-| `$SERVICE_AUTH_TOKEN` | Service-to-service shared secret | `.env` |
+| `$SERVICE_ACCOUNT_TOKEN` | Keycloak service account token (client_credentials grant) | Phase J |
 
 ### URL Convention
 

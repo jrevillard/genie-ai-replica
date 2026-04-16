@@ -50,8 +50,6 @@ Edit `.env` and set the required secrets:
 
 ```bash
 ARANGO_PASSWORD=<strong-password>
-JWT_SECRET=<strong-random-string>
-SESSION_SECRET=<strong-random-string>
 TRANSLATION_CACHE_PASSWORD=<strong-password>
 POSTGRES_PASSWORD=<strong-password>
 KONG_DB_PASSWORD=<strong-password>
@@ -60,7 +58,6 @@ GENIE_ADMIN_PASSWORD=<strong-password>
 KEYCLOAK_DB_PASSWORD=<strong-password>
 KEYCLOAK_CLIENT_SECRET=<strong-random-string>
 KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
-SERVICE_AUTH_TOKEN=<strong-random-string>
 ```
 
 Generate strong passwords with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`

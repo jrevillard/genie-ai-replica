@@ -485,7 +485,7 @@ export default {
 
     checkContextConfig(context) {
       const user = this.$store.getters.currentUser
-      if (!user || user.role !== 'Admin') return
+      if (!user || !(user.roles || []).map(r => r.toLowerCase()).includes('admin')) return
 
       const warnings = []
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {

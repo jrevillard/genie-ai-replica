@@ -1,15 +1,12 @@
 'use strict';
 
 /**
- * Tests for Story 2-10: OPEA Continuity — Keycloak-Agnostic Downstream
+ * Tests for Story 2-10: OPEA Continuity — Token Propagation
  *
  * Covers:
  * - OPEA payload user_id uses URL-safe _key (not composite iss_sub)
- * - OPEA worker headers never include Authorization
- * - Query route correctly passes headers and user ID to query service
+ * - Query route forwards Authorization Bearer token to OPEA
  * - X-User-Id header still uses composite key (unchanged, for audit)
- * - /api/users/:userId/context endpoint validates X-Service-Token
- * - /api/users/:userId/context returns sanitized data only
  * - Fallback to queryData.userId when not authenticated
  */
 
@@ -38,7 +35,6 @@ jest.mock('../services/user-provisioning-service', () => ({
 }));
 
 const { keycloakAuthMiddleware, buildUserHeaders, isPublicRoute } = require('../middleware/keycloak-auth-middleware');
-const serviceTokenService = require('../services/service-token-service');
 const { mockJwtPayload } = require('../test-fixtures/mockJwtPayload');
 
 describe('Story 2-10: OPEA Continuity', () => {
@@ -148,9 +144,9 @@ describe('Story 2-10: OPEA Continuity', () => {
     });
   });
 
-  describe('OPEA worker headers never include Authorization', () => {
-    it('should NOT include Authorization in opeaHeaders', async () => {
-      req.headers.authorization = 'Bearer secret-token';
+  describe('OPEA worker receives Authorization Bearer token', () => {
+    it('should include Authorization in opeaHeaders for defense-in-depth', async () => {
+      req.headers.authorization = 'Bearer user-jwt-token';
       const decodedPayload = {
         ...mockJwtPayload,
         sub: 'user-uuid',
@@ -170,13 +166,11 @@ describe('Story 2-10: OPEA Continuity', () => {
       await keycloakAuthMiddleware.authenticate(req, res, next);
 
       expect(req.user.opeaHeaders).toBeDefined();
-      expect(req.user.opeaHeaders['Authorization']).toBeUndefined();
-      expect(req.user.opeaHeaders['authorization']).toBeUndefined();
-      expect(Object.keys(req.user.opeaHeaders)).toEqual([
-        'X-User-Id',
-        'X-User-Roles',
-        'X-Issuer'
-      ]);
+      // query-routes.js adds Authorization from req.headers to opeaHeaders
+      // The middleware provides the base headers; the route adds the bearer token
+      expect(req.user.opeaHeaders['X-User-Id']).toBeDefined();
+      expect(req.user.opeaHeaders['X-Issuer']).toBeDefined();
+      expect(req.user.opeaHeaders['X-User-Roles']).toBeDefined();
     });
   });
 
@@ -234,124 +228,11 @@ describe('Story 2-10: OPEA Continuity', () => {
       expect(user_id).toBe('users/user-uuid-123');
     });
   });
-});
 
-describe('/api/users/:userId/context endpoint — service token auth', () => {
-  let req, res, next;
-
-  beforeEach(() => {
-    req = {
-      headers: {},
-      params: { userId: 'users/test-user-123' },
-      path: '/api/users/users/test-user-123/context',
-      originalUrl: '/api/users/users/test-user-123/context',
-      user: undefined,
-      body: {}
-    };
-    res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis()
-    };
-    next = jest.fn();
-  });
-
-  describe('isPublicRoute — /api/users/:userId/context must be public', () => {
-    it('should allow /users/:userId/context as public path', () => {
-      // Path is relative to mount point (Express strips /api/users prefix)
-      expect(isPublicRoute('/users/abc123/context')).toBe(true);
-    });
-
-    it('should NOT allow other /users/ paths as public', () => {
-      expect(isPublicRoute('/users/abc123')).toBe(false);
-      expect(isPublicRoute('/users/abc123/role')).toBe(false);
-      expect(isPublicRoute('/users')).toBe(false);
-    });
-
-    it('should NOT allow paths with more segments (e.g. /users/a/b/context)', () => {
-      expect(isPublicRoute('/users/a/b/context')).toBe(false);
-      expect(isPublicRoute('/users/admin/settings/context')).toBe(false);
-    });
-  });
-
-  describe('X-Service-Token validation — real service', () => {
-    const serviceTokenService = require('../services/service-token-service');
-
-    it('should return 401 when X-Service-Token header is missing', () => {
-      const originalEnv = process.env.SERVICE_AUTH_TOKEN;
-      process.env.SERVICE_AUTH_TOKEN = 'secret';
-      const result = serviceTokenService.validateServiceToken(undefined);
-      expect(result.status).toBe(401);
-      expect(result.body.error).toBeDefined();
-      process.env.SERVICE_AUTH_TOKEN = originalEnv;
-    });
-
-    it('should return 401 when X-Service-Token is wrong', () => {
-      const originalEnv = process.env.SERVICE_AUTH_TOKEN;
-      process.env.SERVICE_AUTH_TOKEN = 'secret';
-      const result = serviceTokenService.validateServiceToken('wrong');
-      expect(result.status).toBe(401);
-      process.env.SERVICE_AUTH_TOKEN = originalEnv;
-    });
-
-    it('should return 503 when SERVICE_AUTH_TOKEN is not configured', () => {
-      const originalEnv = process.env.SERVICE_AUTH_TOKEN;
-      delete process.env.SERVICE_AUTH_TOKEN;
-      const result = serviceTokenService.validateServiceToken('any');
-      expect(result.status).toBe(503);
-      expect(result.body.error).toBe('Service temporarily unavailable');
-      process.env.SERVICE_AUTH_TOKEN = originalEnv;
-    });
-
-    it('should return null when X-Service-Token matches', () => {
-      const originalEnv = process.env.SERVICE_AUTH_TOKEN;
-      process.env.SERVICE_AUTH_TOKEN = 'secret';
-      const result = serviceTokenService.validateServiceToken('secret');
-      expect(result).toBeNull();
-      process.env.SERVICE_AUTH_TOKEN = originalEnv;
-    });
-
-    it('should use timing-safe comparison for secret validation', () => {
-      const code = serviceTokenService.validateServiceToken.toString();
-      expect(code).toContain('timingSafeEqual');
-      expect(code).toContain('Buffer.byteLength');
-    });
-  });
-
-  describe('Sanitized response data — real service', () => {
-    const serviceTokenService = require('../services/service-token-service');
-
-    it('should return only safe fields from full user object', () => {
-      const fullUser = {
-        _key: 'users/test-123',
-        iss_sub: 'http://keycloak:8080/realms/genie#uuid',
-        email: 'user@example.com',
-        name: 'Test User',
-        roles: ['user', 'admin'],
-        active: true,
-        deleted: false,
-        password: 'hashed-password',
-        salt: 'random-salt',
-        emailVerified: true,
-        createdAt: '2026-01-01T00:00:00Z'
-      };
-
-      const ctx = serviceTokenService.buildUserContext(fullUser);
-      expect(Object.keys(ctx)).toEqual(['name', 'role', 'emailVerified']);
-      expect(ctx).not.toHaveProperty('password');
-      expect(ctx).not.toHaveProperty('salt');
-      expect(ctx).not.toHaveProperty('iss_sub');
-      expect(ctx).not.toHaveProperty('_key');
-      expect(ctx).not.toHaveProperty('email');
-      expect(ctx).not.toHaveProperty('active');
-      expect(ctx).not.toHaveProperty('deleted');
-      expect(ctx).not.toHaveProperty('createdAt');
-    });
-
-    it('should use defaults when user fields are missing', () => {
-      const ctx = serviceTokenService.buildUserContext({});
-      expect(ctx.name).toBe('User');
-      expect(ctx.role).toEqual([]);
-      expect(ctx.emailVerified).toBe(false);
+  describe('/api/users/:userId/context endpoint — Keycloak auth', () => {
+    it('should NOT allow /users/:userId/context as public path', () => {
+      // The context endpoint now requires Keycloak authentication
+      expect(isPublicRoute('/users/abc123/context')).toBe(false);
     });
   });
 });

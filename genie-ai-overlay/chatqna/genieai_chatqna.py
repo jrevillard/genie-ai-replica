@@ -143,33 +143,35 @@ class GenieUserProfileClient:
     Client for fetching User Profile data from the Backend Service.
     Designed to be used within the ChatQnA orchestrator.
 
-    Service-to-service auth uses X-Service-Token shared secret
-    (the legacy http-service JWT pipeline was removed in Story 1-11).
+    Auth: Bearer token propagated from the backend (JWKS-validated).
     """
 
     def __init__(self):
-        self._service_token = os.getenv("SERVICE_AUTH_TOKEN", "")
+        self._token = None
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
+
+    def set_token(self, token: str):
+        self._token = token
 
     async def get_user_profile(self, user_id: str):
         """
         Fetches the sanitized user profile from the backend for context enrichment.
         Target: GET /api/users/{userId}/context
-        Auth: X-Service-Token header (shared secret with backend)
+        Auth: Bearer token (propagated from backend via Authorization header)
         """
         if not user_id:
             logger.warning("get_user_profile called with empty user_id")
             return None
 
-        if not self._service_token:
-            logger.warning("SERVICE_AUTH_TOKEN not configured, skipping profile fetch")
+        if not self._token:
+            logger.warning("No Bearer token available, skipping profile fetch")
             return None
 
         # Construct URL — user_id is ArangoDB _key (URL-safe)
         url = f"{BACKEND_SERVICE_URL}/api/users/{user_id}/context"
 
         headers = {
-            "X-Service-Token": self._service_token,
+            "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json"
         }
 
@@ -183,7 +185,7 @@ class GenieUserProfileClient:
                         return profile_data
 
                     elif response.status == 401:
-                        logger.error("X-Service-Token rejected (401). Check SERVICE_AUTH_TOKEN configuration.")
+                        logger.error("Bearer token rejected (401). Check token propagation.")
                         return None
 
                     elif response.status == 404:
@@ -781,13 +783,13 @@ class ChatQnAService:
         if not file_id:
             return {"categoryLabel": None, "serviceLabels": []}
 
-        service_token = self.user_profile_client._service_token
-        if not service_token:
-            logger.error("SERVICE_AUTH_TOKEN not configured.")
+        token = self.user_profile_client._token
+        if not token:
+            logger.error("No Bearer token available for document-repository call.")
             return None
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
-        headers = {"X-Service-Token": service_token}
+        headers = {"Authorization": f"Bearer {token}"}
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -1175,6 +1177,22 @@ class ChatQnAService:
 
     async def handle_request(self, request: Request):
         data = await request.json()
+
+        # Extract and validate propagated Bearer token from Authorization header
+        authorization = request.headers.get("Authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token_str = authorization[7:]
+
+            # Defense-in-depth: validate token via JWKS
+            from keycloak_token_validator import validate_token
+            claims = await validate_token(token_str)
+            if claims is None:
+                logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
+                return {"error": "Unauthorized", "message": "Token validation failed"}
+
+            self.user_profile_client.set_token(token_str)
+        else:
+            logger.warning("No Authorization header in request — service-to-service calls will fail")
 
         # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
         logger.info(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")

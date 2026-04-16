@@ -292,8 +292,6 @@ Set **all required secrets** (Section 1-2 in the env template):
 
 ```bash
 ARANGO_PASSWORD=<strong-password>
-JWT_SECRET=<strong-random-string>
-SESSION_SECRET=<strong-random-string>
 TRANSLATION_CACHE_PASSWORD=<strong-password>
 POSTGRES_PASSWORD=<strong-password>
 KONG_DB_PASSWORD=<strong-password>
@@ -302,7 +300,6 @@ GENIE_ADMIN_PASSWORD=<strong-password>
 KEYCLOAK_DB_PASSWORD=<strong-password>
 KEYCLOAK_CLIENT_SECRET=<strong-password>
 KEYCLOAK_PROXY_CLIENT_SECRET=<strong-random-string>
-SERVICE_AUTH_TOKEN=<strong-random-string>
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_SECURE=true
@@ -593,7 +590,7 @@ docker run -d -p 5000:5000 --name registry --restart=unless-stopped registry:2
 
 # 2. Configure environment
 cp env .env
-# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+# Edit .env with your secrets (ARANGO_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.)
 # Set network variables for remote access:
 sed -i 's/^NGINX_PUBLIC_DOMAIN=.*/NGINX_PUBLIC_DOMAIN=10.0.0.110/' .env
 sed -i "s|^VUE_APP_API_URL=.*|VUE_APP_API_URL=https://10.0.0.110/api|" .env

@@ -473,7 +473,7 @@ export default {
         this.userData = {
           name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
           email: userData.email || '',
-          accountType: userData.accountType || (userData.roles && userData.roles[0]) || userData.role || this.translate('settings.standardAccount'),
+          accountType: (userData.roles && userData.roles[0]) || this.translate('settings.standardAccount'),
           userId: this.currentUserId,
           createdAt: userData.createdAt || '',
         }
@@ -498,7 +498,7 @@ export default {
           this.userData = {
             name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
-            accountType: fallbackUser.accountType || (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
+            accountType: (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
             userId: this.currentUserId,
             createdAt: fallbackUser.createdAt || '',
           }

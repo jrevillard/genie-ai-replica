@@ -524,7 +524,6 @@ import { mapGetters, mapActions } from "vuex";
 import ModalDialog from "./ModalDialog.vue";
 import ContextMenu from "./ContextMenu.vue";
 import chatHistoryService from "@/services/chatHistoryService";
-import userService from "@/services/userService";
 import notificationService from "@/services/notificationService";
 import { eventBus } from "../eventBus.js";
 
@@ -876,11 +875,8 @@ export default {
 
     async loadCurrentUser() {
       try {
-        console.log("Loading current user data");
-        this.currentUser = userService.getCurrentUser();
-        if (!this.currentUser) {
-          this.currentUser = await userService.getCurrentUserInfo();
-        }
+        console.log("Loading current user data from Vuex store");
+        this.currentUser = this.$store.getters.currentUser;
         console.log("Current user loaded:", this.currentUser);
         if (!this.currentUser || (!this.currentUser._key && !this.currentUser.id)) {
           console.error("User data loaded but no valid ID found:", this.currentUser);

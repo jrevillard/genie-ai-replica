@@ -520,7 +520,6 @@
 
 <script>
 import userProfileService from "@/services/userProfileService";
-import userService from "@/services/userService";
 import notificationService from "@/services/notificationService";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import SearchableCountryDropdown from "@/components/SearchableCountryDropdown.vue";

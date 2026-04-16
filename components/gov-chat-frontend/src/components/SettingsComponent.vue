@@ -562,84 +562,48 @@ export default {
       });
     },
     async fetchUserData() {
-      console.log("[SETTINGS] Fetching user data...");
-      this.isLoading = true;
-      this.errorMessage = null;
+      console.log('[SETTINGS] Fetching user data...')
+      this.isLoading = true
+      this.errorMessage = null
       try {
-        console.log("[SETTINGS] Checking for cached user data...");
-        let userData = userService.getCurrentUser();
+        console.log('[SETTINGS] Checking Vuex auth store for user data...')
+        let userData = this.$store.getters.currentUser
         if (!userData) {
-          console.log("[SETTINGS] No cached data, fetching from API...");
-          userData = await userService.getCurrentUserInfo();
-          console.log("[SETTINGS] User data fetched from API:", userData);
+          console.log('[SETTINGS] No store data, showing error...')
+          throw new Error('No user data available in store')
         } else {
-          console.log(
-            "[SETTINGS] Using cached data, refreshing in background..."
-          );
-          userService.refreshUserData().catch((err) => {
-            console.warn("[SETTINGS] Background refresh failed:", err);
-          });
+          console.log('[SETTINGS] Using Vuex store data:', userData)
         }
-        console.log("[SETTINGS] Extracting user ID...");
-        let userId = userData.id || userData.userId || userData._id || "";
-        if (typeof userId === "string" && userId.includes("/")) {
-          userId = userId.split("/").pop();
-        }
-        this.currentUserId = userId;
-        console.log(
-          "[SETTINGS] Stored user ID for authentication:",
-          this.currentUserId
-        );
-        console.log("[SETTINGS] Updating userData state...");
+        console.log('[SETTINGS] Updating userData state...')
         this.userData = {
-          name:
-            userData.fullName ||
-            userData.loginName ||
-            userData.username ||
-            this.translate("settings.user"),
-          email: userData.email || "",
-          accountType:
-            userData.accountType ||
-            userData.role ||
-            this.translate("settings.standardAccount"),
-          userId: this.currentUserId,
-          createdAt: userData.createdAt || "",
-        };
-        console.log("[SETTINGS] userData updated:", this.userData);
+          name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
+          email: userData.email || '',
+          accountType: (userData.roles && userData.roles[0]) || this.translate('settings.standardAccount'),
+          createdAt: userData.createdAt || '',
+        }
+        console.log('[SETTINGS] userData updated:', this.userData)
         if (userData.avatarUrl) {
-          console.log("[SETTINGS] Setting user avatar:", userData.avatarUrl);
-          this.userAvatar = userData.avatarUrl;
+          console.log('[SETTINGS] Setting user avatar:', userData.avatarUrl)
+          this.userAvatar = userData.avatarUrl
         }
       } catch (error) {
-        console.error("[SETTINGS] Error fetching user data:", error);
-        notificationService.error(this.translate("settings.unableToLoadUser"));
-        console.log("[SETTINGS] Attempting to use fallback user data...");
-        const fallbackUser = userService.getCurrentUser();
+        console.error('[SETTINGS] Error fetching user data:', error)
+        notificationService.error(this.translate('settings.unableToLoadUser'))
+        console.log('[SETTINGS] Attempting to use Vuex store as fallback...')
+        const fallbackUser = this.$store.getters.currentUser
         if (fallbackUser) {
-          console.log("[SETTINGS] Fallback user data found:", fallbackUser);
-          let userId =
-            fallbackUser.id || fallbackUser.userId || fallbackUser._id || "";
-          if (typeof userId === "string" && userId.includes("/")) {
-            userId = userId.split("/").pop();
-          }
-          this.currentUserId = userId;
-          console.log("[SETTINGS] Fallback user ID:", this.currentUserId);
+          console.log('[SETTINGS] Fallback user data found:', fallbackUser)
           this.userData = {
-            name:
-              fallbackUser.fullName ||
-              fallbackUser.loginName ||
-              this.translate("settings.user"),
-            email: fallbackUser.email || "",
-            accountType:
-              fallbackUser.accountType || this.translate("settings.account"),
-            userId: this.currentUserId,
-            createdAt: fallbackUser.createdAt || "",
-          };
-          console.log("[SETTINGS] Fallback userData set:", this.userData);
+            name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
+            email: fallbackUser.email || '',
+            accountType: (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
+            createdAt: fallbackUser.createdAt || '',
+          }
+          console.log('[SETTINGS] Fallback userData set:', this.userData)
         }
       } finally {
-        console.log("[SETTINGS] Setting isLoading to false");
-        this.isLoading = false;
+        console.log('[SETTINGS] Setting isLoading to false')
+        this.isLoading = false
       }
     },
     close() {

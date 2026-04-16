@@ -14,7 +14,7 @@ import notificationService from './notificationService';
  * - i18n translation keys are defined in src/i18n/locales/*.js for:
  *   1. Documentation purposes (this serves as the source of truth for message semantics)
  *   2. Potential future use in Vue-based error pages
- *   3. Consistency across all 14 supported languages
+ *   3. Consistency across supported languages
  *
  * ARCHITECTURE NOTES:
  * - The i18n system (vue-i18n) is only available within Vue component context

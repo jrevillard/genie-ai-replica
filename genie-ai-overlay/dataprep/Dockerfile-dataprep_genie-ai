@@ -50,7 +50,7 @@ RUN apt-get update -y && \
 
 # Add /app (for 'comps'), the dataprep 'src' (for entrypoint),
 # and 'proto' (for api_protocol) to PYTHONPATH
-ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/cores/proto"
+ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/dataprep/src/integrations:/app/comps/cores/proto"
 
 # Step B: Copy the entire OPEA 'comps' directory from the clone
 COPY --from=opea_base /src/comps/ /app/comps/

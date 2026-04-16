@@ -538,7 +538,7 @@ app.use(morgan(customFormat));
 
 // Route-specific middleware
 app.use('/api/admin', authMiddleware.authenticate, authMiddleware.isAdmin);
-app.use('/api/users', authMiddleware.authenticate);
+app.use('/api/me', authMiddleware.authenticate);
 ```
 
 ## Shared Libraries
@@ -995,7 +995,7 @@ graph TB
         CHAT_API["/api/chat-history<br/>Conversations"]
         ANALYTICS_API["/api/analytics<br/>Metrics"]
         ADMIN_API["/api/admin<br/>Administration"]
-        USER_API["/api/users<br/>User Management"]
+        USER_API["/api/me<br/>User Profile"]
     end
     
     subgraph "Route Handlers"

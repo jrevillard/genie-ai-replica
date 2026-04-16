@@ -105,7 +105,7 @@ curl -sk "https://localhost/auth/realms/genie/protocol/openid-connect/userinfo" 
 
 ```bash
 # Existing token still works (user is disabled but token is not expired)
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
 print(f'success: {d.get(\"success\",\"N/A\")}')
@@ -136,12 +136,12 @@ curl -sk -X PUT "https://localhost/auth/admin/realms/genie/users/${USER_ID}" \
 **Expected**: HTTP 204
 
 ```bash
-# Verify user can still get tokens and access /api/auth/me
+# Verify user can still get tokens and access /api/me
 USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
 ```
 **Expected**: HTTP 200
 
@@ -256,7 +256,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
 print(f'success: {d[\"success\"]}')
@@ -277,7 +277,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     print(u._key);
   " 2>/dev/null | tail -1)
 
-curl -sk "https://localhost/api/users/${USER_KEY}" \
+curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
@@ -291,7 +291,7 @@ print(f'active: {d.get(\"active\",\"N/A\")}')
 
 ```bash
 # Update profile via Keycloak proxy (JSON body)
-curl -sk -X PUT "https://localhost/api/users/${USER_KEY}" \
+curl -sk -X PUT "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"firstName":"TestUpdated","lastName":"UserUpdated"}' \
@@ -311,26 +311,17 @@ print(f'lastName: {u[\"lastName\"]}')
 ```
 **Expected**: `firstName: TestUpdated`, `lastName: UserUpdated`
 
-### Test M.4 — Self-Context Enforcement (Cannot Modify Other User)
+> **Note:** The old IDOR protection test (`PUT /api/users/:userId` with mismatched userId → 403) has been removed. The `/api/me` singleton is inherently self-scoped — there is no userId parameter to manipulate, making IDOR structurally impossible. Profile updates are already covered by Test M.3.
+
+### Test M.4 — Email Change via Admin Proxy
 
 ```bash
-# Attempt to modify a different user (use an invalid _key)
-curl -sk -X PUT "https://localhost/api/users/some-other-user-key" \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"firstName":"Hacked"}' -w "\nHTTP: %{http_code}\n"
-```
-**Expected**: HTTP 403 `{"error": "FORBIDDEN", "message": "You can only update your own profile", "details": {}}`
-
-### Test M.5 — Email Change via Admin Proxy
-
-```bash
-curl -sk -X PUT "https://localhost/api/users/email" \
+curl -sk -X PUT "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"email":"testuser-updated@genie.local"}' | python3 -m json.tool
 ```
-**Expected**: HTTP 200 `{"success": true, "shouldLogout": true}`
+**Expected**: HTTP 200 `{"success": true, "message": "Profile saved successfully", ...}`
 
 ```bash
 # Verify email in Keycloak
@@ -343,25 +334,25 @@ print(f'email: {u[\"email\"]}')
 ```
 **Expected**: `email: testuser-updated@genie.local`
 
-### Test M.6 — Restore Original Email (Cleanup)
+### Test M.5 — Restore Original Email (Cleanup)
 
 ```bash
-curl -sk -X PUT "https://localhost/api/users/email" \
+curl -sk -X PUT "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"email":"testuser@genie.local"}' -w "\nHTTP: %{http_code}\n"
 ```
 **Expected**: HTTP 200
 
-### Test M.7 — Reset Data Endpoint
+### Test M.6 — Reset Data Endpoint
 
 ```bash
-curl -sk -X POST "https://localhost/api/users/reset-data" \
+curl -sk -X POST "https://localhost/api/me/reset-data" \
   -H "Authorization: Bearer $USER_TOKEN" | python3 -m json.tool
 ```
 **Expected**: `{"success": true, "message": "...", "fieldsPreserved": <number>}`
 
-### Test M.8 — JIT Provisioning Updates Profile on Re-login
+### Test M.7 — JIT Provisioning Updates Profile on Re-login
 
 ```bash
 # Update profile in Keycloak directly (simulating external change)
@@ -378,7 +369,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
 print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
@@ -386,7 +377,7 @@ print(f'name: {d[\"user\"].get(\"name\",\"N/A\")}')
 ```
 **Expected**: `name: JIT Test` (profile updated from Keycloak via JIT)
 
-### Test M.9 — JIT Reactivation of Soft-Deleted User
+### Test M.8 — JIT Reactivation of Soft-Deleted User
 
 ```bash
 # Soft-delete user in ArangoDB directly
@@ -417,7 +408,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" | python3 -c "
 import sys,json
 d = json.load(sys.stdin)
 print(f'success: {d[\"success\"]}')
@@ -434,7 +425,7 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 ```
 **Expected**: `deleted: false`, `active: true`
 
-### Test M.10 — Delete User Account (Keycloak + ArangoDB)
+### Test M.9 — Delete User Account (Keycloak + ArangoDB)
 
 ```bash
 # Save user _key before deletion (email will be nullified by erasure)
@@ -445,7 +436,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
     print(u._key);
   " 2>/dev/null | tail -1)
 
-curl -sk -X POST "https://localhost/api/users/delete" \
+curl -sk -X POST "https://localhost/api/me/delete" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"reason":"E2E test cleanup"}' | python3 -m json.tool
@@ -463,7 +454,7 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 ```
 **Expected**: `deleted: true`, `email: null`
 
-### Test M.11 — Cleanup: Recreate Test User for Phase N
+### Test M.10 — Cleanup: Recreate Test User for Phase N
 
 ```bash
 # Recreate testuser in Keycloak for GDPR tests
@@ -485,7 +476,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
 # Expected: 200
 ```
 
@@ -516,7 +507,7 @@ USER_KEY=$(docker exec $(docker ps --filter name=arango --format '{{.ID}}' | hea
 echo "User _key: $USER_KEY"
 
 # Trigger erasure (deletes Keycloak user + nullifies all PII in ArangoDB)
-curl -sk -X POST "https://localhost/api/users/delete" \
+curl -sk -X POST "https://localhost/api/me/delete" \
   -H "Authorization: Bearer $USER_TOKEN" | python3 -m json.tool
 ```
 **Expected**: `{"success": true, ...}`
@@ -570,12 +561,12 @@ ERASE_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/ope
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk -X POST "https://localhost/api/users/delete" \
+curl -sk -X POST "https://localhost/api/me/delete" \
   -H "Authorization: Bearer $ERASE_TOKEN" -o /dev/null -w "First erase: %{http_code}\n"
 # Expected: 200
 
 # Second erase (idempotent — user already deleted from Keycloak)
-curl -sk -X POST "https://localhost/api/users/delete" \
+curl -sk -X POST "https://localhost/api/me/delete" \
   -H "Authorization: Bearer $ERASE_TOKEN" -w "Second erase: %{http_code}\n"
 # Expected: 200 (no error — idempotent)
 ```
@@ -609,7 +600,7 @@ USER_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/open
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
 # Expected: 200
 ```
 
@@ -634,14 +625,13 @@ curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $USER_TOKEN" 
 | M.1 | Get user profile via proxy | | |
 | M.2 | Get user profile by ID | | |
 | M.3 | Update user profile | | |
-| M.4 | Self-context enforcement (403) | | |
-| M.5 | Email change via admin proxy | | |
-| M.6 | Restore original email (cleanup) | | |
-| M.7 | Reset data endpoint | | |
-| M.8 | JIT provisioning updates profile on re-login | | |
-| M.9 | JIT reactivation of soft-deleted user | | |
-| M.10 | Delete user account (Keycloak + ArangoDB) | | |
-| M.11 | Cleanup: recreate test user | | |
+| M.4 | Email change via admin proxy | | |
+| M.5 | Restore original email (cleanup) | | |
+| M.6 | Reset data endpoint | | |
+| M.7 | JIT provisioning updates profile on re-login | | |
+| M.8 | JIT reactivation of soft-deleted user | | |
+| M.9 | Delete user account (Keycloak + ArangoDB) | | |
+| M.10 | Cleanup: recreate test user | | |
 | N.1 | GDPR erasure (complete deletion) | | |
 | N.2 | Erased user PII nullified in ArangoDB | | |
 | N.3 | Erased user cannot log in | | |

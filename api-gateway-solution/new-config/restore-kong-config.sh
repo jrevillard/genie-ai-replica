@@ -230,32 +230,6 @@ restore_config() {
     done < ${_TMP_PREFIX}_routes.tmp
     rm -f ${_TMP_PREFIX}_routes.tmp
 
-    # Add user-admin-route (belongs to express-api service)
-    log "Adding user-admin-route"
-    existing_route=$(curl -s "$KONG_ADMIN_URL/routes/user-admin-route")
-    if [ -z "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/express-api/routes" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "user-admin-route",
-                "paths": ["/api/users/admin/users"],
-                "strip_path": false,
-                "preserve_host": true,
-                "protocols": ["http", "https"]
-            }')
-        http_code=$(echo "$response" | sed -n '$p')
-        body=$(echo "$response" | sed '$d')
-        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "Route user-admin-route added successfully"
-        else
-            log "ERROR: Failed to add route user-admin-route with HTTP status $http_code"
-            log "Response: $body"
-            errors=$((errors + 1))
-        fi
-    else
-        log "Route user-admin-route already exists, skipping"
-    fi
-
     # Update or create service plugins
     echo "$config_json" | jq -c '.plugins[] | select(.service?)' > ${_TMP_PREFIX}_svc_plugins.tmp
     while IFS= read -r plugin; do
@@ -462,19 +436,16 @@ test_endpoints() {
         exit 1
     fi
 
-    # Test 2: POST /api/users/admin/users/{USER_ID}/force-logout
-    log "Testing POST /api/users/admin/users/$USER_ID/force-logout"
-    response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/users/admin/users/$USER_ID/force-logout" \
-        -H "Authorization: Bearer $jwt_token" \
-        -H "Content-Type: application/json" \
-        -d '{}')
+    # Test 2: GET /api/me (authenticated user profile)
+    log "Testing GET /api/me"
+    response=$(curl -s -w "\n%{http_code}" "$KONG_PUBLIC_URL/api/me" \
+        -H "Authorization: Bearer $jwt_token")
     http_code=$(echo "$response" | sed -n '$p')
     body=$(echo "$response" | sed '$d')
     if [ "$http_code" -eq 200 ]; then
-        log "SUCCESS: /api/users/admin/users/$USER_ID/force-logout returned 200"
-        log "Response: $body"
+        log "SUCCESS: /api/me returned 200"
     else
-        log "ERROR: /api/users/admin/users/$USER_ID/force-logout failed with status $http_code"
+        log "ERROR: /api/me failed with status $http_code"
         log "Response: $body"
         exit 1
     fi

@@ -274,6 +274,8 @@ sequenceDiagram
     BE->>BE: Validate JWT + JIT provision user
     BE->>ChatQnA: Bearer token
     ChatQnA->>ChatQnA: Validate JWT (JWKS)
+    ChatQnA->>BE: GET /api/me/context (user profile for AI enrichment)
+    BE->>ChatQnA: User context (name, role, emailVerified)
     ChatQnA->>TEI: Generate embedding
     TEI->>ChatQnA: Embedding vector
     ChatQnA->>Ret: Query with embedding
@@ -288,7 +290,7 @@ sequenceDiagram
     FE->>User: Display answer
 ```
 
-The RAG pipeline flows through the API gateway, backend, and OPEA services. The Bearer token is forwarded to ChatQnA, which performs independent JWKS validation.
+The RAG pipeline flows through the API gateway, backend, and OPEA services. The Bearer token is forwarded to ChatQnA, which performs independent JWKS validation. ChatQnA also fetches user context from the backend via `GET /api/me/context` to enrich AI prompts with user profile data.
 
 ---
 
@@ -382,7 +384,13 @@ Retraction removes all graph data (chunks, entities, relationships) associated w
 |-------|--------|-------|
 | `/health` | Public | Health check endpoints |
 | `/api-docs` | Public | Swagger API documentation |
-| `/api/auth/*` | Public | Keycloak OIDC callbacks, login/logout redirects |
+| `/api/auth/callback` | Public | Keycloak OIDC callback redirect |
+| `/api/auth/logout/callback` | Public | Keycloak post-logout callback |
+| `/api/auth/logout` | Protected | User logout (Keycloak handles session invalidation) |
+| `/api/me` | Protected | Current user profile singleton (GET, PUT) |
+| `/api/me/context` | Protected | User context for AI enrichment |
+| `/api/me/reset-data` | Protected | Reset user profile data |
+| `/api/me/delete` | Protected | Delete user account (GDPR erasure) |
 | `/api/*` | Protected | All other API routes require valid Bearer token |
 
 Unauthenticated requests to protected routes receive a 401 response. The backend validates the JWT on every protected request before processing.
@@ -474,6 +482,7 @@ Request path: `Browser -> NGINX (TLS) -> Kong (CORS, rate limit) -> Backend (JWT
 | D5 | In-memory token storage | The frontend stores tokens in JavaScript memory only (no localStorage or sessionStorage). Mitigates token theft via XSS. |
 | D6 | Dataprep service account | Dataprep authenticates via Keycloak client_credentials grant with a dedicated service account, separate from user tokens. |
 | D7 | Gateway architecture | NGINX terminates TLS and proxies all traffic to Kong. Kong provides CORS and rate limiting. Both are required in the current configuration — Kong cannot be bypassed. |
+| D8 | `/api/me` singleton resource | After Keycloak migration, the frontend has no access to ArangoDB `_key` (only OIDC claims). A singleton `/api/me` resource eliminates the need for path-based user IDs. User resolution happens via JWT middleware (`req.user._key`). The `_key` never leaves the backend. |
 
 ---
 

@@ -61,8 +61,8 @@ describe('isPublicRoute', () => {
     expect(isPublicRoute('/api/chat')).toBe(false);
   });
 
-  it('should NOT identify /api/users as public', () => {
-    expect(isPublicRoute('/api/users')).toBe(false);
+  it('should NOT identify /api/me as public', () => {
+    expect(isPublicRoute('/api/me')).toBe(false);
   });
 
   it('should NOT identify /api/admin as public', () => {

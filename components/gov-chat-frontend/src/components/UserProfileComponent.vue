@@ -594,7 +594,8 @@ export default {
       countryName: "",
       isLoading: false,
       errorMessage: null,
-      currentUserId: "",
+
+
       isSubmitting: false,
       showEducationSearch: false,
       educationSearchTerm: "",
@@ -850,27 +851,6 @@ export default {
       this.showConfirmDialog = false;
       this.isSubmitting = true;
 
-      // Safety check to make sure we have a valid user ID
-      if (!this.currentUserId) {
-        console.error(
-          "Missing currentUserId in confirmSave, attempting to retrieve it"
-        );
-        this.currentUserId = await this.getCurrentUserId();
-
-        if (!this.currentUserId) {
-          notificationService.error(
-            this.translate(
-              "errors.savingFailed",
-              "Failed to save profile: Missing user ID"
-            )
-          );
-          this.isSubmitting = false;
-          return;
-        }
-      }
-
-      console.log("Submitting form, currentUserId:", this.currentUserId);
-
       try {
         const validation = this.validateForm();
         console.log("Form validation result:", validation);
@@ -917,14 +897,10 @@ export default {
           console.warn("Country code is missing from form data");
         }
 
-        console.log("Profile data being sent to API:", profileData);
-        console.log("API URL will be /api/users/" + this.currentUserId);
+        console.log('Profile data being sent to API:', profileData)
 
-        const result = await userProfileService.updateProfile(
-          this.currentUserId,
-          profileData
-        );
-        console.log("Update profile API response:", result);
+        const result = await userProfileService.updateProfile(profileData)
+        console.log('Update profile API response:', result)
 
         notificationService.success(
           this.translate("saveSuccess", "Profile saved successfully")
@@ -1010,41 +986,11 @@ export default {
       }
       return true; // Other tabs considered complete for simplicity
     },
-    getCurrentUserId() {
-      try {
-        const userData = userService.getCurrentUser();
-        if (!userData) {
-          console.error("No user data available");
-          return "";
-        }
-        let userId = userData.id || userData.userId || userData._id || "";
-        if (typeof userId === "string" && userId.includes("/")) {
-          userId = userId.split("/").pop();
-        }
-        console.log("Retrieved user ID:", userId);
-        return userId;
-      } catch (error) {
-        console.error("Error getting current user ID:", error);
-        return "";
-      }
-    },
     async loadUserProfileData() {
       this.isLoading = true;
       this.errorMessage = null;
       try {
-        // Get and STORE the user ID in the component property
-        this.currentUserId = await this.getCurrentUserId();
-
-        if (!this.currentUserId) {
-          throw new Error("Unable to determine current user ID");
-        }
-
-        console.log("Loading profile data for user ID:", this.currentUserId);
-
-        const profileData = await userProfileService.getProfile(
-          this.currentUserId
-        );
-        console.log("Retrieved profile data:", profileData);
+        const profileData = await userProfileService.getProfile()
 
         if (profileData) {
           // Extract the nationality and country codes before mapping other data

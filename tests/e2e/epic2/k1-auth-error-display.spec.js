@@ -40,7 +40,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     tokenParts[1] = 'X' + tokenParts[1].slice(1); // Change first char of payload
     const modifiedToken = tokenParts.join('.');
 
-    const res = await authRequest('GET', '/api/auth/me', {
+    const res = await authRequest('GET', '/api/me', {
       headers: { Authorization: `Bearer ${modifiedToken}` },
     });
     expect(res.status).toBe(401);
@@ -57,14 +57,14 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // Wait for expiry (polling up to 30s)
     const startTime = Date.now();
     while (Date.now() - startTime < 30000) {
-      const res = await authRequest('GET', '/api/auth/me', {
+      const res = await authRequest('GET', '/api/me', {
         headers: { Authorization: `Bearer ${shortToken}` },
       });
       if (res.status === 401 && res.data.error === 'TOKEN_EXPIRED') break;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
-    const res = await authRequest('GET', '/api/auth/me', {
+    const res = await authRequest('GET', '/api/me', {
       headers: { Authorization: `Bearer ${shortToken}` },
     });
     expect(res.status).toBe(401);
@@ -96,7 +96,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   test('K.4 — TOKEN_INVALID (invalid token string)', async () => {
     // NOTE: Keycloak unavailability (docker service scale keycloak=0) is tested
     // via curl in epic2-secure-api-access.md Phase K.4 — cannot be done from Playwright.
-    const res = await authRequest('GET', '/api/auth/me', {
+    const res = await authRequest('GET', '/api/me', {
       headers: { Authorization: 'Bearer clearly-invalid-token' },
     });
     expect(res.status).toBe(401);

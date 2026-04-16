@@ -220,7 +220,7 @@ class QueryService {
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
    */
-  async createQuery(queryData, headers = null, authenticatedUserId = null) {
+  async createQuery(queryData, headers = null) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
@@ -409,7 +409,6 @@ class QueryService {
 
           opeaPayload = {
             messages: queryText,
-            user_id: authenticatedUserId || queryData.userId,
             stream: false
           };
         } else {
@@ -421,7 +420,6 @@ class QueryService {
               serviceLabels: queryData.context.serviceLabels,
               language: queryData.context.language
             },
-            user_id: authenticatedUserId || queryData.userId,
             stream: false
           };
         }

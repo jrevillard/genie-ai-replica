@@ -8,9 +8,7 @@ import httpService from './httpService'
  */
 class UserService {
   constructor() {
-    this.tokenKey = 'user'
-    this.authEndpoint = 'auth'
-    this.userEndpoint = 'users'
+    this.userEndpoint = 'me'
   }
 
   // ===== LOCAL USER DATA HELPERS =====

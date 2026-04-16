@@ -94,40 +94,6 @@ export default {
   },
 
   /**
-   * Save selected services to user preferences
-   * @param {String} userId - User ID
-   * @param {Array} selectedServices - Selected services
-   * @returns {Promise} Save result
-   */
-  async saveSelectedServices(userId, selectedServices) {
-    try {
-      const response = await httpService.post(`users/${userId}/preferences/services`, {
-        selectedServices
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Error saving selected services:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get user's selected services
-   * @param {String} userId - User ID
-   * @returns {Promise} User's selected services
-   */
-  async getUserSelectedServices(userId) {
-    try {
-      const response = await httpService.get(`users/${userId}/preferences/services`);
-      return response.data.selectedServices || [];
-    } catch (error) {
-      console.error('Error getting user selected services:', error);
-      return [];
-    }
-  },
-
-  /**
   * Get all translations for a specific category
   * @param {String} categoryId - The ID of the category
   * @returns {Promise<Array>} A list of translation objects [{lang, text}]

@@ -444,29 +444,26 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 ### User Routes
 
-**Base Path**: `/api/users`
+**Base Path**: `/api/me`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/debug-routes` | List all registered user routes for debugging |
-| GET | `/:userId` | Get user profile by ID |
-| POST | `/` | Create a new user profile with optional file uploads |
-| DELETE | `/:userId` | Delete user profile by ID |
-| GET | `/` | Search users with pagination and criteria |
+| GET | `/` | Get current user profile (resolved from JWT) |
+| PUT | `/` | Update current user profile |
+| GET | `/context` | Get user context for AI enrichment |
 | POST | `/reset-data` | Reset user profile data while preserving account |
-| PUT | `/:userId` | Self-service profile update |
 
 #### Key Parameters
-- `userId`: Identifier for the user being queried or modified.
-- `data`, `files`: Profile data and optional file uploads for profile creation/update.
-- `limit`, `offset`: Pagination for user searches.
+- `data`, `files`: Profile data and optional file uploads for profile update.
+- User is resolved from JWT via `req.user._key` — no userId path parameter.
 
 #### Services Called
-- **User Service**: Manages user profile creation, retrieval, updates, and deletion.
+- **User Service**: Manages user profile retrieval and updates.
+- **Keycloak Proxy Service**: Forwards JIT fields (email, name) to Keycloak Account API.
 
 #### Security
-- All routes require JWT authentication via Keycloak OIDC (`keycloakAuthMiddleware`), except public routes (`/health`, `/api-docs`, `/api/auth/callback`).
-- The OPEA integration endpoint (`/users/:userId/context`) uses OIDC token propagation for service-to-service authentication.
+- All routes require JWT authentication via Keycloak OIDC (`keycloakAuthMiddleware`).
+- The `/api/me` singleton is inherently self-scoped — no IDOR check needed.
 - File uploads are limited to 10MB and stored in memory using `multer`.
 
 ### Weather Routes

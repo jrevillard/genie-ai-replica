@@ -48,7 +48,6 @@ The application is broken down into the following functional categories:
 
 ### Sidebar & Navigation
 
--   **`ServiceTreeContainer.vue`**: A wrapper component responsible for loading and managing the data for the service tree.
 -   **`ServiceTreePanelComponent.vue`**: Renders the hierarchical tree of government services, allowing users to expand, collapse, search, and select nodes to use as context in their chat queries.
 -   **`ServiceCategoryPanelComponent.vue`**: A simpler component that displays a list of top-level service categories with icons.
 -   **`WeatherPanel.vue`**: A widget displayed at the bottom of the sidebar that shows current weather and a forecast based on user location.

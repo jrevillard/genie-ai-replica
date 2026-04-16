@@ -34,7 +34,7 @@ npx playwright test tests/e2e/epic1/a3-legacy-routes-redirect.spec.js
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 ```
 **Expected**: HTTP 200 with `success: true` and user profile
 
@@ -60,7 +60,7 @@ Re-run Test B.1 to trigger provisioning again, then verify document count is sti
 TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer $TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer $TOKEN" -o /dev/null -w "HTTP: %{http_code}\n"
 # Expected: 200
 
 # Verify exactly 1 user document in ArangoDB
@@ -93,21 +93,21 @@ docker exec $(docker ps --filter name=arango --format '{{.ID}}' | head -1) \
 ### Test C.1 —Malformed Token
 
 ```bash
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer not-a-real-token"
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer not-a-real-token"
 # Expected: {"error":"TOKEN_INVALID","message":"Token verification failed","details":{}}
 ```
 
 ### Test C.2 —Not Enough Parts
 
 ```bash
-curl -sk "https://localhost/api/auth/me" -H "Authorization: Bearer a.b"
+curl -sk "https://localhost/api/me" -H "Authorization: Bearer a.b"
 # Expected: {"error":"TOKEN_INVALID","message":"Token verification failed","details":{}}
 ```
 
 ### Test C.3 —No Token
 
 ```bash
-curl -sk "https://localhost/api/auth/me"
+curl -sk "https://localhost/api/me"
 # Expected: {"error":"TOKEN_INVALID","message":"Missing or malformed Authorization header","details":{}}
 ```
 
@@ -509,7 +509,7 @@ docker compose ps
 | A.1 | Frontend redirects to Keycloak | | |
 | A.2 | Full login -> dashboard | | |
 | A.3 | Legacy routes redirect | | |
-| B.1 | JIT provisioning via /api/auth/me | | |
+| B.1 | JIT provisioning via /api/me | | |
 | B.2 | ArangoDB document created | | |
 | B.3 | UPSERT atomic (no duplicates) | | |
 | B.4 | ~~Soft-deleted user -> 403~~ | REMOVED | Superseded by M.9, M.10, N.1 (Story 3.6 changed behavior) |

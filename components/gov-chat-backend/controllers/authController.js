@@ -3,27 +3,6 @@ const sessionService = require('../services/session-service');
 
 const authController = {
   /**
-   * Get current authenticated user info
-   * req.user is set by keycloakAuthMiddleware from JIT provisioning (ArangoDB document)
-   */
-  async getCurrentUser(req, res) {
-    try {
-      if (!req.user || !req.user.iss_sub) {
-        logger.warn('No authenticated user found');
-        return res.status(401).json({ success: false, message: 'Not authenticated' });
-      }
-      const { _id, _rev, encPassword, deleted, ...userWithKey } = req.user;
-      // Expose _key as 'id' for downstream API lookups (e.g. /api/users/:id/context)
-      const { _key, ...userWithoutInternals } = userWithKey;
-      logger.info(`Current user info retrieved for: ${req.user.name || req.user.email || 'unknown'}`);
-      res.json({ success: true, user: { ...userWithoutInternals, id: _key } });
-    } catch (error) {
-      logger.error(`Get current user error: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ success: false, message: 'Failed to retrieve user information' });
-    }
-  },
-
-  /**
    * Logout — end active ArangoDB sessions and emit audit log.
    * Keycloak handles OIDC session invalidation server-side via the redirect flow.
    */

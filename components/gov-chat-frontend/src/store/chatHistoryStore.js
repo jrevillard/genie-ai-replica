@@ -1,7 +1,6 @@
 // src/store/chatHistoryStore.js
 import { v4 as uuidv4 } from 'uuid';
-import chatHistoryService from '@/services/chatHistoryService'; // Adjust path
-import { getUserId } from '@/utils/userUtils';
+import chatHistoryService from '@/services/chatHistoryService';
 
 export default {
   namespaced: true,
@@ -206,9 +205,8 @@ export default {
       console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);
       try {
         const currentUser = rootGetters['auth/currentUser'];
-        const userId = getUserId(currentUser);
-        if (!userId) throw new Error('User ID is missing');
-        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId, userId);
+        if (!currentUser) throw new Error('User is missing');
+        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId);
         const folder = await chatHistoryService.getFolder(toFolderId);
         const chatIds = folder.conversations.map(conv => conv._key);
         commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });

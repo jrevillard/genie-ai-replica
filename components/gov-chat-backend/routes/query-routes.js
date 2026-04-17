@@ -96,12 +96,8 @@ module.exports = (queryService) => {
    *           schema:
    *             type: object
    *             required:
-   *               - userId
    *               - sessionId
    *             properties:
-   *               userId:
-   *                 type: string
-   *                 description: ID of the user making the query
    *               sessionId:
    *                 type: string
    *                 description: ID of the current session
@@ -184,8 +180,13 @@ module.exports = (queryService) => {
    */
   router.post('/', async (req, res) => {
     try {
-      logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
-      const query = await queryService.createQuery(req.body, { authorization: req.headers.authorization });
+      const userId = req.user?.iss_sub;
+      if (!userId) {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      }
+      const queryData = { ...req.body, userId };
+      logger.info(`Creating query for user ${userId}`);
+      const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization });
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
@@ -435,11 +436,6 @@ module.exports = (queryService) => {
    *           default: 0
    *         description: Offset for pagination
    *       - in: query
-   *         name: userId
-   *         schema:
-   *           type: string
-   *         description: Filter by user ID
-   *       - in: query
    *         name: sessionId
    *         schema:
    *           type: string
@@ -529,8 +525,13 @@ module.exports = (queryService) => {
    */
   router.get('/', async (req, res) => {
     try {
+      const userId = req.user?.iss_sub;
+      if (!userId) {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      }
       const { limit = 20, offset = 0, ...criteria } = req.query;
-      logger.info(`Searching queries with criteria: ${JSON.stringify(criteria)}, limit: ${limit}, offset: ${offset}`);
+      criteria.userId = userId;
+      logger.info(`Searching queries for user ${userId}, limit: ${limit}, offset: ${offset}`);
       const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
       res.json(results);
     } catch (error) {

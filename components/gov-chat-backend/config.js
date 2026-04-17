@@ -8,7 +8,6 @@ const config = {
         '/api/me',
         '/api/queries',
         '/api/logs',
-        '/api/sessions',
         '/api/admin/system-health',
         '/api/admin/logs',
         '/api/admin/security-metrics',

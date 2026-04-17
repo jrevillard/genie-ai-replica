@@ -333,12 +333,8 @@ module.exports = (analyticsService) => {
      *           schema:
      *             type: object
      *             required:
-     *               - userId
      *               - eventType
      *             properties:
-     *               userId:
-     *                 type: string
-     *                 description: ID of the user
      *               eventType:
      *                 type: string
      *                 description: Type of event (e.g., pageView, buttonClick)
@@ -359,13 +355,18 @@ module.exports = (analyticsService) => {
      */
     router.post('/events', async (req, res) => {
       try {
-        const { userId, eventType, eventData } = req.body;
-        
-        if (!userId || !eventType) {
-          logger.warn(`Missing required fields in event tracking: userId=${userId}, eventType=${eventType}`);
-          return res.status(400).json({ message: 'userId and eventType are required' });
+        const { eventType, eventData } = req.body;
+
+        if (!eventType) {
+          logger.warn('Missing required field: eventType');
+          return res.status(400).json({ message: 'eventType is required' });
         }
-        
+
+        const userId = req.user?.iss_sub;
+        if (!userId) {
+          return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+        }
+
         logger.info(`Recording event of type ${eventType} for user ${userId}`);
         const result = await analyticsService.trackEvent(userId, eventType, eventData || {});
         res.status(201).json(result);

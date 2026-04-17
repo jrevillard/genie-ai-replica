@@ -4,40 +4,13 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const { logger } = require('../shared-lib');
 
 module.exports = (chatHistoryService) => {
-  // Helper function to extract user ID from the request
+  // Helper function to extract user ID from the JWT-authenticated request
   const extractUserId = (req) => {
-    let userId = '';
-
-    if (req.user?.iss_sub) {
-      userId = req.user.iss_sub;
-      // Ensure it has the correct prefix
-      if (!userId.startsWith('users/')) {
-        userId = `users/${userId}`;
-      }
-      logger.info(`Using user identifier from req.user: ${userId}`);
+    if (!req.user?.iss_sub) {
+      logger.warn('No user context — JWT middleware should have populated req.user.iss_sub');
+      return null;
     }
-
-    // If we don't have a user ID from req.user, check query params
-    if (!userId && req.query.userId) {
-      userId = req.query.userId;
-      // Ensure it has the correct prefix
-      if (!userId.startsWith('users/')) {
-        userId = `users/${userId}`;
-      }
-      logger.info(`Using userId from query parameter: ${userId}`);
-    }
-
-    // Lastly, check if it's in the body (some routes use this)
-    if (!userId && req.body && req.body.userId) {
-      userId = req.body.userId;
-      // Ensure it has the correct prefix
-      if (!userId.startsWith('users/')) {
-        userId = `users/${userId}`;
-      }
-      logger.info(`Using userId from request body: ${userId}`);
-    }
-
-    return userId;
+    return req.user.iss_sub;
   };
 
   // Apply authentication middleware to all routes

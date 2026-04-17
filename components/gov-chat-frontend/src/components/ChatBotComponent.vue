@@ -770,7 +770,6 @@ export default {
 
           queryData = {
             conversationId: this.conversationId,
-            userId: getUserId(this.$store.getters.currentUser) || 'anonymous',
             sessionId: this.currentSessionId || 'new-session',
             messages: messagesForQuery,
             context: {
@@ -783,7 +782,6 @@ export default {
           }
         } else {
           queryData = {
-            userId: getUserId(this.$store.getters.currentUser) || 'anonymous',
             sessionId: this.currentSessionId || 'new-session',
             text: messageForBackend,
             contextOption: contextOption,
@@ -1130,7 +1128,6 @@ export default {
         const firstUserMessage = this.chatMessages.find((msg) => msg.sender === 'user')?.content || ''
 
         const conversationData = {
-          userId: getUserId(currentUser),
           title: this.saveChatDialog.title || this.generateChatTitle(),
           initialMessage: firstUserMessage,
           categoryId: this.currentCategoryId || null,
@@ -1163,7 +1160,6 @@ export default {
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
               metadata: message.metadata || {},
-              userId: getUserId(currentUser),
             }
             console.log('Adding message with data:', messageData)
             console.log('chatHistoryService.addMessage called with:', messageData)
@@ -1189,12 +1185,10 @@ export default {
           console.log('chatHistoryService.addConversationToFolder called with:', {
             folderId: this.saveChatDialog.folderId,
             conversationId: conversation._key,
-            userId: getUserId(currentUser),
           })
           await this.chatHistoryService.addConversationToFolder(
             this.saveChatDialog.folderId,
-            conversation._key,
-            getUserId(currentUser)
+            conversation._key
           )
           console.log(`Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`)
           console.log('Dispatching addChatToFolder with:', {
@@ -1244,7 +1238,6 @@ export default {
         }
 
         const updateData = {
-          userId: getUserId(currentUser),
           title: this.currentChatTitle || this.generateChatTitle(),
           categoryId: this.currentCategoryId || null,
           tags: this.getContextTags(),
@@ -1270,7 +1263,6 @@ export default {
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
               metadata: message.metadata || {},
-              userId: getUserId(currentUser),
             }
             console.log('Adding message with data:', messageData)
             console.log('chatHistoryService.addMessage called with:', messageData)

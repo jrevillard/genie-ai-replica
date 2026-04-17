@@ -64,6 +64,7 @@ import SplashScreen from "./components/SplashScreen.vue";
 import { mapGetters } from "vuex";
 import { eventBus } from "./eventBus.js";
 import chatHistoryService from "./services/chatHistoryService";
+import { getUserId } from "./utils/userUtils";
 
 export default {
   name: 'App',
@@ -251,18 +252,14 @@ export default {
     // --- REPLACED YOUR loadFoldersOnAuth METHOD WITH THIS ---
     async loadFoldersOnAuth() {
       try {
-        // This will now correctly get the user from Vuex
         const user = this.currentUser
-        console.log('loadFoldersOnAuth: Current user from store:', user)
-
-        const userId = user?._key || user?.id
+        const userId = getUserId(user)
         if (!userId) {
-          // This should no longer happen because of the mounted hook's await
           console.warn('loadFoldersOnAuth called, but user not ready.')
           return
         }
 
-        const response = await chatHistoryService.getUserFolders(userId)
+        const response = await chatHistoryService.getUserFolders()
         console.log('loadFoldersOnAuth: getUserFolders response:', response)
         let foldersArray = Array.isArray(response) ? response : response?.folders || []
         const processedFolders = foldersArray

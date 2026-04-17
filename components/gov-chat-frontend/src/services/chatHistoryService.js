@@ -318,26 +318,6 @@ class ChatHistoryService {
   }
 
   /**
-   * Get shared folders for the authenticated user
-   * @param {Object} options - Filter options
-   * @param {Boolean} options.includeArchived - Whether to include archived folders
-   * @returns {Promise} Shared folders list
-   */
-  async getSharedFolders(options = {}) {
-    try {
-      const params = {
-        includeArchived: options.includeArchived || false,
-      }
-
-      const response = await httpService.get('/chat/folders/shared', { params })
-      return response.data
-    } catch (error) {
-      console.error('Error fetching shared folders:', error)
-      throw error
-    }
-  }
-
-  /**
    * Get a specific folder with its details
    * @param {String} folderId - ID of the folder to retrieve
    * @returns {Promise} Folder details with conversations
@@ -533,21 +513,6 @@ class ChatHistoryService {
       return response.data
     } catch (error) {
       console.error(`Error moving conversation ${conversationId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Get users with access to a folder
-   * @param {String} folderId - Folder ID
-   * @returns {Promise} List of users with access
-   */
-  async getFolderUsers(folderId) {
-    try {
-      const response = await httpService.get(`/chat/folders/${folderId}/users`)
-      return response.data
-    } catch (error) {
-      console.error(`Error getting users for folder ${folderId}:`, error)
       throw error
     }
   }

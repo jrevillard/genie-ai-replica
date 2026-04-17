@@ -1271,59 +1271,6 @@ module.exports = (chatHistoryService) => {
 
   /**
    * @swagger
-   * /chat/folders/shared:
-   *   get:
-   *     summary: Get shared folders
-   *     description: Retrieves folders that have been shared with the authenticated user
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: query
-   *         name: includeArchived
-   *         schema:
-   *           type: boolean
-   *           default: false
-   *         description: Whether to include archived folders
-   *     responses:
-   *       200:
-   *         description: List of shared folders
-   *       401:
-   *         description: Unauthorized
-   *       500:
-   *         description: Server error
-   */
-  router.get('/folders/shared', async (req, res, next) => {
-    try {
-      let userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const userKey = req.user._key;
-
-      const includeArchived = req.query.includeArchived === 'true';
-
-      logger.info(`Getting shared folders for user ${userId} with includeArchived: ${includeArchived}`);
-
-      const options = {
-        includeArchived,
-        userKey
-      };
-
-      const folders = await chatHistoryService.getSharedFolders(userId, options);
-      res.json(folders);
-    } catch (error) {
-      logger.error(`Error getting shared folders: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
    * /chat/folders/search:
    *   get:
    *     summary: Search folders
@@ -1714,58 +1661,6 @@ module.exports = (chatHistoryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error moving conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /chat/folders/{folderId}/users:
-   *   get:
-   *     summary: Get folder users
-   *     description: Retrieves users who have access to a folder
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: path
-   *         name: folderId
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: ID of the folder
-   *     responses:
-   *       200:
-   *         description: List of users with access to the folder
-   *       401:
-   *         description: Unauthorized
-   *       403:
-   *         description: Forbidden - user doesn't have permission
-   *       404:
-   *         description: Folder not found
-   *       500:
-   *         description: Server error
-   */
-  router.get('/folders/:folderId/users', async (req, res, next) => {
-    try {
-      const { folderId } = req.params;
-
-      let userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const userKey = req.user._key;
-
-      logger.info(`Getting users with access to folder ${folderId} for user ${userId}`);
-
-      const users = await chatHistoryService.getFolderUsers(folderId, userId, userKey);
-      res.json(users);
-    } catch (error) {
-      logger.error(`Error getting users for folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
       next(error);
     }
   });

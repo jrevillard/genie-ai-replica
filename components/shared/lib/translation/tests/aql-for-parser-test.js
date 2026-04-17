@@ -371,21 +371,6 @@ const getForStatementTests = () => [
       expected: { type: 'ForStatement', variableName: 'folder', collectionName: 'folders' },
     },
     {
-      description: '[CHS-56] getSharedFolders',
-      aql: `FOR edge IN userFolders`,
-      expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },
-    },
-    {
-      description: '[CHS-57] getFolderUsers permission check',
-      aql: `FOR edge IN userFolders`,
-      expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },
-    },
-    {
-      description: '[CHS-58] getFolderUsers get users',
-      aql: `FOR edge IN userFolders`,
-      expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },
-    },
-    {
       description: '[QS-1] setQueryCategory find edge',
       aql: `FOR edge IN queryCategories`,
       expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'queryCategories' },

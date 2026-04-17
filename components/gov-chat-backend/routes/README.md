@@ -260,7 +260,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | GET | `/folders/:folderId` | Get folder details |
 | PATCH | `/folders/:folderId` | Update folder properties |
 | DELETE | `/folders/:folderId` | Delete a folder |
-| GET | `/folders/shared` | Get shared folders |
 | GET | `/folders/search` | Search folders |
 | POST | `/folders/reorder` | Reorder folders |
 | GET | `/folders/:folderId/path` | Get folder path |
@@ -268,7 +267,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | DELETE | `/folders/:folderId/conversations/:conversationId` | Remove conversation from folder |
 | GET | `/conversations/:conversationId/folder` | Get conversation's folder |
 | POST | `/conversations/:conversationId/move` | Move conversation between folders |
-| GET | `/folders/:folderId/users` | Get users with folder access |
 
 #### Key Parameters
 - `userId` (`iss_sub`): OIDC composite key (`${iss}#${sub}`) extracted from JWT for identity and logging.

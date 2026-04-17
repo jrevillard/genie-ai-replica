@@ -59,15 +59,18 @@ const userProvisioningService = {
     await usersCollection.ensureIndex({ type: 'persistent', fields: ['iss_sub'], unique: true, sparse: true });
     await usersCollection.ensureIndex({ type: 'persistent', fields: ['email'], unique: false, sparse: true });
 
-    // Drop legacy unique email index from pre-Keycloak auth
+    // Drop legacy unique email index (any type: hash, persistent, skiplist).
+    // Keycloak does not guarantee email uniqueness across realms — the same
+    // email address can exist in multiple realms with different sub claims.
+    // Must not enforce email uniqueness at the DB level for multi-realm support.
     try {
       const indexes = await usersCollection.indexes();
       const legacyIdx = indexes.find(
-        idx => idx.type === 'persistent' && idx.fields.length === 1 &&
+        idx => idx.fields.length === 1 &&
           idx.fields[0] === 'email' && idx.unique === true
       );
       if (legacyIdx) {
-        logger.info(`[UserProvisioning] Dropping legacy unique email index "${legacyIdx.name}"`);
+        logger.info(`[UserProvisioning] Dropping unique email index "${legacyIdx.name}" (type: ${legacyIdx.type}) — email uniqueness is not guaranteed across Keycloak realms`);
         await usersCollection.dropIndex(legacyIdx.id);
       }
     } catch (err) {
@@ -119,6 +122,44 @@ const userProvisioningService = {
     const db = await dbService.getConnection('default');
 
     const now = new Date().toISOString();
+
+    // Migrate legacy user: if a user without iss_sub shares the same email,
+    // update it with iss_sub so the UPSERT below finds and updates it
+    // instead of inserting a duplicate.
+    const email = decodedToken.email || null;
+    if (email) {
+      const legacyCursor = await db.query(
+        aql`
+          FOR u IN users
+            FILTER u.email == ${email} AND u.iss_sub == null
+            RETURN u
+        `
+      );
+      const legacyUser = await legacyCursor.next();
+      if (legacyUser) {
+        logger.info(`[UserProvisioning] Migrating legacy user ${legacyUser._key} → iss_sub: ${issSub}`);
+        await db.query(
+          aql`
+            FOR u IN users
+              FILTER u._key == ${legacyUser._key}
+              UPDATE u WITH {
+                iss_sub: ${issSub},
+                iss: ${decodedToken.iss},
+                sub: ${decodedToken.sub},
+                name: ${decodedToken.name || decodedToken.preferred_username || legacyUser.name || null},
+                emailVerified: ${decodedToken.email_verified || false},
+                roles: ${decodedToken.realm_access?.roles || []},
+                active: true,
+                deleted: false,
+                deletedAt: null,
+                updatedAt: ${now}
+              } IN users
+          `
+        );
+        // Invalidate any cache for this iss_sub to force fresh read after migration
+        _cache.delete(issSub);
+      }
+    }
 
     // Check if user exists and is soft-deleted before upserting
     const checkCursor = await db.query(

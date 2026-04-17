@@ -67,7 +67,7 @@ describe('userProvisioningService', () => {
       });
     });
 
-    it('should drop legacy unique email index if present', async () => {
+    it('should drop legacy unique email index if present (persistent type)', async () => {
       const { ensureCollection } = require('../shared-lib');
       const mockCollection = await ensureCollection();
       mockCollection.indexes.mockResolvedValue([
@@ -77,6 +77,20 @@ describe('userProvisioningService', () => {
       await userProvisioningService.initialize();
 
       expect(mockCollection.dropIndex).toHaveBeenCalledWith('legacy-email-idx');
+    });
+
+    it('should drop legacy unique email index if present (hash type)', async () => {
+      userProvisioningService._reset();
+      const { ensureCollection } = require('../shared-lib');
+      ensureCollection.mockClear();
+      const mockCollection = await ensureCollection();
+      mockCollection.indexes.mockResolvedValue([
+        { type: 'hash', fields: ['email'], unique: true, sparse: false, id: 'legacy-hash-idx', name: 'idx_1860819211534729216' }
+      ]);
+
+      await userProvisioningService.initialize();
+
+      expect(mockCollection.dropIndex).toHaveBeenCalledWith('legacy-hash-idx');
     });
 
     it('should not drop email index if it is non-unique', async () => {

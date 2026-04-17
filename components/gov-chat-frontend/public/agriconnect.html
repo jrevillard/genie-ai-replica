@@ -81,14 +81,14 @@ button:active{transform:scale(.97)}
         <div style="width:60px;height:60px;background:var(--primary);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:30px">🌾</div>
         <h1 style="font-size:26px;font-weight:900;color:var(--primary)">AgriConnect</h1>
         <p style="font-size:11px;color:var(--on-sv);text-transform:uppercase;letter-spacing:.15em;margin-top:4px">Agricultural Extension Services</p>
-        <p style="font-size:13px;color:var(--on-sv);margin-top:8px;line-height:1.5">Empowering extension workers in the <strong style="color:var(--secondary)">Maloti Mountains</strong></p>
+        <p style="font-size:13px;color:var(--on-sv);margin-top:8px;line-height:1.5">Empowering extension workers in the <strong style="color:var(--secondary)">Maluti Mountains</strong></p>
       </div>
 
       <div style="background:var(--surf-low);border-radius:20px;padding:28px;border:1px solid rgba(193,201,191,.2)">
         <!-- Lang toggle -->
         <div style="display:flex;background:var(--surf-highest);border-radius:14px;padding:4px;gap:4px;margin-bottom:20px">
-          <button style="flex:1;padding:10px;font-size:13px;font-weight:700;border-radius:10px;background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(3,51,25,.2)">Sesotho</button>
-          <button style="flex:1;padding:10px;font-size:13px;font-weight:600;border-radius:10px;color:var(--on-sv)">English</button>
+          <button id="lang-ses" style="flex:1;padding:10px;font-size:13px;font-weight:700;border-radius:10px;background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(3,51,25,.2)" onclick="switchLang('st')">Sesotho</button>
+          <button id="lang-en" style="flex:1;padding:10px;font-size:13px;font-weight:600;border-radius:10px;color:var(--on-sv)" onclick="switchLang('en')">English</button>
         </div>
         <!-- Role -->
         <div style="margin-bottom:20px">
@@ -183,13 +183,11 @@ button:active{transform:scale(.97)}
     <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">Active Pest Alerts</h2>
-        <span style="font-size:8px;font-weight:700;color:var(--error);text-transform:uppercase;background:var(--error-c);padding:2px 7px;border-radius:4px">3 Active</span>
+        <span style="font-size:8px;font-weight:700;color:var(--error);text-transform:uppercase;background:var(--error-c);padding:2px 6px;border-radius:4px">3 Active</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <div style="background:linear-gradient(135deg,#7f1d1d,#991b1b);border-radius:13px;padding:13px 14px;display:flex;align-items:center;gap:11px;cursor:pointer" onclick="sendQ('How do I identify and control Fall Armyworm in maize in Lesotho?');goTo('ai')">
-          <div style="width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          </div>
+          <div style="width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">⚠️</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
               <p style="font-size:12px;font-weight:800;color:#fff">Fall Armyworm</p>
@@ -197,7 +195,7 @@ button:active{transform:scale(.97)}
             </div>
             <p style="font-size:10px;color:rgba(255,255,255,.65);line-height:1.4">Leribe, Maseru, Butha-Buthe. Check maize leaves weekly.</p>
           </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          <span style="color:rgba(255,255,255,.4);font-size:18px">›</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div style="background:#fef3c7;border-radius:11px;padding:11px;cursor:pointer;border:1px solid rgba(217,119,6,.12)" onclick="sendQ('What is bean rust and how do I treat it in Lesotho?');goTo('ai')">
@@ -255,15 +253,15 @@ button:active{transform:scale(.97)}
         <button onclick="goTo('farmers')" style="font-size:10px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">View All</button>
       </div>
       <div class="sp-y2">
-        <div class="list-item" style="cursor:pointer" onclick="viewFarmer('TM','Thabo Mokoena','Maize','Leribe','2.5','+266 5812 3456','Active','2 days ago','Crops look healthy. Needs fertilizer check next visit.')">
+        <div class="list-item farmer-item" data-crop="maize" data-status="active" style="cursor:pointer" onclick="viewFarmer('TM','Thabo Mokoena','Maize','Leribe','2.5','+266 5812 3456','Active','2 days ago','Crops look healthy. Needs fertilizer check next visit.')">
           <div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:var(--primary-c);color:var(--primary-fixed);font-size:12px">TM</div><div><h4 style="font-weight:700;font-size:13px">Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv)">Maize · Leribe District</p></div></div>
           <div style="text-align:right"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary);display:block;margin-bottom:2px">Visited</span><span style="font-size:10px">2d ago</span></div>
         </div>
         <div class="list-item" style="cursor:pointer;border-color:rgba(186,26,26,.1)" onclick="viewFarmer('MS','Mampoi Sebata','Beans','Butha-Buthe','1.8','+266 5823 4567','Alert — Low Yield','5 days ago','Low yield observed. Possible soil nutrient deficiency. Needs urgent attention.')">
           <div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:rgba(255,166,122,.3);color:var(--secondary);font-size:12px">MS</div><div><h4 style="font-weight:700;font-size:13px">Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv)">Beans · Butha-Buthe</p></div></div>
-          <div style="text-align:right"><span class="tag" style="background:var(--error-c);color:var(--error);display:block;margin-bottom:2px">⚠ Alert</span><span style="font-size:10px;color:var(--error)">Low Yield</span></div>
+          <div style="text-align:right"><span class="tag" style="background:var(--error-c);color:var(--error);display:block;margin-bottom:2px">Alert</span><span style="font-size:10px;color:var(--error)">Low Yield</span></div>
         </div>
-        <div class="list-item" style="cursor:pointer" onclick="viewFarmer('KN','Khauhelo Nkosi','Beans','Maseru','3.1','+266 5834 5678','Due Today','1 week ago','First season beans farmer. Needs guidance on spacing.')">
+        <div class="list-item farmer-item" data-crop="beans" data-status="due" style="cursor:pointer" onclick="viewFarmer('KN','Khauhelo Nkosi','Beans','Maseru','3.1','+266 5834 5678','Due Today','1 week ago','First season beans farmer. Needs guidance on spacing.')">
           <div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:42px;height:42px;background:rgba(189,238,199,.4);color:var(--primary);font-size:12px">KN</div><div><h4 style="font-weight:700;font-size:13px">Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv)">Beans · Maseru</p></div></div>
           <div style="text-align:right"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary);display:block;margin-bottom:2px">Due</span><span style="font-size:10px;color:var(--primary)">Today</span></div>
         </div>
@@ -272,7 +270,7 @@ button:active{transform:scale(.97)}
 
     <!-- 6. WEATHER -->
     <div style="background:rgba(255,166,122,.85);border-radius:14px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="sendQ('What is the weather forecast for the next 3 days in Maseru Lesotho and how does it affect maize and beans farming?');goTo('ai')">
-      <div style="background:var(--on-sc);padding:9px;border-radius:11px;font-size:20px;flex-shrink:0" id="w-icon">☀️</div>
+      <div style="background:var(--on-sc);padding:9px;border-radius:11px;font-size:20px;flex-shrink:0">☀️</div>
       <div style="flex:1;min-width:0">
         <h3 id="w-title" style="color:var(--on-sc);font-weight:900;font-size:13px;line-height:1.2">Loading weather...</h3>
         <p id="w-sub" style="color:rgba(120,57,22,.75);font-size:11px">Maseru, Lesotho · Tap to ask AI</p>
@@ -280,7 +278,7 @@ button:active{transform:scale(.97)}
       <p style="font-size:16px;color:rgba(120,57,22,.5);flex-shrink:0">›</p>
     </div>
 
-    <!-- 7. MARKET PRICES (bottom - useful context for extension workers) -->
+    <!-- 7. MARKET PRICES -->
     <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">
         <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em">Market Prices</h2>
@@ -289,19 +287,20 @@ button:active{transform:scale(.97)}
       <div class="sp-y2">
         <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
           <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🌽</span><div><h4 style="font-weight:700;font-size:13px">Maize (50kg)</h4><p style="font-size:10px;color:var(--on-sv)">Maseru Market</p></div></div>
-          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 180</p><p style="font-size:10px;color:#22c55e;font-weight:700">↑ +5%</p></div>
+          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 180</p><p style="font-size:10px;color:#22c55e;font-weight:700">+5%</p></div>
         </div>
         <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
           <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🫘</span><div><h4 style="font-weight:700;font-size:13px">Beans (25kg)</h4><p style="font-size:10px;color:var(--on-sv)">Maseru Market</p></div></div>
-          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 320</p><p style="font-size:10px;color:var(--error);font-weight:700">↓ -2%</p></div>
+          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 320</p><p style="font-size:10px;color:var(--error);font-weight:700">-2%</p></div>
         </div>
         <div style="background:var(--surf-low);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center">
           <div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">🌾</span><div><h4 style="font-weight:700;font-size:13px">Sorghum (50kg)</h4><p style="font-size:10px;color:var(--on-sv)">Ha Matala Market</p></div></div>
-          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 160</p><p style="font-size:10px;color:var(--on-sv);font-weight:700">→ Stable</p></div>
+          <div style="text-align:right"><p style="font-size:18px;font-weight:900;color:var(--primary)">M 160</p><p style="font-size:10px;color:var(--on-sv);font-weight:700">Stable</p></div>
         </div>
       </div>
     </div>
-    </main>
+
+  </main>
   <button onclick="goTo('ai')" style="position:fixed;bottom:82px;right:16px;width:48px;height:48px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(3,51,25,.35);z-index:40">🎙️</button>
   <nav class="bottom-nav">
     <button class="nav-btn active" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
@@ -381,24 +380,24 @@ button:active{transform:scale(.97)}
     <button onclick="showAddFarmer()" style="width:36px;height:36px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(3,51,25,.3)">+</button>
   </header>
   <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px">
-    <input type="text" id="farmer-search" placeholder="🔍  Search by name or district..." oninput="searchFarmers(this.value)" style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:16px;outline:none;color:var(--on-surface)"/>
+    <input type="text" id="farmer-search" oninput="searchFarmers(this.value)" placeholder="🔍  Search farmers..." style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:16px;outline:none"/>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
       <div style="background:var(--primary-c);border-radius:14px;padding:12px;text-align:center"><p style="font-size:26px;font-weight:900;color:var(--primary-fixed)">24</p><p style="font-size:9px;font-weight:700;color:rgba(189,238,199,.6);text-transform:uppercase">Total</p></div>
       <div class="card" style="text-align:center"><p style="font-size:26px;font-weight:900;color:var(--primary)">18</p><p style="font-size:9px;font-weight:700;color:var(--on-sv);text-transform:uppercase">Active</p></div>
       <div style="background:var(--error-c);border-radius:14px;padding:12px;text-align:center"><p style="font-size:26px;font-weight:900;color:var(--error)">3</p><p style="font-size:9px;font-weight:700;color:rgba(186,26,26,.55);text-transform:uppercase">Alerts</p></div>
     </div>
     <div class="scroll-x" style="display:flex;gap:8px;margin-bottom:16px">
-      <button id="ft-all" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--primary);color:#fff" onclick="filterFarmers('all')">All Farmers</button>
-      <button id="ft-maize" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)" onclick="filterFarmers('maize')">Maize</button>
-      <button id="ft-beans" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)" onclick="filterFarmers('beans')">Beans</button>
-      <button id="ft-alert" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)" onclick="filterFarmers('alert')">Needs Visit</button>
+      <button id="ft-all" onclick="filterFarmers('all')" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--primary);color:#fff">All Farmers</button>
+      <button id="ft-maize" onclick="filterFarmers('maize')" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)">Maize</button>
+      <button id="ft-beans" onclick="filterFarmers('beans')" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)">Beans</button>
+      <button id="ft-alert" onclick="filterFarmers('alert')" style="flex:none;padding:6px 14px;border-radius:10px;font-size:11px;font-weight:700;background:var(--surf-mid);color:var(--on-sv)">Needs Visit</button>
     </div>
     <div class="sp-y2">
-      <div class="list-item" style="cursor:pointer" data-crop="maize" data-status="active" onclick="viewFarmer('TM','Thabo Mokoena','Maize','Leribe','2.5','+266 5812 3456','Active','2 days ago','Crops look healthy. Needs fertilizer check next visit.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--primary-c);color:var(--primary-fixed)">TM</div><div><h4 style="font-weight:700;font-size:13px">Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Leribe • 2.5ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">Visited 2d</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item" style="border-color:rgba(186,26,26,.1);cursor:pointer" data-crop="beans" data-status="alert" onclick="viewFarmer('MS','Mampoi Sebata','Beans','Butha-Buthe','1.8','+266 5823 4567','Alert - Low Yield','5 days ago','Low yield observed. Possible soil nutrient deficiency. Needs urgent attention.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(255,166,122,.3);color:var(--secondary)">MS</div><div><h4 style="font-weight:700;font-size:13px">Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Butha-Buthe • 1.8ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:var(--error-c);color:var(--error)">⚠ Alert</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item" style="cursor:pointer" data-crop="beans" data-status="due" onclick="viewFarmer('KN','Khauhelo Nkosi','Beans','Maseru','3.1','+266 5834 5678','Due for visit','1 week ago','First season beans farmer. Needs guidance on spacing and pest management.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(189,238,199,.4);color:var(--primary)">KN</div><div><h4 style="font-weight:700;font-size:13px">Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Maseru • 3.1ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Due Today</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item" style="cursor:pointer" data-crop="maize" data-status="active" onclick="viewFarmer('LP','Lineo Pitso','Maize','Mohale's Hoek','1.2','+266 5845 6789','Active','1 week ago','Small plot but well maintained. Interested in intercropping with beans.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--surf-highest);color:var(--on-sv)">LP</div><div><h4 style="font-weight:700;font-size:13px">Lineo Pitso</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Mohale's Hoek • 1.2ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="color:var(--outline)">1w ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
-      <div class="list-item" style="cursor:pointer" data-crop="beans" data-status="active" onclick="viewFarmer('SM','Selloane Mafoso','Beans + Maize','Maseru','4.0','+266 5856 7890','Active','3 days ago','Experienced farmer with intercropping. Model farmer for the district.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(30,74,46,.4);color:var(--primary-fixed)">SM</div><div><h4 style="font-weight:700;font-size:13px">Selloane Mafoso</h4><p style="font-size:10px;color:var(--on-sv)">Beans + Maize • Maseru • 4.0ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">3d ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item" style="cursor:pointer" onclick="viewFarmer('TM','Thabo Mokoena','Maize','Leribe','2.5','+266 5812 3456','Active','2 days ago','Crops look healthy. Needs fertilizer check next visit.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--primary-c);color:var(--primary-fixed)">TM</div><div><h4 style="font-weight:700;font-size:13px">Thabo Mokoena</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Leribe • 2.5ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">Visited 2d</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item farmer-item" data-crop="beans" data-status="alert" style="border-color:rgba(186,26,26,.1);cursor:pointer" onclick="viewFarmer('MS','Mampoi Sebata','Beans','Butha-Buthe','1.8','+266 5823 4567','Alert - Low Yield','5 days ago','Low yield observed. Possible soil nutrient deficiency. Needs urgent attention.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(255,166,122,.3);color:var(--secondary)">MS</div><div><h4 style="font-weight:700;font-size:13px">Mampoi Sebata</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Butha-Buthe • 1.8ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:var(--error-c);color:var(--error)">⚠ Alert</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item" style="cursor:pointer" onclick="viewFarmer('KN','Khauhelo Nkosi','Beans','Maseru','3.1','+266 5834 5678','Due for visit','1 week ago','First season beans farmer. Needs guidance on spacing and pest management.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(189,238,199,.4);color:var(--primary)">KN</div><div><h4 style="font-weight:700;font-size:13px">Khauhelo Nkosi</h4><p style="font-size:10px;color:var(--on-sv)">Beans • Maseru • 3.1ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">Due Today</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item farmer-item" data-crop="maize" data-status="active" style="cursor:pointer" onclick="viewFarmer('LP','Lineo Pitso','Maize','Mohale's Hoek','1.2','+266 5845 6789','Active','1 week ago','Small plot but well maintained. Interested in intercropping with beans.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--surf-highest);color:var(--on-sv)">LP</div><div><h4 style="font-weight:700;font-size:13px">Lineo Pitso</h4><p style="font-size:10px;color:var(--on-sv)">Maize • Mohale's Hoek • 1.2ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="color:var(--outline)">1w ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
+      <div class="list-item farmer-item" data-crop="beans" data-status="active" style="cursor:pointer" onclick="viewFarmer('SM','Selloane Mafoso','Beans + Maize','Maseru','4.0','+266 5856 7890','Active','3 days ago','Experienced farmer with intercropping. Model farmer for the district.')"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:rgba(30,74,46,.4);color:var(--primary-fixed)">SM</div><div><h4 style="font-weight:700;font-size:13px">Selloane Mafoso</h4><p style="font-size:10px;color:var(--on-sv)">Beans + Maize • Maseru • 4.0ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(144,76,39,.18);color:var(--secondary)">3d ago</span><span style="font-size:18px;color:var(--outline)">›</span></div></div>
     </div>
   </main>
   <nav class="bottom-nav">
@@ -418,60 +417,79 @@ button:active{transform:scale(.97)}
     <span style="font-size:18px">🔄</span>
   </header>
   <main style="flex:1;overflow-y:auto;padding:16px;padding-bottom:90px;max-width:672px;width:100%;margin:0 auto">
-    <input type="text" id="knowledge-search" placeholder="🔍  Search guides..." oninput="searchKnowledge(this.value)" style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:20px;outline:none;color:var(--on-surface)"/>
-    <!-- Challenge-relevant knowledge only -->
-    <div id="knowledge-items" style="margin-bottom:12px">
+    <input type="text" id="knowledge-search" oninput="searchKnowledge(this.value)" placeholder="🔍  Search beans, maize, soil..." style="width:100%;background:var(--surf-low);border:none;border-radius:14px;padding:12px 16px;font-size:13px;margin-bottom:20px;outline:none"/>
 
-      <!-- MAIZE -->
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🌽 Maize (Poone)</h2>
-        <div class="sp-y2">
-          <div class="knowledge-item list-item" data-tags="maize planting season highlands" style="cursor:pointer" onclick="sendQ('When and how should I plant maize in Lesotho highlands?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📅</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Planting Season &amp; Spacing</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Oct–Dec · 75cm row spacing</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-          <div class="knowledge-item list-item" data-tags="maize fertilizer soil npk" style="cursor:pointer" onclick="sendQ('What fertilizer should I use for maize in Lesotho and how much?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧪</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Fertilizer &amp; Soil Management</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">NPK ratios · Soil pH 5.5–7.0</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-          <div class="knowledge-item list-item" data-tags="maize harvest storage yield" style="cursor:pointer" onclick="sendQ('How do I know when maize is ready to harvest in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌾</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Harvesting &amp; Storage</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Timing · Drying · Safe storage</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-        </div>
+    <!-- SEASONAL CALENDAR -->
+    <div style="background:var(--primary);border-radius:14px;padding:14px;margin-bottom:20px;cursor:pointer" onclick="sendQ('What is the full planting and harvesting calendar for maize and beans in Lesotho highlands?');goTo('ai')">
+      <p style="font-size:9px;font-weight:700;color:rgba(189,238,199,.55);text-transform:uppercase;letter-spacing:.15em;margin-bottom:4px">Lesotho Highlands</p>
+      <h3 style="font-size:14px;font-weight:900;color:var(--primary-fixed);margin-bottom:12px">Seasonal Calendar 2026</h3>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px">
+        <div style="text-align:center;padding:6px 2px;border-radius:7px;background:rgba(255,255,255,.08)"><p style="font-size:8px;font-weight:700;color:rgba(189,238,199,.7)">OCT</p><p style="font-size:7px;color:#86efac;margin-top:2px;font-weight:600">Plant</p></div>
+        <div style="text-align:center;padding:6px 2px;border-radius:7px;background:rgba(255,255,255,.08)"><p style="font-size:8px;font-weight:700;color:rgba(189,238,199,.7)">NOV</p><p style="font-size:7px;color:#86efac;margin-top:2px;font-weight:600">Plant</p></div>
+        <div style="text-align:center;padding:6px 2px;border-radius:7px;background:rgba(255,255,255,.08)"><p style="font-size:8px;font-weight:700;color:rgba(189,238,199,.7)">DEC</p><p style="font-size:7px;color:#fcd34d;margin-top:2px;font-weight:600">Grow</p></div>
+        <div style="text-align:center;padding:6px 2px;border-radius:7px;background:rgba(255,255,255,.08)"><p style="font-size:8px;font-weight:700;color:rgba(189,238,199,.7)">JAN</p><p style="font-size:7px;color:#fcd34d;margin-top:2px;font-weight:600">Grow</p></div>
+        <div style="text-align:center;padding:6px 2px;border-radius:7px;background:rgba(255,255,255,.08)"><p style="font-size:8px;font-weight:700;color:rgba(189,238,199,.7)">FEB</p><p style="font-size:7px;color:#fcd34d;margin-top:2px;font-weight:600">Grow</p></div>
+        <div style="text-align:center;padding:6px 2px;border-radius:7px;background:rgba(255,255,255,.08)"><p style="font-size:8px;font-weight:700;color:rgba(189,238,199,.7)">MAR</p><p style="font-size:7px;color:#fb923c;margin-top:2px;font-weight:600">Harvest</p></div>
       </div>
-
-      <!-- BEANS -->
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🫘 Beans (Linaoa)</h2>
-        <div class="sp-y2">
-          <div class="knowledge-item list-item" data-tags="beans planting varieties highlands" style="cursor:pointer" onclick="sendQ('What are the best bean varieties for Lesotho highlands and when to plant?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,166,122,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌱</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Varieties &amp; Planting</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Oct–Nov · Highlands-adapted</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-          <div class="knowledge-item list-item" data-tags="beans intercropping maize soil nitrogen" style="cursor:pointer" onclick="sendQ('How do I intercrop beans with maize in Lesotho for better yield?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,166,122,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔄</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Intercropping with Maize</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Nitrogen fixation · Better yields</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-          <div class="knowledge-item list-item" data-tags="beans disease rust blight treatment" style="cursor:pointer" onclick="sendQ('What are common bean diseases in Lesotho and how do I treat them?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,166,122,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔬</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Bean Diseases</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Rust · Blight · Angular leaf spot</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-        </div>
+      <div style="display:flex;gap:12px;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:50%;background:#86efac"></div><span style="font-size:8px;color:rgba(189,238,199,.7)">Planting</span></div>
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:50%;background:#fcd34d"></div><span style="font-size:8px;color:rgba(189,238,199,.7)">Growing</span></div>
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:50%;background:#fb923c"></div><span style="font-size:8px;color:rgba(189,238,199,.7)">Harvest</span></div>
       </div>
-
-      <!-- PESTS -->
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🐛 Pest Management</h2>
-        <div class="sp-y2">
-          <div class="knowledge-item list-item" data-tags="fall armyworm FAW maize pest identify control" style="cursor:pointer" onclick="sendQ('How do I identify and control Fall Armyworm in maize in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--error-c);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⚠️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Fall Armyworm (FAW)</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Identify · Report · Control</p></div></div><span class="tag" style="background:var(--error-c);color:var(--error)">HIGH RISK</span></div>
-          <div class="knowledge-item list-item" data-tags="stalk borer pest maize control" style="cursor:pointer" onclick="sendQ('How do I identify and control stalk borers in maize in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(144,76,39,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌿</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Stalk Borers</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Chilo partellus · Early detection</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-          <div class="knowledge-item list-item" data-tags="aphids beans pest control spray" style="cursor:pointer" onclick="sendQ('How do I control aphids on beans in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔍</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Aphids on Beans</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Monitoring · Organic control</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-        </div>
-      </div>
-
-      <!-- SOIL & WATER -->
-      <div style="margin-bottom:20px">
-        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🌍 Soil &amp; Water</h2>
-        <div class="sp-y2">
-          <div class="knowledge-item list-item" data-tags="soil pH testing maize beans" style="cursor:pointer" onclick="sendQ('How do I test soil pH for maize and beans in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧪</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Soil pH Testing</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Ideal range 5.5–7.0 · Lime application</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">ESSENTIAL</span></div>
-          <div class="knowledge-item list-item" data-tags="conservation agriculture water basin contour" style="cursor:pointer" onclick="sendQ('What conservation agriculture practices work best in Lesotho highlands?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏗️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Conservation Agriculture</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Basin construction · Contour farming</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-        </div>
-      </div>
-
-      <!-- GOVERNMENT PROGRAMS -->
-      <div style="margin-bottom:12px">
-        <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">🏛️ Government Support</h2>
-        <div class="sp-y2">
-          <div class="knowledge-item list-item" data-tags="input subsidy seeds fertilizer government program" style="cursor:pointer" onclick="goTo('programs')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌱</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Input Subsidy Programme</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Seeds &amp; fertilizer · Deadline May 31</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">ACTIVE</span></div>
-          <div class="knowledge-item list-item" data-tags="FAO extension support farmer program" style="cursor:pointer" onclick="sendQ('What government agricultural support programs are available in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏛️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Farmer Support Unit</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Free advisory · +266 2231 4990</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
-        </div>
-      </div>
-
     </div>
-    <div style="display:flex;justify-content:center;margin-top:8px"><div style="background:rgba(30,74,46,.08);border:1px solid rgba(3,51,25,.1);border-radius:999px;padding:6px 16px;display:flex;align-items:center;gap:6px"><span style="font-size:12px">✅</span><span style="font-size:10px;font-weight:700;color:var(--on-pf-var)">26+ Lesotho documents synced</span></div></div>
+
+    <!-- FULL PRODUCTION CYCLE -->
+    <div class="k-section" style="margin-bottom:20px">
+      <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">Full Production Cycle</h2>
+      <div class="sp-y2">
+        <div class="list-item knowledge-item" data-tags="land preparation ploughing soil tillage" style="cursor:pointer" onclick="sendQ('How should I prepare land for maize and beans in Lesotho highlands?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(144,76,39,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🚜</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">1. Land Preparation</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Ploughing · Ripping · Minimum tillage</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        <div class="list-item knowledge-item" data-tags="planting seeds spacing depth maize beans" style="cursor:pointer" onclick="sendQ('What is the correct planting method for maize and beans in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌱</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">2. Planting</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Seed rate · Spacing · Planting depth</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        <div class="list-item knowledge-item" data-tags="crop management weeding thinning fertilizer topdressing" style="cursor:pointer" onclick="sendQ('How do I manage maize and beans crops during the growing season in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(189,238,199,.3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌿</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">3. Crop Management</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Weeding · Thinning · Top-dressing</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        <div class="list-item knowledge-item" data-tags="harvesting maize beans timing method" style="cursor:pointer" onclick="sendQ('When and how should I harvest maize and beans in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,146,56,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌾</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">4. Harvesting</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Timing · Method · Yield assessment</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        <div class="list-item knowledge-item" data-tags="post harvest storage drying threshing shelling" style="cursor:pointer" onclick="sendQ('How should I dry thresh and store maize and beans after harvest in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏚</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">5. Post-Harvest Handling</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Drying · Threshing · Safe storage</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        <div class="list-item knowledge-item" data-tags="marketing selling prices buyers market" style="cursor:pointer" onclick="goTo('market')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏪</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">6. Marketing &amp; Sales</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Buyers · Prices · Value addition</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+      </div>
+    </div>
+
+    <!-- PEST MANAGEMENT -->
+    <div class="k-section" style="margin-bottom:20px">
+      <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">Pest Management</h2>
+      <div class="sp-y2">
+        <div class="list-item knowledge-item" data-tags="fall armyworm FAW maize pest identify control" style="cursor:pointer" onclick="sendQ('How do I identify and control Fall Armyworm in maize in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--error-c);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⚠️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Fall Armyworm (FAW)</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Identify · Report · Control</p></div></div><span class="tag" style="background:var(--error-c);color:var(--error)">HIGH RISK</span></div>
+        <div class="list-item knowledge-item" data-tags="stalk borer pest maize chilo" style="cursor:pointer" onclick="sendQ('How do I identify and control stalk borers in maize in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(144,76,39,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌽</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Stalk Borers</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Chilo partellus · Early detection</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+        <div class="list-item knowledge-item" data-tags="bean rust blight angular leaf disease" style="cursor:pointer" onclick="sendQ('What are common bean diseases in Lesotho and how do I treat them?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(255,166,122,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔬</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Bean Diseases</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Rust · Blight · Angular leaf spot</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+      </div>
+    </div>
+
+    <!-- EXTENSION TOOLS -->
+    <div class="k-section" style="margin-bottom:20px">
+      <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">Extension Tools</h2>
+      <div class="sp-y2">
+        <div class="list-item knowledge-item" data-tags="planning guide farm plan season budget" style="cursor:pointer" onclick="sendQ('Help me create a seasonal farm plan for a smallholder farmer in Lesotho growing maize and beans.');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📋</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Farm Planning Guide</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Seasonal plan · Input budget · Labour</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">AI</span></div>
+        <div class="list-item knowledge-item" data-tags="diagnosis problem solving crop disease pest" style="cursor:pointer" onclick="sendQ('My farmer has a problem with their maize crop. Help me diagnose and recommend a solution.');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔍</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Crop Problem Diagnosis</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Describe symptoms · Get diagnosis</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">AI</span></div>
+        <div class="list-item knowledge-item" data-tags="visit checklist farm extension assess" style="cursor:pointer" onclick="sendQ('Give me a checklist of what to assess during a farm visit for a maize farmer in Lesotho.');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✅</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Farm Visit Checklist</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">What to assess on each visit</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">AI</span></div>
+      </div>
+    </div>
+
+    <!-- SOIL & WATER -->
+    <div class="k-section" style="margin-bottom:20px">
+      <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">Soil &amp; Water</h2>
+      <div class="sp-y2">
+        <div class="list-item knowledge-item" data-tags="soil pH testing maize beans lime" style="cursor:pointer" onclick="sendQ('How do I test soil pH for maize and beans in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--surf-highest);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧪</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Soil pH Testing</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Ideal range 5.5-7.0 · Lime application</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">ESSENTIAL</span></div>
+        <div class="list-item knowledge-item" data-tags="conservation agriculture basin water contour" style="cursor:pointer" onclick="sendQ('What is basin construction for water conservation in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:var(--surf-highest);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏗️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Basin Construction</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Step-by-step layout guide</p></div></div><span class="tag" style="background:rgba(255,146,56,.15);color:var(--tertiary-t)">CONSERVE</span></div>
+      </div>
+    </div>
+
+    <!-- GOVERNMENT SUPPORT -->
+    <div class="k-section" style="margin-bottom:20px">
+      <h2 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(3,51,25,.55);margin-bottom:10px">Government Support</h2>
+      <div class="sp-y2">
+        <div class="list-item knowledge-item" data-tags="input subsidy seeds fertilizer government" style="cursor:pointer" onclick="goTo('programs')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌱</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Input Subsidy Programme</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Seeds &amp; fertilizer · Deadline May 31</p></div></div><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">ACTIVE</span></div>
+        <div class="list-item knowledge-item" data-tags="FAO extension support farmer advisory" style="cursor:pointer" onclick="sendQ('What government agricultural support programs are available in Lesotho?');goTo('ai')"><div style="display:flex;align-items:center;gap:10px;flex:1"><div style="width:38px;height:38px;background:rgba(3,51,25,.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏛️</div><div style="flex:1"><h4 style="font-size:12px;font-weight:700">Farmer Support Unit</h4><p style="font-size:10px;color:var(--on-sv);margin-top:2px">Free advisory · +266 2231 4990</p></div></div><span style="font-size:18px;color:var(--outline)">›</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:center;margin-top:20px"><div style="background:rgba(30,74,46,.08);border:1px solid rgba(3,51,25,.1);border-radius:999px;padding:6px 16px;display:flex;align-items:center;gap:6px"><span style="font-size:12px">✅</span><span style="font-size:10px;font-weight:700;color:var(--on-pf-var)">All Content Synced Offline</span></div></div>
   </main>
   <nav class="bottom-nav">
     <button class="nav-btn" onclick="goTo('dashboard')"><span class="ni">🏠</span>Home</button>
@@ -566,26 +584,33 @@ async function doLogin(){
     const d=await res.json();
     console.log("Login response:", JSON.stringify(d)); if(d.accessToken){
       token=d.accessToken;
-      localStorage.setItem('ac_token',token);
-      localStorage.setItem('ac_loginName',u.value);
-      localStorage.setItem('ac_loginHash',hash);
       userId=d._key?'users/'+d._key:'users/105329';
-      localStorage.setItem('ac_userId',userId);
       const name=d.personalIdentification?.fullName||u.value;
       const ini=name.split(' ').map(n=>n[0]||'').join('').toUpperCase().substring(0,2)||'EW';
       document.getElementById('prof-name').textContent=name;const ug=document.getElementById('dash-username');if(ug)ug.textContent=name;const pun=document.getElementById('prof-name-users');if(pun)pun.textContent=name;
       document.getElementById('prof-av').textContent=ini;
-      localStorage.setItem('ac_name',name);
-      localStorage.setItem('ac_ini',ini);
+      const uname=d.personalIdentification?.fullName||u.value;
+      const uini=uname.split(' ').map(n=>n[0]||'').join('').toUpperCase().substring(0,2)||'EW';
+      localStorage.setItem('ac_token',token);
+      localStorage.setItem('ac_loginName',u.value);
+      localStorage.setItem('ac_loginHash',hash);
+      localStorage.setItem('ac_userId',userId);
+      localStorage.setItem('ac_name',uname);
+      localStorage.setItem('ac_ini',uini);
       localStorage.setItem('ac_role',d.role||'worker');
-      applyRole(d.role||'worker');setSync(true);initDash();goTo('dashboard');
+      const pn=document.getElementById('prof-name');if(pn)pn.textContent=uname;
+      const du=document.getElementById('dash-username');if(du)du.textContent=uname;
+      const pa=document.getElementById('prof-av');if(pa)pa.textContent=uini;
+      const adminBtn=document.getElementById('role-admin');
+      if(adminBtn&&adminBtn.classList.contains('role-selected')){window.location.href='/dashboard';}
+      else{applyRole(d.role||'worker');setSync(true);initDash();goTo('dashboard');}
     }else{console.log("Login failed:", d); showErr(d.message||'Invalid credentials.');}
   }catch(err){showErr('Connection error. Please try again.');}
   if(b)b.textContent='Login';
 }
 
 function showErr(m){const e=document.getElementById('login-err');if(e){e.textContent=m;e.style.display='block';}}
-function doLogout(){token=null;['ac_token','ac_userId','ac_name','ac_ini','ac_role','ac_loginName','ac_loginHash'].forEach(k=>localStorage.removeItem(k));setSync(false);goTo('login');}
+function doLogout(){token=null;['ac_token','ac_userId','ac_name','ac_ini','ac_role','ac_loginName','ac_loginHash','ac_chat'].forEach(k=>localStorage.removeItem(k));setSync(false);goTo('login');}
 
 function setSync(on){
   const dot=document.getElementById('sync-dot'),lbl=document.getElementById('sync-label');
@@ -637,39 +662,6 @@ function setTopic(t){
 
 function sendQ(txt){const inp=document.getElementById('chat-inp');if(inp)inp.value=txt;sendMsg();}
 
-function saveChatHistory(){
-  try{
-    const m=document.getElementById('chat-msgs');if(!m)return;
-    const items=[];
-    m.querySelectorAll('div[style*="align-items"]').forEach(el=>{
-      const u=el.querySelector('.chat-user');const a=el.querySelector('.chat-ai');
-      if(u)items.push({t:'u',h:u.innerHTML});
-      if(a)items.push({t:'a',h:a.outerHTML});
-    });
-    localStorage.setItem('ac_chat',JSON.stringify(items.slice(-30)));
-  }catch(e){}
-}
-
-function loadChatHistory(){
-  try{
-    const saved=localStorage.getItem('ac_chat');if(!saved)return;
-    const m=document.getElementById('chat-msgs');if(!m)return;
-    JSON.parse(saved).forEach(b=>{
-      const d=document.createElement('div');
-      d.className='fade-in';
-      if(b.t==='u'){
-        d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-end;align-self:flex-end;max-width:92%';
-        d.innerHTML='<div class="chat-user">'+b.h+'</div>';
-      }else{
-        d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-start;max-width:92%';
-        d.innerHTML=b.h;
-      }
-      m.appendChild(d);
-    });
-    m.scrollTop=m.scrollHeight;
-  }catch(e){}
-}
-
 async function sendMsg(){
   const inp=document.getElementById('chat-inp');
   const txt=inp?inp.value.trim():'';
@@ -683,24 +675,21 @@ async function sendMsg(){
     const r=await fetch(API+'/query',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({userId,sessionId:sessId,messages:[{role:'user',content:txt}],context:{categoryLabel:tm[topic]||'General',serviceLabels:lm[topic]||['Just Chat'],language:'EN'}})});
     const d=await r.json();
     rmTyping(tid);
-    if(d.response)addBubble(d.response,'ai',!!(d.metadata?.source_documents?.length));
-    else if(d.error==='Unauthorized'||d.message?.includes('log in')){
+    if(d.response){
+      const conf=d.metadata&&d.metadata.confidence_score?d.metadata.confidence_score:0;
+      const hasSrc=!!(d.metadata&&d.metadata.source_documents&&d.metadata.source_documents.length);
+      addBubble(d.response,'ai',hasSrc,conf);
+    }else if(d.error==='Unauthorized'||(d.message&&d.message.includes('log in'))){
       const su=localStorage.getItem('ac_loginName'),sh=localStorage.getItem('ac_loginHash');
-      if(su&&sh){
-        try{
-          const rr=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginName:su,encPassword:sh})});
-          const dd=await rr.json();
-          if(dd.accessToken){token=dd.accessToken;localStorage.setItem('ac_token',token);addBubble('Session refreshed — please ask your question again.','ai');}
-          else addBubble('Session expired. Please reload the page.','ai');
-        }catch(e2){addBubble('Session expired. Please reload the page.','ai');}
-      } else addBubble('Session expired. Please reload the page.','ai');
-    } else addBubble('Sorry, encountered an error: '+(d.message||'Unknown'),'ai');
+      if(su&&sh){fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginName:su,encPassword:sh})}).then(r=>r.json()).then(dd=>{if(dd.accessToken){token=dd.accessToken;localStorage.setItem('ac_token',token);addBubble('Session refreshed. Please ask again.','ai',false,0);}else addBubble('Session expired. Please reload.','ai',false,0);}).catch(()=>addBubble('Session expired. Please reload.','ai',false,0));}
+      else addBubble('Session expired. Please reload.','ai',false,0);
+    }else addBubble('Sorry, encountered an error: '+(d.message||'Unknown'),'ai',false,0);
   }catch(e){rmTyping(tid);addBubble('Connection error. Please check your network.','ai');}
   const m=document.getElementById('chat-msgs');if(m)m.scrollTop=m.scrollHeight;
   saveChatHistory();
 }
 
-function addBubble(txt,sender,src=false){
+function addBubble(txt,sender,src,conf){src=src||false;conf=conf||0;
   const m=document.getElementById('chat-msgs');if(!m)return;
   const now=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   const d=document.createElement('div');
@@ -709,8 +698,13 @@ function addBubble(txt,sender,src=false){
   if(sender==='user'){
     d.innerHTML='<div class="chat-user"><p style="font-size:13px;font-weight:500;line-height:1.6">'+esc(txt)+'</p></div><span style="font-size:9px;color:var(--outline);font-weight:700;margin-right:4px">'+now+' ✓✓</span>';
   }else{
-    const adv=src?'<div style="display:flex;align-items:center;gap:4px;margin-bottom:8px"><span style="font-size:12px">ℹ️</span><span style="font-size:9px;font-weight:900;color:var(--secondary);text-transform:uppercase;letter-spacing:.05em">Advisory • Keletso</span></div>':'';
-    d.innerHTML='<div class="chat-ai"'+(src?' style="border-left:4px solid var(--secondary-c)"':'')+'">'+adv+'<p style="font-size:13px;font-weight:500;line-height:1.6;color:var(--on-surface)">'+fmt(txt)+'</p></div><span style="font-size:9px;color:var(--outline);font-weight:700;margin-left:4px">'+now+'</span>';
+    const adv=src?'<div style="display:flex;align-items:center;gap:4px;margin-bottom:8px"><span style="font-size:9px;font-weight:900;color:var(--secondary);text-transform:uppercase;letter-spacing:.05em;background:rgba(144,76,39,.12);padding:2px 8px;border-radius:5px">Advisory · Keletso</span></div>':'';
+    const brd=src?' style="border-left:4px solid var(--secondary-c)"':'';
+    const confPct=conf>0?Math.round(conf*100):null;
+    let confBar='';
+    if(confPct!==null){const col=confPct>=60?'#16a34a':confPct>=35?'#d97706':'#ba1a1a';confBar='<div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(193,201,191,.2)"><div style="flex:1;background:var(--surf-highest);border-radius:999px;height:4px"><div style="background:'+col+';height:4px;border-radius:999px;width:'+Math.min(confPct,100)+'%"></div></div><span style="font-size:9px;font-weight:700;color:'+col+'">'+confPct+'% confidence</span></div>';}
+    const fb='<div style="display:flex;gap:6px;margin-top:6px"><button onclick="submitFeedback(this,1)" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Helpful</button><button onclick="submitFeedback(this,-1)" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Not helpful</button></div>';
+    d.innerHTML='<div class="chat-ai"'+brd+'>'+adv+'<p style="font-size:13px;font-weight:500;line-height:1.6;color:var(--on-surface)">'+fmt(txt)+'</p>'+confBar+fb+'</div><span style="font-size:9px;color:var(--outline);font-weight:700;margin-left:4px">'+now+'</span>';
   }
   m.appendChild(d);m.scrollTop=m.scrollHeight;
 }
@@ -730,47 +724,6 @@ function fmt(t){return esc(t).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').re
 // ── FARMER FUNCTIONS ──
 let currentFarmer = null;
 
-function searchFarmers(q){
-  q=q.toLowerCase().trim();
-  document.querySelectorAll('#screen-farmers .sp-y2 .list-item').forEach(el=>{
-    const txt=el.textContent.toLowerCase();
-    el.style.display=(!q||txt.includes(q))?'flex':'none';
-  });
-}
-
-function searchKnowledge(q){
-  q=q.toLowerCase().trim();
-  document.querySelectorAll('.knowledge-item').forEach(el=>{
-    const tags=(el.dataset.tags||'').toLowerCase();
-    const txt=el.textContent.toLowerCase();
-    el.style.display=(!q||txt.includes(q)||tags.includes(q))?'flex':'none';
-  });
-  // Show/hide section headers based on visible items
-  document.querySelectorAll('#knowledge-items > div').forEach(section=>{
-    const visible=section.querySelectorAll('.knowledge-item[style*="flex"],.knowledge-item:not([style])').length;
-    section.style.display=(!q||visible>0)?'block':'none';
-  });
-}
-
-function filterFarmers(type){
-  ['all','maize','beans','alert'].forEach(t=>{
-    const b=document.getElementById('ft-'+t);
-    if(!b)return;
-    b.style.background=t===type?'var(--primary)':'var(--surf-mid)';
-    b.style.color=t===type?'#fff':'var(--on-sv)';
-  });
-  document.querySelectorAll('.sp-y2 .list-item[data-crop]').forEach(el=>{
-    const crop=el.dataset.crop||'';
-    const status=el.dataset.status||'';
-    let show=false;
-    if(type==='all') show=true;
-    else if(type==='maize') show=crop==='maize';
-    else if(type==='beans') show=crop==='beans';
-    else if(type==='alert') show=status==='alert'||status==='due';
-    el.style.display=show?'flex':'none';
-  });
-}
-
 function viewFarmer(initials, name, crop, district, plot, phone, status, lastVisit, notes) {
   currentFarmer = {initials, name, crop, district, plot, phone, status, lastVisit, notes};
   document.getElementById('detail-av').textContent = initials;
@@ -784,6 +737,97 @@ function viewFarmer(initials, name, crop, district, plot, phone, status, lastVis
   document.getElementById('detail-visit').textContent = lastVisit;
   document.getElementById('detail-notes').textContent = notes;
   goTo('farmer-detail');
+}
+
+function switchLang(lang){
+  localStorage.setItem('ac_lang',lang);
+  const ses=document.getElementById('lang-ses'),en=document.getElementById('lang-en');
+  if(lang==='st'){
+    if(ses){ses.style.background='var(--primary)';ses.style.color='#fff';}
+    if(en){en.style.background='transparent';en.style.color='var(--on-sv)';}
+    const lb=document.getElementById('login-btn-txt');if(lb)lb.textContent='Kena';
+    const ci=document.getElementById('chat-inp');if(ci)ci.placeholder='Botsa ka lijalo, lisenyi, boemo ba leholimo...';
+    const cw=document.getElementById('chat-welcome');if(cw)cw.textContent='Lumela! Ke Keletso, moeletsi oa temo Lesotho. U thusoa joang kajeno?';
+    showToast('Sesotho e kentsoe');
+  }else{
+    if(ses){ses.style.background='transparent';ses.style.color='var(--on-sv)';}
+    if(en){en.style.background='var(--primary)';en.style.color='#fff';}
+    const lb=document.getElementById('login-btn-txt');if(lb)lb.textContent='Login';
+    const ci=document.getElementById('chat-inp');if(ci)ci.placeholder='Ask about crops, pests, weather...';
+    const cw=document.getElementById('chat-welcome');if(cw)cw.textContent='Lumela! I am your AgriConnect assistant for Lesotho extension workers. How can I help you today?';
+    showToast('English selected');
+  }
+}
+
+function submitFeedback(btn,score){
+  btn.parentElement.querySelectorAll('button').forEach(b=>{b.style.background='var(--surf-mid)';b.style.color='var(--on-sv)';});
+  if(score===1){btn.style.background='var(--primary)';btn.style.color='#fff';showToast('Thank you for your feedback');}
+  else{btn.style.background='var(--error-c)';btn.style.color='var(--error)';showToast('Feedback noted - we will improve');}
+}
+
+function saveChatHistory(){
+  try{
+    const m=document.getElementById('chat-msgs');if(!m)return;
+    const items=[];
+    m.querySelectorAll('div[style*="align-items"]').forEach(el=>{
+      const u=el.querySelector('.chat-user');const a=el.querySelector('.chat-ai');
+      if(u)items.push({t:'u',h:u.innerHTML});
+      if(a)items.push({t:'a',h:a.outerHTML});
+    });
+    localStorage.setItem('ac_chat',JSON.stringify(items.slice(-30)));
+  }catch(e){}
+}
+
+function loadChatHistory(){
+  try{
+    const saved=localStorage.getItem('ac_chat');if(!saved)return;
+    const m=document.getElementById('chat-msgs');if(!m)return;
+    JSON.parse(saved).forEach(b=>{
+      const d=document.createElement('div');d.className='fade-in';
+      if(b.t==='u'){d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-end;align-self:flex-end;max-width:92%';d.innerHTML='<div class="chat-user">'+b.h+'</div>';}
+      else{d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-start;max-width:92%';d.innerHTML=b.h;}
+      m.appendChild(d);
+    });
+    m.scrollTop=m.scrollHeight;
+  }catch(e){}
+}
+
+function filterFarmers(type){
+  ['all','maize','beans','alert'].forEach(t=>{
+    const b=document.getElementById('ft-'+t);if(!b)return;
+    b.style.background=t===type?'var(--primary)':'var(--surf-mid)';
+    b.style.color=t===type?'#fff':'var(--on-sv)';
+  });
+  document.querySelectorAll('.farmer-item').forEach(el=>{
+    const crop=(el.dataset.crop||'').toLowerCase();
+    const status=(el.dataset.status||'').toLowerCase();
+    let show=false;
+    if(type==='all')show=true;
+    else if(type==='maize')show=crop.includes('maize');
+    else if(type==='beans')show=crop.includes('bean');
+    else if(type==='alert')show=status==='alert'||status==='due';
+    el.style.display=show?'flex':'none';
+  });
+}
+
+function searchFarmers(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.farmer-item').forEach(el=>{
+    el.style.display=(!q||el.textContent.toLowerCase().includes(q))?'flex':'none';
+  });
+}
+
+function searchKnowledge(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.knowledge-item').forEach(el=>{
+    const tags=(el.dataset.tags||'').toLowerCase();
+    el.style.display=(!q||el.textContent.toLowerCase().includes(q)||tags.includes(q))?'flex':'none';
+  });
+  document.querySelectorAll('.k-section').forEach(section=>{
+    if(!q){section.style.display='block';return;}
+    const visible=Array.from(section.querySelectorAll('.knowledge-item')).some(el=>el.style.display!=='none');
+    section.style.display=visible?'block':'none';
+  });
 }
 
 function showAddFarmer() {
@@ -819,40 +863,10 @@ function saveFarmer() {
   const crop = document.getElementById('f-crop').value;
   const plot = document.getElementById('f-plot').value;
   const notes = document.getElementById('f-notes').value.trim();
-  if(!name){ showToast('Please enter farmer name'); return; }
-  if(!phone){ showToast('Please enter phone number'); return; }
-  if(!plot){ showToast('Please enter plot size'); return; }
-  const ini = name.split(' ').map(n=>n[0]||'').join('').toUpperCase().substring(0,2)||'FM';
-  if(currentFarmer){
-    // Update existing — refresh detail view
-    currentFarmer = {initials:ini, name, crop, district, plot, phone, status:currentFarmer.status, lastVisit:currentFarmer.lastVisit, notes};
-    document.getElementById('detail-fullname').textContent = name;
-    document.getElementById('detail-name').textContent = name;
-    document.getElementById('detail-av').textContent = ini;
-    document.getElementById('detail-crop').textContent = '🌱 ' + crop + ' Farmer';
-    document.getElementById('detail-district').textContent = '📍 ' + district + ' District';
-    document.getElementById('detail-plot').textContent = plot + ' ha';
-    document.getElementById('detail-phone').textContent = phone;
-    document.getElementById('detail-notes').textContent = notes;
-    closeModal();
-    showToast('Farmer updated ✓');
-  } else {
-    // Add new farmer to list
-    const list = document.querySelector('#screen-farmers .sp-y2');
-    if(list){
-      const div = document.createElement('div');
-      div.className = 'list-item';
-      div.dataset.crop = crop.toLowerCase();
-      div.dataset.status = 'active';
-      div.style.cursor = 'pointer';
-      div.onclick = () => viewFarmer(ini,name,crop,district,plot,phone,'Active','Just added',notes||'No notes yet.');
-      div.innerHTML = '<div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:44px;height:44px;background:var(--primary-c);color:var(--primary-fixed);font-size:12px">'+ini+'</div><div><h4 style="font-weight:700;font-size:13px">'+name+'</h4><p style="font-size:10px;color:var(--on-sv)">'+crop+' · '+district+' · '+plot+'ha</p></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag" style="background:rgba(189,238,199,.5);color:var(--primary)">New</span><span style="font-size:18px;color:var(--outline)">›</span></div>';
-      list.insertBefore(div, list.firstChild);
-    }
-    closeModal();
-    showToast('Farmer added ✓');
-    goTo('farmers');
-  }
+  if(!name) { showToast('Please enter farmer name'); return; }
+  closeModal();
+  showToast(currentFarmer ? 'Farmer updated successfully ✓' : 'Farmer added successfully ✓');
+  if(!currentFarmer) goTo('farmers');
 }
 
 function confirmDeleteFarmer() {
@@ -905,6 +919,11 @@ function applyRole(role) {
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
+  const now=new Date();
+  const t0=document.getElementById('chat-t0');if(t0)t0.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const dl=document.getElementById('chat-date-lbl');if(dl)dl.textContent='Today • Kajeno — '+now.toLocaleDateString('en-GB',{weekday:'long'});
+  const savedLang=localStorage.getItem('ac_lang');
+  if(savedLang&&savedLang!=='en')setTimeout(()=>switchLang(savedLang),50);
   const st=localStorage.getItem('ac_token');
   if(st){
     token=st;
@@ -912,11 +931,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     const sn=localStorage.getItem('ac_name'),si=localStorage.getItem('ac_ini'),sr=localStorage.getItem('ac_role');
     if(sn){const e=document.getElementById('prof-name');if(e)e.textContent=sn;const e2=document.getElementById('dash-username');if(e2)e2.textContent=sn;}
     if(si){const e=document.getElementById('prof-av');if(e)e.textContent=si;}
-    applyRole(sr||'worker');setSync(true);initDash();goTo('dashboard');setTimeout(loadChatHistory,150);
+    applyRole(sr||'worker');setSync(true);initDash();goTo('dashboard');
+    setTimeout(loadChatHistory,150);
   }
-  const now=new Date();
-  const t0=document.getElementById('chat-t0');if(t0)t0.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  const dl=document.getElementById('chat-date-lbl');if(dl)dl.textContent='Today • Kajeno — '+now.toLocaleDateString('en-GB',{weekday:'long'});
 });
 </script>
 

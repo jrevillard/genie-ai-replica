@@ -1665,7 +1665,5 @@ module.exports = (chatHistoryService) => {
     }
   });
 
-
-
   return router;
 };

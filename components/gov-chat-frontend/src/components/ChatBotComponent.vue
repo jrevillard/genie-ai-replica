@@ -311,6 +311,7 @@
 import { eventBus } from '../eventBus.js'
 import notificationService from '../services/notificationService'
 import { mapGetters, mapActions } from 'vuex'
+import { getUserId } from '../utils/userUtils'
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
 import ModalDialog from './ModalDialog.vue'
 import RightSideBarComponent from './RightSideBarComponent.vue'
@@ -882,7 +883,6 @@ export default {
 
           queryData = {
             conversationId: this.conversationId,
-            userId: this.$store.getters.currentUser?._key || 'anonymous',
             sessionId: this.currentSessionId || 'new-session',
             messages: messagesForQuery,
             context: {
@@ -895,7 +895,6 @@ export default {
           }
         } else {
           queryData = {
-            userId: this.$store.getters.currentUser?._key || 'anonymous',
             sessionId: this.currentSessionId || 'new-session',
             text: messageForBackend,
             contextOption: contextOption,
@@ -1233,14 +1232,13 @@ export default {
         })
 
         const currentUser = this.$store.getters.currentUser
-        if (!currentUser || !currentUser._key) {
+        if (!currentUser || !getUserId(currentUser)) {
           throw new Error('User not authenticated')
         }
 
         const firstUserMessage = this.chatMessages.find((msg) => msg.sender === 'user')?.content || ''
 
         const conversationData = {
-          userId: currentUser._key,
           title: this.saveChatDialog.title || this.generateChatTitle(),
           initialMessage: firstUserMessage,
           categoryId: this.currentCategoryId || null,
@@ -1273,7 +1271,6 @@ export default {
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
               metadata: message.metadata || {},
-              userId: currentUser._key,
             }
             console.log('Adding message with data:', messageData)
             console.log('chatHistoryService.addMessage called with:', messageData)
@@ -1299,13 +1296,8 @@ export default {
           console.log('chatHistoryService.addConversationToFolder called with:', {
             folderId: this.saveChatDialog.folderId,
             conversationId: conversation._key,
-            userId: currentUser._key,
           })
-          await this.chatHistoryService.addConversationToFolder(
-            this.saveChatDialog.folderId,
-            conversation._key,
-            currentUser._key
-          )
+          await this.chatHistoryService.addConversationToFolder(this.saveChatDialog.folderId, conversation._key)
           console.log(`Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`)
           console.log('Dispatching addChatToFolder with:', {
             chatId: conversation._key,
@@ -1345,7 +1337,7 @@ export default {
       console.log('updateExistingChat called')
       try {
         const currentUser = this.$store.getters.currentUser
-        if (!currentUser || !currentUser._key) {
+        if (!currentUser || !getUserId(currentUser)) {
           throw new Error('User not authenticated')
         }
 
@@ -1354,7 +1346,6 @@ export default {
         }
 
         const updateData = {
-          userId: currentUser._key,
           title: this.currentChatTitle || this.generateChatTitle(),
           categoryId: this.currentCategoryId || null,
           tags: this.getContextTags(),
@@ -1380,7 +1371,6 @@ export default {
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
               metadata: message.metadata || {},
-              userId: currentUser._key,
             }
             console.log('Adding message with data:', messageData)
             console.log('chatHistoryService.addMessage called with:', messageData)

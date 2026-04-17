@@ -705,7 +705,7 @@ async function initializeServices() {
 
   // Import services individually with error handling
   let userProfileService, adminDashboardService, analyticsService, queryService;
-  let chatHistoryService, serviceCategoryService, sessionService, logsService;
+  let chatHistoryService, serviceCategoryService, logsService;
   let databaseOperationsService, weatherService, securityScanService, translationService;
 
   const importService = async (name, path) => {
@@ -732,7 +732,6 @@ async function initializeServices() {
     queryService = await importService('QueryService', './services/query-service');
     chatHistoryService = await importService('ChatHistoryService', './services/chat-history-service');
     serviceCategoryService = await importService('ServiceCategoryService', './services/service-category-service');
-    sessionService = await importService('SessionService', './services/session-service');
     logsService = await importService('LogsService', './services/logs-service');
     databaseOperationsService = await importService('DatabaseOperationsService', './services/database-operations-service');
     weatherService = await importService('WeatherService', './services/weather-service');
@@ -750,7 +749,6 @@ async function initializeServices() {
       adminDashboardService: { instance: adminDashboardService, name: 'AdminDashboardService' },
       analyticsService: { instance: analyticsService, name: 'AnalyticsService' },
       databaseOperationsService: { instance: databaseOperationsService, name: 'DatabaseOperationsService' },
-      sessionService: { instance: sessionService, name: 'SessionService' },
       queryService: { instance: queryService, name: 'QueryService' },
       chatHistoryService: { instance: chatHistoryService, name: 'ChatHistoryService' },
       logsService: { instance: logsService, name: 'LogsService' },
@@ -793,7 +791,6 @@ async function initializeServices() {
     // Initialize services with detailed error logging and optional service handling
     logger.info('Initializing services');
     const initPromises = [
-      { service: services.sessionService, name: 'SessionService' },
       { service: services.serviceCategoryService, name: 'ServiceCategoryService' },
       { service: services.userProfileService, name: 'UserProfileService' },
       { service: services.adminDashboardService, name: 'AdminDashboardService' },
@@ -962,7 +959,6 @@ async function startApp() {
     { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService, keycloakAuth: true },
     { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService, keycloakAuth: true },
     { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService, keycloakAuth: true },
-    { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService, keycloakAuth: true },
     { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService, keycloakAuth: true },
     { file: 'auth-routes', paths: ['/api/auth'], service: null },
     { file: 'logger-routes', paths: ['/api/logger'], service: null, keycloakAuth: true },

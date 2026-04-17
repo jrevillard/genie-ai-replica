@@ -163,27 +163,6 @@
       "tags": null
     },
     {
-      "name": "session-route",
-      "id": "58777b89-a66d-438a-a399-b7d3bc67990e",
-      "service": {"name": "express-api"},
-      "paths": ["/api/sessions"],
-      "strip_path": false,
-      "preserve_host": true,
-      "regex_priority": 0,
-      "path_handling": "v0",
-      "request_buffering": true,
-      "response_buffering": true,
-      "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
-      "methods": null,
-      "hosts": null,
-      "headers": null,
-      "snis": null,
-      "sources": null,
-      "destinations": null,
-      "tags": null
-    },
-    {
       "name": "query-route",
       "id": "66937bee-3067-400c-b0e8-d7a0b8d22e08",
       "service": {"name": "express-api"},

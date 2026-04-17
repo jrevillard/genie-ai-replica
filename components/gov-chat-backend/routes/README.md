@@ -1,6 +1,6 @@
 # GENIE.AI - RAG Framework API Routes
 
-This document provides an overview of the API routes available in the GENIE.AI backend, a Retrieval-Augmented Generation (RAG) framework designed to implement advanced RAG use cases. These RESTful endpoints enable interaction with services that power the application, supporting features such as chat history management, database operations, authentication, analytics, session management, user profile management, and weather data retrieval.
+This document provides an overview of the API routes available in the GENIE.AI backend, a Retrieval-Augmented Generation (RAG) framework designed to implement advanced RAG use cases. These RESTful endpoints enable interaction with services that power the application, supporting features such as chat history management, database operations, authentication, analytics, user profile management, and weather data retrieval.
 
 ## Table of Contents
 
@@ -46,10 +46,6 @@ This document provides an overview of the API routes available in the GENIE.AI b
       - [Key Parameters](#key-parameters-8)
       - [Services Called](#services-called-8)
       - [Security](#security-8)
-    - [Session Routes](#session-routes)
-      - [Key Parameters](#key-parameters-9)
-      - [Services Called](#services-called-9)
-      - [Security](#security-9)
     - [User Routes](#user-routes)
       - [Key Parameters](#key-parameters-10)
       - [Services Called](#services-called-10)
@@ -76,7 +72,6 @@ GENIE.AI is a RAG framework that integrates retrieval and generation capabilitie
 - **Query Routes**: Handle user queries and their integration with conversations.
 - **Service Category Routes**: Manage service categories and their hierarchies.
 - **Service Routes**: Provide access to service information.
-- **Session Routes**: Manage user sessions.
 - **User Routes**: Manage user profiles and account settings.
 - **Weather Routes**: Retrieve weather data for specified locations.
 
@@ -101,9 +96,8 @@ graph TD
     D --> K[Query Routes]
     D --> L[Service Category Routes]
     D --> M[Service Routes]
-    D --> N[Session Routes]
-    D --> O[User Routes]
-    D --> P[Weather Routes]
+    D --> N[User Routes]
+    D --> O[Weather Routes]
 
     E -->|Calls| Q[Admin Service]
     E -->|Calls| R[Security Scan Service]
@@ -116,9 +110,8 @@ graph TD
     K -->|Calls| Y[Query Service]
     L -->|Calls| Z[Service Category Service]
     M -->|Calls| Z[Service Category Service]
-    N -->|Calls| AA[Session Service]
-    O -->|Calls| AB[User Service]
-    P -->|Calls| AD[Weather Service]
+    N -->|Calls| AB[User Service]
+    O -->|Calls| AD[Weather Service]
 
     Q -->|Accesses| AE[Database]
     R -->|Accesses| AE
@@ -130,7 +123,6 @@ graph TD
     X -->|Accesses| AE
     Y -->|Accesses| AE
     Z -->|Accesses| AE
-    AA -->|Accesses| AE
     AB -->|Accesses| AE
     AD -->|Accesses| AE
 
@@ -140,8 +132,7 @@ graph TD
     AE -->|Stores| AI[Analytics]
     AE -->|Stores| AJ[Service Categories]
     AE -->|Stores| AK[Logs]
-    AE -->|Stores| AL[Sessions]
-    AE -->|Stores| AM[Weather Data]
+    AE -->|Stores| AL[Weather Data]
 ```
 
 This diagram shows the flow from client requests through the Express router, authentication middleware, and route handlers to the respective services, which interact with the database to store and retrieve data.
@@ -356,7 +347,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | POST | `/:queryId/link/:messageId` | Link query to message |
 
 #### Key Parameters
-- `userId`, `sessionId`, `text`: Required for creating queries.
+- `userId`, `text`: Required for creating queries.
 - `queryId`, `messageId`: Identifiers for specific resources.
 - `responseTime`: Time in milliseconds for query response.
 - `rating`, `comment`: Feedback details.
@@ -416,32 +407,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 #### Security
 - All routes require JWT authentication (`authMiddleware.authenticate`).
 
-### Session Routes
-
-**Base Path**: `/api/sessions`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/` | Create a new session |
-| GET | `/:sessionId` | Get session by ID |
-| PATCH | `/:sessionId/end` | End a session |
-| PATCH | `/:sessionId/keepalive` | Keep a session alive |
-| GET | `/user/:userId` | Get all sessions for a specific user |
-
-#### Key Parameters
-- `userId`: ID of the user creating or querying the session.
-- `sessionId`: Unique identifier for a session.
-- `deviceInfo`: Object containing device type, browser, and OS information.
-- `activeOnly`: Boolean to filter only active sessions.
-
-#### Services Called
-- **Session Service**: Manages session creation, retrieval, updates, and termination, storing session data in the database.
-
-#### Security
-- `/sessions` (POST) does not require authentication to allow session creation before login.
-- All other routes require JWT authentication (`authMiddleware.authenticate`).
-- Session operations validate `userId` to ensure users can only access their own sessions.
-
 ### User Routes
 
 **Base Path**: `/api/me`
@@ -492,7 +457,7 @@ All routes follow a consistent error handling approach:
 1. **400 Bad Request**: Missing or invalid fields (e.g., missing `userId`, invalid `latitude`).
 2. **401 Unauthorized**: Missing or invalid JWT token.
 3. **403 Forbidden**: Insufficient permissions (e.g., non-admin accessing admin routes).
-4. **404 Not Found**: Resource not found (e.g., user, session, conversation).
+4. **404 Not Found**: Resource not found (e.g., user, conversation).
 5. **500 Server Error**: Unexpected errors during processing.
 
 Error responses are formatted consistently:
@@ -528,4 +493,4 @@ This script tests the integration between the query service, analytics service, 
 
 ---
 
-This updated `README.md` reflects the current state of the GENIE.AI API routes, including the newly added session, user, and weather routes. The architecture diagram has been updated to include the new services, and the detailed route descriptions ensure clarity for developers implementing RAG use cases.
+This updated `README.md` reflects the current state of the GENIE.AI API routes, including user and weather routes. The architecture diagram has been updated, and the detailed route descriptions ensure clarity for developers implementing RAG use cases.

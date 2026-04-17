@@ -54,17 +54,18 @@
 </template>
 
 <script>
-import NavBarComponent from "./components/NavBarComponent.vue";
-import SideBarComponent from "./components/SideBarComponent.vue";
-import UnifiedAnalyticsComponent from "./components/UnifiedAnalytics.vue";
-import UserProfileComponent from "./components/UserProfileComponent.vue";
-import SettingsComponent from "./components/SettingsComponent.vue";
-import AdminDashboard from "./components/AdminDashboard.vue";
-import SplashScreen from "./components/SplashScreen.vue";
-import { mapGetters } from "vuex";
-import { eventBus } from "./eventBus.js";
-import chatHistoryService from "./services/chatHistoryService";
-import { themeManager } from "./utils/ThemeManager";
+import NavBarComponent from './components/NavBarComponent.vue'
+import SideBarComponent from './components/SideBarComponent.vue'
+import UnifiedAnalyticsComponent from './components/UnifiedAnalytics.vue'
+import UserProfileComponent from './components/UserProfileComponent.vue'
+import SettingsComponent from './components/SettingsComponent.vue'
+import AdminDashboard from './components/AdminDashboard.vue'
+import SplashScreen from './components/SplashScreen.vue'
+import { mapGetters } from 'vuex'
+import { eventBus } from './eventBus.js'
+import { themeManager } from './utils/ThemeManager'
+import chatHistoryService from './services/chatHistoryService'
+import { getUserId } from './utils/userUtils'
 
 export default {
   name: 'App',
@@ -127,8 +128,8 @@ export default {
 
     try {
       // Wait for the auth state to be determined (OIDC initialization)
-      await this.$store.dispatch("initialize");
-      console.log("initAuth completed, isAuthenticated:", this.isAuthenticated);
+      await this.$store.dispatch('initialize')
+      console.log('initAuth completed, isAuthenticated:', this.isAuthenticated)
 
       // If authenticated, ALSO wait for critical data to load
       // This "await" is critical
@@ -252,18 +253,14 @@ export default {
     // --- REPLACED YOUR loadFoldersOnAuth METHOD WITH THIS ---
     async loadFoldersOnAuth() {
       try {
-        // This will now correctly get the user from Vuex
         const user = this.currentUser
-        console.log('loadFoldersOnAuth: Current user from store:', user)
-
-        const userId = user?._key || user?.id
+        const userId = getUserId(user)
         if (!userId) {
-          // This should no longer happen because of the mounted hook's await
           console.warn('loadFoldersOnAuth called, but user not ready.')
           return
         }
 
-        const response = await chatHistoryService.getUserFolders(userId)
+        const response = await chatHistoryService.getUserFolders()
         console.log('loadFoldersOnAuth: getUserFolders response:', response)
         let foldersArray = Array.isArray(response) ? response : response?.folders || []
         const processedFolders = foldersArray
@@ -303,7 +300,6 @@ export default {
         })
       }
     },
-
 
     async handleLogout() {
       try {

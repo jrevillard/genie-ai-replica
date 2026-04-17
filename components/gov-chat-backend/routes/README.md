@@ -268,8 +268,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | DELETE | `/folders/:folderId/conversations/:conversationId` | Remove conversation from folder |
 | GET | `/conversations/:conversationId/folder` | Get conversation's folder |
 | POST | `/conversations/:conversationId/move` | Move conversation between folders |
-| POST | `/folders/:folderId/share` | Share folder with another user |
-| DELETE | `/folders/:folderId/share/:targetUserId` | Remove folder share |
 | GET | `/folders/:folderId/users` | Get users with folder access |
 
 #### Key Parameters

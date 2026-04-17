@@ -538,52 +538,6 @@ class ChatHistoryService {
   }
 
   /**
-   * Share a folder with another user
-   * @param {String} folderId - Folder ID
-   * @param {String} targetUserId - Target user ID to share with
-   * @param {String} role - Role to assign (viewer, editor, contributor)
-   * @returns {Promise} Result of the operation
-   */
-  async shareFolder(folderId, targetUserId, role = 'viewer') {
-    try {
-      if (!targetUserId) {
-        throw new Error('Target user ID is required')
-      }
-
-      const response = await httpService.post(`/chat/folders/${folderId}/share`, {
-        targetUserId,
-        role,
-      })
-
-      return response.data
-    } catch (error) {
-      console.error(`Error sharing folder ${folderId} with user ${targetUserId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Remove folder sharing with a user
-   * @param {String} folderId - Folder ID
-   * @param {String} targetUserId - Target user ID to remove access from
-   * @returns {Promise} Result of the operation
-   */
-  async removeFolderShare(folderId, targetUserId) {
-    try {
-      if (!targetUserId) {
-        throw new Error('Target user ID is required')
-      }
-
-      const response = await httpService.delete(`/chat/folders/${folderId}/share/${targetUserId}`)
-
-      return response.data
-    } catch (error) {
-      console.error(`Error removing share for folder ${folderId} from user ${targetUserId}:`, error)
-      throw error
-    }
-  }
-
-  /**
    * Get users with access to a folder
    * @param {String} folderId - Folder ID
    * @returns {Promise} List of users with access

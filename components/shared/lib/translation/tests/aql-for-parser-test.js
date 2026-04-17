@@ -371,26 +371,6 @@ const getForStatementTests = () => [
       expected: { type: 'ForStatement', variableName: 'folder', collectionName: 'folders' },
     },
     {
-      description: '[CHS-52] shareFolder owner check',
-      aql: `FOR edge IN userFolders`,
-      expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },
-    },
-    {
-      description: '[CHS-53] shareFolder existing share check',
-      aql: `FOR edge IN userFolders`,
-      expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },
-    },
-    {
-      description: '[CHS-54] removeFolderShare owner check',
-      aql: `FOR edge IN userFolders`,
-      expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },
-    },
-    {
-      description: '[CHS-55] removeFolderShare find share',
-      aql: `FOR edge IN userFolders`,
-      expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },
-    },
-    {
       description: '[CHS-56] getSharedFolders',
       aql: `FOR edge IN userFolders`,
       expected: { type: 'ForStatement', variableName: 'edge', collectionName: 'userFolders' },

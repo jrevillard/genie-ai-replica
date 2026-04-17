@@ -2,7 +2,7 @@
 # This stage clones the external OPEA repository at a specific version.
 ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
 ARG OPEA_VERSION="v1.3" # This tag can be changed to upgrade OPEA
-FROM alpine/git:latest AS opea_base
+FROM alpine/git:v2.52.0 AS opea_base
 
 ARG OPEA_REPO_URL
 ARG OPEA_VERSION

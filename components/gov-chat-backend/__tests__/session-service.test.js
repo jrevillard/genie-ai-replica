@@ -383,7 +383,7 @@ describe('SessionService', () => {
       const activeSession = createActiveSession();
       mockDb.query.mockResolvedValue(createMockCursor([activeSession]));
 
-      await sessionService.getOrCreateSession('user-1');
+      await sessionService.getOrCreateSession('user-1', 'user-1');
 
       // cleanupExpiredSessions was called (fire-and-forget)
       // Since it's async with .catch(), we need to wait a tick
@@ -397,7 +397,7 @@ describe('SessionService', () => {
       // getActiveSession returns null (expired or no session)
       mockDb.query.mockResolvedValue(createMockCursor([]));
 
-      await sessionService.getOrCreateSession('user-1');
+      await sessionService.getOrCreateSession('user-1', 'user-1');
 
       expect(mockSessionsCollection.save).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user-1', active: true })

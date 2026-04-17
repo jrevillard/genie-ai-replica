@@ -36,16 +36,16 @@ class UserProfileService {
     }
   }
 
-  async updateUserProfile(userId, profileData, files = {}) {
+  async updateUserProfile(userKey, profileData, files = {}) {
     const startTime = Date.now();
     try {
-      logger.info('UserProfileService.update_user_profile_start', { userId, incomingKeys: Object.keys(profileData) });
+      logger.info('UserProfileService.update_user_profile_start', { userKey, incomingKeys: Object.keys(profileData) });
 
       if (typeof profileData === 'string') {
         try {
           profileData = JSON.parse(profileData);
         } catch (error) {
-          logger.error('UserProfileService.parse_profile_data_failed', { userId, error: error.message });
+          logger.error('UserProfileService.parse_profile_data_failed', { userKey, error: error.message });
           profileData = {};
         }
       }
@@ -53,17 +53,17 @@ class UserProfileService {
       // Strip JIT-provisioned fields — these are managed by Keycloak, not ArangoDB
       const strippedFields = Object.keys(profileData).filter(k => JIT_PROTECTED_FIELDS.includes(k));
       if (strippedFields.length > 0) {
-        logger.warn('UserProfileService.stripped_jit_fields', { userId, strippedFields });
+        logger.warn('UserProfileService.stripped_jit_fields', { userKey, strippedFields });
         strippedFields.forEach(f => delete profileData[f]);
       }
 
-      const userExists = await this.userExists(userId);
+      const userExists = await this.userExists(userKey);
       if (!userExists) {
-        logger.warn('UserProfileService.user_not_found', { userId });
-        throw new NotFoundError(`User with ID ${userId} not found`);
+        logger.warn('UserProfileService.user_not_found', { userKey });
+        throw new NotFoundError(`User with ID ${userKey} not found`);
       }
 
-      const processedData = await this.process(userId, profileData, files);
+      const processedData = await this.process(userKey, profileData, files);
 
       processedData.updatedAt = new Date().toISOString();
 
@@ -74,14 +74,14 @@ class UserProfileService {
       const hasIdentityTravel = !!processedData.identityTravel;
       const hasMuslimPreferences = !!processedData.muslimPreferences;
 
-      logger.debug('UserProfileService.updating_user_document', { userId, processedKeys: processedKeys.join(','), hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
+      logger.debug('UserProfileService.updating_user_document', { userKey, processedKeys: processedKeys.join(','), hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
 
-      logger.info('UserProfileService.updating_user_document', { userId, processedKeys, hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
-      await this.users.update(userId, processedData);
+      logger.info('UserProfileService.updating_user_document', { userKey, processedKeys, hasPersonalIdentification, hasIdentityTravel, hasMuslimPreferences });
+      await this.users.update(userKey, processedData);
 
       // Fetch the complete user document after update to ensure all fields are returned
       // This is necessary because ArangoDB's update() with returnNew: true only returns updated fields
-      const completeUser = await this.users.document(userId, { graceful: true });
+      const completeUser = await this.users.document(userKey, { graceful: true });
 
       const returnedKeys = Object.keys(completeUser);
       const returnedHasPersonalIdentification = !!completeUser.personalIdentification;
@@ -91,7 +91,7 @@ class UserProfileService {
       const personalIdentificationKeys = completeUser.personalIdentification ? Object.keys(completeUser.personalIdentification) : [];
 
       logger.debug('UserProfileService.user_profile_updated_debug', {
-        userId,
+        userKey,
         returnedKeys,
         hasPersonalIdentification: returnedHasPersonalIdentification,
         hasIdentityTravel: returnedHasIdentityTravel,
@@ -101,7 +101,7 @@ class UserProfileService {
 
       // Log what we're returning for debugging
       logger.info('UserProfileService.user_profile_updated', {
-        userId,
+        userKey,
         returnedKeys,
         hasPersonalIdentification: returnedHasPersonalIdentification,
         hasIdentityTravel: returnedHasIdentityTravel,
@@ -113,7 +113,7 @@ class UserProfileService {
       return completeUser;
     } catch (error) {
       logger.error('UserProfileService.update_user_profile_failed', {
-        userId,
+        userKey,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime
@@ -122,19 +122,19 @@ class UserProfileService {
     }
   }
 
-  async getUserProfile(userId) {
+  async getUserProfile(userKey) {
     const startTime = Date.now();
     try {
-      logger.info('UserProfileService.get_user_profile_start', { userId });
+      logger.info('UserProfileService.get_user_profile_start', { userKey });
 
-      const user = await this.users.document(userId);
+      const user = await this.users.document(userKey);
 
       // If customSettings exists, merge it back into the user object
       // for backward compatibility with clients that expect custom sections
       // at the top level (e.g., muslimPreferences, christianPreferences, etc.)
       if (user.customSettings && typeof user.customSettings === 'object') {
         logger.debug('UserProfileService.merging_custom_settings', {
-          userId,
+          userKey,
           customSettingsKeys: Object.keys(user.customSettings)
         });
 
@@ -143,13 +143,13 @@ class UserProfileService {
         for (const key in user.customSettings) {
           if (!user[key]) {
             user[key] = user.customSettings[key];
-            logger.debug('UserProfileService.merged_custom_key', { userId, key });
+            logger.debug('UserProfileService.merged_custom_key', { userKey, key });
           }
         }
       }
 
       logger.info('UserProfileService.user_profile_retrieved', {
-        userId,
+        userKey,
         returnedKeys: Object.keys(user),
         hasCustomSettings: !!user.customSettings,
         durationMs: Date.now() - startTime
@@ -157,7 +157,7 @@ class UserProfileService {
       return user;
     } catch (error) {
       logger.error('UserProfileService.get_user_profile_failed', {
-        userId,
+        userKey,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime
@@ -166,21 +166,21 @@ class UserProfileService {
     }
   }
 
-  async userExists(userId) {
+  async userExists(userKey) {
     const startTime = Date.now();
     try {
-      logger.debug('UserProfileService.check_user_exists', { userId });
+      logger.debug('UserProfileService.check_user_exists', { userKey });
 
-      await this.users.document(userId);
-      logger.debug('UserProfileService.user_exists', { userId, durationMs: Date.now() - startTime });
+      await this.users.document(userKey);
+      logger.debug('UserProfileService.user_exists', { userKey, durationMs: Date.now() - startTime });
       return true;
     } catch (error) {
       if (error.code === 404) {
-        logger.debug('UserProfileService.user_not_exists', { userId });
+        logger.debug('UserProfileService.user_not_exists', { userKey });
         return false;
       }
       logger.error('UserProfileService.check_user_exists_failed', {
-        userId,
+        userKey,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime
@@ -189,15 +189,15 @@ class UserProfileService {
     }
   }
 
-  async process(userId, profileData, files) {
+  async process(userKey, profileData, files) {
     const startTime = Date.now();
-    logger.info('UserProfileService.process_profile_data_start', { userId, incomingKeys: Object.keys(profileData) });
+    logger.info('UserProfileService.process_profile_data_start', { userKey, incomingKeys: Object.keys(profileData) });
 
     if (typeof profileData === 'string') {
       try {
         profileData = JSON.parse(profileData);
       } catch (error) {
-        logger.error('UserProfileService.parse_profile_data_failed', { userId, error: error.message });
+        logger.error('UserProfileService.parse_profile_data_failed', { userKey, error: error.message });
         profileData = {};
       }
     }
@@ -209,7 +209,7 @@ class UserProfileService {
     for (const key in profileData) {
       if (key !== '_key') {
         processedData[key] = profileData[key];
-        logger.debug('UserProfileService.copied_key_to_processed', { userId, key, dataType: typeof profileData[key] });
+        logger.debug('UserProfileService.copied_key_to_processed', { userKey, key, dataType: typeof profileData[key] });
       }
     }
 
@@ -238,11 +238,11 @@ class UserProfileService {
           if (fileNameParts.length >= 2 && fileNameParts[0] === section) {
             const fieldName = fileNameParts[1];
             try {
-              const fileUrl = await this.storeFile(file, userId, `${section}-${fieldName}`);
+              const fileUrl = await this.storeFile(file, userKey, `${section}-${fieldName}`);
               if (fileUrl) {
                 processedData[section][`${fieldName}Url`] = fileUrl;
                 logger.info('UserProfileService.file_stored', {
-                  userId,
+                  userKey,
                   section,
                   fieldName,
                   fileUrl
@@ -250,7 +250,7 @@ class UserProfileService {
               }
             } catch (error) {
               logger.error('UserProfileService.store_file_failed', {
-                userId,
+                userKey,
                 section,
                 fieldName,
                 error: error.message
@@ -277,7 +277,7 @@ class UserProfileService {
         // Include any object-type data that's not a known section
         if (profileData[key] !== null && typeof profileData[key] === 'object') {
           customSettings[key] = profileData[key];
-          logger.debug('UserProfileService.added_to_custom_settings', { userId, customKey: key });
+          logger.debug('UserProfileService.added_to_custom_settings', { userKey, customKey: key });
         }
       }
     }
@@ -286,14 +286,14 @@ class UserProfileService {
     if (Object.keys(customSettings).length > 0) {
       processedData.customSettings = customSettings;
       logger.info('UserProfileService.custom_settings_aggregated', {
-        userId,
+        userKey,
         customSettingsKeys: Object.keys(customSettings),
         durationMs: Date.now() - startTime
       });
     }
 
     logger.info('UserProfileService.process_profile_data_completed', {
-      userId,
+      userKey,
       processedKeys: Object.keys(processedData),
       customSettingsCount: Object.keys(customSettings).length,
       durationMs: Date.now() - startTime
@@ -301,15 +301,15 @@ class UserProfileService {
     return processedData;
   }
 
-  async storeFile(file, userId, fieldName) {
+  async storeFile(file, userKey, fieldName) {
     const startTime = Date.now();
     try {
-      logger.debug('UserProfileService.store_file_start', { userId, fieldName });
+      logger.debug('UserProfileService.store_file_start', { userKey, fieldName });
 
-      const userDir = sanitizePath(this.uploadDir, userId);
+      const userDir = sanitizePath(this.uploadDir, userKey);
       if (!fs.existsSync(userDir)) {
         fs.mkdirSync(userDir, { recursive: true });
-        logger.info('UserProfileService.created_user_directory', { userId, path: userDir });
+        logger.info('UserProfileService.created_user_directory', { userKey, path: userDir });
       }
 
       const fileExt = path.extname(file.originalname || file.name || 'unknown');
@@ -325,9 +325,9 @@ class UserProfileService {
         throw new Error('Unsupported file object format');
       }
 
-      const fileUrl = `/Uploads/${userId}/${fileName}`;
+      const fileUrl = `/Uploads/${userKey}/${fileName}`;
       logger.info('UserProfileService.file_stored_success', {
-        userId,
+        userKey,
         fieldName,
         fileUrl,
         durationMs: Date.now() - startTime
@@ -335,7 +335,7 @@ class UserProfileService {
       return fileUrl;
     } catch (error) {
       logger.error('UserProfileService.store_file_failed', {
-        userId,
+        userKey,
         fieldName,
         error: error.message,
         stack: error.stack,
@@ -347,36 +347,36 @@ class UserProfileService {
 
   async deleteUserFiles(user) {
     const startTime = Date.now();
-    const userId = user._key;
-    const userDir = sanitizePath(this.uploadDir, userId);
+    const userKey = user._key;
+    const userDir = sanitizePath(this.uploadDir, userKey);
 
-    logger.info('UserProfileService.delete_user_files_start', { userId });
+    logger.info('UserProfileService.delete_user_files_start', { userKey });
 
     if (fs.existsSync(userDir)) {
       await fs.promises.rm(userDir, { recursive: true, force: true });
       logger.info('UserProfileService.user_directory_deleted', {
-        userId,
+        userKey,
         durationMs: Date.now() - startTime
       });
     } else {
-      logger.debug('UserProfileService.no_user_directory_found', { userId });
+      logger.debug('UserProfileService.no_user_directory_found', { userKey });
     }
   }
 
   /**
    * Reset user profile data while preserving essential account information
-   * @param {string} userId - User ID
+   * @param {string} userKey - User ID
    * @returns {Promise<Object>} Result with preserved fields count
    */
-  async resetUserData(userId) {
+  async resetUserData(userKey) {
     const startTime = Date.now();
     try {
-      logger.info('UserProfileService.reset_user_data_start', { userId });
+      logger.info('UserProfileService.reset_user_data_start', { userKey });
 
-      const currentUserDoc = await this.getUserProfile(userId);
+      const currentUserDoc = await this.getUserProfile(userKey);
       if (!currentUserDoc) {
-        logger.warn('UserProfileService.user_not_found', { userId });
-        throw new NotFoundError(`User with ID ${userId} not found`);
+        logger.warn('UserProfileService.user_not_found', { userKey });
+        throw new NotFoundError(`User with ID ${userKey} not found`);
       }
 
       const preservedData = {
@@ -385,42 +385,42 @@ class UserProfileService {
       };
 
       logger.debug('UserProfileService.preserving_fields', {
-        userId,
+        userKey,
         fields: Object.keys(preservedData)
       });
 
       await this.deleteUserFiles(currentUserDoc);
 
       try {
-        await this.users.replace(userId, preservedData);
-        logger.info('UserProfileService.user_document_replaced', { userId });
+        await this.users.replace(userKey, preservedData);
+        logger.info('UserProfileService.user_document_replaced', { userKey });
       } catch (replaceError) {
         logger.warn('UserProfileService.replace_operation_failed', {
-          userId,
+          userKey,
           error: replaceError.message
         });
 
-        await this.users.update(userId, preservedData, {
+        await this.users.update(userKey, preservedData, {
           keepNull: true,
           mergeObjects: false,
           overwrite: true
         });
-        logger.info('UserProfileService.user_document_updated_with_overwrite', { userId });
+        logger.info('UserProfileService.user_document_updated_with_overwrite', { userKey });
       }
 
       logger.info('UserProfileService.reset_user_data_completed', {
-        userId,
+        userKey,
         fieldsPreserved: Object.keys(preservedData).length,
         durationMs: Date.now() - startTime
       });
       return {
-        userId,
+        userKey,
         fieldsPreserved: Object.keys(preservedData).length,
         success: true
       };
     } catch (error) {
       logger.error('UserProfileService.reset_user_data_failed', {
-        userId,
+        userKey,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime

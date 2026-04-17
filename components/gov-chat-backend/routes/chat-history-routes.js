@@ -73,6 +73,8 @@ module.exports = (chatHistoryService) => {
         });
       }
 
+      const userKey = req.user._key;
+
       const limit = parseInt(req.query.limit) || 20;
       const offset = parseInt(req.query.offset) || 0;
       const includeArchived = req.query.includeArchived === 'true';
@@ -86,7 +88,8 @@ module.exports = (chatHistoryService) => {
         offset,
         includeArchived,
         filterStarred,
-        searchTerm
+        searchTerm,
+        userKey
       };
 
       const result = await chatHistoryService.getUserConversations(userId, options);
@@ -190,14 +193,15 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
       const { title, categoryId, initialMessage, tags } = req.body;
 
-      logger.info(`Creating new conversation for user ${numericUserId} with title "${title}"`);
+      logger.info(`Creating new conversation for user ${userId} with title "${title}"`);
 
       const conversationData = {
-        userId: numericUserId,
+        userId: userId,
+        userKey,
         title: title || 'New Conversation',
         categoryId,
         tags: tags || [],
@@ -215,7 +219,7 @@ module.exports = (chatHistoryService) => {
           conversationId: conversation._key,
           content: initialMessage,
           sender: 'user',
-          userId: numericUserId
+          userId: userId
         });
       }
 
@@ -288,9 +292,9 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
 
-      const updateData = { ...req.body, userId: numericUserId };
+
+      const updateData = { ...req.body, userId: userId };
 
       logger.info(`Updating conversation ${conversationId} with data:`, updateData);
 
@@ -342,11 +346,11 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
-      logger.info(`Deleting conversation ${conversationId} for user ${numericUserId}`);
+      logger.info(`Deleting conversation ${conversationId} for user ${userId}`);
 
-      const result = await chatHistoryService.deleteConversation(conversationId, numericUserId);
+      const result = await chatHistoryService.deleteConversation(conversationId, userId, userKey);
       res.json(result);
     } catch (error) {
       logger.error(`Error deleting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
@@ -475,7 +479,7 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+
 
       logger.info(`Raw request body for conversation ${conversationId}:`, req.body ? JSON.stringify(req.body, null, 2) : 'No body');
 
@@ -503,7 +507,7 @@ module.exports = (chatHistoryService) => {
         conversationId,
         content,
         sender,
-        userId: numericUserId,
+        userId: userId,
         timestamp: new Date().toISOString(),
         queryId,
         metadata: metadata || {}
@@ -718,16 +722,16 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
       const { title, responseText, tags } = req.body;
 
-      logger.info(`Creating conversation from query ${queryId} for user ${numericUserId}`);
+      logger.info(`Creating conversation from query ${queryId} for user ${userId}`);
 
       const result = await chatHistoryService.createConversationFromQuery(
         queryId,
-        numericUserId,
-        { title, responseText, tags }
+        userId,
+        { title, responseText, tags, userKey }
       );
 
       res.status(201).json(result);
@@ -789,7 +793,7 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
       const searchTerm = req.query.q || '';
       const limit = parseInt(req.query.limit) || 20;
@@ -800,10 +804,10 @@ module.exports = (chatHistoryService) => {
         return res.status(400).json({ message: 'Search term is required' });
       }
 
-      logger.info(`Searching conversations for user ${numericUserId} with term "${searchTerm}"`);
+      logger.info(`Searching conversations for user ${userId} with term "${searchTerm}"`);
 
-      const options = { limit, offset, includeArchived };
-      const results = await chatHistoryService.searchConversations(numericUserId, searchTerm, options);
+      const options = { limit, offset, includeArchived, userKey };
+      const results = await chatHistoryService.searchConversations(userId, searchTerm, options);
 
       res.json(results);
     } catch (error) {
@@ -846,13 +850,13 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
       const limit = parseInt(req.query.limit) || 5;
 
-      logger.info(`Getting ${limit} recent conversations for user ${numericUserId}`);
+      logger.info(`Getting ${limit} recent conversations for user ${userId}`);
 
-      const conversations = await chatHistoryService.getRecentConversations(numericUserId, limit);
+      const conversations = await chatHistoryService.getRecentConversations(userId, limit, userKey);
       res.json(conversations);
     } catch (error) {
       logger.error(`Error getting recent conversations: ${error.message}`, { stack: error.stack });
@@ -887,11 +891,11 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
-      logger.info(`Getting conversation statistics for user ${numericUserId}`);
+      logger.info(`Getting conversation statistics for user ${userId}`);
 
-      const stats = await chatHistoryService.getUserConversationStats(numericUserId);
+      const stats = await chatHistoryService.getUserConversationStats(userId, userKey);
       res.json(stats);
     } catch (error) {
       logger.error(`Error getting conversation statistics: ${error.message}`, { stack: error.stack });
@@ -938,6 +942,8 @@ module.exports = (chatHistoryService) => {
         });
       }
 
+      const userKey = req.user._key;
+
       const includeArchived = req.query.includeArchived === 'true';
       const parentFolderId = req.query.parentFolderId || null;
 
@@ -945,7 +951,8 @@ module.exports = (chatHistoryService) => {
 
       const options = {
         includeArchived,
-        parentFolderId
+        parentFolderId,
+        userKey
       };
 
       const folders = await chatHistoryService.getUserFolders(userId, options);
@@ -1007,7 +1014,7 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
       const { name, description, parentFolderId, color, icon } = req.body;
 
@@ -1015,13 +1022,13 @@ module.exports = (chatHistoryService) => {
         return res.status(400).json({ message: 'Folder name is required' });
       }
 
-      logger.info(`Creating new folder for user ${numericUserId} with name "${name}"`);
+      logger.info(`Creating new folder for user ${userId} with name "${name}"`);
 
       if (parentFolderId) {
         try {
           const parentFolder = await chatHistoryService.getFolder(parentFolderId);
 
-          const ownerCheck = parentFolder.owners.some(owner => owner._key === numericUserId);
+          const ownerCheck = parentFolder.owners.some(owner => owner.iss_sub === userId);
           if (!ownerCheck) {
             return res.status(403).json({
               message: 'You do not have permission to create subfolders in this folder'
@@ -1032,13 +1039,15 @@ module.exports = (chatHistoryService) => {
         }
       }
 
-      const existingFolders = await chatHistoryService.getUserFolders(numericUserId, {
-        parentFolderId: parentFolderId
+      const existingFolders = await chatHistoryService.getUserFolders(userId, {
+        parentFolderId: parentFolderId,
+        userKey
       });
       const order = existingFolders.length;
 
       const folderData = {
-        userId: numericUserId,
+        userId: userId,
+        userKey,
         name,
         description: description || '',
         created: new Date().toISOString(),
@@ -1164,9 +1173,9 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
 
-      const updateData = { ...req.body, userId: numericUserId };
+
+      const updateData = { ...req.body, userId: userId };
 
       logger.info(`Updating folder ${folderId} with data:`, updateData);
 
@@ -1248,64 +1257,14 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
-      logger.info(`Deleting folder ${folderId} for user ${numericUserId}, deleteContents: ${deleteContents}`);
+      logger.info(`Deleting folder ${folderId} for user ${userId}, deleteContents: ${deleteContents}`);
 
-      const result = await chatHistoryService.deleteFolder(folderId, numericUserId, deleteContents);
+      const result = await chatHistoryService.deleteFolder(folderId, userId, deleteContents, userKey);
       res.json(result);
     } catch (error) {
       logger.error(`Error deleting folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /chat/folders/shared:
-   *   get:
-   *     summary: Get shared folders
-   *     description: Retrieves folders that have been shared with the authenticated user
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: query
-   *         name: includeArchived
-   *         schema:
-   *           type: boolean
-   *           default: false
-   *         description: Whether to include archived folders
-   *     responses:
-   *       200:
-   *         description: List of shared folders
-   *       401:
-   *         description: Unauthorized
-   *       500:
-   *         description: Server error
-   */
-  router.get('/folders/shared', async (req, res, next) => {
-    try {
-      let userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const includeArchived = req.query.includeArchived === 'true';
-
-      logger.info(`Getting shared folders for user ${userId} with includeArchived: ${includeArchived}`);
-
-      const options = {
-        includeArchived
-      };
-
-      const folders = await chatHistoryService.getSharedFolders(userId, options);
-      res.json(folders);
-    } catch (error) {
-      logger.error(`Error getting shared folders: ${error.message}`, { stack: error.stack });
       next(error);
     }
   });
@@ -1350,7 +1309,7 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
       const searchTerm = req.query.q || '';
       const includeArchived = req.query.includeArchived === 'true';
@@ -1359,10 +1318,10 @@ module.exports = (chatHistoryService) => {
         return res.status(400).json({ message: 'Search term is required' });
       }
 
-      logger.info(`Searching folders for user ${numericUserId} with term "${searchTerm}"`);
+      logger.info(`Searching folders for user ${userId} with term "${searchTerm}"`);
 
-      const options = { includeArchived };
-      const results = await chatHistoryService.searchFolders(numericUserId, searchTerm, options);
+      const options = { includeArchived, userKey };
+      const results = await chatHistoryService.searchFolders(userId, searchTerm, options);
 
       res.json(results);
     } catch (error) {
@@ -1429,11 +1388,11 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
-      logger.info(`Reordering ${folderOrders.length} folders for user ${numericUserId} under parent ${parentFolderId || 'root'}`);
+      logger.info(`Reordering ${folderOrders.length} folders for user ${userId} under parent ${parentFolderId || 'root'}`);
 
-      const result = await chatHistoryService.reorderFolders(numericUserId, folderOrders, parentFolderId);
+      const result = await chatHistoryService.reorderFolders(userId, folderOrders, parentFolderId, userKey);
       res.json(result);
     } catch (error) {
       logger.error(`Error reordering folders: ${error.message}`, { stack: error.stack });
@@ -1524,11 +1483,11 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
-      logger.info(`Adding conversation ${conversationId} to folder ${folderId} by user ${numericUserId}`);
+      logger.info(`Adding conversation ${conversationId} to folder ${folderId} by user ${userId}`);
 
-      const result = await chatHistoryService.addConversationToFolder(folderId, conversationId, numericUserId);
+      const result = await chatHistoryService.addConversationToFolder(folderId, conversationId, userId, userKey);
       res.json(result);
     } catch (error) {
       logger.error(`Error adding conversation to folder: ${error.message}`, { stack: error.stack });
@@ -1582,11 +1541,11 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
-      logger.info(`Removing conversation ${conversationId} from folder ${folderId} by user ${numericUserId}`);
+      logger.info(`Removing conversation ${conversationId} from folder ${folderId} by user ${userId}`);
 
-      const result = await chatHistoryService.removeConversationFromFolder(folderId, conversationId, numericUserId);
+      const result = await chatHistoryService.removeConversationFromFolder(folderId, conversationId, userId, userKey);
       res.json(result);
     } catch (error) {
       logger.error(`Error removing conversation from folder: ${error.message}`, { stack: error.stack });
@@ -1694,11 +1653,11 @@ module.exports = (chatHistoryService) => {
         });
       }
 
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+      const userKey = req.user._key;
 
-      logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'} by user ${numericUserId}`);
+      logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'} by user ${userId}`);
 
-      const result = await chatHistoryService.moveConversation(conversationId, sourceFolderId, targetFolderId, numericUserId);
+      const result = await chatHistoryService.moveConversation(conversationId, sourceFolderId, targetFolderId, userId, userKey);
       res.json(result);
     } catch (error) {
       logger.error(`Error moving conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
@@ -1706,201 +1665,6 @@ module.exports = (chatHistoryService) => {
     }
   });
 
-  /**
-   * @swagger
-   * /chat/folders/{folderId}/share:
-   *   post:
-   *     summary: Share folder
-   *     description: Shares a folder with another user
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: path
-   *         name: folderId
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: ID of the folder to share
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - targetUserId
-   *             properties:
-   *               targetUserId:
-   *                 type: string
-   *                 description: ID of the user to share with
-   *               role:
-   *                 type: string
-   *                 enum: [viewer, editor, contributor]
-   *                 default: viewer
-   *                 description: Permission role for the shared user
-   *     responses:
-   *       200:
-   *         description: Folder shared successfully
-   *       401:
-   *         description: Unauthorized
-   *       403:
-   *         description: Forbidden - user doesn't have permission
-   *       404:
-   *         description: Folder or target user not found
-   *       500:
-   *         description: Server error
-   */
-  router.post('/folders/:folderId/share', async (req, res, next) => {
-    try {
-      const { folderId } = req.params;
-      const { targetUserId, role } = req.body;
-
-      if (!targetUserId) {
-        return res.status(400).json({ message: 'Target user ID is required' });
-      }
-
-      let userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      const numericTargetUserId = targetUserId.startsWith('users/') ? targetUserId.substring(6) : targetUserId;
-
-      if (numericUserId === numericTargetUserId) {
-        return res.status(400).json({ message: 'Cannot share a folder with yourself' });
-      }
-
-      logger.info(`Sharing folder ${folderId} from user ${numericUserId} to user ${numericTargetUserId} with role ${role || 'viewer'}`);
-
-      const result = await chatHistoryService.shareFolder(
-        folderId,
-        numericUserId,
-        numericTargetUserId,
-        role || 'viewer'
-      );
-
-      res.json(result);
-    } catch (error) {
-      logger.error(`Error sharing folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /chat/folders/{folderId}/share/{targetUserId}:
-   *   delete:
-   *     summary: Remove folder share
-   *     description: Removes a user's access to a shared folder
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: path
-   *         name: folderId
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: ID of the shared folder
-   *       - in: path
-   *         name: targetUserId
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: ID of the user whose access to remove
-   *     responses:
-   *       200:
-   *         description: Share removed successfully
-   *       401:
-   *         description: Unauthorized
-   *       403:
-   *         description: Forbidden - user doesn't have permission
-   *       404:
-   *         description: Folder or share not found
-   *       500:
-   *         description: Server error
-   */
-  router.delete('/folders/:folderId/share/:targetUserId', async (req, res, next) => {
-    try {
-      const { folderId, targetUserId } = req.params;
-
-      let userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      const numericTargetUserId = targetUserId.startsWith('users/') ? targetUserId.substring(6) : targetUserId;
-
-      logger.info(`Removing share for folder ${folderId} from user ${numericTargetUserId} by owner ${numericUserId}`);
-
-      const result = await chatHistoryService.removeFolderShare(folderId, numericUserId, numericTargetUserId);
-      res.json(result);
-    } catch (error) {
-      logger.error(`Error removing folder share ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /chat/folders/{folderId}/users:
-   *   get:
-   *     summary: Get folder users
-   *     description: Retrieves users who have access to a folder
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: path
-   *         name: folderId
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: ID of the folder
-   *     responses:
-   *       200:
-   *         description: List of users with access to the folder
-   *       401:
-   *         description: Unauthorized
-   *       403:
-   *         description: Forbidden - user doesn't have permission
-   *       404:
-   *         description: Folder not found
-   *       500:
-   *         description: Server error
-   */
-  router.get('/folders/:folderId/users', async (req, res, next) => {
-    try {
-      const { folderId } = req.params;
-
-      let userId = extractUserId(req);
-
-      if (!userId) {
-        logger.warn('No userId available in request');
-        return res.status(400).json({
-          success: false,
-          message: 'User ID is required but not found in request'
-        });
-      }
-
-      const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-
-      logger.info(`Getting users with access to folder ${folderId} for user ${numericUserId}`);
-
-      const users = await chatHistoryService.getFolderUsers(folderId, numericUserId);
-      res.json(users);
-    } catch (error) {
-      logger.error(`Error getting users for folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
 
 
   return router;

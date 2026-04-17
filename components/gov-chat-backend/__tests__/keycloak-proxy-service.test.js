@@ -297,10 +297,10 @@ describe('keycloak-proxy-service', () => {
 
       // Should log the error state
       expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('ArangoDB erasure failed after Keycloak delete'), expect.objectContaining({
-        arangoUserId: 'user-key',
+        userKey: 'user-key',
         state: 'PARTIAL_ERASURE'
       }));
-    });
+  });
   });
 
   // Soft-delete vs Erasure Distinction (documented here for reference)

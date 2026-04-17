@@ -66,9 +66,10 @@ module.exports = (userService) => {
    */
   router.get('/', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
-      const userId = req.user._key;
+      const userId = req.user.iss_sub;
+      const userKey = req.user._key;
       logger.info(`Getting profile for authenticated user ${userId}`);
-      const user = await userService.getUserProfile(userId);
+      const user = await userService.getUserProfile(userKey);
       res.json(user);
     } catch (error) {
       logger.error(`Error getting user profile: ${error.message}`, { stack: error.stack });
@@ -97,8 +98,9 @@ module.exports = (userService) => {
    */
   router.get('/context', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
-      const userId = req.user._key;
-      const user = await userService.getUserProfile(userId);
+      const userId = req.user.iss_sub;
+      const userKey = req.user._key;
+      const user = await userService.getUserProfile(userKey);
 
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
@@ -134,10 +136,11 @@ module.exports = (userService) => {
    */
   router.post('/reset-data', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
-      const userId = req.user._key;
+      const userId = req.user.iss_sub;
+      const userKey = req.user._key;
       logger.info(`[RESET DATA] Reset request for user ${userId}`);
 
-      const result = await userService.resetUserData(userId);
+      const result = await userService.resetUserData(userKey);
       logger.info(`[RESET DATA] User profile data reset successfully for user ${userId}`);
 
       res.json({
@@ -173,10 +176,11 @@ module.exports = (userService) => {
    */
   router.post('/delete', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
-      const userId = req.user._key;
+      const userId = req.user.iss_sub;
+      const userKey = req.user._key;
       logger.info(`[DELETE] Account deletion requested for user ${userId}`);
 
-      await keycloakProxyService.deleteUser(userId);
+      await keycloakProxyService.deleteUser(userKey);
 
       logger.info(`[DELETE] Account deleted successfully for user ${userId}`);
       res.json({ success: true, message: 'Account deleted' });
@@ -228,7 +232,8 @@ module.exports = (userService) => {
    *         description: Server error
    */
   router.put('/', keycloakAuthMiddleware.authenticate, upload.any(), async (req, res) => {
-    const userId = req.user._key;
+    const userId = req.user.iss_sub;
+    const userKey = req.user._key;
 
     try {
       // Parse profile data (multipart/form-data sends JSON in req.body.data)
@@ -258,12 +263,12 @@ module.exports = (userService) => {
 
       // Forward JIT fields to Keycloak via Admin API
       if (Object.keys(jitFields).length > 0) {
-        await keycloakProxyService.updateOwnProfile(userId, jitFields);
+        await keycloakProxyService.updateOwnProfile(userKey, jitFields);
         logger.info(`[PUT /me] JIT fields forwarded to Keycloak for user ${userId}`);
       }
 
       // Write custom fields to ArangoDB (JIT fields are stripped by updateUserProfile)
-      const user = await userService.updateUserProfile(userId, customFields, req.files || []);
+      const user = await userService.updateUserProfile(userKey, customFields, req.files || []);
       logger.info(`[PUT /me] Profile updated for user ${userId}`);
 
       return res.json({ success: true, message: 'Profile saved successfully', user });

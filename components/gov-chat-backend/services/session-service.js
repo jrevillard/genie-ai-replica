@@ -65,7 +65,7 @@ class SessionService {
     }
   }
 
-  async createSession(userId, deviceInfo = {}, ipAddress = '') {
+  async createSession(userId, userKey, deviceInfo = {}, ipAddress = '') {
     try {
       logger.info(`Creating session for user ${userId}`);
 
@@ -74,22 +74,22 @@ class SessionService {
         startTime: new Date().toISOString(),
         active: true
       };
-      
+
       logger.info(`Creating session document for user ${userId}`);
       const session = await this.sessions.save(basicSessionDoc);
       const sessionId = session._key;
       logger.info(`Session created with auto-generated key: ${sessionId}`);
-      
+
       const updateData = {};
-      
+
       if (deviceInfo && typeof deviceInfo === 'object' && Object.keys(deviceInfo).length > 0) {
         updateData.deviceInfo = deviceInfo;
       }
-      
+
       if (ipAddress && typeof ipAddress === 'string') {
         updateData.ipAddress = ipAddress;
       }
-      
+
       if (Object.keys(updateData).length > 0) {
         logger.info(`Updating session ${sessionId} with additional data: ${JSON.stringify(updateData)}`);
         await this.sessions.update(sessionId, updateData);
@@ -98,7 +98,7 @@ class SessionService {
       try {
         logger.info(`Creating edge between user ${userId} and session ${sessionId}`);
         await this.userSessions.save({
-          _from: `users/${userId}`,
+          _from: `users/${userKey}`,
           _to: `sessions/${sessionId}`,
           createdAt: new Date().toISOString()
         });
@@ -116,19 +116,32 @@ class SessionService {
     }
   }
 
-  async getActiveSession(userId) {
+  async getActiveSession(userId, { legacyKey = null } = {}) {
     try {
       logger.info(`Fetching active session for user ${userId}`);
 
-      const query = aql`
-        FOR session IN sessions
-          FILTER session.userId == ${userId}
-          FILTER session.active == true
-          FILTER session.endTime == null
-          SORT session.startTime DESC
-          LIMIT 1
-          RETURN session
-      `;
+      let query;
+      if (legacyKey) {
+        query = aql`
+          FOR session IN sessions
+            FILTER session.userId == ${userId} || session.userId == ${legacyKey}
+            FILTER session.active == true
+            FILTER session.endTime == null
+            SORT session.startTime DESC
+            LIMIT 1
+            RETURN session
+        `;
+      } else {
+        query = aql`
+          FOR session IN sessions
+            FILTER session.userId == ${userId}
+            FILTER session.active == true
+            FILTER session.endTime == null
+            SORT session.startTime DESC
+            LIMIT 1
+            RETURN session
+        `;
+      }
 
       const cursor = await this.db.query(query);
       const session = await cursor.next();
@@ -158,7 +171,7 @@ class SessionService {
     }
   }
 
-  async getOrCreateSession(userId, deviceInfo = {}, ipAddress = '') {
+  async getOrCreateSession(userId, userKey, deviceInfo = {}, ipAddress = '') {
     try {
       logger.info(`Getting or creating session for user ${userId}`);
 
@@ -171,15 +184,15 @@ class SessionService {
         });
       }
 
-      const activeSession = await this.getActiveSession(userId);
-      
+      const activeSession = await this.getActiveSession(userId, { legacyKey: userKey });
+
       if (activeSession) {
         logger.info(`Returning existing active session: ${activeSession._key} for user ${userId}`);
         return activeSession;
       }
-      
+
       logger.info(`No active session found, creating new session for user ${userId}`);
-      const newSession = await this.createSession(userId, deviceInfo, ipAddress);
+      const newSession = await this.createSession(userId, userKey, deviceInfo, ipAddress);
       logger.info(`Session retrieved or created successfully: ${newSession._key} for user ${userId}`);
       return newSession;
     } catch (error) {
@@ -262,13 +275,30 @@ class SessionService {
     }
   }
 
-  async getUserSessions(userId, activeOnly = false) {
+  async getUserSessions(userId, { legacyKey = null, activeOnly = false } = {}) {
     try {
       logger.info(`Fetching sessions for user ${userId}${activeOnly ? ' (active only)' : ''}`);
 
       let query;
-      
-      if (activeOnly) {
+
+      if (legacyKey) {
+        if (activeOnly) {
+          query = aql`
+            FOR session IN sessions
+              FILTER session.userId == ${userId} || session.userId == ${legacyKey}
+              FILTER session.active == true
+              SORT session.startTime DESC
+              RETURN session
+          `;
+        } else {
+          query = aql`
+            FOR session IN sessions
+              FILTER session.userId == ${userId} || session.userId == ${legacyKey}
+              SORT session.startTime DESC
+              RETURN session
+          `;
+        }
+      } else if (activeOnly) {
         query = aql`
           FOR session IN sessions
             FILTER session.userId == ${userId}

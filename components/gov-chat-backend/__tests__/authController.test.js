@@ -64,7 +64,7 @@ describe('authController', () => {
 
       await authController.logout(req, res);
 
-      expect(mockGetUserSessions).toHaveBeenCalledWith('user-123', true);
+      expect(mockGetUserSessions).toHaveBeenCalledWith('http://localhost:8080/realms/genie#user-123', { legacyKey: 'user-123', activeOnly: true });
       expect(mockEndSession).toHaveBeenCalledTimes(2);
       expect(mockEndSession).toHaveBeenCalledWith('session-1');
       expect(mockEndSession).toHaveBeenCalledWith('session-2');

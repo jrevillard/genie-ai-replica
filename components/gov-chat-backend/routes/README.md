@@ -421,7 +421,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 #### Key Parameters
 - `data`, `files`: Profile data and optional file uploads for profile update.
-- User is resolved from JWT via `req.user._key` — no userId path parameter.
+- User is resolved from JWT via `req.user.iss_sub` — no userId path parameter.
 
 #### Services Called
 - **User Service**: Manages user profile retrieval and updates.

@@ -196,10 +196,6 @@ export default {
       commit('ADD_CHAT_TO_FOLDER', { chatId, folderId });
     },
 
-    removeChatFromFolder({ commit }, { chatId, folderId }) {
-      commit('REMOVE_CHAT_FROM_FOLDER', { chatId, folderId });
-    },
-
     // Enhanced moveChat action to sync with backend
     async moveChat({ commit, state, rootGetters }, { chatId, fromFolderId, toFolderId }) {
       console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);

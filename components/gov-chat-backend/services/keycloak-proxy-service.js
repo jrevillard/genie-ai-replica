@@ -29,23 +29,23 @@ const keycloakProxyService = {
 
   /**
    * Resolve a Keycloak UUID from an ArangoDB user record
-   * @param {string} arangoUserId - ArangoDB _key
+   * @param {string} userKey - ArangoDB _key
    * @returns {Promise<string>} Keycloak UUID (sub field)
    * @throws {Error} If user not found or sub field missing
    */
-  async _resolveKeycloakUserId(arangoUserId) {
+  async _resolveKeycloakUserId(userKey) {
     const db = await dbService.getConnection('default');
     const cursor = await db.query(
       aql`
         FOR u IN users
-          FILTER u._key == ${arangoUserId}
+          FILTER u._key == ${userKey}
           RETURN u.sub
       `
     );
     const sub = await cursor.next();
 
     if (!sub) {
-      throw new Error(`User ${arangoUserId} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`);
+      throw new Error(`User ${userKey} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`);
     }
 
     return sub;
@@ -182,28 +182,28 @@ const keycloakProxyService = {
 
   /**
    * Update a user in Keycloak
-   * @param {string} arangoUserId - ArangoDB _key
+   * @param {string} userKey - ArangoDB _key
    * @param {Object} data - Fields to update (e.g. { enabled: true, email: '...' })
    */
-  async updateUser(arangoUserId, data) {
-    const uuid = await this._resolveKeycloakUserId(arangoUserId);
-    logger.info('[KeycloakProxy] Updating user', { arangoUserId, uuid, fields: Object.keys(data) });
+  async updateUser(userKey, data) {
+    const uuid = await this._resolveKeycloakUserId(userKey);
+    logger.info('[KeycloakProxy] Updating user', { userKey, uuid, fields: Object.keys(data) });
     return this._adminApiCall('PUT', `/users/${uuid}`, data);
   },
 
   /**
    * Assign realm roles to a user
-   * @param {string} arangoUserId - ArangoDB _key
+   * @param {string} userKey - ArangoDB _key
    * @param {string[]} roleNames - Role names to assign (must be lowercase)
    */
-  async assignRoles(arangoUserId, roleNames) {
+  async assignRoles(userKey, roleNames) {
     // Validate role names before any I/O
     const invalidRoles = roleNames.filter(r => !ALLOWED_ROLES.includes(r));
     if (invalidRoles.length > 0) {
       throw new Error(`Invalid roles: ${invalidRoles.join(', ')}. Allowed: ${ALLOWED_ROLES.join(', ')}`);
     }
 
-    const uuid = await this._resolveKeycloakUserId(arangoUserId);
+    const uuid = await this._resolveKeycloakUserId(userKey);
 
     // Fetch role representations from Keycloak
     const roleRepresentations = [];
@@ -212,26 +212,26 @@ const keycloakProxyService = {
       roleRepresentations.push({ id: role.id, name: role.name });
     }
 
-    logger.info('[KeycloakProxy] Assigning roles', { arangoUserId, uuid, roles: roleNames });
+    logger.info('[KeycloakProxy] Assigning roles', { userKey, uuid, roles: roleNames });
     return this._adminApiCall('POST', `/users/${uuid}/role-mappings/realm`, roleRepresentations);
   },
 
   /**
    * Delete a user from Keycloak and erase personal data in ArangoDB (GDPR right to erasure)
-   * @param {string} arangoUserId - ArangoDB _key
+   * @param {string} userKey - ArangoDB _key
    * @throws {Error} If Keycloak user not found (404) or authentication fails
    * @throws {Error} If ArangoDB erasure fails after Keycloak delete (partial erasure state)
    */
-  async deleteUser(arangoUserId) {
-    const uuid = await this._resolveKeycloakUserId(arangoUserId);
-    logger.info('[KeycloakProxy] Deleting user', { arangoUserId, uuid });
+  async deleteUser(userKey) {
+    const uuid = await this._resolveKeycloakUserId(userKey);
+    logger.info('[KeycloakProxy] Deleting user', { userKey, uuid });
 
     // Delete from Keycloak first (authoritative source)
     try {
       await this._adminApiCall('DELETE', `/users/${uuid}`);
     } catch (error) {
       if (error.status === 404) {
-        logger.info('[KeycloakProxy] User already deleted from Keycloak, skipping', { arangoUserId, uuid });
+        logger.info('[KeycloakProxy] User already deleted from Keycloak, skipping', { userKey, uuid });
         return;
       }
       throw error;
@@ -244,7 +244,7 @@ const keycloakProxyService = {
       await db.query(
         aql`
           FOR u IN users
-            FILTER u._key == ${arangoUserId}
+            FILTER u._key == ${userKey}
             UPDATE u WITH {
               deleted: true,
               erasedAt: DATE_ISO8601(DATE_NOW()),
@@ -260,10 +260,10 @@ const keycloakProxyService = {
             } IN users
         `
       );
-      logger.info('[KeycloakProxy] User erased', { arangoUserId });
+      logger.info('[KeycloakProxy] User erased', { userKey });
     } catch (arangoError) {
       logger.error('[KeycloakProxy] ArangoDB erasure failed after Keycloak delete', {
-        arangoUserId,
+        userKey,
         error: arangoError.message,
         state: 'PARTIAL_ERASURE'
       });
@@ -279,12 +279,12 @@ const keycloakProxyService = {
    * Update a user's own profile fields in Keycloak via Admin API.
    * Uses the service account token (same as updateUser) because Keycloak's
    * /account endpoint is the Account Console (React SPA), not a REST API.
-   * @param {string} arangoUserId - ArangoDB _key (self-enforced by caller)
+   * @param {string} userKey - ArangoDB _key (self-enforced by caller)
    * @param {Object} data - JIT fields to update (e.g. { email, firstName, lastName })
    */
-  async updateOwnProfile(arangoUserId, data) {
-    const uuid = await this._resolveKeycloakUserId(arangoUserId);
-    logger.info('[KeycloakProxy] Updating own profile via Admin API', { arangoUserId, uuid, fields: Object.keys(data) });
+  async updateOwnProfile(userKey, data) {
+    const uuid = await this._resolveKeycloakUserId(userKey);
+    logger.info('[KeycloakProxy] Updating own profile via Admin API', { userKey, uuid, fields: Object.keys(data) });
     return this._adminApiCall('PUT', `/users/${uuid}`, data);
   }
 };

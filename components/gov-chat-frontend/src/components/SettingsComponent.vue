@@ -1,20 +1,16 @@
 <template>
   <div class="settings-overlay">
-    <div
-      class="settings-dialog"
-      :key="'settings-dialog-' + currentLocale"
-      :style="dialogThemeStyles"
-    >
+    <div :key="'settings-dialog-' + currentLocale" class="settings-dialog" :style="dialogThemeStyles">
       <div class="dialog-header">
         <h2 class="header-title" :data-themed="isThemeReady">
-          {{ translate("settings.title", "Settings") }}
+          {{ translate('settings.title', 'Settings') }}
         </h2>
         <div class="header-actions">
           <button class="btn-close" @click="close">
-            {{ translate("settings.close", "Close") }}
+            {{ translate('settings.close', 'Close') }}
           </button>
           <button class="btn-save" @click="save">
-            {{ translate("settings.saveSettings", "Save Settings") }}
+            {{ translate('settings.saveSettings', 'Save Settings') }}
           </button>
         </div>
       </div>
@@ -22,53 +18,43 @@
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
         <p>
-          {{
-            translate("settings.loadingUserInfo", "Loading user information...")
-          }}
+          {{ translate('settings.loadingUserInfo', 'Loading user information...') }}
         </p>
       </div>
 
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
-        <button @click="fetchUserData" class="btn-retry">
-          {{ translate("settings.retry", "Retry") }}
+        <button class="btn-retry" @click="fetchUserData">
+          {{ translate('settings.retry', 'Retry') }}
         </button>
       </div>
 
       <div v-else>
         <div class="profile-section">
           <div class="account-avatar">
-            <div class="avatar-placeholder" v-if="!userAvatar">
+            <div v-if="!userAvatar" class="avatar-placeholder">
               {{
                 userData.name
                   ? userData.name
-                      .split(" ")
+                      .split(' ')
                       .map((n) => n[0])
-                      .join("")
+                      .join('')
                       .toUpperCase()
                       .substring(0, 2)
-                  : "?"
+                  : '?'
               }}
             </div>
-            <img
-              v-else
-              :src="userAvatar"
-              alt="User avatar"
-              class="avatar-image"
-            />
+            <img v-else :src="userAvatar" alt="User avatar" class="avatar-image" />
           </div>
           <div class="account-details">
             <div class="user-name">
-              {{ userData.name || translate("settings.userName", "User") }}
+              {{ userData.name || translate('settings.userName', 'User') }}
             </div>
             <div class="user-email">
-              {{ userData.email || "email@example.com" }}
+              {{ userData.email || 'email@example.com' }}
             </div>
             <div class="account-type">
-              {{
-                userData.accountType ||
-                translate("settings.standardAccount", "Standard Account")
-              }}
+              {{ userData.accountType || translate('settings.standardAccount', 'Standard Account') }}
             </div>
           </div>
         </div>
@@ -76,50 +62,34 @@
         <div class="settings-grid">
           <div class="settings-box">
             <h3 class="section-title">
-              {{ translate("settings.display", "Display") }}
+              {{ translate('settings.display', 'Display') }}
             </h3>
 
             <div class="setting-item">
-              <label class="section-label">{{
-                translate("settings.displayLanguage", "Display Language")
-              }}</label>
+              <label class="section-label">{{ translate('settings.displayLanguage', 'Display Language') }}</label>
               <language-selector v-model="settings.language" />
             </div>
 
             <div class="setting-item">
-              <label class="section-label">{{
-                translate("settings.theme", "Theme")
-              }}</label>
+              <label class="section-label">{{ translate('settings.theme', 'Theme') }}</label>
               <div class="theme-buttons">
                 <button
                   class="theme-toggle"
                   :class="{ active: settings.theme === 'light' }"
                   @click="applyTheme('light')"
                 >
-                  {{ translate("settings.themes.light", "Light") }}
+                  {{ translate('settings.themes.light', 'Light') }}
                 </button>
-                <button
-                  class="theme-toggle"
-                  :class="{ active: settings.theme === 'dark' }"
-                  @click="applyTheme('dark')"
-                >
-                  {{ translate("settings.themes.dark", "Dark") }}
+                <button class="theme-toggle" :class="{ active: settings.theme === 'dark' }" @click="applyTheme('dark')">
+                  {{ translate('settings.themes.dark', 'Dark') }}
                 </button>
               </div>
             </div>
 
             <div class="setting-item">
-              <label class="section-label">{{
-                translate("settings.fontSize", "Font Size")
-              }}</label>
+              <label class="section-label">{{ translate('settings.fontSize', 'Font Size') }}</label>
               <div class="slider-container">
-                <input
-                  type="range"
-                  min="30"
-                  max="100"
-                  v-model.number="settings.fontSize"
-                  class="slider"
-                />
+                <input v-model.number="settings.fontSize" type="range" min="30" max="100" class="slider" />
                 <span class="slider-value">{{ settings.fontSize }}%</span>
               </div>
             </div>
@@ -127,22 +97,14 @@
 
           <div class="settings-box">
             <h3 class="section-title">
-              {{ translate("settings.notifications", "Notifications") }}
+              {{ translate('settings.notifications', 'Notifications') }}
             </h3>
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">{{
-                  translate("settings.emailUpdates", "Email Updates")
-                }}</label>
-                <div
-                  class="switch"
-                  @click="settings.emailUpdates = !settings.emailUpdates"
-                >
-                  <div
-                    class="switch-track"
-                    :class="{ active: settings.emailUpdates }"
-                  >
+                <label class="section-label">{{ translate('settings.emailUpdates', 'Email Updates') }}</label>
+                <div class="switch" @click="settings.emailUpdates = !settings.emailUpdates">
+                  <div class="switch-track" :class="{ active: settings.emailUpdates }">
                     <div class="switch-thumb"></div>
                   </div>
                 </div>
@@ -151,22 +113,11 @@
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">{{
-                  translate(
-                    "settings.soundNotifications",
-                    "Sound Notifications"
-                  )
-                }}</label>
-                <div
-                  class="switch"
-                  @click="
-                    settings.soundNotifications = !settings.soundNotifications
-                  "
-                >
-                  <div
-                    class="switch-track"
-                    :class="{ active: settings.soundNotifications }"
-                  >
+                <label class="section-label">
+                  {{ translate('settings.soundNotifications', 'Sound Notifications') }}
+                </label>
+                <div class="switch" @click="settings.soundNotifications = !settings.soundNotifications">
+                  <div class="switch-track" :class="{ active: settings.soundNotifications }">
                     <div class="switch-thumb"></div>
                   </div>
                 </div>
@@ -177,61 +128,39 @@
 
         <div class="account-management-section">
           <h3 class="section-title">
-            {{ translate("settings.accountManagement", "Account Management") }}
+            {{ translate('settings.accountManagement', 'Account Management') }}
           </h3>
 
           <div class="account-management-grid">
             <div class="management-row">
               <div class="management-col">
-                <label class="section-label">{{
-                  translate("settings.emailAddress", "Email Address")
-                }}</label>
-                <input
-                  type="email"
-                  class="text-input"
-                  v-model="userData.email"
-                  disabled
-                />
-              </div>
-
-              <div class="management-col">
-                <label class="section-label">{{
-                  translate("settings.account", "Account")
-                }}</label>
                 <a
-                  class="btn-secondary full-width"
-                  :href="keycloakAccountUrl"
+                  :href="accountConsoleUrl"
                   target="_blank"
                   rel="noopener noreferrer"
+                  class="btn-secondary full-width manage-account-btn"
                 >
-                  {{ translate("settings.manageAccount", "Manage Account") }}
+                  {{ translate('settings.manageMyAccount', 'Manage my account') }} →
                 </a>
-              </div>
-            </div>
-
-            <div class="management-row">
-              <div class="management-col">
-                <button
-                  class="btn-secondary full-width"
-                  @click="confirmResetUserData"
-                >
-                  {{ translate("settings.resetUserData", "Reset User Data") }}
-                </button>
                 <p class="description-text">
-                  {{
-                    translate(
-                      "settings.resetUserDataDesc",
-                      "This will clear all your profile data and chat history."
-                    )
-                  }}
+                  {{ translate('settings.manageMyAccountDesc', 'Update your email, password, and account settings.') }}
                 </p>
               </div>
 
+              <div class="management-col">
+                <button class="btn-secondary full-width" @click="confirmResetUserData">
+                  {{ translate('settings.resetUserData', 'Reset User Data') }}
+                </button>
+                <p class="description-text">
+                  {{
+                    translate('settings.resetUserDataDesc', 'This will clear all your profile data and chat history.')
+                  }}
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -246,7 +175,6 @@
     @confirm="handleResetDataConfirm"
     @cancel="handleResetDataCancel"
   />
-
 </template>
 
 <script>
@@ -258,14 +186,14 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import LanguageSelector from '@/components/LanguageSelector.vue'
 
 export default {
-  name: "SettingsComponent",
+  name: 'SettingsComponent',
   components: {
     ConfirmDialog,
     LanguageSelector,
   },
   data() {
     return {
-      currentLocale: this.$i18n ? this.$i18n.locale : "en",
+      currentLocale: this.$i18n ? this.$i18n.locale : 'en',
       isLoading: true,
       errorMessage: null,
       isThemeReady: false,
@@ -273,481 +201,55 @@ export default {
         language: this.getCurrentLanguage(),
         theme: this.getCurrentTheme(),
         fontSize: this.getSavedFontSize(),
-        emailUpdates: this.getSavedPreference("emailUpdates", false),
-        soundNotifications: this.getSavedPreference("soundNotifications", true),
+        emailUpdates: this.getSavedPreference('emailUpdates', false),
+        soundNotifications: this.getSavedPreference('soundNotifications', true),
       },
       userData: {
-        name: "",
-        email: "",
-        accountType: "",
-        userId: "",
-        createdAt: "",
+        name: '',
+        email: '',
+        accountType: '',
+        userId: '',
+        createdAt: '',
       },
       userAvatar: null,
       showResetDataConfirm: false,
       resetDataDialog: {
-        title: "",
-        message: "",
-        confirmText: "",
-        cancelText: "",
+        title: '',
+        message: '',
+        confirmText: '',
+        cancelText: '',
       },
-    };
+    }
   },
   computed: {
     isDarkMode() {
-      console.log(
-        "[SETTINGS] Computing isDarkMode, settings.theme:",
-        this.settings.theme
-      );
-      return this.settings.theme === "dark";
+      return this.settings.theme === 'dark'
+    },
+    accountConsoleUrl() {
+      return `${oidcConfig.authority}/account/`
     },
     dialogThemeStyles() {
-      const _ = this.settings.theme; // reactive bridge
-      const theme = themeManager.getDialogTheme();
+      // Reference settings.theme so Vue re-evaluates when theme changes
+      const _ = this.settings.theme
+      const dialogTheme = themeManager.getDialogTheme()
       return {
-        "--dialog-background": theme.modal.background,
-        "--dialog-title-color": theme.modal.titleColor,
-        "--dialog-text-color": theme.modal.textColor,
-        "--dialog-border-color": theme.modal.borderColor,
-        "--dialog-box-shadow": theme.modal.boxShadow,
-        "--dialog-overlay-background": theme.overlay.background,
-      };
-    },
-    keycloakAccountUrl() {
-      return `${oidcConfig.authority}/account/`;
-    },
-  },
-  created() {
-    console.log("[SETTINGS] Initializing currentLocale...");
-    this.currentLocale = this.$i18n ? this.$i18n.locale : "en";
-    console.log("[SETTINGS] currentLocale initialized to:", this.currentLocale);
-
-    console.log("[SETTINGS] Component created, fetching user data...");
-    this.fetchUserData();
-
-    console.log("[SETTINGS] Initializing dialog texts...");
-    this.updateDialogTexts();
-
-    console.log("[SETTINGS] Initial settings.theme:", this.settings.theme);
-    console.log(
-      "[SETTINGS] Initial DOM data-theme:",
-      document.documentElement.getAttribute("data-theme")
-    );
-
-    console.log("[SETTINGS] Setting up watcher for settings.language...");
-    this.$watch("settings.language", (newVal) => {
-      console.log("[SETTINGS] settings.language changed to:", newVal);
-      if (this.$i18n) {
-        console.log("[SETTINGS] Updating i18n locale...");
-        this.$i18n.locale = newVal;
-        console.log("[SETTINGS] Updating currentLocale to:", newVal);
-        this.currentLocale = newVal;
-        console.log(
-          "[SETTINGS] Forcing component re-render for language update..."
-        );
-        this.$forceUpdate();
-        if (this.$root) {
-          console.log("[SETTINGS] Forcing root component re-render...");
-          this.$root.$forceUpdate();
-        }
-      }
-    });
-
-    console.log("[SETTINGS] Setting up watcher for $i18n.locale...");
-    if (this.$i18n) {
-      this.$watch("$i18n.locale", (newLocale) => {
-        console.log("Locale changed in Settings:", newLocale);
-        this.currentLocale = newLocale;
-        if (this.settings && this.settings.language !== newLocale) {
-          console.log("[SETTINGS] Syncing settings.language to:", newLocale);
-          this.settings.language = newLocale;
-        }
-        console.log(
-          "[SETTINGS] Forcing component re-render for external locale change..."
-        );
-        this.$forceUpdate();
-      });
-    }
-  },
-  mounted() {
-    console.log("[SETTINGS] Adding theme change event listener...");
-    window.addEventListener("themeChange", this.updateTheme);
-
-    console.log("[SETTINGS] Forcing theme application on mount...");
-    this.applyTheme(this.settings.theme);
-
-    console.log("[SETTINGS] Scheduling theme readiness update...");
-    this.$nextTick(() => {
-      console.log("[SETTINGS] Setting isThemeReady to true...");
-      this.isThemeReady = true;
-    });
-
-    console.log("[SETTINGS] Forcing i18n update on mount...");
-    if (this.$i18n) {
-      const savedLanguage = localStorage.getItem("userLocale") || "en";
-      console.log(
-        "[SETTINGS] Saved language from localStorage:",
-        savedLanguage
-      );
-      console.log("[SETTINGS] Setting i18n locale to:", savedLanguage);
-      this.$i18n.locale = savedLanguage;
-      console.log("[SETTINGS] Setting settings.language to:", savedLanguage);
-      this.settings.language = savedLanguage;
-      console.log("[SETTINGS] Scheduling $forceUpdate after i18n update...");
-      this.$nextTick(() => {
-        console.log(
-          "[SETTINGS] Forcing component re-render after i18n update..."
-        );
-        this.$forceUpdate();
-      });
-    }
-
-    console.log("Current locale:", this.$i18n.locale);
-    console.log("Available locales:", this.$i18n.availableLocales);
-  },
-  beforeUnmount() {
-    console.log("[SETTINGS] Removing theme change event listener...");
-    window.removeEventListener("themeChange", this.updateTheme);
-  },
-  methods: {
-    getCurrentTheme() {
-      console.log("[SETTINGS] Getting current theme...");
-      let theme = localStorage.getItem("theme") || "light";
-      console.log("[SETTINGS] Theme from localStorage:", theme);
-
-      if (theme === "system") {
-        console.log(
-          "[SETTINGS] Theme set to 'system', checking OS preference..."
-        );
-        theme = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-        console.log("[SETTINGS] Resolved system theme to:", theme);
-      }
-      return theme;
-    },
-    getCurrentLanguage() {
-      console.log("[SETTINGS] Getting current language...");
-
-      if (this.$i18n && this.$i18n.locale) {
-        console.log("[SETTINGS] Language from i18n:", this.$i18n.locale);
-        return this.$i18n.locale;
-      }
-
-      try {
-        const savedLocale = localStorage.getItem("userLocale");
-        if (savedLocale) {
-          console.log("[SETTINGS] Language from localStorage:", savedLocale);
-          return savedLocale;
-        }
-      } catch (e) {
-        console.warn(
-          "[SETTINGS] Error accessing localStorage for language:",
-          e
-        );
-      }
-
-      console.log("[SETTINGS] Defaulting to language: 'en'");
-      return "en";
-    },
-    getSavedFontSize() {
-      console.log("[SETTINGS] Getting saved font size...");
-      try {
-        const fontSize = localStorage.getItem("fontSize");
-        if (fontSize) {
-          console.log("[SETTINGS] Font size from localStorage:", fontSize);
-          return parseInt(fontSize);
-        }
-        console.log("[SETTINGS] No font size found, defaulting to 50%");
-        return 50;
-      } catch (e) {
-        console.warn(
-          "[SETTINGS] Error accessing localStorage for font size:",
-          e
-        );
-        return 50;
-      }
-    },
-    getSavedPreference(key, defaultValue) {
-      console.log(`[SETTINGS] Getting saved preference for ${key}...`);
-      try {
-        const value = localStorage.getItem(key);
-        if (value !== null) {
-          console.log(`[SETTINGS] Preference ${key} from localStorage:`, value);
-          return JSON.parse(value);
-        }
-        console.log(
-          `[SETTINGS] No preference for ${key}, defaulting to:`,
-          defaultValue
-        );
-        return defaultValue;
-      } catch (e) {
-        console.warn(`[SETTINGS] Error accessing localStorage for ${key}:`, e);
-        return defaultValue;
-      }
-    },
-    translate(key, fallback = "") {
-      console.log("[SETTINGS] Translating key:", key);
-      if (!this.$i18n) {
-        console.log(
-          "[SETTINGS] No i18n instance, returning fallback:",
-          fallback
-        );
-        return fallback;
-      }
-      try {
-        console.log("[SETTINGS] Using locale:", this.currentLocale);
-        const translation = this.$i18n.t(key, { locale: this.currentLocale });
-        if (translation === key) {
-          console.log(
-            "[SETTINGS] Translation not found, using fallback:",
-            fallback || key
-          );
-          return fallback || key;
-        }
-        console.log("[SETTINGS] Translation found:", translation);
-        return translation;
-      } catch (e) {
-        console.error("[SETTINGS] Translation error:", e);
-        console.log(
-          "[SETTINGS] Returning fallback due to error:",
-          fallback || key
-        );
-        return fallback || key;
-      }
-    },
-    updateTheme() {
-      console.log("[SETTINGS] Theme change event triggered");
-      const currentTheme =
-        document.documentElement.getAttribute("data-theme") || "light";
-      console.log("[SETTINGS] Current theme from DOM:", currentTheme);
-      if (this.settings.theme !== currentTheme) {
-        console.log(
-          "[SETTINGS] Updating settings.theme to match DOM:",
-          currentTheme
-        );
-        this.settings.theme = currentTheme;
-      }
-      console.log("[SETTINGS] Resetting theme readiness...");
-      this.isThemeReady = false;
-      this.$nextTick(() => {
-        console.log("[SETTINGS] Setting theme readiness to true...");
-        this.isThemeReady = true;
-        console.log(
-          "[SETTINGS] Forcing component update after theme change..."
-        );
-        this.$forceUpdate();
-      });
-    },
-    applyTheme(theme) {
-      this.settings.theme = theme;
-      localStorage.setItem("theme", theme);
-      themeManager.setTheme(theme);
-      this.$emit("themeChanged", theme);
-      this.$forceUpdate();
-    },
-    updateDialogTexts() {
-      console.log("[SETTINGS] Updating dialog texts for current locale...");
-      this.resetDataDialog = {
-        title: this.translate("settings.resetUserDataTitle", "Reset User Data"),
-        message: this.translate(
-          "settings.confirmResetUserData",
-          "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials."
-        ),
-        confirmText: this.translate("settings.reset", "Reset"),
-        cancelText: this.translate("settings.cancel", "Cancel"),
-      };
-      console.log("[SETTINGS] Dialog texts updated:", {
-        resetDataDialog: this.resetDataDialog,
-      });
-    },
-    async fetchUserData() {
-      console.log('[SETTINGS] Fetching user data...')
-      this.isLoading = true
-      this.errorMessage = null
-      try {
-        console.log('[SETTINGS] Checking Vuex auth store for user data...')
-        let userData = this.$store.getters.currentUser
-        if (!userData) {
-          console.log('[SETTINGS] No store data, showing error...')
-          throw new Error('No user data available in store')
-        } else {
-          console.log('[SETTINGS] Using Vuex store data:', userData)
-        }
-        console.log('[SETTINGS] Updating userData state...')
-        this.userData = {
-          name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
-          email: userData.email || '',
-          accountType: (userData.roles && userData.roles[0]) || this.translate('settings.standardAccount'),
-          createdAt: userData.createdAt || '',
-        }
-        console.log('[SETTINGS] userData updated:', this.userData)
-        if (userData.avatarUrl) {
-          console.log('[SETTINGS] Setting user avatar:', userData.avatarUrl)
-          this.userAvatar = userData.avatarUrl
-        }
-      } catch (error) {
-        console.error('[SETTINGS] Error fetching user data:', error)
-        notificationService.error(this.translate('settings.unableToLoadUser'))
-        console.log('[SETTINGS] Attempting to use Vuex store as fallback...')
-        const fallbackUser = this.$store.getters.currentUser
-        if (fallbackUser) {
-          console.log('[SETTINGS] Fallback user data found:', fallbackUser)
-          this.userData = {
-            name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
-            email: fallbackUser.email || '',
-            accountType: (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
-            createdAt: fallbackUser.createdAt || '',
-          }
-          console.log('[SETTINGS] Fallback userData set:', this.userData)
-        }
-      } finally {
-        console.log('[SETTINGS] Setting isLoading to false')
-        this.isLoading = false
-      }
-    },
-    close() {
-      console.log("[SETTINGS] Closing dialog without saving...");
-      this.$emit("close");
-    },
-    save() {
-      console.log("[SETTINGS] Saving settings...");
-      notificationService.info(
-        this.translate("settings.savingSettings", "Saving your settings..."),
-        1000
-      );
-      const isChangingLanguage =
-        this.$i18n && this.$i18n.locale !== this.settings.language;
-      console.log("[SETTINGS] Is language changing?:", isChangingLanguage);
-      if (this.$i18n) {
-        console.log(
-          "[SETTINGS] Saving language preference:",
-          this.settings.language
-        );
-        this.$i18n.locale = this.settings.language;
-        try {
-          localStorage.setItem("userLocale", this.settings.language);
-          console.log("[SETTINGS] Language preference saved to localStorage");
-        } catch (e) {
-          console.warn("[SETTINGS] Error saving language preference:", e);
-        }
-      }
-      console.log("[SETTINGS] Applying theme:", this.settings.theme);
-      themeManager.setTheme(this.settings.theme);
-      try {
-        localStorage.setItem("theme", this.settings.theme);
-      } catch (e) {
-        console.warn("[SETTINGS] Error saving theme preference:", e);
-      }
-      console.log("[SETTINGS] Saving font size:", this.settings.fontSize);
-      try {
-        localStorage.setItem("fontSize", this.settings.fontSize.toString());
-        document.documentElement.style.fontSize = `${
-          this.settings.fontSize / 50
-        }rem`;
-        console.log("[SETTINGS] Font size applied and saved");
-      } catch (e) {
-        console.warn("[SETTINGS] Error saving font size:", e);
-      }
-      console.log("[SETTINGS] Saving notification preferences...");
-      try {
-        localStorage.setItem(
-          "emailUpdates",
-          JSON.stringify(this.settings.emailUpdates)
-        );
-        localStorage.setItem(
-          "soundNotifications",
-          JSON.stringify(this.settings.soundNotifications)
-        );
-        console.log("[SETTINGS] Notification preferences saved:", {
-          emailUpdates: this.settings.emailUpdates,
-          soundNotifications: this.settings.soundNotifications,
-        });
-      } catch (e) {
-        console.warn("[SETTINGS] Error saving notification preferences:", e);
-      }
-      console.log(
-        "[SETTINGS] Emitting themeChanged event:",
-        this.settings.theme
-      );
-      this.$emit("themeChanged", this.settings.theme);
-      notificationService.success(
-        this.translate("settings.settingsSaved", "Settings saved successfully!")
-      );
-      console.log("[SETTINGS] Closing dialog after saving...");
-      this.$emit("close");
-      if (isChangingLanguage) {
-        console.log("[SETTINGS] Language changed, scheduling page reload...");
-        setTimeout(() => {
-          window.location.reload();
-        }, 100);
-      }
-    },
-    confirmResetUserData() {
-      console.log("[SETTINGS] Showing reset user data confirmation...");
-      this.showResetDataConfirm = true;
-    },
-    handleResetDataConfirm() {
-      console.log("[SETTINGS] User confirmed reset user data...");
-      this.showResetDataConfirm = false;
-      this.resetUserData();
-    },
-    handleResetDataCancel() {
-      console.log("[SETTINGS] User cancelled reset user data...");
-      this.showResetDataConfirm = false;
-    },
-    async resetUserData() {
-      console.log("[SETTINGS] Resetting user data...");
-      try {
-        this.isLoading = true;
-        console.log("[SETTINGS] Calling userService.resetUserData...");
-        const response = await userService.resetUserData();
-        console.log("[SETTINGS] Reset user data response:", response);
-        notificationService.success(
-          this.translate(
-            "settings.userDataReset",
-            "Your profile data has been successfully reset."
-          )
-        );
-        console.log("[SETTINGS] Refreshing user data after reset...");
-        await this.fetchUserData();
-        console.log(
-          "[SETTINGS] Clearing localStorage except theme and language..."
-        );
-        const themeValue = localStorage.getItem("theme");
-        const langValue = localStorage.getItem("userLocale");
-        localStorage.clear();
-        if (themeValue) localStorage.setItem("theme", themeValue);
-        if (langValue) localStorage.setItem("userLocale", langValue);
-        console.log("[SETTINGS] Restored theme and language to localStorage");
-      } catch (e) {
-        console.error("[SETTINGS] Error resetting user data:", e);
-        notificationService.error(
-          this.translate(
-            "settings.failedToResetUserData",
-            "Failed to reset your profile data. Please try again later."
-          )
-        );
-      } finally {
-        console.log("[SETTINGS] Setting isLoading to false after reset...");
-        this.isLoading = false;
+        '--dialog-background': dialogTheme.modal.background,
+        '--dialog-title-color': dialogTheme.modal.titleColor,
+        '--dialog-text-color': dialogTheme.modal.textColor,
+        '--dialog-border-color': dialogTheme.modal.borderColor,
+        '--dialog-box-shadow': dialogTheme.modal.boxShadow,
+        '--dialog-overlay-background': dialogTheme.overlay.background,
       }
     },
   },
   watch: {
-    "settings.theme"(newTheme) {
-      console.log("[SETTINGS] settings.theme changed to:", newTheme);
-      this.$forceUpdate();
-    },
-    "settings.language": function () {
-      console.log("[SETTINGS] Language changed, updating dialog texts...");
-      this.updateDialogTexts();
+    'settings.theme'(newTheme) {
+      console.log('[SETTINGS] settings.theme changed to:', newTheme)
+      this.$forceUpdate()
     },
     currentLocale: function () {
-      console.log(
-        "[SETTINGS] Current locale changed, updating dialog texts..."
-      );
-      this.updateDialogTexts();
+      console.log('[SETTINGS] Current locale changed, updating dialog texts...')
+      this.updateDialogTexts()
     },
   },
   created() {
@@ -960,7 +462,12 @@ export default {
         }
         console.log('[SETTINGS] Updating userData state...')
         this.userData = {
-          name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
+          name:
+            userData.name ||
+            userData.fullName ||
+            userData.loginName ||
+            userData.username ||
+            this.translate('settings.user'),
           email: userData.email || '',
           accountType: (userData.roles && userData.roles[0]) || this.translate('settings.standardAccount'),
           createdAt: userData.createdAt || '',
@@ -978,7 +485,8 @@ export default {
         if (fallbackUser) {
           console.log('[SETTINGS] Fallback user data found:', fallbackUser)
           this.userData = {
-            name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
+            name:
+              fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
             accountType: (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
             createdAt: fallbackUser.createdAt || '',
@@ -1138,15 +646,12 @@ export default {
   font-weight: 600;
 }
 
-.header-title[data-themed="true"] {
+.header-title[data-themed='true'] {
   color: var(--dialog-title-color, #333333) !important;
 }
 
 /* Fallback override for dark mode */
-[data-theme="dark"]
-  .settings-dialog
-  .dialog-header
-  .header-title[data-themed="true"] {
+[data-theme='dark'] .settings-dialog .dialog-header .header-title[data-themed='true'] {
   color: #f0f0f0 !important;
 }
 
@@ -1282,7 +787,7 @@ export default {
 }
 
 /* Fallback override for dark mode */
-[data-theme="dark"] .settings-dialog .section-title {
+[data-theme='dark'] .settings-dialog .section-title {
   color: #f0f0f0 !important;
 }
 
@@ -1299,7 +804,7 @@ export default {
 }
 
 /* Override text colors for dark mode */
-[data-theme="dark"] .settings-dialog .section-label {
+[data-theme='dark'] .settings-dialog .section-label {
   color: rgba(255, 255, 255, 0.8) !important;
 }
 
@@ -1472,15 +977,6 @@ export default {
   border: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
-.input-with-button {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.input-with-button .text-input {
-  flex: 1;
-}
-
 /* Buttons */
 .btn-close,
 .btn-save,
@@ -1508,20 +1004,11 @@ export default {
   width: 100%;
 }
 
-.btn-danger {
-  width: 100%;
-  padding: 0.6rem 1.25rem;
-  border-radius: 4px;
+.manage-account-btn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
-  font-weight: 500;
-  border: none;
-  background-color: var(--bg-danger, #dc3545);
-  color: white;
-  transition: all 0.2s;
-}
-
-.btn-danger:hover {
-  background-color: var(--bg-danger-hover, #c82333);
 }
 
 .btn-save {
@@ -1538,7 +1025,7 @@ export default {
 }
 
 /* Override button colors for dark mode */
-[data-theme="dark"] .settings-dialog .btn-close {
+[data-theme='dark'] .settings-dialog .btn-close {
   background-color: #444444 !important;
   color: #f0f0f0 !important;
 }
@@ -1547,181 +1034,6 @@ export default {
   margin-top: 0.5rem;
   font-size: 0.875rem;
   color: var(--text-tertiary, #767676);
-}
-
-.danger-text {
-  color: var(--text-danger, #dc3545);
-}
-
-/* Modal styling */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-}
-
-.modal-content {
-  width: 450px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  background-color: var(--dialog-background, #ffffff);
-  border-radius: 8px;
-  box-shadow: var(--dialog-box-shadow, 0 4px 12px rgba(0, 0, 0, 0.15));
-}
-
-.modal-title {
-  padding: 1rem 1.5rem;
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  border-bottom: 1px solid var(--dialog-border-color, #dcdfe4);
-  color: var(--dialog-title-color, #333333);
-}
-
-.modal-body {
-  padding: 1.5rem;
-  color: var(--dialog-text-color, #666666);
-}
-
-/* Override text colors for dark mode */
-[data-theme="dark"] .settings-dialog .modal-body {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-
-.modal-body ul {
-  margin-top: 0.5rem;
-  margin-bottom: 1.5rem;
-  padding-left: 1.5rem;
-}
-
-.modal-body ul li {
-  margin-bottom: 0.5rem;
-}
-
-.modal-footer {
-  padding: 1rem 1.5rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  border-top: 1px solid var(--dialog-border-color, #dcdfe4);
-}
-
-/* Password Reset Dialog Styles */
-.password-reset-modal {
-  width: 400px;
-  padding: 1.5rem;
-  color: #fff;
-  background-color: #333;
-}
-
-.logo {
-  text-align: center;
-  margin-bottom: 1rem;
-}
-
-.app-logo {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: var(--bg-button-primary, #4e97d1);
-  margin-bottom: 0.5rem;
-}
-
-.vue-logo {
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-bottom: 16px solid #fff;
-}
-
-.app-name {
-  font-size: 1.5rem;
-  color: #fff;
-  margin: 0;
-  font-weight: 500;
-}
-
-.password-reset-heading {
-  text-align: center;
-  font-size: 1.2rem;
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  font-weight: 500;
-  color: #ddd;
-}
-
-.password-reset-form {
-  margin-bottom: 1rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  color: #ddd;
-  font-weight: 500;
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.625rem 0.75rem;
-  font-size: 0.9375rem;
-  border: none;
-  border-radius: 6px;
-  background-color: #222;
-  color: #fff;
-  transition: background-color 0.2s;
-}
-
-.form-control:focus {
-  outline: none;
-  background-color: #2a2a2a;
-}
-
-.error-message {
-  color: #ff6b6b;
-  font-size: 0.75rem;
-  margin-top: 0.25rem;
-  margin-bottom: 0;
-}
-
-.reset-button {
-  width: 100%;
-  padding: 0.625rem;
-  background-color: var(--bg-button-primary, #4e97d1);
-  color: var(--text-button-primary, #ffffff);
-  font-size: 0.9375rem;
-  font-weight: bold;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.reset-button:hover:not(:disabled) {
-  background-color: var(--bg-button-primary-hover, #3a7da0);
-}
-
-.reset-button:disabled {
-  background-color: #3a7da8;
-  cursor: not-allowed;
-  opacity: 0.7;
 }
 
 /* Responsive adjustments */
@@ -1752,157 +1064,5 @@ export default {
     background-color: var(--dialog-background, #ffffff);
     z-index: 10;
   }
-
-  .input-with-button {
-    flex-wrap: wrap;
-  }
-
-  .input-with-button .text-input {
-    width: calc(100% - 70px);
-  }
-
-  .input-with-button .btn-secondary {
-    width: 60px;
-  }
-}
-
-/* Password strength indicator */
-.password-strength-indicator {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-}
-
-.strength-label {
-  margin-bottom: 0.25rem;
-  color: #ddd;
-}
-
-.strength-0 {
-  color: #ff4d4d;
-}
-
-.strength-1 {
-  color: #ffa64d;
-}
-
-.strength-2 {
-  color: #ffcc00;
-}
-
-.strength-3 {
-  color: #80cc33;
-}
-
-.strength-4 {
-  color: #47d147;
-}
-
-.strength-bar-container {
-  height: 4px;
-  background-color: #444;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.strength-bar {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.strength-bar.strength-0 {
-  background-color: #ff4d4d;
-}
-
-.strength-bar.strength-1 {
-  background-color: #ffa64d;
-}
-
-.strength-bar.strength-2 {
-  background-color: #ffcc00;
-}
-
-.strength-bar.strength-3 {
-  background-color: #80cc33;
-}
-
-.strength-bar.strength-4 {
-  background-color: #47d147;
-}
-
-.strength-suggestions {
-  list-style-type: none;
-  padding-left: 0;
-  margin: 0.5rem 0 0;
-  color: #aaa;
-}
-
-.strength-suggestions li {
-  margin-bottom: 0.25rem;
-  line-height: 1.2;
-  font-size: 0.75rem;
-}
-
-.strength-suggestions li::before {
-  content: "• ";
-  color: var(--bg-button-primary, #4e97d1);
-}
-
-.password-reset-modal-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2001;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
-}
-
-.warning-text {
-  color: var(--text-warning, #f5a623);
-  font-weight: 500;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background-color: rgba(245, 166, 35, 0.1);
-  border-left: 3px solid var(--text-warning, #f5a623);
-  border-radius: 4px;
-}
-
-/* Add themed styles for modal components */
-.modal-content[data-theme="dark"] {
-  background-color: var(--dialog-background, #2a2a2a);
-  color: var(--dialog-text-color, rgba(255, 255, 255, 0.8));
-}
-
-.modal-content[data-theme="dark"] .modal-title,
-.modal-content[data-theme="dark"] label[data-themed="true"] {
-  color: var(--dialog-title-color, #f0f0f0);
-}
-
-.modal-content[data-theme="dark"] .modal-footer {
-  border-top-color: var(--dialog-border-color, #444444);
-}
-
-.modal-content[data-theme="dark"] .modal-title {
-  border-bottom-color: var(--dialog-border-color, #444444);
-}
-
-.modal-content[data-theme="dark"] .text-input {
-  background-color: var(--bg-input, #333333);
-  color: var(--text-primary, #f0f0f0);
-  border-color: var(--dialog-border-color, #555555);
-}
-
-.modal-title[data-themed="true"] {
-  color: var(--dialog-title-color, #333333);
-}
-
-.modal-content[data-theme="dark"] .modal-title[data-themed="true"],
-.modal-content[data-theme="dark"] p[data-themed="true"] {
-  color: var(--dialog-title-color, #f0f0f0);
 }
 </style>

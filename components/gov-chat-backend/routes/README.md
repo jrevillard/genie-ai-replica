@@ -271,7 +271,8 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | GET | `/folders/:folderId/users` | Get users with folder access |
 
 #### Key Parameters
-- `userId`: Extracted from request for user-specific operations.
+- `userId` (`iss_sub`): OIDC composite key (`${iss}#${sub}`) extracted from JWT for identity and logging.
+- `userKey` (`_key`): ArangoDB document key extracted from JWT for database operations (document handles, edge `_from`/`_to` references).
 - `conversationId`, `folderId`, `queryId`, `messageId`: Identifiers for specific resources.
 - `limit`, `offset`: Pagination for conversations, messages, and folders.
 - `includeArchived`, `filterStarred`, `searchTerm`: Filtering options for conversations and folders.
@@ -284,7 +285,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 #### Security
 - All routes require JWT authentication (`authMiddleware.authenticate`).
 - User ID extraction ensures operations are restricted to the authenticated user’s data.
-- Folder sharing includes permission checks (viewer, editor, contributor roles).
 - Conversation and folder operations validate ownership and permissions.
 
 ### Database Operations Routes
@@ -419,7 +419,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 #### Key Parameters
 - `data`, `files`: Profile data and optional file uploads for profile update.
-- User is resolved from JWT via `req.user.iss_sub` — no userId path parameter.
+- User is resolved from JWT: `req.user.iss_sub` for identity/logging, `req.user._key` for ArangoDB document operations — no userId path parameter.
 
 #### Services Called
 - **User Service**: Manages user profile retrieval and updates.
@@ -440,7 +440,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 #### Key Parameters
 - `latitude`, `longitude`: Coordinates for the location (optional, defaults to server location).
-- `userId`: ID of the user requesting weather data.
+- `userId` (`iss_sub`): ID of the user requesting weather data, extracted from JWT.
 
 #### Services Called
 - **Weather Service**: Retrieves current weather and forecast data, storing user-specific weather requests in the database.

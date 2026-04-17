@@ -134,11 +134,11 @@ clients:
       client.credentials.use.refresh.token: false
       require.pushed.authorization.requests: false
     redirectUris:
-      - http://localhost:8090/*
-      - https://localhost/*
+      - http://$(env:NGINX_PUBLIC_DOMAIN)/*
+      - https://$(env:NGINX_PUBLIC_DOMAIN)/*
     webOrigins:
-      - http://localhost:8090
-      - https://localhost
+      - http://$(env:NGINX_PUBLIC_DOMAIN)
+      - https://$(env:NGINX_PUBLIC_DOMAIN)
 
   # Service account for GENIE.AI backend → Keycloak Admin API proxy
   # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.

@@ -33,6 +33,13 @@ Thumbs.db
 # Docker
 docker-compose*.yaml
 
+# GENIE.AI components (not needed by OPEA Dockerfiles)
+components/
+api-gateway-solution/
+
+# Secrets (never in build context)
+secrets/
+
 # Deploy
 deploy/
 

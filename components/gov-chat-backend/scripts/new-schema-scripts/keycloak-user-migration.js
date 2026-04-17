@@ -64,14 +64,13 @@ async function migrateUsersCollection() {
     }
 
     // --- Handle legacy unique email index ---
-    // The legacy auth-service creates email with unique: true.
-    // Keycloak doesn't guarantee email uniqueness across realms,
-    // so we must drop it and recreate as non-unique.
+    // Keycloak does not guarantee email uniqueness across realms — the same
+    // email address can exist in multiple realms with different sub claims.
+    // Must not enforce email uniqueness at the DB level for multi-realm support.
     try {
       const indexes = await collection.getIndexes();
       const legacyEmailIndex = indexes.find(
-        idx => idx.type === 'persistent' &&
-          idx.fields.length === 1 &&
+        idx => idx.fields.length === 1 &&
           idx.fields[0] === 'email' &&
           idx.unique === true
       );

@@ -520,6 +520,10 @@ export default {
       handler(user) {
         if (user && user !== this.currentUser) {
           this.currentUser = user
+          if (getUserId(user)) {
+            this.loadConversationsForCurrentTab()
+            this.loadFoldersFromBackend()
+          }
         }
       },
       immediate: true,

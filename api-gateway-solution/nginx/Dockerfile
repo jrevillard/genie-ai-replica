@@ -1,5 +1,7 @@
 FROM nginx:1.28-alpine
 
+RUN apk add --no-cache openssl gettext
+
 # Copy nginx configuration
 COPY conf/default.conf.template /etc/nginx/conf.d/default.conf.template
 COPY conf/security-headers.conf /etc/nginx/conf.d/security-headers.conf

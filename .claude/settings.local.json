@@ -5,7 +5,11 @@
       "Bash(findstr:*)",
       "Bash(bn)",
       "Bash(st \")",
-      "Bash(flutter clean)"
+      "Bash(flutter clean)",
+      "Bash(chmod +x:*)",
+      "Bash(python -W error::UserWarning -c ':*)",
+      "Bash(docker compose *)",
+      "Bash(docker exec *)"
     ]
   }
 }

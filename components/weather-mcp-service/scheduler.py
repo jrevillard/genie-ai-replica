@@ -48,10 +48,17 @@ async def run_hourly_pipeline(
 
     # Step 1 – ingestion (blocking I/O; run in thread pool to avoid blocking loop)
     try:
-        forecasts = await asyncio.get_event_loop().run_in_executor(
+        forecasts = await asyncio.get_running_loop().run_in_executor(
             None, lambda: ingestor.ingest_short_term(forecast_days=7)
         )
-        logger.info("[PIPELINE] Ingested %d district forecasts", len(forecasts))
+        fallback_count     = sum(1 for f in forecasts if f.fallback_used)
+        sense_check_failed = sum(1 for f in forecasts if f.sense_check_passed is False)
+        sense_check_passed = sum(1 for f in forecasts if f.sense_check_passed is True)
+        logger.info(
+            "[PIPELINE] Ingested %d district forecasts — "
+            "sense_check(pass=%d fail=%d) fallback=%d",
+            len(forecasts), sense_check_passed, sense_check_failed, fallback_count,
+        )
     except Exception as exc:
         logger.error("[PIPELINE] Ingestion failed: %s", exc)
         return {"status": "error", "stage": "ingestion", "error": str(exc)}
@@ -62,18 +69,18 @@ async def run_hourly_pipeline(
 
     for fc in forecasts:
         try:
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None, lambda f=fc: storage.upsert_forecast(f)
             )
 
             assessment = risk_engine.classify(fc)
 
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None, lambda a=assessment: storage.upsert_risk_assessment(a)
             )
 
             if assessment.tier >= 2:
-                await asyncio.get_event_loop().run_in_executor(
+                await asyncio.get_running_loop().run_in_executor(
                     None, lambda a=assessment: notifier.dispatch(a)
                 )
                 notified += 1
@@ -83,10 +90,13 @@ async def run_hourly_pipeline(
             errors += 1
 
     result = {
-        "status":              "ok" if errors == 0 else "partial",
-        "districts_processed": len(forecasts),
-        "errors":              errors,
-        "alerts_dispatched":   notified,
+        "status":               "ok" if errors == 0 else "partial",
+        "districts_processed":  len(forecasts),
+        "sense_check_passed":  sense_check_passed,
+        "sense_check_failed":  sense_check_failed,
+        "fallback_used":       fallback_count,
+        "errors":               errors,
+        "alerts_dispatched":    notified,
     }
     logger.info("[PIPELINE] Hourly pipeline complete: %s", result)
     return result

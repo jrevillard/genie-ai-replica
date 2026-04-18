@@ -24,6 +24,47 @@ from mcp_client import MCPClientManager
 from agent import WeatherAgent
 from mcp_weather.tools.weather_forecast import fetch_forecast_logic
 
+# ---------------------------------------------------------------------------
+# Logging — configure before any module-level loggers are used.
+# LOG_LEVEL env var controls verbosity (default INFO).
+# Set LOG_LEVEL=DEBUG in docker-compose to see full agent trace logs.
+# ---------------------------------------------------------------------------
+_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=_LOG_LEVEL,
+    format="%(asctime)s  %(levelname)-7s  %(name)s  %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+    force=True,  # override any handler uvicorn already set
+)
+
+# Suppress noisy third-party loggers — always at WARNING regardless of LOG_LEVEL
+for _noisy in (
+    "httpcore",
+    "httpcore.connection",
+    "httpcore.http11",
+    "httpx",
+    "urllib3",
+    "urllib3.connectionpool",
+    "google_genai",
+    "google_genai.models",
+    "google.auth",
+    "google.auth.transport",
+):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+# Keep uvicorn error log visible; filter /health out of access log
+logging.getLogger("uvicorn.error").setLevel(logging.INFO)
+
+
+class _HealthCheckFilter(logging.Filter):
+    """Drop GET /health access-log lines — they fire every 30 s and bury real traffic."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "GET /health" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(_HealthCheckFilter())
+logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------

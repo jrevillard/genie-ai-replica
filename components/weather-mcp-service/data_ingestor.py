@@ -1,17 +1,25 @@
 """
-DataIngestor — weather data ingestion.
+DataIngestor — weather data ingestion with BAMIS sense_check validation.
+
+Pipeline per district:
+  1. Fetch Open-Meteo hourly-aggregated 7-day forecast (primary)
+  2. Fetch BAMIS WRF table in one bulk request (all districts, once per run)
+  3. sense_check: compare OM day-0 values against BAMIS period bounds (±20% tolerance)
+     - Pass  → use Open-Meteo data (sense_check_passed=True)
+     - Fail  → discard OM, fetch full BMD per-district and use as replacement
+               (fallback_used=True, sense_check_passed=False)
+     - N/A   → BAMIS reference unavailable for this district; use OM as-is
 
 Sources:
   1. Open-Meteo  — free, no API key, 1 km grid, daily aggregated (primary)
-  2. BMD BAMIS   — official Bangladesh scraper, existing MCP tool (fallback)
-
-All sources normalise to UnifiedForecast before returning.
+  2. BMD BAMIS   — official Bangladesh scraper (sense_check reference + fallback)
 """
 import json
 import logging
 from datetime import datetime, timezone
 
 import requests
+from bs4 import BeautifulSoup
 
 from models import (
     DayForecast,
@@ -21,7 +29,11 @@ from models import (
     UnifiedForecast,
     WindData,
 )
-from mcp_weather.tools.weather_forecast import fetch_forecast_logic
+from mcp_weather.tools.weather_forecast import (
+    fetch_forecast_logic,
+    BAMIS_URL,
+    BENGALI_TO_ENGLISH,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,8 +154,12 @@ class DataIngestor:
         """
         Fetch 0–forecast_days day forecasts for all (or specified) districts.
 
-        Primary source:   Open-Meteo  (free, no API key)
-        Fallback source:  BMD BAMIS   (existing scraper via fetch_forecast_logic)
+        Flow per district:
+          1. Fetch Open-Meteo (primary)
+          2. Run sense_check vs pre-fetched BAMIS bulk data
+             - Pass  → use OM forecast
+             - Fail  → fetch full BMD per-district and use it (fallback_used=True)
+          3. If OM failed entirely → fall back to BMD directly
 
         Returns one UnifiedForecast per district.
         Districts that fail both sources are skipped and logged.
@@ -151,31 +167,222 @@ class DataIngestor:
         targets = districts if districts is not None else list(DISTRICT_COORDS.keys())
         results: list[UnifiedForecast] = []
 
+        # --- Step 0: fetch BAMIS bounds for ALL districts in one HTTP request ---
+        bmd_daily = self._fetch_bmd_sense_data()
+        sense_check_failed = 0
+
         for district in targets:
             coords = DISTRICT_COORDS.get(district)
+            om_forecast: UnifiedForecast | None = None
+
+            # --- Step 1: try Open-Meteo ---
             if coords:
                 try:
-                    uf = self._from_open_meteo(district, coords, forecast_days)
-                    results.append(uf)
-                    continue
+                    om_forecast = self._from_open_meteo(district, coords, forecast_days)
                 except Exception as exc:
                     logger.warning(
-                        "[INGESTOR] Open-Meteo failed for %s: %s — falling back to BMD",
-                        district, exc,
+                        "[INGESTOR] Open-Meteo failed for %s: %s", district, exc,
                     )
 
-            # BMD fallback (also handles districts without registered coordinates)
+            # --- Step 2: sense_check if OM succeeded ---
+            if om_forecast is not None:
+                bmd_bounds = bmd_daily.get(district)
+
+                if bmd_bounds and om_forecast.forecast:
+                    reliable, metrics = self._sense_check(om_forecast.forecast[0], bmd_bounds)
+                    om_forecast.sense_check_passed = reliable
+
+                    if not reliable:
+                        sense_check_failed += 1
+                        logger.warning(
+                            "[INGESTOR] sense_check FAILED for %s "
+                            "(violations=%d/%d rate=%.2f) — switching to BMD",
+                            district,
+                            metrics["violations"],
+                            metrics["total_checked"],
+                            metrics["violation_rate"],
+                        )
+                        try:
+                            bmd_fc = self._from_bmd(district, forecast_days)
+                            bmd_fc.fallback_used = True
+                            bmd_fc.sense_check_passed = False
+                            results.append(bmd_fc)
+                            continue
+                        except Exception as exc:
+                            logger.error(
+                                "[INGESTOR] BMD fallback failed for %s after failed sense_check: %s"
+                                " — keeping OM data",
+                                district, exc,
+                            )
+                    else:
+                        logger.debug(
+                            "[INGESTOR] sense_check OK for %s (violations=%d/%d rate=%.2f)",
+                            district,
+                            metrics["violations"],
+                            metrics["total_checked"],
+                            metrics["violation_rate"],
+                        )
+                results.append(om_forecast)
+                continue
+
+            # --- Step 3: OM failed entirely — fall back to BMD directly ---
             try:
-                uf = self._from_bmd(district, forecast_days)
-                results.append(uf)
+                bmd_fc = self._from_bmd(district, forecast_days)
+                bmd_fc.fallback_used = True
+                results.append(bmd_fc)
             except Exception as exc:
-                logger.error("[INGESTOR] BMD fallback also failed for %s: %s", district, exc)
+                logger.error("[INGESTOR] Both sources failed for %s: %s", district, exc)
 
         logger.info(
-            "[INGESTOR] Short-term ingestion complete: %d / %d districts",
-            len(results), len(targets),
+            "[INGESTOR] Short-term ingestion complete: %d / %d districts (sense_check_failed=%d)",
+            len(results), len(targets), sense_check_failed,
         )
         return results
+
+    # ------------------------------------------------------------------
+    # sense_check
+    # ------------------------------------------------------------------
+
+    # BAMIS uses its own English transliterations which differ from our canonical names.
+    # This table maps BAMIS page names → DISTRICT_COORDS keys so sense_check lookups work.
+    _BAMIS_NAME_MAP: dict[str, str] = {
+        "Chattogram":      "Chittagong",       # official new spelling vs colonial name
+        "Cumilla":         "Comilla",           # Bengali romanisation vs old spelling
+        "Khagrachari":     "Khagrachhari",      # missing 'h'
+        "Chapai Nawabganj":"Chapainawabganj",   # space + different romanisation
+        "Barishal":        "Barisal",           # official new spelling vs old spelling
+        "Jhalokati":       "Jhalokathi",        # missing 'h'
+    }
+
+    def _fetch_bmd_sense_data(self) -> dict[str, dict]:
+        """
+        Fetch the BAMIS WRF table ONCE and return temperature/rain/humidity
+        bounds for all districts.
+
+        Returns: {district_name: {"t_min", "t_max", "rain", "humidity"}}
+        Keys are normalised to match DISTRICT_COORDS via _BAMIS_NAME_MAP.
+        Empty dict on network failure (sense_check will be skipped gracefully).
+        """
+        try:
+            url = BAMIS_URL.format(days=1)
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            }
+            resp = requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            def _sf(cells: list, idx: int) -> float:
+                try:
+                    return float(cells[idx].get_text(strip=True))
+                except (IndexError, ValueError):
+                    return 0.0
+
+            result: dict[str, dict] = {}
+            for row in soup.select("table tbody tr"):
+                cells = row.find_all("td")
+                if not cells:
+                    continue
+                raw_name = cells[0].get_text(strip=True)
+                # BENGALI_TO_ENGLISH handles Bengali text; for pages that already use
+                # English, get() falls through and raw_name is used as-is.
+                bamis_name = BENGALI_TO_ENGLISH.get(raw_name, raw_name)
+                # Normalise to our canonical DISTRICT_COORDS key
+                canonical = self._BAMIS_NAME_MAP.get(bamis_name, bamis_name)
+                result[canonical] = {
+                    "t_min":    _sf(cells, 1),
+                    "t_max":    _sf(cells, 3),
+                    "humidity": _sf(cells, 5),
+                    "rain":     _sf(cells, 10),  # total mm for the period (days=1 → daily)
+                }
+
+            logger.info("[INGESTOR] BAMIS sense_check reference loaded: %d districts", len(result))
+            return result
+
+        except Exception as exc:
+            logger.warning(
+                "[INGESTOR] BAMIS sense_check fetch failed: %s — sense_check will be skipped", exc,
+            )
+            return {}
+
+    @staticmethod
+    def _sense_check(
+        om_day: "DayForecast",
+        bmd_bounds: dict,
+        tolerance: float = 0.2,
+    ) -> tuple[bool, dict]:
+        """
+        Check whether Open-Meteo day-0 values are plausible against BAMIS bounds.
+
+        Checks three variables (temperature max, precipitation, humidity).
+        Returns (reliable, metrics) where reliable=False triggers BMD fallback.
+        A violation occurs when the OM value lies outside the BAMIS ± tolerance range.
+        sense_check fails when violation_rate ≥ 0.5 (majority of checked variables fail).
+        """
+        violations = 0
+        total_checked = 0
+        details: dict = {}
+
+        # Temperature: OM daily max vs BAMIS period min/max bounds
+        bmd_t_max = bmd_bounds.get("t_max", 0.0)
+        bmd_t_min = bmd_bounds.get("t_min", 0.0)
+        if bmd_t_max > 0:
+            upper = bmd_t_max * (1 + tolerance)
+            lower = bmd_t_min * (1 - tolerance)
+            om_val = om_day.temperature.max
+            violated = om_val > upper or om_val < lower
+            total_checked += 1
+            if violated:
+                violations += 1
+            details["temperature"] = {
+                "om_max": om_val, "bmd_bounds": [round(lower, 1), round(upper, 1)],
+                "violation": violated,
+            }
+
+        # Precipitation: OM daily total vs BAMIS daily total (upper-bound check only)
+        # Lower bound is 0 — OM reporting less rain than BMD is acceptable.
+        bmd_rain = bmd_bounds.get("rain", 0.0)
+        om_rain = om_day.precipitation.value
+        # Give at least a 10 mm absolute buffer for small rain values
+        upper_rain = max(bmd_rain * (1 + tolerance), bmd_rain + 10.0)
+        violated = om_rain > upper_rain
+        total_checked += 1
+        if violated:
+            violations += 1
+        details["precipitation"] = {
+            "om_value": om_rain, "bmd_upper": round(upper_rain, 1), "violation": violated,
+        }
+
+        # Humidity: OM max vs BAMIS single value ± tolerance
+        bmd_hum = bmd_bounds.get("humidity", 0.0)
+        if bmd_hum > 0:
+            upper_hum = min(bmd_hum * (1 + tolerance), 100.0)
+            lower_hum = max(bmd_hum * (1 - tolerance), 0.0)
+            om_hum = om_day.humidity
+            violated = om_hum > upper_hum or om_hum < lower_hum
+            total_checked += 1
+            if violated:
+                violations += 1
+            details["humidity"] = {
+                "om_value": om_hum, "bmd_bounds": [round(lower_hum, 1), round(upper_hum, 1)],
+                "violation": violated,
+            }
+
+        if total_checked == 0:
+            return True, {"total_checked": 0, "violations": 0, "violation_rate": 0.0}
+
+        violation_rate = violations / total_checked
+        return violation_rate < 0.5, {
+            "total_checked": total_checked,
+            "violations": violations,
+            "violation_rate": round(violation_rate, 3),
+            "details": details,
+        }
 
     # ------------------------------------------------------------------
     # Sources

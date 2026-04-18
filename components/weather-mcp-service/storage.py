@@ -47,7 +47,7 @@ class StorageLayer:
 
     def __init__(self) -> None:
         arango_url  = os.getenv("ARANGO_URL",      "http://arango-vector-db:8529")
-        arango_db   = os.getenv("ARANGO_DB_NAME",  "node-services")
+        arango_db   = os.getenv("ARANGO_DB_NAME",  "genie-ai")
         arango_user = os.getenv("ARANGO_USER",     "root")
         arango_pass = os.getenv("ARANGO_PASSWORD", "test")
 

@@ -4,7 +4,11 @@ uvicorn==0.29.0
 python-multipart==0.0.6
 
 # LLM / agent
-google-genai==0.8.0
+# google-genai 0.8.x has a field typed as the built-in `any` function instead of
+# typing.Any, which causes pydantic >=2.11 to raise ArbitraryTypeWarning during
+# schema generation (and a hard error in stricter warning modes). The 1.x line
+# fixes that annotation. Pin <2.0.0 to stay within the stable 1.x API surface.
+google-genai>=1.0.0,<2.0.0
 
 # MCP protocol
 mcp>=1.0.0

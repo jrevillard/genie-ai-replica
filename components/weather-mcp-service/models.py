@@ -55,10 +55,12 @@ class UnifiedForecast(BaseModel):
     location: str                    # Canonical English district name
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    source: str                      # "bmd" | "open_meteo" | "copernicus" | "weathernext"
+    source: str                      # "bmd" | "open_meteo"
     horizon: str                     # "short" (0–7 d) | "long" (8–30 d)
     ingested_at: str                 # ISO 8601 UTC
     forecast: list[DayForecast]
+    fallback_used: bool = False           # True when BMD replaced OM after failed sense_check
+    sense_check_passed: Optional[bool] = None  # None = check not performed
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import httpx
 import json
 import os
 import re
-import aiohttp # for async http requests
+import aiohttp 
 import requests
 import asyncio
 import copy
@@ -44,7 +44,7 @@ TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_TIMEOUT = int(os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180))  # Timeout in seconds for translation service (default: 3 minutes) 
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
-RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
+RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "retriever-arango-service")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
 RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
@@ -79,8 +79,6 @@ MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max cha
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
-CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "true")
-CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", None)
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -480,7 +478,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     
         prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
                          f"\n\nCHAT HISTORY:\n{translated_history_string}"
-                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}")
+                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
         
         final_llm_prompt = f"{system_instructions}{prompt_add_context}"
 
@@ -609,34 +607,21 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
             # handle template
             received_prompt = data.get("initial_query", inputs.get("text", ""))
-            
-            if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
-                abstention_instructions = (
-                    CHATQNA_ABSTENTION_INSTRUCTIONS 
-                    if CHATQNA_ABSTENTION_INSTRUCTIONS is not None 
-                    else "\n[Returned Documents] The knowledge base search did not return any results. State clearly that you cannot answer based on available information."
-                )
-                received_prompt += abstention_instructions
-            
-            prompt = received_prompt 
-
-            # System instructions for integration of retrieved documents are already included in the CHATQNA_SYSTEM_PROMPT
-            # OPTIONAL: 
-            # Re-introduce the below code, to dynamically pass custom instructions or to condition them based on retrieved documents
-            # chat_template = llm_parameters_dict["chat_template"]
-            # if chat_template:
-            #     prompt_template = PromptTemplate.from_template(chat_template)
-            #     input_variables = prompt_template.input_variables
-            #     if sorted(input_variables) == ["context", "question"]:
-            #         prompt = prompt_template.format(question=received_prompt, context="\n".join(doc_texts)) 
-            #     elif input_variables == ["question"]:
-            #         prompt = prompt_template.format(question=received_prompt)
-            #     else:
-            #         if logflag:
-            #             logger.debug(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
-            #         prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
-            # else:
-            #     prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
+            prompt = received_prompt
+            chat_template = llm_parameters_dict["chat_template"]
+            if chat_template:
+                prompt_template = PromptTemplate.from_template(chat_template)
+                input_variables = prompt_template.input_variables
+                if sorted(input_variables) == ["context", "question"]:
+                    prompt = prompt_template.format(question=received_prompt, context="\n".join(doc_texts)) 
+                elif input_variables == ["question"]:
+                    prompt = prompt_template.format(question=received_prompt)
+                else:
+                    if logflag:
+                        logger.debug(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
+                    prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
+            else:
+                prompt = ChatTemplate.generate_rag_prompt(received_prompt, doc_texts)
 
             next_data["inputs"] = prompt
         
@@ -691,37 +676,24 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         # 3. Build the RAG prompt
         initial_query = inputs.get("initial_query", " ") 
+        chat_template = llm_parameters_dict.get("chat_template") if llm_parameters_dict else None
         
-        # System instructions for integration of retrieved documents are already included in the CHATQNA_SYSTEM_PROMPT
-        # OPTIONAL: 
-        # Re-introduce the below code, to dynamically pass custom instructions or to condition them based on retrieved documents
-        # chat_template = llm_parameters_dict.get("chat_template") if llm_parameters_dict else None
-        
-        # if chat_template:
-        #     prompt_template = PromptTemplate.from_template(chat_template)
-        #     input_variables = prompt_template.input_variables
-        #     if sorted(input_variables) == ["context", "question"]:
-        #         prompt = prompt_template.format(question=initial_query, context="\n".join(docs))
-        #     elif input_variables == ["question"]:
-        #         prompt = prompt_template.format(question=initial_query)
-        #     else:
-        #         prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
-        # else:
-        #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
-            
-        if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
-            abstention_instructions = (
-                CHATQNA_ABSTENTION_INSTRUCTIONS 
-                if CHATQNA_ABSTENTION_INSTRUCTIONS is not None 
-                else "\n[Retrieved Documents] The knowledge base search did not return any results. State clearly that you cannot answer based on available information."
-                )
-            next_data["inputs"] = initial_query + abstention_instructions
+        if chat_template:
+            prompt_template = PromptTemplate.from_template(chat_template)
+            input_variables = prompt_template.input_variables
+            if sorted(input_variables) == ["context", "question"]:
+                prompt = prompt_template.format(question=initial_query, context="\n".join(docs))
+            elif input_variables == ["question"]:
+                prompt = prompt_template.format(question=initial_query)
+            else:
+                prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
         else:
-            next_data["inputs"] = initial_query + "".join(f"\n[Retrieved Document]: {doc}" for doc in docs) # prompt <- change to 'prompt' if you re-introduce the code above
-        
+            prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
+            
+        next_data["inputs"] = prompt
         next_data["retrieved_docs"] = reranked_docs_with_scores
         
-        # 4. Preserve file mappings for citation:
+        # 4. Preserve file mappings for citations
         if "file_id_pairs" in inputs:
             next_data["file_id_pairs"] = inputs["file_id_pairs"]
 

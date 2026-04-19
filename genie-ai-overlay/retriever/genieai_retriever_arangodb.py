@@ -63,6 +63,24 @@ class GenieEmbedDoc(EmbedDoc):
     traversal_max_returned: Optional[int] = None
     traversal_score_threshold: Optional[float] = None
 
+
+class SimpleTEIEmbeddings:
+    """Simple embedder that calls TEI endpoint directly via HTTP."""
+    def __init__(self, endpoint):
+        self.endpoint = endpoint.rstrip('/')
+    def embed_query(self, text):
+        import requests
+        resp = requests.post(f"{self.endpoint}/embed", json={"inputs": text}, timeout=30)
+        resp.raise_for_status()
+        result = resp.json()
+        if isinstance(result, list) and len(result) > 0:
+            if isinstance(result[0], list):
+                return result[0]
+            return result
+        return result
+    def embed_documents(self, texts):
+        return [self.embed_query(t) for t in texts]
+
 logger = CustomLogger("genieai_retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
 
@@ -508,6 +526,13 @@ class GenieaiArangoRetriever(OpeaComponent):
         search_start = input_dict.get("search_start", ARANGO_SEARCH_START)
         search_mode = input_dict.get("search_mode", ARANGO_SEARCH_MODE)
         enable_traversal = input_dict.get("enable_traversal", ARANGO_TRAVERSAL_ENABLED)
+        # Convert string 'false'/'true' to boolean
+        if isinstance(enable_traversal, str):
+            enable_traversal = enable_traversal.lower() == 'true'
+        elif isinstance(enable_traversal, bool):
+            pass
+        else:
+            enable_traversal = bool(enable_traversal)
         enable_summarizer = input_dict.get("enable_summarizer", SUMMARIZER_ENABLED)
         distance_strategy = input_dict.get("distance_strategy", ARANGO_DISTANCE_STRATEGY)
         use_approx_search = input_dict.get("use_approx_search", ARANGO_USE_APPROX_SEARCH)
@@ -631,12 +656,8 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
             embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
-        elif TEI_EMBEDDING_ENDPOINT and HF_TOKEN:
-            embeddings = HuggingFaceEndpointEmbeddings(
-                model=TEI_EMBEDDING_ENDPOINT,
-                task="feature-extraction",
-                huggingfacehub_api_token=HF_TOKEN,
-            )
+        elif TEI_EMBEDDING_ENDPOINT:
+            embeddings = SimpleTEIEmbeddings(endpoint=TEI_EMBEDDING_ENDPOINT)
         else:
             embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
 

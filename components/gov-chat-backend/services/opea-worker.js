@@ -10,7 +10,7 @@ const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
 const axiosInstance = axios.create({
   httpAgent,
   httpsAgent,
-  timeout: 120000 // 120s hard timeout
+  timeout: 300000 // 120s hard timeout
 });
 
 parentPort.on('message', async (task) => {

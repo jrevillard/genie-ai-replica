@@ -663,6 +663,16 @@ function setTopic(t){
 function sendQ(txt){const inp=document.getElementById('chat-inp');if(inp)inp.value=txt;sendMsg();}
 
 async function sendMsg(){
+  // Refresh token before long query to prevent expiry during wait
+  try {
+    const su=localStorage.getItem('ac_user');
+    const sh=localStorage.getItem('ac_hash');
+    if(su&&sh){
+      const rr=await fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginName:su,encPassword:sh})});
+      const rd=await rr.json();
+      if(rd.accessToken){token=rd.accessToken;localStorage.setItem('ac_token',token);}
+    }
+  } catch(e){}
   const inp=document.getElementById('chat-inp');
   const txt=inp?inp.value.trim():'';
   if(!txt)return;
@@ -672,7 +682,7 @@ async function sendMsg(){
   const tm={general:'General',maize:'Crop Farming',beans:'Crop Farming',pest:'Pest Management',weather:'Weather Advisory'};
   const lm={general:['Just Chat'],maize:['Maize Farming'],beans:['Beans Farming'],pest:['Pest & Disease Control'],weather:['Weather Advice']};
   try{
-    const r=await fetch(API+'/query',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({userId,sessionId:sessId,messages:[{role:'user',content:txt}],context:{categoryLabel:tm[topic]||'General',serviceLabels:lm[topic]||['Just Chat'],language:'EN'}})});
+    const r=await fetch(API+'/queries',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},signal:AbortSignal.timeout(300000),body:JSON.stringify({userId,sessionId:sessId,messages:[{role:'user',content:txt}],contextOption:'single-message',context:{categoryLabel:tm[topic]||'General',serviceLabels:lm[topic]||['Just Chat'],language:'EN'}})});
     const d=await r.json();
     rmTyping(tid);
     if(d.response){
@@ -788,7 +798,7 @@ function loadChatHistory(){
       else{d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-start;max-width:92%';d.innerHTML=b.h;}
       m.appendChild(d);
     });
-    m.scrollTop=m.scrollHeight;
+    setTimeout(()=>{m.scrollTop=m.scrollHeight;},200);
   }catch(e){}
 }
 

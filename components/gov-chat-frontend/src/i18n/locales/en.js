@@ -902,7 +902,14 @@ export default {
     loadingUserInfo: 'Loading user information...',
     resetUserDataTitle: "Reset User Data",
     confirmResetUserData: "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.",
-    reset: "Reset"
+    reset: "Reset",
+    deleteAccount: "Delete my account",
+    deleteAccountDesc: "Permanently delete your account and all data. This cannot be undone.",
+    deleteAccountTitle: "Delete Account",
+    confirmDeleteAccount: "Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.",
+    delete: "Delete",
+    accountDeleted: "Your account has been deleted.",
+    failedToDeleteAccount: "Failed to delete your account. Please try again later."
   },
   userProfile: {
     title: 'User Profile',

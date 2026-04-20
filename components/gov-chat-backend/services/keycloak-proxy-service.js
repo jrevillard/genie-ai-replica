@@ -8,7 +8,7 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
 const PROXY_CLIENT_ID = process.env.KEYCLOAK_PROXY_CLIENT_ID;
 const PROXY_CLIENT_SECRET = process.env.KEYCLOAK_PROXY_CLIENT_SECRET;
 
-const ALLOWED_ROLES = ['admin', 'user'];
+const ALLOWED_ROLES = ['admin'];
 const FETCH_TIMEOUT_MS = 10000; // 10s timeout for Keycloak API calls
 
 // Service account token cache (lazy refresh on 401)
@@ -18,8 +18,8 @@ let cachedToken = null;
  * Keycloak Proxy Service — proxies user management operations to Keycloak
  *
  * Uses two auth modes:
- * 1. Service account (genie-proxy-client) — for admin operations (role assignment, enable/disable, email, delete)
- * 2. Self-service profile updates — also uses service account (Keycloak /account is the Console SPA, not a REST API)
+ * 1. Service account (genie-proxy-client) — for admin operations (delete user)
+ * 2. User's own token (pass-through) — for self-service profile updates via Account API
  */
 const keycloakProxyService = {
 
@@ -181,42 +181,6 @@ const keycloakProxyService = {
   // ---------------------------------------------------------------------------
 
   /**
-   * Update a user in Keycloak
-   * @param {string} userKey - ArangoDB _key
-   * @param {Object} data - Fields to update (e.g. { enabled: true, email: '...' })
-   */
-  async updateUser(userKey, data) {
-    const uuid = await this._resolveKeycloakUserId(userKey);
-    logger.info('[KeycloakProxy] Updating user', { userKey, uuid, fields: Object.keys(data) });
-    return this._adminApiCall('PUT', `/users/${uuid}`, data);
-  },
-
-  /**
-   * Assign realm roles to a user
-   * @param {string} userKey - ArangoDB _key
-   * @param {string[]} roleNames - Role names to assign (must be lowercase)
-   */
-  async assignRoles(userKey, roleNames) {
-    // Validate role names before any I/O
-    const invalidRoles = roleNames.filter(r => !ALLOWED_ROLES.includes(r));
-    if (invalidRoles.length > 0) {
-      throw new Error(`Invalid roles: ${invalidRoles.join(', ')}. Allowed: ${ALLOWED_ROLES.join(', ')}`);
-    }
-
-    const uuid = await this._resolveKeycloakUserId(userKey);
-
-    // Fetch role representations from Keycloak
-    const roleRepresentations = [];
-    for (const name of roleNames) {
-      const role = await this._adminApiCall('GET', `/roles/${name}`);
-      roleRepresentations.push({ id: role.id, name: role.name });
-    }
-
-    logger.info('[KeycloakProxy] Assigning roles', { userKey, uuid, roles: roleNames });
-    return this._adminApiCall('POST', `/users/${uuid}/role-mappings/realm`, roleRepresentations);
-  },
-
-  /**
    * Delete a user from Keycloak and erase personal data in ArangoDB (GDPR right to erasure)
    * @param {string} userKey - ArangoDB _key
    * @throws {Error} If Keycloak user not found (404) or authentication fails
@@ -276,16 +240,31 @@ const keycloakProxyService = {
   // ---------------------------------------------------------------------------
 
   /**
-   * Update a user's own profile fields in Keycloak via Admin API.
-   * Uses the service account token (same as updateUser) because Keycloak's
-   * /account endpoint is the Account Console (React SPA), not a REST API.
-   * @param {string} userKey - ArangoDB _key (self-enforced by caller)
+   * Update a user's own profile fields in Keycloak via Account API.
+   * Uses the user's own access token (pass-through) — no service account needed.
+   * @param {string} accessToken - User's OIDC access token
    * @param {Object} data - JIT fields to update (e.g. { email, firstName, lastName })
    */
-  async updateOwnProfile(userKey, data) {
-    const uuid = await this._resolveKeycloakUserId(userKey);
-    logger.info('[KeycloakProxy] Updating own profile via Admin API', { userKey, uuid, fields: Object.keys(data) });
-    return this._adminApiCall('PUT', `/users/${uuid}`, data);
+  async updateOwnProfile(accessToken, data) {
+    const url = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/account`;
+    logger.info('[KeycloakProxy] Updating own profile via Account API', { fields: Object.keys(data) });
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw this._mapKeycloakError(response.status, text, '/account');
+    }
+
+    return {};
   }
 };
 

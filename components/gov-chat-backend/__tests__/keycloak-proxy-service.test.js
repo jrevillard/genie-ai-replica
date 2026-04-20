@@ -105,42 +105,6 @@ describe('keycloak-proxy-service', () => {
     });
   });
 
-  describe('updateUser', () => {
-    it('should proxy user update to Keycloak', async () => {
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce(mockOkResponse(200));
-
-      setupDbForResolve('uuid-abc');
-
-      await keycloakProxyService.updateUser('user-key', { enabled: true });
-
-      const lastCall = global.fetch.mock.calls[global.fetch.mock.calls.length - 1];
-      expect(lastCall[0]).toContain('/admin/realms/genie/users/uuid-abc');
-      expect(lastCall[1].method).toBe('PUT');
-    });
-  });
-
-  describe('assignRoles', () => {
-    it('should validate role names and proxy to Keycloak', async () => {
-      keycloakProxyService._clearTokenCache();
-      global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'role-id-1', name: 'admin' }) })
-        .mockResolvedValueOnce(mockOkResponse(204));
-
-      setupDbForResolve('uuid-abc');
-
-      await keycloakProxyService.assignRoles('user-key', ['admin']);
-      expect(global.fetch).toHaveBeenCalledTimes(3);
-    });
-
-    it('should reject invalid roles before calling Keycloak', async () => {
-      // assignRoles validates roles BEFORE resolving the user ID
-      await expect(keycloakProxyService.assignRoles('user-key', ['superadmin'])).rejects.toThrow('Invalid roles');
-    });
-  });
-
   describe('deleteUser', () => {
     it('should delete from Keycloak and set deleted=true in ArangoDB', async () => {
       keycloakProxyService._clearTokenCache();
@@ -316,19 +280,25 @@ describe('keycloak-proxy-service', () => {
   // Actual verification of markUserAsDeleted behavior is in user-provisioning-service.test.js
 
   describe('updateOwnProfile', () => {
-    it('should proxy profile update via Admin API (service account)', async () => {
-      keycloakProxyService._clearTokenCache();
+    it('should update profile via Account API with user token', async () => {
       global.fetch = jest.fn()
-        .mockResolvedValueOnce(mockTokenResponse())
         .mockResolvedValueOnce(mockOkResponse(200));
 
-      setupDbForResolve('uuid-abc');
+      await keycloakProxyService.updateOwnProfile('user-access-token', { email: 'new@test.com' });
 
-      await keycloakProxyService.updateOwnProfile('user-key', { email: 'new@test.com' });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [url, options] = global.fetch.mock.calls[0];
+      expect(url).toContain('/realms/genie/account');
+      expect(options.method).toBe('PUT');
+      expect(options.headers.Authorization).toBe('Bearer user-access-token');
+    });
 
-      const lastCall = global.fetch.mock.calls[global.fetch.mock.calls.length - 1];
-      expect(lastCall[0]).toContain('/admin/realms/genie/users/uuid-abc');
-      expect(lastCall[1].method).toBe('PUT');
+    it('should throw on Account API error', async () => {
+      global.fetch = jest.fn()
+        .mockResolvedValueOnce({ ok: false, status: 409, text: async () => 'Duplicate email' });
+
+      await expect(keycloakProxyService.updateOwnProfile('token', { email: 'dup@test.com' }))
+        .rejects.toThrow('Conflict in Keycloak operation');
     });
   });
 
@@ -357,11 +327,11 @@ describe('keycloak-proxy-service', () => {
         .mockResolvedValueOnce(mockTokenResponse()) // initial token
         .mockResolvedValueOnce({ ok: false, status: 401, text: async () => 'Expired' })
         .mockResolvedValueOnce(mockTokenResponse()) // refreshed token
-        .mockResolvedValueOnce(mockOkResponse(200)); // retry
+        .mockResolvedValueOnce(mockOkResponse(204)); // retry
 
       setupDbForResolve('uuid-abc');
 
-      await keycloakProxyService.updateUser('user-key', { enabled: false });
+      await keycloakProxyService.deleteUser('user-key');
       expect(global.fetch).toHaveBeenCalledTimes(4);
     });
   });

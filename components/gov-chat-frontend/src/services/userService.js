@@ -25,6 +25,20 @@ class UserService {
       throw error
     }
   }
+
+  /**
+   * Delete user account (GDPR right to erasure). Permanent and irreversible.
+   * @returns {Promise} Promise with deletion result
+   */
+  async deleteAccount() {
+    try {
+      const response = await httpService.post(`${this.userEndpoint}/delete`)
+      return response.data
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      throw error
+    }
+  }
 }
 
 export default new UserService()

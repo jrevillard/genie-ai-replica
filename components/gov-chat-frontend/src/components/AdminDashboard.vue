@@ -562,22 +562,10 @@
                     {{ translate('admin.databaseManagement', 'Database Management') }}
                   </div>
                   <div class="card-actions">
-                    <button class="btn btn-primary" @click="reindexDatabase">
-                      {{ translate('admin.reindexDatabase', 'Reindex Database') }}
-                    </button>
                   </div>
                 </div>
 
                 <div class="db-actions">
-                  <div class="db-action-card" @click="reindexDatabase">
-                    <div class="action-icon">🔄</div>
-                    <div class="action-title">
-                      {{ translate('admin.dbActions.reindex', 'Reindex') }}
-                    </div>
-                    <div class="action-desc">
-                      {{ translate('admin.dbActions.reindexDesc', 'Rebuild database indexes') }}
-                    </div>
-                  </div>
                   <div class="db-action-card" @click="backupDatabase">
                     <div class="action-icon">💾</div>
                     <div class="action-title">
@@ -599,10 +587,6 @@
                 </div>
 
                 <div class="db-stats">
-                  <div>
-                    <strong>{{ translate('admin.lastReindex', 'Last Reindex') }}:</strong>
-                    {{ dbStats.lastReindex }}
-                  </div>
                   <div>
                     <strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong>
                     {{ dbStats.databaseSize }}
@@ -1611,7 +1595,6 @@ export default {
 
       // Database stats
       dbStats: {
-        lastReindex: '5 days ago',
         databaseSize: '42.3 GB',
         totalTables: 128,
       },
@@ -2370,16 +2353,6 @@ export default {
     },
 
     // Database operations
-    async reindexDatabase() {
-      this.executeOperation('reindexDatabase', async () => {
-        const response = await databaseOperationsService.reindexDatabase()
-        // Update the last reindex time if successful
-        if (response.data && response.data.success) {
-          this.dbStats.lastReindex = 'Just now'
-        }
-        return response.data
-      })
-    },
 
     async backupDatabase() {
       this.executeOperation('backupDatabase', async () => {

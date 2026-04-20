@@ -310,22 +310,7 @@ class AdminDashboardService {
       const formattedSize = (totalSize / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
-      logger.debug('Fetching last reindex time from analytics');
-      const reindexCursor = await this.db.query(`
-        FOR a IN analytics
-          FILTER a.event == 'reindex'
-          SORT a.timestamp DESC
-          LIMIT 1
-          RETURN a.timestamp
-      `);
-      const lastReindexTimestamp = await reindexCursor.next();
-      const lastReindex = lastReindexTimestamp
-        ? this.formatTimeAgo(new Date(lastReindexTimestamp))
-        : 'Never';
-      logger.debug(`Last reindex time: ${lastReindexTimestamp || 'Never'}, formatted: ${lastReindex}`);
-
       const response = {
-        lastReindex,
         databaseSize: formattedSize,
         totalTables: collections.length,
         collections: collectionStats
@@ -369,7 +354,7 @@ class AdminDashboardService {
     try {
       logger.debug('Fetching total user count');
       const userCountCursor = await this.db.query(`
-        RETURN LENGTH(FOR u IN users RETURN 1)
+        RETURN LENGTH(FOR u IN users FILTER u.deleted != true RETURN 1)
       `);
       const userCount = await userCountCursor.next();
       logger.debug(`Total users: ${userCount}`);
@@ -392,6 +377,7 @@ class AdminDashboardService {
         LET oneMonthAgo = DATE_SUBTRACT(DATE_NOW(), 1, "month")
         RETURN LENGTH(
           FOR u IN users
+            FILTER u.deleted != true
             FILTER DATE_TIMESTAMP(u.createdAt) >= DATE_TIMESTAMP(oneMonthAgo)
             RETURN 1
         )
@@ -402,6 +388,7 @@ class AdminDashboardService {
       logger.debug('Fetching sample user list (top 10)');
       const usersCursor = await this.db.query(`
         FOR u IN users
+          FILTER u.deleted != true
           SORT u.updatedAt DESC
           LIMIT 10
           RETURN {
@@ -703,45 +690,6 @@ class AdminDashboardService {
       return response;
     } catch (error) {
       logger.error(`Error in debugYesterdayLogs: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  /**
-   * Reindex database
-   * @returns {Promise<Object>} Reindex result
-   */
-  async reindexDatabase() {
-    if (!this.db) {
-      throw new Error('Database not initialized. Call init() first.');
-    }
-    logger.info('Reindexing database');
-
-    try {
-      logger.debug('Starting database reindex');
-      const collections = await this.db.collections();
-      for (const collection of collections) {
-        logger.debug(`Reindexing collection: ${collection.name}`);
-        // Simulate reindexing (actual implementation depends on ArangoDB setup)
-        await collection.figures();
-      }
-
-      const timestamp = new Date().toISOString();
-      await this.storeAnalyticsData({
-        event: 'reindex',
-        timestamp
-      });
-
-      const response = {
-        status: 'success',
-        message: 'Database reindexed successfully',
-        timestamp
-      };
-      logger.debug(`Reindex response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in reindexDatabase: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -1164,6 +1112,7 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               FILTER ${filterCondition}
               RETURN 1
           )
@@ -1171,6 +1120,7 @@ class AdminDashboardService {
 
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             FILTER ${filterCondition}
             SORT u.updatedAt DESC
             LIMIT ${offset}, ${limit}
@@ -1190,11 +1140,13 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               RETURN 1
           )
         `;
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             SORT u.updatedAt DESC
             LIMIT ${offset}, ${limit}
             RETURN {

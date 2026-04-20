@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger, dbService, ensureCollection } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 const { NotFoundError, ForbiddenError } = require('../middleware/errors');
 
 //const initDB = dbService.getConnection();
@@ -34,36 +34,15 @@ class ChatHistoryService {
     try {
       this.db = await this.dbService.getConnection();
 
-      // Ensure all collections exist before accessing them
-      await ensureCollection(this.db, 'conversations');
-      await ensureCollection(this.db, 'messages');
-      await ensureCollection(this.db, 'userConversations', { type: 3 });
-      await ensureCollection(this.db, 'conversationCategories', { type: 3 });
-      await ensureCollection(this.db, 'queryMessages');
-      await ensureCollection(this.db, 'conversationFiles');
-      await ensureCollection(this.db, 'folders');
-      await ensureCollection(this.db, 'userFolders', { type: 3 });
-      await ensureCollection(this.db, 'folderConversations', { type: 3 });
-
       this.conversations = this.db.collection('conversations');
       this.messages = this.db.collection('messages');
       this.userConversations = this.db.collection('userConversations');
       this.conversationCategories = this.db.collection('conversationCategories');
       this.queryMessages = this.db.collection('queryMessages');
-
-      // conversationFiles collection with index for fast lookups by conversationId
       this.conversationFiles = this.db.collection('conversationFiles');
-      try {
-        await this.conversationFiles.ensureIndex({
-          type: 'persistent',
-          fields: ['conversationId']
-        });
-      } catch (err) {
-        // Index may already exist; ignore duplicate index errors
-        if (err.errorNum !== 1212) {
-          logger.warn(`Could not create conversationFiles index: ${err.message}`);
-        }
-      }
+      this.folders = this.db.collection('folders');
+      this.userFolders = this.db.collection('userFolders');
+      this.folderConversations = this.db.collection('folderConversations');
 
       this.initialized = true;
       logger.info('ChatHistoryService initialized successfully');

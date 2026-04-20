@@ -67,7 +67,7 @@ GENIE.AI is a RAG framework that integrates retrieval and generation capabilitie
 - **Analytics Routes**: Provide insights into user interactions and system performance.
 - **Authentication Routes**: Handle user authentication, registration, and password management.
 - **Chat History Routes**: Manage user conversations, messages, and folder organization.
-- **Database Operations Routes**: Perform database maintenance tasks like reindexing and backups.
+- **Database Operations Routes**: Perform database maintenance tasks like backups and optimization.
 - **Logger Routes**: Configure and manage logging settings.
 - **Query Routes**: Handle user queries and their integration with conversations.
 - **Service Category Routes**: Manage service categories and their hierarchies.
@@ -168,7 +168,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | GET | `/logs/summary` | Get logs summary by type and service |
 | GET | `/logs/search` | Search logs with filtering |
 | GET | `/logs/debug-yesterday` | Retrieve debug logs for yesterday |
-| POST | `/database-operations/reindex` | Reindex database |
 | POST | `/database-operations/backup` | Backup database |
 | POST | `/database-operations/optimize` | Optimize database |
 | GET | `/users/search` | Search users with filtering |
@@ -291,7 +290,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/reindex` | Reindex database |
 | POST | `/backup` | Backup database |
 | POST | `/optimize` | Optimize database |
 
@@ -299,7 +297,7 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - None (operations are system-wide).
 
 #### Services Called
-- **Database Service**: Performs database maintenance tasks like reindexing, backups, and optimization.
+- **Database Service**: Performs database maintenance tasks like backups and optimization.
 
 #### Security
 - All routes require JWT authentication (`authMiddleware.authenticate`).

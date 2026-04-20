@@ -114,9 +114,7 @@ beforeEach(() => {
       if (name === 'sessionQueries') return mockSessionQueriesCollection;
       return createMockCollection();
     }),
-    query: jest.fn(),
-    listCollections: jest.fn().mockResolvedValue([{ name: 'sessions' }, { name: 'userSessions' }, { name: 'sessionQueries' }]),
-    createCollection: jest.fn().mockResolvedValue({})
+    query: jest.fn()
   };
 
   const { dbService } = require('../shared-lib');
@@ -132,59 +130,6 @@ beforeEach(() => {
 });
 
 describe('SessionService', () => {
-  describe('init', () => {
-    it('should initialize collections and create index', async () => {
-      await sessionService.init();
-
-      expect(mockDb.collection).toHaveBeenCalledWith('sessions');
-      expect(mockDb.collection).toHaveBeenCalledWith('userSessions');
-      expect(mockDb.collection).toHaveBeenCalledWith('sessionQueries');
-      expect(mockSessionsCollection.ensureIndex).toHaveBeenCalledWith({
-        type: 'persistent',
-        fields: ['active', 'lastActiveTime'],
-        name: 'idx-active-lastActiveTime',
-        sparse: false
-      });
-      expect(sessionService.initialized).toBe(true);
-    });
-
-    it('should skip initialization if already initialized', async () => {
-      sessionService.initialized = true;
-      await sessionService.init();
-
-      expect(mockDb.collection).not.toHaveBeenCalled();
-    });
-
-    it('should create missing collections on fresh database', async () => {
-      sessionService.initialized = false;
-      mockDb.listCollections.mockResolvedValue([]);
-      mockDb.createCollection.mockResolvedValue({});
-
-      await sessionService.init();
-
-      // Should create 2 document collections + 1 edge collection
-      expect(mockDb.createCollection).toHaveBeenCalledWith('sessions');
-      expect(mockDb.createCollection).toHaveBeenCalledWith('sessionQueries');
-      expect(mockDb.createCollection).toHaveBeenCalledWith('userSessions', { type: 3 });
-      expect(mockDb.createCollection).toHaveBeenCalledTimes(3);
-      expect(sessionService.initialized).toBe(true);
-    });
-
-    it('should skip creating collections that already exist', async () => {
-      sessionService.initialized = false;
-      mockDb.listCollections.mockResolvedValue([
-        { name: 'sessions' },
-        { name: 'userSessions' },
-        { name: 'sessionQueries' }
-      ]);
-      mockDb.createCollection.mockClear();
-
-      await sessionService.init();
-
-      expect(mockDb.createCollection).not.toHaveBeenCalled();
-      expect(sessionService.initialized).toBe(true);
-    });
-  });
 
   describe('getActiveSession', () => {
     beforeEach(async () => {

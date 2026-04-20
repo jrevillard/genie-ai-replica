@@ -794,6 +794,7 @@
         | reject('search', 'kong-migrations')
         | reject('search', 'postgres-init')
         | reject('search', 'keycloak-config')
+        | reject('search', 'db-migrations')
         | reject('search', '0/0')
         | select('search', '0/')
         | length == 0

@@ -69,6 +69,8 @@ const userProvisioningService = {
       throw new Error('Missing iss_sub in decoded token');
     }
 
+    logger.info(`[UserProvisioning] realm_access: ${JSON.stringify(decodedToken.realm_access)}, resource_access: ${JSON.stringify(decodedToken.resource_access)}`);
+
     // Check cache first — avoids ArangoDB round-trip on every request
     evictExpired();
     const cached = _cache.get(issSub);

@@ -43,8 +43,13 @@ roles:
   realm:
     - name: admin
       description: Administrator role with full access
-    - name: user
-      description: Standard user role
+      composite: true
+      composites:
+        client:
+          realm-management:
+            - manage-users
+            - query-users
+            - view-identity-providers
     - name: dataprep-service
       description: Service account role for Dataprep ingestion pipeline
 
@@ -61,7 +66,6 @@ users:
         temporary: false
     realmRoles:
       - admin
-      - user
     clientRoles:
       realm-management:
         # Realm

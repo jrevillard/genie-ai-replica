@@ -883,7 +883,7 @@ export default {
       darkTheme: 'Oscuro',
       systemTheme: 'Sistema'
     },
-    confirmDeleteAccount: '¿Está seguro de que desea eliminar su cuenta? Esta acción no se puede deshacer.',
+    confirmDeleteAccount: '¿Está seguro de que desea eliminar su cuenta? Esta acción es permanente y no se puede deshacer. Todos sus datos serán borrados.',
     processing: 'Procesando...',
     userDataReset: 'Sus datos de perfil han sido restablecidos con éxito.',
     failedToResetUserData: 'Falló el restablecimiento de sus datos de perfil. Por favor, intente nuevamente más tarde.',
@@ -893,7 +893,13 @@ export default {
     loadingUserInfo: 'Cargando información del usuario...',
     resetUserDataTitle: "Restablecer Datos de Usuario",
     confirmResetUserData: "¿Está seguro de que desea restablecer todos sus datos de perfil? Esto borrará toda su información de perfil e historial de chat, pero mantendrá sus credenciales de cuenta.",
-    reset: "Restablecer"
+    reset: "Restablecer",
+    deleteAccount: "Eliminar mi cuenta",
+    deleteAccountDesc: "Elimine permanentemente su cuenta y todos los datos. Esto no se puede deshacer.",
+    deleteAccountTitle: "Eliminar Cuenta",
+    delete: "Eliminar",
+    accountDeleted: "Su cuenta ha sido eliminada.",
+    failedToDeleteAccount: "No se pudo eliminar su cuenta. Por favor, intente nuevamente más tarde."
   },
   userProfile: {
     title: 'Perfil de Usuario',

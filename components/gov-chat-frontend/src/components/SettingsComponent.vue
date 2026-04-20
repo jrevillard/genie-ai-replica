@@ -157,6 +157,17 @@
                   }}
                 </p>
               </div>
+
+              <div class="management-col">
+                <button class="btn-danger full-width" @click="confirmDeleteAccount">
+                  {{ translate('settings.deleteAccount', 'Delete my account') }}
+                </button>
+                <p class="description-text danger-text">
+                  {{
+                    translate('settings.deleteAccountDesc', 'Permanently delete your account and all data. This cannot be undone.')
+                  }}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -174,6 +185,18 @@
     :parent-styles="{ maxWidth: '450px' }"
     @confirm="handleResetDataConfirm"
     @cancel="handleResetDataCancel"
+  />
+
+  <ConfirmDialog
+    :visible="showDeleteAccountConfirm"
+    :title="deleteAccountDialog.title"
+    :message="deleteAccountDialog.message"
+    :confirm-text="deleteAccountDialog.confirmText"
+    :cancel-text="deleteAccountDialog.cancelText"
+    :theme="getCurrentTheme()"
+    :parent-styles="{ maxWidth: '450px' }"
+    @confirm="handleDeleteAccountConfirm"
+    @cancel="handleDeleteAccountCancel"
   />
 </template>
 
@@ -214,6 +237,13 @@ export default {
       userAvatar: null,
       showResetDataConfirm: false,
       resetDataDialog: {
+        title: '',
+        message: '',
+        confirmText: '',
+        cancelText: '',
+      },
+      showDeleteAccountConfirm: false,
+      deleteAccountDialog: {
         title: '',
         message: '',
         confirmText: '',
@@ -445,7 +475,15 @@ export default {
         confirmText: this.translate('settings.reset', 'Reset'),
         cancelText: this.translate('settings.cancel', 'Cancel'),
       }
-      console.log('[SETTINGS] Dialog texts updated:', this.resetDataDialog)
+      this.deleteAccountDialog = {
+        title: this.translate('settings.deleteAccountTitle', 'Delete Account'),
+        message: this.translate(
+          'settings.confirmDeleteAccount',
+          'Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.'
+        ),
+        confirmText: this.translate('settings.delete', 'Delete'),
+        cancelText: this.translate('settings.cancel', 'Cancel'),
+      }
     },
     async fetchUserData() {
       console.log('[SETTINGS] Fetching user data...')
@@ -589,6 +627,30 @@ export default {
         )
       } finally {
         console.log('[SETTINGS] Setting isLoading to false after reset...')
+        this.isLoading = false
+      }
+    },
+    confirmDeleteAccount() {
+      this.showDeleteAccountConfirm = true
+    },
+    handleDeleteAccountConfirm() {
+      this.showDeleteAccountConfirm = false
+      this.deleteAccount()
+    },
+    handleDeleteAccountCancel() {
+      this.showDeleteAccountConfirm = false
+    },
+    async deleteAccount() {
+      try {
+        this.isLoading = true
+        await userService.deleteAccount()
+        await this.$store.dispatch('logout')
+      } catch (e) {
+        console.error('[SETTINGS] Error deleting account:', e)
+        notificationService.error(
+          this.translate('settings.failedToDeleteAccount', 'Failed to delete your account. Please try again later.')
+        )
+      } finally {
         this.isLoading = false
       }
     },
@@ -1016,6 +1078,21 @@ export default {
 .btn-close {
   background-color: var(--bg-button-secondary, #d1d5db);
   color: var(--text-button-secondary, #333333);
+}
+
+.btn-danger {
+  background-color: #dc2626;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background-color: #b91c1c;
+}
+
+.danger-text {
+  color: #dc2626;
 }
 
 /* Override button colors for dark mode */

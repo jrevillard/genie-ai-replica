@@ -261,9 +261,13 @@ module.exports = (userService) => {
         }
       }
 
-      // Forward JIT fields to Keycloak via Admin API
+      // Forward JIT fields to Keycloak via Account API (user's own token)
       if (Object.keys(jitFields).length > 0) {
-        await keycloakProxyService.updateOwnProfile(userKey, jitFields);
+        const accessToken = req.headers.authorization?.replace('Bearer ', '');
+        if (!accessToken) {
+          return res.status(401).json({ success: false, message: 'Missing authorization token' });
+        }
+        await keycloakProxyService.updateOwnProfile(accessToken, jitFields);
         logger.info(`[PUT /me] JIT fields forwarded to Keycloak for user ${userId}`);
       }
 

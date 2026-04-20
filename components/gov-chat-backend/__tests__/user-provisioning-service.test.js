@@ -39,8 +39,12 @@ describe('userProvisioningService', () => {
     mockCursor.next.mockReset();
     mockGetConnection.mockResolvedValue(mockDb);
     userProvisioningService._reset();
-    // Default: first query (soft-delete check) returns empty, second (upsert) returns user
+    // Default: legacy check (no match), soft-delete check (not deleted), upsert returns user
+    // Legacy migration query is conditional (only runs when email is present).
+    // Use mockResolvedValue (reusable) for legacy so tests without email skip it.
+    const noLegacyCursor = { next: jest.fn().mockResolvedValue(undefined) };
     mockQuery
+      .mockResolvedValueOnce(noLegacyCursor) // legacy migration: no legacy user (consumed when email present)
       .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
       .mockResolvedValue(mockCursor); // upsert: returns { new, old }
   });
@@ -69,7 +73,7 @@ describe('userProvisioningService', () => {
 
       const result = await userProvisioningService.provisionUser(decoded);
 
-      expect(mockQuery).toHaveBeenCalledTimes(2); // soft-delete check + upsert
+      expect(mockQuery).toHaveBeenCalledTimes(3); // legacy + soft-delete + upsert
       expect(mockCursor.next).toHaveBeenCalledTimes(1);
       expect(result).toEqual(newUser);
     });
@@ -102,7 +106,7 @@ describe('userProvisioningService', () => {
       // Verify the UPSERT uses UPDATE (not REPLACE) — updateDoc is the 3rd interpolated value
       // aql`UPSERT { iss_sub: ${issSub} } INSERT ${newDoc} UPDATE ${updateDoc} IN users`
       // values: [issSub, newDoc, updateDoc]
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0];
       const upsertValues = upsertCall.values;
       const updateDoc = upsertValues[2]; // 3rd interpolated value
       expect(updateDoc).toBeDefined();
@@ -142,7 +146,7 @@ describe('userProvisioningService', () => {
       // createdAt also preserved
       expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
       // Verify updateDoc does NOT contain custom fields — UPDATE only merges listed fields
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0];
       const updateDoc = upsertCall.values[2];
       expect(updateDoc.personalIdentification).toBeUndefined();
       expect(updateDoc.theme).toBeUndefined();
@@ -174,7 +178,7 @@ describe('userProvisioningService', () => {
       const result = await userProvisioningService.provisionUser(decoded);
 
       expect(result.email).toBe('newemail@example.com');
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0];
       const updateDoc = upsertCall.values[2];
       expect(updateDoc.email).toBe('newemail@example.com');
     });
@@ -214,6 +218,7 @@ describe('userProvisioningService', () => {
       // Second query (upsert) returns the reactivated user
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) }) // check finds deleted user
         .mockResolvedValue(mockCursor); // upsert returns reactivated user
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
@@ -229,8 +234,8 @@ describe('userProvisioningService', () => {
       expect(result.deleted).toBe(false);
       expect(result.deletedAt).toBeNull();
       expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
-      // UPSERT should have been called after the soft-delete check
-      expect(mockQuery).toHaveBeenCalledTimes(2);
+      // UPSERT should have been called after legacy + soft-delete check
+      expect(mockQuery).toHaveBeenCalledTimes(3);
     });
 
     it('should update JIT fields from JWT when re-activating soft-deleted user', async () => {
@@ -259,6 +264,7 @@ describe('userProvisioningService', () => {
 
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
         .mockResolvedValue(mockCursor);
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
@@ -275,7 +281,7 @@ describe('userProvisioningService', () => {
       expect(result.email).toBe('newemail@example.com');
       expect(result.name).toBe('New Name');
       // Verify updateDoc includes re-activation fields
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0];
       const updateDoc = upsertCall.values[2];
       expect(updateDoc.deleted).toBe(false);
       expect(updateDoc.deletedAt).toBeNull();
@@ -298,6 +304,7 @@ describe('userProvisioningService', () => {
 
       mockQuery
         .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // legacy: no match
         .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(deletedUser) })
         .mockResolvedValue(mockCursor);
       mockCursor.next.mockResolvedValue({ new: reactivatedUser, old: deletedUser });
@@ -361,7 +368,7 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0];
       const upsertValues = upsertCall.values;
       expect(upsertValues[2].roles).toEqual(['super-admin']); // updateDoc
       expect(upsertValues[1].roles).toEqual(['super-admin']); // newDoc
@@ -392,11 +399,16 @@ describe('userProvisioningService', () => {
 
       await userProvisioningService.provisionUser(decoded);
 
-      const upsertCall = mockQuery.mock.calls[1][0];
+      const upsertCall = mockQuery.mock.calls[2][0];
       expect(upsertCall.values[1].name).toBe('testuser'); // newDoc
     });
 
     it('should set email and name to null when not in JWT', async () => {
+      // No email in decoded → legacy migration query is skipped (only 2 queries)
+      mockQuery
+        .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
+        .mockResolvedValue(mockCursor); // upsert: returns { new, old }
       const user = {
         _key: 'users/123',
         iss_sub: ISS_SUB,
@@ -428,6 +440,11 @@ describe('userProvisioningService', () => {
     });
 
     it('should set roles to empty array when realm_access is missing', async () => {
+      // No email in decoded → legacy migration query is skipped (only 2 queries)
+      mockQuery
+        .mockReset()
+        .mockResolvedValueOnce({ next: jest.fn().mockResolvedValue(undefined) }) // soft-delete check: not deleted
+        .mockResolvedValue(mockCursor); // upsert: returns { new, old }
       const user = {
         _key: 'users/123',
         iss_sub: ISS_SUB,
@@ -447,7 +464,7 @@ describe('userProvisioningService', () => {
         sub: '12345678-1234-1234-1234-123456789012',
         iss: 'http://localhost:8080/realms/genie',
         iss_sub: ISS_SUB
-        // no realm_access
+        // no realm_access, no email
       };
 
       await userProvisioningService.provisionUser(decoded);

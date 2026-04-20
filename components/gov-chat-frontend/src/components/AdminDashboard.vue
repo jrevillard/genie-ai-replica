@@ -561,8 +561,7 @@
                   <div class="card-title">
                     {{ translate('admin.databaseManagement', 'Database Management') }}
                   </div>
-                  <div class="card-actions">
-                  </div>
+                  <div class="card-actions"></div>
                 </div>
 
                 <div class="db-actions">
@@ -1520,7 +1519,6 @@ import { eventBus } from '../eventBus.js'
 import { availableLanguages } from '../config/languageConfig.js'
 import oidcConfig from '../config/oidcConfig.js'
 import documentFileService from '../services/documentFileService.js'
-import labelService from '../services/labelService.js'
 import { formatFileSize } from '../utils/fileUtils.js'
 import { themeManager } from '../utils/ThemeManager'
 

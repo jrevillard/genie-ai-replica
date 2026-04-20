@@ -207,7 +207,6 @@ export default {
     database: 'Database',
     logs: 'Logs',
     userManagement: 'User Management',
-    security: 'Security',
     systemAdministration: 'System Administration',
     loading: 'Loading...',
     close: 'Close dashboard',

@@ -208,7 +208,6 @@ export default {
     database: 'Banco de Dados',
     logs: 'Logs',
     userManagement: 'Gerenciamento de Usuários',
-    security: 'Segurança',
     systemAdministration: 'Administração do Sistema',
     manage: 'Gerenciar',
     loading: 'Carregando...',
@@ -904,7 +903,14 @@ export default {
     loadingUserInfo: 'Carregando informações do usuário...',
     resetUserDataTitle: "Redefinir Dados do Usuário",
     confirmResetUserData: "Tem certeza de que deseja redefinir todos os dados do seu perfil? Isso limpará todas as informações do seu perfil e histórico de chat, mas manterá suas credenciais de conta.",
-    reset: "Redefinir"
+    reset: "Redefinir",
+    deleteAccount: "Excluir minha conta",
+    deleteAccountDesc: "Excluir permanentemente sua conta e todos os dados. Isso não pode ser desfeito.",
+    deleteAccountTitle: "Excluir Conta",
+    confirmDeleteAccount: "Tem certeza de que deseja excluir sua conta? Esta ação é permanente e não pode ser desfeita. Todos os seus dados serão apagados.",
+    delete: "Excluir",
+    accountDeleted: "Sua conta foi excluída.",
+    failedToDeleteAccount: "Falha ao excluir sua conta. Por favor, tente novamente mais tarde."
   },
   userProfile: {
     title: 'Perfil do Usuário',

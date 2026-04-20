@@ -207,7 +207,6 @@ export default {
     database: 'Datenbank',
     logs: 'Protokolle',
     userManagement: 'Benutzerverwaltung',
-    security: 'Sicherheit',
     systemAdministration: 'Systemadministration',
     loading: 'Laden...',
     close: 'Dashboard schließen',
@@ -904,7 +903,14 @@ export default {
     loadingUserInfo: 'Benutzerinformationen werden geladen...',
     resetUserDataTitle: "Benutzerdaten zurücksetzen",
     confirmResetUserData: "Sind Sie sicher, dass Sie alle Ihre Profildaten zurücksetzen möchten? Dies löscht alle Ihre Profilinformationen und den Chatverlauf, behält aber Ihre Kontodaten bei.",
-    reset: "Zurücksetzen"
+    reset: "Zurücksetzen",
+    deleteAccount: "Mein Konto löschen",
+    deleteAccountDesc: "Ihr Konto und alle Daten dauerhaft löschen. Dies kann nicht rückgängig gemacht werden.",
+    deleteAccountTitle: "Konto löschen",
+    confirmDeleteAccount: "Sind Sie sicher, dass Sie Ihr Konto löschen möchten? Diese Aktion ist dauerhaft und kann nicht rückgängig gemacht werden. Alle Ihre Daten werden gelöscht.",
+    delete: "Löschen",
+    accountDeleted: "Ihr Konto wurde gelöscht.",
+    failedToDeleteAccount: "Fehler beim Löschen Ihres Kontos. Bitte versuchen Sie es später erneut."
   },
   userProfile: {
     title: 'Benutzerprofil',

@@ -207,7 +207,6 @@ export default {
     database: '数据库',
     logs: '日志',
     userManagement: '用户管理',
-    security: '安全',
     systemAdministration: '系统管理',
     manage: '管理',
     loading: '加载中...',
@@ -904,7 +903,14 @@ export default {
     loadingUserInfo: '正在加载用户信息...',
     resetUserDataTitle: "重置用户数据",
     confirmResetUserData: "您确定要重置所有资料数据吗？这将清除您的所有资料信息和聊天历史，但保留您的账户凭据。",
-    reset: "重置"
+    reset: "重置",
+    deleteAccount: "删除我的账户",
+    deleteAccountDesc: "永久删除您的账户和所有数据。此操作无法撤销。",
+    deleteAccountTitle: "删除账户",
+    confirmDeleteAccount: "您确定要删除您的账户吗？此操作是永久性的，无法撤销。您的所有数据将被清除。",
+    delete: "删除",
+    accountDeleted: "您的账户已被删除。",
+    failedToDeleteAccount: "删除账户失败。请稍后重试。"
   },
   userProfile: {
     title: '用户资料',

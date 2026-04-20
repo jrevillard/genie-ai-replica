@@ -208,7 +208,6 @@ export default {
     database: 'قاعدة البيانات',
     logs: 'السجلات',
     userManagement: 'إدارة المستخدمين',
-    security: 'الأمان',
     systemAdministration: 'إدارة النظام',
     loading: 'جاري التحميل...',
     close: 'إغلاق لوحة التحكم',
@@ -970,7 +969,11 @@ export default {
     resetUserDataTitle: "إعادة تعيين بيانات المستخدم",
     confirmResetUserData: "هل أنت متأكد من أنك تريد إعادة تعيين جميع بيانات ملفك الشخصي؟ سيؤدي هذا إلى مسح جميع معلومات ملفك الشخصي وسجل المحادثات، ولكن سيحتفظ ببيانات اعتماد حسابك.",
     reset: "إعادة التعيين",
-    deleteAccountTitle: "حذف الحساب"
+    deleteAccountTitle: "حذف الحساب",
+    confirmDeleteAccount: "هل أنت متأكد من أنك تريد حذف حسابك؟ هذا الإجراء دائم ولا يمكن التراجع عنه. سيتم حذف جميع بياناتك.",
+    delete: "حذف",
+    accountDeleted: "تم حذف حسابك بنجاح.",
+    failedToDeleteAccount: "فشل حذف الحساب. يرجى المحاولة مرة أخرى لاحقًا."
   },
   userProfile: {
     title: 'ملف المستخدم',

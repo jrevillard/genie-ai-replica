@@ -207,7 +207,6 @@ export default {
     database: 'Database',
     logs: 'Log',
     userManagement: 'Manajemen Pengguna',
-    security: 'Keamanan',
     systemAdministration: 'Administrasi Sistem',
     loading: 'Memuat...',
     close: 'Tutup dasbor',
@@ -891,7 +890,14 @@ export default {
     loadingUserInfo: 'Memuat informasi pengguna...',
     resetUserDataTitle: "Atur Ulang Data Pengguna",
     confirmResetUserData: "Apakah Anda yakin ingin mengatur ulang semua data profil Anda? Ini akan menghapus semua informasi profil dan riwayat obrolan Anda, tetapi kredensial akun Anda akan tetap ada.",
-    reset: "Atur Ulang"
+    reset: "Atur Ulang",
+    deleteAccount: "Hapus akun saya",
+    deleteAccountDesc: "Hapus akun dan semua data secara permanen. Tindakan ini tidak dapat dibatalkan.",
+    deleteAccountTitle: "Hapus Akun",
+    confirmDeleteAccount: "Apakah Anda yakin ingin menghapus akun Anda? Tindakan ini bersifat permanen dan tidak dapat dibatalkan. Semua data Anda akan dihapus.",
+    delete: "Hapus",
+    accountDeleted: "Akun Anda telah dihapus.",
+    failedToDeleteAccount: "Gagal menghapus akun Anda. Silakan coba lagi nanti."
   },
   userProfile: {
     title: 'Profil Pengguna',

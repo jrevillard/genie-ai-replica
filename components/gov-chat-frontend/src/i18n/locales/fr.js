@@ -207,7 +207,6 @@ export default {
     database: 'Base de données',
     logs: 'Journaux',
     userManagement: 'Gestion des utilisateurs',
-    security: 'Sécurité',
     systemAdministration: 'Administration du système',
     loading: 'Chargement...',
     close: 'Fermer le tableau de bord',
@@ -900,7 +899,14 @@ export default {
     loadingUserInfo: 'Chargement des informations de l\'utilisateur...',
     resetUserDataTitle: "Réinitialiser les données utilisateur",
     confirmResetUserData: "Êtes-vous sûr de vouloir réinitialiser toutes vos données de profil ? Cela effacera toutes vos informations de profil et votre historique de discussions, mais conservera vos identifiants de compte.",
-    reset: "Réinitialiser"
+    reset: "Réinitialiser",
+    deleteAccount: "Supprimer mon compte",
+    deleteAccountDesc: "Supprimer définitivement votre compte et toutes les données. Cette action est irréversible.",
+    deleteAccountTitle: "Supprimer le compte",
+    confirmDeleteAccount: "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est permanente et ne peut pas être annulée. Toutes vos données seront effacées.",
+    delete: "Supprimer",
+    accountDeleted: "Votre compte a été supprimé.",
+    failedToDeleteAccount: "Échec de la suppression de votre compte. Veuillez réessayer plus tard."
   },
   userProfile: {
     title: 'Profil utilisateur',

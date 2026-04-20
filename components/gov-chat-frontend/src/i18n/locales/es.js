@@ -207,7 +207,6 @@ export default {
     database: 'Base de Datos',
     logs: 'Registros',
     userManagement: 'Gestión de Usuarios',
-    security: 'Seguridad',
     systemAdministration: 'Administración del Sistema',
     loading: 'Cargando...',
     close: 'Cerrar panel de control',

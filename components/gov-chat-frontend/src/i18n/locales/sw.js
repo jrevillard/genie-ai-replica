@@ -207,7 +207,6 @@ export default {
     database: 'Hifadhidata',
     logs: 'Kumbukumbu',
     userManagement: 'Usimamizi wa Watumiaji',
-    security: 'Usalama',
     systemAdministration: 'Usimamizi wa Mfumo',
     loading: 'Inapakia...',
     close: 'Funga dashibodi',
@@ -904,7 +903,14 @@ export default {
     loadingUserInfo: 'Inapakia taarifa za mtumiaji...',
     resetUserDataTitle: "Weka Upya Data ya Mtumiaji",
     confirmResetUserData: "Una uhakika unataka kuweka upya data yako yote ya wasifu? Hii itafuta taarifa zako zote za wasifu na historia ya mazungumzo, lakini itaweka stakabadhi zako za akaunti.",
-    reset: "Weka Upya"
+    reset: "Weka Upya",
+    deleteAccount: "Futa akaunti yangu",
+    deleteAccountDesc: "Futa akaunti yako na data zote kwa sababu ya kudumu. Hii haiwezi kurudishwa.",
+    deleteAccountTitle: "Futa Akaunti",
+    confirmDeleteAccount: "Una uhakika unataka kufuta akaunti yako? Kitendo hiki ni cha kudumu na hakikiwezi kurudishwa. Data zako zote zitafutwa.",
+    delete: "Futa",
+    accountDeleted: "Akaunti yako imefutwa.",
+    failedToDeleteAccount: "Imeshindwa kufuta akaunti yako. Tafadhali jaribu tena baadaye."
   },
   userProfile: {
     title: 'Wasifu wa Mtumiaji',

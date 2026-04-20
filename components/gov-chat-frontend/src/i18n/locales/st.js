@@ -207,7 +207,6 @@ export default {
     database: 'Datha (Database)',
     logs: 'Lilog',
     userManagement: 'Tsamaiso ya Basebedisi',
-    security: 'Tshireletso',
     systemAdministration: 'Tsamaiso ya Sistimi',
     loading: 'Ea kenya...',
     close: 'Kwala dashboto',
@@ -895,7 +894,14 @@ export default {
     loadingUserInfo: 'E kenya tlhahisoleseding ya mosebedisi...',
     resetUserDataTitle: "Seta Datha ya Mosebedisi Botjha",
     confirmResetUserData: "Na o na le bonnete ba hore o batla ho seta datha ya profaele ya hao yohle botjha? Sena se tla hlakola tlhahisoleseding yohle ya profaele ya hao le nalane ya moqoqo, empa se boloka dintlha tsa hao tsa ho kena.",
-    reset: "Seta Botjha"
+    reset: "Seta Botjha",
+    deleteAccount: "Phumula akaunti ea ka",
+    deleteAccountDesc: "Phumula akaunti ea hao le datha yohle ka ho sa khutlisoe. Seno se ke sa boloka.",
+    deleteAccountTitle: "Phumula Akaunti",
+    confirmDeleteAccount: "Na o na le bonnete ba hore o batla ho phumula akaunti ea hao? Mosebetsi ona o tloha oa boloka mme o ke oa khutliswa. Datha yohle ya hao e tla hlakolwa.",
+    delete: "Phumula",
+    accountDeleted: "Akaunti ea hao e phumutswe.",
+    failedToDeleteAccount: "Ho hloleha ho phumula akaunti ea hao. Ka kopo leka hape hamorao."
   },
   userProfile: {
     title: 'Profaele ya Mosebedisi',

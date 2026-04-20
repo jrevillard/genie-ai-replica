@@ -40,6 +40,17 @@ async function main() {
     process.exit(1);
   }
 
+  const systemDb = new Database({ url: dbUrl, auth: { username: user, password } });
+  await systemDb.get();
+  console.log(`[migrations] Connected to ArangoDB at ${dbUrl}`);
+
+  const existingDbs = await systemDb.listDatabases();
+  if (!existingDbs.includes(dbName)) {
+    console.log(`[migrations] Database '${dbName}' does not exist — creating`);
+    await systemDb.createDatabase(dbName);
+    console.log(`[migrations] Created database '${dbName}'`);
+  }
+
   const db = new Database({ url: dbUrl, databaseName: dbName, auth: { username: user, password } });
   await db.get();
   console.log(`[migrations] Connected to ${dbName} at ${dbUrl}`);
@@ -85,7 +96,7 @@ async function main() {
       }
       await migration.up(db);
 
-      await collection.insert({
+      await collection.save({
         _key: migrationKey,
         appliedAt: new Date().toISOString()
       });

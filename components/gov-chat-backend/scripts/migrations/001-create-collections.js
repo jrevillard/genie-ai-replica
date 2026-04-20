@@ -51,6 +51,13 @@ module.exports = {
 
       // Weather
       { name: 'weatherRequests', type: 2 },
+
+      // Document repository
+      { name: 'files', type: 2 },
+      { name: 'labels', type: 2 },
+      { name: 'crawl_job', type: 2 },
+      { name: 'crawl_log', type: 2 },
+      { name: 'crawl_metrics', type: 2 },
     ];
 
     for (const col of collections) {

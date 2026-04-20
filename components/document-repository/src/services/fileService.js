@@ -21,44 +21,6 @@ class FileService {
     this.uploadDir = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
     this.allowedMimeTypes = appConfig.upload.allowedMimeTypes;
     this.allowedExtensions = appConfig.upload.allowedExtensions;
-
-    // Initialize collections on startup to ensure crawl_job and crawl_log exist
-    this._initializeCollections();
-  }
-
-  /**
-   * Ensures required collections exist in the database
-   * (New method to support the asynchronous crawler architecture)
-   */
-  async _initializeCollections() {
-    try {
-      const db = await this.getDb();
-      const requiredCollections = ['files', 'ingestion_log', 'crawl_job', 'crawl_log', 'crawl_metrics'];
-      
-      for (const collectionName of requiredCollections) {
-        const collection = db.collection(collectionName);
-        const exists = await collection.exists();
-        if (!exists) {
-          await collection.create(); // Use collection.create()
-          logger.info(`[FILE-SERVICE] Created missing collection: ${collectionName}`);
-        }
-        
-        // Create indexes
-        if (collectionName === 'crawl_job') {
-          await collection.ensureIndex({ type: 'persistent', fields: ['file_id'], unique: true });
-          await collection.ensureIndex({ type: 'persistent', fields: ['status'] });
-        }
-        if (collectionName === 'crawl_log') {
-          await collection.ensureIndex({ type: 'persistent', fields: ['file_id'] });
-          await collection.ensureIndex({ type: 'persistent', fields: ['timestamp'] });
-        }
-        if (collectionName === 'crawl_metrics') {
-          await collection.ensureIndex({ type: 'persistent', fields: ['file_id'], unique: true });
-        }
-      }
-    } catch (error) {
-      logger.error(`[FILE-SERVICE] Failed to initialize collections: ${error.message}`);
-    }
   }
 
   /**

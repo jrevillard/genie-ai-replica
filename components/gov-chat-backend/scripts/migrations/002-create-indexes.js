@@ -39,6 +39,17 @@ module.exports = {
       // ingestion_log
       { collection: 'ingestion_log', type: 'persistent', fields: ['file_id'], name: 'idx_ingestion_log_file_id' },
       { collection: 'ingestion_log', type: 'persistent', fields: ['timestamp'], name: 'idx_ingestion_log_timestamp' },
+
+      // crawl_job (document-repository)
+      { collection: 'crawl_job', type: 'persistent', fields: ['file_id'], unique: true, name: 'idx_crawl_job_file_id' },
+      { collection: 'crawl_job', type: 'persistent', fields: ['status'], name: 'idx_crawl_job_status' },
+
+      // crawl_log (document-repository)
+      { collection: 'crawl_log', type: 'persistent', fields: ['file_id'], name: 'idx_crawl_log_file_id' },
+      { collection: 'crawl_log', type: 'persistent', fields: ['timestamp'], name: 'idx_crawl_log_timestamp' },
+
+      // crawl_metrics (document-repository)
+      { collection: 'crawl_metrics', type: 'persistent', fields: ['file_id'], unique: true, name: 'idx_crawl_metrics_file_id' },
     ];
 
     for (const idx of indexDefs) {

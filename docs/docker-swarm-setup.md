@@ -205,6 +205,9 @@ docker build -t genie-ai-keycloak:latest configs/keycloak/
 # Keycloak Config CLI (one-shot — applies realm configuration)
 docker build -f configs/keycloak/Dockerfile.config-cli -t genie-ai-keycloak-config:latest configs/keycloak/
 
+# DB Migrations (one-shot — runs ArangoDB schema migrations before backend starts)
+docker build -f components/gov-chat-backend/Dockerfile.migrations -t genie-ai-db-migrations:latest .
+
 # OPEA services (if DEPLOY_OPEA=1) — context is project root for all
 docker build -f genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai -t genie-ai-dataprep-arango:latest .
 docker build -f genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai -t genie-ai-retriever-arango:latest .
@@ -212,7 +215,7 @@ docker build -f genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai -t genie-ai
 docker build -f genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai -t genie-ai-reranker:latest .
 ```
 
-This builds 13 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
+This builds 14 services. Skip the OPEA builds if `DEPLOY_OPEA=0`.
 
 ### 5b. Tag images for local registry
 
@@ -227,6 +230,7 @@ docker tag genie-ai-kong-config:latest localhost:5000/genie-ai-kong-config:lates
 docker tag genie-ai-postgres-init:latest localhost:5000/genie-ai-postgres-init:latest
 docker tag genie-ai-keycloak:latest localhost:5000/genie-ai-keycloak:latest
 docker tag genie-ai-keycloak-config:latest localhost:5000/genie-ai-keycloak-config:latest
+docker tag genie-ai-db-migrations:latest localhost:5000/genie-ai-db-migrations:latest
 
 # Services tagged by Compose project name (genieai_mvp)
 docker tag genieai_mvp_frontend:latest localhost:5000/genie-ai-frontend:latest
@@ -249,6 +253,7 @@ docker push localhost:5000/genie-ai-kong-config:latest
 docker push localhost:5000/genie-ai-postgres-init:latest
 docker push localhost:5000/genie-ai-keycloak:latest
 docker push localhost:5000/genie-ai-keycloak-config:latest
+docker push localhost:5000/genie-ai-db-migrations:latest
 ```
 
 ### 5d. (Optional) Pre-pull external images for air-gapped deployments

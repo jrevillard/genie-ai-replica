@@ -533,6 +533,12 @@
             source_tag: genie-ai-keycloak-config:latest
             registry_tag: genie-ai-keycloak-config:latest
             opea: false
+          - name: db-migrations
+            dockerfile: components/gov-chat-backend/Dockerfile.migrations
+            context: .
+            source_tag: genie-ai-db-migrations:latest
+            registry_tag: genie-ai-db-migrations:latest
+            opea: false
           - name: dataprep-arango
             dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
             context: .

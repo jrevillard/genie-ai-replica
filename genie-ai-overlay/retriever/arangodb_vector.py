@@ -377,7 +377,7 @@ class ArangoVector(VectorStore):
 
         aql = f"""
             FOR doc IN @@collection
-                LIMIT 500
+                LIMIT 50000
                 LET score = {score_func}(doc.{self.embedding_field}, @query_embedding)
                 SORT score {sort_order}
                 LIMIT {k}

@@ -395,7 +395,7 @@ class AdminDashboardService {
             _key: u._key,
             loginName: u.loginName,
             email: u.email,
-            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
+            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
             roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : [])
           }
       `);
@@ -1082,6 +1082,7 @@ class AdminDashboardService {
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `
               LOWER(u.loginName) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
             `;
             break;
@@ -1103,6 +1104,7 @@ class AdminDashboardService {
             filterCondition = `
               LOWER(u.loginName) LIKE @term
               OR LOWER(u.email) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
               OR (HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0)
             `;
@@ -1128,7 +1130,7 @@ class AdminDashboardService {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
               roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : []),
               sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
@@ -1153,7 +1155,7 @@ class AdminDashboardService {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
               roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : []),
               sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,

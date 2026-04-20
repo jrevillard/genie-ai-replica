@@ -14,3 +14,15 @@ user_name: Jerome
 communication_language: French
 document_output_language: English
 output_folder: "{project-root}/_bmad-output"
+
+# GitLab Tracking Configuration
+# When enabled, sprint tracking is mirrored to GitLab Issues via glab CLI.
+# Fallback to file-system tracking if GitLab is unavailable.
+gitlab_tracking:
+  enabled: true
+  # PRD key used for label scoping (e.g., "keycloak-idp" creates prd::keycloak-idp label)
+  prd_key: "keycloak-idp"
+  # Optional: link to an existing GitLab issue as PRD parent (skip auto-creation)
+  # prd_parent_issue: 218
+  # Custom task for sync operations
+  sync_task: "{project-root}/_bmad/_config/custom/sync-gitlab-issues.md"

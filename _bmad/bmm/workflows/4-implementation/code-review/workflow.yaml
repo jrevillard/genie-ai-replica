@@ -13,6 +13,10 @@ planning_artifacts: "{config_source}:planning_artifacts"
 implementation_artifacts: "{config_source}:implementation_artifacts"
 sprint_status: "{implementation_artifacts}/sprint-status.yaml"
 
+# GitLab tracking
+gitlab_tracking_enabled: "{config_source}:gitlab_tracking:enabled"
+gitlab_tracking_prd_key: "{config_source}:gitlab_tracking:prd_key"
+
 # Workflow components
 installed_path: "{project-root}/_bmad/bmm/workflows/4-implementation/code-review"
 instructions: "{installed_path}/instructions.xml"

@@ -324,6 +324,26 @@
       <action>Save file, preserving ALL comments and structure including STATUS DEFINITIONS</action>
     </check>
 
+    <!-- Sync to GitLab if tracking enabled -->
+    <check if="gitlab_tracking is enabled in config">
+      <action>Detect GitLab project by following Step 1 of the shared sync task at `_bmad/_config/custom/sync-gitlab-issues.md`</action>
+      <check if="GitLab is reachable">
+        <action>Read prd_key from config (field: gitlab_tracking.prd_key)</action>
+        <action>Search for existing issue: `glab api --paginate "projects/$PROJECT_ID/issues?search={{epic_num}}.{{story_num}}&amp;labels=type::story,prd::{prd_key}&amp;state=all&amp;per_page=100" --hostname $HOST`</action>
+        <check if="issue with title starting with "{{epic_num}}.{{story_num}} " already exists">
+          <note>Story issue already exists in GitLab — skip creation</note>
+        </check>
+        <check if="issue does NOT exist">
+          <action>Create story issue: `glab api --method POST "projects/$PROJECT_ID/issues" --hostname $HOST -f "title={{epic_num}}.{{story_num}} {story_title}" -F "description=@/tmp/gl-desc-{{story_key}}.md" -f "labels=type::story,status::ready-for-dev,prd::{prd_key},{prd_key}::epic-{{epic_num}}"`</action>
+          <note>Write description to a temp file at `/tmp/gl-desc-{story_key}.md` with: **Sprint Key:** `{{story_key}}` / **Epic:** {{epic_num}} / **PRD:** {prd_key} / --- / {acceptance_criteria}. Use `-F` (file upload with `@` prefix). Clean up the temp file after creation.</note>
+          <output>GitLab issue created for {{story_key}}</output>
+        </check>
+      </check>
+      <check if="GitLab is NOT reachable">
+        <note>GitLab unavailable — story issue will be created on next sync</note>
+      </check>
+    </check>
+
     <action>Report completion</action>
     <output>**🎯 ULTIMATE BMad Method STORY CONTEXT CREATED, {user_name}!**
 

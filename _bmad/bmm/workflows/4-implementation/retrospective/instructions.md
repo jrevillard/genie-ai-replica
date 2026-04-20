@@ -1355,6 +1355,25 @@ Retrospective document was saved successfully, but {sprint_status_file} may need
 </output>
 </check>
 
+<!-- Sync to GitLab if tracking enabled -->
+<check if="gitlab_tracking is enabled in config">
+  <action>Detect GitLab project by following Step 1 of the shared sync task at `_bmad/_config/custom/sync-gitlab-issues.md`</action>
+  <check if="GitLab is reachable">
+    <action>Read prd_key from config (field: gitlab_tracking.prd_key)</action>
+    <action>Search for existing retrospective issue: `glab api --paginate "projects/$PROJECT_ID/issues?search=epic-{{epic_number}}-retrospective&labels=type::retrospective,prd::{prd_key}&state=all&per_page=100" --hostname $HOST`</action>
+    <check if="issue already exists">
+      <note>Retrospective issue already exists in GitLab — skip creation</note>
+    </check>
+    <check if="issue does NOT exist">
+      <action>Create retrospective issue: `glab api --method POST "projects/$PROJECT_ID/issues" --hostname $HOST -f "title={{retrospective_title}}" -F "description=@/tmp/gl-desc-epic-{{epic_number}}-retrospective.md" -f "labels=type::retrospective,status::done,prd::{prd_key},{prd_key}::epic-{{epic_number}}"`</action>
+      <output>GitLab retrospective issue created</output>
+    </check>
+  </check>
+  <check if="GitLab is NOT reachable">
+    <note>GitLab unavailable — retrospective issue will be created on next sync</note>
+  </check>
+</check>
+
 </step>
 
 <step n="12" goal="Final Summary and Handoff">

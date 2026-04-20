@@ -25,6 +25,11 @@ architecture_file: "{planning_artifacts}/architecture.md" # Fallback for constra
 ux_file: "{planning_artifacts}/*ux*.md" # Fallback for UX requirements (if not in epics file)
 story_title: "" # Will be elicited if not derivable
 project_context: "**/project-context.md"
+
+# GitLab tracking
+gitlab_tracking_enabled: "{config_source}:gitlab_tracking:enabled"
+gitlab_tracking_prd_key: "{config_source}:gitlab_tracking:prd_key"
+
 default_output_file: "{implementation_artifacts}/{{story_key}}.md"
 
 # Smart input file references - Simplified for enhanced approach

@@ -213,6 +213,20 @@
       </check>
 
       <action>Store {{current_sprint_status}} for later use</action>
+
+      <!-- Sync to GitLab if tracking enabled -->
+      <check if="gitlab_tracking is enabled in config">
+        <action>Detect GitLab project by following Step 1 of the shared sync task at `_bmad/_config/custom/sync-gitlab-issues.md`</action>
+        <check if="GitLab is reachable">
+          <action>Find the issue for {{story_key}}: `glab api --paginate "projects/$PROJECT_ID/issues?search={{epic_num}}.{{story_num}}&amp;labels=type::story,prd::{prd_key}&amp;state=all&amp;per_page=100" --hostname $HOST` (convert story key dashes to dots, e.g., "1-1" → "1.1")</action>
+          <action>Extract IID from the matching issue (title starts with "{{epic_num}}.{{story_num}} ")</action>
+          <action>Update status to in-progress: `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "labels={updated_labels}" -f "state_event=reopen"`</action>
+          <note>Parse the JSON response to get current labels, remove any existing status::* label, add status::in-progress</note>
+        </check>
+        <check if="GitLab is NOT reachable">
+          <note>GitLab unavailable — status will be synced on next connection</note>
+        </check>
+      </check>
     </check>
 
     <check if="{{sprint_status}} file does NOT exist">
@@ -350,6 +364,29 @@
       <action>Update development_status[{{story_key}}] = "review"</action>
       <action>Save file, preserving ALL comments and structure including STATUS DEFINITIONS</action>
       <output>✅ Story status updated to "review" in sprint-status.yaml</output>
+
+      <!-- Sync to GitLab if tracking enabled -->
+      <check if="gitlab_tracking is enabled in config">
+        <action>Detect GitLab project by following Step 1 of the shared sync task at `_bmad/_config/custom/sync-gitlab-issues.md`</action>
+        <check if="GitLab is reachable">
+          <action>Find the issue for {{story_key}} and extract IID and current labels</action>
+          <action>Update status to review: `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "labels={updated_labels}" -f "state_event=reopen"`</action>
+          <note>Replace status label with status::review. Parse JSON to get current labels, remove existing status::* label, add status::review.</note>
+
+          <!-- Remind developer to link MR to GitLab issue -->
+          <action>Find the GitLab Issue for {{story_key}} in the in-memory issue data (from the sync call above)</action>
+          <action>Match the issue whose title starts with "{EPIC}.{STORY} " (the story number prefix)</action>
+          <check if="issue found">
+            <output>⚠️ **GitLab Tracking**: When creating the Merge Request for this story, include `Closes #IID` in the MR description to link it to the GitLab issue.</output>
+          </check>
+          <check if="issue not found">
+            <output>WARN: No GitLab issue found for story {{story_key}}. Run `/sync-sprint-gitlab` to create it.</output>
+          </check>
+        </check>
+        <check if="GitLab is NOT reachable">
+          <note>GitLab unavailable — status will be synced on next connection</note>
+        </check>
+      </check>
     </check>
 
     <check if="{sprint_status} file does NOT exist OR {{current_sprint_status}} == 'no-sprint-tracking'">

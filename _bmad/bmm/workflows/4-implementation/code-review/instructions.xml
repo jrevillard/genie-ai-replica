@@ -214,6 +214,19 @@
       <output>ℹ️ Story status updated (no sprint tracking configured)</output>
     </check>
 
+    <!-- Sync to GitLab if tracking enabled -->
+    <check if="gitlab_tracking is enabled in config">
+      <action>Detect GitLab project by following Step 1 of the shared sync task at `_bmad/_config/custom/sync-gitlab-issues.md`</action>
+      <check if="GitLab is reachable">
+        <action>Find the issue for {{story_key}} and extract IID and current labels</action>
+        <action>Update status to {{new_status}}: `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "labels={updated_labels}" -f "state_event={state_event}"`</action>
+        <note>Replace status label with status::{{new_status}}. If {{new_status}} is "done", set state_event=close. Otherwise set state_event=reopen.</note>
+      </check>
+      <check if="GitLab is NOT reachable">
+        <note>GitLab unavailable — status will be synced on next connection</note>
+      </check>
+    </check>
+
     <output>**✅ Review Complete!**
 
       **Story Status:** {{new_status}}

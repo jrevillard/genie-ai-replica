@@ -228,3 +228,43 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Remove rules that become obvious over time
 
 Last Updated: 2026-03-27
+
+---
+
+## GitLab Tracking Integration
+
+The project can optionally use GitLab Issues as a tracking system alongside file-based tracking. Configuration is in `_bmad/bmm/config.yaml` under `gitlab_tracking`.
+
+When enabled, BMAD workflows execute `glab` CLI commands directly to create/update GitLab issues — no shell script dependency.
+
+### Label Structure
+
+Labels follow a 3-level hierarchy for multi-PRD support:
+
+```
+# Global labels (shared across all PRDs)
+status::backlog | ready-for-dev | in-progress | review | done | deferred | closed
+type::prd | story | qa | retrospective
+
+# Per-PRD labels (created dynamically)
+prd::<prd-key>                    # e.g., prd::keycloak-idp
+<prd-key>::epic-1 | epic-2 | ...  # e.g., keycloak-idp::epic-1
+```
+
+### How It Works
+
+- When `gitlab_tracking.enabled: true`, workflow steps include `<check if>` blocks that run `glab api` commands directly
+- The AI detects the GitLab project from `git remote`, gets the project ID, and executes API calls
+- Fallback: if GitLab is unreachable, the workflow continues with file-system tracking only
+- Complex operations (label management, bulk sync, reconciliation) are delegated to a shared custom task at `_bmad/_config/custom/sync-gitlab-issues.md`
+
+### Slash Command
+
+- `/sync-sprint-gitlab` — syncs sprint-status.yaml to GitLab Issues
+
+### Key Rules
+
+- GitLab is primary source of truth when available; sprint-status.yaml serves as fallback authority during outages and is auto-synced when connectivity is restored
+- When creating Merge Requests, include `Closes #IID` in the MR description to link it to the corresponding GitLab issue (the dev-story workflow provides the IID)
+- When creating issues, always include `type::story`, `status::backlog`, `prd::<key>`, and `<key>::epic-N` labels
+- Epic labels are scoped per PRD (e.g., `keycloak-idp::epic-1`) to support multiple concurrent PRDs

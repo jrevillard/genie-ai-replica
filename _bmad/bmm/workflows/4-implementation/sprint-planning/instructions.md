@@ -180,6 +180,20 @@ development_status:
 
 </step>
 
+<step n="6" goal="Sync to GitLab Issues (if GitLab tracking enabled)">
+<check if="gitlab_tracking is enabled in {config_source}">
+  <action>Read the shared sync task at `_bmad/_config/custom/sync-gitlab-issues.md` and follow Steps 1-4 (detect project, ensure labels, create PRD issue, sync issues) using `glab` CLI directly</action>
+
+  <check if="GitLab is NOT reachable at any point">
+    <output>GitLab unavailable — using file-system tracking. Run sync on next successful connection.</output>
+  </check>
+</check>
+
+<check if="gitlab_tracking is NOT enabled">
+  <note>GitLab tracking is disabled in config. Using file-system tracking only.</note>
+</check>
+</step>
+
 </workflow>
 
 ## Additional Documentation

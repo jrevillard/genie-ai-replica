@@ -21,8 +21,13 @@ project_context: "**/project-context.md"
 project_name: "{config_source}:project_name"
 
 # Tracking system configuration
-tracking_system: "file-system" # Options: file-system, Future will support other options from config of mcp such as jira, linear, trello
+tracking_system: "file-system" # Always file-system; GitLab is an additive mirror when gitlab_tracking.enabled
 project_key: "NOKEY" # Placeholder for tracker integrations; file-system uses a no-op key
+
+# GitLab tracking (read from config, fallback to disabled)
+gitlab_tracking_enabled: "{config_source}:gitlab_tracking:enabled"
+gitlab_tracking_prd_key: "{config_source}:gitlab_tracking:prd_key"
+gitlab_tracking_prd_parent_issue: "{config_source}:gitlab_tracking:prd_parent_issue"
 story_location: "{implementation_artifacts}" # Relative path for file-system, Future will support URL for Jira/Linear/Trello
 story_location_absolute: "{implementation_artifacts}" # Absolute path for file operations
 

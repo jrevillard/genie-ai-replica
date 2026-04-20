@@ -17,6 +17,11 @@ instructions: "{installed_path}/instructions.md"
 # Inputs
 sprint_status_file: "{implementation_artifacts}/sprint-status.yaml"
 
+# GitLab tracking
+gitlab_tracking_enabled: "{config_source}:gitlab_tracking:enabled"
+
+gitlab_tracking_prd_key: "{config_source}:gitlab_tracking:prd_key"
+
 # Smart input file references
 input_file_patterns:
   sprint_status:

@@ -470,34 +470,6 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database-operations/reindex:
-   *   post:
-   *     summary: Reindex database
-   *     tags: [Admin]
-   *     security:
-   *       - KeycloakOAuth2: ['openid']
-   *     responses:
-   *       200:
-   *         description: Database reindexed successfully
-   *       401:
-   *         description: Unauthorized - authentication required
-   *       403:
-   *         description: Forbidden - admin access required
-   *       500:
-   *         description: Server error
-   */
-  router.post('/database-operations/reindex', async (req, res, next) => {
-    try {
-      const result = await adminService.reindexDatabase();
-      res.json(result);
-    } catch (error) {
-      logger.error(`[ADMIN-ROUTES] Error reindexing database: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
    * /admin/database-operations/backup:
    *   post:
    *     summary: Backup database

@@ -266,8 +266,6 @@ export default {
       network: 'Network Bandwidth'
     },
     databaseManagement: 'Database Management',
-    reindexDatabase: 'Reindex Database',
-    lastReindex: 'Last Reindex',
     databaseSize: 'Database Size',
     totalTables: 'Total Tables',
     logManagement: 'Log Management',
@@ -298,18 +296,14 @@ export default {
     roleUser: 'User',
     statusActive: 'Active',
     dbActions: {
-      reindex: 'Reindex',
       backup: 'Backup',
       optimize: 'Optimize',
-      reindexDesc: 'Rebuild database indexes',
       backupDesc: 'Create database backup',
       optimizeDesc: 'Optimize query performance'
     },
     operations: {
-      reindexTitle: 'Database Reindex Results',
       backupTitle: 'Database Backup Results',
       optimizeTitle: 'Database Optimization Results',
-      reindexResults: 'Reindex Results',
       optimizeResults: 'Optimization Results',
       collection: 'Collection',
       status: 'Status',
@@ -321,11 +315,6 @@ export default {
       errorDetails: 'Error Details',
       close: 'Close',
       resultsTitle: 'Operation Results',
-      reindexDatabase: {
-        success: 'Database reindexing completed successfully',
-        error: 'Error during database reindexing',
-        loading: 'Reindexing database...'
-      },
       backupDatabase: {
         success: 'Database backup completed successfully',
         error: 'Error during database backup',

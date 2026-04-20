@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger, dbService, ensureCollection } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 const ServiceCategoryService = require('../services/service-category-service');
 
 class AnalyticsService {
@@ -26,14 +26,6 @@ class AnalyticsService {
     }
     try {
       this.db = await this.dbService.getConnection('default');
-
-      // Ensure all collections exist before accessing them
-      await ensureCollection(this.db, 'analytics');
-      await ensureCollection(this.db, 'events');
-      await ensureCollection(this.db, 'queries');
-      await ensureCollection(this.db, 'users');
-      await ensureCollection(this.db, 'sessions');
-      await ensureCollection(this.db, 'serviceCategories');
 
       this.analytics = this.db.collection('analytics');
       this.events = this.db.collection('events');

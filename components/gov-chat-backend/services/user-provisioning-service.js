@@ -1,7 +1,7 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const { logger, dbService, ensureCollection } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 
 /**
  * User Provisioning Service — JIT user provisioning via ArangoDB UPSERT
@@ -53,30 +53,6 @@ const userProvisioningService = {
    */
   async initialize() {
     if (_initialized) return;
-    const db = await dbService.getConnection('default');
-    const usersCollection = await ensureCollection(db, 'users');
-
-    await usersCollection.ensureIndex({ type: 'persistent', fields: ['iss_sub'], unique: true, sparse: true });
-    await usersCollection.ensureIndex({ type: 'persistent', fields: ['email'], unique: false, sparse: true });
-
-    // Drop legacy unique email index (any type: hash, persistent, skiplist).
-    // Keycloak does not guarantee email uniqueness across realms — the same
-    // email address can exist in multiple realms with different sub claims.
-    // Must not enforce email uniqueness at the DB level for multi-realm support.
-    try {
-      const indexes = await usersCollection.indexes();
-      const legacyIdx = indexes.find(
-        idx => idx.fields.length === 1 &&
-          idx.fields[0] === 'email' && idx.unique === true
-      );
-      if (legacyIdx) {
-        logger.info(`[UserProvisioning] Dropping unique email index "${legacyIdx.name}" (type: ${legacyIdx.type}) — email uniqueness is not guaranteed across Keycloak realms`);
-        await usersCollection.dropIndex(legacyIdx.id);
-      }
-    } catch (err) {
-      logger.warn(`[UserProvisioning] Could not check/drop legacy email index: ${err.message}`);
-    }
-
     _initialized = true;
     logger.info('[UserProvisioning] Schema initialization complete');
   },

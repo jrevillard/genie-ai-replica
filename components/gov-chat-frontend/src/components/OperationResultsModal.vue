@@ -33,33 +33,6 @@
           </div>
         </div>
         
-        <!-- Operation details: Reindex results -->
-        <div v-if="operation === 'reindexDatabase' && results.success && results.results" class="result-details">
-          <div class="result-section">
-            <h3>{{ translate('admin.operations.reindexResults', 'Reindex Results') }}</h3>
-            <div class="table-container">
-              <table class="results-table">
-                <thead>
-                  <tr>
-                    <th>{{ translate('admin.operations.collection', 'Collection') }}</th>
-                    <th>{{ translate('admin.operations.status', 'Status') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(item, index) in results.results" :key="index">
-                    <td>{{ item.collection }}</td>
-                    <td>
-                      <span :class="['status-badge', item.status === 'success' ? 'badge-success' : 'badge-error']">
-                        {{ item.status }}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        
         <!-- Operation details: Optimize results -->
         <div v-if="operation === 'optimizeDatabase' && results.success && results.results" class="result-details">
           <div class="result-section">
@@ -137,7 +110,6 @@
     computed: {
       title() {
         const operationTitles = {
-          reindexDatabase: this.translate('admin.operations.reindexTitle', 'Database Reindex Results'),
           backupDatabase: this.translate('admin.operations.backupTitle', 'Database Backup Results'),
           optimizeDatabase: this.translate('admin.operations.optimizeTitle', 'Database Optimization Results')
         };

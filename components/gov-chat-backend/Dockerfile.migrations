@@ -1,0 +1,6 @@
+FROM node:22.14.0-alpine
+WORKDIR /app
+COPY gov-chat-backend/scripts/migrations ./scripts/migrations
+COPY gov-chat-backend/scripts/migrations/run-migrations.js .
+RUN npm install arangojs dotenv
+CMD ["node", "run-migrations.js"]

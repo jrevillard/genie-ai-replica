@@ -266,8 +266,6 @@ export default {
       network: 'Ancho de Banda de Red'
     },
     databaseManagement: 'Gestión de Base de Datos',
-    reindexDatabase: 'Reindexar Base de Datos',
-    lastReindex: 'Última Reindexación',
     databaseSize: 'Tamaño de la Base de Datos',
     totalTables: 'Tablas Totales',
     logManagement: 'Gestión de Registros',
@@ -298,18 +296,14 @@ export default {
     roleUser: 'Usuario',
     statusActive: 'Activo',
     dbActions: {
-      reindex: 'Reindexar',
       backup: 'Respaldo',
       optimize: 'Optimizar',
-      reindexDesc: 'Reconstruir índices de la base de datos',
       backupDesc: 'Crear respaldo de la base de datos',
       optimizeDesc: 'Optimizar el rendimiento de consultas'
     },
     operations: {
-      reindexTitle: 'Resultados de Reindexación de Base de Datos',
       backupTitle: 'Resultados de Respaldo de Base de Datos',
       optimizeTitle: 'Resultados de Optimización de Base de Datos',
-      reindexResults: 'Resultados de Reindexación',
       optimizeResults: 'Resultados de Optimización',
       collection: 'Colección',
       status: 'Estado',
@@ -321,11 +315,6 @@ export default {
       errorDetails: 'Detalles de Error',
       close: 'Cerrar',
       resultsTitle: 'Resultados de Operación',
-      reindexDatabase: {
-        success: 'Reindexación de base de datos completada con éxito',
-        error: 'Error durante la reindexación de la base de datos',
-        loading: 'Reindexando base de datos...'
-      },
       backupDatabase: {
         success: 'Respaldo de base de datos completado con éxito',
         error: 'Error durante el respaldo de la base de datos',

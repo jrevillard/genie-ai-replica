@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { logger, dbService, ensureCollection } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
 const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');
@@ -26,7 +26,6 @@ class UserProfileService {
     }
     try {
       this.db = await this.dbService.getConnection('default');
-      await ensureCollection(this.db, 'users');
       this.users = this.db.collection('users');
       this.initialized = true;
       logger.info('UserProfileService database initialized');

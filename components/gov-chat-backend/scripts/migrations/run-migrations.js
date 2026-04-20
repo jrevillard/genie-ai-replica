@@ -26,7 +26,7 @@ const { Database } = require('arangojs');
 const fs = require('fs');
 const path = require('path');
 
-const MIGRATIONS_DIR = __dirname;
+const MIGRATIONS_DIR = path.join(__dirname, 'scripts', 'migrations');
 const COLLECTION_NAME = 'schema_migrations';
 
 async function main() {

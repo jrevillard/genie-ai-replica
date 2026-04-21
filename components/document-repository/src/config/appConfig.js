@@ -17,8 +17,8 @@ const config = {
 
   // Dataprep service configuration
   dataprep: {
-    host: process.env.DATAPREP_HOST || 'http://dataprep',
-    port: process.env.DATAPREP_PORT || '6007',
+    host: process.env.DATAPREP_HOST || 'http://dataprep-arango-service',
+    port: process.env.DATAPREP_PORT || '5000',
 
     // This needs to be changed as it cannot be deployed on Kubernetes like this; David F
     ingestPath: '/v1/dataprep/ingest_file',

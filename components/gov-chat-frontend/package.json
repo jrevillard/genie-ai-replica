@@ -5,10 +5,10 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "eslint --max-warnings 999 src/",
-    "lint:fix": "eslint --fix src/",
-    "format": "prettier --check \"src/**/*.{js,vue,json,css,scss}\"",
-    "format:fix": "prettier --write \"src/**/*.{js,vue,json,css,scss}\"",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.{js,vue,json,css,scss}\"",
+    "format:check": "prettier --check \"src/**/*.{js,vue,json,css,scss}\"",
     "prepare": "cd ../.. && husky components/gov-chat-frontend/.husky",
     "test": "jest --verbose"
   },
@@ -16,7 +16,7 @@
     "@fortawesome/fontawesome-free": "^6.7.2",
     "apexcharts": "^4.5.0",
     "assert": "^2.1.0",
-    "axios": "^0.27.2",
+    "axios": "^1.13.6",
     "browserify-zlib": "^0.2.0",
     "buffer-browserify": "^0.2.5",
     "crypto-browserify": "^3.12.1",
@@ -39,23 +39,26 @@
   },
   "devDependencies": {
     "@babel/preset-env": "^7.29.2",
+    "@eslint/js": "^10.0.1",
     "@vue/cli-plugin-babel": "^5.0.9",
     "@vue/cli-service": "^5.0.0",
     "@vue/test-utils": "^2.4.6",
     "@vue/vue3-jest": "^29.2.6",
     "babel-jest": "^29.7.0",
-    "eslint": "^8.56.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-vue": "^9.23.0",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.8.0",
+    "globals": "^17.4.0",
     "husky": "^9.0.11",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "lint-staged": "^15.2.2",
-    "prettier": "^3.2.5"
+    "prettier": "^3.8.1",
+    "vue-eslint-parser": "^10.4.0"
   },
   "lint-staged": {
     "src/**/*.{js,vue}": [
-      "eslint --fix --max-warnings 999",
+      "eslint --fix",
       "prettier --write"
     ],
     "src/**/*.{json,css,scss}": [

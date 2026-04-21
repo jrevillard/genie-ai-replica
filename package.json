@@ -1,7 +1,11 @@
 {
   "scripts": {
     "test:e2e": "npx playwright test tests/e2e/",
-    "test:e2e:list": "npx playwright test tests/e2e/ --list"
+    "test:e2e:list": "npx playwright test tests/e2e/ --list",
+    "lint": "npm run lint --prefix components/gov-chat-frontend && npm run lint --prefix components/gov-chat-backend && npm run lint --prefix components/document-repository && npm run lint --prefix components/shared/lib",
+    "lint:fix": "npm run lint:fix --prefix components/gov-chat-frontend && npm run lint:fix --prefix components/gov-chat-backend && npm run lint:fix --prefix components/document-repository && npm run lint:fix --prefix components/shared/lib",
+    "format": "npm run format --prefix components/gov-chat-frontend && npm run format --prefix components/gov-chat-backend && npm run format --prefix components/document-repository && npm run format --prefix components/shared/lib",
+    "format:check": "npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0"

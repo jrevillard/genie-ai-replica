@@ -7,21 +7,6 @@ import httpService from './httpService'
  */
 export default {
   /**
-   * Reindex the database
-   * Drops and recreates indexes for all collections
-   *
-   * @returns {Promise} API response with reindex results
-   */
-  async reindexDatabase() {
-    try {
-      return await httpService.post('/database/reindex')
-    } catch (error) {
-      console.error('Error reindexing database:', error)
-      throw error
-    }
-  },
-
-  /**
    * Create a database backup
    *
    * @returns {Promise} API response with backup details

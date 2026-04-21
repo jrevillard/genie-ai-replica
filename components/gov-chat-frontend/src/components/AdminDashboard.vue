@@ -561,23 +561,10 @@
                   <div class="card-title">
                     {{ translate('admin.databaseManagement', 'Database Management') }}
                   </div>
-                  <div class="card-actions">
-                    <button class="btn btn-primary" @click="reindexDatabase">
-                      {{ translate('admin.reindexDatabase', 'Reindex Database') }}
-                    </button>
-                  </div>
+                  <div class="card-actions"></div>
                 </div>
 
                 <div class="db-actions">
-                  <div class="db-action-card" @click="reindexDatabase">
-                    <div class="action-icon">🔄</div>
-                    <div class="action-title">
-                      {{ translate('admin.dbActions.reindex', 'Reindex') }}
-                    </div>
-                    <div class="action-desc">
-                      {{ translate('admin.dbActions.reindexDesc', 'Rebuild database indexes') }}
-                    </div>
-                  </div>
                   <div class="db-action-card" @click="backupDatabase">
                     <div class="action-icon">💾</div>
                     <div class="action-title">
@@ -599,10 +586,6 @@
                 </div>
 
                 <div class="db-stats">
-                  <div>
-                    <strong>{{ translate('admin.lastReindex', 'Last Reindex') }}:</strong>
-                    {{ dbStats.lastReindex }}
-                  </div>
                   <div>
                     <strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong>
                     {{ dbStats.databaseSize }}
@@ -1416,15 +1399,17 @@
                     <tr v-for="user in displayedUsers" :key="user._key">
                       <td>{{ user.fullName || user.loginName }}</td>
                       <td>{{ user.email }}</td>
-                      <td>{{ user.role }}</td>
+                      <td>{{ (user.roles || []).join(', ') || user.role }}</td>
                       <td>
-                        <button
+                        <a
+                          :href="getUserManageUrl(user)"
+                          target="_blank"
+                          rel="noopener noreferrer"
                           class="btn btn-outline"
-                          style="padding: 0.25rem 0.5rem"
-                          @click="openUserEditDialog(user._key)"
+                          style="padding: 0.25rem 0.5rem; text-decoration: none; display: inline-block"
                         >
-                          {{ translate('admin.edit', 'Edit') }}
-                        </button>
+                          {{ translate('admin.manage', 'Manage') }} →
+                        </a>
                       </td>
                     </tr>
                     <tr v-if="displayedUsers.length === 0">
@@ -1491,13 +1476,6 @@
       @close="closeOperationResults"
     />
 
-    <UserEditDialog
-      v-if="showUserEditDialog"
-      :userId="selectedUserId"
-      @close="showUserEditDialog = false"
-      @user-updated="handleUserUpdated"
-    />
-
     <UploadFilesDialog
       v-if="showUploadDialog"
       @close="showUploadDialog = false"
@@ -1533,15 +1511,14 @@ import databaseOperationsService from '../services/databaseOperationsService'
 import adminDashboardService from '../services/adminDashboardService'
 import OperationResultsModal from './OperationResultsModal.vue'
 import LogSearchDialog from './LogSearchDialog.vue'
-import UserEditDialog from './UserEditDialog.vue'
 import UploadFilesDialog from './UploadFilesDialog.vue'
 import AddFromLinkDialog from './AddFromLinkDialog.vue'
 import FileDetailsDialog from './FileDetailsDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue' // IMPORT ConfirmDialog
 import { eventBus } from '../eventBus.js'
 import { availableLanguages } from '../config/languageConfig.js'
+import oidcConfig from '../config/oidcConfig.js'
 import documentFileService from '../services/documentFileService.js'
-import labelService from '../services/labelService.js'
 import { formatFileSize } from '../utils/fileUtils.js'
 import { themeManager } from '../utils/ThemeManager'
 
@@ -1550,7 +1527,6 @@ export default {
   components: {
     OperationResultsModal,
     LogSearchDialog,
-    UserEditDialog,
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
@@ -1581,9 +1557,6 @@ export default {
       currentLocale: this.getCurrentLanguage(),
 
       securityDetails: null,
-      showAllLogins: false,
-      showAllSuspicious: false,
-      debugSecurity: true,
       // Theme settings
       currentTheme: document.documentElement.getAttribute('data-theme') || 'light',
 
@@ -1620,7 +1593,6 @@ export default {
 
       // Database stats
       dbStats: {
-        lastReindex: '5 days ago',
         databaseSize: '42.3 GB',
         totalTables: 128,
       },
@@ -1641,50 +1613,6 @@ export default {
 
       showLogSearchDialog: false,
 
-      featureFlags: [
-        {
-          id: 'enhancedSearch',
-          name: 'Enhanced Search',
-          description: 'Enable AI-powered search capabilities',
-          enabled: true,
-        },
-        {
-          id: 'newDashboardUi',
-          name: 'New Dashboard UI',
-          description: 'Updated user interface for dashboards',
-          enabled: false,
-        },
-        {
-          id: 'bulkProcessingApi',
-          name: 'Bulk Processing API',
-          description: 'Enable bulk data processing endpoints',
-          enabled: true,
-        },
-      ],
-
-      alertConfigs: [
-        {
-          id: 'cpuUsage',
-          title: 'CPU Usage > 90%',
-          channels: 'Email, SMS to System Admin',
-          enabled: true,
-        },
-        {
-          id: 'errorRate',
-          title: 'Error Rate > 1%',
-          channels: 'Email to Dev Team, Slack #alerts',
-          enabled: true,
-        },
-        {
-          id: 'lowStorage',
-          title: 'Storage < 10%',
-          channels: 'Email, SMS, Automated cleanup',
-          enabled: true,
-        },
-      ],
-
-      maintenanceMode: false,
-      showAlertsConfig: false,
       showOperationResults: false,
 
       metrics: {
@@ -1693,13 +1621,6 @@ export default {
         errorRate: 0.05,
         monthlyActiveUsers: 0,
       },
-
-      logFilter: {
-        level: '',
-        service: '',
-      },
-
-      logsTotal: 1284,
 
       securityMetrics: {
         failedLoginAttempts: 23,
@@ -1719,18 +1640,9 @@ export default {
         users: [],
       },
 
-      showUserEditDialog: false,
-      selectedUserId: null,
       currentUser: {},
 
       searchResults: [],
-
-      status: {
-        info: {
-          color: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        },
-      },
 
       userSearchTerm: '',
       userSearchField: 'all',
@@ -1786,6 +1698,13 @@ export default {
     }
   },
   computed: {
+    keycloakAdminUrl() {
+      const keycloakUrl = window.location.origin + '/auth/admin';
+      // Extract realm from runtime OIDC config (authority = "https://host/auth/realms/{realm}")
+      const realm = (oidcConfig.authority.match(/\/realms\/([^/]+)$/)||[])[1] || 'genie';
+      return `${keycloakUrl}/${realm}/console/#/${realm}/users`;
+    },
+
     // Test if there are unsaved changes
     isFormDirty() {
       if (!this.originalHierarchyFormState) {
@@ -2205,13 +2124,10 @@ export default {
         this.isLoading = true
         const response = await adminDashboardService.getLogs({
           limit: 20, // Get more logs than we'll display in the summary
-          level: this.logFilter ? this.logFilter.level : '',
-          service: this.logFilter ? this.logFilter.service : '',
         })
 
         if (response && response.data && response.data.data) {
           this.logs = response.data.data.logs || []
-          this.logsTotal = response.data.data.total || 0
         }
       } catch (error) {
         console.error('Error loading logs:', error)
@@ -2435,16 +2351,6 @@ export default {
     },
 
     // Database operations
-    async reindexDatabase() {
-      this.executeOperation('reindexDatabase', async () => {
-        const response = await databaseOperationsService.reindexDatabase()
-        // Update the last reindex time if successful
-        if (response.data && response.data.success) {
-          this.dbStats.lastReindex = 'Just now'
-        }
-        return response.data
-      })
-    },
 
     async backupDatabase() {
       this.executeOperation('backupDatabase', async () => {
@@ -2458,64 +2364,6 @@ export default {
         const response = await databaseOperationsService.optimizeDatabase()
         return response.data
       })
-    },
-
-    // Job operations
-    viewAllJobs() {
-      this.showOperation('viewAllJobs')
-    },
-
-    cancelJob(jobId) {
-      this.showOperation('cancelJob', { jobId })
-    },
-
-    restartJob(jobId) {
-      this.showOperation('restartJob', { jobId })
-    },
-
-    // Feature flag operations
-    addNewFlag() {
-      this.showOperation('addNewFlag')
-    },
-
-    updateFeatureFlag(feature) {
-      this.showOperation('updateFeatureFlag', {
-        id: feature.id,
-        enabled: feature.enabled,
-      })
-    },
-
-    // Alert operations
-    addNewAlert() {
-      this.showOperation('addNewAlert')
-    },
-
-    updateAlertConfig(alert) {
-      this.showOperation('updateAlertConfig', {
-        id: alert.id,
-        enabled: alert.enabled,
-      })
-    },
-
-    saveAlertConfigs() {
-      this.showOperation('saveAlertConfigs')
-      this.showAlertsConfig = false
-    },
-
-    // Deployment operations
-    deployVersion() {
-      this.showOperation('deployVersion')
-    },
-
-    toggleMaintenanceMode() {
-      this.showOperation('toggleMaintenanceMode', {
-        enabled: this.maintenanceMode,
-      })
-    },
-
-    // Performance operations
-    viewDetailedMetrics() {
-      this.showOperation('viewDetailedMetrics')
     },
 
     // Helper to execute database operations with proper loading and error handling
@@ -2576,65 +2424,28 @@ export default {
       }
     },
 
-    // Legacy method for operations that are not yet implemented with real API calls
-    showOperation(operation, data = {}) {
-      // In a real app, this would make API calls
-      // For now, just show loading and a notification
-      this.isLoading = true
-      this.currentOperation = operation
-
-      setTimeout(() => {
-        this.isLoading = false
-        this.currentOperation = null
-        console.log(`Operation ${operation} executed with data:`, data)
-
-        // If using the notification service via event bus:
-        this.showNotification(
-          this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`),
-          'info'
-        )
-      }, 1500)
-    },
-
     // Close the operation results modal
     closeOperationResults() {
       this.showOperationResults = false
     },
 
-    // Get current user information
+    // Get current user information from Vuex auth store (Keycloak OIDC)
     getCurrentUser() {
-      // Get current user data from localStorage or other source
-      const userData = localStorage.getItem('user')
-      if (userData) {
-        try {
-          this.currentUser = JSON.parse(userData)
-        } catch (e) {
-          console.error('Error parsing user data:', e)
-          this.currentUser = {}
-        }
-      }
+      const user = this.$store.getters.currentUser
+      this.currentUser = user || {}
     },
 
-    // Open user edit dialog
-    openUserEditDialog(userId) {
-      console.log(`UserId clicked:`, userId)
-      this.selectedUserId = userId
-      console.log(`this.selectedUserId:`, this.selectedUserId)
-      this.showUserEditDialog = true
-      console.log(`this.showUserEditDialog`, this.showUserEditDialog)
-    },
-
-    // Handle user updated event from dialog
-    handleUserUpdated(updatedData) {
-      console.log('User updated:', updatedData)
-
-      // Refresh user list if we're on the Users tab
-      if (this.activeTab === 'users') {
-        this.loadUserStats()
+    /**
+     * Build the admin console URL for managing a specific user.
+     * Keycloak 26+ admin console URL format (hash-based SPA):
+     *   {base}/admin/{realm}/console/#/{realm}/users/{userId}/settings
+     * Falls back to the generic user list if the Keycloak user ID (sub) is unavailable.
+     */
+    getUserManageUrl(user) {
+      if (user.sub) {
+        return `${this.keycloakAdminUrl}/${user.sub}/settings`;
       }
-
-      // Show notification
-      this.showNotification(this.translate('admin.userEdit.userUpdated', 'User updated successfully'), 'success')
+      return this.keycloakAdminUrl;
     },
 
     /**
@@ -2795,40 +2606,6 @@ export default {
         }
       } finally {
         this.isLoading = false
-      }
-    },
-
-    // Get color for the usage bar based on value
-    getSecurityBarColor(value) {
-      if (value < 10) return 'usage-low'
-      if (value < 30) return 'usage-medium'
-      return 'usage-high'
-    },
-
-    // Toggle showing all login issues
-    toggleShowAllLogins() {
-      this.showAllLogins = !this.showAllLogins
-    },
-
-    // NEW: Toggle showing all suspicious activities
-    toggleShowAllSuspicious() {
-      this.showAllSuspicious = !this.showAllSuspicious
-    },
-
-    // Format the security metrics for display
-    formatSecurityMetrics() {
-      // Calculate percentage for UI display (capped at 100%)
-      const failedLoginPercent = Math.min(Math.ceil((this.securityMetrics.failedLoginAttempts / 100) * 100), 100)
-
-      const suspiciousActivityPercent = Math.min(Math.ceil((this.securityMetrics.suspiciousActivities / 20) * 100), 100)
-
-      return {
-        failedLoginAttempts: this.securityMetrics.failedLoginAttempts,
-        failedLoginPercent: failedLoginPercent,
-        suspiciousActivities: this.securityMetrics.suspiciousActivities,
-        suspiciousActivityPercent: suspiciousActivityPercent,
-        lastSecurityScan: this.securityMetrics.lastSecurityScan,
-        vulnerabilities: this.securityMetrics.vulnerabilities,
       }
     },
 

@@ -32,19 +32,48 @@ docker compose build [service_name]
 - `.env*` files → Contain secrets, are in `.gitignore`
 - `env` files (no extension) → Templates, can be committed
 
-## Centralized .gitignore
-All ignore rules are in the root `.gitignore` - no per-service `.gitignore` files.
+## .gitignore
+Root `.gitignore` covers project-wide rules. Some components have their own `.gitignore` (e.g., `components/document-repository/`, `mobile/`) for framework-specific patterns (node_modules, coverage, etc.).
 
 ## Service Ports
+
+In Swarm mode, only nginx and ArangoDB are exposed on the host. All other services are internal (inter-container only).
+
+### Exposed (host-accessible, configurable via `.env`)
+| Service | Port | Variable |
+|---------|------|----------|
+| Nginx (HTTP) | 80 | `NGINX_HTTP_PORT` |
+| Nginx (HTTPS) | 443 | `NGINX_HTTPS_PORT` |
+| ArangoDB | 8529 | `ARANGO_PORT` |
+
+### Internal — GENIE.AI Core (container-only)
 | Service | Port |
 |---------|------|
-| Frontend | 8090 |
+| Frontend | 5173 |
 | Backend | 3000 |
 | Document Repository | 3001 |
-| ArangoDB | 8529 |
-| Redis | 6379 (container, internal only) |
+| Dataprep | 5000 |
+| Redis | 6379 |
 | ClamAV | 3310 |
+| Keycloak | 8080 |
+| Kong | 8000 |
+| PostgreSQL | 5432 |
 
-## Test account
-- **Username:** jrevillard
-- **Password:** Test1234!
+### Internal — OPEA/AI (`DEPLOY_OPEA` controlled, container-only)
+| Service | Port |
+|---------|------|
+| vLLM | 8000 |
+| TEI Embedding | 80 |
+| Embedding | 6000 |
+| TEI Reranker | 80 |
+| Retriever | 7000 |
+| Reranker | 8000 |
+| ChatQnA | 8888 |
+| Translation | 9031 |
+
+### Disabled (`replicas: 0`, not running)
+| Service | Port | Reason |
+|---------|------|--------|
+| Guardrail | 9090 | Disabled |
+| OPEA UI/Nginx | 5173 | Disabled |
+| Certbot | — | One-shot, `CERTBOT_REPLICAS:-0` |

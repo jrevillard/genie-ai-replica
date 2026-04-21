@@ -358,7 +358,6 @@ graph TB
             VERIFY[EmailVerificationScreen]
             RESET[PasswordResetInitiateScreen]
             CONFIRM[PasswordResetConfirmScreen]
-            SUCCESS[RegistrationSuccessScreen]
         end
         
         subgraph "Main Application"
@@ -430,7 +429,6 @@ graph TD
         ROUTER --> VERIFY[EmailVerificationScreen]
         ROUTER --> RESET_INIT[PasswordResetInitiateScreen]
         ROUTER --> RESET_CONF[PasswordResetConfirmScreen]
-        ROUTER --> REG_SUCCESS[RegistrationSuccessScreen]
     end
     
     subgraph "Protected Routes"
@@ -469,31 +467,24 @@ graph TD
 
 ### User Authentication Flow
 
+> **Note:** Authentication is handled by Keycloak OIDC. Registration, email verification, and password reset are managed by the Keycloak IdP. The login screen redirects to the Keycloak login page via OIDC.
+
 ```mermaid
 sequenceDiagram
     participant U as User
     participant L as LoginScreen
-    participant R as RegisterScreen
-    participant V as EmailVerificationScreen
+    participant K as Keycloak IdP
     participant A as authService
     participant S as Vuex Store
     participant APP as App.vue
-    
-    Note over U,APP: Registration Flow
-    U->>R: Enter registration details
-    R->>A: register(userData)
-    A->>A: Validate and create account
-    A-->>R: Registration success
-    R->>V: Redirect to email verification
-    U->>V: Click email verification link
-    V->>A: verifyEmail(token)
-    A-->>V: Verification success
-    V->>L: Redirect to login
-    
-    Note over U,APP: Login Flow
-    U->>L: Enter credentials
-    L->>A: login(username, password)
-    A->>A: Authenticate user
+
+    Note over U,APP: Login Flow (Keycloak OIDC)
+    U->>L: Click login
+    L->>K: Redirect to Keycloak login page
+    U->>K: Enter credentials
+    K->>K: Authenticate user
+    K-->>L: Redirect with authorization code
+    L->>A: exchangeCodeForToken(code)
     A-->>L: Return user data & token
     L->>S: dispatch('initAuth')
     L->>S: commit('setUser', userData)
@@ -773,7 +764,7 @@ nano /public/config/genie-ai-config.json
 
 cd /path/to/project/root
 cp env .env
-# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+# Edit .env with your secrets (ARANGO_PASSWORD, etc.)
 set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # Access the application

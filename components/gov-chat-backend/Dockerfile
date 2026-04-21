@@ -1,4 +1,4 @@
-FROM node:22.14.0
+FROM node:22.14.0 AS builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -11,9 +11,6 @@ WORKDIR /app
 
 COPY gov-chat-backend/package*.json ./
 COPY shared/lib ./shared-lib
-RUN ls -l /app/shared-lib && \
-    test -f /app/shared-lib/security-headers.js && echo "security-headers.js found" || echo "security-headers.js missing" && \
-    test -f /app/shared-lib/security-middleware.js && echo "security-middleware.js found" || echo "security-middleware.js missing"
 
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm install --verbose --fetch-timeout 600000 || \
@@ -22,9 +19,17 @@ RUN npm config set registry https://registry.npmjs.org/ && \
 RUN rm -rf /app/node_modules/shared-lib
 
 COPY gov-chat-backend/ ./
-RUN ls -l /app && \
-    ls -l /app/shared-lib && \
-    mkdir -p /app/Uploads
+RUN mkdir -p /app/Uploads
+
+FROM node:22.14.0
+
+WORKDIR /app
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/shared-lib ./shared-lib
+COPY --from=builder /app/Uploads ./Uploads
+COPY gov-chat-backend/ ./
 
 EXPOSE 3000
 
@@ -34,4 +39,8 @@ ENV UPLOAD_DIR=./Uploads
 ENV MAX_FILE_SIZE=5242880
 ENV SESSION_EXPIRATION_TIME=1800000
 
+COPY gov-chat-backend/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "index.js"]

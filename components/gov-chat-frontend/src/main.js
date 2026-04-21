@@ -129,15 +129,6 @@ if (savedLanguage && i18n) {
   document.documentElement.setAttribute('lang', savedLanguage)
 }
 
-// Global language change handler
-window.addEventListener('languageChanged', (event) => {
-  if (event.detail && event.detail.language) {
-    // Force reload the page when language changes from settings
-    // This ensures all components get the new translations
-    window.location.reload()
-  }
-})
-
 const getBrowserLocale = () => {
   // Get browser language (e.g. 'en-US' -> 'en')
   const browserLang = navigator.language || navigator.userLanguage

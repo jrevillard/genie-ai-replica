@@ -1,3 +1,10 @@
+# playwright-cli working directory (test snapshots)
+.playwright-cli/
+.playwright/
+
+# Playwright test results
+test-results/
+
 # Environment files (secrets - never commit)
 .env
 .env.local
@@ -26,6 +33,8 @@ build/
 # Logs
 logs/
 *.log
+*.log.txt
+*-log.txt
 *.log.gz
 npm-debug.log*
 yarn-debug.log*

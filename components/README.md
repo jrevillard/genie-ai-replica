@@ -35,7 +35,7 @@ Before deploying, ensure the following prerequisites are met:
    ```bash
    cp env .env
    ```
-4. See `env` template for required secrets (ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, etc.).
+4. See `env` template for required secrets (ARANGO_PASSWORD, etc.).
 
 ## **3. Deployment**
 
@@ -46,7 +46,7 @@ All services are deployed via Docker Swarm from the project root using the root 
 ```bash
 # From project root
 cp env .env   # First time: create your .env
-# Then edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+# Then edit .env with your secrets (ARANGO_PASSWORD, etc.)
 
 set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
 ```

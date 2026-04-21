@@ -2,7 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger, dbService, ensureCollection } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
@@ -31,10 +31,6 @@ class QueryService {
     }
     try {
       this.db = await this.dbService.getConnection('default');
-      await ensureCollection(this.db, 'queries');
-      await ensureCollection(this.db, 'serviceCategories');
-      await ensureCollection(this.db, 'services');
-      await ensureCollection(this.db, 'queryCategories', { type: 3 });
       this.queries = this.db.collection('queries');
       this.serviceCategories = this.db.collection('serviceCategories');
       this.services = this.db.collection('services');
@@ -70,7 +66,7 @@ class QueryService {
    * @param {Object} payload - The request payload
    * @returns {Promise<Object>} The worker result
    */
-  runOPEAWorker(url, payload) {
+  runOPEAWorker(url, payload, headers = null) {
     return new Promise((resolve, reject) => {
       const workerPath = path.join(__dirname, './opea-worker.js');
       const worker = new Worker(workerPath);
@@ -93,7 +89,7 @@ class QueryService {
         if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
       });
 
-      worker.postMessage({ url, payload });
+      worker.postMessage({ url, payload, headers });
     });
   }
 
@@ -220,7 +216,7 @@ class QueryService {
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
    */
-  async createQuery(queryData) {
+  async createQuery(queryData, headers = null) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
@@ -420,7 +416,6 @@ class QueryService {
               serviceLabels: queryData.context.serviceLabels,
               language: queryData.context.language
             },
-            user_id: queryData.userId,
             stream: false
           };
         }
@@ -429,7 +424,7 @@ class QueryService {
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;

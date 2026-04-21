@@ -6,13 +6,12 @@ import httpService from './httpService';
  */
 class UserProfileService {
   /**
-   * Get user profile by ID
-   * @param {String} userId - User ID
+   * Get current user profile
    * @returns {Promise} User profile data
    */
-  async getProfile(userId) {
+  async getProfile() {
     try {
-      const response = await httpService.get(`users/${userId}`);
+      const response = await httpService.get('me');
       return response.data;
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -21,37 +20,13 @@ class UserProfileService {
   }
 
   /**
-   * Create a new user profile
-   * @param {Object} profileData - Profile data from the form
-   * @returns {Promise} Created user profile
-   */
-  async createProfile(profileData) {
-    try {
-      // Handle file uploads and form data
-      const formData = this.prepareFormData(profileData);
-      
-      const response = await httpService.post('users', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  }
-
- /**
- * Update an existing user profile
- * @param {String} userId - User ID
+ * Update current user profile
  * @param {Object} profileData - Updated profile data
  * @returns {Promise} Updated user profile
  */
-  async updateProfile(userId, profileData) {
+  async updateProfile(profileData) {
     try {
-      console.log(`Updating user profile for ID: ${userId}`);
+      console.log('Updating user profile');
       console.log('Profile data:', profileData);
 
       // Check if there are any File objects in the profile data
@@ -62,14 +37,14 @@ class UserProfileService {
         // Handle file uploads and form data
         const formData = this.prepareFormData(profileData);
 
-        response = await httpService.put(`users/${userId}`, formData, {
+        response = await httpService.put('me', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
       } else {
         // No files, send as JSON
-        response = await httpService.put(`users/${userId}`, profileData);
+        response = await httpService.put('me', profileData);
       }
 
       return response.data;
@@ -145,7 +120,6 @@ class UserProfileService {
   }
 
 }
-
 
 
 export default new UserProfileService();

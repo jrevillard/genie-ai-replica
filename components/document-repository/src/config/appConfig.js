@@ -17,8 +17,8 @@ const config = {
 
   // Dataprep service configuration
   dataprep: {
-    host: process.env.DATAPREP_HOST || 'http://dataprep',
-    port: process.env.DATAPREP_PORT || '6007',
+    host: process.env.DATAPREP_HOST || 'http://dataprep-arango-service',
+    port: process.env.DATAPREP_PORT || '5000',
 
     // This needs to be changed as it cannot be deployed on Kubernetes like this; David F
     ingestPath: '/v1/dataprep/ingest_file',
@@ -64,9 +64,9 @@ const config = {
 
   // Security configuration
   security: {
-    jwtSecret: process.env.JWT_SECRET,  // Required - no default for security
-    jwtExpiration: process.env.JWT_EXPIRATION || '24h',
-    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS) || 10,
+    keycloakUrl: process.env.KEYCLOAK_URL,
+    keycloakRealm: process.env.KC_REALM,
+    keycloakClientId: process.env.KC_CLIENT_ID,
     rateLimit: {
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 30000 // limit each IP to 100 requests per windowMs
@@ -117,7 +117,7 @@ const config = {
  */
 config.getFormattedConfiguration = function() {
   // Add any other sensitive keys here in lowercase and they will be redacted
-  const sensitiveKeys = ['password', 'jwtsecret', 'arango_password'];
+  const sensitiveKeys = ['password', 'arango_password'];
 
   /**
    * Recursively formats an object for logging.

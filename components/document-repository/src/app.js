@@ -144,19 +144,6 @@ app.get('/api', (req, res) => {
 app.use('/api/files', fileRoutes);
 app.use('/api/labels', labelRoutes);
 
-// Serve uploaded files (with security considerations)
-app.use('/uploads', express.static(uploadDir, {
-  maxAge: '1d',
-  etag: true,
-  lastModified: true,
-  setHeaders: (res, path) => {
-    // Security headers for file serving
-    res.set('X-Content-Type-Options', 'nosniff');
-    res.set('X-Frame-Options', 'DENY');
-    res.set('X-XSS-Protection', '1; mode=block');
-  }
-}));
-
 // 404 handler for undefined routes
 app.use('*', (req, res) => {
   logger.warn(`Route not found: ${req.originalUrl}`);

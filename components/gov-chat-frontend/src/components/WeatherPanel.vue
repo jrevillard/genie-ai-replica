@@ -57,10 +57,8 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'; // FIX: Import Vuex getters
-import weatherService from '@/services/weatherService'; // Adjust path as needed
-// FIX: No longer need authService, will get user from Vuex store
-// import authService from '@/services/authService'; 
+import { mapGetters } from 'vuex';
+import weatherService from '@/services/weatherService';
 
 export default {
   name: 'WeatherPanel',
@@ -161,10 +159,9 @@ export default {
           const { latitude, longitude } = position.coords;
           
           // FIX: Get userId from the Vuex store 'user' object
-          const userId = this.user?._key || null;
           const locale = this.$i18n.locale;
 
-          const weatherData = await weatherService.getWeather({ latitude, longitude, userId, locale });
+          const weatherData = await weatherService.getWeather({ latitude, longitude, locale });
           this.location = weatherData.location;
           this.currentWeather = weatherData.current;
           this.forecast = weatherData.forecast;

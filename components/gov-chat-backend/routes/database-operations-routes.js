@@ -1,61 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (databaseService) => {
   // Apply authentication middleware to all routes
-  router.use(authMiddleware.authenticate, authMiddleware.isAdmin);
-
-  /**
-   * @swagger
-   * /database/reindex:
-   *   post:
-   *     summary: Reindex Database
-   *     description: Drops and recreates indexes for all collections
-   *     tags: [Database Operations]
-   *     responses:
-   *       200:
-   *         description: Database reindexed successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 success:
-   *                   type: boolean
-   *                 message:
-   *                   type: string
-   *                 results:
-   *                   type: array
-   *                   items:
-   *                     type: object
-   *                     properties:
-   *                       collection:
-   *                         type: string
-   *                       status:
-   *                         type: string
-   *       500:
-   *         description: Server error
-   */
-  router.post('/reindex', async (req, res) => {
-    try {
-      logger.info('Initiating database reindexing via API');
-      const result = await databaseService.reindexDatabase();
-      
-      if (result.success) {
-        res.json(result);
-      } else {
-        res.status(500).json(result);
-      }
-    } catch (error) {
-      logger.error(`Unexpected error during database reindexing: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: 'Unexpected error during database reindexing'
-      });
-    }
-  });
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger

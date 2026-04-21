@@ -49,23 +49,6 @@ const adminController = {
     }
   },
   
-  async reindexDatabase(req, res) {
-    try {
-      const databaseOperationsService = new DatabaseOperationsService();
-      await databaseOperationsService.init();
-      logger.info('Controller: Reindexing database');
-      const response = await databaseOperationsService.reindexDatabase();
-      res.json(response);
-    } catch (error) {
-      logger.error(`Error reindexing database: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ 
-        success: false, 
-        message: 'Failed to reindex database',
-        error: error.message
-      });
-    }
-  },
-  
   async backupDatabase(req, res) {
     try {
       const databaseOperationsService = new DatabaseOperationsService();
@@ -324,8 +307,6 @@ try {
 } catch (error) {
   logger.warn('Database operations service not found. Database operations will not work.');
   DatabaseOperationsService = {
-    reindexDatabase: async () => ({ success: false, message: 'Database operations service not available' }),
-    backupDatabase: async () => ({ success: false, message: 'Database operations service not available' }),
     optimizeDatabase: async () => ({ success: false, message: 'Database operations service not available' })
   };
 }

@@ -74,7 +74,6 @@
 </template>
 
 <script>
-import userService from '@/services/userService'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { formatFileSize } from '../utils/fileUtils.js'
@@ -280,8 +279,7 @@ export default {
     },
 
     getAuthToken() {
-      const user = userService.getCurrentUser()
-      return user ? user.accessToken : null
+      return this.$store.getters.accessToken || null
     },
 
     getDisplayUrl(doc) {

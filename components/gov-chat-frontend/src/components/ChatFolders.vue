@@ -367,9 +367,9 @@ import { mapGetters, mapActions } from 'vuex'
 import ModalDialog from './ModalDialog.vue'
 import ContextMenu from './ContextMenu.vue'
 import chatHistoryService from '@/services/chatHistoryService'
-import userService from '@/services/userService'
 import notificationService from '@/services/notificationService'
 import { eventBus } from '../eventBus.js'
+import { getUserId } from '@/utils/userUtils'
 
 export default {
   name: 'ChatFolders',
@@ -416,7 +416,7 @@ export default {
   },
 
   computed: {
-    ...mapGetters('chatHistory', ['getAllFolders', 'getChatsByFolderId', 'getFolderById', 'getChatById']),
+    ...mapGetters('chatHistory', ['getAllFolders', 'getFolderById', 'getChatById']),
     themeClass() {
       const theme = this.$route.meta.theme || 'light'
       return theme === 'dark' ? 'context-menu-dark' : 'context-menu-light'
@@ -514,6 +514,19 @@ export default {
     },
     searchTerm() {
       this.handleSearchInput()
+    },
+    // Keep local currentUser in sync with the Vuex store
+    '$store.getters.currentUser': {
+      handler(user) {
+        if (user && user !== this.currentUser) {
+          this.currentUser = user
+          if (getUserId(user)) {
+            this.loadConversationsForCurrentTab()
+            this.loadFoldersFromBackend()
+          }
+        }
+      },
+      immediate: true,
     },
   },
 
@@ -683,19 +696,17 @@ export default {
     async loadCurrentUser() {
       try {
         console.log('Loading current user data')
-        this.currentUser = userService.getCurrentUser()
+        this.currentUser = this.$store.getters.currentUser
         if (!this.currentUser) {
-          this.currentUser = await userService.getCurrentUserInfo()
-        }
-        console.log('Current user loaded:', this.currentUser)
-        if (!this.currentUser || (!this.currentUser._key && !this.currentUser.id)) {
-          console.error('User data loaded but no valid ID found:', this.currentUser)
+          console.warn('No user in Vuex store, cannot load folders')
           this.errorMessage = this.safeT('sidebar.errorLoadingUser', 'User data is incomplete. Please reload the page.')
           return
         }
-        if (!this.currentUser._key && this.currentUser.id) {
-          this.currentUser._key = this.currentUser.id
-          console.log('Using user.id as user._key:', this.currentUser._key)
+        console.log('Current user loaded:', this.currentUser)
+        if (!this.currentUser || !getUserId(this.currentUser)) {
+          console.error('User data loaded but no valid ID found:', this.currentUser)
+          this.errorMessage = this.safeT('sidebar.errorLoadingUser', 'User data is incomplete. Please reload the page.')
+          return
         }
         this.loadConversationsForCurrentTab()
         this.loadFoldersFromBackend()
@@ -718,20 +729,18 @@ export default {
       this.isLoading = true
       this.errorMessage = null
       try {
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           console.error('Cannot load conversations: No current user or missing user ID')
           this.errorMessage = this.safeT('sidebar.errorLoadingUser', 'User data is missing. Please reload the page.')
           this.isLoading = false
           return
         }
-        const userId = this.currentUser._key
-        console.log(`Loading conversations for user ID: ${userId}`)
         const options = { limit: 100, offset: 0 }
         if (this.activeTab === 'all') {
           options.includeArchived = false
         }
         console.log('Fetching conversations with options:', options)
-        const response = await chatHistoryService.getUserConversations(userId, options)
+        const response = await chatHistoryService.getUserConversations(options)
         console.log(`Received ${response.conversations?.length || 0} conversations from server:`, response)
         this.conversations = (response.conversations || []).map((conv) => {
           return {
@@ -790,7 +799,7 @@ export default {
       this.errorMessage = null
       this.conversations = []
       try {
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           this.errorMessage = 'User data is missing'
           this.isLoading = false
           return
@@ -800,7 +809,7 @@ export default {
           options.includeArchived = true
         }
         console.log('Fetching conversations with options:', options)
-        const response = await chatHistoryService.getUserConversations(this.currentUser._key, options)
+        const response = await chatHistoryService.getUserConversations(options)
         console.log(`Received ${response.conversations?.length || 0} conversations from server:`, response)
         this.conversations = (response.conversations || []).map((conv) => {
           return {
@@ -862,7 +871,7 @@ export default {
       try {
         console.log(`Toggling starred status for conversation ${conversation._key}`)
         const newStatus = !conversation.isStarred
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           console.error('Cannot update conversation: No current user or missing user ID')
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'))
           return
@@ -870,7 +879,6 @@ export default {
         conversation.isStarred = newStatus
         await chatHistoryService.updateConversation(conversation._key, {
           isStarred: newStatus,
-          userId: this.currentUser._key,
         })
         if (this.activeTab === 'starred' && !newStatus) {
           this.conversations = this.conversations.filter((conv) => conv._key !== conversation._key)
@@ -895,7 +903,7 @@ export default {
       try {
         console.log(`Toggling archived status for conversation ${conversation._key}`)
         const newStatus = event.target.checked
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           console.error('Cannot update conversation: No current user or missing user ID')
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'))
           return
@@ -903,7 +911,6 @@ export default {
         conversation.isArchived = newStatus
         await chatHistoryService.updateConversation(conversation._key, {
           isArchived: newStatus,
-          userId: this.currentUser._key,
         })
         if (this.activeTab !== 'archived' && newStatus) {
           this.conversations = this.conversations.filter((conv) => conv._key !== conversation._key)
@@ -1010,20 +1017,6 @@ export default {
       await this.fetchFolderChats(folderId, true)
     },
 
-    async getChatsByFolderId({ commit }, folderId) {
-      try {
-        console.log(`Fetching chats for folder ${folderId}`)
-        const folder = await chatHistoryService.getFolder(folderId)
-        const chatIds = folder.conversations.map((conv) => conv._key)
-        commit('SET_FOLDER_CHATS', { folderId, chats: chatIds })
-        console.log(`Chat IDs for folder ${folderId}:`, chatIds)
-        return folder.conversations
-      } catch (error) {
-        console.error(`Error fetching chats for folder ${folderId}:`, error)
-        throw error
-      }
-    },
-
     getChatCount(folderId) {
       return this.folderCounts[folderId] || 0
     },
@@ -1046,13 +1039,12 @@ export default {
         return
       }
       try {
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           console.error('Cannot create folder: No current user or missing user ID')
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'))
           return
         }
         const folderData = {
-          userId: this.currentUser._key,
           name: this.newFolderName.trim(),
         }
         console.log('Creating folder with data:', folderData)
@@ -1071,12 +1063,12 @@ export default {
     async loadFoldersFromBackend() {
       try {
         console.log('Loading folders from backend')
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           console.error('Cannot load folders: No current user or missing user ID')
           this.errorMessage = this.safeT('sidebar.errorNoUser', 'User data is missing')
           return []
         }
-        const response = await chatHistoryService.getUserFolders(this.currentUser._key)
+        const response = await chatHistoryService.getUserFolders()
         console.log('Raw getUserFolders response:', JSON.stringify(response, null, 2))
         let foldersArray = Array.isArray(response) ? response : response?.folders || []
         console.log(`Received ${foldersArray.length} folders:`, foldersArray)
@@ -1131,7 +1123,6 @@ export default {
         console.log(`Updating folder ${this.editingFolder.id} with name: ${this.editingFolderName}`)
         await chatHistoryService.updateFolder(this.editingFolder.id, {
           name: this.editingFolderName.trim(),
-          userId: this.currentUser._key,
         })
         await this.loadFoldersFromBackend()
         notificationService.success(this.safeT('sidebar.folderUpdated', 'Folder updated successfully'))
@@ -1151,12 +1142,12 @@ export default {
       }
       try {
         this.isLoading = true
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           console.error('Cannot delete folder: No current user or missing user ID')
           notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'))
           return
         }
-        await chatHistoryService.deleteFolder(this.editingFolder.id, this.currentUser._key, false)
+        await chatHistoryService.deleteFolder(this.editingFolder.id, false)
         await this.loadFoldersFromBackend()
         if (this.selectedFolderId === this.editingFolder.id) {
           this.selectedFolderId = 'default'
@@ -1241,7 +1232,6 @@ export default {
         this.activeChat.title = this.newChatTitle.trim()
         await chatHistoryService.updateConversation(this.activeChat._key, {
           title: this.newChatTitle.trim(),
-          userId: this.currentUser._key,
         })
         this.updateChat({
           chatId: this.activeChat._key,
@@ -1269,14 +1259,14 @@ export default {
       if (!this.activeChat) {
         return
       }
-      if (!this.currentUser || !this.currentUser._key) {
+      if (!this.currentUser || !getUserId(this.currentUser)) {
         console.error('Cannot delete chat: No current user or missing user ID')
         notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'))
         return
       }
       console.log(`Deleting chat ${this.activeChat._key}`)
       try {
-        await chatHistoryService.deleteConversation(this.activeChat._key, this.currentUser._key)
+        await chatHistoryService.deleteConversation(this.activeChat._key)
         this.conversations = this.conversations.filter((c) => c._key !== this.activeChat._key)
         this.deleteChat(this.activeChat._key)
         if (this.selectedFolderId && this.folderCounts[this.selectedFolderId] !== undefined) {
@@ -1299,7 +1289,7 @@ export default {
         console.error('No active chat or destination folder selected')
         return
       }
-      if (!this.currentUser || !this.currentUser._key) {
+      if (!this.currentUser || !getUserId(this.currentUser)) {
         console.error('Cannot move chat: No current user or missing user ID')
         notificationService.error(this.safeT('sidebar.errorNoUser', 'User data is missing'))
         return
@@ -1314,8 +1304,7 @@ export default {
         if (isRemovingFromFolder) {
           await chatHistoryService.removeConversationFromFolder(
             this.activeChat._key,
-            this.selectedFolderId,
-            this.currentUser._key
+            this.selectedFolderId
           )
           if (this.$store.state.chatHistory.folderChats[this.selectedFolderId]) {
             await this.$store.dispatch('chatHistory/removeChatFromFolder', {
@@ -1331,8 +1320,7 @@ export default {
           await chatHistoryService.moveConversation(
             this.activeChat._key,
             this.selectedFolderId,
-            this.destinationFolderId,
-            this.currentUser._key
+            this.destinationFolderId
           )
           await this.moveChat({
             chatId: this.activeChat._key,
@@ -1429,7 +1417,7 @@ export default {
           this.conversations = []
         }
         console.log(`Fetching conversations for folder ${folderId}`)
-        if (!this.currentUser || !this.currentUser._key) {
+        if (!this.currentUser || !getUserId(this.currentUser)) {
           this.errorMessage = 'User data is missing'
           return
         }

@@ -134,14 +134,9 @@
           <div class="account-management-grid">
             <div class="management-row">
               <div class="management-col">
-                <a
-                  :href="accountConsoleUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn-secondary full-width manage-account-btn"
-                >
+                <button class="btn-secondary full-width" @click="openAccountConsole">
                   {{ translate('settings.manageMyAccount', 'Manage my account') }} →
-                </a>
+                </button>
                 <p class="description-text">
                   {{ translate('settings.manageMyAccountDesc', 'Update your email, password, and account settings.') }}
                 </p>
@@ -164,7 +159,10 @@
                 </button>
                 <p class="description-text danger-text">
                   {{
-                    translate('settings.deleteAccountDesc', 'Permanently delete your account and all data. This cannot be undone.')
+                    translate(
+                      'settings.deleteAccountDesc',
+                      'Permanently delete your account and all data. This cannot be undone.'
+                    )
                   }}
                 </p>
               </div>
@@ -502,7 +500,7 @@ export default {
         this.userData = {
           name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
           email: userData.email || '',
-          accountType: (userData.roles && userData.roles[0]) || this.translate('settings.standardAccount'),
+          accountType: (userData.roles && userData.roles.join(', ')) || this.translate('settings.standardAccount'),
           createdAt: userData.createdAt || '',
         }
         console.log('[SETTINGS] userData updated:', this.userData)
@@ -520,7 +518,7 @@ export default {
           this.userData = {
             name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
-            accountType: (fallbackUser.roles && fallbackUser.roles[0]) || this.translate('settings.account'),
+            accountType: (fallbackUser.roles && fallbackUser.roles.join(', ')) || this.translate('settings.account'),
             createdAt: fallbackUser.createdAt || '',
           }
           console.log('[SETTINGS] Fallback userData set:', this.userData)
@@ -537,8 +535,6 @@ export default {
     save() {
       console.log('[SETTINGS] Saving settings...')
       notificationService.info(this.translate('settings.savingSettings', 'Saving your settings...'), 1000)
-      const isChangingLanguage = this.$i18n && this.$i18n.locale !== this.settings.language
-      console.log('[SETTINGS] Is language changing?:', isChangingLanguage)
       if (this.$i18n) {
         console.log('[SETTINGS] Saving language preference:', this.settings.language)
         this.$i18n.locale = this.settings.language
@@ -581,12 +577,9 @@ export default {
       notificationService.success(this.translate('settings.settingsSaved', 'Settings saved successfully!'))
       console.log('[SETTINGS] Closing dialog after saving...')
       this.$emit('close')
-      if (isChangingLanguage) {
-        console.log('[SETTINGS] Language changed, scheduling page reload...')
-        setTimeout(() => {
-          window.location.reload()
-        }, 100)
-      }
+    },
+    openAccountConsole() {
+      window.open(this.accountConsoleUrl, '_blank', 'noopener,noreferrer')
     },
     confirmResetUserData() {
       console.log('[SETTINGS] Showing reset user data confirmation...')
@@ -1060,13 +1053,6 @@ export default {
   width: 100%;
 }
 
-.manage-account-btn {
-  display: block;
-  text-align: center;
-  text-decoration: none;
-  cursor: pointer;
-}
-
 .btn-save {
   background-color: var(--bg-button-primary, #4e97d1);
   color: var(--text-button-primary, #ffffff);
@@ -1085,6 +1071,11 @@ export default {
   color: #ffffff;
   border: none;
   cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: 500;
+  line-height: 1.5;
+  box-sizing: border-box;
 }
 
 .btn-danger:hover {

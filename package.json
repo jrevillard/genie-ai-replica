@@ -9,7 +9,10 @@
     "lint:py": "ruff check genie-ai-overlay/",
     "lint:py:fix": "ruff check --fix genie-ai-overlay/",
     "format:py": "ruff format genie-ai-overlay/",
-    "format:py:check": "ruff format --check genie-ai-overlay/"
+    "format:py:check": "ruff format --check genie-ai-overlay/",
+    "lint:dart": "cd mobile/genie_ai_mobile && flutter analyze",
+    "format:dart": "cd mobile/genie_ai_mobile && dart format .",
+    "format:dart:check": "cd mobile/genie_ai_mobile && dart format --set-exit-if-changed ."
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0"

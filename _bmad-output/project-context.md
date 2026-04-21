@@ -75,7 +75,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Backend code is NOT in a `src/` subdirectory — files are at service root level
 
 #### Python — OPEA Services
-- PEP 8, `black` formatter, `flake8` linter
+- PEP 8, `ruff` for linting and formatting (configured in `genie-ai-overlay/pyproject.toml`)
 - Copyright headers required on all files
 - Use `CustomLogger` from `comps`, never `print()` for logging
 - Environment: `os.getenv('VAR', 'default_value')`

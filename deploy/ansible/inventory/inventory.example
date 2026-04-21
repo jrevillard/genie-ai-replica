@@ -1,0 +1,41 @@
+# GENIE.AI Docker Swarm - Inventory Example
+#
+# One inventory file per environment. Copy to inventory/<environment>.ini:
+#   cp inventory.example inventory/itu_rtx_test.ini
+#   cp inventory.example inventory/production.ini
+#
+# The environment group (e.g. [itu_rtx_test]) tells Ansible which group_vars to load:
+#   - group_vars/itu_rtx_test/vars.yml (non-secret config)
+#   - group_vars/itu_rtx_test/vault.yml (encrypted secrets)
+#   - group_vars/all.yml is always loaded (shared config)
+#
+# IMPORTANT: Use underscores in group names (itu_rtx_test, not itu-rtx-test).
+# Hyphens cause Ansible warnings.
+
+# --- Environment group (one per inventory file) ---
+
+[itu_rtx_test]
+# Test environment node(s)
+genieai-test ansible_host=10.0.0.110
+
+# [production]
+# Production environment node(s)
+# genieai-prod ansible_host=10.0.0.200
+
+# --- Role groups (all environments) ---
+
+[swarm_managers]
+# Manager node(s) - runs API gateway (gateway=true label) and docker stack deploy
+genieai-test
+
+[gpu_nodes]
+# GPU node(s) - runs OPEA AI/ML services (vLLM, TEI, etc.)
+# Single-node: same host as manager
+genieai-test
+
+# [swarm_workers]
+# Future: additional worker nodes for multi-node deployments
+
+# --- Common variables ---
+[all:vars]
+ansible_user=ubuntu

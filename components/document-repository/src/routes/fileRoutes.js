@@ -1,7 +1,7 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
-const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
-const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
+const { uploadSingle, uploadMultiple, validateFiles } = require('../middlewares/fileUpload');
+const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
 const router = express.Router();
 
@@ -47,7 +47,7 @@ router.use(authenticateToken);
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
+router.post('/upload', authorizeRole(['Admin']), uploadSingle, validateFiles, fileController.uploadFile);
 
 /**
  * @swagger
@@ -90,7 +90,7 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
+router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, validateFiles, fileController.uploadMultipleFiles);
 
 /**
  * @swagger
@@ -262,30 +262,42 @@ router.get('/search', fileController.searchMetadata);
 
 /**
  * @swagger
- * /api/files/{fileId}/crawl-job:
+ * /api/files/search/files:
  *   get:
- *     summary: Get the crawl job status for a file
+ *     summary: Search files by text query
+ *     description: Full-text search across file names, source URLs, and authors
  *     tags: [Files]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: fileId
+ *       - in: query
+ *         name: q
  *         required: true
  *         schema:
  *           type: string
- *         description: File ID
+ *           minLength: 2
+ *           maxLength: 100
+ *         description: Search query
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 10
+ *         description: Maximum number of results
+ *       - in: query
+ *         name: mimeType
+ *         schema:
+ *           type: string
+ *         description: Filter by MIME type
  *     responses:
  *       '200':
- *         description: Crawl job details
+ *         description: Search results
  *       '401':
  *         description: Unauthorized
- *       '403':
- *         description: Forbidden - Admin role required
- *       '404':
- *         description: Job not found
  */
-router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCrawlJob);
+router.get('/search/files', fileController.searchFiles);
 
 /**
  * @swagger
@@ -311,6 +323,33 @@ router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCra
  *         description: File not found
  */
 router.get('/:fileId', fileController.getMetadata);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/crawl-job:
+ *   get:
+ *     summary: Get the crawl job status for a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       '200':
+ *         description: Crawl job details
+ *       '401':
+ *         description: Unauthorized
+ *       '403':
+ *         description: Forbidden - Admin role required
+ *       '404':
+ *         description: Job not found
+ */
+router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCrawlJob);
 
 /**
  * @swagger
@@ -544,7 +583,7 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *       '404':
  *         description: File not found
  */
-router.delete('/:fileId', fileController.deleteFile);
+router.delete('/:fileId', authorizeRole(['Admin']), fileController.deleteFile);
 
 /**
  * @swagger
@@ -574,7 +613,7 @@ router.delete('/:fileId', fileController.deleteFile);
  *       '401':
  *         description: Unauthorized
  */
-router.delete('/', fileController.deleteMultipleFiles);
+router.delete('/', authorizeRole(['Admin']), fileController.deleteMultipleFiles);
 
 /**
  * @swagger
@@ -809,6 +848,6 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.ge
  *       '401':
  *         description: Unauthorized
  */
-router.patch('/:fileId/status', authorizeRole(['Admin']), fileController.updateFileStatus);
+router.patch('/:fileId/status', authorizeRole(['Admin', 'dataprep-service']), fileController.updateFileStatus);
 
 module.exports = router;

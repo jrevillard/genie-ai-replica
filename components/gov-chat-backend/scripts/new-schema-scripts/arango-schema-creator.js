@@ -1,8 +1,8 @@
+#!/usr/bin/env node
+
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
 const readline = require('readline');
-const path = require('path');
-const { getDbConfig } = require('./db-config');
 
 // Redirect all console output to both console and log file
 let logBuffer = [];
@@ -107,32 +107,12 @@ class ArangoSchemaCreator {
       await this.createFunctions(schema.functions);
       
       console.log('Schema creation completed successfully');
-      await this.ensureCriticalCollections();
       await this.saveFullLog('./schema-creation-complete-log.txt');
     } catch (error) {
       console.error(`Error during schema creation: ${error.message}`);
       console.error(`Error stack: ${error.stack}`);
       await this.saveFullLog('./schema-creation-complete-log.txt');
       throw error;
-    }
-  }
-
-  async ensureCriticalCollections() {
-    const criticalCollections = ['files', 'crawl_job', 'crawl_log', 'crawl_metrics', 'chunks', 'users', 'conversations', 'messages', 'serviceCategories', 'services'];
-    console.log('\nEnsuring critical pipeline collections exist explicitly...');
-    for (const name of criticalCollections) {
-      const collection = this.db.collection(name);
-      try {
-        const exists = await collection.exists();
-        if (!exists) {
-          await collection.create();
-          console.log(`  --> Created missing critical collection: ${name}`);
-        } else {
-          console.log(`  --> collection already exists: ${name}`);
-        }
-      } catch (err) {
-        console.error(`  Error ensuring collection ${name}: ${err.message}`);
-      }
     }
   }
 
@@ -191,7 +171,7 @@ class ArangoSchemaCreator {
         await collection.create(options);
         console.log(`Created collection: ${collectionSchema.name}`);
       } catch (error) {
-        if (error.errorNum === 1207) { // Collection already exists
+        if (error.code === 1207 || error.errorNum === 1207) { // Collection already exists
           console.log(`Collection already exists: ${collectionSchema.name}`);
         } else {
           console.error(`Error creating collection ${collectionSchema.name}: ${error.message}`);
@@ -266,7 +246,7 @@ class ArangoSchemaCreator {
         await graph.create({ edgeDefinitions: edgeDefs, orphanCollections: orphanColls, ...graphOptions });
         console.log(`Created graph: ${graphSchema.name}`);
       } catch (error) {
-        if (error.errorNum === 1925) { // Graph already exists
+        if (error.code === 1925) { // Graph already exists
           console.log(`Graph already exists: ${graphSchema.name}`);
         } else {
           console.error(`Error creating graph ${graphSchema.name}:`, error.message);
@@ -285,7 +265,7 @@ class ArangoSchemaCreator {
         await view.create(viewSchema.properties, viewSchema.type);
         console.log(`Created view: ${viewSchema.name}`);
       } catch (error) {
-        if (error.errorNum === 1207) { // View already exists
+        if (error.code === 1207) { // View already exists
           console.log(`View already exists: ${viewSchema.name}`);
         } else {
           console.error(`Error creating view ${viewSchema.name}:`, error);
@@ -312,7 +292,7 @@ class ArangoSchemaCreator {
         });
         console.log(`Created analyzer: ${analyzerSchema.name}`);
       } catch (error) {
-        if (error.errorNum === 1650) { // Analyzer already exists
+        if (error.code === 1650) { // Analyzer already exists
           console.log(`Analyzer already exists: ${analyzerSchema.name}`);
         } else {
           console.error(`Error creating analyzer ${analyzerSchema.name}:`, error);
@@ -338,7 +318,7 @@ class ArangoSchemaCreator {
         });
         console.log(`Created function: ${functionSchema.name}`);
       } catch (error) {
-        if (error.errorNum === 1582) { // Function already exists
+        if (error.code === 1582) { // Function already exists
           console.log(`Function already exists: ${functionSchema.name}`);
         } else {
           console.error(`Error creating function ${functionSchema.name}:`, error);
@@ -369,47 +349,31 @@ function askQuestion(query) {
 async function main() {
   const schemaPath = process.argv[2] || './arango-schema.json';
   
-  // Read configuration from centralized utility
-  const config = getDbConfig();
+  // Read configuration from environment variables, with defaults
+  const config = {
+    url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
+    database: process.env.ARANGO_DATABASE || 'node-services',
+    auth: {
+      username: process.env.ARANGO_USER || 'root',
+      password: process.env.ARANGO_PASSWORD || 'your-database-password'
+    }
+  };
 
   // --- Confirmation Prompt ---
-  if (!process.env.AUTO_BOOTSTRAP) {
-    console.log('--- Database Schema Creator ---');
-    console.log('This script will apply a schema to an ArangoDB database.');
-    console.log('\nDatabase configuration to be used:');
-    console.log(`  URL:      ${config.url}`);
-    console.log(`  Database: ${config.database}`);
-    console.log(`  User:     ${config.auth.username}`);
-    
-    const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+  console.log('--- Database Schema Creator ---');
+  console.log('This script will apply a schema to an ArangoDB database.');
+  console.log('\nDatabase configuration to be used:');
+  console.log(`  URL:      ${config.url}`);
+  console.log(`  Database: ${config.database}`);
+  console.log(`  User:     ${config.auth.username}`);
+  
+  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
 
-    if (answer.toLowerCase() !== 'y') {
-      console.log('Operation cancelled by user. Exiting.');
-      process.exit(0);
-    }
+  if (answer.toLowerCase() !== 'y') {
+    console.log('Operation cancelled by user. Exiting.');
+    process.exit(0);
   }
   // --- End Confirmation Prompt ---
-
-  try {
-    // Phase 1: Connect to _system to verify or create the application database
-    console.log(`Connecting to _system database to check/create "${config.database}"...`);
-    const systemDb = new Database({
-      url: config.url,
-      databaseName: '_system',
-      auth: config.auth
-    });
-    const databases = await systemDb.listDatabases();
-    if (!databases.includes(config.database)) {
-      console.log(`Database "${config.database}" not found. Creating it programmatically...`);
-      await systemDb.createDatabase(config.database);
-      console.log(`Database "${config.database}" created successfully.`);
-    } else {
-      console.log(`Database "${config.database}" already exists.`);
-    }
-  } catch (err) {
-    console.error("Error during initial _system database verification:", err.message);
-    process.exit(1);
-  }
 
   const creator = new ArangoSchemaCreator(config);
   

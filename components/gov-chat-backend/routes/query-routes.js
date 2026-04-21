@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger
@@ -14,6 +14,8 @@ module.exports = (queryService) => {
    *     summary: Update query response time
    *     description: Updates the response time of a specific query.
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -60,7 +62,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error.
    */
-  router.patch('/:queryId/responsetime', async (req, res) => {
+  router.patch('/:queryId/responsetime', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const { responseTime } = req.body;
@@ -74,10 +76,7 @@ module.exports = (queryService) => {
       res.json(updatedQuery);
     } catch (error) {
       logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -88,6 +87,8 @@ module.exports = (queryService) => {
    *     summary: Create a new query
    *     description: Creates a new query and records it in analytics. Supports single-message or full conversation modes.
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -95,12 +96,8 @@ module.exports = (queryService) => {
    *           schema:
    *             type: object
    *             required:
-   *               - userId
    *               - sessionId
    *             properties:
-   *               userId:
-   *                 type: string
-   *                 description: ID of the user making the query
    *               sessionId:
    *                 type: string
    *                 description: ID of the current session
@@ -183,8 +180,13 @@ module.exports = (queryService) => {
    */
   router.post('/', async (req, res) => {
     try {
-      logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
-      const query = await queryService.createQuery(req.body);
+      const userId = req.user?.iss_sub;
+      if (!userId) {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      }
+      const queryData = { ...req.body, userId };
+      logger.info(`Creating query for user ${userId}`);
+      const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization });
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
@@ -199,6 +201,8 @@ module.exports = (queryService) => {
    *     summary: Get query by ID
    *     description: Retrieves a query by its unique identifier
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -259,6 +263,8 @@ module.exports = (queryService) => {
    *     summary: Add feedback to a query
    *     description: Adds user feedback to a query and records it in analytics
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -327,17 +333,14 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/:queryId/feedback', async (req, res) => {
+  router.post('/:queryId/feedback', async (req, res, next) => {
     try {
       logger.info(`Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`);
       const query = await queryService.addFeedback(req.params.queryId, req.body);
       res.json(query);
     } catch (error) {
       logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -348,6 +351,8 @@ module.exports = (queryService) => {
    *     summary: Mark query as answered
    *     description: Marks a query as answered and updates response time
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -390,7 +395,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error.
    */
-  router.patch('/:queryId/answered', async (req, res) => {
+  router.patch('/:queryId/answered', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const { responseTime } = req.body;
@@ -404,10 +409,7 @@ module.exports = (queryService) => {
       res.json(updatedQuery);
     } catch (error) {
       logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -418,6 +420,8 @@ module.exports = (queryService) => {
    *     summary: Search queries
    *     description: Searches queries based on various criteria with pagination
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: limit
@@ -431,11 +435,6 @@ module.exports = (queryService) => {
    *           type: integer
    *           default: 0
    *         description: Offset for pagination
-   *       - in: query
-   *         name: userId
-   *         schema:
-   *           type: string
-   *         description: Filter by user ID
    *       - in: query
    *         name: sessionId
    *         schema:
@@ -526,8 +525,13 @@ module.exports = (queryService) => {
    */
   router.get('/', async (req, res) => {
     try {
+      const userId = req.user?.iss_sub;
+      if (!userId) {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      }
       const { limit = 20, offset = 0, ...criteria } = req.query;
-      logger.info(`Searching queries with criteria: ${JSON.stringify(criteria)}, limit: ${limit}, offset: ${offset}`);
+      criteria.userId = userId;
+      logger.info(`Searching queries for user ${userId}, limit: ${limit}, offset: ${offset}`);
       const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
       res.json(results);
     } catch (error) {
@@ -543,6 +547,8 @@ module.exports = (queryService) => {
    *     summary: Get conversations for a query
    *     description: Retrieves all conversations associated with a specific query
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -564,19 +570,14 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/:queryId/conversations', async (req, res) => {
+  router.get('/:queryId/conversations', async (req, res, next) => {
     try {
       logger.info(`Getting conversations for query ${req.params.queryId}`);
       const conversations = await queryService.getConversationsForQuery(req.params.queryId);
       res.json(conversations);
     } catch (error) {
       logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -587,6 +588,8 @@ module.exports = (queryService) => {
    *     summary: Create conversation from query
    *     description: Creates a new conversation based on an existing query
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -626,7 +629,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/:queryId/conversation', async (req, res) => {
+  router.post('/:queryId/conversation', async (req, res, next) => {
     try {
       const { queryId } = req.params;
       const options = req.body;
@@ -637,12 +640,7 @@ module.exports = (queryService) => {
       res.status(201).json(result);
     } catch (error) {
       logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: 'Query not found' });
-      }
-      
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 
@@ -653,6 +651,8 @@ module.exports = (queryService) => {
    *     summary: Link query to message
    *     description: Creates a link between a query and an existing message
    *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: queryId
@@ -692,7 +692,7 @@ module.exports = (queryService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/:queryId/link/:messageId', async (req, res) => {
+  router.post('/:queryId/link/:messageId', async (req, res, next) => {
     try {
       const { queryId, messageId } = req.params;
       const options = req.body;
@@ -703,12 +703,7 @@ module.exports = (queryService) => {
       res.json(result);
     } catch (error) {
       logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
-      
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ message: error.message });
-      }
-      
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   });
 

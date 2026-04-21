@@ -6,13 +6,12 @@ import httpService from './httpService';
  */
 class UserProfileService {
   /**
-   * Get user profile by ID
-   * @param {String} userId - User ID
+   * Get current user profile
    * @returns {Promise} User profile data
    */
-  async getProfile(userId) {
+  async getProfile() {
     try {
-      const response = await httpService.get(`users/${userId}`);
+      const response = await httpService.get('me');
       return response.data;
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -21,37 +20,13 @@ class UserProfileService {
   }
 
   /**
-   * Create a new user profile
-   * @param {Object} profileData - Profile data from the form
-   * @returns {Promise} Created user profile
-   */
-  async createProfile(profileData) {
-    try {
-      // Handle file uploads and form data
-      const formData = this.prepareFormData(profileData);
-      
-      const response = await httpService.post('users', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  }
-
- /**
- * Update an existing user profile
- * @param {String} userId - User ID
+ * Update current user profile
  * @param {Object} profileData - Updated profile data
  * @returns {Promise} Updated user profile
  */
-  async updateProfile(userId, profileData) {
+  async updateProfile(profileData) {
     try {
-      console.log(`Updating user profile for ID: ${userId}`);
+      console.log('Updating user profile');
       console.log('Profile data:', profileData);
 
       // Check if there are any File objects in the profile data
@@ -62,14 +37,14 @@ class UserProfileService {
         // Handle file uploads and form data
         const formData = this.prepareFormData(profileData);
 
-        response = await httpService.put(`users/${userId}`, formData, {
+        response = await httpService.put('me', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
       } else {
         // No files, send as JSON
-        response = await httpService.put(`users/${userId}`, profileData);
+        response = await httpService.put('me', profileData);
       }
 
       return response.data;
@@ -96,21 +71,6 @@ class UserProfileService {
       }
     }
     return false;
-  }
-
-  /**
-   * Delete a user profile
-   * @param {String} userId - User ID
-   * @returns {Promise} Deletion result
-   */
-  async deleteProfile(userId) {
-    try {
-      const response = await httpService.delete(`users/${userId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting user profile:', error);
-      throw error;
-    }
   }
 
   /**
@@ -159,81 +119,7 @@ class UserProfileService {
     return formData;
   }
 
-  /**
-   * Search for users based on criteria
-   * @param {Object} criteria - Search criteria
-   * @param {Number} page - Page number (starting from 1)
-   * @param {Number} limit - Results per page
-   * @returns {Promise} Search results with pagination
-   */
-  async searchUsers(criteria, page = 1, limit = 20) {
-    try {
-      const offset = (page - 1) * limit;
-      
-      const response = await httpService.get('users/search', {
-        params: { ...criteria, limit, offset }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error searching users:', error);
-      throw error;
-    }
-  }
-
-
-  /**
-   * Update user role (admin only)
-   * @param {String} userId - User ID to update
-   * @param {Object} updateData - Data containing the new role
-   * @returns {Promise} Update result
-   */
-  async updateUserRole(userId, updateData) {
-    try {
-      console.log(`Updating role for user ${userId} to ${updateData.role}`);
-
-      // First try the admin-specific endpoint
-      try {
-        const response = await httpService.put(`admin/users/${userId}/role`, updateData);
-        return response;
-      } catch (adminError) {
-        console.warn('Admin-specific role update failed, falling back to standard user update:', adminError.message);
-
-        // If that fails, try the standard user update endpoint
-        // This matches the route in user-routes.js 
-        const response = await httpService.put(`users/${userId}`, {
-          role: updateData.role
-        });
-        return response;
-      }
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update user role only (specific method for role changes)
-   * @param {String} userId - User ID to update
-   * @param {String} role - New role value
-   * @returns {Promise} Update result
-   */
-  async updateUserRoleOnly(userId, role) {
-    try {
-      console.log(`Updating role for user ${userId} to ${role}`);
-
-      // Make the API request to the endpoint that matches the backend route
-      // This matches the PUT /api/users/:userId/role endpoint in user-routes.js
-      const response = await httpService.put(`users/${userId}/role`, { role });
-
-      console.log(`Role update response:`, response);
-      return response;
-    } catch (error) {
-      console.error('Error updating user role:', error);
-      throw error;
-    }
-  }
-
 }
+
 
 export default new UserProfileService();

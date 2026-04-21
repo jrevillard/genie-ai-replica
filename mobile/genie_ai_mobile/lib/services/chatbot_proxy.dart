@@ -17,7 +17,7 @@ class ChatbotProxy {
       'sessionId': sessionId,
       'messages': messages,
       'userId': userId,
-      'timestamp': DateTime.now().toIso8601String(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
     };
 
     if (language != null && language.isNotEmpty) {

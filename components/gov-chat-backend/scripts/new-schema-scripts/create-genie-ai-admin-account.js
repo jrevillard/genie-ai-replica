@@ -1,23 +1,16 @@
+// Import the ArangoDB driver
 const { Database } = require('arangojs');
 const readline = require('readline');
-const path = require('path');
-const { getDbConfig } = require('./db-config');
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
-
-const config = getDbConfig();
-const jwtSecret = process.env.JWT_SECRET || 'default-jwt-secret';
-const adminPasswordHash = crypto.createHash('sha256').update('admin').digest('hex');
 
 // --- Admin User Data ---
 // The basic admin user object to be created.
 const adminUser = {
   "loginName": "Admin",
   "email": "admin@admin.com",
-  "encPassword": adminPasswordHash,
+  "encPassword": "$2b$10$/84cIgD6IhXCTMFGP7Tjn.2btwbqgUtqbbucuiyEh91dwc2pF./Aa",
   "emailVerified": true,
-  "createdAt": new Date().toISOString(),
-  "updatedAt": new Date().toISOString(),
+  "createdAt": "2025-04-15T16:40:05.829Z",
+  "updatedAt": "2025-10-07T06:37:32.681Z",
   "personalIdentification": {
     "fullName": "Admin",
     "dob": "",
@@ -25,8 +18,8 @@ const adminUser = {
     "nationality": "",
     "maritalStatus": ""
   },
-  "accessToken": jwt.sign({ userId: "2140", loginName: "Admin", email: "admin@admin.com" }, jwtSecret, { expiresIn: '1h' }),
-  "refreshToken": jwt.sign({ userId: "2140", tokenVersion: 3 }, jwtSecret, { expiresIn: '7d' }),
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTQwIiwiaWF0IjoxNzU5ODE4NTk0LCJleHAiOjE3NTk5MDQ5OTR9.Q_D7mCXORPTCfFu0RTjUFMNtgx-PKjEr4WNrfxyCv3Q",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTQwIiwidG9rZW5WZXJzaW9uIjozLCJpYXQiOjE3NTk4MTg1OTQsImV4cCI6MTc2MDQyMzM5NH0.yu4Rif5ieMbWpcHRZUeK8g5Pj7TBgD9BeRfNDdfPDrU",
   "role": "Admin"
 };
 
@@ -53,27 +46,29 @@ function askQuestion(query) {
  */
 async function createAdminUser() {
   
-  // Read configuration from centralized utility
+  // Read configuration from environment variables, with defaults
   const dbConfig = {
-    ...config,
-    databaseName: config.database
+    url: process.env.ARANGO_URL || "http://127.0.0.1:8529",
+    databaseName: process.env.ARANGO_DATABASE || "node-services",
+    auth: {
+      username: process.env.ARANGO_USER || "root",
+      password: process.env.ARANGO_PASSWORD || "your-database-password"
+    },
   };
 
   // --- Confirmation Prompt ---
-  if (!process.env.AUTO_BOOTSTRAP) {
-    console.log('--- Admin User Creation Script ---');
-    console.log('This script will create an Admin user in the database.');
-    console.log('\nDatabase configuration to be used:');
-    console.log(`  URL:      ${dbConfig.url}`);
-    console.log(`  Database: ${dbConfig.databaseName}`);
-    console.log(`  User:     ${dbConfig.auth.username}`);
-    
-    const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+  console.log('--- Admin User Creation Script ---');
+  console.log('This script will create an Admin user in the database.');
+  console.log('\nDatabase configuration to be used:');
+  console.log(`  URL:      ${dbConfig.url}`);
+  console.log(`  Database: ${dbConfig.databaseName}`);
+  console.log(`  User:     ${dbConfig.auth.username}`);
+  
+  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
 
-    if (answer.toLowerCase() !== 'y') {
-      console.log('Operation cancelled by user. Exiting.');
-      process.exit(0);
-    }
+  if (answer.toLowerCase() !== 'y') {
+    console.log('Operation cancelled by user. Exiting.');
+    process.exit(0);
   }
   // --- End Confirmation Prompt ---
 
@@ -91,25 +86,30 @@ async function createAdminUser() {
 
     const usersCollection = db.collection("users");
 
-    // UPSERT: always enforce the correct password, create if missing
-    console.log(`Upserting user "${adminUser.loginName}"...`);
+    // 1. Check if the user already exists
+    console.log(`Checking for existing user with loginName: "${adminUser.loginName}"...`);
     const cursor = await db.query({
       query: `
-        UPSERT { loginName: @loginName }
-        INSERT @user
-        UPDATE { encPassword: @encPassword, emailVerified: true, updatedAt: @now }
-        IN users
-        RETURN { action: OLD ? 'updated' : 'inserted', loginName: NEW.loginName }
+        FOR user IN users
+        FILTER user.loginName == @loginName
+        LIMIT 1
+        RETURN user
       `,
-      bindVars: {
-        loginName: adminUser.loginName,
-        user: adminUser,
-        encPassword: adminUser.encPassword,
-        now: new Date().toISOString()
-      }
+      bindVars: { loginName: adminUser.loginName }
     });
-    const result = await cursor.next();
-    console.log(`User "${adminUser.loginName}" ${result.action} successfully.`);
+
+    const existingUser = await cursor.next();
+
+    if (existingUser) {
+      // 2a. If user exists, do nothing
+      console.log(`User "${adminUser.loginName}" already exists. No action taken.`);
+    } else {
+      // 2b. If user does not exist, create it
+      console.log(`User "${adminUser.loginName}" not found. Creating new user...`);
+      const result = await usersCollection.save(adminUser, { returnNew: true });
+      console.log("Successfully created new admin user:");
+      console.log(result.new);
+    }
 
   } catch (err) {
     console.error("An error occurred:", err.message);

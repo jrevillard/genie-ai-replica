@@ -1,7 +1,7 @@
 const multer = require('multer');
 const config = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
-// const { validateFileType } = require('../utils/mimeTypes');
+const { validateFileType } = require('../utils/mimeTypeValidator');
 
 logger.debug('Multer configuration module loading...');
 logger.debug('Using upload configuration:', config.upload);
@@ -14,15 +14,24 @@ logger.debug('Multer storage configured to memoryStorage.');
 const fileFilter = async (req, file, cb) => {
   logger.debug(`Entering fileFilter for file: ${file.originalname}`);
   try {
-    // Basic MIME type check
-    logger.debug(`Checking file: ${file.originalname}, MIME type: ${file.mimetype}`);
-    if (!config.upload.allowedMimeTypes.includes(file.mimetype)) {
-      logger.warn(`File type ${file.mimetype} is not allowed for file: ${file.originalname}. Rejecting file.`);
-      return cb(new Error(`File type ${file.mimetype} is not allowed`), false);
+    const ext = file.originalname.toLowerCase().substring(file.originalname.lastIndexOf('.'));
+    logger.debug(`Checking file: ${file.originalname}, MIME type: ${file.mimetype}, extension: ${ext}`);
+
+    // Primary check: MIME type must be in allowed list
+    if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
+      logger.debug(`File type ${file.mimetype} allowed for file: ${file.originalname}. Accepting file.`);
+      return cb(null, true);
     }
-    
-    logger.debug(`File type ${file.mimetype} allowed for file: ${file.originalname}. Accepting file.`);
-    cb(null, true);
+
+    // Fallback: if MIME type is unrecognized, check if the extension is valid
+    // Browsers sometimes misreport MIME types (e.g., .docx as application/octet-stream)
+    if (config.upload.allowedExtensions.includes(ext)) {
+      logger.debug(`MIME type ${file.mimetype} not recognized, but extension ${ext} is allowed. Accepting file (magic-byte validation will confirm).`);
+      return cb(null, true);
+    }
+
+    logger.warn(`File type ${file.mimetype} and extension ${ext} are not allowed for file: ${file.originalname}. Rejecting file.`);
+    return cb(new Error(`File type ${file.mimetype} is not allowed`), false);
   } catch (error) {
     logger.error(`Error in fileFilter for file: ${file.originalname}`, error);
     cb(error, false);
@@ -65,16 +74,16 @@ const validateFiles = async (req, res, next) => {
     // Validate each file
     for (const file of files) {
       logger.debug(`validateFiles: Validating file: ${file.originalname}`);
-      
-      // const validation = await validateFileType(file);
-      // if (!validation.isValid) {
-      //   logger.warn(`File validation failed for ${file.originalname}: ${validation.error}`);
-      //   return res.status(400).json({
-      //     success: false,
-      //     error: validation.error
-      //   });
-      // }
-      // logger.debug(`File validation successful for ${file.originalname}`);
+
+      const validation = await validateFileType(file);
+      if (!validation.isValid) {
+        logger.warn(`File validation failed for ${file.originalname}: ${validation.error}`);
+        return res.status(400).json({
+          success: false,
+          error: validation.error
+        });
+      }
+      logger.debug(`File validation successful for ${file.originalname}`);
     }
 
     logger.debug('validateFiles: All files passed validation. Calling next().');

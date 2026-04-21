@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
@@ -12,7 +12,7 @@ module.exports = (serviceCategoryService) => {
     methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(m => m !== 'constructor')
   });
 
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger
@@ -21,6 +21,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Get all categories with services
    *     description: Retrieves all service categories with their associated services
    *     tags: [Services]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: locale
@@ -85,6 +87,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Get category with services
    *     description: Retrieves a specific service category with its associated services
    *     tags: [Services]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -134,7 +138,7 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/categories/:categoryId', async (req, res) => {
+  router.get('/categories/:categoryId', async (req, res, next) => {
     const start = Date.now();
     try {
       const locale = req.query.locale || 'en';
@@ -143,13 +147,8 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      if (error.message.includes('not found')) {
-        logger.warn(`Category ${req.params.categoryId} not found`);
-        res.status(404).json({ message: error.message });
-      } else {
-        logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
-        res.status(500).json({ message: error.message });
-      }
+      logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      next(error);
     }
   });
 
@@ -160,6 +159,8 @@ module.exports = (serviceCategoryService) => {
    *     summary: Search categories and services
    *     description: Searches for categories and services based on a query string
    *     tags: [Services]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: query

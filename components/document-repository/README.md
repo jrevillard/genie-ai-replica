@@ -121,7 +121,7 @@ document-repository/
 │   ├── middlewares/             # Middleware for Express
 │   │   ├── fileUpload.js         # Multer config
 │   │   ├── errorHandler.js
-│   │   ├── authMiddleware.js
+│   │   ├── keycloak-auth-middleware.js  # Keycloak OIDC/JWKS authentication
 │   ├── config/
 │   │   ├── appConfig.js
 │   ├── utils/

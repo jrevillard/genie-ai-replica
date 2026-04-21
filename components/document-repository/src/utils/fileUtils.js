@@ -137,67 +137,6 @@ function getMetadataFilePath(filePath) {
   return metaPath;
 };
 
-/**
- * Count lines in a text file
- */
-const getTxtLineCount = async (filePath) => {
-  logger.debug(`Entering getTxtLineCount for: ${filePath}`);
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    const lineCount = content.split('\n').length;
-    logger.debug(`File ${filePath} has ${lineCount} lines.`);
-    return lineCount;
-  } catch (error) {
-    logger.warn(`Failed to read file for getTxtLineCount: ${filePath}. Returning null.`, error);
-    return null; // Return null if file reading fails
-  }
-};
-
-/**
- * Count words in a text file
- */
-const getTxtWordCount = async (filePath) => {
-  logger.debug(`Entering getTxtWordCount for: ${filePath}`);
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
-    logger.debug(`File ${filePath} has ${wordCount} words.`);
-    return wordCount;
-  }
-  catch (error) {
-    logger.warn(`Failed to read file for getTxtWordCount: ${filePath}. Returning null.`, error);
-    return null; // Return null if file reading fails
-  }
-};
-
-const getPdfPageCount = async (filePath) => {
-  logger.debug(`Entering getPdfPageCount for: ${filePath}`);
-  try {
-    const pdf = require('pdf-parse');
-    const dataBuffer = await fs.readFile(filePath);
-    const data = await pdf(dataBuffer);
-    logger.debug(`PDF ${filePath} has ${data.numpages} pages.`);
-    return data.numpages || null;
-  } catch (error) {
-    logger.error(`Failed to extract PDF page count for ${filePath}: ${error.message}`, error);
-    return null; // Return null if extraction fails
-  }
-};
-
-const getDocxWordCount = async (filePath) => {
-  logger.debug(`Entering getDocxWordCount for: ${filePath}`);
-  try {
-    const docx = require('docx-parser');
-    const content = await docx.parseDocx(filePath);
-    const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
-    logger.debug(`DOCX ${filePath} has ${wordCount} words.`);
-    return wordCount;
-  } catch (error) {
-    logger.error(`Failed to extract DOCX word count for ${filePath}: ${error.message}`, error);
-    return null; // Return null if extraction fails
-  }
-};
-
 // Utility function to compute SHA-256 hash of a file
 const getFileHash = async (filePath) => {
   logger.debug(`Entering getFileHash for: ${filePath}`);
@@ -225,12 +164,8 @@ module.exports = {
   ensureDirectoryExists,
   saveFileToDisk,
   deleteFile,
-  getFileSize, // To be edited
-  getFileMetadata, // To be edited
+  getFileSize,
+  getFileMetadata,
   getMetadataFilePath,
-  getTxtLineCount,
-  getTxtWordCount,
-  getPdfPageCount,
-  getDocxWordCount,
   getFileHash
 };

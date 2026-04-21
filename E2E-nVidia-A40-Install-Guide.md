@@ -167,7 +167,7 @@ npm -v
 \#Output: v20.20.1<br>
 \#Output: 10.8.2
 
-## **8\. Update docker and install the docker compose plugin (this is needed for running docker-compose.yaml)**
+## **8\. Update docker and install the docker compose plugin (this is needed for running Docker Swarm deployment)**
 
 ### Prepare for docker installs
 ```
@@ -211,8 +211,8 @@ sudo apt-get update
 sudo apt-get install docker-compose-plugin
 ```
 
-After completing these steps you should be able to run commands like 
-```docker compose ps```, ```docker compose logs```, etc.
+After completing these steps you should be able to run commands like
+```docker service ls```, ```docker service logs```, etc.
 
 ## **9\. Use the env template for .env**
 **NOTE:** You do have the choice to build your own .env but this will likely take a lot of time and experimentation - in the future we will add a configuration builder but for now just copy the template. If you want to be more studious then read the configuration guide in detail. It is likely time well invested now anyway
@@ -234,23 +234,24 @@ Example: ```VUE_APP_CSP_CONNECT_SRC=...```
 ``` CHATQNA_SYSTEM_PROMPT="<INSTRUCTIONS>\nYou are a friendly and polite information assistant.\nYour task is to answer the user's latest question using only the content provided from the knowledge base.\nDo not invent or assume information; if the answer is not in the provided content, inform the user that the information is unavailable.\nUse the user's name, gender, age, preferences, and chat history to tailor and personalise your responses.\nKeep answers informative but concise; provide detailed explanations only when necessary or explicitly requested.\n</INSTRUCTIONS>\n\nIn line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided." ```
 
 ### Go to Huggingface and create your own access token and replace in .env.
-```HUGGINGFACEHUB_API_TOKEN=<your huggingface token>```
 ```HUGGING_FACE_HUB_TOKEN=<your huggingface token>```
 
 **Note:** The VLLM_API_KEY can be removed unless you are using external services (which you are not)**
 ```VLLM_API_KEY=<your vLLM API key>```
 
 
-## **10\. Start the services (should start pulling images) - there will be some errors**
+## **10\. Initialize Docker Swarm and deploy the stack**
 ```
-docker compose up --build -d
+docker swarm init
+set -a && source .env && set +a
+docker stack deploy -c docker-compose.yaml genieai
 ```
 
-## **11\. Check the status of the containers** 
+## **11\. Check the status of the services**
 ```
-docker ps
+docker service ls
 
-docker compose logs -f
+docker service logs genieai_backend -f
 ```
 
 **NOTE:** that at this point there will be errors in the logs and containers restarting - this is because the configuration is incomplete

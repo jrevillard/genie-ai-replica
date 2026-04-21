@@ -9,7 +9,6 @@ import asyncio
 import aiohttp
 import fcntl  # Added for file locking
 from typing import List, Optional, Union, Dict, Any
-from datetime import datetime, timedelta
 
 from numpy import dot
 from numpy.linalg import norm
@@ -48,8 +47,9 @@ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 # 2. Backend Service: Source of Truth for Label Hierarchy
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
-# 3. HTTP Service: Authentication Token Broker
-GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
+
+# 3. Keycloak Service Account for OIDC authentication
+from keycloak_service_account import get_service_account_token
 
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
 GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "false").lower() == "true"
@@ -63,8 +63,10 @@ LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 # New: Concurrency Control for Batches
 MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "5"))
 
-# Spec 5.3: Externalized Prompt
-LABEL_SELECTOR_SYSTEM_PROMPT = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", """
+# Spec 5.3: Externalized Prompt - Two-tier priority
+# Level 1: ENV VAR (highest priority) - override via .env
+# Level 2: Hardcoded default (fallback) - works out-of-the-box
+_LABEL_SELECTOR_DEFAULT = """
 <SYSTEM INSTRUCTIONS>
 You are a precise semantic labeler for a RAG knowledge graph.
 Goal: Assign 1–4 MOST RELEVANT labels from the list below that best match the chunk content.
@@ -82,7 +84,9 @@ Labels:
 Output strict JSON only:
 {"labels": ["Label1", "Label2"]}
 </SYSTEM INSTRUCTIONS>
-""".strip())
+""".strip()
+_env_value = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", "")
+LABEL_SELECTOR_SYSTEM_PROMPT = _env_value.strip() or _LABEL_SELECTOR_DEFAULT
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):
@@ -93,15 +97,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        # Token caching state
-        self._cached_token = None
-        self._token_expiry = None
-        # FIX: Async Lock to prevent race conditions where 50 tasks fetch token at once
-        self._token_lock = asyncio.Lock()
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
-        self._log_semaphore = asyncio.Semaphore(100) 
-        
+        self._log_semaphore = asyncio.Semaphore(100)
+
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
 
@@ -112,7 +111,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print("="*60)
         print(f" DOCUMENT_REPO_URL    : {DOCUMENT_REPOSITORY_URL}")
         print(f" BACKEND_SERVICE_URL  : {BACKEND_SERVICE_URL}")
-        print(f" AUTH_TOKEN_URL       : {GET_AUTH_TOKEN_URL}")
+        print(f" OIDC_AUTH            : Keycloak service account (client_credentials)")
         print(f" GUARDRAIL_ENABLED    : {GUARDRAIL_ENABLED} ({GUARDRAIL_URL})")
         print("-" * 60)
         print(f" LABELING_STRATEGY    : {LABELING_STRATEGY}")
@@ -120,61 +119,32 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" BM25_THRESHOLD       : {BM25_LABEL_THRESHOLD}")
         print(f" EXTRACTION_METHOD    : {CONTENT_EXTRACTION_METHOD}")
         print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
-        print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
+        print(f" ARANGO_DB            : {os.getenv('ARANGO_DB')}")
         print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
         print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
         print("="*60 + "\n")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
-    async def _get_auth_token(self):
-        """Fetches a fresh JWT from the internal http-service with locking and caching."""
-        now = datetime.now()
-        
-        # 1. Fast Path: Check if valid token exists (No lock needed)
-        if self._cached_token and self._token_expiry and now < self._token_expiry:
-            return self._cached_token
-
-        # 2. Slow Path: Acquire Lock to prevent thundering herd
-        async with self._token_lock:
-            # Check again (Double-Checked Locking) in case another task filled it while we waited
-            if self._cached_token and self._token_expiry and now < self._token_expiry:
-                return self._cached_token
-
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(GET_AUTH_TOKEN_URL) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            token = data.get("accessToken")
-                            if token:
-                                # Cache the token for 50 mins (assuming 1h life)
-                                self._cached_token = token
-                                self._token_expiry = now + timedelta(minutes=50)
-                                return token
-                            logger.error(f"Auth Service returned 200 but no accessToken: {data}")
-                        else:
-                            # Log but don't crash, caller handles None
-                            logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
-            except Exception as e:
-                logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
-            
+    async def _service_headers(self):
+        """Return auth headers using Keycloak service account Bearer token."""
+        try:
+            token = await get_service_account_token()
+            return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        except Exception as e:
+            logger.error(f"Failed to obtain service account token: {e}")
             return None
 
     async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
         """Updates file status in Document Repository (Spec 4.1/6.1)."""
-        token = await self._get_auth_token()
-        if not token:
+        headers = await self._service_headers()
+        if not headers:
             if logflag:
                 logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
+
         # FIX: chunk_count must be at the ROOT level, not inside dataprep object
         payload = {
             "dataprep": {"status": status}
@@ -194,17 +164,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
-        token = await self._get_auth_token()
-        if not token:
+        headers = await self._service_headers()
+        if not headers:
             if logflag:
                 logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
         payload = {
             "level": level, # Sent exactly as passed (INFO, WARN, ERROR)
             "stage": stage,
@@ -227,14 +193,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _fetch_all_labels(self):
         """Fetch full taxonomy from the Backend Service to guide the LLM."""
-        token = await self._get_auth_token()
-        if not token:
-            logger.warning("Skipping label fetch due to missing auth token.")
+        headers = await self._service_headers()
+        if not headers:
+            logger.warning("Skipping label fetch due to missing service account token.")
             return []
 
         # FIX: Target the Backend Service for the hierarchy
         url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
-        headers = {"Authorization": f"Bearer {token}"}
         
         try:
             async with self._log_semaphore: # Reuse semaphore to be polite to backend
@@ -367,11 +332,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 while retries < 3:
                     try:
+                        # Replace {labels_list} placeholder with actual labels
+                        system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
                         response = await client.chat.completions.create(
                             model=model,
                             messages=[
-                                {"role": "system", "content": LABEL_SELECTOR_SYSTEM_PROMPT},
-                                {"role": "user", "content": f"Input: {text}\nLabels: {all_labels}"}
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": f"Input: {text}"}
                             ]
                         )
                         parsed = json.loads(response.choices[0].message.content)
@@ -605,7 +572,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
-                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
+                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
                 
                 documents_to_process = []
                 for i, doc in enumerate(labelled_docs):
@@ -660,7 +627,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._write_ingestion_log(input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
                 
                 # Perform graceful rollback (retraction)
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
                 
                 # Set final status to "Killed" as per state machine specification
                 await self._update_doc_status(input.file_id, "Killed")
@@ -677,7 +644,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._update_doc_status(input.file_id, "Ingestion Error")
                 
                 # Auto-retract created data
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
                 
                 raise HTTPException(status_code=500, detail=error_msg)

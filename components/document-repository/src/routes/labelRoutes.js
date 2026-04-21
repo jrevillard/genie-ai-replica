@@ -1,6 +1,6 @@
 const labelController = require('../controllers/labelController');
 const express = require('express');
-const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
+const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
 const router = express.Router();
 

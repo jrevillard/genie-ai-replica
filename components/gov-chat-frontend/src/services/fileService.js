@@ -1,5 +1,5 @@
 // src/services/fileService.js - File Upload Service
-import httpService from './httpService';
+import httpService from './httpService'
 
 export default {
   /**
@@ -11,21 +11,21 @@ export default {
    */
   async uploadFile(file, context, entityId) {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('context', context);
-      formData.append('entityId', entityId);
-      
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('context', context)
+      formData.append('entityId', entityId)
+
       const response = await httpService.post('files/upload', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return response.data;
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error uploading file:', error);
-      throw error;
+      console.error('Error uploading file:', error)
+      throw error
     }
   },
 
@@ -38,25 +38,25 @@ export default {
    */
   async uploadMultipleFiles(files, context, entityId) {
     try {
-      const formData = new FormData();
-      
+      const formData = new FormData()
+
       files.forEach((file, index) => {
-        formData.append(`files[${index}]`, file);
-      });
-      
-      formData.append('context', context);
-      formData.append('entityId', entityId);
-      
+        formData.append(`files[${index}]`, file)
+      })
+
+      formData.append('context', context)
+      formData.append('entityId', entityId)
+
       const response = await httpService.post('files/upload-multiple', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return response.data;
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error uploading multiple files:', error);
-      throw error;
+      console.error('Error uploading multiple files:', error)
+      throw error
     }
   },
 
@@ -66,7 +66,7 @@ export default {
    * @returns {String} File URL
    */
   getFileUrl(fileId) {
-    return `${httpService.baseUrl}/files/${fileId}`;
+    return `${httpService.baseUrl}/files/${fileId}`
   },
 
   /**
@@ -76,11 +76,11 @@ export default {
    */
   async deleteFile(fileId) {
     try {
-      const response = await httpService.delete(`files/${fileId}`);
-      return response.data;
+      const response = await httpService.delete(`files/${fileId}`)
+      return response.data
     } catch (error) {
-      console.error('Error deleting file:', error);
-      throw error;
+      console.error('Error deleting file:', error)
+      throw error
     }
   },
 
@@ -91,11 +91,11 @@ export default {
    */
   async getFileMetadata(fileId) {
     try {
-      const response = await httpService.get(`files/${fileId}/metadata`);
-      return response.data;
+      const response = await httpService.get(`files/${fileId}/metadata`)
+      return response.data
     } catch (error) {
-      console.error('Error getting file metadata:', error);
-      throw error;
+      console.error('Error getting file metadata:', error)
+      throw error
     }
   },
 
@@ -108,13 +108,13 @@ export default {
   async getEntityFiles(entityId, context) {
     try {
       const response = await httpService.get('files', {
-        params: { entityId, context }
-      });
-      
-      return response.data;
+        params: { entityId, context },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error getting entity files:', error);
-      throw error;
+      console.error('Error getting entity files:', error)
+      throw error
     }
   },
 
@@ -125,90 +125,19 @@ export default {
    * @returns {String} Preview URL
    */
   getPreviewUrl(fileId, options = {}) {
-    const { width, height, quality } = options;
-    let url = `${httpService.baseUrl}/files/${fileId}/preview`;
-    
-    const params = new URLSearchParams();
-    if (width) params.append('width', width);
-    if (height) params.append('height', height);
-    if (quality) params.append('quality', quality);
-    
-    const queryString = params.toString();
+    const { width, height, quality } = options
+    let url = `${httpService.baseUrl}/files/${fileId}/preview`
+
+    const params = new URLSearchParams()
+    if (width) params.append('width', width)
+    if (height) params.append('height', height)
+    if (quality) params.append('quality', quality)
+
+    const queryString = params.toString()
     if (queryString) {
-      url += `?${queryString}`;
+      url += `?${queryString}`
     }
-    
-    return url;
-  },
 
-  /**
-   * Check if a file type is an image
-   * @param {String} mimeType - File MIME type
-   * @returns {Boolean} True if the file is an image
-   */
-  isImage(mimeType) {
-    return mimeType && mimeType.startsWith('image/');
+    return url
   },
-
-  /**
-   * Check if a file type is a document
-   * @param {String} mimeType - File MIME type
-   * @returns {Boolean} True if the file is a document
-   */
-  isDocument(mimeType) {
-    const documentTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'text/plain',
-      'text/csv'
-    ];
-    
-    return documentTypes.includes(mimeType);
-  },
-
-  /**
-   * Format file size for display
-   * @param {Number} bytes - File size in bytes
-   * @returns {String} Formatted file size
-   */
-  formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  },
-
-  /**
-   * Get file extension from a file name
-   * @param {String} fileName - File name
-   * @returns {String} File extension
-   */
-  getFileExtension(fileName) {
-    return fileName.split('.').pop().toLowerCase();
-  },
-
-  /**
-   * Create a URL for a local file
-   * @param {File} file - File object
-   * @returns {String} Object URL
-   */
-  createObjectURL(file) {
-    return URL.createObjectURL(file);
-  },
-
-  /**
-   * Revoke a previously created object URL
-   * @param {String} url - Object URL to revoke
-   */
-  revokeObjectURL(url) {
-    URL.revokeObjectURL(url);
-  }
-};
+}

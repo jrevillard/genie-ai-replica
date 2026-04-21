@@ -41,7 +41,7 @@ class DatabaseService {
             const url = process.env.ARCADE_URL || 'http://localhost:2480';
             const databaseName = process.env.ARCADE_DB || 'node-services';
             const username = process.env.ARCADE_USER || 'root';
-            const password = process.env.ARCADE_PASSWORD || 'test';
+            const password = process.env.ARCADE_PASSWORD;
             const maxSockets = process.env.MAX_SOCKETS || 100;
             const maxFreeSockets = process.env.MAX_FREE_SOCKETS || 50;
 
@@ -71,14 +71,13 @@ class DatabaseService {
             const url = process.env.ARANGO_URL || 'http://arango-vector-db:8529';
             const databaseName = process.env.ARANGO_DB || 'node-services';
             const username = process.env.ARANGO_USER || 'root';
-            const password = process.env.ARANGO_PASSWORD || 'test';
+            const password = process.env.ARANGO_PASSWORD;
             const maxSockets = process.env.MAX_SOCKETS || 100;
             const maxFreeSockets = process.env.MAX_FREE_SOCKETS || 50;
 
             logger.info(`process.env.ARANGO_URL:` + process.env.ARANGO_URL);
             logger.info(`process.env.ARANGO_DB:` + process.env.ARANGO_DB);
             logger.info(`process.env.ARANGO_USER:` + process.env.ARANGO_USER);
-            logger.info(`process.env.ARANGO_PASSWORD:` + process.env.ARANGO_PASSWORD);
             logger.info(`ARANGO_URL: ${url}`);
             logger.info(`ARANGO_DB: ${databaseName}`);
             logger.info(`ARANGO_USERNAME: ${username}`);
@@ -407,6 +406,26 @@ class DatabaseService {
             logger.info(`[DB_CONNECTION] Target: ${connectionConfig.url}/${connectionConfig.databaseName}`);
 
             db = new Database(connectionConfig);
+
+            // Ensure database exists before connecting (first deployment)
+            const systemDb = new Database({
+                url: connectionConfig.url,
+                auth: connectionConfig.auth,
+            });
+            try {
+                await systemDb.login(connectionConfig.auth.username, connectionConfig.auth.password);
+                const dbExists = (await systemDb.listDatabases()).includes(connectionConfig.databaseName);
+                if (!dbExists) {
+                    logger.info(`[DB_CONNECTION] Database '${connectionConfig.databaseName}' does not exist, creating...`);
+                    await systemDb.createDatabase(connectionConfig.databaseName);
+                    logger.info(`[DB_CONNECTION] Database '${connectionConfig.databaseName}' created successfully`);
+                }
+                systemDb.close();
+            } catch (error) {
+                logger.error(`[DB_CONNECTION] Failed to ensure database exists: ${error.message}`);
+                systemDb.close();
+                throw error;
+            }
 
             await retry(async () => {
                 try {

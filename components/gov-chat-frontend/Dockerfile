@@ -1,24 +1,26 @@
-# Use Node.js 22.14.0 as the base image
-FROM node:22.14.0-alpine
+FROM node:22.14.0-alpine AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
 COPY package.json package-lock.json ./
 RUN npm install
 
-# Copy the entire project
 COPY . .
-
-# Build the Vue app for production
 RUN npm run build
 
-# Install http-server to serve static files
-RUN npm install -g http-server
+FROM nginx:alpine
 
-# Expose the port the Vue app runs on
+WORKDIR /app
+
+COPY --from=build /app/dist /app/dist
+RUN chmod -R a+r /app/dist
+
+COPY nginx.conf /etc/nginx/nginx.conf.template
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8090
 
-# Serve the built app with http-server
-CMD ["sh", "-c", "http-server /app/dist -p 8090"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+CMD ["sh", "-c", "envsubst '$NGINX_PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]

@@ -10,15 +10,15 @@ const config = {
   // Database configuration
   database: {
     url: process.env.ARANGO_URL || 'http://arangodb:8529',
-    username: process.env.ARANGO_USERNAME || 'root',
-    password: process.env.ARANGO_PASSWORD || 'test',
-    databaseName: process.env.ARANGO_DB_NAME || 'node-services'
+    username: process.env.ARANGO_USER || 'root',
+    password: process.env.ARANGO_PASSWORD, // Required - no default for security
+    databaseName: process.env.ARANGO_DB || 'genie-ai'
   },
 
   // Dataprep service configuration
   dataprep: {
-    host: process.env.DATAPREP_HOST || 'http://91.203.132.198', 
-    port: process.env.DATAPREP_PORT || '6007', 
+    host: process.env.DATAPREP_HOST || 'http://dataprep-arango-service',
+    port: process.env.DATAPREP_PORT || '5000',
 
     // This needs to be changed as it cannot be deployed on Kubernetes like this; David F
     ingestPath: '/v1/dataprep/ingest_file',
@@ -37,9 +37,10 @@ const config = {
       'application/vnd.ms-excel', // excel files .xls
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // excel files .xlsx
       'text/markdown',  // markdown files .md, .markdown
+      'text/plain',  // text files .txt (also sent by some browsers for .md)
       'text/html',   // html files .html
-      'text/plain',  // text files .txt
-      'application/octet-stream' // generic binary files - temporary adding it to solve docx, xlsx, md upload issues
+      'application/zip', // browsers sometimes report .docx/.xlsx as zip
+      'application/x-zip-compressed' // Windows browsers sometimes report Office files as this
     ],
     allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
     requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
@@ -63,9 +64,9 @@ const config = {
 
   // Security configuration
   security: {
-    jwtSecret: process.env.JWT_SECRET || 'default-jwt-secret',
-    jwtExpiration: process.env.JWT_EXPIRATION || '24h',
-    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS) || 10,
+    keycloakUrl: process.env.KEYCLOAK_URL,
+    keycloakRealm: process.env.KC_REALM,
+    keycloakClientId: process.env.KC_CLIENT_ID,
     rateLimit: {
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 30000 // limit each IP to 100 requests per windowMs
@@ -116,7 +117,7 @@ const config = {
  */
 config.getFormattedConfiguration = function() {
   // Add any other sensitive keys here in lowercase and they will be redacted
-  const sensitiveKeys = ['password', 'jwtsecret', 'arango_password'];
+  const sensitiveKeys = ['password', 'arango_password'];
 
   /**
    * Recursively formats an object for logging.

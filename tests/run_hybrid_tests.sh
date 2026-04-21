@@ -9,8 +9,12 @@ TEST_SCRIPT="run_rag_config_test_async.py"
 
 echo "[1/2] Rebuilding overlay containers to apply Python orchestration updates..."
 # Rebuilding ChatQnA, Reranker, and Retriever to ingest the new payload modifications
-docker compose build chatqna-xeon-backend-server reranker retriever-arango-service
-docker compose up -d chatqna-xeon-backend-server reranker retriever-arango-service
+# Note: This script must be run from the project root where docker-compose.yaml is located.
+# For Swarm deployments, ensure images are rebuilt and pushed to the registry before running tests.
+docker build -t genie-ai-chatqna-server:latest genie-ai-overlay/chatqna/
+docker build -t genie-ai-reranker:latest genie-ai-overlay/reranker/
+docker build -t genie-ai-retriever-arango:latest genie-ai-overlay/retriever/
+docker service update --force genieai_chatqna-xeon-backend-server genieai_reranker genieai_retriever-arango-service
 
 echo "[2/2] Launching Python Test Harness..."
 # The script will poll until ChatQnA is UP and ready

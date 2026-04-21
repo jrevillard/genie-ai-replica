@@ -1,0 +1,210 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    # ACME challenge location (Let's Encrypt HTTP-01)
+    # Always present and harmless when certbot is not running (empty dir returns 404)
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Redirect all other HTTP traffic to HTTPS
+    location / {
+        return 301 https://${NGINX_PUBLIC_DOMAIN}$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name _;
+
+    # Docker DNS resolver — enables lazy hostname resolution so nginx starts
+    # even when upstream containers (frontend, kong) are not yet running.
+    # NGINX re-resolves on each request, so containers can start in any order.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # SSL configuration
+    ssl_certificate /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # set a 50MB file size limit
+    client_max_body_size 50m;
+
+    # Permissions Policy (deployment-specific)
+    add_header Permissions-Policy "${NGINX_PERMISSIONS_POLICY}" always;
+
+    # Hide server info (server context — not allowed inside if blocks)
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Server;
+
+    # Block access to dotfiles (e.g., .git, .env), but allow .well-known (OIDC discovery)
+    location ~ /\.(?!well-known) {
+        deny all;
+        return 404;
+    }
+
+    # Block access to sensitive files and version control systems
+    location ~ /(BitKeeper|\.git|\.svn|\.hg|CVS) {
+        deny all;
+        return 404;
+    }
+
+    # For robots.txt, sitemap.xml and other specific text files
+    location ~* \.(txt|xml)$ {
+        include conf.d/security-headers.conf;
+        add_header Cache-Control "public, max-age=86400";
+        try_files $uri =404;
+    }
+
+    # For the /uploads/ location specifically
+    location /Uploads/ {
+        include conf.d/security-headers.conf;
+        try_files $uri =404;
+    }
+
+    # Keycloak Identity Provider proxied to Kong
+    # Note: when proxy_pass uses a variable, nginx does NOT perform
+    # path prefix substitution — the full request URI is forwarded as-is.
+    set $kong_addr ${KONG_PROXY_HOST}:8000;
+    location /auth/ {
+        # Security headers — SAMEORIGIN instead of DENY for Keycloak admin console iframes
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header Referrer-Policy "no-referrer-when-downgrade" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+        # Hide upstream headers — NGINX is the authoritative source for security headers
+        proxy_hide_header Content-Security-Policy;
+        proxy_hide_header X-Frame-Options;
+
+        # Proxy settings to Kong
+        proxy_pass http://$kong_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_connect_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # Backend API traffic proxied to Kong
+    # CORS Authority: nginx is the single authoritative CORS layer.
+    # If Kong has CORS plugins enabled, they must be disabled to avoid duplicate headers.
+    # Note: CORS origin uses NGINX_PUBLIC_DOMAIN (single origin at TLS termination),
+    # not CORS_ALLOWED_ORIGINS (multi-origin, used by backend only).
+    location /api/ {
+        include conf.d/security-headers.conf;
+
+        # CORS headers for API requests
+        # Note: nginx 'if' blocks do NOT inherit add_header from parent context,
+        # so we must re-include security-headers.conf here for OPTIONS responses.
+        if ($request_method = 'OPTIONS') {
+            include conf.d/security-headers.conf;
+            add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+            add_header 'Access-Control-Max-Age' 86400 always;
+            return 204;
+        }
+
+        add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+        add_header 'Access-Control-Allow-Credentials' 'true' always;
+
+        # API-specific CSP
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+
+        # Proxy settings to Kong
+        # Note: when proxy_pass uses a variable, nginx does NOT perform
+        # path prefix substitution — the full request URI is forwarded as-is.
+        proxy_pass http://$kong_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_connect_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # Swagger API docs — proxied to Kong (backend serves /api-docs and /api-docs.json)
+    # NOTE: location /api/ does NOT match /api-docs (hyphen vs slash after "api"),
+    # so this block must appear before the frontend catch-all location /.
+    location /api-docs {
+        include conf.d/security-headers.conf;
+
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+
+        proxy_pass http://$kong_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # Frontend Vue.js application
+    # Uses a variable for proxy_pass so nginx resolves the hostname at request time
+    # via the Docker DNS resolver, instead of failing at startup if frontend is down.
+    set $frontend_addr ${NGINX_FRONTEND_HOST}:${NGINX_FRONTEND_PORT};
+    location / {
+        include conf.d/security-headers.conf;
+
+        # Frontend CSP with parameterized connect-src
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+
+        # Proxy settings to Vue frontend
+        proxy_pass http://$frontend_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host ${NGINX_PUBLIC_DOMAIN};
+        proxy_buffering off;
+        proxy_connect_timeout 300s;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+
+        # Handle SPA fallback - intercept 404s and serve index.html
+        proxy_intercept_errors on;
+        error_page 404 = @frontend_spa;
+    }
+
+    # Named location for SPA fallback
+    location @frontend_spa {
+        include conf.d/security-headers.conf;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+
+        proxy_pass http://$frontend_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host ${NGINX_PUBLIC_DOMAIN};
+        rewrite ^ /index.html break;
+    }
+}

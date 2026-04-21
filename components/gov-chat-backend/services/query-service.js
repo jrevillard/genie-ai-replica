@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
+const { NotFoundError } = require('../middleware/errors');
 
 class QueryService {
   constructor() {
@@ -65,7 +66,7 @@ class QueryService {
    * @param {Object} payload - The request payload
    * @returns {Promise<Object>} The worker result
    */
-  runOPEAWorker(url, payload) {
+  runOPEAWorker(url, payload, headers = null) {
     return new Promise((resolve, reject) => {
       const workerPath = path.join(__dirname, './opea-worker.js');
       const worker = new Worker(workerPath);
@@ -88,7 +89,7 @@ class QueryService {
         if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
       });
 
-      worker.postMessage({ url, payload });
+      worker.postMessage({ url, payload, headers });
     });
   }
 
@@ -215,13 +216,13 @@ class QueryService {
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
    */
-  async createQuery(queryData) {
+  async createQuery(queryData, headers = null) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
       logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
-      const backendMode = process.env.CONTEXT_OPTION || 'single-message';
+      const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
       logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
       logger.info('[DEBUG] Starting validation of incoming data...');
@@ -415,7 +416,6 @@ class QueryService {
               serviceLabels: queryData.context.serviceLabels,
               language: queryData.context.language
             },
-            user_id: queryData.userId,
             stream: false
           };
         }
@@ -424,7 +424,7 @@ class QueryService {
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;
@@ -1193,7 +1193,7 @@ class QueryService {
 
       if (!query) {
         logger.warn('QueryService.query_not_found', { queryId });
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       const conversation = await this.chatHistoryService.createConversationFromQuery(
@@ -1315,7 +1315,7 @@ class QueryService {
       });
 
       if (error.name === 'ArangoError' && error.errorNum === 1202) {
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       throw error;
@@ -1352,7 +1352,7 @@ class QueryService {
 
       if (!message) {
         logger.warn('QueryService.message_not_found', { messageId });
-        throw new Error('Message not found');
+        throw new NotFoundError('Message not found');
       }
 
       const link = await this.chatHistoryService.linkQueryToConversation(

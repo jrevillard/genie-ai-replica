@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { NotFoundError, ValidationError } = require('../middleware/errors');
 
 class ServiceCategoryService {
   constructor() {
@@ -99,9 +100,11 @@ class ServiceCategoryService {
         const categoryData = categories[i];
         // ... (skipping invalid category checks) ...
 
+        const categoryName = categoryData.name || `Category ${i + 1}`;
         const categoryDoc = {
           catCode: categoryData.catKey || `cat${i + 1}`,
-          order: i + 1
+          order: i + 1,
+          nameEN: categoryName
         };
 
         const newCategory = await this.serviceCategories.save(categoryDoc);
@@ -115,7 +118,7 @@ class ServiceCategoryService {
           _key: `${newCategory._key}_${upperLocale}`,
           serviceCategoryId: newCategory._key,
           languageCode: upperLocale,
-          translation: categoryData.name || `Category ${i + 1}`, // 'name' is the English value
+          translation: categoryName,
           isActive: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -194,11 +197,12 @@ class ServiceCategoryService {
         logger.info(`Processing service ${i + 1}/${services.length}: "${serviceName}"`);
 
         try {
-          // Create service document without name fields
+          // Create service document with nameEN for query-service compatibility
           const serviceDoc = {
             serviceCode: `service_${i + 1}`,
             categoryId: categoryKey,
-            order: i + 1
+            order: i + 1,
+            nameEN: serviceName
           };
 
           logger.info(`Creating service with serviceCode: ${serviceDoc.serviceCode}`);
@@ -258,6 +262,9 @@ class ServiceCategoryService {
   async createServiceWithTranslations(categoryKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
   
       // 1. Get the current maximum order number for services IN THIS CATEGORY
@@ -274,6 +281,7 @@ class ServiceCategoryService {
       // 2. Create the main service document
       const serviceDoc = {
         categoryId: categoryKey,
+        nameEN: payload.nameEN,
       };
       const newService = await this.services.save(serviceDoc);
       logger.info(`Service document created with key: ${newService._key}`);
@@ -306,6 +314,9 @@ class ServiceCategoryService {
   async updateServiceWithTranslations(serviceKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Updating service ${serviceKey} with name "${payload.nameEN}"`);
 
       // 1. Ensure the service exists (this will throw an error if not found)
@@ -322,6 +333,9 @@ class ServiceCategoryService {
       };
       await this.serviceTranslations.save(englishTranslationDoc, { overwrite: true });
       logger.info(`Upserted English translation for service ${serviceKey}`);
+
+      // 2b. Keep nameEN in sync on the parent service document
+      await this.services.update(serviceKey, { nameEN: payload.nameEN });
 
       // 3. Clear old non-English translations and save the new set
       await this.db.query(aql`
@@ -546,7 +560,7 @@ class ServiceCategoryService {
 
       if (!result) {
         logger.warn(`Category ${categoryKey} not found`);
-        throw new Error(`Category ${categoryKey} not found`);
+        throw new NotFoundError(`Category ${categoryKey} not found`);
       }
 
       if (!result.name) {
@@ -798,6 +812,9 @@ class ServiceCategoryService {
   async createCategory(payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Creating new category "${payload.nameEN}"`);
 
       // 1. Get the current maximum order number for categories
@@ -810,9 +827,10 @@ class ServiceCategoryService {
       const newOrder = maxOrder + 1;
       logger.info(`Determined new category order: ${newOrder}`);
 
-      // 2. Create the category document with the correct order
+      // 2. Create the category document with the correct order and nameEN
       const categoryDoc = {
-        order: newOrder
+        order: newOrder,
+        nameEN: payload.nameEN
       };
       const newCategory = await this.serviceCategories.save(categoryDoc);
 
@@ -835,6 +853,9 @@ class ServiceCategoryService {
   async updateCategoryWithTranslations(categoryKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Updating category ${categoryKey} with name "${payload.nameEN}"`);
 
       // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)
@@ -852,6 +873,9 @@ class ServiceCategoryService {
       };
       await this.serviceCategoryTranslations.save(englishTranslationDoc, { overwrite: true });
       logger.info(`Upserted English translation for category ${categoryKey}`);
+
+      // 2b. Keep nameEN in sync on the parent category document
+      await this.serviceCategories.update(categoryKey, { nameEN: payload.nameEN });
 
       // 3. Update/create the other translations
       if (payload.translations && Array.isArray(payload.translations)) {

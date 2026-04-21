@@ -1,0 +1,5 @@
+node_modules
+dist
+tests
+*.config.js
+vue.config.js

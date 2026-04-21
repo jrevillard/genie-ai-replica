@@ -1,23 +1,16 @@
+// Import the ArangoDB driver
 const { Database } = require('arangojs');
 const readline = require('readline');
-const path = require('path');
-const { getDbConfig } = require('./db-config');
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
-
-const config = getDbConfig();
-const jwtSecret = process.env.JWT_SECRET || 'default-jwt-secret';
-const managerPasswordHash = crypto.createHash('sha256').update('manager').digest('hex');
 
 // --- User Data ---
 // The user object to be created.
 const managerUser = {
   "loginName": "genie-ai-manager",
   "email": "genie.ai@atomicmail.io",
-  "encPassword": managerPasswordHash,
+  "encPassword": "$2b$10$6Lh/XglcywVVChMHeLEFB.9o140Rz6D652miTNWghLcisyUL6oroq",
   "emailVerified": true,
-  "createdAt": new Date().toISOString(),
-  "updatedAt": new Date().toISOString(),
+  "createdAt": "2025-08-26T13:39:27.730Z",
+  "updatedAt": "2025-10-06T03:07:39.356Z",
   "personalIdentification": {
     "fullName": "genie-ai-manager",
     "dob": "",
@@ -28,8 +21,8 @@ const managerUser = {
   "addressResidency": {
     "currentAddress": ""
   },
-  "accessToken": jwt.sign({ userId: "2162", loginName: "genie-ai-manager", email: "genie.ai@atomicmail.io" }, jwtSecret, { expiresIn: '1h' }),
-  "refreshToken": jwt.sign({ userId: "2162", tokenVersion: 0 }, jwtSecret, { expiresIn: '7d' }),
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTYyIiwibG9naW5OYW1lIjoiZ2VuaWUtYWktbWFuYWdlciIsImVtYWlsIjoiZ2VuaWUuYWlAYXRvbWljbWFpbC5pbyIsImlhdCI6MTc1OTcyMDA1OSwiZXhwIjoxNzU5ODA2NDU5fQ.V93S6eBKkJpPj_wCbuVMdcdS6NhwGMMBKtGEFEHkn7E",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTYyIiwidG9rZW5WZXJzaW9uIjowLCJpYXQiOjE3NTk3MjAwNTksImV4cCI6MTc2MDMyNDg1OX0.wrG8l0e4z4AcY2FxBbfXcx9HfgWjFVD7ZRL80ygI4yQ",
   "role": "Admin"
 };
 
@@ -55,14 +48,17 @@ function askQuestion(query) {
  * Main function to connect to ArangoDB and create the user.
  */
 async function createArangoUser() {
-    // Read configuration from centralized utility
+    // Read configuration from environment variables, with defaults
     const dbConfig = {
-        ...config,
-        databaseName: config.database
+        url: process.env.ARANGO_URL || "http://127.0.0.1:8529",
+        databaseName: process.env.ARANGO_DATABASE || "node-services",
+        auth: {
+          username: process.env.ARANGO_USER || "root",
+          password: process.env.ARANGO_PASSWORD || "your-database-password"
+        },
     };
 
     // --- Confirmation Prompt ---
-  if (!process.env.AUTO_BOOTSTRAP) {
     console.log('--- Manager User Creation Script ---');
     console.log('This script will create a genie-ai-manager user in the database.');
     console.log('\nDatabase configuration to be used:');
@@ -76,8 +72,7 @@ async function createArangoUser() {
       console.log('Operation cancelled by user. Exiting.');
       process.exit(0);
     }
-  }
-  // --- End Confirmation Prompt ---
+    // --- End Confirmation Prompt ---
 
   console.log("\nConnecting to ArangoDB...");
   const db = new Database(dbConfig);
@@ -93,25 +88,30 @@ async function createArangoUser() {
 
     const usersCollection = db.collection("users");
 
-    // UPSERT: always enforce the correct password, create if missing
-    console.log(`Upserting user "${managerUser.loginName}"...`);
+    // 1. Check if the user already exists
+    console.log(`Checking for existing user with loginName: "${managerUser.loginName}"...`);
     const cursor = await db.query({
       query: `
-        UPSERT { loginName: @loginName }
-        INSERT @user
-        UPDATE { encPassword: @encPassword, emailVerified: true, updatedAt: @now }
-        IN users
-        RETURN { action: OLD ? 'updated' : 'inserted', loginName: NEW.loginName }
+        FOR user IN users
+        FILTER user.loginName == @loginName
+        LIMIT 1
+        RETURN user
       `,
-      bindVars: {
-        loginName: managerUser.loginName,
-        user: managerUser,
-        encPassword: managerUser.encPassword,
-        now: new Date().toISOString()
-      }
+      bindVars: { loginName: managerUser.loginName }
     });
-    const result = await cursor.next();
-    console.log(`User "${managerUser.loginName}" ${result.action} successfully.`);
+
+    const existingUser = await cursor.next();
+
+    if (existingUser) {
+      // 2a. If user exists, do nothing
+      console.log(`User "${managerUser.loginName}" already exists. No action taken.`);
+    } else {
+      // 2b. If user does not exist, create it
+      console.log(`User "${managerUser.loginName}" not found. Creating new user...`);
+      const result = await usersCollection.save(managerUser, { returnNew: true });
+      console.log("Successfully created new user:");
+      console.log(result.new);
+    }
 
   } catch (err) {
     console.error("An error occurred:", err.message);

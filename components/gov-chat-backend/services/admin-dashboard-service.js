@@ -2,9 +2,7 @@ const { logger, dbService } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
-const util = require('util');
-const childProcess = require('child_process');
-const exec = util.promisify(childProcess.exec);
+const { isValidDateStr } = require('./path-sanitizer');
 
 class AdminDashboardService {
   constructor() {
@@ -284,78 +282,6 @@ class AdminDashboardService {
   }
 
   /**
-   * Get storage usage percentage
-   * @returns {Promise<number>} Storage usage percentage
-   */
-  async getStorageUsage() {
-    try {
-      logger.debug('Calculating storage usage');
-      if (process.platform !== 'win32') {
-        const { stdout } = await exec('df -h / | tail -1 | awk \'{print $5}\'');
-        const usageString = stdout.trim();
-        const usage = parseInt(usageString.replace('%', ''));
-        logger.debug(`Storage usage (Linux): ${usage}%`);
-        return usage;
-      } else {
-        const { stdout } = await exec('wmic logicaldisk get size,freespace | findstr /C:"C:"');
-        const [size, freeSpace] = stdout.trim().split(/\s+/).map(num => parseInt(num));
-        const usage = Math.round(((size - freeSpace) / size) * 100);
-        logger.debug(`Storage usage (Windows): size=${size}, freeSpace=${freeSpace}, usage=${usage}%`);
-        return usage;
-      }
-    } catch (error) {
-      logger.error(`Error getting storage usage: ${error.message}`);
-      logger.debug('Falling back to default storage usage: 50%');
-      return 50;
-    }
-  }
-
-  /**
-   * Get network usage percentage (simulated)
-   * @returns {Promise<number>} Network usage percentage
-   */
-  async getNetworkUsage() {
-    try {
-      const { stdout: interfaces } = await exec("ip -br link show up | awk '{print $1}' | grep -vE '^lo$'");
-      const activeInterfaces = interfaces.trim().split('\n');
-      let totalBandwidthUsage = 0;
-      let interfacesChecked = 0;
-
-      for (const iface of activeInterfaces) {
-        try {
-          const rxBytes = parseInt(await fs.readFile(`/sys/class/net/${iface}/statistics/rx_bytes`, 'utf8'));
-          const txBytes = parseInt(await fs.readFile(`/sys/class/net/${iface}/statistics/tx_bytes`, 'utf8'));
-          const totalBytes = rxBytes + txBytes;
-          const speedFile = `/sys/class/net/${iface}/speed`;
-          let interfaceSpeed = 1000;
-          try {
-            interfaceSpeed = parseInt(await fs.readFile(speedFile, 'utf8'));
-          } catch (speedError) {
-            logger.warn(`Could not read speed for interface ${iface}`);
-          }
-          const bandwidthUsage = Math.min(
-            Math.round((totalBytes * 8) / (interfaceSpeed * 1000 * 1000 / 8) * 100),
-            100
-          );
-          totalBandwidthUsage += bandwidthUsage;
-          interfacesChecked++;
-        } catch (interfaceError) {
-          logger.warn(`Error checking interface ${iface}: ${interfaceError.message}`);
-        }
-      }
-
-      const averageBandwidthUsage = interfacesChecked > 0
-        ? Math.round(totalBandwidthUsage / interfacesChecked)
-        : 0;
-      logger.debug(`Network bandwidth usage: ${averageBandwidthUsage}%`);
-      return averageBandwidthUsage;
-    } catch (error) {
-      logger.error(`Error getting network usage: ${error.message}`);
-      return 35;
-    }
-  }
-
-  /**
    * Get database statistics
    * @returns {Promise<Object>} Database statistics
    */
@@ -384,22 +310,7 @@ class AdminDashboardService {
       const formattedSize = (totalSize / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
-      logger.debug('Fetching last reindex time from analytics');
-      const reindexCursor = await this.db.query(`
-        FOR a IN analytics
-          FILTER a.event == 'reindex'
-          SORT a.timestamp DESC
-          LIMIT 1
-          RETURN a.timestamp
-      `);
-      const lastReindexTimestamp = await reindexCursor.next();
-      const lastReindex = lastReindexTimestamp
-        ? this.formatTimeAgo(new Date(lastReindexTimestamp))
-        : 'Never';
-      logger.debug(`Last reindex time: ${lastReindexTimestamp || 'Never'}, formatted: ${lastReindex}`);
-
       const response = {
-        lastReindex,
         databaseSize: formattedSize,
         totalTables: collections.length,
         collections: collectionStats
@@ -443,7 +354,7 @@ class AdminDashboardService {
     try {
       logger.debug('Fetching total user count');
       const userCountCursor = await this.db.query(`
-        RETURN LENGTH(FOR u IN users RETURN 1)
+        RETURN LENGTH(FOR u IN users FILTER u.deleted != true RETURN 1)
       `);
       const userCount = await userCountCursor.next();
       logger.debug(`Total users: ${userCount}`);
@@ -466,6 +377,7 @@ class AdminDashboardService {
         LET oneMonthAgo = DATE_SUBTRACT(DATE_NOW(), 1, "month")
         RETURN LENGTH(
           FOR u IN users
+            FILTER u.deleted != true
             FILTER DATE_TIMESTAMP(u.createdAt) >= DATE_TIMESTAMP(oneMonthAgo)
             RETURN 1
         )
@@ -476,14 +388,15 @@ class AdminDashboardService {
       logger.debug('Fetching sample user list (top 10)');
       const usersCursor = await this.db.query(`
         FOR u IN users
+          FILTER u.deleted != true
           SORT u.updatedAt DESC
           LIMIT 10
           RETURN {
             _key: u._key,
             loginName: u.loginName,
             email: u.email,
-            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-            role: HAS(u, "role") ? u.role : "User"
+            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+            roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : [])
           }
       `);
       const users = await usersCursor.all();
@@ -545,6 +458,10 @@ class AdminDashboardService {
           logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
         }
       } else if (dateRange === 'custom' && startDate && endDate) {
+        if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
+          logger.warn('getLogs.invalid_custom_date_range', { startDate, endDate });
+          return { logs: [], totalLogs: 0 };
+        }
         const start = new Date(startDate);
         const end = new Date(endDate);
         const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
@@ -778,45 +695,6 @@ class AdminDashboardService {
   }
 
   /**
-   * Reindex database
-   * @returns {Promise<Object>} Reindex result
-   */
-  async reindexDatabase() {
-    if (!this.db) {
-      throw new Error('Database not initialized. Call init() first.');
-    }
-    logger.info('Reindexing database');
-
-    try {
-      logger.debug('Starting database reindex');
-      const collections = await this.db.collections();
-      for (const collection of collections) {
-        logger.debug(`Reindexing collection: ${collection.name}`);
-        // Simulate reindexing (actual implementation depends on ArangoDB setup)
-        await collection.figures();
-      }
-
-      const timestamp = new Date().toISOString();
-      await this.storeAnalyticsData({
-        event: 'reindex',
-        timestamp
-      });
-
-      const response = {
-        status: 'success',
-        message: 'Database reindexed successfully',
-        timestamp
-      };
-      logger.debug(`Reindex response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in reindexDatabase: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  /**
    * Backup database
    * @returns {Promise<Object>} Backup result
    */
@@ -829,20 +707,36 @@ class AdminDashboardService {
     try {
       logger.debug('Starting database backup');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupDir = path.join(__dirname, '../backups');
+      const backupDir = process.env.BACKUP_DIR || path.join(__dirname, '../backups');
       await fs.mkdir(backupDir, { recursive: true });
 
-      const backupFile = path.join(backupDir, `backup-${timestamp}.dump`);
-      logger.debug(`Backup file path: ${backupFile}`);
+      // Export all collections using arangojs API (no shell commands needed)
+      const collections = await this.db.collections();
+      const backupData = {};
+      let totalDocuments = 0;
 
-      // Simulate backup (actual implementation depends on ArangoDB setup)
-      await exec(`arangodump --output-directory ${backupDir} --server.database ${process.env.ARANGO_DB_NAME}`);
-      logger.debug('Backup completed');
+      for (const collection of collections) {
+        try {
+          const cursor = await collection.all();
+          const documents = await cursor.all();
+          backupData[collection.name] = documents;
+          totalDocuments += documents.length;
+          logger.debug(`Exported ${documents.length} documents from ${collection.name}`);
+        } catch (err) {
+          logger.warn(`Skipping collection ${collection.name}: ${err.message}`);
+        }
+      }
+
+      const backupFile = path.join(backupDir, `backup-${timestamp}.json`);
+      await fs.writeFile(backupFile, JSON.stringify(backupData, null, 2));
+      logger.debug(`Backup completed: ${totalDocuments} documents across ${Object.keys(backupData).length} collections`);
 
       const response = {
         status: 'success',
         message: 'Database backup completed successfully',
-        backupFile
+        backupFile,
+        collections: Object.keys(backupData),
+        documentCount: totalDocuments
       };
       logger.debug(`Backup response: ${JSON.stringify(response)}`);
 
@@ -965,9 +859,12 @@ class AdminDashboardService {
       logger.debug('Checking disk space');
       let diskSpace;
       try {
-        const { stdout } = await exec('df -h');
-        diskSpace = stdout;
-        logger.debug(`Disk space output: ${diskSpace}`);
+        const stats = await fs.statfs('/');
+        const totalGB = Math.round((stats.blocks * stats.bsize) / (1024 * 1024 * 1024));
+        const freeGB = Math.round((stats.bavail * stats.bsize) / (1024 * 1024 * 1024));
+        const usedPercent = Math.round(((stats.blocks - stats.bavail) / stats.blocks) * 100);
+        diskSpace = `Filesystem /: ${totalGB}G total, ${freeGB}G available (${usedPercent}% used)`;
+        logger.debug(`Disk space: ${diskSpace}`);
       } catch (error) {
         diskSpace = 'Unable to fetch disk space information';
         logger.error(`Error getting disk space: ${error.message}`);
@@ -1185,6 +1082,7 @@ class AdminDashboardService {
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `
               LOWER(u.loginName) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
             `;
             break;
@@ -1198,7 +1096,7 @@ class AdminDashboardService {
             break;
           case 'role':
             queryParams.term = `%${term.toLowerCase()}%`;
-            filterCondition = `HAS(u, "role") AND LOWER(u.role) LIKE @term`;
+            filterCondition = `HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0`;
             break;
           case 'all':
           default:
@@ -1206,8 +1104,9 @@ class AdminDashboardService {
             filterCondition = `
               LOWER(u.loginName) LIKE @term
               OR LOWER(u.email) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
-              OR (HAS(u, "role") AND LOWER(u.role) LIKE @term)
+              OR (HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0)
             `;
             break;
         }
@@ -1215,6 +1114,7 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               FILTER ${filterCondition}
               RETURN 1
           )
@@ -1222,6 +1122,7 @@ class AdminDashboardService {
 
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             FILTER ${filterCondition}
             SORT u.updatedAt DESC
             LIMIT ${offset}, ${limit}
@@ -1229,8 +1130,9 @@ class AdminDashboardService {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }
@@ -1240,19 +1142,22 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               RETURN 1
           )
         `;
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             SORT u.updatedAt DESC
             LIMIT ${offset}, ${limit}
             RETURN {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }
@@ -1325,15 +1230,8 @@ class ResourceUsageMonitor {
 
   async getStorageUsage() {
     try {
-      if (process.platform !== 'win32') {
-        const { stdout } = await exec('df -h / | tail -1 | awk \'{print $5}\'');
-        const usageString = stdout.trim();
-        return parseInt(usageString.replace('%', ''));
-      } else {
-        const { stdout } = await exec('wmic logicaldisk get size,freespace | findstr /C:"C:"');
-        const [size, freeSpace] = stdout.trim().split(/\s+/).map(num => parseInt(num));
-        return Math.round(((size - freeSpace) / size) * 100);
-      }
+      const stats = await fs.statfs('/');
+      return Math.round(((stats.blocks - stats.bavail) / stats.blocks) * 100);
     } catch (error) {
       logger.error(`Error getting storage usage: ${error.message}`);
       return 50;
@@ -1342,26 +1240,24 @@ class ResourceUsageMonitor {
 
   async getNetworkUsage() {
     try {
-      if (process.platform === 'linux') {
-        const { stdout } = await exec('cat /proc/net/dev');
-        const lines = stdout.split('\n').slice(2);
-        let totalBytes = 0;
+      const data = await fs.readFile('/proc/net/dev', 'utf8');
+      const lines = data.split('\n').slice(2);
+      let totalBytes = 0;
 
-        lines.forEach(line => {
-          if (line.trim()) {
-            const parts = line.trim().split(/\s+/);
-            const interfaceName = parts[0].replace(':', '');
-            if (interfaceName !== 'lo') {
-              totalBytes += parseInt(parts[1]) + parseInt(parts[9]);
-            }
+      for (const line of lines) {
+        if (line.trim()) {
+          const parts = line.trim().split(/\s+/);
+          const interfaceName = parts[0].replace(':', '');
+          if (interfaceName !== 'lo') {
+            totalBytes += parseInt(parts[1]) + parseInt(parts[9]);
           }
-        });
-        return Math.min(Math.round((totalBytes / (1024 * 1024)) % 100), 100);
+        }
       }
-      return Math.round(Math.random() * 100);
+      return Math.min(Math.round((totalBytes / (1024 * 1024)) % 100), 100);
     } catch (error) {
-      logger.error(`Error getting network usage: ${error.message}`);
-      return 35;
+      // /proc/net/dev unavailable (e.g., Kubernetes with restricted mounts)
+      logger.debug(`Network stats unavailable: ${error.message}`);
+      return 0;
     }
   }
 

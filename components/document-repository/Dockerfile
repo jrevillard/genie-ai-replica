@@ -44,27 +44,18 @@ RUN chmod +x clamav-node.sh
 # Create directories for uploads and logs
 RUN mkdir -p uploads logs
 
-# Debug: Run tests *after* all steps are complete
-RUN ls -la /app && \
-    ls -la /app/shared-lib
-RUN [ -f /app/shared-lib/logger.js ] || \
-    { echo "logger.js missing!"; exit 1; }
-RUN [ -f /app/shared-lib/db-connection-service.js ] || \
-    { echo "db-connection-service.js missing!"; exit 1; }
-
 # Expose ports
 EXPOSE 3001 3310
 
 # Set environment variables
 ARG ARANGO_PASSWORD
-ENV NODE_ENV=development
+ENV NODE_ENV=production
 ENV PORT=3001
 ENV ARANGO_URL=http://arango-vector-db:8529
-ENV ARANGO_DB=node-services
 ENV ARANGO_USER=root
 ENV ARANGO_PASSWORD=$ARANGO_PASSWORD
 ENV UPLOAD_DIR=./uploads
-ENV MAX_FILE_SIZE=524288000
+ENV MAX_FILE_SIZE=52428800
 ENV MAX_FILES_UPLOAD=10
 
 # Start the application

@@ -28,7 +28,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.prompts import PromptTemplate
 
 from langdetect import detect
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from transformers import AutoTokenizer
 
 
@@ -44,6 +44,7 @@ TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_TIMEOUT = int(os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180))  # Timeout in seconds for translation service (default: 3 minutes) 
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
+EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
 RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
 RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7025))
 RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
@@ -59,7 +60,7 @@ RETRIEVER_K = int(os.getenv("RETRIEVER_ARANGO_K", 4))
 RETRIEVER_FETCH_K = int(os.getenv("RETRIEVER_ARANGO_FETCH_K", 20)) 
 RETRIEVER_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1)) 
 RETRIEVER_DISTANCE_THRESHOLD = int(os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", 1)) 
-RETRIEVER_TRAVERSAL_ENABLED = os.getenv("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", None)
+RETRIEVER_TRAVERSAL_ENABLED = os.getenv("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", "false")
 RETRIEVER_TRAVERSAL_MAX_DEPTH = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH", 2))
 RETRIEVER_TRAVERSAL_MAX_RETURNED = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED", 3))
 RETRIEVER_TRAVERSAL_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD", 0.5))
@@ -70,17 +71,28 @@ RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 2)) # if RERANKING_STRATEGY set
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9)) # if RERANKING_STRATEGY set to 'threshold'
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
-BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Frontend backend service URL
-GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
+BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Backend service URL
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
 
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
-CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
-CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "true")
-CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", None)
+# Two-tier priority: ENV VAR (override) > Hardcoded default
+_CHATQNA_SYSTEM_DEFAULT = """You are a friendly and polite information assistant.
+
+Your task is to answer the user's latest question using only the content provided from the knowledge base.
+
+**Instructions:**
+- Do not invent or assume information
+- If the answer is not in the provided content, inform the user that the information is unavailable
+- Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses
+- Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested
+
+In line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided."""
+CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
+CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
+CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -130,120 +142,56 @@ class GenieUserProfileClient:
     """
     Client for fetching User Profile data from the Backend Service.
     Designed to be used within the ChatQnA orchestrator.
+
+    Auth: Bearer token propagated from the backend (JWKS-validated).
     """
 
     def __init__(self):
-        # Token caching state (Reused from GenieArangoDataprep pattern)
-        self._cached_token = None
-        self._token_expiry = None
-        self._token_lock = asyncio.Lock()
-        
-        # Log initialization
+        self._token = None
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
 
+    def set_token(self, token: str):
+        self._token = token
 
-    async def _get_auth_token(self):
+    async def get_user_profile(self):
         """
-        Fetches a fresh JWT from the internal http-service with locking and caching.
-        (Identical logic to GenieArangoDataprep for consistency)
+        Fetches the sanitized user profile from the backend for context enrichment.
+        Target: GET /api/me/context
+        Auth: Bearer token (propagated from backend via Authorization header)
         """
-        now = datetime.now()
-        
-        # 1. Fast Path: Check if valid token exists (No lock needed)
-        if self._cached_token and self._token_expiry and now < self._token_expiry:
-            return self._cached_token
-
-        # 2. Slow Path: Acquire Lock to prevent thundering herd
-        async with self._token_lock:
-            # Check again (Double-Checked Locking)
-            if self._cached_token and self._token_expiry and now < self._token_expiry:
-                return self._cached_token
-
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(GET_AUTH_TOKEN_URL) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            token = data.get("accessToken")
-                            if token:
-                                # Cache the token for 50 mins (assuming 1h life)
-                                self._cached_token = token
-                                self._token_expiry = now + timedelta(minutes=50)
-                                return token
-                            logger.error(f"Auth Service returned 200 but no accessToken: {data}")
-                        else:
-                            logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
-            except Exception as e:
-                logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
-            
+        if not self._token:
+            logger.warning("No Bearer token available, skipping profile fetch")
             return None
 
-    async def get_user_profile(self, user_id: str):
-        """
-        Fetches the full user profile from the backend for context enrichment.
-        Target: GET /api/users/{userId}
-        """
-        if not user_id:
-            logger.warning("get_user_profile called with empty user_id")
-            return None
+        # Construct URL
+        url = f"{BACKEND_SERVICE_URL}/api/me/context"
 
-        # 1. Get Authentication Token
-        token = await self._get_auth_token()
-        if not token:
-            logger.warning(f"Skipping profile fetch for user {user_id} due to missing auth token.")
-            return None
-
-        # 2. Construct URL based on user-routes.js definition
-        # Route in JS: router.get('/:userId', ...) mounted at /api/users
-        url = f"{BACKEND_SERVICE_URL}/api/users/{user_id}/context"
-        
-        # 3. Prepare Headers
         headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json"
         }
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers) as response:
 
-                    if response.status == 401:
-                        logger.warning("Cached token rejected (401). Fetching fresh token and retrying...")
-                        self._cached_token = None
-                        token = await self._get_auth_token()
-
-                        if not token:
-                            return None
-                        
-                        headers["Authorization"] = f"Bearer {token}"
-
-                        async with session.get(url, headers=headers) as retry_response:
-                            response = retry_response
-
                     if response.status == 200:
                         profile_data = await response.json()
-                        logger.info(f"Successfully retrieved profile for user {user_id}")
-                        
-                        # Optional: Mask sensitive fields before returning to LLM context
-                        if 'password' in profile_data: del profile_data['password']
-                        if 'salt' in profile_data: del profile_data['salt']
-                        
+                        logger.info("Successfully retrieved user profile")
                         return profile_data
-                    
-                    elif response.status == 404:
-                        logger.warning(f"User profile not found for ID {user_id}")
+
+                    elif response.status == 401:
+                        logger.error("Bearer token rejected (401). Check token propagation.")
                         return None
 
-                    # elif response.status == 401:
-                    #     logger.error(f"Authentication failed for user profile fetch. Token might be invalid.")
-                    #     # Invalidate cache so next retry fetches a fresh token
-                    #     self._cached_token = None 
-                    #     return None
+                    elif response.status == 404:
+                        logger.warning("User profile not found")
+                        return None
 
                     else:
                         logger.error(f"Failed to fetch user profile. Status: {response.status}, Body: {await response.text()}")
                         return None
-                        
+
         except Exception as e:
             logger.error(f"Error connecting to Backend Service for profile: {e}")
             return None
@@ -430,7 +378,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
 
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
-        inputs["inputs"] = inputs["text"]
+        inputs["input"] = inputs["text"]
         del inputs["text"]
 
 
@@ -571,8 +519,11 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
     elif self.services[cur_node].service_type == ServiceType.EMBEDDING:
         if logflag:
             logger.debug(f'Raw output of the embedding\n {data}\n')
+        # OPEA embedding microservice returns {"data": [{"index": 0, "embedding": [...]}]}
+        if isinstance(data, dict) and "data" in data:
+            data = data["data"]
         assert isinstance(data, list)
-        next_data = {"text": inputs["inputs"], "embedding": data[0]}
+        next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
@@ -828,14 +779,13 @@ class ChatQnAService:
         if not file_id:
             return {"categoryLabel": None, "serviceLabels": []}
 
-        auth_token = await self.user_profile_client._get_auth_token()
-        if not auth_token:
-            logger.error("Failed to get admin auth token.")
+        token = self.user_profile_client._token
+        if not token:
+            logger.error("No Bearer token available for document-repository call.")
             return None
-            # return ""
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
-        headers = {"Authorization": f"Bearer {auth_token}"}
+        headers = {"Authorization": f"Bearer {token}"}
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -862,7 +812,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -905,7 +855,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -938,7 +888,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -984,7 +934,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -1034,7 +984,7 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
+            endpoint=EMBEDDING_SERVER_ENDPOINT,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -1224,18 +1174,31 @@ class ChatQnAService:
     async def handle_request(self, request: Request):
         data = await request.json()
 
+        # Extract and validate propagated Bearer token from Authorization header
+        authorization = request.headers.get("Authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token_str = authorization[7:]
+
+            # Defense-in-depth: validate token via JWKS
+            from keycloak_token_validator import validate_token
+            claims = await validate_token(token_str)
+            if claims is None:
+                logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
+                return {"error": "Unauthorized", "message": "Token validation failed"}
+
+            self.user_profile_client.set_token(token_str)
+        else:
+            logger.warning("No Authorization header in request — service-to-service calls will fail")
+
         # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
         logger.info(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")
 
-        user_id_header = data.get("user_id")
         user_details = {}
 
-        if user_id_header:
-            try: 
-                user_details = await self.user_profile_client.get_user_profile(user_id_header)
-                # logger.info(f"USER PROFILE RETRIEVED: {user_details}")
-            except Exception as e:
-                logger.error(f"USER PROFILE ERROR: {e}")
+        try:
+            user_details = await self.user_profile_client.get_user_profile()
+        except Exception as e:
+            logger.error(f"USER PROFILE ERROR: {e}")
 
         # -----------------------------------------------
 

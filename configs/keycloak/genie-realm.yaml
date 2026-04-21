@@ -1,0 +1,169 @@
+realm: $(env:KC_REALM)
+enabled: true
+# TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
+sslRequired: none
+
+# Realm security and behavior properties
+registrationAllowed: $(env:KEYCLOAK_REGISTRATION_ENABLED)
+verifyEmail: $(env:KEYCLOAK_VERIFY_EMAIL)
+resetPasswordAllowed: $(env:KEYCLOAK_RESET_PASSWORD)
+loginWithEmailAllowed: $(env:KEYCLOAK_LOGIN_WITH_EMAIL)
+duplicateEmailsAllowed: $(env:KEYCLOAK_DUPLICATE_EMAILS)
+bruteForceProtected: $(env:KEYCLOAK_BRUTE_FORCE)
+passwordPolicy: $(env:KEYCLOAK_PASSWORD_POLICY)
+loginTheme: $(env:KEYCLOAK_THEME)
+accountTheme: $(env:KEYCLOAK_THEME)
+adminTheme: $(env:KEYCLOAK_THEME)
+emailTheme: $(env:KEYCLOAK_THEME)
+smtpServer:
+  from: $(env:EMAIL_FROM)
+  host: $(env:EMAIL_HOST)
+  port: $(env:EMAIL_PORT)
+  ssl: $(env:EMAIL_SECURE)
+  starttls: $(env:EMAIL_SMTP_STARTTLS)
+  auth: $(env:EMAIL_SMTP_AUTH)
+  user: $(env:EMAIL_USER)
+  password: $(env:EMAIL_PASSWORD)
+internationalizationEnabled: $(env:KEYCLOAK_I18N_ENABLED)
+defaultLocale: $(env:KEYCLOAK_LOCALE)
+supportedLocales:
+  - ar
+  - de
+  - en
+  - es
+  - fr
+  - pt
+  - ru
+  - th
+  - zh-Hans
+accessTokenLifespan: $(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)
+
+# Realm roles (must be defined before users that reference them)
+roles:
+  realm:
+    - name: admin
+      description: Administrator role with full access
+      composite: true
+      composites:
+        client:
+          realm-management:
+            - manage-users
+            - query-users
+            - view-identity-providers
+    - name: dataprep-service
+      description: Service account role for Dataprep ingestion pipeline
+
+# Default admin user
+users:
+  - username: $(env:GENIE_ADMIN_USERNAME)
+    enabled: true
+    email: $(env:GENIE_ADMIN_EMAIL)
+    firstName: Admin
+    lastName: GENIE
+    credentials:
+      - type: password
+        value: $(env:GENIE_ADMIN_PASSWORD)
+        temporary: false
+    realmRoles:
+      - admin
+    clientRoles:
+      realm-management:
+        # Realm
+        - view-realm
+        - manage-realm
+        - query-realms
+        # Users
+        - view-users
+        - manage-users
+        - query-users
+        - impersonation
+        # Groups
+        - query-groups
+        # Clients
+        - view-clients
+        - manage-clients
+        - query-clients
+        - create-client
+        # Events
+        - view-events
+        - manage-events
+        # Identity Providers
+        - view-identity-providers
+        - manage-identity-providers
+        # Authorization
+        - view-authorization
+        - manage-authorization
+  # Service account user for genie-proxy-client — assigns realm-management client roles
+  # keycloak-config-cli uses serviceAccountClientId to link this user entry to the client's service account
+  - username: service-account-genie-proxy-client
+    enabled: true
+    serviceAccountClientId: genie-proxy-client
+    clientRoles:
+      realm-management:
+        - query-users
+        - view-users
+        - manage-users
+        - view-realm
+  # Service account user for dataprep-service-client — assigns realm role for document-repository authorization
+  - username: service-account-dataprep-service-client
+    enabled: true
+    serviceAccountClientId: dataprep-service-client
+    realmRoles:
+      - dataprep-service
+
+# OIDC client configuration
+clients:
+  # Keycloak built-in account console (needs webOrigins for iframe auth)
+  - clientId: account
+    enabled: true
+    webOrigins:
+      - http://$(env:NGINX_PUBLIC_DOMAIN)
+      - https://$(env:NGINX_PUBLIC_DOMAIN)
+  - clientId: account-console
+    enabled: true
+    webOrigins:
+      - http://$(env:NGINX_PUBLIC_DOMAIN)
+      - https://$(env:NGINX_PUBLIC_DOMAIN)
+
+  - clientId: $(env:KC_CLIENT_ID)
+    enabled: true
+    publicClient: true
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: false
+      client.credentials.use.refresh.token: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - http://$(env:NGINX_PUBLIC_DOMAIN)/*
+      - https://$(env:NGINX_PUBLIC_DOMAIN)/*
+    webOrigins:
+      - http://$(env:NGINX_PUBLIC_DOMAIN)
+      - https://$(env:NGINX_PUBLIC_DOMAIN)
+
+  # Service account for GENIE.AI backend → Keycloak Admin API proxy
+  # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.
+  # Permissions are restricted: cannot modify realm settings, client config, or other admin operations.
+  - clientId: genie-proxy-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_PROXY_CLIENT_SECRET)
+
+  # Service account for Dataprep ingestion pipeline → document-repository
+  # Uses client_credentials grant to obtain tokens for service-to-service calls.
+  # The dataprep-service realm role authorizes PATCH /api/files/:fileId/status in document-repository.
+  - clientId: dataprep-service-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_DATAPREP_CLIENT_SECRET)

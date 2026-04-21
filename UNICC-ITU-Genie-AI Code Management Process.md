@@ -26,12 +26,10 @@ The repository is organized to support modularity, shared libraries, and third-p
 
 ```plaintext
 /unicc-itu-genie-ai
-├── api-gateway-solution/        # API gateway configs (nginx, Kong, Keycloak)
-│   ├── nginx/                   # Nginx configuration files
-│   ├── kong-backups/            # Kong gateway backups
-│   ├── kong-postgres-backups/   # Kong PostgreSQL backups
-│   ├── new-config/              # New configuration files
-│   └── old-config/              # Legacy configuration files
+├── api-gateway-solution/        # API gateway configs (nginx, Kong)
+│   ├── nginx/                   # Nginx configuration (template-based, auto-rendered)
+│   ├── new-config/              # Kong configuration files and scripts
+│   └── scripts/                 # Kong management utilities
 ├── components/                  # Core applications
 │   ├── gov-chat-backend/        # Node.js backend
 │   │   ├── controllers/         # Request handlers
@@ -62,7 +60,6 @@ The repository is organized to support modularity, shared libraries, and third-p
 │   ├── chatqna/                 # ChatQnA component overlays
 │   ├── core/                    # Core OPEA overlays
 │   ├── dataprep/                # Data preparation overlays
-│   ├── http-service/            # HTTP service overlays
 │   ├── retriever/               # Retriever component overlays
 │   ├── reranker/                # Reranker component overlays
 │   └── build-patches/           # Build modification patches
@@ -566,27 +563,3 @@ For questions or clarifications, contact UNICC ITU via GitLab issues or sync mee
 **Last Updated:** March 10, 2026
 **Project:** GENIE.AI
 **Maintained By:** ITU (International Telecommunication Union)
-
-## Deployment from Scratch
-
-To deploy the GENIE-AI stack on a fresh server or after a clean clone, follow these steps:
-
-1. **Prepare Environment**: Create your active environment file from the template:
-   ```bash
-   cp env .env
-   ```
-
-2. **Configure Secrets**: Edit the `.env` file and add your `HUGGINGFACEHUB_API_TOKEN`.
-
-3. **Build and Start Containers**: Launch the infrastructure. This handles the initial image builds and internal networking:
-   ```bash
-   docker compose up -d --build
-   ```
-
-4. **Initialize Infrastructure**: Run the automated deployment script. This handles SSL generation, database bootstrapping, and Kong API Gateway configuration:
-   ```bash
-   ./deploy.sh
-   ```
-
-> [!NOTE]
-> The `deploy.sh` and `api-gateway-solution/nginx/entrypoint.sh` files are marked as executable in the repository. If you encounter permission issues on a new system, run `chmod +x deploy.sh api-gateway-solution/nginx/entrypoint.sh`.

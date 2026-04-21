@@ -396,7 +396,7 @@ class AdminDashboardService {
             loginName: u.loginName,
             email: u.email,
             fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
-            roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : [])
+            roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : [])
           }
       `);
       const users = await usersCursor.all();
@@ -1131,7 +1131,7 @@ class AdminDashboardService {
               loginName: u.loginName,
               email: u.email,
               fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
-              roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : []),
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
               sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
@@ -1156,7 +1156,7 @@ class AdminDashboardService {
               loginName: u.loginName,
               email: u.email,
               fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
-              roles: HAS(u, "roles") ? u.roles : (HAS(u, "role") ? [u.role] : []),
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
               sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt

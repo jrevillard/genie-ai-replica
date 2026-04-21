@@ -6,23 +6,27 @@
  * Tokens are stored in-memory only via the service layer.
  */
 
-import keycloakAuthService from '@/services/keycloakAuthService';
+import keycloakAuthService from '@/services/keycloakAuthService'
 
 function mapOidcUserToState(oidcUser) {
   if (!oidcUser || !oidcUser.profile) {
-    return null;
+    return null
   }
 
-  const profile = oidcUser.profile;
+  const profile = oidcUser.profile
 
   // realm_access.roles lives in the access token, not the ID token.
-  const accessTokenClaims = keycloakAuthService.getAccessTokenClaims();
+  const accessTokenClaims = keycloakAuthService.getAccessTokenClaims()
   if (accessTokenClaims && !accessTokenClaims.realm_access) {
-    console.warn('[Auth Store] No realm_access in access token — "roles" scope may not be requested in OIDC config');
+    console.warn('[Auth Store] No realm_access in access token — "roles" scope may not be requested in OIDC config')
   }
-  const roles = accessTokenClaims?.realm_access?.roles || [];
+  const roles = (accessTokenClaims?.realm_access?.roles || []).filter(
+    (r) => r !== 'offline_access' && r !== 'uma_authorization' && !r.startsWith('default-roles-')
+  )
   if (roles.length === 0 && accessTokenClaims?.realm_access) {
-    console.warn('[Auth Store] User has no realm roles — every user should have at least the "user" role assigned in Keycloak');
+    console.warn(
+      '[Auth Store] User has no realm roles — every user should have at least the "user" role assigned in Keycloak'
+    )
   }
 
   return {
@@ -32,28 +36,28 @@ function mapOidcUserToState(oidcUser) {
     email: profile.email || null,
     name: profile.name || profile.preferred_username || null,
     preferred_username: profile.preferred_username || null,
-    roles
-  };
+    roles,
+  }
 }
 
-let silentRenewCallback = null;
+let silentRenewCallback = null
 
 function registerSilentRenewCallback(commit) {
   // Clean up any existing callback from a previous session
   if (silentRenewCallback) {
-    keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
+    keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback)
   }
 
   silentRenewCallback = (refreshedUser) => {
-    const updatedUser = mapOidcUserToState(refreshedUser);
+    const updatedUser = mapOidcUserToState(refreshedUser)
     if (updatedUser) {
       commit('updateAccessToken', {
         accessToken: refreshedUser.access_token,
-        user: updatedUser
-      });
+        user: updatedUser,
+      })
     }
-  };
-  keycloakAuthService.onAccessTokenUpdated(silentRenewCallback);
+  }
+  keycloakAuthService.onAccessTokenUpdated(silentRenewCallback)
 }
 
 const state = {
@@ -61,8 +65,8 @@ const state = {
   user: null,
   accessToken: null,
   error: null,
-  isInitialized: false
-};
+  isInitialized: false,
+}
 
 const getters = {
   isAuthenticated: (state) => state.isAuthenticated,
@@ -71,19 +75,19 @@ const getters = {
   authError: (state) => {
     // Backward compatibility: return message string if error is object
     if (state.error && typeof state.error === 'object') {
-      return state.error.message;
+      return state.error.message
     }
-    return state.error;
+    return state.error
   },
   lastAuthErrorCode: (state) => {
     // Return error code if error is object, null otherwise
     if (state.error && typeof state.error === 'object') {
-      return state.error.code;
+      return state.error.code
     }
-    return null;
+    return null
   },
-  isAuthInitialized: (state) => state.isInitialized
-};
+  isAuthInitialized: (state) => state.isInitialized,
+}
 
 const actions = {
   /**
@@ -96,35 +100,35 @@ const actions = {
       // Honor intentional logout — block session restoration until user explicitly re-logs in.
       // The flag is consumed by handleCallback/login on successful authentication.
       if (sessionStorage.getItem('genie_post_logout')) {
-        commit('clearAuth');
-        commit('setInitialized');
-        return;
+        commit('clearAuth')
+        commit('setInitialized')
+        return
       }
 
-      const user = await keycloakAuthService.initialize();
+      const user = await keycloakAuthService.initialize()
 
       if (user && !user.expired) {
-        const stateUser = mapOidcUserToState(user);
+        const stateUser = mapOidcUserToState(user)
         if (stateUser) {
           commit('setAuth', {
             isAuthenticated: true,
             user: stateUser,
-            accessToken: user.access_token
-          });
+            accessToken: user.access_token,
+          })
 
           // Register callback for silent token renew
-          registerSilentRenewCallback(commit);
+          registerSilentRenewCallback(commit)
         } else {
-          commit('clearAuth');
+          commit('clearAuth')
         }
       } else {
-        commit('clearAuth');
+        commit('clearAuth')
       }
     } catch (error) {
-      console.error('[Auth Store] Initialization error:', error.message);
-      commit('setError', { code: 'INIT_ERROR', message: 'Authentication initialization failed' });
+      console.error('[Auth Store] Initialization error:', error.message)
+      commit('setError', { code: 'INIT_ERROR', message: 'Authentication initialization failed' })
     } finally {
-      commit('setInitialized');
+      commit('setInitialized')
     }
   },
 
@@ -135,14 +139,14 @@ const actions = {
    */
   async login({ commit }, options = {}) {
     try {
-      commit('clearError');
+      commit('clearError')
       // Explicit login — clear post_logout block
-      sessionStorage.removeItem('genie_post_logout');
-      await keycloakAuthService.login(options);
+      sessionStorage.removeItem('genie_post_logout')
+      await keycloakAuthService.login(options)
     } catch (error) {
-      console.error('[Auth Store] Login error:', error.message);
-      commit('setError', { code: 'LOGIN_ERROR', message: 'Login redirect failed' });
-      throw error;
+      console.error('[Auth Store] Login error:', error.message)
+      commit('setError', { code: 'LOGIN_ERROR', message: 'Login redirect failed' })
+      throw error
     }
   },
 
@@ -152,29 +156,29 @@ const actions = {
    */
   async handleCallback({ commit }) {
     try {
-      commit('clearError');
+      commit('clearError')
       // New successful login — clear post_logout block
-      sessionStorage.removeItem('genie_post_logout');
-      const user = await keycloakAuthService.handleCallback();
+      sessionStorage.removeItem('genie_post_logout')
+      const user = await keycloakAuthService.handleCallback()
 
       if (user) {
-        const stateUser = mapOidcUserToState(user);
+        const stateUser = mapOidcUserToState(user)
         if (stateUser) {
           commit('setAuth', {
             isAuthenticated: true,
             user: stateUser,
-            accessToken: user.access_token
-          });
+            accessToken: user.access_token,
+          })
 
-          registerSilentRenewCallback(commit);
+          registerSilentRenewCallback(commit)
         }
       }
 
-      return user;
+      return user
     } catch (error) {
-      console.error('[Auth Store] Callback error:', error.message);
-      commit('setError', { code: 'CALLBACK_ERROR', message: 'Authentication callback failed' });
-      throw error;
+      console.error('[Auth Store] Callback error:', error.message)
+      commit('setError', { code: 'CALLBACK_ERROR', message: 'Authentication callback failed' })
+      throw error
     }
   },
 
@@ -183,24 +187,24 @@ const actions = {
    */
   async logout({ commit }) {
     try {
-      commit('clearError');
+      commit('clearError')
       // Clean up legacy localStorage BEFORE Keycloak redirect
       // (signoutRedirect navigates away — code after it never executes)
-      localStorage.removeItem('user');
-      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user')
+      localStorage.removeItem('auth_token')
       // Mark session as intentionally terminated to prevent auto re-login
-      sessionStorage.setItem('genie_post_logout', 'true');
+      sessionStorage.setItem('genie_post_logout', 'true')
       // Clean up silent renew callback before redirect
       if (silentRenewCallback) {
-        keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback);
-        silentRenewCallback = null;
+        keycloakAuthService.removeAccessTokenUpdatedCallback(silentRenewCallback)
+        silentRenewCallback = null
       }
-      await keycloakAuthService.logout();
-      commit('clearAuth');
+      await keycloakAuthService.logout()
+      commit('clearAuth')
     } catch (error) {
-      console.error('[Auth Store] Logout error:', error.message);
+      console.error('[Auth Store] Logout error:', error.message)
       // Always clear local state even if Keycloak redirect fails
-      commit('clearAuth');
+      commit('clearAuth')
     }
   },
 
@@ -208,7 +212,7 @@ const actions = {
    * Clear the current auth error
    */
   clearError({ commit }) {
-    commit('clearError');
+    commit('clearError')
   },
 
   /**
@@ -255,68 +259,68 @@ const actions = {
    * @returns {Object} Parsed error { code, message }
    */
   handleApiError({ commit }, errorResponse) {
-    let code = 'UNKNOWN_ERROR';
-    let message = 'An error occurred';
+    let code = 'UNKNOWN_ERROR'
+    let message = 'An error occurred'
 
     if (errorResponse && typeof errorResponse === 'object') {
-      code = errorResponse.error || 'UNKNOWN_ERROR';
-      message = errorResponse.message || 'An error occurred';
+      code = errorResponse.error || 'UNKNOWN_ERROR'
+      message = errorResponse.message || 'An error occurred'
     }
 
-    commit('setError', { code, message });
+    commit('setError', { code, message })
 
-    return { code, message };
-  }
-};
+    return { code, message }
+  },
+}
 
 const mutations = {
   setAuth(state, { isAuthenticated, user, accessToken }) {
-    state.isAuthenticated = isAuthenticated;
-    state.user = user;
-    state.accessToken = accessToken;
-    state.error = null;
+    state.isAuthenticated = isAuthenticated
+    state.user = user
+    state.accessToken = accessToken
+    state.error = null
   },
 
   clearAuth(state) {
-    state.isAuthenticated = false;
-    state.user = null;
-    state.accessToken = null;
-    state.error = null;
+    state.isAuthenticated = false
+    state.user = null
+    state.accessToken = null
+    state.error = null
   },
 
   setError(state, error) {
     // Handle both string and { code, message } object formats
     if (typeof error === 'string') {
-      state.error = error;
+      state.error = error
     } else if (error && typeof error === 'object') {
       state.error = {
         code: error.code || 'UNKNOWN_ERROR',
-        message: error.message || 'An error occurred'
-      };
+        message: error.message || 'An error occurred',
+      }
     } else {
-      state.error = null;
+      state.error = null
     }
   },
 
   clearError(state) {
-    state.error = null;
+    state.error = null
   },
 
   setInitialized(state) {
-    state.isInitialized = true;
+    state.isInitialized = true
   },
 
   updateAccessToken(state, { accessToken, user }) {
-    state.accessToken = accessToken;
+    state.accessToken = accessToken
     if (user) {
-      state.user = user;
+      state.user = user
     }
-  }
-};
+  },
+}
 
 export default {
   state,
   getters,
   actions,
-  mutations
-};
+  mutations,
+}

@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const { logger } = require('../shared-lib');
@@ -28,10 +27,14 @@ try {
   const swaggerSpec = swaggerJsdoc(swaggerOptions);
   logger.info('Swagger specification generated successfully');
 
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-    explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }',
-  }));
+  app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      explorer: true,
+      customCss: '.swagger-ui .topbar { display: none }'
+    })
+  );
 
   app.get('/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -42,52 +45,40 @@ try {
     error: error.message,
     stack: error.stack,
     rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown',
+    errorType: error?.constructor?.name || 'Unknown'
   });
 }
 
-
 // TODO: [NORMA] should use from shared-lib??
 // Security middleware
-app.use(helmet({
-  crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"]
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:']
+      }
     }
-  }
-}));
+  })
+);
 
 // TODO: [NORMA] should use from shared-lib??
 // CORS configuration
-app.use(cors({
-  origin: appConfig.allowedOrigins || ['http://localhost:3000', 'http://localhost:3001'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: appConfig.allowedOrigins || ['http://localhost:3000', 'http://localhost:3001'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+    credentials: true
+  })
+);
 
 // TODO: [NORMA] should use from shared-lib??
 // **FIX:** Trust the proxy to allow rate limiting based on X-Forwarded-For
 app.set('trust proxy', 1);
-
-// [MODIFIED] Rate Limiter Configuration
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 0, // [CHANGED] 0 = Unlimited (Disabled)
-  message: {
-    error: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// [CRITICAL FIX] Disabled rate limiter middleware to prevent 429 errors
-// during high-velocity dataprep ingestion (log flooding).
-// app.use(limiter); 
 
 // Compression middleware
 app.use(compression());
@@ -124,7 +115,8 @@ app.get('/api', (req, res) => {
   res.json({
     name: 'Document Repository API',
     version: '1.0.0',
-    description: 'Backend API for document repository with file upload, virus scanning, label management, and search capabilities',
+    description:
+      'Backend API for document repository with file upload, virus scanning, label management, and search capabilities',
     endpoints: {
       files: '/api/files',
       health: '/health'
@@ -149,7 +141,7 @@ app.use('*', (req, res) => {
   logger.warn(`Route not found: ${req.originalUrl}`);
 
   const availableRoutes = app._router.stack
-    .filter(r => r.route)
+    .filter((r) => r.route)
     .map((r) => `${Object.keys(r.route.methods).join(', ').toUpperCase()} ${r.route.path}`);
   res.status(404).json({
     error: 'Route not found',

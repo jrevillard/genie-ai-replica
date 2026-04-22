@@ -9,7 +9,6 @@ const fsStandard = require('fs'); // Required for createWriteStream
 const path = require('path');
 const { Worker } = require('worker_threads');
 const os = require('os');
-const { URL } = require('url');
 
 // Shared libraries
 const { logger, dbService } = require('../../shared-lib');
@@ -24,7 +23,7 @@ const fileUtils = require('../utils/fileUtils');
 const POLL_INTERVAL_MS = appConfig.crawler?.pollIntervalMs || 5000;
 const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 5000;
 const MAX_PAGES_PER_JOB = appConfig.crawler?.maxPages || 1000;
-const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 20; 
+const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 20;
 const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLowerCase();
 const UPLOAD_DIR = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
 
@@ -35,37 +34,37 @@ const workers = [];
 let workerRR = 0;
 
 const initWorkers = () => {
-    if (workers.length > 0) return; // Prevent double init
-    logger.info(`[CRAWL-WORKER] Initializing ${NUM_THREADS} CPU worker threads...`);
-    for (let i = 0; i < NUM_THREADS; i++) {
-        workers.push(new Worker(path.join(__dirname, 'pageProcessor.js')));
-    }
+  if (workers.length > 0) return; // Prevent double init
+  logger.info(`[CRAWL-WORKER] Initializing ${NUM_THREADS} CPU worker threads...`);
+  for (let i = 0; i < NUM_THREADS; i++) {
+    workers.push(new Worker(path.join(__dirname, 'pageProcessor.js')));
+  }
 };
 
 const processPageOnThread = (html, url, config) => {
-    return new Promise((resolve, reject) => {
-        const worker = workers[workerRR];
-        workerRR = (workerRR + 1) % NUM_THREADS;
+  return new Promise((resolve, reject) => {
+    const worker = workers[workerRR];
+    workerRR = (workerRR + 1) % NUM_THREADS;
 
-        const handler = (msg) => {
-            cleanup();
-            if (msg.result === 'error') reject(new Error(msg.message));
-            else resolve(msg);
-        };
-        const errorHandler = (err) => {
-            cleanup();
-            reject(err);
-        };
-        const cleanup = () => {
-            worker.off('message', handler);
-            worker.off('error', errorHandler);
-        };
+    const handler = (msg) => {
+      cleanup();
+      if (msg.result === 'error') reject(new Error(msg.message));
+      else resolve(msg);
+    };
+    const errorHandler = (err) => {
+      cleanup();
+      reject(err);
+    };
+    const cleanup = () => {
+      worker.off('message', handler);
+      worker.off('error', errorHandler);
+    };
 
-        worker.on('message', handler);
-        worker.on('error', errorHandler);
+    worker.on('message', handler);
+    worker.on('error', errorHandler);
 
-        worker.postMessage({ html, url, config, requiredLang: REQUIRED_LANG });
-    });
+    worker.postMessage({ html, url, config, requiredLang: REQUIRED_LANG });
+  });
 };
 
 const start = () => {
@@ -118,7 +117,7 @@ const processJob = async (job, db) => {
   const fileId = job.file_id;
   const crawlConfig = job.config || {};
   const crawler = new Crawler(null, REQUEST_TIMEOUT_MS, crawlConfig);
-  
+
   let pagesProcessed = 0;
 
   // --- STREAM SETUP (OPTIMIZATION) ---
@@ -132,10 +131,10 @@ const processJob = async (job, db) => {
 
   // Helper to handle backpressure
   const writeToDisk = async (text) => {
-      if (!writeStream.write(text)) {
-          // If buffer is full, wait for 'drain' event to prevent memory buildup
-          await new Promise(resolve => writeStream.once('drain', resolve));
-      }
+    if (!writeStream.write(text)) {
+      // If buffer is full, wait for 'drain' event to prevent memory buildup
+      await new Promise((resolve) => writeStream.once('drain', resolve));
+    }
   };
 
   // State
@@ -150,31 +149,31 @@ const processJob = async (job, db) => {
     const bufferCopy = [...logBuffer];
     logBuffer = [];
     try {
-        await Promise.all(bufferCopy.map(l => fileService.addCrawlLog(fileId, l.level, l.stage, l.message)));
+      await Promise.all(bufferCopy.map((l) => fileService.addCrawlLog(fileId, l.level, l.stage, l.message)));
     } catch (e) {
-        logger.warn(`[CRAWL-WORKER] Failed to flush logs: ${e.message}`);
+      logger.warn(`[CRAWL-WORKER] Failed to flush logs: ${e.message}`);
     }
   };
 
   // --- REUSABLE KILL CHECK ---
   const checkKillStatus = async () => {
-      if (isJobKilled) throw new Error('Killed');
-      
-      const now = Date.now();
-      if (now - lastKillCheck > 2000) {
-          try {
-              const currentJob = await db.collection('crawl_job').document(job._key);
-              if (currentJob.kill_requested) {
-                  isJobKilled = true;
-                  throw new Error('Killed');
-              }
-          } catch(e) {
-              if (e.message === 'Killed') throw e;
-              // Ignore DB errors during check, rely on next check
-              logger.warn(`[CRAWL-WORKER] Kill check failed: ${e.message}`);
-          }
-          lastKillCheck = now;
+    if (isJobKilled) throw new Error('Killed');
+
+    const now = Date.now();
+    if (now - lastKillCheck > 2000) {
+      try {
+        const currentJob = await db.collection('crawl_job').document(job._key);
+        if (currentJob.kill_requested) {
+          isJobKilled = true;
+          throw new Error('Killed');
+        }
+      } catch (e) {
+        if (e.message === 'Killed') throw e;
+        // Ignore DB errors during check, rely on next check
+        logger.warn(`[CRAWL-WORKER] Kill check failed: ${e.message}`);
       }
+      lastKillCheck = now;
+    }
   };
 
   try {
@@ -198,24 +197,27 @@ const processJob = async (job, db) => {
         if (result.result === 'empty') return;
 
         if (result.shouldSkip) {
-             logBuffer.push({ level: 'INFO', stage: 'Filter', message: `Skipped ${crawledUrl}: Detected '${result.detectedLang}'` });
-             return;
+          logBuffer.push({
+            level: 'INFO',
+            stage: 'Filter',
+            message: `Skipped ${crawledUrl}: Detected '${result.detectedLang}'`
+          });
+          return;
         }
 
         if (result.markdown && result.markdown.length > 0) {
-            // --- STREAMING WRITE ---
-            const separator = hasWrittenContent ? '\n\n---\n\n' : '';
-            const content = `${separator}## Source: ${crawledUrl}\n\n${result.markdown}`;
-            
-            await writeToDisk(content);
-            
-            hasWrittenContent = true;
-            pagesProcessed++;
+          // --- STREAMING WRITE ---
+          const separator = hasWrittenContent ? '\n\n---\n\n' : '';
+          const content = `${separator}## Source: ${crawledUrl}\n\n${result.markdown}`;
+
+          await writeToDisk(content);
+
+          hasWrittenContent = true;
+          pagesProcessed++;
         }
 
         logBuffer.push({ level: 'INFO', stage: 'Page', message: `Crawled: ${crawledUrl}` });
         if (logBuffer.length >= 20) await flushLogBuffer();
-
       } catch (threadError) {
         logger.warn(`[CRAWL-WORKER] Thread processing failed for ${crawledUrl}: ${threadError.message}`);
       }
@@ -229,20 +231,20 @@ const processJob = async (job, db) => {
       // 2. Report Metrics
       const now = Date.now();
       if (now - lastMetricsUpdate > 3000) {
-          try {
-            await fileService.updateCrawlMetrics(fileId, {
-                ...metrics,
-                processed: pagesProcessed,
-                limit: MAX_PAGES_PER_JOB,
-                max_depth: job.depth 
-            });
-            await updateJobProgress(db, job._key, pagesProcessed);
-            await flushLogBuffer();
-          } catch (e) { 
-              // Do not swallow "Killed", but ignore other metrics errors
-              if (e.message === 'Killed') throw e;
-          }
-          lastMetricsUpdate = now;
+        try {
+          await fileService.updateCrawlMetrics(fileId, {
+            ...metrics,
+            processed: pagesProcessed,
+            limit: MAX_PAGES_PER_JOB,
+            max_depth: job.depth
+          });
+          await updateJobProgress(db, job._key, pagesProcessed);
+          await flushLogBuffer();
+        } catch (e) {
+          // Do not swallow "Killed", but ignore other metrics errors
+          if (e.message === 'Killed') throw e;
+        }
+        lastMetricsUpdate = now;
       }
     };
 
@@ -251,7 +253,7 @@ const processJob = async (job, db) => {
 
     // CLOSE STREAM
     writeStream.end();
-    await new Promise(resolve => writeStream.on('finish', resolve));
+    await new Promise((resolve) => writeStream.on('finish', resolve));
 
     await flushLogBuffer();
 
@@ -264,7 +266,8 @@ const processJob = async (job, db) => {
     const fileHash = await fileUtils.getFileHash(storagePath); // This might take time for huge files, but inevitable
 
     const fileDb = await dbService.getConnection('files');
-    await fileDb.query(`
+    await fileDb.query(
+      `
       FOR f IN files
       FILTER f.file_id == @fileId
       UPDATE f WITH { 
@@ -273,13 +276,15 @@ const processJob = async (job, db) => {
         file_hash: @fileHash,
         uploaded_date: @uploadedDate
       } IN files
-    `, {
-      fileId: fileId,
-      storagePath: storagePath,
-      fileSize: stats.size,
-      fileHash: fileHash,
-      uploadedDate: new Date().toISOString()
-    });
+    `,
+      {
+        fileId: fileId,
+        storagePath: storagePath,
+        fileSize: stats.size,
+        fileHash: fileHash,
+        uploadedDate: new Date().toISOString()
+      }
+    );
 
     await db.collection('crawl_job').update(job._key, {
       status: 'Succeeded',
@@ -289,35 +294,44 @@ const processJob = async (job, db) => {
 
     await fileService.addCrawlLog(fileId, 'INFO', 'System', 'Crawl complete.');
     logger.info(`[CRAWL-WORKER] Job ${job._key} SUCCEEDED. Saved to ${storagePath}`);
-
   } catch (error) {
     // CLOSE STREAM ON ERROR
     if (writeStream && !writeStream.closed) {
-        writeStream.end();
+      writeStream.end();
     }
     await flushLogBuffer();
 
     // Partial Success (Max Pages)
     if (error.message === 'MaxPagesReached') {
-        logger.info(`[CRAWL-WORKER] Max pages reached. Partial save valid.`);
-        // Even if we stopped early, the file on disk is valid because we streamed it!
-        // Just update metadata.
-        try {
-            const stats = await fs.stat(storagePath);
-            const fileDb = await dbService.getConnection('files');
-            await fileDb.query(`
+      logger.info(`[CRAWL-WORKER] Max pages reached. Partial save valid.`);
+      // Even if we stopped early, the file on disk is valid because we streamed it!
+      // Just update metadata.
+      try {
+        const stats = await fs.stat(storagePath);
+        const fileDb = await dbService.getConnection('files');
+        await fileDb.query(
+          `
                 FOR f IN files FILTER f.file_id == @fileId
                 UPDATE f WITH { storage_path: @storagePath, file_size: @fileSize, uploaded_date: @uploadedDate } IN files
-            `, { fileId, storagePath, fileSize: stats.size, uploadedDate: new Date().toISOString() });
+            `,
+          { fileId, storagePath, fileSize: stats.size, uploadedDate: new Date().toISOString() }
+        );
 
-            await db.collection('crawl_job').update(job._key, {
-                status: 'Succeeded',
-                pages_crawled: pagesProcessed,
-                finished_at: new Date().toISOString()
-            });
-            await fileService.addCrawlLog(fileId, 'WARN', 'System', 'Crawl stopped: Max pages reached. Saved partial content.');
-            return;
-        } catch(e) { logger.error('Failed to save metadata on max pages', e); }
+        await db.collection('crawl_job').update(job._key, {
+          status: 'Succeeded',
+          pages_crawled: pagesProcessed,
+          finished_at: new Date().toISOString()
+        });
+        await fileService.addCrawlLog(
+          fileId,
+          'WARN',
+          'System',
+          'Crawl stopped: Max pages reached. Saved partial content.'
+        );
+        return;
+      } catch (e) {
+        logger.error('Failed to save metadata on max pages', e);
+      }
     }
 
     // Standard Failure
@@ -333,7 +347,9 @@ const processJob = async (job, db) => {
         finished_at: new Date().toISOString()
       });
       await fileService.addCrawlLog(fileId, 'ERROR', 'System', logMessage);
-    } catch (e) { logger.error('Failed to update error status', e); }
+    } catch (e) {
+      logger.error('Failed to update error status', e);
+    }
   }
 };
 
@@ -342,7 +358,11 @@ const updateJobStatus = async (db, key, status) => {
 };
 
 const updateJobProgress = async (db, key, count) => {
-  try { await db.collection('crawl_job').update(key, { pages_crawled: count }); } catch (e) {}
+  try {
+    await db.collection('crawl_job').update(key, { pages_crawled: count });
+  } catch {
+    // Ignore update errors
+  }
 };
 
 module.exports = { start };

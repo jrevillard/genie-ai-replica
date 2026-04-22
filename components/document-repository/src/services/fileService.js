@@ -5,7 +5,7 @@ const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
-const Crawler = require('../utils/crawler'); 
+const Crawler = require('../utils/crawler');
 const langdetect = require('langdetect');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
@@ -41,13 +41,17 @@ class FileService {
       if (mimeType === 'application/pdf') {
         const data = await pdf(buffer);
         const text = data.text || '';
-        logger.info(`[FILE-SERVICE] pdf-parse extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+        logger.info(
+          `[FILE-SERVICE] pdf-parse extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`
+        );
         return text;
       }
       if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         const { value } = await mammoth.extractRawText({ buffer });
         const text = value || '';
-        logger.info(`[FILE-SERVICE] mammoth extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+        logger.info(
+          `[FILE-SERVICE] mammoth extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`
+        );
         return text;
       }
       if (mimeType.startsWith('text/')) {
@@ -79,24 +83,27 @@ class FileService {
    * @returns {string} ISO language code (e.g., 'en') or null
    */
   _detectLanguage(text) {
-    if (!text || text.trim().length < 20) { // Don't detect on very short strings
+    if (!text || text.trim().length < 20) {
+      // Don't detect on very short strings
       logger.warn(`[FILE-SERVICE] Language detection skipped: Text is too short (${text ? text.length : 0} chars)`);
       return null;
     }
-    
-    logger.info(`[FILE-SERVICE] Detecting language from text (first 200 chars): "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
-    
+
+    logger.info(
+      `[FILE-SERVICE] Detecting language from text (first 200 chars): "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`
+    );
+
     try {
       // Use detectOne() which is more robust and returns a simple string or throws an error.
-      const langCode = langdetect.detectOne(text); 
-      
+      const langCode = langdetect.detectOne(text);
+
       if (langCode) {
         logger.info(`[FILE-SERVICE] Language_detect result: ${langCode}`);
         return langCode;
       }
 
       logger.warn(`[FILE-SERVICE] Language_detect.detectOne returned an empty result.`);
-      return null; 
+      return null;
     } catch (error) {
       // langdetect throws an error if no language features are found
       logger.warn(`[FILE-SERVICE] Language detection failed (no language features found or error): ${error.message}`);
@@ -104,7 +111,6 @@ class FileService {
     }
   }
 
-  
   /**
    * Upload and process a file
    * @param {Object} fileData - File data from multer
@@ -112,7 +118,6 @@ class FileService {
    * @returns {Object} File record
    */
   async uploadFile(fileData, fileInfo = {}) {
-    
     let filePath;
     try {
       const originalFileName = fileData.originalname;
@@ -121,7 +126,7 @@ class FileService {
 
       // Perform Language Detection (Spec Sec 4.1)
       const requiredLanguage = (appConfig.upload.requiredIngestionLanguage || 'en').toLowerCase();
-      
+
       // Only check supported types for ingestion
       const ingestionTypes = [
         'application/pdf',
@@ -138,32 +143,40 @@ class FileService {
         // --- UPDATED LOGIC ---
         // 1. Extract clean text from the file buffer
         const text = await this._extractText(fileData.buffer, mimeType, originalFileName);
-        
+
         // 2. Detect language from the clean text
         detectedLang = this._detectLanguage(text);
-        
+
         // 3. Get the language from the HTML tag (if provided by the crawler)
         const tagLang = fileInfo.language; // This is 'ru' from <html lang="ru">
-        
-        logger.info(`[FILE-SERVICE] Language detected (Content): ${detectedLang}, (HTML Tag): ${tagLang}, (Required): ${requiredLanguage}`);
+
+        logger.info(
+          `[FILE-SERVICE] Language detected (Content): ${detectedLang}, (HTML Tag): ${tagLang}, (Required): ${requiredLanguage}`
+        );
 
         // 4. Stricter validation
         // Block if language is NOT detected (null) OR if it is the wrong language.
         if (!detectedLang || detectedLang.toLowerCase() !== requiredLanguage) {
           const langFound = detectedLang || 'unknown'; // Handle null for the error message
-          throw new Error(`File [${originalFileName}] content appears to be in [${langFound}]. Only [${requiredLanguage.toUpperCase()}] documents are supported for ingestion.`);
+          throw new Error(
+            `File [${originalFileName}] content appears to be in [${langFound}]. Only [${requiredLanguage.toUpperCase()}] documents are supported for ingestion.`
+          );
         }
-        
+
         // 5. NEW: Validate tag language against content language if tag exists
         if (tagLang && tagLang.trim() !== '' && tagLang.toLowerCase() !== 'unknown') {
           if (tagLang.toLowerCase() !== detectedLang.toLowerCase()) {
-            logger.warn(`[FILE-SERVICE] Conflicting languages for ${originalFileName}. HTML tag: [${tagLang}], Content: [${detectedLang}].`);
+            logger.warn(
+              `[FILE-SERVICE] Conflicting languages for ${originalFileName}. HTML tag: [${tagLang}], Content: [${detectedLang}].`
+            );
             // Allowing ingestion based on content as per logic flow, but flagging discrepancy.
             // If this should be a hard failure, uncomment the line below:
             // throw new Error(`File [${originalFileName}] has conflicting languages. HTML tag says [${tagLang}] but content appears to be [${detectedLang}].`);
           }
-           // If they match, we trust the detected content language
-           logger.info(`[FILE-SERVICE] HTML tag lang "${tagLang}" matches content lang "${detectedLang}". Validation passed.`);
+          // If they match, we trust the detected content language
+          logger.info(
+            `[FILE-SERVICE] HTML tag lang "${tagLang}" matches content lang "${detectedLang}". Validation passed.`
+          );
         }
         // --- END UPDATED LOGIC ---
       }
@@ -210,14 +223,14 @@ class FileService {
       const stats = await fs.stat(filePath);
       const createdDate = stats.birthtime;
       logger.debug(`[FILE-SERVICE] File creation date: ${createdDate}`);
-      
+
       // Create file record in database
       const fileRecord = {
         file_id: fileId,
         file_name: originalFileName,
         file_size: fileData.size,
         file_type: mimeType,
-        storage_path : filePath,
+        storage_path: filePath,
         file_hash: await fileUtils.getFileHash(filePath), // Optional: calculate hash if needed
         labels: fileInfo.labels,
         author: fileInfo.author,
@@ -245,9 +258,15 @@ class FileService {
       return fileRecord;
     } catch (error) {
       logger.error(`Upload file FAILED. ${error}`);
-      
+
       // Cleanup file if it exists
-      if (filePath && await fs.access(filePath).then(() => true).catch(() => false)) {
+      if (
+        filePath &&
+        (await fs
+          .access(filePath)
+          .then(() => true)
+          .catch(() => false))
+      ) {
         try {
           await fs.unlink(filePath);
         } catch (cleanupError) {
@@ -258,7 +277,6 @@ class FileService {
       throw error;
     }
   }
-
 
   async uploadLink(url, fileType = 'html') {
     // Use crawler to fetch content
@@ -272,44 +290,50 @@ class FileService {
 
     // 2. [FIXED] Clean content (Match logic from crawlWorker.js)
     if (fileType === 'md') {
-        $('script').remove();
-        $('style').remove();
-        $('nav').remove();
-        $('footer').remove();
-        $('header').remove();
-        $('iframe').remove();
-        $('noscript').remove();
-        $('div[class*="cookie"]').remove();
-        $('div[class*="privacy"]').remove();
-        $('button').remove();
-        
-        // Fix relative links & images
-        $('img, a').each((i, el) => {
-            const attr = el.tagName === 'img' ? 'src' : 'href';
-            const val = $(el).attr(attr);
-            if (val && !val.startsWith('http') && !val.startsWith('data:') && !val.startsWith('#')) {
-                try {
-                    $(el).attr(attr, new URL(val, url).href);
-                } catch (e) {}
-            }
-        });
+      $('script').remove();
+      $('style').remove();
+      $('nav').remove();
+      $('footer').remove();
+      $('header').remove();
+      $('iframe').remove();
+      $('noscript').remove();
+      $('div[class*="cookie"]').remove();
+      $('div[class*="privacy"]').remove();
+      $('button').remove();
+
+      // Fix relative links & images
+      $('img, a').each((i, el) => {
+        const attr = el.tagName === 'img' ? 'src' : 'href';
+        const val = $(el).attr(attr);
+        if (val && !val.startsWith('http') && !val.startsWith('data:') && !val.startsWith('#')) {
+          try {
+            $(el).attr(attr, new URL(val, url).href);
+          } catch {
+            // Ignore invalid URLs
+          }
+        }
+      });
     }
 
     // 3. Extract Content
-    let contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
-    
+    const contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
+
     // 4. Detect Language
-    const language = crawler.getLanguage($.html()); 
+    const language = crawler.getLanguage($.html());
     logger.info(`[FILE-SERVICE] Detected language tag: ${language}`);
 
     // 5. Generate Filename
     let pageTitle = $('title').text().trim() || 'untitled';
-    pageTitle = pageTitle.replace(/[\/\\?%*:|"<>]/g, '-').substring(0, 100) || 'untitled';
-    
+    pageTitle = pageTitle.replace(/[/\\?%*:|"<>]/g, '-').substring(0, 100) || 'untitled';
+
     // [FIX] Include Domain in filename to ensure it matches search queries
     let domain = 'web';
-    try { domain = new URL(url).hostname; } catch(e){}
-    const title = `${domain}_${pageTitle}`; 
+    try {
+      domain = new URL(url).hostname;
+    } catch {
+      // Use default 'web' if URL is invalid
+    }
+    const title = `${domain}_${pageTitle}`;
 
     const ext = fileType === 'md' ? '.md' : '.html';
     const fileName = `${title}${ext}`;
@@ -348,7 +372,7 @@ class FileService {
       language: language,
       crawlDate: new Date().toISOString()
     };
-    
+
     const uploadedFile = await this.uploadFile(fileData, fileInfo);
 
     // [FIX] Create a "synthetic" crawl_job record so the dashboard knows this happened
@@ -374,7 +398,7 @@ class FileService {
       };
       await db.collection('crawl_job').save(crawlJob);
       logger.info(`[FILE-SERVICE] Created crawl_job record for single page: ${url}`);
-      
+
       // Add log
       await this.addCrawlLog(uploadedFile.file_id, 'INFO', 'System', 'Single page crawl completed successfully.');
     } catch (e) {
@@ -405,15 +429,15 @@ class FileService {
   async scheduleSiteCrawl(url, depth, config = {}) {
     const db = await this.getDb();
     const fileId = fileUtils.generateUniqueFileId();
-    
+
     // Extract domain for filename
     let domain = 'unknown-site';
     try {
       domain = new URL(url).hostname;
-    } catch (e) { 
+    } catch {
       logger.warn(`[FILE-SERVICE] Could not parse hostname from ${url}`);
     }
-    
+
     const fileName = `${domain}_full_crawl.md`;
 
     // 1. Create File Stub
@@ -464,13 +488,15 @@ class FileService {
     await db.collection('files').save(fileRecord);
     await db.collection('crawl_job').save(crawlJob);
 
-    logger.info(`[FILE-SERVICE] Scheduled crawl for ${url} (ID: ${fileId}) with config: ${JSON.stringify(crawlJob.config)}`);
+    logger.info(
+      `[FILE-SERVICE] Scheduled crawl for ${url} (ID: ${fileId}) with config: ${JSON.stringify(crawlJob.config)}`
+    );
     return fileRecord;
   }
 
   /**
    * Get crawl job status by file ID
-   * @param {string} fileId 
+   * @param {string} fileId
    */
   async getCrawlJobByFileId(fileId) {
     const db = await this.getDb();
@@ -560,7 +586,6 @@ class FileService {
     logger.info(`[FILE-SERVICE] Kill signal sent for job ${fileId}`);
   }
 
-
   /**
    * Get all files with pagination
    * MODIFIED: Performs a LEFT JOIN on crawl_job to include crawl status in the result
@@ -569,7 +594,7 @@ class FileService {
    */
   async getFiles(options = {}) {
     try {
-      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus} = options;
+      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus } = options;
       const offset = (page - 1) * limit;
 
       // Build query
@@ -583,7 +608,7 @@ class FileService {
           RETURN job
         )[0]
       `;
-      
+
       const bindVars = {};
 
       // Add filters
@@ -598,7 +623,9 @@ class FileService {
       }
       if (search) {
         // [FIX] Search in both filename AND source_url so domain search works
-        filters.push('(CONTAINS(LOWER(file.file_name), LOWER(@search)) OR CONTAINS(LOWER(file.source_url), LOWER(@search)))');
+        filters.push(
+          '(CONTAINS(LOWER(file.file_name), LOWER(@search)) OR CONTAINS(LOWER(file.source_url), LOWER(@search)))'
+        );
         bindVars.search = search;
       }
       if (dataprepStatus) {
@@ -613,8 +640,8 @@ class FileService {
 
       // [FIX] Sort by file_id DESC instead of uploaded_date to avoid timezone/UTC confusion
       // file_id is chronologically generated so new files always appear first.
-      query += ' SORT file.file_id DESC'; 
-      
+      query += ' SORT file.file_id DESC';
+
       query += ` LIMIT ${offset}, ${limit}`;
       // MERGE the file with the found crawlJob (if any)
       query += ' RETURN MERGE(file, { crawl_job: crawlJob })';
@@ -627,12 +654,12 @@ class FileService {
       // Get total count for pagination
       let countQuery = 'FOR file IN files';
       if (filters.length > 0) {
-          countQuery += ` FILTER ${filters.join(' AND ')}`;
+        countQuery += ` FILTER ${filters.join(' AND ')}`;
       }
       countQuery += ' COLLECT WITH COUNT INTO totalCount RETURN totalCount';
-      
+
       const countCursor = await db.query(countQuery, bindVars);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       return {
         files,
@@ -649,7 +676,6 @@ class FileService {
     }
   }
 
-
   /**
    * Delete file by ID
    * MODIFIED: Added cleanup for crawl_job, crawl_log, and crawl_metrics
@@ -663,7 +689,7 @@ class FileService {
       if (!file) {
         throw new Error(`File record not found in database: ${fileId}`);
       }
-      
+
       // prepare file path for deletion
       const fileExtension = path.extname(file.file_name).slice(1);
       const fileNameOnDisk = file.file_id + '.' + fileExtension;
@@ -673,11 +699,11 @@ class FileService {
       try {
         await fs.access(filePath);
         logger.info(`File found on disk: ${filePath}`);
-      } catch (error) {
+      } catch {
         logger.warn(`File not found on disk: ${filePath}`);
         // Do not throw error here, allow metadata deletion even if file is missing
       }
-      
+
       // Delete metadata first and keep a backup
       let deletedMetadata = false;
       let metadataBackup = null;
@@ -687,7 +713,7 @@ class FileService {
         logger.info(`Metadata deleted for file ${fileId}`);
       } catch (error) {
         logger.error(`Failed to delete metadata for file ${fileId}: ${error.message}`);
-        throw new Error(`Failed to delete metadata for file ${fileId}`);
+        throw new Error(`Failed to delete metadata for file ${fileId}`, { cause: error });
       }
 
       // --- NEW: Clean up crawl job, logs, and metrics if they exist ---
@@ -709,10 +735,10 @@ class FileService {
         logger.info(`File deleted from disk: ${filePath}`);
         return true;
       } catch (error) {
-         if (error.code === 'ENOENT') {
-             logger.warn(`Physical file was already missing, but metadata deleted: ${filePath}`);
-             return true; // Consider success if metadata is gone and file was already gone
-         }
+        if (error.code === 'ENOENT') {
+          logger.warn(`Physical file was already missing, but metadata deleted: ${filePath}`);
+          return true; // Consider success if metadata is gone and file was already gone
+        }
         logger.error(`File metadata deleted but failed to delete physical file: ${error.message}`);
         // attempt to restore metadata if file deletion fails
         if (deletedMetadata && metadataBackup) {
@@ -732,7 +758,6 @@ class FileService {
       throw error;
     }
   }
-
 
   /**
    * Search files
@@ -775,7 +800,6 @@ class FileService {
     }
   }
 
-
   /**
    * Get file statistics
    * @returns {Object} File statistics
@@ -783,7 +807,9 @@ class FileService {
   async getFileStats() {
     try {
       const db = await this.getDb();
-      const stats = await db.query(`
+      const stats = await db
+        .query(
+          `
         RETURN {
           totalFiles: COUNT(FOR file IN files RETURN 1),
           totalSize: SUM(FOR file IN files RETURN file.file_size || 0),
@@ -793,7 +819,9 @@ class FileService {
             RETURN { mimeType, count }
           )
         }
-      `).then(cursor => cursor.next());
+      `
+        )
+        .then((cursor) => cursor.next());
       return stats;
     } catch (error) {
       logger.error(`Error getting file stats: ${error}`);
@@ -817,7 +845,7 @@ class FileService {
         stage: logData.stage,
         message: logData.message
       };
-      
+
       const result = await db.collection('ingestion_log').save(logEntry, { returnNew: true });
       logger.debug(`[FILE-SERVICE] Ingestion log added for ${fileId}: ${logData.message}`);
       return result.new;

@@ -1,10 +1,9 @@
 const NodeClam = require('clamscan');
 const { Readable } = require('stream');
 
-const appConfig= require('../config/appConfig');
+const appConfig = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
-
 
 class SecurityService {
   constructor() {
@@ -22,7 +21,7 @@ class SecurityService {
       },
       preference: 'clamdscan'
     };
-    
+
     this.clamscan = null;
     this.isInitialized = false;
     this.maxBufferSize = 50 * 1024 * 1024; // 50MB — must match MAX_FILE_SIZE
@@ -60,7 +59,7 @@ class SecurityService {
         this.clamscan = await new NodeClam().init(this.clamAVOptions);
       }
     } catch (error) {
-      throw new Error(`Failed to initialize ClamAV: ${error.message}`);
+      throw new Error(`Failed to initialize ClamAV: ${error.message}`, { cause: error });
     }
 
     this.isInitialized = true;
@@ -105,9 +104,8 @@ class SecurityService {
 
       // Scan the buffer using stream scanning
       return await this.clamscan.scanStream(this._convertToStream(buffer));
-
     } catch (error) {
-      throw new Error(`Buffer scan failed: ${error.message}`);
+      throw new Error(`Buffer scan failed: ${error.message}`, { cause: error });
     }
   }
 }

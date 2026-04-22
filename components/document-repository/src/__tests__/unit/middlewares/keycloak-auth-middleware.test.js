@@ -6,15 +6,15 @@ beforeEach(() => {
 
   jest.mock('jose', () => ({
     createRemoteJWKSet: jest.fn(),
-    jwtVerify: jest.fn(),
+    jwtVerify: jest.fn()
   }));
 
   jest.mock('../../../config/appConfig', () => ({
     security: {
       keycloakUrl: 'https://localhost/auth',
       keycloakRealm: 'genie',
-      keycloakClientId: 'genie-app',
-    },
+      keycloakClientId: 'genie-app'
+    }
   }));
 
   jest.mock('../../../../shared-lib', () => ({
@@ -22,8 +22,8 @@ beforeEach(() => {
       info: jest.fn(),
       error: jest.fn(),
       debug: jest.fn(),
-      warn: jest.fn(),
-    },
+      warn: jest.fn()
+    }
   }));
 
   jose = require('jose');
@@ -40,11 +40,11 @@ function createMocks(overrides = {}) {
     originalUrl: '/api/files',
     headers: {},
     user: undefined,
-    ...overrides.req,
+    ...overrides.req
   };
   const res = {
     status: jest.fn().mockReturnThis(),
-    json: jest.fn().mockReturnThis(),
+    json: jest.fn().mockReturnThis()
   };
   const next = jest.fn();
   return { req, res, next };
@@ -57,7 +57,7 @@ function createMockPayload(roles = ['admin']) {
     iss: 'https://localhost/auth/realms/genie',
     azp: 'genie-app',
     realm_access: { roles },
-    exp: Math.floor(Date.now() / 1000) + 3600,
+    exp: Math.floor(Date.now() / 1000) + 3600
   };
 }
 
@@ -106,9 +106,7 @@ describe('keycloak-auth-middleware', () => {
       const { req, res, next } = createMocks();
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID' })
-      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -116,9 +114,7 @@ describe('keycloak-auth-middleware', () => {
       const { req, res, next } = createMocks({ req: { headers: { authorization: 'Basic abc123' } } });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID' })
-      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     });
 
     it('should return 401 for expired token (JWTExpired)', async () => {
@@ -128,13 +124,11 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockRejectedValue(expiredError);
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer expired-token' } },
+        req: { headers: { authorization: 'Bearer expired-token' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_EXPIRED' })
-      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_EXPIRED' }));
     });
 
     it('should return 401 for invalid token', async () => {
@@ -142,13 +136,11 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockRejectedValue(new Error('Invalid signature'));
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer invalid-token' } },
+        req: { headers: { authorization: 'Bearer invalid-token' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID' })
-      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     });
 
     it('should return 401 for claim validation failure (JWTClaimValidationFailed)', async () => {
@@ -158,7 +150,7 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockRejectedValue(claimError);
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer bad-claim-token' } },
+        req: { headers: { authorization: 'Bearer bad-claim-token' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
@@ -173,13 +165,11 @@ describe('keycloak-auth-middleware', () => {
       });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer some-token' } },
+        req: { headers: { authorization: 'Bearer some-token' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(503);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'AUTH_SERVICE_UNAVAILABLE' })
-      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'AUTH_SERVICE_UNAVAILABLE' }));
     });
 
     it('should attach user object for valid token with admin role', async () => {
@@ -188,7 +178,7 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockResolvedValue({ payload });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer valid-token' } },
+        req: { headers: { authorization: 'Bearer valid-token' } }
       });
       await authenticateToken(req, res, next);
 
@@ -213,13 +203,13 @@ describe('keycloak-auth-middleware', () => {
     it('should return 401 when token azp does not match expected client', async () => {
       const payload = {
         ...createMockPayload(['admin']),
-        azp: 'evil-client',
+        azp: 'evil-client'
       };
       jose.createRemoteJWKSet.mockReturnValue({});
       jose.jwtVerify.mockResolvedValue({ payload });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer valid-token-wrong-azp' } },
+        req: { headers: { authorization: 'Bearer valid-token-wrong-azp' } }
       });
       await authenticateToken(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
@@ -236,7 +226,7 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockResolvedValue({ payload });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer no-azp-token' } },
+        req: { headers: { authorization: 'Bearer no-azp-token' } }
       });
       await authenticateToken(req, res, next);
       expect(next).toHaveBeenCalledWith();
@@ -249,7 +239,7 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockResolvedValue({ payload });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer valid-token' } },
+        req: { headers: { authorization: 'Bearer valid-token' } }
       });
       await authenticateToken(req, res, next);
 
@@ -262,7 +252,7 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockResolvedValue({ payload });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer valid-token' } },
+        req: { headers: { authorization: 'Bearer valid-token' } }
       });
       await authenticateToken(req, res, next);
 
@@ -275,7 +265,7 @@ describe('keycloak-auth-middleware', () => {
       jose.jwtVerify.mockResolvedValue({ payload });
 
       const { req, res, next } = createMocks({
-        req: { headers: { authorization: 'Bearer valid-token' } },
+        req: { headers: { authorization: 'Bearer valid-token' } }
       });
       await authenticateToken(req, res, next);
 
@@ -303,9 +293,7 @@ describe('keycloak-auth-middleware', () => {
       const middleware = authorizeRole(['Admin']);
       middleware(req, res, next);
       expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'FORBIDDEN' })
-      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'FORBIDDEN' }));
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -314,9 +302,7 @@ describe('keycloak-auth-middleware', () => {
       const middleware = authorizeRole(['Admin']);
       middleware(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: 'TOKEN_INVALID' })
-      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     });
 
     it('should perform case-insensitive role comparison', () => {

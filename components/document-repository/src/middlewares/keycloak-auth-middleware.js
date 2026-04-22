@@ -38,7 +38,7 @@ async function getJWKS() {
  * @returns {boolean} True if path is public
  */
 function isPublicRoute(path) {
-  return PUBLIC_PATHS.some(publicPath => {
+  return PUBLIC_PATHS.some((publicPath) => {
     if (publicPath.endsWith('/')) {
       return path.startsWith(publicPath);
     }
@@ -183,9 +183,7 @@ const authorizeRole = (allowedRoles) => {
         });
       }
 
-      const hasRole = allowedRoles.some(
-        role => role.toLowerCase() === String(req.user.role).toLowerCase()
-      );
+      const hasRole = allowedRoles.some((role) => role.toLowerCase() === String(req.user.role).toLowerCase());
 
       if (!hasRole) {
         return res.status(403).json({

@@ -1,6 +1,6 @@
 /*
  * This object is used to read and load all of the configurations and make them available to the other components
-*/
+ */
 require('dotenv').config();
 
 const config = {
@@ -31,14 +31,14 @@ const config = {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024, // 50MB
     uploadDir: process.env.UPLOAD_DIR || './uploads',
     allowedMimeTypes: [
-      'application/pdf',  // pdf files .pdf
+      'application/pdf', // pdf files .pdf
       'application/msword', // word files .doc
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // word files .docx
       'application/vnd.ms-excel', // excel files .xls
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // excel files .xlsx
-      'text/markdown',  // markdown files .md, .markdown
-      'text/plain',  // text files .txt (also sent by some browsers for .md)
-      'text/html',   // html files .html
+      'text/markdown', // markdown files .md, .markdown
+      'text/plain', // text files .txt (also sent by some browsers for .md)
+      'text/html', // html files .html
       'application/zip', // browsers sometimes report .docx/.xlsx as zip
       'application/x-zip-compressed' // Windows browsers sometimes report Office files as this
     ],
@@ -56,7 +56,7 @@ const config = {
     workerConcurrency: parseInt(process.env.CRAWLER_WORKER_CONCURRENCY) || 10
   },
 
-  //Labeling configuration 
+  //Labeling configuration
   labels: {
     allowedLevels: ['category', 'service'], // Allowed levels for labels
     allowedStatuses: ['pending', 'active'] // Allowed statuses for labels - not sure what this is for; David F
@@ -72,35 +72,34 @@ const config = {
       max: 30000 // limit each IP to 100 requests per windowMs
     }
   },
- 
+
   //Controls whether or not the clamav service is used for uploaded documents
   virusScanning: process.env.VIRUS_SCANNING === 'true' || false,
 
   // ClamAV configuration using clamscan library
   clamscan: {
-   removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false,
-    
+    removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false,
+
     // FIX: Check for the string 'false' or use the env var as a path
-    quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED === 'false' 
-      ? false 
-      : (process.env.CLAMSCAN_QUARANTINE_INFECTED || false),
- 
+    quarantineInfected:
+      process.env.CLAMSCAN_QUARANTINE_INFECTED === 'false' ? false : process.env.CLAMSCAN_QUARANTINE_INFECTED || false,
+
     debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false,
-    
+
     // FIX: Use a strict === 'true' check, as 'false' string is truthy
     socket: process.env.CLAMSCAN_SOCKET === 'true' || false,
-    
+
     host: process.env.CLAMSCAN_HOST || '127.0.0.1',
-    
+
     // FIX: Convert port string to a number
     port: parseInt(process.env.CLAMSCAN_PORT, 10) || 3310,
-    
+
     // FIX: Convert timeout string to a number
     timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
-    
+
     localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true,
     path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
-    active: process.env.CLAMSCAN_ACTIVE === 'true' || true,
+    active: process.env.CLAMSCAN_ACTIVE === 'true' || true
   },
 
   // Logging configuration
@@ -115,7 +114,7 @@ const config = {
  * Sensitive keys (like 'password' or 'jwtSecret') are redacted.
  * @returns {string} A formatted string of the loaded configuration.
  */
-config.getFormattedConfiguration = function() {
+config.getFormattedConfiguration = function () {
   // Add any other sensitive keys here in lowercase and they will be redacted
   const sensitiveKeys = ['password', 'arango_password'];
 
@@ -143,16 +142,16 @@ config.getFormattedConfiguration = function() {
       if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
         lines.push(`${indent}${key}:`);
         lines.push(formatRecursive(value, indent + '  '));
-      } 
+      }
       // 3. Handle arrays
       else if (Array.isArray(value)) {
         // Truncate long arrays for readability
         if (value.length > 10) {
-           lines.push(`${indent}${key}: [${value.slice(0, 10).join(', ')}... (and ${value.length - 10} more)]`);
+          lines.push(`${indent}${key}: [${value.slice(0, 10).join(', ')}... (and ${value.length - 10} more)]`);
         } else {
-           lines.push(`${indent}${key}: [${value.join(', ')}]`);
+          lines.push(`${indent}${key}: [${value.join(', ')}]`);
         }
-      } 
+      }
       // 4. Handle primitives (string, number, boolean, null)
       else {
         lines.push(`${indent}${key}: ${value}`);
@@ -164,6 +163,5 @@ config.getFormattedConfiguration = function() {
   // Using 'this' refers to the 'config' object itself
   return `\n--- Loaded Environment Configuration ---\n${formatRecursive(this)}\n----------------------------------------`;
 };
-
 
 module.exports = config;

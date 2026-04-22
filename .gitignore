@@ -28,6 +28,7 @@ dist/
 
 # Git worktrees
 .worktrees/
+.claude/worktrees/
 build/
 
 # Logs

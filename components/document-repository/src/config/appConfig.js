@@ -67,10 +67,6 @@ const config = {
     keycloakUrl: process.env.KEYCLOAK_URL,
     keycloakRealm: process.env.KC_REALM,
     keycloakClientId: process.env.KC_CLIENT_ID,
-    rateLimit: {
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 30000 // limit each IP to 100 requests per windowMs
-    }
   },
 
   //Controls whether or not the clamav service is used for uploaded documents

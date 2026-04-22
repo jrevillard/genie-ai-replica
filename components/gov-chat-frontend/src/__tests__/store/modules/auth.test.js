@@ -5,6 +5,7 @@ const mockInitialize = jest.fn();
 const mockLogin = jest.fn();
 const mockHandleCallback = jest.fn();
 const mockLogout = jest.fn();
+const mockGetAccessTokenClaims = jest.fn(() => ({ realm_access: { roles: ['user', 'admin'] } }));
 const mockOnAccessTokenUpdated = jest.fn();
 const mockRemoveAccessTokenUpdatedCallback = jest.fn();
 
@@ -16,6 +17,7 @@ jest.mock('@/services/keycloakAuthService', () => ({
     handleCallback: mockHandleCallback,
     logout: mockLogout,
     getAccessToken: jest.fn(),
+    getAccessTokenClaims: mockGetAccessTokenClaims,
     isAuthenticated: jest.fn(),
     getUser: jest.fn(),
     onAccessTokenUpdated: mockOnAccessTokenUpdated,
@@ -762,6 +764,7 @@ describe('Vuex Auth Module', () => {
     });
 
     it('defaults roles to empty array when realm_access missing', async () => {
+      mockGetAccessTokenClaims.mockImplementationOnce(() => null);
       mockInitialize.mockResolvedValue(createMockOidcUser({
         profile: {
           sub: 'user-456',

@@ -6,10 +6,11 @@ Keycloak service account token management for Dataprep.
 Obtains and caches tokens via client_credentials grant.
 Auto-renews when token is near expiry.
 """
-import os
-import time
+
 import asyncio
 import logging
+import os
+import time
 
 import aiohttp
 
@@ -56,19 +57,18 @@ async def get_service_account_token() -> str:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(token_url, data=payload) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"Failed to obtain service account token: {response.status} - {error_text}")
-                        raise Exception(f"Token request failed: {response.status}")
+            async with aiohttp.ClientSession() as session, session.post(token_url, data=payload) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"Failed to obtain service account token: {response.status} - {error_text}")
+                    raise Exception(f"Token request failed: {response.status}")
 
-                    data = await response.json()
-                    _cached_token = data["access_token"]
-                    _token_expiry = time.time() + data.get("expires_in", 300)
+                data = await response.json()
+                _cached_token = data["access_token"]
+                _token_expiry = time.time() + data.get("expires_in", 300)
 
-                    logger.info("Service account token obtained successfully")
-                    return _cached_token
+                logger.info("Service account token obtained successfully")
+                return _cached_token
 
         except Exception as e:
             logger.error(f"Error obtaining service account token: {e}")

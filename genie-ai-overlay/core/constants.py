@@ -38,7 +38,8 @@ class ServiceType(Enum):
     TEXT2CYPHER = 21
     TEXT2KG = 22
     STRUCT2GRAPH = 23
-    TRANSLATOR = 24 # Add Translator service type for MegaService
+    TRANSLATOR = 24  # Add Translator service type for MegaService
+
 
 class MegaServiceEndpoint(Enum):
     """The enum of an MegaService endpoint."""

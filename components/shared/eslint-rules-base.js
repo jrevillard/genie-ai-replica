@@ -5,4 +5,5 @@
 module.exports = {
   'no-var': 'error',
   'prefer-const': 'error',
+  'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
 };

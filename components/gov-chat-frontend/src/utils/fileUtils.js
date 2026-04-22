@@ -6,13 +6,13 @@
  * @returns {String} Formatted file size (e.g., "1.5 MB")
  */
 export function formatFileSize(bytes) {
-  if (bytes == null || bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-  if (bytes < 1) return `${bytes} Bytes`
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  const index = Math.min(i, sizes.length - 1)
-  return parseFloat((bytes / Math.pow(k, index)).toFixed(2)) + ' ' + sizes[index]
+  if (bytes == null || bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  if (bytes < 1) return `${bytes} Bytes`;
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const index = Math.min(i, sizes.length - 1);
+  return parseFloat((bytes / Math.pow(k, index)).toFixed(2)) + ' ' + sizes[index];
 }
 
 /**
@@ -21,7 +21,7 @@ export function formatFileSize(bytes) {
  * @returns {Boolean} True if the file is an image
  */
 export function isImage(mimeType) {
-  return mimeType && mimeType.startsWith('image/')
+  return mimeType && mimeType.startsWith('image/');
 }
 
 /**
@@ -39,9 +39,9 @@ export function isDocument(mimeType) {
     'application/vnd.ms-powerpoint',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'text/plain',
-    'text/csv',
-  ]
-  return documentTypes.includes(mimeType)
+    'text/csv'
+  ];
+  return documentTypes.includes(mimeType);
 }
 
 /**
@@ -50,5 +50,5 @@ export function isDocument(mimeType) {
  * @returns {String} File extension (lowercase)
  */
 export function getFileExtension(fileName) {
-  return fileName.split('.').pop().toLowerCase()
+  return fileName.split('.').pop().toLowerCase();
 }

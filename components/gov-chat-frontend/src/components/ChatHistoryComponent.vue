@@ -2,11 +2,7 @@
   <div class="chat-history" :data-theme="$route.meta.theme || 'light'">
     <h4>{{ $t('sidebar.chatHistory', 'Chat History') }}</h4>
     <ul>
-      <li
-        v-for="(chat, index) in chats"
-        :key="index"
-        @click="$emit('selectChat', chat)"
-      >
+      <li v-for="(chat, index) in chats" :key="index" @click="$emit('selectChat', chat)">
         {{ chat.title || 'Untitled Chat' }}
         <span class="date">{{ chat.date }}</span>
       </li>
@@ -17,15 +13,16 @@
 <script>
 export default {
   name: 'ChatHistoryComponent',
+  emits: ['selectChat'],
   data() {
     return {
       chats: [
         { id: 1, title: 'Tax Inquiry', date: '2025-02-27' },
         { id: 2, title: 'Fire Safety', date: '2025-02-26' }
       ]
-    }
+    };
   }
-}
+};
 </script>
 
 <style scoped>
@@ -46,8 +43,8 @@ export default {
   padding: 0 16px;
 }
 
-[data-theme="dark"] .chat-history h4,
-html[data-theme="dark"] .chat-history h4 {
+[data-theme='dark'] .chat-history h4,
+html[data-theme='dark'] .chat-history h4 {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
@@ -85,8 +82,8 @@ html[data-theme="dark"] .chat-history h4 {
   letter-spacing: 0.5px;
 }
 
-[data-theme="dark"] .chat-history h4,
-html[data-theme="dark"] .chat-history h4 {
+[data-theme='dark'] .chat-history h4,
+html[data-theme='dark'] .chat-history h4 {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 </style>

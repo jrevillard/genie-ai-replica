@@ -87,7 +87,7 @@
                         :key="index"
                         class="preset-icon"
                         :class="{
-                          selected: formData.personalIdentification.profileIcon === icon,
+                          selected: formData.personalIdentification.profileIcon === icon
                         }"
                         @click="selectPresetIcon(icon)"
                       >
@@ -420,19 +420,20 @@
 </template>
 
 <script>
-import userProfileService from '@/services/userProfileService'
-import notificationService from '@/services/notificationService'
-import { themeManager } from '@/utils/ThemeManager'
-import { getUserId } from '@/utils/userUtils'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import SearchableCountryDropdown from '@/components/SearchableCountryDropdown.vue'
+import userProfileService from '@/services/userProfileService';
+import notificationService from '@/services/notificationService';
+import { themeManager } from '@/utils/ThemeManager';
+
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import SearchableCountryDropdown from '@/components/SearchableCountryDropdown.vue';
 
 export default {
   name: 'UserProfileComponent',
   components: {
     ConfirmDialog,
-    SearchableCountryDropdown,
+    SearchableCountryDropdown
   },
+  emits: ['cancel', 'save'],
   data() {
     return {
       isThemeReady: false,
@@ -445,7 +446,7 @@ export default {
         { key: 'healthInfo' },
         { key: 'employmentInfo' },
         { key: 'educationRecords' },
-        { key: 'financialInfo' },
+        { key: 'financialInfo' }
       ],
       formData: {
         personalIdentification: {
@@ -453,43 +454,43 @@ export default {
           dob: '',
           gender: '',
           nationality: '',
-          profileIcon: '',
+          profileIcon: ''
         },
         civilRegistration: {
           birthCert: '',
           citizenship: '',
-          immigration: '',
+          immigration: ''
         },
         addressResidency: {
           currentAddress: '',
           postalCode: '',
           country: '',
-          residencyStatus: '',
+          residencyStatus: ''
         },
         identityDocuments: {
           idCard: '',
           passport: '',
-          driversLicense: '',
+          driversLicense: ''
         },
         healthInfo: {
           bloodType: '',
-          organDonor: '',
+          organDonor: ''
         },
         employmentInfo: {
           employmentHistory: '',
           currentEmployer: '',
-          taxId: '',
+          taxId: ''
         },
         educationRecords: {
           education: '',
           degrees: '',
           certifications: '',
-          academicRecords: '',
+          academicRecords: ''
         },
         financialInfo: {
           incomeTax: '',
-          bankAccounts: '',
-        },
+          bankAccounts: ''
+        }
       },
       nationalityName: '',
       countryName: '',
@@ -518,7 +519,7 @@ export default {
         '/icons/profile5.png',
         '/icons/profile6.png',
         '/icons/profile7.png',
-        '/icons/profile8.png',
+        '/icons/profile8.png'
       ],
       uploadedImage: null,
       initialsColor: '#4E97D1',
@@ -530,24 +531,24 @@ export default {
         '#9B59B6', // Purple
         '#1ABC9C', // Teal
         '#34495E', // Dark Blue
-        '#D35400', // Burnt Orange
-      ],
-    }
+        '#D35400' // Burnt Orange
+      ]
+    };
   },
   computed: {
     isDarkMode() {
       // Access a reactive data property so Vue tracks this computed
       // when themeChange event fires and updateTheme() resets isThemeReady
-      void this.isThemeReady
+      void this.isThemeReady;
       return (
         document.documentElement.getAttribute('data-theme') === 'dark' ||
         document.body.getAttribute('data-theme') === 'dark'
-      )
+      );
     },
     dialogThemeStyles() {
       // Reference isThemeReady so Vue re-evaluates on theme changes
-      const _ = this.isThemeReady
-      const dialogTheme = themeManager.getDialogTheme()
+      void this.isThemeReady;
+      const dialogTheme = themeManager.getDialogTheme();
       return {
         '--dialog-background': dialogTheme.modal.background,
         '--dialog-title-color': dialogTheme.modal.titleColor,
@@ -563,46 +564,46 @@ export default {
         '--dialog-tabs-active-background': dialogTheme.tabs.activeBackground,
         '--dialog-tabs-text-color': dialogTheme.tabs.textColor,
         '--dialog-tabs-active-text-color': dialogTheme.tabs.activeTextColor,
-        '--dialog-tabs-border-color': dialogTheme.tabs.borderColor,
-      }
-    },
+        '--dialog-tabs-border-color': dialogTheme.tabs.borderColor
+      };
+    }
   },
   watch: {
     'formData.personalIdentification.nationality': {
       handler(newVal) {
-        console.log('Nationality model changed to:', newVal)
+        console.log('Nationality model changed to:', newVal);
         // Rely on SearchableCountryDropdown to emit the name via update:name
       },
-      immediate: true,
+      immediate: true
     },
     'formData.addressResidency.country': {
       handler(newVal) {
-        console.log('Country model changed to:', newVal)
+        console.log('Country model changed to:', newVal);
         // Rely on SearchableCountryDropdown to emit the name via update:name
       },
-      immediate: true,
+      immediate: true
     },
     '$i18n.locale'() {
-      this.loadEducationOptions()
-      this.loadDegreeOptions()
-      this.refreshCountryDropdowns()
+      this.loadEducationOptions();
+      this.loadDegreeOptions();
+      this.refreshCountryDropdowns();
     },
 
     // Watch for tab changes to ensure dropdown state persists
     activeTab: {
       handler(newTabIndex, oldTabIndex) {
-        console.log(`Tab changed from ${oldTabIndex} to ${newTabIndex}`)
+        console.log(`Tab changed from ${oldTabIndex} to ${newTabIndex}`);
 
         // If we're switching to the Personal Identification tab (0)
         if (newTabIndex === 0 && this.formData.personalIdentification.nationality) {
           this.$nextTick(() => {
             setTimeout(() => {
               if (this.$refs.nationalityDropdown) {
-                console.log('Restoring nationality dropdown after tab switch')
-                this.$refs.nationalityDropdown.manuallySetCountryName(this.formData.personalIdentification.nationality)
+                console.log('Restoring nationality dropdown after tab switch');
+                this.$refs.nationalityDropdown.manuallySetCountryName(this.formData.personalIdentification.nationality);
               }
-            }, 50)
-          })
+            }, 50);
+          });
         }
 
         // If we're switching to the Address & Residency tab (2)
@@ -610,144 +611,144 @@ export default {
           this.$nextTick(() => {
             setTimeout(() => {
               if (this.$refs.countryDropdown) {
-                console.log('Restoring country dropdown after tab switch')
-                this.$refs.countryDropdown.manuallySetCountryName(this.formData.addressResidency.country)
+                console.log('Restoring country dropdown after tab switch');
+                this.$refs.countryDropdown.manuallySetCountryName(this.formData.addressResidency.country);
               }
-            }, 50)
-          })
+            }, 50);
+          });
         }
-      },
-    },
+      }
+    }
   },
   mounted() {
-    window.addEventListener('themeChange', this.updateTheme)
+    window.addEventListener('themeChange', this.updateTheme);
     this.$nextTick(() => {
-      this.isThemeReady = true
-    })
-    this.loadEducationOptions()
-    this.loadDegreeOptions()
-    this.loadUserProfileData()
+      this.isThemeReady = true;
+    });
+    this.loadEducationOptions();
+    this.loadDegreeOptions();
+    this.loadUserProfileData();
   },
   beforeUnmount() {
-    window.removeEventListener('themeChange', this.updateTheme)
+    window.removeEventListener('themeChange', this.updateTheme);
   },
   methods: {
     // Centralized translation function
     translate(key, fallback = '') {
       // Try direct path first
-      const fullKey = key.startsWith('userProfile.') ? key : `userProfile.${key}`
+      const fullKey = key.startsWith('userProfile.') ? key : `userProfile.${key}`;
 
       // Next try with fields prefix if it's not already there
-      let result
+      let result;
       if (this.$te(fullKey)) {
-        result = this.$t(fullKey)
+        result = this.$t(fullKey);
       }
       // If the key doesn't contain "fields." already, try with it
       else if (!key.includes('fields.')) {
-        const fieldsKey = `userProfile.fields.${key}`
+        const fieldsKey = `userProfile.fields.${key}`;
         if (this.$te(fieldsKey)) {
-          result = this.$t(fieldsKey)
+          result = this.$t(fieldsKey);
         }
       }
 
-      return result || fallback || key
+      return result || fallback || key;
     },
     onNationalityChange(code) {
-      console.log('Nationality changed to:', code, 'Type:', typeof code)
+      console.log('Nationality changed to:', code, 'Type:', typeof code);
       // Only update if we received a valid code
       if (code !== undefined) {
-        this.formData.personalIdentification.nationality = code
+        this.formData.personalIdentification.nationality = code;
       }
     },
 
     onCountryChange(code) {
-      console.log('Country changed to:', code, 'Type:', typeof code)
+      console.log('Country changed to:', code, 'Type:', typeof code);
       // Only update if we received a valid code
       if (code !== undefined) {
-        this.formData.addressResidency.country = code
+        this.formData.addressResidency.country = code;
       }
     },
 
     updateNationalityName(name) {
-      console.log('Updating nationality name:', name)
-      this.nationalityName = name || ''
+      console.log('Updating nationality name:', name);
+      this.nationalityName = name || '';
 
       if (name && !this.formData.personalIdentification.nationality) {
-        console.warn('Country name set but code is missing, attempting to find code')
+        console.warn('Country name set but code is missing, attempting to find code');
         // Try to find the code from the name (this could be expanded if needed)
       }
 
       // Store this in localStorage to persist across tab changes
       if (name && this.formData.personalIdentification.nationality) {
         try {
-          localStorage.setItem('user_nationality_name', name)
-          localStorage.setItem('user_nationality_code', this.formData.personalIdentification.nationality)
+          localStorage.setItem('user_nationality_name', name);
+          localStorage.setItem('user_nationality_code', this.formData.personalIdentification.nationality);
         } catch (e) {
-          console.warn('Could not store nationality in localStorage', e)
+          console.warn('Could not store nationality in localStorage', e);
         }
       }
     },
 
     updateCountryName(name) {
-      console.log('Updating country name:', name)
-      this.countryName = name || ''
+      console.log('Updating country name:', name);
+      this.countryName = name || '';
 
       if (name && !this.formData.addressResidency.country) {
-        console.warn('Country name set but code is missing, attempting to find code')
+        console.warn('Country name set but code is missing, attempting to find code');
         // Try to find the code from the name (this could be expanded if needed)
       }
 
       // Store this in localStorage to persist across tab changes
       if (name && this.formData.addressResidency.country) {
         try {
-          localStorage.setItem('user_country_name', name)
-          localStorage.setItem('user_country_code', this.formData.addressResidency.country)
+          localStorage.setItem('user_country_name', name);
+          localStorage.setItem('user_country_code', this.formData.addressResidency.country);
         } catch (e) {
-          console.warn('Could not store country in localStorage', e)
+          console.warn('Could not store country in localStorage', e);
         }
       }
     },
 
     refreshCountryDropdowns() {
-      console.log('Refreshing country dropdowns due to locale change')
+      console.log('Refreshing country dropdowns due to locale change');
       this.$nextTick(() => {
         // Refresh nationality dropdown if it exists
         if (this.$refs.nationalityDropdown) {
-          this.$refs.nationalityDropdown.loadCountries()
+          this.$refs.nationalityDropdown.loadCountries();
           if (this.formData.personalIdentification.nationality) {
             setTimeout(() => {
-              this.$refs.nationalityDropdown.manuallySetCountryName(this.formData.personalIdentification.nationality)
-            }, 200)
+              this.$refs.nationalityDropdown.manuallySetCountryName(this.formData.personalIdentification.nationality);
+            }, 200);
           }
         }
 
         // Refresh country dropdown if it exists
         if (this.$refs.countryDropdown) {
-          this.$refs.countryDropdown.loadCountries()
+          this.$refs.countryDropdown.loadCountries();
           if (this.formData.addressResidency.country) {
             setTimeout(() => {
-              this.$refs.countryDropdown.manuallySetCountryName(this.formData.addressResidency.country)
-            }, 200)
+              this.$refs.countryDropdown.manuallySetCountryName(this.formData.addressResidency.country);
+            }, 200);
           }
         }
-      })
+      });
     },
 
     // New method to restore country data after tab switching
     restoreCountryState() {
       // Try to restore from localStorage
       try {
-        const nationalityCode = localStorage.getItem('user_nationality_code')
-        const countryCode = localStorage.getItem('user_country_code')
-        const nationalityName = localStorage.getItem('user_nationality_name')
-        const countryName = localStorage.getItem('user_country_name')
+        const nationalityCode = localStorage.getItem('user_nationality_code');
+        const countryCode = localStorage.getItem('user_country_code');
+        const nationalityName = localStorage.getItem('user_nationality_name');
+        const countryName = localStorage.getItem('user_country_name');
 
         console.log('Restoring from localStorage:', {
           nationalityCode,
           nationalityName,
           countryCode,
-          countryName,
-        })
+          countryName
+        });
 
         // Restore nationality if needed
         if (nationalityCode && this.activeTab === 0 && this.$refs.nationalityDropdown) {
@@ -755,196 +756,196 @@ export default {
             !this.formData.personalIdentification.nationality ||
             this.formData.personalIdentification.nationality !== nationalityCode
           ) {
-            console.log('Restoring nationality from localStorage')
-            this.formData.personalIdentification.nationality = nationalityCode
-            this.nationalityName = nationalityName || ''
-            this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode)
+            console.log('Restoring nationality from localStorage');
+            this.formData.personalIdentification.nationality = nationalityCode;
+            this.nationalityName = nationalityName || '';
+            this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
           }
         }
 
         // Restore country if needed
         if (countryCode && this.activeTab === 2 && this.$refs.countryDropdown) {
           if (!this.formData.addressResidency.country || this.formData.addressResidency.country !== countryCode) {
-            console.log('Restoring country from localStorage')
-            this.formData.addressResidency.country = countryCode
-            this.countryName = countryName || ''
-            this.$refs.countryDropdown.manuallySetCountryName(countryCode)
+            console.log('Restoring country from localStorage');
+            this.formData.addressResidency.country = countryCode;
+            this.countryName = countryName || '';
+            this.$refs.countryDropdown.manuallySetCountryName(countryCode);
           }
         }
       } catch (e) {
-        console.warn('Error restoring country state from localStorage', e)
+        console.warn('Error restoring country state from localStorage', e);
       }
     },
 
     updateCountryDisplay() {
       // This function ensures the country dropdowns properly display the correct values
       if (this.formData.personalIdentification.nationality) {
-        console.log('Setting nationality display for:', this.formData.personalIdentification.nationality)
+        console.log('Setting nationality display for:', this.formData.personalIdentification.nationality);
         // The SearchableCountryDropdown component will handle this through its value prop
       }
 
       if (this.formData.addressResidency.country) {
-        console.log('Setting country display for:', this.formData.addressResidency.country)
+        console.log('Setting country display for:', this.formData.addressResidency.country);
         // The SearchableCountryDropdown component will handle this through its value prop
       }
     },
     updateTheme() {
-      this.isThemeReady = false
+      this.isThemeReady = false;
       this.$nextTick(() => {
-        this.isThemeReady = true
-      })
+        this.isThemeReady = true;
+      });
     },
     cancel() {
-      this.$emit('cancel')
+      this.$emit('cancel');
     },
     saveProfile() {
-      console.log('Save profile button clicked')
-      this.showConfirmDialog = true
+      console.log('Save profile button clicked');
+      this.showConfirmDialog = true;
     },
     async confirmSave() {
-      this.showConfirmDialog = false
-      this.isSubmitting = true
+      this.showConfirmDialog = false;
+      this.isSubmitting = true;
 
       try {
-        const validation = this.validateForm()
-        console.log('Form validation result:', validation)
+        const validation = this.validateForm();
+        console.log('Form validation result:', validation);
 
         if (!validation.isValid) {
-          notificationService.error(this.translate('errors.invalidForm', 'Please fill all required fields'))
-          return
+          notificationService.error(this.translate('errors.invalidForm', 'Please fill all required fields'));
+          return;
         }
 
-        const profileData = JSON.parse(JSON.stringify(this.formData))
-        console.log('Profile data before submission:', profileData)
+        const profileData = JSON.parse(JSON.stringify(this.formData));
+        console.log('Profile data before submission:', profileData);
 
         console.log('Country data before submission:', {
           nationality: profileData.personalIdentification.nationality,
           nationalityName: this.nationalityName,
           country: profileData.addressResidency.country,
-          countryName: this.countryName,
-        })
+          countryName: this.countryName
+        });
 
         if (this.formData.personalIdentification.nationality) {
-          profileData.personalIdentification.nationality = this.formData.personalIdentification.nationality
-          console.log('Explicitly set nationality to:', profileData.personalIdentification.nationality)
+          profileData.personalIdentification.nationality = this.formData.personalIdentification.nationality;
+          console.log('Explicitly set nationality to:', profileData.personalIdentification.nationality);
         } else {
-          console.warn('Nationality code is missing from form data')
+          console.warn('Nationality code is missing from form data');
         }
 
         if (this.formData.addressResidency.country) {
-          profileData.addressResidency.country = this.formData.addressResidency.country
-          console.log('Explicitly set country to:', profileData.addressResidency.country)
+          profileData.addressResidency.country = this.formData.addressResidency.country;
+          console.log('Explicitly set country to:', profileData.addressResidency.country);
         } else {
-          console.warn('Country code is missing from form data')
+          console.warn('Country code is missing from form data');
         }
 
-        console.log('Profile data being sent to API:', profileData)
+        console.log('Profile data being sent to API:', profileData);
 
-        const result = await userProfileService.updateProfile(profileData)
-        console.log('Update profile API response:', result)
+        const result = await userProfileService.updateProfile(profileData);
+        console.log('Update profile API response:', result);
 
-        notificationService.success(this.translate('saveSuccess', 'Profile saved successfully'))
-        this.$emit('save', profileData)
+        notificationService.success(this.translate('saveSuccess', 'Profile saved successfully'));
+        this.$emit('save', profileData);
       } catch (error) {
-        console.error('Error saving profile:', error)
-        notificationService.error(this.translate('errors.savingFailed', 'Failed to save profile'))
+        console.error('Error saving profile:', error);
+        notificationService.error(this.translate('errors.savingFailed', 'Failed to save profile'));
       } finally {
-        this.isSubmitting = false
+        this.isSubmitting = false;
       }
     },
     cancelSave() {
-      this.showConfirmDialog = false
-      console.log('User cancelled save operation')
+      this.showConfirmDialog = false;
+      console.log('User cancelled save operation');
     },
     onFileChange(e, section, fieldKey) {
-      const file = e.target.files[0]
-      if (!file) return
+      const file = e.target.files[0];
+      if (!file) return;
 
-      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
-      const maxSize = 5 * 1024 * 1024 // 5MB
+      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+      const maxSize = 5 * 1024 * 1024; // 5MB
 
       if (!allowedTypes.includes(file.type)) {
-        notificationService.error(this.translate('errors.invalidFileType', 'Invalid file type'))
-        return
+        notificationService.error(this.translate('errors.invalidFileType', 'Invalid file type'));
+        return;
       }
 
       if (file.size > maxSize) {
-        notificationService.error(this.translate('errors.fileTooLarge', 'File is too large'))
-        return
+        notificationService.error(this.translate('errors.fileTooLarge', 'File is too large'));
+        return;
       }
 
-      this.formData[section][fieldKey] = file
+      this.formData[section][fieldKey] = file;
     },
     validateForm() {
       const validations = {
         personalIdentification: [
           { field: 'fullName', required: true },
-          { field: 'dob', required: true },
-        ],
-      }
+          { field: 'dob', required: true }
+        ]
+      };
 
-      const errors = {}
+      const errors = {};
 
       Object.keys(validations).forEach((section) => {
         validations[section].forEach((validation) => {
-          const value = this.formData[section][validation.field]
+          const value = this.formData[section][validation.field];
           if (validation.required && !value) {
-            errors[`${section}.${validation.field}`] = this.translate('validation.nameRequired')
+            errors[`${section}.${validation.field}`] = this.translate('validation.nameRequired');
           }
-        })
-      })
+        });
+      });
 
       if (this.isTabComplete(this.activeTab)) {
-        notificationService.info(this.translate('tabComplete', 'Tab completed!'), 1500)
+        notificationService.info(this.translate('tabComplete', 'Tab completed!'), 1500);
       }
 
       return {
         isValid: Object.keys(errors).length === 0,
-        errors,
-      }
+        errors
+      };
     },
     isTabComplete(tabIndex) {
-      const tab = this.tabs[tabIndex]
-      if (!tab) return false
+      const tab = this.tabs[tabIndex];
+      if (!tab) return false;
       if (tab.key === 'personalIdentification') {
-        return !!this.formData.personalIdentification.fullName && !!this.formData.personalIdentification.dob
+        return !!this.formData.personalIdentification.fullName && !!this.formData.personalIdentification.dob;
       }
-      return true // Other tabs considered complete for simplicity
+      return true; // Other tabs considered complete for simplicity
     },
     async loadUserProfileData() {
-      this.isLoading = true
-      this.errorMessage = null
+      this.isLoading = true;
+      this.errorMessage = null;
       try {
-        const profileData = await userProfileService.getProfile()
+        const profileData = await userProfileService.getProfile();
 
         if (profileData) {
           // Extract the nationality and country codes before mapping other data
-          const nationalityCode = profileData.personalIdentification?.nationality || ''
-          const countryCode = profileData.addressResidency?.country || ''
+          const nationalityCode = profileData.personalIdentification?.nationality || '';
+          const countryCode = profileData.addressResidency?.country || '';
 
           // Map profile data to form data
           Object.keys(this.formData).forEach((section) => {
             if (profileData[section]) {
               Object.keys(this.formData[section]).forEach((field) => {
                 if (profileData[section][field] !== undefined) {
-                  this.formData[section][field] = profileData[section][field]
+                  this.formData[section][field] = profileData[section][field];
                 }
-              })
+              });
             }
-          })
+          });
 
-          console.log('Form data after population:', this.formData)
+          console.log('Form data after population:', this.formData);
 
           // Store country values to localStorage for tab-switching persistence
           try {
             if (nationalityCode) {
-              localStorage.setItem('user_nationality_code', nationalityCode)
+              localStorage.setItem('user_nationality_code', nationalityCode);
             }
             if (countryCode) {
-              localStorage.setItem('user_country_code', countryCode)
+              localStorage.setItem('user_country_code', countryCode);
             }
           } catch (e) {
-            console.warn('Could not store country codes in localStorage', e)
+            console.warn('Could not store country codes in localStorage', e);
           }
 
           // Ensuring the country dropdowns get initialized with their values
@@ -952,26 +953,26 @@ export default {
             // Set nationality dropdown with a delay to ensure component is mounted
             setTimeout(() => {
               if (nationalityCode && this.$refs.nationalityDropdown) {
-                console.log('Setting nationality dropdown with code:', nationalityCode)
-                this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode)
+                console.log('Setting nationality dropdown with code:', nationalityCode);
+                this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
               }
 
               if (countryCode && this.$refs.countryDropdown) {
-                console.log('Setting country dropdown with code:', countryCode)
-                this.$refs.countryDropdown.manuallySetCountryName(countryCode)
+                console.log('Setting country dropdown with code:', countryCode);
+                this.$refs.countryDropdown.manuallySetCountryName(countryCode);
               }
-            }, 300) // Small delay to ensure components are ready
-          })
+            }, 300); // Small delay to ensure components are ready
+          });
         }
       } catch (error) {
-        console.error('Error loading user profile:', error)
-        this.errorMessage = this.translate('errors.loadingFailed', 'Failed to load profile data')
+        console.error('Error loading user profile:', error);
+        this.errorMessage = this.translate('errors.loadingFailed', 'Failed to load profile data');
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
     retryLoading() {
-      this.loadUserProfileData()
+      this.loadUserProfileData();
     },
     loadDegreeOptions() {
       const defaultOptions = this.translate('degreeOptions', [
@@ -1002,54 +1003,54 @@ export default {
         'Vocational Certificate',
         'Graduate Certificate',
         'Post-Graduate Diploma',
-        'Post-Doctoral',
-      ])
+        'Post-Doctoral'
+      ]);
 
-      this.degreeOptions = Array.isArray(defaultOptions) ? defaultOptions : []
-      const locale = this.$i18n ? this.$i18n.locale : 'en'
-      this.degreeOptions.sort((a, b) => a.localeCompare(b, locale))
+      this.degreeOptions = Array.isArray(defaultOptions) ? defaultOptions : [];
+      const locale = this.$i18n ? this.$i18n.locale : 'en';
+      this.degreeOptions.sort((a, b) => a.localeCompare(b, locale));
     },
     toggleDegreeSearch() {
-      this.showDegreeSearch = true
-      this.degreeSearchTerm = this.formData.educationRecords.degrees || ''
-      this.filterDegreeOptions()
+      this.showDegreeSearch = true;
+      this.degreeSearchTerm = this.formData.educationRecords.degrees || '';
+      this.filterDegreeOptions();
       this.$nextTick(() => {
         if (this.$refs.degreeSearchInput) {
-          this.$refs.degreeSearchInput.focus()
+          this.$refs.degreeSearchInput.focus();
         }
-      })
+      });
     },
     filterDegreeOptions() {
       if (!this.degreeSearchTerm) {
-        this.filteredDegreeOptions = [...this.degreeOptions]
+        this.filteredDegreeOptions = [...this.degreeOptions];
       } else {
-        const searchTerm = this.degreeSearchTerm.toLowerCase()
-        this.filteredDegreeOptions = this.degreeOptions.filter((option) => option.toLowerCase().includes(searchTerm))
+        const searchTerm = this.degreeSearchTerm.toLowerCase();
+        this.filteredDegreeOptions = this.degreeOptions.filter((option) => option.toLowerCase().includes(searchTerm));
       }
-      this.selectedDegreeIndex = -1
+      this.selectedDegreeIndex = -1;
     },
     selectDegreeOption(option) {
-      this.formData.educationRecords.degrees = option
-      this.showDegreeSearch = false
+      this.formData.educationRecords.degrees = option;
+      this.showDegreeSearch = false;
     },
     handleDegreeBlur(event) {
       if (!event.relatedTarget || (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
         setTimeout(() => {
-          this.showDegreeSearch = false
-        }, 150)
+          this.showDegreeSearch = false;
+        }, 150);
       }
     },
     selectFirstDegreeOption() {
       if (this.filteredDegreeOptions.length > 0) {
-        this.selectDegreeOption(this.filteredDegreeOptions[0])
+        this.selectDegreeOption(this.filteredDegreeOptions[0]);
       }
     },
     navigateDegreeOptions(direction) {
-      const optionsLength = this.filteredDegreeOptions.length
+      const optionsLength = this.filteredDegreeOptions.length;
       if (optionsLength > 0) {
-        this.selectedDegreeIndex = (this.selectedDegreeIndex + direction + optionsLength) % optionsLength
+        this.selectedDegreeIndex = (this.selectedDegreeIndex + direction + optionsLength) % optionsLength;
         if (this.selectedDegreeIndex >= 0 && this.selectedDegreeIndex < optionsLength) {
-          this.$refs.degreeSearchInput.focus()
+          this.$refs.degreeSearchInput.focus();
         }
       }
     },
@@ -1153,130 +1154,130 @@ export default {
         'Veterinary Medicine',
         'Web Development',
         'Wildlife Biology',
-        'Zoology',
-      ])
+        'Zoology'
+      ]);
 
-      this.educationOptions = Array.isArray(defaultOptions) ? defaultOptions : []
-      const locale = this.$i18n ? this.$i18n.locale : 'en'
-      this.educationOptions.sort((a, b) => a.localeCompare(b, locale))
+      this.educationOptions = Array.isArray(defaultOptions) ? defaultOptions : [];
+      const locale = this.$i18n ? this.$i18n.locale : 'en';
+      this.educationOptions.sort((a, b) => a.localeCompare(b, locale));
     },
     toggleEducationSearch() {
-      this.showEducationSearch = true
-      this.educationSearchTerm = this.formData.educationRecords.education || ''
-      this.filterEducationOptions()
+      this.showEducationSearch = true;
+      this.educationSearchTerm = this.formData.educationRecords.education || '';
+      this.filterEducationOptions();
       this.$nextTick(() => {
         if (this.$refs.educationSearchInput) {
-          this.$refs.educationSearchInput.focus()
+          this.$refs.educationSearchInput.focus();
         }
-      })
+      });
     },
     filterEducationOptions() {
       if (!this.educationSearchTerm) {
-        this.filteredEducationOptions = [...this.educationOptions]
+        this.filteredEducationOptions = [...this.educationOptions];
       } else {
-        const searchTerm = this.educationSearchTerm.toLowerCase()
+        const searchTerm = this.educationSearchTerm.toLowerCase();
         this.filteredEducationOptions = this.educationOptions.filter((option) =>
           option.toLowerCase().includes(searchTerm)
-        )
+        );
       }
-      this.selectedEducationIndex = -1
+      this.selectedEducationIndex = -1;
     },
     selectEducationOption(option) {
-      this.formData.educationRecords.education = option
-      this.showEducationSearch = false
+      this.formData.educationRecords.education = option;
+      this.showEducationSearch = false;
     },
     handleEducationBlur(event) {
       if (!event.relatedTarget || (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
         setTimeout(() => {
-          this.showEducationSearch = false
-        }, 150)
+          this.showEducationSearch = false;
+        }, 150);
       }
     },
     selectFirstEducationOption() {
       if (this.filteredEducationOptions.length > 0) {
-        this.selectEducationOption(this.filteredEducationOptions[0])
+        this.selectEducationOption(this.filteredEducationOptions[0]);
       }
     },
     navigateEducationOptions(direction) {
-      const optionsLength = this.filteredEducationOptions.length
+      const optionsLength = this.filteredEducationOptions.length;
       if (optionsLength > 0) {
-        this.selectedEducationIndex = (this.selectedEducationIndex + direction + optionsLength) % optionsLength
+        this.selectedEducationIndex = (this.selectedEducationIndex + direction + optionsLength) % optionsLength;
         if (this.selectedEducationIndex >= 0 && this.selectedEducationIndex < optionsLength) {
-          this.$refs.educationSearchInput.focus()
+          this.$refs.educationSearchInput.focus();
         }
       }
     },
     openIconSelector() {
-      this.showIconSelector = true
+      this.showIconSelector = true;
     },
     closeIconSelector() {
-      this.showIconSelector = false
-      this.uploadedImage = null
+      this.showIconSelector = false;
+      this.uploadedImage = null;
     },
     getInitials(name) {
-      if (!name) return '?'
+      if (!name) return '?';
       return name
         .split(' ')
         .map((n) => n[0])
         .join('')
         .toUpperCase()
-        .substring(0, 2)
+        .substring(0, 2);
     },
     selectPresetIcon(icon) {
-      this.formData.personalIdentification.profileIcon = icon
-      this.closeIconSelector()
+      this.formData.personalIdentification.profileIcon = icon;
+      this.closeIconSelector();
     },
     triggerFileUpload() {
-      this.$refs.fileInput.click()
+      this.$refs.fileInput.click();
     },
     handleFileUpload(event) {
-      const file = event.target.files[0]
-      if (!file) return
+      const file = event.target.files[0];
+      if (!file) return;
 
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif']
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
       if (!validTypes.includes(file.type)) {
         notificationService.error(
           this.translate('errors.invalidFileType', 'Please upload a valid image (JPEG, PNG, GIF)')
-        )
-        return
+        );
+        return;
       }
 
       if (file.size > 2 * 1024 * 1024) {
-        notificationService.error(this.translate('errors.fileTooLarge', 'Image size must be less than 2MB'))
-        return
+        notificationService.error(this.translate('errors.fileTooLarge', 'Image size must be less than 2MB'));
+        return;
       }
 
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = (e) => {
-        this.uploadedImage = e.target.result
-      }
-      reader.readAsDataURL(file)
+        this.uploadedImage = e.target.result;
+      };
+      reader.readAsDataURL(file);
     },
     confirmUpload() {
-      this.formData.personalIdentification.profileIcon = this.uploadedImage
-      this.closeIconSelector()
+      this.formData.personalIdentification.profileIcon = this.uploadedImage;
+      this.closeIconSelector();
     },
     useInitials() {
-      const canvas = document.createElement('canvas')
-      const size = 200
-      canvas.width = size
-      canvas.height = size
-      const ctx = canvas.getContext('2d')
+      const canvas = document.createElement('canvas');
+      const size = 200;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
 
-      ctx.fillStyle = this.initialsColor
-      ctx.fillRect(0, 0, size, size)
+      ctx.fillStyle = this.initialsColor;
+      ctx.fillRect(0, 0, size, size);
 
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 80px Arial'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(this.getInitials(this.formData.personalIdentification.fullName), size / 2, size / 2)
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 80px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.getInitials(this.formData.personalIdentification.fullName), size / 2, size / 2);
 
-      this.formData.personalIdentification.profileIcon = canvas.toDataURL('image/png')
-      this.closeIconSelector()
-    },
-  },
-}
+      this.formData.personalIdentification.profileIcon = canvas.toDataURL('image/png');
+      this.closeIconSelector();
+    }
+  }
+};
 </script>
 
 <style scoped>

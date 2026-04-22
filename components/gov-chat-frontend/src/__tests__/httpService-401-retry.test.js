@@ -80,7 +80,7 @@ describe('httpService 401 retry with signinSilent', () => {
 
     try {
       await callResponseErrorHandler(401);
-    } catch (e) {
+    } catch {
       // Expected — retry calls mockAxiosInstance which rejects
     }
 
@@ -112,7 +112,7 @@ describe('httpService 401 retry with signinSilent', () => {
 
     try {
       await callResponseErrorHandler(401);
-    } catch (e) {
+    } catch {
       // Expected
     }
 
@@ -126,7 +126,7 @@ describe('httpService 401 retry with signinSilent', () => {
 
     try {
       await callResponseErrorHandler(401);
-    } catch (e) {
+    } catch {
       // Expected
     }
 
@@ -137,7 +137,7 @@ describe('httpService 401 retry with signinSilent', () => {
   it('should NOT call signinSilent on 403 response', async () => {
     try {
       await callResponseErrorHandler(403, { error: 'INSUFFICIENT_ROLES' });
-    } catch (e) {
+    } catch {
       // Expected
     }
 
@@ -155,7 +155,7 @@ describe('httpService 401 retry with signinSilent', () => {
 
     try {
       await httpService.handleResponseError(error);
-    } catch (e) {
+    } catch {
       // Expected — should not retry
     }
 
@@ -165,7 +165,7 @@ describe('httpService 401 retry with signinSilent', () => {
   it('should not affect non-401 errors', async () => {
     try {
       await callResponseErrorHandler(500, { error: 'Server error' });
-    } catch (e) {
+    } catch {
       // Expected
     }
 
@@ -351,7 +351,7 @@ describe('httpService error parsing and notifications', () => {
 
         try {
           await callResponseErrorHandler(401, { error: 'TOKEN_EXPIRED', message: 'Token has expired' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
@@ -366,7 +366,7 @@ describe('httpService error parsing and notifications', () => {
 
         try {
           await callResponseErrorHandler(401, { error: 'TOKEN_INVALID', message: 'Invalid token' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
@@ -380,35 +380,31 @@ describe('httpService error parsing and notifications', () => {
       it('should emit distinct authorization error for FORBIDDEN', async () => {
         try {
           await callResponseErrorHandler(403, { error: 'FORBIDDEN', message: 'Access denied' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
         expect(mockSigninSilent).not.toHaveBeenCalled();
         expect(mockLogin).not.toHaveBeenCalled();
-        expect(notificationService.error).toHaveBeenCalledWith(
-          expect.stringContaining('Access denied')
-        );
+        expect(notificationService.error).toHaveBeenCalledWith(expect.stringContaining('Access denied'));
       });
 
       it('should emit authorization error for INSUFFICIENT_ROLES', async () => {
         try {
           await callResponseErrorHandler(403, { error: 'INSUFFICIENT_ROLES', message: 'Insufficient permissions' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
         expect(mockSigninSilent).not.toHaveBeenCalled();
         expect(mockLogin).not.toHaveBeenCalled();
-        expect(notificationService.error).toHaveBeenCalledWith(
-          expect.stringContaining('Insufficient permissions')
-        );
+        expect(notificationService.error).toHaveBeenCalledWith(expect.stringContaining('Insufficient permissions'));
       });
 
       it('should use backend message when available for 403', async () => {
         try {
           await callResponseErrorHandler(403, { error: 'FORBIDDEN', message: 'Custom backend error message' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
@@ -419,20 +415,21 @@ describe('httpService error parsing and notifications', () => {
     describe('503 errors — service unavailable notifications', () => {
       it('should emit service unavailable notification for AUTH_SERVICE_UNAVAILABLE', async () => {
         try {
-          await callResponseErrorHandler(503, { error: 'AUTH_SERVICE_UNAVAILABLE', message: 'Auth service unavailable' });
-        } catch (e) {
+          await callResponseErrorHandler(503, {
+            error: 'AUTH_SERVICE_UNAVAILABLE',
+            message: 'Auth service unavailable'
+          });
+        } catch {
           // Expected
         }
 
-        expect(notificationService.error).toHaveBeenCalledWith(
-          expect.stringContaining('Auth service unavailable')
-        );
+        expect(notificationService.error).toHaveBeenCalledWith(expect.stringContaining('Auth service unavailable'));
       });
 
       it('should handle generic 503 without error code', async () => {
         try {
           await callResponseErrorHandler(503, { message: 'Service temporarily unavailable' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
@@ -444,13 +441,11 @@ describe('httpService error parsing and notifications', () => {
       it('should emit system error notification for PROVISIONING_FAILED', async () => {
         try {
           await callResponseErrorHandler(500, { error: 'PROVISIONING_FAILED', message: 'System error occurred' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
-        expect(notificationService.error).toHaveBeenCalledWith(
-          expect.stringContaining('System error occurred')
-        );
+        expect(notificationService.error).toHaveBeenCalledWith(expect.stringContaining('System error occurred'));
       });
 
       it('should NOT expose provisioning details in notification', async () => {
@@ -460,12 +455,12 @@ describe('httpService error parsing and notifications', () => {
             message: 'System error',
             details: { arangoError: 'Connection failed' }
           });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
         const notificationCalls = notificationService.error.mock.calls;
-        notificationCalls.forEach(call => {
+        notificationCalls.forEach((call) => {
           const message = call[0];
           expect(message).not.toContain('arangoError');
           expect(message).not.toContain('Connection failed');
@@ -477,7 +472,7 @@ describe('httpService error parsing and notifications', () => {
       it('should emit generic error notification for unrecognized error codes', async () => {
         try {
           await callResponseErrorHandler(500, { error: 'UNKNOWN_CODE', message: 'Unknown error' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
@@ -487,13 +482,11 @@ describe('httpService error parsing and notifications', () => {
       it('should emit generic notification when backend message is missing', async () => {
         try {
           await callResponseErrorHandler(500, { error: 'SOME_ERROR' });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
-        expect(notificationService.error).toHaveBeenCalledWith(
-          expect.stringMatching(/error|occurred/i)
-        );
+        expect(notificationService.error).toHaveBeenCalledWith(expect.stringMatching(/error|occurred/i));
       });
     });
 
@@ -505,12 +498,12 @@ describe('httpService error parsing and notifications', () => {
             message: 'Access denied',
             details: { internalTrace: 'stack trace here' }
           });
-        } catch (e) {
+        } catch {
           // Expected
         }
 
         const notificationCalls = notificationService.error.mock.calls;
-        notificationCalls.forEach(call => {
+        notificationCalls.forEach((call) => {
           const message = call[0];
           expect(message).not.toContain('internalTrace');
           expect(message).not.toContain('stack trace here');

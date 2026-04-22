@@ -11,13 +11,13 @@ export default {
         id: 'default',
         name: 'All Chats',
         isDefault: true,
-        createdAt: new Date().toISOString(),
-      },
+        createdAt: new Date().toISOString()
+      }
     ],
     chats: [],
     folderChats: {
-      default: [],
-    },
+      default: []
+    }
   }),
 
   getters: {
@@ -29,12 +29,12 @@ export default {
         .filter((chat) => chat !== undefined);
     },
     getFolderById: (state) => (folderId) => state.folders.find((folder) => folder.id === folderId),
-    getChatById: (state) => (chatId) => state.chats.find((chat) => chat.id === chatId),
+    getChatById: (state) => (chatId) => state.chats.find((chat) => chat.id === chatId)
   },
 
   mutations: {
     setFolders(state, folders) {
-      console.log("setFolders mutation received:", folders);
+      console.log('setFolders mutation received:', folders);
       state.folders = [...folders];
     },
 
@@ -48,7 +48,7 @@ export default {
         id: uuidv4(),
         name: folderData.name,
         isDefault: false,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
       };
       state.folders.push(newFolder);
       state.folderChats[newFolder.id] = [];
@@ -83,7 +83,7 @@ export default {
         preview: chatData.preview || '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        messageCount: chatData.messageCount || 0,
+        messageCount: chatData.messageCount || 0
       };
       state.chats.push(newChat);
       const folderId = chatData.folderId || 'default';
@@ -93,8 +93,8 @@ export default {
         state.folderChats.default.push(newChat.id);
       }
       // Debug: Log new chat and folderChats
-      console.log("ADD_CHAT mutation: Added chat:", newChat);
-      console.log("ADD_CHAT mutation: Updated folderChats for", folderId, ":", state.folderChats[folderId]);
+      console.log('ADD_CHAT mutation: Added chat:', newChat);
+      console.log('ADD_CHAT mutation: Updated folderChats for', folderId, ':', state.folderChats[folderId]);
       return newChat.id;
     },
 
@@ -105,7 +105,7 @@ export default {
           ...state.chats[chatIndex],
           title: title || state.chats[chatIndex].title,
           preview: preview || state.chats[chatIndex].preview,
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         };
       }
     },
@@ -153,12 +153,12 @@ export default {
           id: 'default',
           name: 'All Chats',
           isDefault: true,
-          createdAt: new Date().toISOString(),
-        },
+          createdAt: new Date().toISOString()
+        }
       ];
       state.folderChats = { default: [] };
       console.log('CLEAR_FOLDERS mutation: Reset folders and folderChats');
-    },
+    }
   },
 
   actions: {
@@ -197,14 +197,14 @@ export default {
     },
 
     // Enhanced moveChat action to sync with backend
-    async moveChat({ commit, state, rootGetters }, { chatId, fromFolderId, toFolderId }) {
+    async moveChat({ commit, rootGetters }, { chatId, fromFolderId, toFolderId }) {
       console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);
       try {
         const currentUser = rootGetters['auth/currentUser'];
         if (!currentUser) throw new Error('User is missing');
         await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId);
         const folder = await chatHistoryService.getFolder(toFolderId);
-        const chatIds = folder.conversations.map(conv => conv._key);
+        const chatIds = folder.conversations.map((conv) => conv._key);
         commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
         commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
         console.log(`Chat ${chatId} moved successfully to ${toFolderId}`);
@@ -236,5 +236,5 @@ export default {
     async clearFolders({ commit }) {
       commit('CLEAR_FOLDERS');
     }
-  },
+  }
 };

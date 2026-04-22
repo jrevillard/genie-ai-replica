@@ -1,5 +1,5 @@
 // src/services/fileService.js - File Upload Service
-import httpService from './httpService'
+import httpService from './httpService';
 
 export default {
   /**
@@ -11,21 +11,21 @@ export default {
    */
   async uploadFile(file, context, entityId) {
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('context', context)
-      formData.append('entityId', entityId)
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('context', context);
+      formData.append('entityId', entityId);
 
       const response = await httpService.post('files/upload', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
+          'Content-Type': 'multipart/form-data'
+        }
+      });
 
-      return response.data
+      return response.data;
     } catch (error) {
-      console.error('Error uploading file:', error)
-      throw error
+      console.error('Error uploading file:', error);
+      throw error;
     }
   },
 
@@ -38,25 +38,25 @@ export default {
    */
   async uploadMultipleFiles(files, context, entityId) {
     try {
-      const formData = new FormData()
+      const formData = new FormData();
 
       files.forEach((file, index) => {
-        formData.append(`files[${index}]`, file)
-      })
+        formData.append(`files[${index}]`, file);
+      });
 
-      formData.append('context', context)
-      formData.append('entityId', entityId)
+      formData.append('context', context);
+      formData.append('entityId', entityId);
 
       const response = await httpService.post('files/upload-multiple', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
+          'Content-Type': 'multipart/form-data'
+        }
+      });
 
-      return response.data
+      return response.data;
     } catch (error) {
-      console.error('Error uploading multiple files:', error)
-      throw error
+      console.error('Error uploading multiple files:', error);
+      throw error;
     }
   },
 
@@ -66,7 +66,7 @@ export default {
    * @returns {String} File URL
    */
   getFileUrl(fileId) {
-    return `${httpService.baseUrl}/files/${fileId}`
+    return `${httpService.baseUrl}/files/${fileId}`;
   },
 
   /**
@@ -76,11 +76,11 @@ export default {
    */
   async deleteFile(fileId) {
     try {
-      const response = await httpService.delete(`files/${fileId}`)
-      return response.data
+      const response = await httpService.delete(`files/${fileId}`);
+      return response.data;
     } catch (error) {
-      console.error('Error deleting file:', error)
-      throw error
+      console.error('Error deleting file:', error);
+      throw error;
     }
   },
 
@@ -91,11 +91,11 @@ export default {
    */
   async getFileMetadata(fileId) {
     try {
-      const response = await httpService.get(`files/${fileId}/metadata`)
-      return response.data
+      const response = await httpService.get(`files/${fileId}/metadata`);
+      return response.data;
     } catch (error) {
-      console.error('Error getting file metadata:', error)
-      throw error
+      console.error('Error getting file metadata:', error);
+      throw error;
     }
   },
 
@@ -108,13 +108,13 @@ export default {
   async getEntityFiles(entityId, context) {
     try {
       const response = await httpService.get('files', {
-        params: { entityId, context },
-      })
+        params: { entityId, context }
+      });
 
-      return response.data
+      return response.data;
     } catch (error) {
-      console.error('Error getting entity files:', error)
-      throw error
+      console.error('Error getting entity files:', error);
+      throw error;
     }
   },
 
@@ -125,19 +125,19 @@ export default {
    * @returns {String} Preview URL
    */
   getPreviewUrl(fileId, options = {}) {
-    const { width, height, quality } = options
-    let url = `${httpService.baseUrl}/files/${fileId}/preview`
+    const { width, height, quality } = options;
+    let url = `${httpService.baseUrl}/files/${fileId}/preview`;
 
-    const params = new URLSearchParams()
-    if (width) params.append('width', width)
-    if (height) params.append('height', height)
-    if (quality) params.append('quality', quality)
+    const params = new URLSearchParams();
+    if (width) params.append('width', width);
+    if (height) params.append('height', height);
+    if (quality) params.append('quality', quality);
 
-    const queryString = params.toString()
+    const queryString = params.toString();
     if (queryString) {
-      url += `?${queryString}`
+      url += `?${queryString}`;
     }
 
-    return url
-  },
-}
+    return url;
+  }
+};

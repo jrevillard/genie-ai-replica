@@ -36,83 +36,83 @@ export default {
   props: {
     title: {
       type: String,
-      default: '',
+      default: ''
     },
     size: {
       type: String,
       default: 'medium',
-      validator: (value) => ['small', 'medium', 'large', 'xl'].includes(value),
+      validator: (value) => ['small', 'medium', 'large', 'xl'].includes(value)
     },
     scrollable: {
       type: Boolean,
-      default: true,
+      default: true
     },
     isTranslationKey: {
       type: Boolean,
-      default: false,
-    },
+      default: false
+    }
   },
   emits: ['close'],
   data() {
     return {
-      originalOverflow: null,
-    }
+      originalOverflow: null
+    };
   },
   mounted() {
     // Prevent body scrolling when modal is open
-    this.originalOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    this.originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
 
     // Trap focus inside modal
-    this.trapFocus()
+    this.trapFocus();
 
     // Add escape key listener
-    document.addEventListener('keydown', this.handleEscKey)
+    document.addEventListener('keydown', this.handleEscKey);
   },
   beforeUnmount() {
     // Restore body scrolling when component is destroyed
-    document.body.style.overflow = this.originalOverflow
+    document.body.style.overflow = this.originalOverflow;
 
     // Remove escape key listener
-    document.removeEventListener('keydown', this.handleEscKey)
+    document.removeEventListener('keydown', this.handleEscKey);
   },
   methods: {
     handleEscKey(event) {
       if (event.key === 'Escape') {
-        this.$emit('close')
+        this.$emit('close');
       }
     },
     trapFocus() {
       // Implementation of focus trap for accessibility
       const focusableElements = this.$refs.modalDialog.querySelectorAll(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      )
+      );
 
       if (focusableElements.length > 0) {
-        const firstElement = focusableElements[0]
-        const lastElement = focusableElements[focusableElements.length - 1]
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
 
         // Focus the first element initially
-        firstElement.focus()
+        firstElement.focus();
 
         this.$refs.modalDialog.addEventListener('keydown', (e) => {
           if (e.key === 'Tab') {
             // Shift + Tab on first element -> move to last
             if (e.shiftKey && document.activeElement === firstElement) {
-              e.preventDefault()
-              lastElement.focus()
+              e.preventDefault();
+              lastElement.focus();
             }
             // Tab on last element -> move to first
             else if (!e.shiftKey && document.activeElement === lastElement) {
-              e.preventDefault()
-              firstElement.focus()
+              e.preventDefault();
+              firstElement.focus();
             }
           }
-        })
+        });
       }
-    },
-  },
-}
+    }
+  }
+};
 </script>
 
 <style scoped>

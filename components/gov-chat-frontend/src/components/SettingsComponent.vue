@@ -199,19 +199,20 @@
 </template>
 
 <script>
-import userService from '@/services/userService'
-import notificationService from '@/services/notificationService'
-import { themeManager } from '@/utils/ThemeManager'
-import oidcConfig from '@/config/oidcConfig'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import LanguageSelector from '@/components/LanguageSelector.vue'
+import userService from '@/services/userService';
+import notificationService from '@/services/notificationService';
+import { themeManager } from '@/utils/ThemeManager';
+import oidcConfig from '@/config/oidcConfig';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import LanguageSelector from '@/components/LanguageSelector.vue';
 
 export default {
   name: 'SettingsComponent',
   components: {
     ConfirmDialog,
-    LanguageSelector,
+    LanguageSelector
   },
+  emits: ['themeChanged', 'close'],
   data() {
     return {
       currentLocale: this.$i18n ? this.$i18n.locale : 'en',
@@ -223,14 +224,14 @@ export default {
         theme: this.getCurrentTheme(),
         fontSize: this.getSavedFontSize(),
         emailUpdates: this.getSavedPreference('emailUpdates', false),
-        soundNotifications: this.getSavedPreference('soundNotifications', true),
+        soundNotifications: this.getSavedPreference('soundNotifications', true)
       },
       userData: {
         name: '',
         email: '',
         accountType: '',
         userId: '',
-        createdAt: '',
+        createdAt: ''
       },
       userAvatar: null,
       showResetDataConfirm: false,
@@ -238,232 +239,232 @@ export default {
         title: '',
         message: '',
         confirmText: '',
-        cancelText: '',
+        cancelText: ''
       },
       showDeleteAccountConfirm: false,
       deleteAccountDialog: {
         title: '',
         message: '',
         confirmText: '',
-        cancelText: '',
-      },
-    }
+        cancelText: ''
+      }
+    };
   },
   computed: {
     isDarkMode() {
-      return this.settings.theme === 'dark'
+      return this.settings.theme === 'dark';
     },
     accountConsoleUrl() {
-      return `${oidcConfig.authority}/account/`
+      return `${oidcConfig.authority}/account/`;
     },
     dialogThemeStyles() {
       // Reference settings.theme so Vue re-evaluates when theme changes
-      const _ = this.settings.theme
-      const dialogTheme = themeManager.getDialogTheme()
+      void this.settings.theme;
+      const dialogTheme = themeManager.getDialogTheme();
       return {
         '--dialog-background': dialogTheme.modal.background,
         '--dialog-title-color': dialogTheme.modal.titleColor,
         '--dialog-text-color': dialogTheme.modal.textColor,
         '--dialog-border-color': dialogTheme.modal.borderColor,
         '--dialog-box-shadow': dialogTheme.modal.boxShadow,
-        '--dialog-overlay-background': dialogTheme.overlay.background,
-      }
-    },
+        '--dialog-overlay-background': dialogTheme.overlay.background
+      };
+    }
   },
   watch: {
     'settings.theme'(newTheme) {
-      console.log('[SETTINGS] settings.theme changed to:', newTheme)
-      this.$forceUpdate()
+      console.log('[SETTINGS] settings.theme changed to:', newTheme);
+      this.$forceUpdate();
     },
     currentLocale: function () {
-      console.log('[SETTINGS] Current locale changed, updating dialog texts...')
-      this.updateDialogTexts()
-    },
+      console.log('[SETTINGS] Current locale changed, updating dialog texts...');
+      this.updateDialogTexts();
+    }
   },
   created() {
-    console.log('[SETTINGS] Initializing currentLocale...')
-    this.currentLocale = this.$i18n ? this.$i18n.locale : 'en'
-    console.log('[SETTINGS] currentLocale initialized to:', this.currentLocale)
+    console.log('[SETTINGS] Initializing currentLocale...');
+    this.currentLocale = this.$i18n ? this.$i18n.locale : 'en';
+    console.log('[SETTINGS] currentLocale initialized to:', this.currentLocale);
 
-    console.log('[SETTINGS] Component created, fetching user data...')
-    this.fetchUserData()
+    console.log('[SETTINGS] Component created, fetching user data...');
+    this.fetchUserData();
 
-    console.log('[SETTINGS] Initializing dialog texts...')
-    this.updateDialogTexts()
+    console.log('[SETTINGS] Initializing dialog texts...');
+    this.updateDialogTexts();
 
-    console.log('[SETTINGS] Initial settings.theme:', this.settings.theme)
-    console.log('[SETTINGS] Initial DOM data-theme:', document.documentElement.getAttribute('data-theme'))
+    console.log('[SETTINGS] Initial settings.theme:', this.settings.theme);
+    console.log('[SETTINGS] Initial DOM data-theme:', document.documentElement.getAttribute('data-theme'));
 
-    console.log('[SETTINGS] Setting up watcher for settings.language...')
+    console.log('[SETTINGS] Setting up watcher for settings.language...');
     this.$watch('settings.language', (newVal) => {
-      console.log('[SETTINGS] settings.language changed to:', newVal)
-      this.updateDialogTexts()
+      console.log('[SETTINGS] settings.language changed to:', newVal);
+      this.updateDialogTexts();
       if (this.$i18n) {
-        console.log('[SETTINGS] Updating i18n locale...')
-        this.$i18n.locale = newVal
-        console.log('[SETTINGS] Updating currentLocale to:', newVal)
-        this.currentLocale = newVal
-        console.log('[SETTINGS] Forcing component re-render for language update...')
-        this.$forceUpdate()
+        console.log('[SETTINGS] Updating i18n locale...');
+        this.$i18n.locale = newVal;
+        console.log('[SETTINGS] Updating currentLocale to:', newVal);
+        this.currentLocale = newVal;
+        console.log('[SETTINGS] Forcing component re-render for language update...');
+        this.$forceUpdate();
         if (this.$root) {
-          console.log('[SETTINGS] Forcing root component re-render...')
-          this.$root.$forceUpdate()
+          console.log('[SETTINGS] Forcing root component re-render...');
+          this.$root.$forceUpdate();
         }
       }
-    })
+    });
 
-    console.log('[SETTINGS] Setting up watcher for $i18n.locale...')
+    console.log('[SETTINGS] Setting up watcher for $i18n.locale...');
     if (this.$i18n) {
       this.$watch('$i18n.locale', (newLocale) => {
-        console.log('Locale changed in Settings:', newLocale)
-        this.currentLocale = newLocale
+        console.log('Locale changed in Settings:', newLocale);
+        this.currentLocale = newLocale;
         if (this.settings && this.settings.language !== newLocale) {
-          console.log('[SETTINGS] Syncing settings.language to:', newLocale)
-          this.settings.language = newLocale
+          console.log('[SETTINGS] Syncing settings.language to:', newLocale);
+          this.settings.language = newLocale;
         }
-        console.log('[SETTINGS] Forcing component re-render for external locale change...')
-        this.$forceUpdate()
-      })
+        console.log('[SETTINGS] Forcing component re-render for external locale change...');
+        this.$forceUpdate();
+      });
     }
   },
   mounted() {
-    console.log('[SETTINGS] Adding theme change event listener...')
-    window.addEventListener('themeChange', this.updateTheme)
+    console.log('[SETTINGS] Adding theme change event listener...');
+    window.addEventListener('themeChange', this.updateTheme);
 
-    console.log('[SETTINGS] Forcing theme application on mount...')
-    this.applyTheme(this.settings.theme)
+    console.log('[SETTINGS] Forcing theme application on mount...');
+    this.applyTheme(this.settings.theme);
 
-    console.log('[SETTINGS] Scheduling theme readiness update...')
+    console.log('[SETTINGS] Scheduling theme readiness update...');
     this.$nextTick(() => {
-      this.isThemeReady = true
-    })
+      this.isThemeReady = true;
+    });
 
-    console.log('[SETTINGS] Forcing i18n update on mount...')
+    console.log('[SETTINGS] Forcing i18n update on mount...');
     if (this.$i18n) {
-      const savedLanguage = localStorage.getItem('userLocale') || 'en'
-      console.log('[SETTINGS] Saved language from localStorage:', savedLanguage)
-      this.$i18n.locale = savedLanguage
-      this.settings.language = savedLanguage
+      const savedLanguage = localStorage.getItem('userLocale') || 'en';
+      console.log('[SETTINGS] Saved language from localStorage:', savedLanguage);
+      this.$i18n.locale = savedLanguage;
+      this.settings.language = savedLanguage;
       this.$nextTick(() => {
-        this.$forceUpdate()
-      })
+        this.$forceUpdate();
+      });
     }
 
-    console.log('Current locale:', this.$i18n.locale)
+    console.log('Current locale:', this.$i18n.locale);
   },
   beforeUnmount() {
-    console.log('[SETTINGS] Removing theme change event listener...')
-    window.removeEventListener('themeChange', this.updateTheme)
+    console.log('[SETTINGS] Removing theme change event listener...');
+    window.removeEventListener('themeChange', this.updateTheme);
   },
   methods: {
     getCurrentTheme() {
-      console.log('[SETTINGS] Getting current theme...')
-      let theme = localStorage.getItem('theme') || 'light'
-      console.log('[SETTINGS] Theme from localStorage:', theme)
+      console.log('[SETTINGS] Getting current theme...');
+      let theme = localStorage.getItem('theme') || 'light';
+      console.log('[SETTINGS] Theme from localStorage:', theme);
 
       if (theme === 'system') {
-        console.log("[SETTINGS] Theme set to 'system', checking OS preference...")
-        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-        console.log('[SETTINGS] Resolved system theme to:', theme)
+        console.log("[SETTINGS] Theme set to 'system', checking OS preference...");
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        console.log('[SETTINGS] Resolved system theme to:', theme);
       }
-      return theme
+      return theme;
     },
     getCurrentLanguage() {
-      console.log('[SETTINGS] Getting current language...')
+      console.log('[SETTINGS] Getting current language...');
 
       if (this.$i18n && this.$i18n.locale) {
-        console.log('[SETTINGS] Language from i18n:', this.$i18n.locale)
-        return this.$i18n.locale
+        console.log('[SETTINGS] Language from i18n:', this.$i18n.locale);
+        return this.$i18n.locale;
       }
 
       try {
-        const savedLocale = localStorage.getItem('userLocale')
+        const savedLocale = localStorage.getItem('userLocale');
         if (savedLocale) {
-          console.log('[SETTINGS] Language from localStorage:', savedLocale)
-          return savedLocale
+          console.log('[SETTINGS] Language from localStorage:', savedLocale);
+          return savedLocale;
         }
       } catch (e) {
-        console.warn('[SETTINGS] Error accessing localStorage for language:', e)
+        console.warn('[SETTINGS] Error accessing localStorage for language:', e);
       }
 
-      console.log("[SETTINGS] Defaulting to language: 'en'")
-      return 'en'
+      console.log("[SETTINGS] Defaulting to language: 'en'");
+      return 'en';
     },
     getSavedFontSize() {
-      console.log('[SETTINGS] Getting saved font size...')
+      console.log('[SETTINGS] Getting saved font size...');
       try {
-        const fontSize = localStorage.getItem('fontSize')
+        const fontSize = localStorage.getItem('fontSize');
         if (fontSize) {
-          console.log('[SETTINGS] Font size from localStorage:', fontSize)
-          return parseInt(fontSize)
+          console.log('[SETTINGS] Font size from localStorage:', fontSize);
+          return parseInt(fontSize);
         }
-        console.log('[SETTINGS] No font size found, defaulting to 50%')
-        return 50
+        console.log('[SETTINGS] No font size found, defaulting to 50%');
+        return 50;
       } catch (e) {
-        console.warn('[SETTINGS] Error accessing localStorage for font size:', e)
-        return 50
+        console.warn('[SETTINGS] Error accessing localStorage for font size:', e);
+        return 50;
       }
     },
     getSavedPreference(key, defaultValue) {
-      console.log(`[SETTINGS] Getting saved preference for ${key}...`)
+      console.log(`[SETTINGS] Getting saved preference for ${key}...`);
       try {
-        const value = localStorage.getItem(key)
+        const value = localStorage.getItem(key);
         if (value !== null) {
-          console.log(`[SETTINGS] Preference ${key} from localStorage:`, value)
-          return JSON.parse(value)
+          console.log(`[SETTINGS] Preference ${key} from localStorage:`, value);
+          return JSON.parse(value);
         }
-        console.log(`[SETTINGS] No preference for ${key}, defaulting to:`, defaultValue)
-        return defaultValue
+        console.log(`[SETTINGS] No preference for ${key}, defaulting to:`, defaultValue);
+        return defaultValue;
       } catch (e) {
-        console.warn(`[SETTINGS] Error accessing localStorage for ${key}:`, e)
-        return defaultValue
+        console.warn(`[SETTINGS] Error accessing localStorage for ${key}:`, e);
+        return defaultValue;
       }
     },
     translate(key, fallback = '') {
-      console.log('[SETTINGS] Translating key:', key)
+      console.log('[SETTINGS] Translating key:', key);
       if (!this.$i18n) {
-        console.log('[SETTINGS] No i18n instance, returning fallback:', fallback)
-        return fallback
+        console.log('[SETTINGS] No i18n instance, returning fallback:', fallback);
+        return fallback;
       }
       try {
-        console.log('[SETTINGS] Using locale:', this.currentLocale)
-        const translation = this.$i18n.t(key, { locale: this.currentLocale })
+        console.log('[SETTINGS] Using locale:', this.currentLocale);
+        const translation = this.$i18n.t(key, { locale: this.currentLocale });
         if (translation === key) {
-          console.log('[SETTINGS] Translation not found, using fallback:', fallback || key)
-          return fallback || key
+          console.log('[SETTINGS] Translation not found, using fallback:', fallback || key);
+          return fallback || key;
         }
-        console.log('[SETTINGS] Translation found:', translation)
-        return translation
+        console.log('[SETTINGS] Translation found:', translation);
+        return translation;
       } catch (e) {
-        console.error('[SETTINGS] Translation error:', e)
-        console.log('[SETTINGS] Returning fallback due to error:', fallback || key)
-        return fallback || key
+        console.error('[SETTINGS] Translation error:', e);
+        console.log('[SETTINGS] Returning fallback due to error:', fallback || key);
+        return fallback || key;
       }
     },
     updateTheme() {
-      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light'
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
       if (this.settings.theme !== currentTheme) {
-        this.settings.theme = currentTheme
+        this.settings.theme = currentTheme;
       }
-      this.isThemeReady = false
+      this.isThemeReady = false;
       this.$nextTick(() => {
-        this.isThemeReady = true
-        this.$forceUpdate()
-      })
+        this.isThemeReady = true;
+        this.$forceUpdate();
+      });
     },
     applyTheme(theme) {
-      this.settings.theme = theme
-      localStorage.setItem('theme', theme)
+      this.settings.theme = theme;
+      localStorage.setItem('theme', theme);
       try {
-        themeManager.setTheme(theme)
+        themeManager.setTheme(theme);
       } catch (e) {
-        console.warn('[SETTINGS] Error applying theme:', e)
+        console.warn('[SETTINGS] Error applying theme:', e);
       }
-      this.$emit('themeChanged', theme)
-      this.$forceUpdate()
+      this.$emit('themeChanged', theme);
+      this.$forceUpdate();
     },
     updateDialogTexts() {
-      console.log('[SETTINGS] Updating dialog texts for current locale...')
+      console.log('[SETTINGS] Updating dialog texts for current locale...');
       this.resetDataDialog = {
         title: this.translate('settings.resetUserDataTitle', 'Reset User Data'),
         message: this.translate(
@@ -471,8 +472,8 @@ export default {
           'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.'
         ),
         confirmText: this.translate('settings.reset', 'Reset'),
-        cancelText: this.translate('settings.cancel', 'Cancel'),
-      }
+        cancelText: this.translate('settings.cancel', 'Cancel')
+      };
       this.deleteAccountDialog = {
         title: this.translate('settings.deleteAccountTitle', 'Delete Account'),
         message: this.translate(
@@ -480,175 +481,181 @@ export default {
           'Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.'
         ),
         confirmText: this.translate('settings.delete', 'Delete'),
-        cancelText: this.translate('settings.cancel', 'Cancel'),
-      }
+        cancelText: this.translate('settings.cancel', 'Cancel')
+      };
     },
     async fetchUserData() {
-      console.log('[SETTINGS] Fetching user data...')
-      this.isLoading = true
-      this.errorMessage = null
+      console.log('[SETTINGS] Fetching user data...');
+      this.isLoading = true;
+      this.errorMessage = null;
       try {
-        console.log('[SETTINGS] Checking Vuex auth store for user data...')
-        let userData = this.$store.getters.currentUser
+        console.log('[SETTINGS] Checking Vuex auth store for user data...');
+        const userData = this.$store.getters.currentUser;
         if (!userData) {
-          console.log('[SETTINGS] No store data, showing error...')
-          throw new Error('No user data available in store')
+          console.log('[SETTINGS] No store data, showing error...');
+          throw new Error('No user data available in store');
         } else {
-          console.log('[SETTINGS] Using Vuex store data:', userData)
+          console.log('[SETTINGS] Using Vuex store data:', userData);
         }
-        console.log('[SETTINGS] Updating userData state...')
+        console.log('[SETTINGS] Updating userData state...');
         this.userData = {
-          name: userData.name || userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
+          name:
+            userData.name ||
+            userData.fullName ||
+            userData.loginName ||
+            userData.username ||
+            this.translate('settings.user'),
           email: userData.email || '',
           accountType: (userData.roles && userData.roles.join(', ')) || this.translate('settings.standardAccount'),
-          createdAt: userData.createdAt || '',
-        }
-        console.log('[SETTINGS] userData updated:', this.userData)
+          createdAt: userData.createdAt || ''
+        };
+        console.log('[SETTINGS] userData updated:', this.userData);
         if (userData.avatarUrl) {
-          console.log('[SETTINGS] Setting user avatar:', userData.avatarUrl)
-          this.userAvatar = userData.avatarUrl
+          console.log('[SETTINGS] Setting user avatar:', userData.avatarUrl);
+          this.userAvatar = userData.avatarUrl;
         }
       } catch (error) {
-        console.error('[SETTINGS] Error fetching user data:', error)
-        notificationService.error(this.translate('settings.unableToLoadUser'))
-        console.log('[SETTINGS] Attempting to use Vuex store as fallback...')
-        const fallbackUser = this.$store.getters.currentUser
+        console.error('[SETTINGS] Error fetching user data:', error);
+        notificationService.error(this.translate('settings.unableToLoadUser'));
+        console.log('[SETTINGS] Attempting to use Vuex store as fallback...');
+        const fallbackUser = this.$store.getters.currentUser;
         if (fallbackUser) {
-          console.log('[SETTINGS] Fallback user data found:', fallbackUser)
+          console.log('[SETTINGS] Fallback user data found:', fallbackUser);
           this.userData = {
-            name: fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
+            name:
+              fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
             accountType: (fallbackUser.roles && fallbackUser.roles.join(', ')) || this.translate('settings.account'),
-            createdAt: fallbackUser.createdAt || '',
-          }
-          console.log('[SETTINGS] Fallback userData set:', this.userData)
+            createdAt: fallbackUser.createdAt || ''
+          };
+          console.log('[SETTINGS] Fallback userData set:', this.userData);
         }
       } finally {
-        console.log('[SETTINGS] Setting isLoading to false')
-        this.isLoading = false
+        console.log('[SETTINGS] Setting isLoading to false');
+        this.isLoading = false;
       }
     },
     close() {
-      console.log('[SETTINGS] Closing dialog without saving...')
-      this.$emit('close')
+      console.log('[SETTINGS] Closing dialog without saving...');
+      this.$emit('close');
     },
     save() {
-      console.log('[SETTINGS] Saving settings...')
-      notificationService.info(this.translate('settings.savingSettings', 'Saving your settings...'), 1000)
+      console.log('[SETTINGS] Saving settings...');
+      notificationService.info(this.translate('settings.savingSettings', 'Saving your settings...'), 1000);
       if (this.$i18n) {
-        console.log('[SETTINGS] Saving language preference:', this.settings.language)
-        this.$i18n.locale = this.settings.language
+        console.log('[SETTINGS] Saving language preference:', this.settings.language);
+        this.$i18n.locale = this.settings.language;
         try {
-          localStorage.setItem('userLocale', this.settings.language)
-          console.log('[SETTINGS] Language preference saved to localStorage')
+          localStorage.setItem('userLocale', this.settings.language);
+          console.log('[SETTINGS] Language preference saved to localStorage');
         } catch (e) {
-          console.warn('[SETTINGS] Error saving language preference:', e)
+          console.warn('[SETTINGS] Error saving language preference:', e);
         }
       }
-      console.log('[SETTINGS] Applying theme to DOM:', this.settings.theme)
-      themeManager.setTheme(this.settings.theme)
+      console.log('[SETTINGS] Applying theme to DOM:', this.settings.theme);
+      themeManager.setTheme(this.settings.theme);
       try {
-        localStorage.setItem('theme', this.settings.theme)
-        console.log('[SETTINGS] Theme preference saved to localStorage')
+        localStorage.setItem('theme', this.settings.theme);
+        console.log('[SETTINGS] Theme preference saved to localStorage');
       } catch (e) {
-        console.warn('[SETTINGS] Error saving theme preference:', e)
+        console.warn('[SETTINGS] Error saving theme preference:', e);
       }
-      console.log('[SETTINGS] Saving font size:', this.settings.fontSize)
+      console.log('[SETTINGS] Saving font size:', this.settings.fontSize);
       try {
-        localStorage.setItem('fontSize', this.settings.fontSize.toString())
-        document.documentElement.style.fontSize = `${this.settings.fontSize / 50}rem`
-        console.log('[SETTINGS] Font size applied and saved')
+        localStorage.setItem('fontSize', this.settings.fontSize.toString());
+        document.documentElement.style.fontSize = `${this.settings.fontSize / 50}rem`;
+        console.log('[SETTINGS] Font size applied and saved');
       } catch (e) {
-        console.warn('[SETTINGS] Error saving font size:', e)
+        console.warn('[SETTINGS] Error saving font size:', e);
       }
-      console.log('[SETTINGS] Saving notification preferences...')
+      console.log('[SETTINGS] Saving notification preferences...');
       try {
-        localStorage.setItem('emailUpdates', JSON.stringify(this.settings.emailUpdates))
-        localStorage.setItem('soundNotifications', JSON.stringify(this.settings.soundNotifications))
+        localStorage.setItem('emailUpdates', JSON.stringify(this.settings.emailUpdates));
+        localStorage.setItem('soundNotifications', JSON.stringify(this.settings.soundNotifications));
         console.log('[SETTINGS] Notification preferences saved:', {
           emailUpdates: this.settings.emailUpdates,
-          soundNotifications: this.settings.soundNotifications,
-        })
+          soundNotifications: this.settings.soundNotifications
+        });
       } catch (e) {
-        console.warn('[SETTINGS] Error saving notification preferences:', e)
+        console.warn('[SETTINGS] Error saving notification preferences:', e);
       }
-      console.log('[SETTINGS] Emitting themeChanged event:', this.settings.theme)
-      this.$emit('themeChanged', this.settings.theme)
-      notificationService.success(this.translate('settings.settingsSaved', 'Settings saved successfully!'))
-      console.log('[SETTINGS] Closing dialog after saving...')
-      this.$emit('close')
+      console.log('[SETTINGS] Emitting themeChanged event:', this.settings.theme);
+      this.$emit('themeChanged', this.settings.theme);
+      notificationService.success(this.translate('settings.settingsSaved', 'Settings saved successfully!'));
+      console.log('[SETTINGS] Closing dialog after saving...');
+      this.$emit('close');
     },
     openAccountConsole() {
-      window.open(this.accountConsoleUrl, '_blank', 'noopener,noreferrer')
+      window.open(this.accountConsoleUrl, '_blank', 'noopener,noreferrer');
     },
     confirmResetUserData() {
-      console.log('[SETTINGS] Showing reset user data confirmation...')
-      this.showResetDataConfirm = true
+      console.log('[SETTINGS] Showing reset user data confirmation...');
+      this.showResetDataConfirm = true;
     },
     handleResetDataConfirm() {
-      console.log('[SETTINGS] User confirmed reset user data...')
-      this.showResetDataConfirm = false
-      this.resetUserData()
+      console.log('[SETTINGS] User confirmed reset user data...');
+      this.showResetDataConfirm = false;
+      this.resetUserData();
     },
     handleResetDataCancel() {
-      console.log('[SETTINGS] User cancelled reset user data...')
-      this.showResetDataConfirm = false
+      console.log('[SETTINGS] User cancelled reset user data...');
+      this.showResetDataConfirm = false;
     },
     async resetUserData() {
-      console.log('[SETTINGS] Resetting user data...')
+      console.log('[SETTINGS] Resetting user data...');
       try {
-        this.isLoading = true
-        console.log('[SETTINGS] Calling userService.resetUserData...')
-        const response = await userService.resetUserData()
-        console.log('[SETTINGS] Reset user data response:', response)
+        this.isLoading = true;
+        console.log('[SETTINGS] Calling userService.resetUserData...');
+        const response = await userService.resetUserData();
+        console.log('[SETTINGS] Reset user data response:', response);
         notificationService.success(
           this.translate('settings.userDataReset', 'Your profile data has been successfully reset.')
-        )
-        console.log('[SETTINGS] Refreshing user data after reset...')
-        await this.fetchUserData()
-        console.log('[SETTINGS] Clearing localStorage except theme and language...')
-        const themeValue = localStorage.getItem('theme')
-        const langValue = localStorage.getItem('userLocale')
-        localStorage.clear()
-        if (themeValue) localStorage.setItem('theme', themeValue)
-        if (langValue) localStorage.setItem('userLocale', langValue)
-        console.log('[SETTINGS] Restored theme and language to localStorage')
+        );
+        console.log('[SETTINGS] Refreshing user data after reset...');
+        await this.fetchUserData();
+        console.log('[SETTINGS] Clearing localStorage except theme and language...');
+        const themeValue = localStorage.getItem('theme');
+        const langValue = localStorage.getItem('userLocale');
+        localStorage.clear();
+        if (themeValue) localStorage.setItem('theme', themeValue);
+        if (langValue) localStorage.setItem('userLocale', langValue);
+        console.log('[SETTINGS] Restored theme and language to localStorage');
       } catch (e) {
-        console.error('[SETTINGS] Error resetting user data:', e)
+        console.error('[SETTINGS] Error resetting user data:', e);
         notificationService.error(
           this.translate('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.')
-        )
+        );
       } finally {
-        console.log('[SETTINGS] Setting isLoading to false after reset...')
-        this.isLoading = false
+        console.log('[SETTINGS] Setting isLoading to false after reset...');
+        this.isLoading = false;
       }
     },
     confirmDeleteAccount() {
-      this.showDeleteAccountConfirm = true
+      this.showDeleteAccountConfirm = true;
     },
     handleDeleteAccountConfirm() {
-      this.showDeleteAccountConfirm = false
-      this.deleteAccount()
+      this.showDeleteAccountConfirm = false;
+      this.deleteAccount();
     },
     handleDeleteAccountCancel() {
-      this.showDeleteAccountConfirm = false
+      this.showDeleteAccountConfirm = false;
     },
     async deleteAccount() {
       try {
-        this.isLoading = true
-        await userService.deleteAccount()
-        await this.$store.dispatch('logout')
+        this.isLoading = true;
+        await userService.deleteAccount();
+        await this.$store.dispatch('logout');
       } catch (e) {
-        console.error('[SETTINGS] Error deleting account:', e)
+        console.error('[SETTINGS] Error deleting account:', e);
         notificationService.error(
           this.translate('settings.failedToDeleteAccount', 'Failed to delete your account. Please try again later.')
-        )
+        );
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
-    },
-  },
-}
+    }
+  }
+};
 </script>
 
 <style scoped>

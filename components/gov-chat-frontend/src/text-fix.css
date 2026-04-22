@@ -2,7 +2,12 @@
 /* Global text color fixes */
 
 /* General heading fixes */
-h1, h2, h3, h4, h5, h6,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
 .modal-header h3,
 .analytics-dashboard h2,
 .analytics-dashboard h3,
@@ -14,7 +19,7 @@ h1, h2, h3, h4, h5, h6,
 
 /* Metric values */
 .metric-value,
-[class*="metric"] [class*="value"],
+[class*='metric'] [class*='value'],
 .metrics-summary .metric-value,
 .metric-card .metric-value {
   color: #000 !important;

@@ -1,5 +1,5 @@
 // src/services/userService.js
-import httpService from './httpService'
+import httpService from './httpService';
 
 /**
  * Service for user data operations (post-OIDC cleanup).
@@ -8,7 +8,7 @@ import httpService from './httpService'
  */
 class UserService {
   constructor() {
-    this.userEndpoint = 'me'
+    this.userEndpoint = 'me';
   }
 
   /**
@@ -17,12 +17,12 @@ class UserService {
    */
   async resetUserData() {
     try {
-      console.log('Calling reset user data endpoint')
-      const response = await httpService.post(`${this.userEndpoint}/reset-data`)
-      return response.data
+      console.log('Calling reset user data endpoint');
+      const response = await httpService.post(`${this.userEndpoint}/reset-data`);
+      return response.data;
     } catch (error) {
-      console.error('Error resetting user data:', error)
-      throw error
+      console.error('Error resetting user data:', error);
+      throw error;
     }
   }
 
@@ -32,13 +32,13 @@ class UserService {
    */
   async deleteAccount() {
     try {
-      const response = await httpService.post(`${this.userEndpoint}/delete`)
-      return response.data
+      const response = await httpService.post(`${this.userEndpoint}/delete`);
+      return response.data;
     } catch (error) {
-      console.error('Error deleting account:', error)
-      throw error
+      console.error('Error deleting account:', error);
+      throw error;
     }
   }
 }
 
-export default new UserService()
+export default new UserService();

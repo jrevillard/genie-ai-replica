@@ -134,8 +134,9 @@ export default {
   name: 'ChatResponseFeedbackDialog',
   props: {
     visible: { type: Boolean, default: false },
-    message: { type: Object, default: null },
+    message: { type: Object, default: null }
   },
+  emits: ['close', 'submit'],
   data() {
     return {
       selectedRating: null,
@@ -147,91 +148,91 @@ export default {
         '#F1C27D', // Medium-light skin tone
         '#E0AC69', // Medium skin tone
         '#C68642', // Medium-dark skin tone
-        '#8D5524', // Dark skin tone
-      ],
-    }
+        '#8D5524' // Dark skin tone
+      ]
+    };
   },
   watch: {
     visible(newVal) {
       if (newVal) {
         // Reset state when dialog is opened
-        this.selectedRating = null
-        this.thumbFeedback = null
-        this.feedbackText = ''
+        this.selectedRating = null;
+        this.thumbFeedback = null;
+        this.feedbackText = '';
 
         // Focus management
         this.$nextTick(() => {
-          const firstButton = this.$el.querySelector('.thumb-button')
-          if (firstButton) firstButton.focus()
-        })
+          const firstButton = this.$el.querySelector('.thumb-button');
+          if (firstButton) firstButton.focus();
+        });
       }
-    },
+    }
   },
   // Focus management for accessibility
   mounted() {
     // Handle escape key press
     this.escHandler = (e) => {
       if (e.key === 'Escape' && this.visible) {
-        this.closeDialog()
+        this.closeDialog();
       }
-    }
-    document.addEventListener('keydown', this.escHandler)
+    };
+    document.addEventListener('keydown', this.escHandler);
 
     // Focus the first thumbs button when dialog opens
     this.$nextTick(() => {
       if (this.visible) {
-        const firstButton = this.$el.querySelector('.thumb-button')
-        if (firstButton) firstButton.focus()
+        const firstButton = this.$el.querySelector('.thumb-button');
+        if (firstButton) firstButton.focus();
       }
-    })
+    });
   },
   beforeUnmount() {
-    document.removeEventListener('keydown', this.escHandler)
+    document.removeEventListener('keydown', this.escHandler);
   },
   methods: {
     closeDialog() {
-      this.selectedRating = null
-      this.thumbFeedback = null
-      this.feedbackText = ''
-      this.$emit('close')
+      this.selectedRating = null;
+      this.thumbFeedback = null;
+      this.feedbackText = '';
+      this.$emit('close');
     },
     selectThumbFeedback(type) {
-      this.thumbFeedback = type
+      this.thumbFeedback = type;
 
       // Auto-set rating based on thumb selection (optional)
       if (type === 'up') {
-        this.selectedRating = 4 // Default "up" to a 4 rating
+        this.selectedRating = 4; // Default "up" to a 4 rating
       } else if (type === 'down') {
-        this.selectedRating = 2 // Default "down" to a 2 rating
+        this.selectedRating = 2; // Default "down" to a 2 rating
       }
     },
     submitFeedback() {
       // Validate that either a rating or thumb feedback is selected
-      if (!this.selectedRating && !this.thumbFeedback) return
+      if (!this.selectedRating && !this.thumbFeedback) return;
 
       this.$emit('submit', {
         rating: this.selectedRating,
         thumbFeedback: this.thumbFeedback,
         skinTone: this.skinToneColor,
         text: this.feedbackText,
-        message: this.message,
-      })
+        message: this.message
+      });
 
-      this.closeDialog()
+      this.closeDialog();
     },
     getRatingLabel(rating) {
       // Directly access translation data to avoid missing translation issues
       try {
-        const locale = this.$i18n.locale
-        const label = this.$i18n.messages[locale]?.responseRating?.ratingLabels[rating]
-        return label || `Rating ${rating}`
+        const locale = this.$i18n.locale;
+        const label = this.$i18n.messages[locale]?.responseRating?.ratingLabels[rating];
+        return label || `Rating ${rating}`;
       } catch (err) {
-        console.error('Error getting rating label:', err)
-        return `Rating ${rating}`
+        console.error('Error getting rating label:', err);
+        return `Rating ${rating}`;
       }
-    },
-  },
-}
+    }
+  }
+};
 </script>
 
 <style scoped>

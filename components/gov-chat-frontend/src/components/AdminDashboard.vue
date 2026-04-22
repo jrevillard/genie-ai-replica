@@ -1496,8 +1496,8 @@
       :visible="confirmDialogState.visible"
       :title="confirmDialogState.title"
       :message="confirmDialogState.message"
-      :confirmText="confirmDialogState.confirmText"
-      :cancelText="confirmDialogState.cancelText"
+      :confirm-text="confirmDialogState.confirmText"
+      :cancel-text="confirmDialogState.cancelText"
       :theme="currentTheme"
       @confirm="confirmDialogState.onConfirm"
       @cancel="confirmDialogState.onCancel"
@@ -1506,21 +1506,21 @@
 </template>
 
 <script>
-import serviceTreeService from '../services/serviceTreeService.js'
-import databaseOperationsService from '../services/databaseOperationsService'
-import adminDashboardService from '../services/adminDashboardService'
-import OperationResultsModal from './OperationResultsModal.vue'
-import LogSearchDialog from './LogSearchDialog.vue'
-import UploadFilesDialog from './UploadFilesDialog.vue'
-import AddFromLinkDialog from './AddFromLinkDialog.vue'
-import FileDetailsDialog from './FileDetailsDialog.vue'
-import ConfirmDialog from './ConfirmDialog.vue' // IMPORT ConfirmDialog
-import { eventBus } from '../eventBus.js'
-import { availableLanguages } from '../config/languageConfig.js'
-import oidcConfig from '../config/oidcConfig.js'
-import documentFileService from '../services/documentFileService.js'
-import { formatFileSize } from '../utils/fileUtils.js'
-import { themeManager } from '../utils/ThemeManager'
+import serviceTreeService from '../services/serviceTreeService.js';
+import databaseOperationsService from '../services/databaseOperationsService';
+import adminDashboardService from '../services/adminDashboardService';
+import OperationResultsModal from './OperationResultsModal.vue';
+import LogSearchDialog from './LogSearchDialog.vue';
+import UploadFilesDialog from './UploadFilesDialog.vue';
+import AddFromLinkDialog from './AddFromLinkDialog.vue';
+import FileDetailsDialog from './FileDetailsDialog.vue';
+import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
+import { eventBus } from '../eventBus.js';
+import { availableLanguages } from '../config/languageConfig.js';
+import oidcConfig from '../config/oidcConfig.js';
+import documentFileService from '../services/documentFileService.js';
+import { formatFileSize } from '../utils/fileUtils.js';
+import { themeManager } from '../utils/ThemeManager';
 
 export default {
   name: 'AdminDashboard',
@@ -1530,7 +1530,7 @@ export default {
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
-    ConfirmDialog, // REGISTER ConfirmDialog
+    ConfirmDialog // REGISTER ConfirmDialog
   },
   emits: ['close'],
   data() {
@@ -1541,7 +1541,7 @@ export default {
         file_name: 'asc',
         'dataprep.status': 'asc',
         upload_date: 'desc', // Default to newest first
-        file_size: 'asc',
+        file_size: 'asc'
       },
 
       // Placeholder for form state
@@ -1569,7 +1569,7 @@ export default {
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
         { id: 'security', label: 'Security' },
-        { id: 'users', label: 'Users' },
+        { id: 'users', label: 'Users' }
       ],
 
       // Loading state
@@ -1588,13 +1588,13 @@ export default {
         { id: 'cache', name: 'Cache', status: 'good' },
         { id: 'storage', name: 'Storage', status: 'warning' },
         { id: 'messageQueue', name: 'Message Queue', status: 'good' },
-        { id: 'externalApi', name: 'External API', status: 'error' },
+        { id: 'externalApi', name: 'External API', status: 'error' }
       ],
 
       // Database stats
       dbStats: {
         databaseSize: '42.3 GB',
-        totalTables: 128,
+        totalTables: 128
       },
 
       // Resource usage metrics
@@ -1602,7 +1602,7 @@ export default {
         { id: 'cpu', label: 'CPU Usage', value: 42 },
         { id: 'memory', label: 'Memory Usage', value: 78 },
         { id: 'storage', label: 'Storage Usage', value: 92 },
-        { id: 'network', label: 'Network Bandwidth', value: 35 },
+        { id: 'network', label: 'Network Bandwidth', value: 35 }
       ],
 
       logs: [],
@@ -1619,7 +1619,7 @@ export default {
         systemUptime: 99.98,
         avgResponseTime: 245,
         errorRate: 0.05,
-        monthlyActiveUsers: 0,
+        monthlyActiveUsers: 0
       },
 
       securityMetrics: {
@@ -1629,15 +1629,15 @@ export default {
         vulnerabilities: {
           critical: 0,
           medium: 2,
-          low: 5,
-        },
+          low: 5
+        }
       },
 
       userStats: {
         totalUsers: 0,
         activeUsers: 0,
         newUsers: 0,
-        users: [],
+        users: []
       },
 
       currentUser: {},
@@ -1662,19 +1662,19 @@ export default {
         _key: null,
         nameEN: '',
         translations: [], // Array for translation objects
-        parentId: null,
+        parentId: null
       },
       documents: [], // Remove the old hardcoded data and start with an empty array
       isDocumentsLoading: false,
       documentPagination: {
         page: 1,
         limit: 15, // You can adjust the number of items per page
-        total: 0,
+        total: 0
       },
       // The existing properties below are already correct
       documentSearchTerm: '',
       documentFilters: {
-        status: 'all',
+        status: 'all'
       },
       selectedDocuments: [],
 
@@ -1693,156 +1693,156 @@ export default {
         confirmText: 'OK',
         cancelText: 'Cancel',
         onConfirm: () => {},
-        onCancel: () => {},
-      },
-    }
+        onCancel: () => {}
+      }
+    };
   },
   computed: {
     keycloakAdminUrl() {
       const keycloakUrl = window.location.origin + '/auth/admin';
       // Extract realm from runtime OIDC config (authority = "https://host/auth/realms/{realm}")
-      const realm = (oidcConfig.authority.match(/\/realms\/([^/]+)$/)||[])[1] || 'genie';
+      const realm = (oidcConfig.authority.match(/\/realms\/([^/]+)$/) || [])[1] || 'genie';
       return `${keycloakUrl}/${realm}/console/#/${realm}/users`;
     },
 
     // Test if there are unsaved changes
     isFormDirty() {
       if (!this.originalHierarchyFormState) {
-        return false
+        return false;
       }
       // Compare the stringified versions of the current and original form states
-      return JSON.stringify(this.hierarchyForm) !== this.originalHierarchyFormState
+      return JSON.stringify(this.hierarchyForm) !== this.originalHierarchyFormState;
     },
 
     // User list to display (either search results or all users)
     displayedUsers() {
       // If we have search results, show them
       if (this.userSearchResults) {
-        return this.userSearchResults
+        return this.userSearchResults;
       }
 
       // If we're actively searching but have no results yet
       if (this.isSearchingUsers) {
-        return []
+        return [];
       }
 
       // Otherwise, show all users
-      return this.userStats.users || []
+      return this.userStats.users || [];
     },
 
     /**
      * Performs client-side filtering on the documents array based on the selected status.
      */
     filteredDocuments() {
-      const selectedStatus = this.documentFilters.status
+      const selectedStatus = this.documentFilters.status;
       if (!this.documents || this.documents.length === 0) {
-        return []
+        return [];
       }
       if (selectedStatus === 'all') {
-        return this.documents // If 'All' is selected, return the full list
+        return this.documents; // If 'All' is selected, return the full list
       }
-      return this.documents.filter((doc) => doc.dataprep && doc.dataprep.status === selectedStatus)
+      return this.documents.filter((doc) => doc.dataprep && doc.dataprep.status === selectedStatus);
     },
 
     sortedAndFilteredDocuments() {
       // Get the currently filtered list
-      const filtered = this.filteredDocuments
-      if (!this.sortKey) return filtered
+      const filtered = this.filteredDocuments;
+      if (!this.sortKey) return filtered;
 
       // Get the current sort direction
-      const order = this.sortOrders[this.sortKey] || 'asc'
-      const multiplier = order === 'asc' ? 1 : -1
+      const order = this.sortOrders[this.sortKey] || 'asc';
+      const multiplier = order === 'asc' ? 1 : -1;
 
       // Make a copy and sort it
       return [...filtered].sort((a, b) => {
-        let valA, valB
+        let valA, valB;
 
         // Handle nested properties like 'dataprep.status'
         if (this.sortKey.includes('.')) {
-          const keys = this.sortKey.split('.')
-          valA = a[keys[0]][keys[1]]
-          valB = b[keys[0]][keys[1]]
+          const keys = this.sortKey.split('.');
+          valA = a[keys[0]][keys[1]];
+          valB = b[keys[0]][keys[1]];
         } else {
-          valA = a[this.sortKey]
-          valB = b[this.sortKey]
+          valA = a[this.sortKey];
+          valB = b[this.sortKey];
         }
 
         // Comparison logic
-        if (valA < valB) return -1 * multiplier
-        if (valA > valB) return 1 * multiplier
-        return 0
-      })
+        if (valA < valB) return -1 * multiplier;
+        if (valA > valB) return 1 * multiplier;
+        return 0;
+      });
     },
 
     showIngestButton() {
       // 1. Don't show if no documents are selected
       if (this.selectedDocuments.length === 0) {
-        return false
+        return false;
       }
 
       // 2. Create a Set of selected keys for efficient lookup
-      const selectedKeys = new Set(this.selectedDocuments)
+      const selectedKeys = new Set(this.selectedDocuments);
 
       // 3. Find all the full document objects that are currently selected
-      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key))
+      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key));
 
       // 4. Check if ANY of the selected documents have the status 'ingested'
-      const hasIngestedFile = selectedDocObjects.some((doc) => doc.dataprep && doc.dataprep.status === 'ingested')
+      const hasIngestedFile = selectedDocObjects.some((doc) => doc.dataprep && doc.dataprep.status === 'ingested');
 
       // 5. Only show the button if there are selected files AND none of them are ingested
-      return !hasIngestedFile
-    },
+      return !hasIngestedFile;
+    }
   },
   watch: {
     '$i18n.locale'(newLocale) {
-      console.log('Locale changed in AdminDashboard:', newLocale)
-      this.currentLocale = newLocale
-      this.$forceUpdate()
+      console.log('Locale changed in AdminDashboard:', newLocale);
+      this.currentLocale = newLocale;
+      this.$forceUpdate();
     },
     activeTab(newTab) {
       if (newTab === 'hierarchy' && this.knowledgeHierarchy.length === 0) {
-        this.loadKnowledgeHierarchy()
+        this.loadKnowledgeHierarchy();
       }
     },
 
     documentSearchTerm() {
       // A debounce would be ideal here in a real app, but this works
-      this.documentPagination.page = 1 // Reset to first page on new search
-      this.loadDocuments()
+      this.documentPagination.page = 1; // Reset to first page on new search
+      this.loadDocuments();
     },
     documentFilters: {
       handler() {
-        this.documentPagination.page = 1 // Reset to first page on filter change
-        this.loadDocuments()
+        this.documentPagination.page = 1; // Reset to first page on filter change
+        this.loadDocuments();
       },
-      deep: true,
-    },
+      deep: true
+    }
   },
   created() {
     // Initialize with the current language settings
-    this.currentLocale = this.$i18n ? this.$i18n.locale : 'en'
+    this.currentLocale = this.$i18n ? this.$i18n.locale : 'en';
   },
   mounted() {
     // Apply current language settings
     if (this.$i18n) {
-      this.$i18n.locale = this.currentLocale
+      this.$i18n.locale = this.currentLocale;
     }
 
     // Apply theme from localStorage or default
-    this.applyTheme(this.currentTheme)
+    this.applyTheme(this.currentTheme);
 
     // Listen for theme changes from other components
-    window.addEventListener('themeChange', this.handleThemeChange)
+    window.addEventListener('themeChange', this.handleThemeChange);
 
     // Load initial data for the dashboard
-    this.loadInitialData()
+    this.loadInitialData();
 
     // Get current user data
-    this.getCurrentUser()
+    this.getCurrentUser();
   },
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
-    window.removeEventListener('themeChange', this.handleThemeChange)
+    window.removeEventListener('themeChange', this.handleThemeChange);
   },
   methods: {
     formatFileSize,
@@ -1859,14 +1859,14 @@ export default {
         confirmText: confirmText || this.translate('common.ok', 'OK'),
         cancelText: cancelText || this.translate('common.cancel', 'Cancel'),
         onConfirm: () => {
-          if (onConfirm) onConfirm()
-          this.resetConfirmDialog()
+          if (onConfirm) onConfirm();
+          this.resetConfirmDialog();
         },
         onCancel: () => {
-          if (onCancel) onCancel()
-          this.resetConfirmDialog()
-        },
-      }
+          if (onCancel) onCancel();
+          this.resetConfirmDialog();
+        }
+      };
     },
 
     /**
@@ -1880,8 +1880,8 @@ export default {
         confirmText: 'OK',
         cancelText: 'Cancel',
         onConfirm: () => {},
-        onCancel: () => {},
-      }
+        onCancel: () => {}
+      };
     },
     // --- END: Methods for ConfirmDialog ---
 
@@ -1890,8 +1890,8 @@ export default {
      */
     handleDocumentPagination(newPage) {
       if (newPage > 0 && (newPage - 1) * this.documentPagination.limit < this.documentPagination.total) {
-        this.documentPagination.page = newPage
-        this.loadDocuments()
+        this.documentPagination.page = newPage;
+        this.loadDocuments();
       }
     },
 
@@ -1901,10 +1901,10 @@ export default {
     sortBy(key) {
       if (this.sortKey === key) {
         // If clicking the same column, reverse the order
-        this.sortOrders[key] = this.sortOrders[key] === 'asc' ? 'desc' : 'asc'
+        this.sortOrders[key] = this.sortOrders[key] === 'asc' ? 'desc' : 'asc';
       } else {
         // If clicking a new column, set it as the sort key
-        this.sortKey = key
+        this.sortKey = key;
       }
     },
 
@@ -1912,20 +1912,20 @@ export default {
     translate(key, fallback = '') {
       if (!this.$i18n) {
         // console.warn(`[AdminDashboard] $i18n not available. Using fallback for: ${key}`);
-        return fallback
+        return fallback;
       }
       try {
         // Force the correct locale
-        const translation = this.$i18n.t(key, { locale: this.currentLocale })
+        const translation = this.$i18n.t(key, { locale: this.currentLocale });
         // Return fallback if the key is returned (meaning no translation found)
         if (translation === key) {
           // console.warn(`[AdminDashboard] No translation for key: ${key}. Using fallback.`);
-          return fallback || key
+          return fallback || key;
         }
-        return translation
+        return translation;
       } catch (e) {
-        console.error(`[AdminDashboard] Translation error for key ${key}:`, e)
-        return fallback || key
+        console.error(`[AdminDashboard] Translation error for key ${key}:`, e);
+        return fallback || key;
       }
     },
 
@@ -1933,69 +1933,69 @@ export default {
     getCurrentLanguage() {
       // First try to get from i18n instance
       if (this.$i18n && this.$i18n.locale) {
-        return this.$i18n.locale
+        return this.$i18n.locale;
       }
 
       // Fallback to localStorage
       try {
-        const savedLocale = localStorage.getItem('userLocale')
+        const savedLocale = localStorage.getItem('userLocale');
         if (savedLocale) {
-          return savedLocale
+          return savedLocale;
         }
       } catch (e) {
-        console.warn('Error accessing localStorage for language:', e)
+        console.warn('Error accessing localStorage for language:', e);
       }
 
       // Default to English if nothing else works
-      return 'en'
+      return 'en';
     },
 
     // Change language
     changeLanguage() {
       if (this.$i18n) {
         // Set the i18n locale
-        this.$i18n.locale = this.currentLocale
+        this.$i18n.locale = this.currentLocale;
 
         // Save to localStorage
         try {
-          localStorage.setItem('userLocale', this.currentLocale)
+          localStorage.setItem('userLocale', this.currentLocale);
         } catch (e) {
-          console.warn('Error saving language preference:', e)
+          console.warn('Error saving language preference:', e);
         }
 
         // Force update this component
-        this.$forceUpdate()
+        this.$forceUpdate();
       }
     },
 
     // Toggle between light and dark theme
     toggleTheme() {
-      const newTheme = this.currentTheme === 'light' ? 'dark' : 'light'
-      this.applyTheme(newTheme)
+      const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+      this.applyTheme(newTheme);
     },
 
     // Apply theme
     applyTheme(theme) {
       // Update local state
-      this.currentTheme = theme
+      this.currentTheme = theme;
 
       // Save to localStorage
-      localStorage.setItem('theme', theme)
+      localStorage.setItem('theme', theme);
 
       // Delegate DOM manipulation to ThemeManager
-      themeManager.setTheme(theme)
+      themeManager.setTheme(theme);
     },
 
     // Handle theme change event from other components
     handleThemeChange(event) {
       if (event.detail && event.detail.theme) {
-        this.applyTheme(event.detail.theme)
+        this.applyTheme(event.detail.theme);
       }
     },
 
     // Get current effective theme
     getCurrentTheme() {
-      return this.currentTheme
+      return this.currentTheme;
     },
 
     // Set active tab
@@ -2013,50 +2013,50 @@ export default {
           cancelText: this.translate('common.cancel', 'Cancel'),
           onConfirm: () => {
             // User confirmed, proceed with tab switch
-            this.activeTab = tabId
-            this.originalHierarchyFormState = null // Reset form state
-            this.loadDataForTab(tabId) // Load data for the new tab
+            this.activeTab = tabId;
+            this.originalHierarchyFormState = null; // Reset form state
+            this.loadDataForTab(tabId); // Load data for the new tab
           },
           onCancel: () => {
             // User canceled, do nothing
-          },
-        })
-        return // Stop the original flow
+          }
+        });
+        return; // Stop the original flow
       }
 
       // Step 2: Proceed with the tab switch
-      console.log(`[AdminDashboard] Setting active tab to: ${tabId}, current securityDetails:`, this.securityDetails)
-      this.activeTab = tabId
-      this.originalHierarchyFormState = null // Reset form state when leaving the hierarchy tab
+      console.log(`[AdminDashboard] Setting active tab to: ${tabId}, current securityDetails:`, this.securityDetails);
+      this.activeTab = tabId;
+      this.originalHierarchyFormState = null; // Reset form state when leaving the hierarchy tab
 
       // Step 3: Load the necessary data for the newly selected tab
-      this.loadDataForTab(tabId)
+      this.loadDataForTab(tabId);
     },
 
     // --- ADDED: Helper to load data based on tab ID ---
     loadDataForTab(tabId) {
       if (tabId === 'database') {
-        this.loadDatabaseStats()
+        this.loadDatabaseStats();
       } else if (tabId === 'logs') {
-        this.loadLogsSummary()
-        this.loadLogs()
+        this.loadLogsSummary();
+        this.loadLogs();
       } else if (tabId === 'security') {
-        console.log(`[AdminDashboard] Loading security tab, isLoading: ${this.isLoading}`)
-        this.loadSecurityMetrics()
+        console.log(`[AdminDashboard] Loading security tab, isLoading: ${this.isLoading}`);
+        this.loadSecurityMetrics();
       } else if (tabId === 'users') {
-        this.loadUserStats()
+        this.loadUserStats();
       } else if (tabId === 'documents') {
-        this.loadDocuments()
+        this.loadDocuments();
       } else if (tabId === 'hierarchy' && this.knowledgeHierarchy.length === 0) {
-        this.loadKnowledgeHierarchy()
+        this.loadKnowledgeHierarchy();
       }
     },
 
     // Get usage level based on percentage
     getUsageLevel(value) {
-      if (value < 50) return 'low'
-      if (value < 80) return 'medium'
-      return 'high'
+      if (value < 50) return 'low';
+      if (value < 80) return 'medium';
+      return 'high';
     },
 
     // Show notification using the event bus
@@ -2064,16 +2064,16 @@ export default {
       eventBus.$emit('notification:show', {
         message,
         type,
-        duration,
-      })
+        duration
+      });
     },
 
     // Load system health data
     async loadSystemHealth() {
       try {
-        this.isLoading = true
+        this.isLoading = true;
         // Get the data object directly from the service
-        const data = await adminDashboardService.getSystemHealth()
+        const data = await adminDashboardService.getSystemHealth();
 
         // Check if the data and its 'metrics' property exist
         if (data && data.metrics) {
@@ -2082,28 +2082,28 @@ export default {
             systemUptime: data.metrics.systemUptime,
             avgResponseTime: data.metrics.avgResponseTime,
             errorRate: data.metrics.errorRate,
-            monthlyActiveUsers: data.metrics.monthlyActiveUsers,
-          }
+            monthlyActiveUsers: data.metrics.monthlyActiveUsers
+          };
 
           // Update health services
-          this.healthServices = data.healthServices
+          this.healthServices = data.healthServices;
 
           // Update resource usage
           this.resourceUsage = Object.keys(data.resourceUsage).map((id) => ({
             id,
             label: this.getResourceLabel(id),
-            value: data.resourceUsage[id],
-          }))
+            value: data.resourceUsage[id]
+          }));
         } else {
           // Log a warning if data is missing, which helps in debugging
-          console.warn('Received invalid system health data:', data)
-          this.showNotification('Failed to parse system health data', 'error')
+          console.warn('Received invalid system health data:', data);
+          this.showNotification('Failed to parse system health data', 'error');
         }
       } catch (error) {
-        console.error('Error loading system health:', error)
-        this.showNotification('Failed to load system health data', 'error')
+        console.error('Error loading system health:', error);
+        this.showNotification('Failed to load system health data', 'error');
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
@@ -2113,141 +2113,141 @@ export default {
         cpu: this.translate('admin.resources.cpu', 'CPU Usage'),
         memory: this.translate('admin.resources.memory', 'Memory Usage'),
         storage: this.translate('admin.resources.storage', 'Storage Usage'),
-        network: this.translate('admin.resources.network', 'Network Bandwidth'),
-      }
-      return labels[resourceId] || resourceId
+        network: this.translate('admin.resources.network', 'Network Bandwidth')
+      };
+      return labels[resourceId] || resourceId;
     },
 
     // Load logs
     async loadLogs() {
       try {
-        this.isLoading = true
+        this.isLoading = true;
         const response = await adminDashboardService.getLogs({
-          limit: 20, // Get more logs than we'll display in the summary
-        })
+          limit: 20 // Get more logs than we'll display in the summary
+        });
 
         if (response && response.data && response.data.data) {
-          this.logs = response.data.data.logs || []
+          this.logs = response.data.data.logs || [];
         }
       } catch (error) {
-        console.error('Error loading logs:', error)
-        this.showNotification('Failed to load logs', 'error')
+        console.error('Error loading logs:', error);
+        this.showNotification('Failed to load logs', 'error');
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     // Load log summaries from the API
     async loadLogsSummary() {
       try {
-        this.isLoading = true
+        this.isLoading = true;
         const response = await adminDashboardService.getLogsSummary({
-          date: new Date().toISOString().split('T')[0],
-        })
-        console.log('[AdminDashboard] Logs summary response:', JSON.stringify(response, null, 2))
+          date: new Date().toISOString().split('T')[0]
+        });
+        console.log('[AdminDashboard] Logs summary response:', JSON.stringify(response, null, 2));
 
         if (response && response.data && Array.isArray(response.data.errors) && Array.isArray(response.data.warnings)) {
-          this.errorLogsSummary = response.data.errors || []
-          this.warningLogsSummary = response.data.warnings || []
+          this.errorLogsSummary = response.data.errors || [];
+          this.warningLogsSummary = response.data.warnings || [];
           if (this.errorLogsSummary.length === 0 && this.warningLogsSummary.length === 0) {
-            this.showNotification(this.translate('admin.noLogsFound', 'No logs found for today'), 'info')
+            this.showNotification(this.translate('admin.noLogsFound', 'No logs found for today'), 'info');
           }
         } else {
-          console.error('[AdminDashboard] Invalid logs summary response structure:', response)
+          console.error('[AdminDashboard] Invalid logs summary response structure:', response);
           this.showNotification(
             this.translate('admin.invalidLogsResponse', 'Invalid logs summary response structure'),
             'error'
-          )
-          this.errorLogsSummary = []
-          this.warningLogsSummary = []
+          );
+          this.errorLogsSummary = [];
+          this.warningLogsSummary = [];
         }
       } catch (error) {
-        console.error('[AdminDashboard] Error loading logs summary:', error.message, error.stack)
-        this.showNotification(this.translate('admin.logsSummaryError', 'Failed to load logs summary'), 'error')
-        this.errorLogsSummary = []
-        this.warningLogsSummary = []
+        console.error('[AdminDashboard] Error loading logs summary:', error.message, error.stack);
+        this.showNotification(this.translate('admin.logsSummaryError', 'Failed to load logs summary'), 'error');
+        this.errorLogsSummary = [];
+        this.warningLogsSummary = [];
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     // Security operations (This is a corrected/combined version)
     async runSecurityScan() {
-      console.log('[AdminDashboard] Starting runSecurityScan, isLoading:', this.isLoading)
-      if (this.isLoading && this.currentOperation === 'runSecurityScan') return // Prevent double-click
+      console.log('[AdminDashboard] Starting runSecurityScan, isLoading:', this.isLoading);
+      if (this.isLoading && this.currentOperation === 'runSecurityScan') return; // Prevent double-click
 
-      this.isLoading = true
-      this.currentOperation = 'runSecurityScan'
+      this.isLoading = true;
+      this.currentOperation = 'runSecurityScan';
 
       try {
-        const response = await adminDashboardService.runSecurityScan()
-        console.log('[AdminDashboard] Security scan API response:', response)
+        const response = await adminDashboardService.runSecurityScan();
+        console.log('[AdminDashboard] Security scan API response:', response);
 
         if (response.success) {
-          console.log('[AdminDashboard] Security scan completed successfully:', response.data)
-          await this.loadSecurityDetails() // This fetches all necessary details
-          this.securityMetrics.lastScan = this.translate('admin.security.lastScanJustNow', 'Just now') // Update last scan time
+          console.log('[AdminDashboard] Security scan completed successfully:', response.data);
+          await this.loadSecurityDetails(); // This fetches all necessary details
+          this.securityMetrics.lastScan = this.translate('admin.security.lastScanJustNow', 'Just now'); // Update last scan time
           // Update vulnerability counts from the detailed response
           if (this.securityDetails && this.securityDetails.vulnerabilityDetails) {
             this.securityMetrics.vulnerabilities = {
               critical: this.securityDetails.vulnerabilityDetails.critical.length,
               medium: this.securityDetails.vulnerabilityDetails.medium.length,
-              low: this.securityDetails.vulnerabilityDetails.low.length,
-            }
+              low: this.securityDetails.vulnerabilityDetails.low.length
+            };
           }
-          this.$forceUpdate()
+          this.$forceUpdate();
           this.showNotification(
             this.translate('admin.operations.runSecurityScan.success', 'Security scan completed successfully'),
             'success'
-          )
+          );
         } else {
-          throw new Error(response.message || 'Security scan failed')
+          throw new Error(response.message || 'Security scan failed');
         }
 
-        console.log('[AdminDashboard] After scan, securityDetails:', this.securityDetails)
+        console.log('[AdminDashboard] After scan, securityDetails:', this.securityDetails);
       } catch (error) {
-        console.error('[AdminDashboard] Error running security scan:', error)
+        console.error('[AdminDashboard] Error running security scan:', error);
         this.showNotification(
           this.translate('admin.operations.runSecurityScan.error', 'Failed to run security scan'),
           'error'
-        )
+        );
       } finally {
-        this.isLoading = false
-        this.currentOperation = null
+        this.isLoading = false;
+        this.currentOperation = null;
         console.log(
           '[AdminDashboard] runSecurityScan complete, isLoading:',
           this.isLoading,
           'currentOperation:',
           this.currentOperation
-        )
+        );
       }
     },
 
     // Search logs method - launches the search dialog
     searchLogs() {
       // Make sure the current theme is properly set
-      this.currentTheme = document.documentElement.getAttribute('data-theme') || 'light'
+      this.currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
 
       // Show the log search dialog
-      this.showLogSearchDialog = true
+      this.showLogSearchDialog = true;
 
       // Load error and warning log summaries if they haven't been loaded yet
       if (this.activeTab === 'logs' && !this.errorLogsSummary.length && !this.warningLogsSummary.length) {
-        this.loadLogsSummary()
+        this.loadLogsSummary();
       }
     },
 
     // Handle search results from the LogSearchDialog component
     handleSearchResults(results) {
       // Store the search results
-      this.searchResults = results
+      this.searchResults = results;
 
       // Notify the user about the results
       if (results.length === 0) {
         this.showNotification(
           this.translate('admin.logSearch.noResultsFound', 'No logs matched your search criteria'),
           'info'
-        )
+        );
       } else {
         this.showNotification(
           this.translate('admin.logSearch.resultsFound', `Found {count} log entries`).replace(
@@ -2255,11 +2255,11 @@ export default {
             results.length
           ), // Added placeholder replacement
           'success'
-        )
+        );
 
         // If we're not on the logs tab, switch to it to display the results
         if (this.activeTab !== 'logs') {
-          this.setActiveTab('logs')
+          this.setActiveTab('logs');
         }
       }
     },
@@ -2267,23 +2267,23 @@ export default {
     // Log operations
     async rolloverLogs() {
       this.executeOperation('rolloverLogs', async () => {
-        const response = await adminDashboardService.rolloverLogs()
+        const response = await adminDashboardService.rolloverLogs();
         // Refresh logs after rollover
         if (response.data && response.data.success) {
-          await Promise.all([this.loadLogsSummary(), this.loadLogs()])
+          await Promise.all([this.loadLogsSummary(), this.loadLogs()]);
         }
-        return response.data
-      })
+        return response.data;
+      });
     },
 
     // Load security metrics
     async loadSecurityMetrics() {
-      console.log('[AdminDashboard] Loading security metrics...')
+      console.log('[AdminDashboard] Loading security metrics...');
       try {
-        this.isLoading = true
-        const response = await adminDashboardService.getSecurityMetrics()
+        this.isLoading = true;
+        const response = await adminDashboardService.getSecurityMetrics();
         if (response && response.data) {
-          console.log('[AdminDashboard] Security metrics loaded successfully:', response.data)
+          console.log('[AdminDashboard] Security metrics loaded successfully:', response.data);
           this.securityMetrics = {
             failedLoginAttempts: response.data.failedLoginAttempts || 0,
             suspiciousActivities: response.data.suspiciousActivities || 0,
@@ -2291,16 +2291,16 @@ export default {
             vulnerabilities: response.data.vulnerabilities || {
               critical: 0,
               medium: 0,
-              low: 0,
-            },
-          }
+              low: 0
+            }
+          };
           // Also load the details when metrics are loaded
-          await this.loadSecurityDetails()
+          await this.loadSecurityDetails();
         } else {
-          console.warn('[AdminDashboard] Security metrics response missing data property')
+          console.warn('[AdminDashboard] Security metrics response missing data property');
         }
       } catch (error) {
-        console.error('[AdminDashboard] Error loading security metrics:', error)
+        console.error('[AdminDashboard] Error loading security metrics:', error);
         this.securityMetrics = {
           failedLoginAttempts: 0,
           suspiciousActivities: 0,
@@ -2308,44 +2308,44 @@ export default {
           vulnerabilities: {
             critical: 0,
             medium: 0,
-            low: 0,
-          },
-        }
+            low: 0
+          }
+        };
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     // Load user stats
     async loadUserStats() {
       // This now acts as a trigger for the initial, full, paginated user list.
-      await this.searchUsers()
+      await this.searchUsers();
     },
 
     // System diagnostics
     async runDiagnostics() {
       this.executeOperation('runDiagnostics', async () => {
-        const response = await adminDashboardService.runDiagnostics()
-        return response.data
-      })
+        const response = await adminDashboardService.runDiagnostics();
+        return response.data;
+      });
     },
 
     // Load all dashboard data
     async loadInitialData() {
-      this.loadSystemHealth()
-      this.loadDataForTab(this.activeTab) // Call the helper
+      this.loadSystemHealth();
+      this.loadDataForTab(this.activeTab); // Call the helper
     },
 
     // Load database statistics
     async loadDatabaseStats() {
       try {
         // Call the stats endpoint if it exists
-        const response = await databaseOperationsService.getDatabaseStats()
+        const response = await databaseOperationsService.getDatabaseStats();
         if (response && response.data) {
-          this.dbStats = response.data
+          this.dbStats = response.data;
         }
       } catch (error) {
-        console.error('Error loading database stats:', error)
+        console.error('Error loading database stats:', error);
         // Just log the error, don't show a notification since this is background loading
       }
     },
@@ -2354,31 +2354,31 @@ export default {
 
     async backupDatabase() {
       this.executeOperation('backupDatabase', async () => {
-        const response = await databaseOperationsService.backupDatabase()
-        return response.data
-      })
+        const response = await databaseOperationsService.backupDatabase();
+        return response.data;
+      });
     },
 
     async optimizeDatabase() {
       this.executeOperation('optimizeDatabase', async () => {
-        const response = await databaseOperationsService.optimizeDatabase()
-        return response.data
-      })
+        const response = await databaseOperationsService.optimizeDatabase();
+        return response.data;
+      });
     },
 
     // Helper to execute database operations with proper loading and error handling
     async executeOperation(operation, apiCall) {
       try {
         // Set loading state and operation name
-        this.isLoading = true
-        this.currentOperation = operation
-        this.operationResults = null
+        this.isLoading = true;
+        this.currentOperation = operation;
+        this.operationResults = null;
 
         // Execute the API call
-        const result = await apiCall()
+        const result = await apiCall();
 
         // Set operation results for potential display
-        this.operationResults = result
+        this.operationResults = result;
 
         // Show success notification
         if (result && result.success) {
@@ -2386,53 +2386,53 @@ export default {
           this.showNotification(
             this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`),
             'success'
-          )
+          );
         } else if (result === undefined || result === null) {
           // Case 2: Success with an empty body (e.g., 200 OK from diagnostics)
           this.showNotification(
             this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`),
             'success'
-          )
+          );
         } else {
           // Case 3: A failure response (e.g., { success: false, message: '...' })
-          throw new Error(result.message || `Failed to ${operation}`)
+          throw new Error(result.message || `Failed to ${operation}`);
         }
 
         // Return the result
-        return result
+        return result;
       } catch (error) {
         // Set error result
         this.operationResults = {
           success: false,
           message: error.message || this.translate(`admin.operations.${operation}.error`, `Error during ${operation}`),
-          error: error.response?.data?.error || error.message,
-        }
+          error: error.response?.data?.error || error.message
+        };
 
         // Show error notification
-        this.showNotification(this.operationResults.message, 'error')
+        this.showNotification(this.operationResults.message, 'error');
 
-        console.error(`Error during ${operation}:`, error)
-        return this.operationResults
+        console.error(`Error during ${operation}:`, error);
+        return this.operationResults;
       } finally {
         // Reset loading state
-        this.isLoading = false
+        this.isLoading = false;
 
         // Optionally show results modal
         if (this.operationResults) {
-          this.showOperationResults = true
+          this.showOperationResults = true;
         }
       }
     },
 
     // Close the operation results modal
     closeOperationResults() {
-      this.showOperationResults = false
+      this.showOperationResults = false;
     },
 
     // Get current user information from Vuex auth store (Keycloak OIDC)
     getCurrentUser() {
-      const user = this.$store.getters.currentUser
-      this.currentUser = user || {}
+      const user = this.$store.getters.currentUser;
+      this.currentUser = user || {};
     },
 
     /**
@@ -2452,16 +2452,16 @@ export default {
      * Search users from the server
      */
     async searchUsers() {
-      this.isSearchingUsers = true
+      this.isSearchingUsers = true;
       try {
         // On initial load (no search term, first page), fetch the detailed stats.
         if (this.userSearchOffset === 0 && !this.userSearchTerm) {
           // This call specifically gets the active/new/total user counts
-          const statsResponse = await adminDashboardService.getUserStats()
+          const statsResponse = await adminDashboardService.getUserStats();
           if (statsResponse) {
-            this.userStats.totalUsers = statsResponse.totalUsers
-            this.userStats.activeUsers = statsResponse.activeUsers
-            this.userStats.newUsers = statsResponse.newUsers
+            this.userStats.totalUsers = statsResponse.totalUsers;
+            this.userStats.activeUsers = statsResponse.activeUsers;
+            this.userStats.newUsers = statsResponse.newUsers;
           }
         }
 
@@ -2470,24 +2470,24 @@ export default {
           term: this.userSearchTerm,
           field: this.userSearchField,
           limit: this.userSearchLimit,
-          offset: this.userSearchOffset,
-        })
+          offset: this.userSearchOffset
+        });
 
         if (searchResponse && searchResponse.data) {
-          this.userSearchResults = [...(searchResponse.data.users || [])]
-          this.userSearchTotal = searchResponse.data.total || 0
+          this.userSearchResults = [...(searchResponse.data.users || [])];
+          this.userSearchTotal = searchResponse.data.total || 0;
         } else {
-          console.warn('No data received from searchUsers')
-          this.userSearchResults = []
-          this.userSearchTotal = 0
+          console.warn('No data received from searchUsers');
+          this.userSearchResults = [];
+          this.userSearchTotal = 0;
         }
       } catch (error) {
-        console.error('Error searching users:', error)
-        this.showNotification(this.translate('admin.userSearch.error', 'Error searching users'), 'error')
-        this.userSearchResults = []
-        this.userSearchTotal = 0
+        console.error('Error searching users:', error);
+        this.showNotification(this.translate('admin.userSearch.error', 'Error searching users'), 'error');
+        this.userSearchResults = [];
+        this.userSearchTotal = 0;
       } finally {
-        this.isSearchingUsers = false
+        this.isSearchingUsers = false;
       }
     },
 
@@ -2495,12 +2495,12 @@ export default {
      * Reset user search and reload all users
      */
     resetUserSearch() {
-      this.userSearchTerm = ''
-      this.userSearchField = 'all'
-      this.userSearchResults = null
-      this.userSearchTotal = 0
-      this.userSearchOffset = 0
-      this.searchUsers() // Re-run the search to show all users
+      this.userSearchTerm = '';
+      this.userSearchField = 'all';
+      this.userSearchResults = null;
+      this.userSearchTotal = 0;
+      this.userSearchOffset = 0;
+      this.searchUsers(); // Re-run the search to show all users
     },
 
     /**
@@ -2508,8 +2508,8 @@ export default {
      * @param {number} offset - New offset for pagination
      */
     handleUserSearchPagination(offset) {
-      this.userSearchOffset = offset
-      this.searchUsers()
+      this.userSearchOffset = offset;
+      this.searchUsers();
     },
 
     // Load security metrics from the service
@@ -2521,25 +2521,25 @@ export default {
      */
     parseLogMessage(logString) {
       if (typeof logString !== 'string') {
-        return { type: 'UNKNOWN', message: String(logString) }
+        return { type: 'UNKNOWN', message: String(logString) };
       }
-      const match = logString.match(/^\[([A-Z]+)\]:?\s*/)
+      const match = logString.match(/^\[([A-Z]+)\]:?\s*/);
       if (match) {
         return {
           type: match[1], // e.g., "INFO", "ERROR"
-          message: logString.substring(match[0].length),
-        }
+          message: logString.substring(match[0].length)
+        };
       }
-      return { type: 'INFO', message: logString } // Default if no prefix
+      return { type: 'INFO', message: logString }; // Default if no prefix
     },
 
     // Load detailed security information
     async loadSecurityDetails() {
-      console.log('[AdminDashboard] Starting loadSecurityDetails')
+      console.log('[AdminDashboard] Starting loadSecurityDetails');
       try {
-        this.isLoading = true
-        const response = await adminDashboardService.getSecurityDetails()
-        console.log('[AdminDashboard] Security details API response:', JSON.stringify(response, null, 2))
+        this.isLoading = true;
+        const response = await adminDashboardService.getSecurityDetails();
+        console.log('[AdminDashboard] Security details API response:', JSON.stringify(response, null, 2));
 
         // Define a helper to map vulnerability details
         const mapVulnerability = (v) => ({
@@ -2555,18 +2555,18 @@ export default {
           occurrences: v.instanceCount,
           firstSeen: v.firstSeen,
           lastSeen: v.lastSeen,
-          lineNumbers: v.lineNumbers,
-        })
+          lineNumbers: v.lineNumbers
+        });
 
         // REVISED: Define a helper to map and parse log details
         const mapAndParseLogDetail = (log) => {
-          const parsed = this.parseLogMessage(log.message || '')
+          const parsed = this.parseLogMessage(log.message || '');
           return {
             timestamp: log.timestamp,
             type: parsed.type,
-            message: parsed.message,
-          }
-        }
+            message: parsed.message
+          };
+        };
 
         this.securityDetails = {
           lastScan: response.lastScan || 'Never',
@@ -2574,7 +2574,7 @@ export default {
             critical: 0,
             medium: 0,
             low: 0,
-            details: [],
+            details: []
           },
           vulnerabilityDetails: {
             critical: Array.isArray(response.vulnerabilityDetails?.critical)
@@ -2585,35 +2585,35 @@ export default {
               : [],
             low: Array.isArray(response.vulnerabilityDetails?.low)
               ? response.vulnerabilityDetails.low.map(mapVulnerability)
-              : [],
+              : []
           },
           failedLoginDetails: Array.isArray(response.failedLoginDetails)
             ? response.failedLoginDetails.map(mapAndParseLogDetail)
             : [],
           suspiciousDetails: Array.isArray(response.suspiciousDetails)
             ? response.suspiciousDetails.map(mapAndParseLogDetail)
-            : [],
-        }
-        console.log('[AdminDashboard] Security details loaded and parsed successfully:', this.securityDetails)
+            : []
+        };
+        console.log('[AdminDashboard] Security details loaded and parsed successfully:', this.securityDetails);
       } catch (error) {
-        console.error('[AdminDashboard] Error loading security details:', error)
+        console.error('[AdminDashboard] Error loading security details:', error);
         this.securityDetails = {
           lastScan: 'Never',
           vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
           vulnerabilityDetails: { critical: [], medium: [], low: [] },
           failedLoginDetails: [],
-          suspiciousDetails: [],
-        }
+          suspiciousDetails: []
+        };
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     async loadKnowledgeHierarchy() {
-      this.isHierarchyLoading = true
+      this.isHierarchyLoading = true;
       try {
         // Using the serviceTreeService to fetch data
-        const categories = await serviceTreeService.getAdminCategories('en')
+        const categories = await serviceTreeService.getAdminCategories('en');
         // The API returns a simple structure; adapt it for the UI.
         // A dedicated admin endpoint should return the full object with translations.
         this.knowledgeHierarchy = categories.map((cat) => ({
@@ -2624,17 +2624,17 @@ export default {
             // service is now the object {_key, name}
             _key: service._key, // Use the REAL key from the database
             nameEN: service.name, // Use the name property from the service object
-            translations: [],
-          })),
-        }))
+            translations: []
+          }))
+        }));
       } catch (error) {
         this.showNotification(
           this.translate('admin.hierarchy.loadError', 'Failed to load knowledge hierarchy.'),
           'error'
-        )
-        console.error(error)
+        );
+        console.error(error);
       } finally {
-        this.isHierarchyLoading = false
+        this.isHierarchyLoading = false;
       }
     },
 
@@ -2647,10 +2647,10 @@ export default {
         _key: null,
         nameEN: '',
         translations: [{ lang: '', text: '' }],
-        parentId: null,
-      }
+        parentId: null
+      };
       // Store the initial state for the unsaved changes check
-      this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm)
+      this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
     },
 
     showAddServiceForm(category) {
@@ -2665,18 +2665,18 @@ export default {
         _key: null,
         nameEN: '',
         translations: [{ lang: '', text: '' }],
-        parentId: category._key,
-      }
+        parentId: category._key
+      };
       // Store the initial state for the unsaved changes check
-      this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm)
+      this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
     },
 
     async showEditForm(item, parentCategory = null) {
-      const isCategory = !parentCategory
+      const isCategory = !parentCategory;
 
       // MODIFIED: Use translate method for title
-      const titleKey = isCategory ? 'admin.hierarchy.formTitleEditCategory' : 'admin.hierarchy.formTitleEditService'
-      const fallbackTitle = `Edit ${isCategory ? 'Category' : 'Service'}: "${item.nameEN}"`
+      const titleKey = isCategory ? 'admin.hierarchy.formTitleEditCategory' : 'admin.hierarchy.formTitleEditService';
+      const fallbackTitle = `Edit ${isCategory ? 'Category' : 'Service'}: "${item.nameEN}"`;
 
       // Step 1: Immediately show the form with basic info
       this.hierarchyForm = {
@@ -2686,59 +2686,59 @@ export default {
         _key: item._key,
         nameEN: item.nameEN,
         translations: [], // Start with an empty array
-        parentId: isCategory ? null : parentCategory._key,
-      }
+        parentId: isCategory ? null : parentCategory._key
+      };
 
       // Step 2: Fetch the translations asynchronously
-      this.isTranslationsLoading = true
+      this.isTranslationsLoading = true;
       try {
-        let fetchedTranslations = []
+        let fetchedTranslations = [];
         if (isCategory) {
           // Call the service method for categories
-          fetchedTranslations = await serviceTreeService.getCategoryTranslations(item._key)
+          fetchedTranslations = await serviceTreeService.getCategoryTranslations(item._key);
         } else {
           // Call the service method for services
-          fetchedTranslations = await serviceTreeService.getServiceTranslations(item._key)
+          fetchedTranslations = await serviceTreeService.getServiceTranslations(item._key);
         }
 
         // Filter out the English ('en') translation from the results
-        const filteredTranslations = fetchedTranslations.filter((t) => t.lang !== 'en')
+        const filteredTranslations = fetchedTranslations.filter((t) => t.lang !== 'en');
 
         // Step 3: Populate the form with the filtered data
         if (filteredTranslations.length > 0) {
-          this.hierarchyForm.translations = filteredTranslations
+          this.hierarchyForm.translations = filteredTranslations;
         } else {
           // If no non-English translations exist, provide one empty row for the user to start
-          this.hierarchyForm.translations.push({ lang: '', text: '' })
+          this.hierarchyForm.translations.push({ lang: '', text: '' });
         }
 
         // Step 4: Store the initial state for the unsaved changes check
-        this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm)
-      } catch (error) {
+        this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
+      } catch {
         this.showNotification(
           this.translate('admin.hierarchy.loadTranslationsError', 'Failed to load translations.'),
           'error'
-        )
+        );
         // Ensure there's at least one empty row on error
         if (this.hierarchyForm.translations.length === 0) {
-          this.hierarchyForm.translations.push({ lang: '', text: '' })
+          this.hierarchyForm.translations.push({ lang: '', text: '' });
         }
       } finally {
-        this.isTranslationsLoading = false
+        this.isTranslationsLoading = false;
       }
     },
 
     addTranslationRow() {
-      this.hierarchyForm.translations.push({ lang: '', text: '' })
+      this.hierarchyForm.translations.push({ lang: '', text: '' });
     },
 
     removeTranslationRow(index) {
-      this.hierarchyForm.translations.splice(index, 1)
+      this.hierarchyForm.translations.splice(index, 1);
     },
 
     closeHierarchyForm() {
-      this.hierarchyForm.visible = false
-      this.originalHierarchyFormState = null
+      this.hierarchyForm.visible = false;
+      this.originalHierarchyFormState = null;
     },
 
     // Modify cancelHierarchyForm
@@ -2754,21 +2754,21 @@ export default {
           confirmText: this.translate('admin.buttons.discard', 'Discard'),
           cancelText: this.translate('common.cancel', 'Cancel'),
           onConfirm: () => {
-            this.closeHierarchyForm() // User confirmed
+            this.closeHierarchyForm(); // User confirmed
           },
           onCancel: () => {
             // User canceled, do nothing
-          },
-        })
+          }
+        });
       } else {
-        this.closeHierarchyForm()
+        this.closeHierarchyForm();
       }
     },
 
     async saveHierarchyItem() {
       // --- 1. VALIDATION ---
-      const validTranslations = this.hierarchyForm.translations.filter((t) => t.lang && t.text.trim())
-      const langCodes = validTranslations.map((t) => t.lang)
+      const validTranslations = this.hierarchyForm.translations.filter((t) => t.lang && t.text.trim());
+      const langCodes = validTranslations.map((t) => t.lang);
 
       // Check for duplicate languages
       if (new Set(langCodes).size !== langCodes.length) {
@@ -2779,64 +2779,64 @@ export default {
             'Duplicate languages found in translations. Please remove them.'
           ),
           'error'
-        )
-        return
+        );
+        return;
       }
 
       // --- 2. PREPARE PAYLOAD ---
       const payload = {
         nameEN: this.hierarchyForm.nameEN,
-        translations: validTranslations,
-      }
+        translations: validTranslations
+      };
 
-      this.isLoading = true
+      this.isLoading = true;
       try {
-        const { mode, _key, parentId } = this.hierarchyForm
+        const { mode, _key, parentId } = this.hierarchyForm;
 
         // --- 3. CALL CORRECT SERVICE METHOD (SAVE) ---
         if (mode === 'createCategory') {
-          await serviceTreeService.createCategory(payload)
+          await serviceTreeService.createCategory(payload);
         } else if (mode === 'editCategory') {
-          await serviceTreeService.updateCategory(_key, payload)
+          await serviceTreeService.updateCategory(_key, payload);
         } else if (mode === 'createService') {
-          await serviceTreeService.createService(parentId, payload)
+          await serviceTreeService.createService(parentId, payload);
         } else if (mode === 'editService') {
-          await serviceTreeService.updateService(_key, payload)
+          await serviceTreeService.updateService(_key, payload);
         }
 
         this.showNotification(
           // MODIFIED: Use new i18n key
           this.translate('admin.hierarchy.saveSuccess', 'Hierarchy item saved successfully.'),
           'success'
-        )
-        this.closeHierarchyForm() // Close form on success
+        );
+        this.closeHierarchyForm(); // Close form on success
 
         // --- 4. REFRESH DATA ---
-        await this.loadKnowledgeHierarchy() // Refresh the admin dashboard tree
-        eventBus.$emit('knowledge-hierarchy-updated') // Emit global event for other components
+        await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
+        eventBus.$emit('knowledge-hierarchy-updated'); // Emit global event for other components
       } catch (error) {
         this.showNotification(
           // MODIFIED: Use new i18n key
           this.translate('admin.hierarchy.saveError', 'Failed to save hierarchy item.'),
           'error'
-        )
-        console.error(error)
+        );
+        console.error(error);
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
     async deleteHierarchyItem(item, parentCategory = null) {
-      const isCategory = !parentCategory
-      const type = isCategory ? 'Category' : 'Service'
+      const isCategory = !parentCategory;
+      const type = isCategory ? 'Category' : 'Service';
 
       // MODIFIED: Use new i18n keys for ConfirmDialog
       const titleKey = isCategory
         ? 'admin.hierarchy.confirmDeleteTitleCategory'
-        : 'admin.hierarchy.confirmDeleteTitleService'
-      const messageKey = isCategory ? 'admin.hierarchy.confirmDeleteCategory' : 'admin.hierarchy.confirmDeleteService'
-      const defaultTitle = `Delete ${type}?`
-      const defaultMessage = `Are you sure you want to delete the ${type} "${item.nameEN}"? This action cannot be undone.`
+        : 'admin.hierarchy.confirmDeleteTitleService';
+      const messageKey = isCategory ? 'admin.hierarchy.confirmDeleteCategory' : 'admin.hierarchy.confirmDeleteService';
+      const defaultTitle = `Delete ${type}?`;
+      const defaultMessage = `Are you sure you want to delete the ${type} "${item.nameEN}"? This action cannot be undone.`;
 
       this.showConfirmDialog({
         title: this.translate(titleKey, defaultTitle),
@@ -2845,37 +2845,37 @@ export default {
         cancelText: this.translate('common.cancel', 'Cancel'),
         onConfirm: async () => {
           // User confirmed, proceed with deletion
-          this.isLoading = true
+          this.isLoading = true;
           try {
             // Conditionally call the correct delete method from the service
             if (isCategory) {
-              await serviceTreeService.deleteCategory(item._key)
+              await serviceTreeService.deleteCategory(item._key);
             } else {
-              await serviceTreeService.deleteService(item._key)
+              await serviceTreeService.deleteService(item._key);
             }
 
             // MODIFIED: Use new i18n keys for notification
             const successKey = isCategory
               ? 'admin.hierarchy.deleteSuccessCategory'
-              : 'admin.hierarchy.deleteSuccessService'
-            this.showNotification(this.translate(successKey, `${type} deleted successfully.`), 'success')
+              : 'admin.hierarchy.deleteSuccessService';
+            this.showNotification(this.translate(successKey, `${type} deleted successfully.`), 'success');
 
             // Refresh the data in the admin panel and the main application
-            await this.loadKnowledgeHierarchy()
-            eventBus.$emit('knowledge-hierarchy-updated')
+            await this.loadKnowledgeHierarchy();
+            eventBus.$emit('knowledge-hierarchy-updated');
           } catch (error) {
             // MODIFIED: Use new i18n keys for notification
-            const errorKey = isCategory ? 'admin.hierarchy.deleteErrorCategory' : 'admin.hierarchy.deleteErrorService'
-            this.showNotification(this.translate(errorKey, `Failed to delete ${type}.`), 'error')
-            console.error(error)
+            const errorKey = isCategory ? 'admin.hierarchy.deleteErrorCategory' : 'admin.hierarchy.deleteErrorService';
+            this.showNotification(this.translate(errorKey, `Failed to delete ${type}.`), 'error');
+            console.error(error);
           } finally {
-            this.isLoading = false
+            this.isLoading = false;
           }
         },
         onCancel: () => {
           // User canceled, do nothing
-        },
-      })
+        }
+      });
     },
 
     // --- START: NEW METHODS FOR DOCUMENTS ---
@@ -2884,61 +2884,61 @@ export default {
     // addFromLink() is now just the action to show the dialog (see below)
 
     viewDocumentDetails(docId) {
-      console.log('Viewing details for doc ID:', docId)
-      this.selectedFileId = docId
-      this.showDetailsDialog = true
+      console.log('Viewing details for doc ID:', docId);
+      this.selectedFileId = docId;
+      this.showDetailsDialog = true;
     },
 
     // UPDATED: Determine status class based on crawl status first
     getStatusClass(doc) {
       // 1. Normalize Access: Handle snake_case, camelCase, or potential array wrapping
-      let job = doc.crawl_job || doc.crawlJob
-      if (Array.isArray(job)) job = job.length > 0 ? job[0] : null
+      let job = doc.crawl_job || doc.crawlJob;
+      if (Array.isArray(job)) job = job.length > 0 ? job[0] : null;
 
       // 2. Normalize Strings
-      const crawlStatus = job?.status ? String(job.status).toLowerCase().trim() : null
-      const dataPrepStatus = doc.dataprep?.status ? String(doc.dataprep.status).toLowerCase().trim() : ''
+      const crawlStatus = job?.status ? String(job.status).toLowerCase().trim() : null;
+      const dataPrepStatus = doc.dataprep?.status ? String(doc.dataprep.status).toLowerCase().trim() : '';
 
       // 3. Priority Logic: Crawl Status takes precedence for active/failed states
-      if (crawlStatus === 'crawling') return 'status-ingesting' // Blue
-      if (crawlStatus === 'failed' || crawlStatus === 'killed') return 'status-error' // Red
+      if (crawlStatus === 'crawling') return 'status-ingesting'; // Blue
+      if (crawlStatus === 'failed' || crawlStatus === 'killed') return 'status-error'; // Red
 
       // 4. Fallback Logic: DataPrep Status
-      if (dataPrepStatus === 'ingested') return 'status-ingested'
-      if (dataPrepStatus === 'ingesting') return 'status-ingesting'
-      if (dataPrepStatus === 'ingested with warnings') return 'status-ingested-with-warnings'
-      if (dataPrepStatus === 'ingestion error') return 'status-ingestion-error'
-      if (dataPrepStatus === 'pending') return 'status-pending'
-      if (dataPrepStatus === 'retracted') return 'status-retracted'
+      if (dataPrepStatus === 'ingested') return 'status-ingested';
+      if (dataPrepStatus === 'ingesting') return 'status-ingesting';
+      if (dataPrepStatus === 'ingested with warnings') return 'status-ingested-with-warnings';
+      if (dataPrepStatus === 'ingestion error') return 'status-ingestion-error';
+      if (dataPrepStatus === 'pending') return 'status-pending';
+      if (dataPrepStatus === 'retracted') return 'status-retracted';
 
-      return ''
+      return '';
     },
 
     getDisplayStatus(doc) {
       // 1. Normalize Access
-      let job = doc.crawl_job || doc.crawlJob
-      if (Array.isArray(job)) job = job.length > 0 ? job[0] : null
+      let job = doc.crawl_job || doc.crawlJob;
+      if (Array.isArray(job)) job = job.length > 0 ? job[0] : null;
 
       // 2. Priority Logic
       if (job && job.status) {
-        const s = String(job.status).toLowerCase().trim()
-        if (s === 'crawling') return 'Crawling'
-        if (s === 'failed') return 'Crawl Failed'
-        if (s === 'killed') return 'Crawl Killed'
+        const s = String(job.status).toLowerCase().trim();
+        if (s === 'crawling') return 'Crawling';
+        if (s === 'failed') return 'Crawl Failed';
+        if (s === 'killed') return 'Crawl Killed';
         // If 'pending', we distinguish it from the file's ingestion pending status
-        if (s === 'pending') return 'Crawl Scheduled'
+        if (s === 'pending') return 'Crawl Scheduled';
       }
 
       // 3. Fallback to dataprep status or 'Unknown'
-      return doc.dataprep ? doc.dataprep.status : 'Unknown'
+      return doc.dataprep ? doc.dataprep.status : 'Unknown';
     },
 
     selectAllDocuments(event) {
       if (event.target.checked) {
         // MODIFICATION: Select based on _key, not file_id
-        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d._key)
+        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d._key);
       } else {
-        this.selectedDocuments = []
+        this.selectedDocuments = [];
       }
     },
     /**
@@ -2947,7 +2947,7 @@ export default {
     async handleBatchAction(action) {
       if (action === 'ingest') {
         // MODIFIED: Use ConfirmDialog
-        const count = this.selectedDocuments.length
+        const count = this.selectedDocuments.length;
         this.showConfirmDialog({
           title: this.translate('admin.documents.confirmIngestTitle', 'Confirm Batch Ingestion'),
           message: this.translate(
@@ -2958,10 +2958,10 @@ export default {
           cancelText: this.translate('common.cancel', 'Cancel'),
           onConfirm: async () => {
             // User confirmed, proceed with batch ingest
-            this.isLoading = true // Use the main dashboard loading overlay
+            this.isLoading = true; // Use the main dashboard loading overlay
             try {
               // Call the service with the array of selected document keys
-              await documentFileService.ingestMultipleFiles(this.selectedDocuments)
+              await documentFileService.ingestMultipleFiles(this.selectedDocuments);
 
               this.showNotification(
                 // MODIFIED: Use new i18n key
@@ -2970,13 +2970,13 @@ export default {
                   `{count} file(s) have been queued for ingestion.`
                 ).replace('{count}', count),
                 'success'
-              )
+              );
 
               // Clear the selection after the action is successful
-              this.selectedDocuments = []
+              this.selectedDocuments = [];
 
               // Refresh the document list to show the updated statuses
-              await this.loadDocuments()
+              await this.loadDocuments();
             } catch (error) {
               this.showNotification(
                 // MODIFIED: Use new i18n key
@@ -2985,16 +2985,16 @@ export default {
                   'An error occurred during the batch ingestion process.'
                 ),
                 'error'
-              )
-              console.error('Batch ingest error:', error)
+              );
+              console.error('Batch ingest error:', error);
             } finally {
-              this.isLoading = false
+              this.isLoading = false;
             }
           },
           onCancel: () => {
             // User canceled, do nothing
-          },
-        })
+          }
+        });
       }
       // You can add 'else if' blocks for other actions like 'retract' or 'delete' here
     },
@@ -3002,12 +3002,12 @@ export default {
 
     // This method is triggered by the "+ Upload Files" button
     uploadFiles() {
-      this.showUploadDialog = true
+      this.showUploadDialog = true;
     },
 
     // This method is triggered by the "+ Add from Link" button
     addFromLink() {
-      this.showLinkDialog = true
+      this.showLinkDialog = true;
     },
 
     // This method is triggered by clicking a row in the documents table
@@ -3015,8 +3015,8 @@ export default {
     refreshDocuments() {
       // In a real application, this would re-fetch the document list from your API
       // this.showNotification("Document list refreshed.", "info"); // Notification is now more specific
-      console.log('Refreshing document list...')
-      this.loadDocuments()
+      console.log('Refreshing document list...');
+      this.loadDocuments();
     },
 
     // Handler for the @files-uploaded event from the UploadFilesDialog
@@ -3028,8 +3028,8 @@ export default {
           uploadedFiles.length
         ),
         'success'
-      )
-      this.refreshDocuments()
+      );
+      this.refreshDocuments();
     },
 
     // Handler for the @link-submitted event from the AddFromLinkDialog
@@ -3041,8 +3041,8 @@ export default {
           newFile.file_name
         ),
         'success'
-      )
-      this.refreshDocuments()
+      );
+      this.refreshDocuments();
     },
 
     // Handler for events from the FileDetailsDialog
@@ -3053,8 +3053,8 @@ export default {
           .replace('{action}', payload.action)
           .replace('{fileId}', payload.fileId),
         'success'
-      )
-      this.refreshDocuments()
+      );
+      this.refreshDocuments();
     },
 
     handleFileUpdated(payload) {
@@ -3065,53 +3065,53 @@ export default {
           payload.fileId
         ),
         'success'
-      )
-      this.refreshDocuments()
+      );
+      this.refreshDocuments();
     },
 
     async loadDocuments() {
-      this.isDocumentsLoading = true
+      this.isDocumentsLoading = true;
       try {
         // 1. Prepare Params
         // Note: 'sort' and 'order' removed because the backend returned 400 Bad Request.
         // The list will load in the backend's default order (currently Ascending/Oldest First).
         const params = {
           page: this.documentPagination.page,
-          limit: this.documentPagination.limit,
-        }
+          limit: this.documentPagination.limit
+        };
 
         if (this.documentSearchTerm && this.documentSearchTerm.trim() !== '') {
-          params.search = this.documentSearchTerm.trim()
+          params.search = this.documentSearchTerm.trim();
         }
 
         // 2. Call API
-        const response = await documentFileService.getFiles(params)
+        const response = await documentFileService.getFiles(params);
 
         // 3. Normalize Data
         // Map DB 'uploaded_date' to UI 'upload_date' so the client-side table renders dates correctly
-        const rawDocs = response.data || []
+        const rawDocs = response.data || [];
         this.documents = rawDocs.map((doc) => {
           if (!doc.upload_date && doc.uploaded_date) {
-            doc.upload_date = doc.uploaded_date
+            doc.upload_date = doc.uploaded_date;
           }
-          return doc
-        })
+          return doc;
+        });
 
         // 4. Pagination
         if (response.pagination) {
-          this.documentPagination.total = response.pagination.totalFiles || 0
-          this.documentPagination.page = response.pagination.currentPage || 1
+          this.documentPagination.total = response.pagination.totalFiles || 0;
+          this.documentPagination.page = response.pagination.currentPage || 1;
         }
       } catch (error) {
-        console.error('Error loading documents:', error)
-        this.showNotification(this.translate('admin.documents.loadError', 'Failed to load documents.'), 'error')
-        this.documents = []
+        console.error('Error loading documents:', error);
+        this.showNotification(this.translate('admin.documents.loadError', 'Failed to load documents.'), 'error');
+        this.documents = [];
       } finally {
-        this.isDocumentsLoading = false
+        this.isDocumentsLoading = false;
       }
-    },
-  },
-}
+    }
+  }
+};
 </script>
 
 <style scoped>

@@ -1,9 +1,9 @@
 <!-- ServiceTreePanelComponent.vue with Android keyboard fix -->
 <template>
-  <div class="service-tree-panel" ref="treePanel">
+  <div ref="treePanel" class="service-tree-panel">
     <h4>{{ $t("sidebar.governmentServices") }}</h4>
 
-    <div class="search-container" ref="searchContainer">
+    <div ref="searchContainer" class="search-container">
       <input
         v-model="searchQuery"
         class="search-box"
@@ -15,14 +15,14 @@
       />
       <button
         class="expand-collapse-btn"
-        @click="toggleAllNodes"
         :title="isAnyNodeExpanded ? 'Collapse All' : 'Expand All'"
+        @click="toggleAllNodes"
       >
         {{ isAnyNodeExpanded ? "−" : "+" }}
       </button>
     </div>
 
-    <div class="tree-list-container" ref="treeListContainer">
+    <div ref="treeListContainer" class="tree-list-container">
       <ul class="service-tree-list">
         <li v-for="node in nodes" :key="node.catKey">
           <div class="node-label" @click="toggleNode(node)">
@@ -42,8 +42,8 @@
             <li
               v-for="(childName, cIndex) in node.children"
               :key="cIndex"
-              @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
               :class="{ selected: isChildSelected(node.catKey, cIndex) }"
+              @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
             >
               <div class="node-label child-row">
                 <span class="toggle-icon placeholder"></span>
@@ -175,72 +175,6 @@ export default {
   },
 
   methods: {
-    // Handle focus on search input
-    handleInputFocus() {
-      // Specifically for Android devices
-      if (/Android/i.test(navigator.userAgent)) {
-        // Prevent the sidebar from being toggled/closed when keyboard opens
-        const sideBar = document.querySelector(".side-bar");
-        if (sideBar) {
-          // Force sidebar to stay open regardless of toggle state
-          sideBar.style.transform = "translateX(0)";
-
-          // Store original width to restore it later
-          sideBar._originalWidth = sideBar.style.width;
-
-          // Ensure sidebar has proper width
-          sideBar.style.width = "85%";
-          sideBar.style.maxWidth = "320px";
-
-          // Set a high z-index to keep it above other elements
-          sideBar.style.zIndex = "9999";
-        }
-
-        // Force the sidebar content to stay visible
-        const sidebarContent = document.querySelector(".sidebar-content");
-        if (sidebarContent) {
-          sidebarContent.style.display = "block";
-          sidebarContent.style.visibility = "visible";
-        }
-
-        // Add a flag to body to indicate keyboard is open
-        document.body.classList.add("android-keyboard-open");
-      }
-    },
-
-    // Handle blur on search input
-    handleInputBlur() {
-      // For Android devices
-      if (/Android/i.test(navigator.userAgent)) {
-        // Use timeout to ensure keyboard has fully closed
-        setTimeout(() => {
-          // Restore sidebar to its original state
-          const sideBar = document.querySelector(".side-bar");
-          if (sideBar) {
-            // If sidebar is meant to be closed, restore transform
-            if (!sideBar.classList.contains("side-bar-open")) {
-              sideBar.style.transform = "translateX(-100%)";
-            } else {
-              sideBar.style.transform = "";
-            }
-
-            // Restore original width if it was stored
-            if (sideBar._originalWidth !== undefined) {
-              sideBar.style.width = sideBar._originalWidth;
-              delete sideBar._originalWidth;
-            } else {
-              sideBar.style.width = "";
-            }
-
-            sideBar.style.maxWidth = "";
-            sideBar.style.zIndex = "";
-          }
-
-          // Remove the flag from body
-          document.body.classList.remove("android-keyboard-open");
-        }, 300);
-      }
-    },
     // Load categories from the API
     async loadCategories(locale) {
       try {

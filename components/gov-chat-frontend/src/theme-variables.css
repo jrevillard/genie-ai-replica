@@ -15,7 +15,7 @@
   --bg-card: #ffffff;
 
   /* Button colors */
-  --bg-button-primary: var(--accent-color, #4E97D1); /* Use accent color, fallback to Huduma blue */
+  --bg-button-primary: var(--accent-color, #4e97d1); /* Use accent color, fallback to Huduma blue */
   --bg-button-primary-hover: var(--accent-hover, #3a7da0); /* Hover shade */
   --bg-button-secondary: #d1d5db; /* Neutral gray for light mode */
   --bg-button-secondary-hover: #b9bfc9; /* Slightly darker gray for hover */
@@ -40,9 +40,9 @@
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
 
   /* Accent colors rely on dynamically set variables */
-  --accent-color: var(--accent-color, #4E97D1); /* Fallback to Huduma blue */
+  --accent-color: var(--accent-color, #4e97d1); /* Fallback to Huduma blue */
   --accent-hover: var(--accent-hover, #3a7da0);
-  --accent-color-secondary: var(--accent-color-secondary, #2C5F8A); /* Secondary accent from config */
+  --accent-color-secondary: var(--accent-color-secondary, #2c5f8a); /* Secondary accent from config */
 
   /* Status colors */
   --status-operational: #10b981;
@@ -51,16 +51,16 @@
 
   /* Form elements */
   --slider-track: #e9ecef;
-  --slider-thumb: var(--bg-button-primary, #4E97D1); /* Use primary color for consistency */
+  --slider-thumb: var(--bg-button-primary, #4e97d1); /* Use primary color for consistency */
   --switch-track-off: #d0d0d0;
-  --switch-track-on: var(--bg-button-primary, #4E97D1); /* Use primary color for active state */
+  --switch-track-on: var(--bg-button-primary, #4e97d1); /* Use primary color for active state */
   --switch-thumb: #ffffff;
 }
 
 /* Dark theme variables - applied ONLY when [data-theme="dark"] is present */
-html[data-theme="dark"],
-body[data-theme="dark"],
-[data-theme="dark"] {
+html[data-theme='dark'],
+body[data-theme='dark'],
+[data-theme='dark'] {
   /* Base colors */
   --bg-primary: #1e1e1e;
   --bg-secondary: #252525;
@@ -103,17 +103,17 @@ body[data-theme="dark"],
 
   /* Form elements */
   --slider-track: #3a3a3a;
-  --slider-thumb: var(--bg-button-primary, #4E97D1); /* Use primary color */
+  --slider-thumb: var(--bg-button-primary, #4e97d1); /* Use primary color */
   --switch-track-off: #4d4d4d;
-  --switch-track-on: var(--bg-button-primary, #4E97D1); /* Use primary color */
+  --switch-track-on: var(--bg-button-primary, #4e97d1); /* Use primary color */
   --switch-thumb: #ffffff;
 }
 
 /* System theme support */
 @media (prefers-color-scheme: dark) {
-  html[data-theme="system"],
-  body[data-theme="system"],
-  [data-theme="system"] {
+  html[data-theme='system'],
+  body[data-theme='system'],
+  [data-theme='system'] {
     /* Base colors */
     --bg-primary: #1e1e1e;
     --bg-secondary: #252525;
@@ -156,9 +156,9 @@ body[data-theme="dark"],
 
     /* Form elements */
     --slider-track: #3a3a3a;
-    --slider-thumb: var(--bg-button-primary, #4E97D1);
+    --slider-thumb: var(--bg-button-primary, #4e97d1);
     --switch-track-off: #4d4d4d;
-    --switch-track-on: var(--bg-button-primary, #4E97D1);
+    --switch-track-on: var(--bg-button-primary, #4e97d1);
     --switch-thumb: #ffffff;
   }
 }

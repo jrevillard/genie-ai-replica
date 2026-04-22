@@ -14,16 +14,16 @@ function getOidcConfig() {
   const appConfig = typeof window !== 'undefined' ? window.APP_CONFIG : null;
   const keycloakConfig = appConfig?.keycloak || {};
 
-  const keycloakUrl = (keycloakConfig.url
-    || process.env.VUE_APP_KEYCLOAK_URL
-    || (origin ? `${origin}/auth` : 'http://localhost:8080')).replace(/\/+$/, '');
+  const keycloakUrl = (
+    keycloakConfig.url ||
+    process.env.VUE_APP_KEYCLOAK_URL ||
+    (origin ? `${origin}/auth` : 'http://localhost:8080')
+  ).replace(/\/+$/, '');
 
   const realm = keycloakConfig.realm || 'genie';
 
-  const clientId = keycloakConfig.client_id
-    || keycloakConfig.clientId
-    || process.env.VUE_APP_KEYCLOAK_CLIENT_ID
-    || 'genie-app';
+  const clientId =
+    keycloakConfig.client_id || keycloakConfig.clientId || process.env.VUE_APP_KEYCLOAK_CLIENT_ID || 'genie-app';
 
   return {
     authority: `${keycloakUrl}/realms/${realm}`,

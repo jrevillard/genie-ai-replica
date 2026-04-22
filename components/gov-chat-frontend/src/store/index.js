@@ -1,17 +1,17 @@
 // src/store/index.js
-import { createStore } from 'vuex'
-import chatHistoryStore from './chatHistoryStore'
-import auth from './modules/auth'
+import { createStore } from 'vuex';
+import chatHistoryStore from './chatHistoryStore';
+import auth from './modules/auth';
 
 // Create and export the store
 export default createStore({
   modules: {
     chatHistory: chatHistoryStore,
-    auth,
+    auth
   },
 
   plugins: [
-    store => {
+    (store) => {
       // Initialize state from localStorage if available
       try {
         const savedChatHistory = localStorage.getItem('chatHistory');
@@ -20,7 +20,7 @@ export default createStore({
           if (parsedData && typeof parsedData === 'object') {
             store.replaceState({
               ...store.state,
-              chatHistory: parsedData,
+              chatHistory: parsedData
             });
           }
         }
@@ -43,6 +43,6 @@ export default createStore({
           }
         }
       });
-    },
-  ],
+    }
+  ]
 });

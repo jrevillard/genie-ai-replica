@@ -53,7 +53,7 @@ class AnalyticsService {
         }
       });
 
-      console.log("Unique users direct response:", response.data);
+      console.log('Unique users direct response:', response.data);
 
       return typeof response.data.value === 'number' ? response.data.value : 0;
     } catch (error) {
@@ -115,10 +115,10 @@ class AnalyticsService {
 
       // Map frontend metric names to backend API metric names
       const metricMap = {
-        'totalQueries': 'totalQueries',
-        'uniqueUsers': 'uniqueUsers',
-        'averageResponseTime': 'averageResponseTime',
-        'satisfactionRate': 'satisfactionRate'
+        totalQueries: 'totalQueries',
+        uniqueUsers: 'uniqueUsers',
+        averageResponseTime: 'averageResponseTime',
+        satisfactionRate: 'satisfactionRate'
       };
 
       const apiMetric = metricMap[metric] || metric;
@@ -187,7 +187,7 @@ class AnalyticsService {
       }
 
       // Process the data to ensure it's valid
-      return response.data.map(item => ({
+      return response.data.map((item) => ({
         timestamp: item.timestamp || '',
         dateLabel: this.formatDateLabel(item.timestamp, interval),
         value: typeof item.value === 'number' ? item.value : 0,
@@ -244,12 +244,12 @@ class AnalyticsService {
     if (!data || !Array.isArray(data)) return [];
 
     // Filter out invalid entries
-    const validData = data.filter(item => item && item.timestamp);
+    const validData = data.filter((item) => item && item.timestamp);
 
     // Get current locale for formatting
     const locale = this.$i18n ? this.$i18n.locale : 'en';
 
-    return validData.map(item => {
+    return validData.map((item) => {
       // Format date label based on interval
       let dateLabel;
       try {
@@ -265,10 +265,11 @@ class AnalyticsService {
               dateLabel = date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
               break;
 
-            case 'weekly':
+            case 'weekly': {
               const weekNum = this.getWeekNumber(date);
               dateLabel = `W${weekNum} ${date.toLocaleDateString(locale, { month: 'short' })}`;
               break;
+            }
 
             case 'monthly':
               dateLabel = date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
@@ -303,7 +304,7 @@ class AnalyticsService {
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
   }
 
   /**
@@ -367,11 +368,11 @@ class AnalyticsService {
 
     if (!data) return defaultData;
 
-    console.log("Dashboard data received:", data);
+    console.log('Dashboard data received:', data);
 
     // Extract the unique users count
-    let uniqueUsers = data.users && typeof data.users.activeCount === 'number' ? data.users.activeCount : 0;
-    console.log("Unique users count from API:", uniqueUsers);
+    const uniqueUsers = data.users && typeof data.users.activeCount === 'number' ? data.users.activeCount : 0;
+    console.log('Unique users count from API:', uniqueUsers);
 
     // Transform the data from the API response structure
     return {
@@ -381,7 +382,7 @@ class AnalyticsService {
       satisfactionRate: data.feedback?.positivePercentage || 0,
 
       // Transform category distribution
-      queryDistribution: (data.categories || []).map(cat => ({
+      queryDistribution: (data.categories || []).map((cat) => ({
         categoryId: cat.categoryId,
         name: cat.name,
         count: cat.count
@@ -401,25 +402,25 @@ class AnalyticsService {
    */
   formatValue(value, format = 'number', locale = null) {
     if (value === null || value === undefined) return '—';
-  
+
     // Get current locale
     const currentLocale = locale || (this.$i18n ? this.$i18n.locale : 'en');
-  
+
     switch (format) {
       case 'number':
         return value.toLocaleString(currentLocale);
-  
+
       case 'time':
         // Format as seconds with 1 decimal place
         return `${value.toFixed(1)}s`;
-  
+
       case 'percent':
         return `${value.toFixed(1)}%`;
-  
+
       case 'milliseconds':
         // Format as whole milliseconds with 'ms' suffix
         return `${Math.round(value)}ms`;
-  
+
       default:
         return String(value);
     }
@@ -575,7 +576,6 @@ class AnalyticsService {
       throw error;
     }
   }
-
 }
 
 export default new AnalyticsService();

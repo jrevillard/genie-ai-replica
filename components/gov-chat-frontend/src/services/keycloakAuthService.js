@@ -11,7 +11,7 @@ import oidcConfig from '@/config/oidcConfig';
 
 let userManager = null;
 let currentUser = null;
-let accessTokenCallbacks = new Set();
+const accessTokenCallbacks = new Set();
 let unsubscribeUserLoaded = null;
 let unsubscribeSilentRenewError = null;
 

@@ -1,19 +1,15 @@
 <template>
   <aside
+    ref="sideBar"
     class="side-bar"
     :class="{
       'side-bar-open': isOpen,
       'keyboard-active': isKeyboardActive,
-      'android-device': isAndroid,
+      'android-device': isAndroid
     }"
     :data-theme="$route.meta.theme || 'light'"
-    ref="sideBar"
   >
-    <div
-      class="mobile-sidebar-overlay"
-      v-if="isOpen"
-      @click="closeOverlay"
-    ></div>
+    <div v-if="isOpen" class="mobile-sidebar-overlay" @click="closeOverlay"></div>
 
     <div class="sidebar-inner">
       <div class="sidebar-tabs">
@@ -23,7 +19,7 @@
           @click="activeTab = 'services'"
         >
           <i class="fas fa-list"></i>
-          {{ $t("sidebar.governmentServices") }}
+          {{ $t('sidebar.governmentServices') }}
         </button>
         <button
           class="tab-button"
@@ -31,12 +27,12 @@
           @click="activeTab = 'history'"
         >
           <i class="fas fa-history"></i>
-          {{ $t("sidebar.savedChats") }}
+          {{ $t('sidebar.savedChats') }}
         </button>
       </div>
 
       <div class="sidebar-content-wrapper">
-        <div class="sidebar-content" ref="sidebarContent">
+        <div ref="sidebarContent" class="sidebar-content">
           <div v-if="activeTab === 'services'" class="services-list">
             <service-tree-panel-component
               ref="serviceTree"
@@ -46,50 +42,38 @@
           </div>
 
           <div v-else-if="activeTab === 'history'" class="chat-history">
-            <div class="chat-sub-tabs" :key="currentLocale">
-              <button
-                class="chat-sub-tab"
-                :class="{ active: activeSubTab === 'all' }"
-                @click="activeSubTab = 'all'"
-              >
-                {{ getTabLabel("all") }}
+            <div :key="currentLocale" class="chat-sub-tabs">
+              <button class="chat-sub-tab" :class="{ active: activeSubTab === 'all' }" @click="activeSubTab = 'all'">
+                {{ getTabLabel('all') }}
               </button>
               <button
                 class="chat-sub-tab"
                 :class="{ active: activeSubTab === 'folders' }"
                 @click="activeSubTab = 'folders'"
               >
-                {{ getTabLabel("folders") }}
+                {{ getTabLabel('folders') }}
               </button>
               <button
                 class="chat-sub-tab"
                 :class="{ active: activeSubTab === 'starred' }"
                 @click="activeSubTab = 'starred'"
               >
-                {{ getTabLabel("starred") }}
+                {{ getTabLabel('starred') }}
               </button>
               <button
                 class="chat-sub-tab"
                 :class="{ active: activeSubTab === 'archived' }"
                 @click="activeSubTab = 'archived'"
               >
-                {{ getTabLabel("archived") }}
+                {{ getTabLabel('archived') }}
               </button>
             </div>
 
-            <chat-folders
-              :active-tab="activeSubTab"
-              @open-chat="openChat"
-              @locale-changed="handleLocaleChange"
-            />
+            <chat-folders :active-tab="activeSubTab" @open-chat="openChat" @locale-changed="handleLocaleChange" />
           </div>
         </div>
 
-        <div
-          class="weather-container"
-          :class="{ 'hide-on-keyboard': isKeyboardActive }"
-          v-show="!isKeyboardActive"
-        >
+        <div v-show="!isKeyboardActive" class="weather-container" :class="{ 'hide-on-keyboard': isKeyboardActive }">
           <weather-panel class="weather-panel-fixed" />
         </div>
       </div>
@@ -98,88 +82,77 @@
 </template>
 
 <script>
-import ServiceTreePanelComponent from "./ServiceTreePanelComponent.vue";
-import ChatFolders from "./ChatFolders.vue";
-import WeatherPanel from "./WeatherPanel.vue";
+import ServiceTreePanelComponent from './ServiceTreePanelComponent.vue';
+import ChatFolders from './ChatFolders.vue';
+import WeatherPanel from './WeatherPanel.vue';
 
 export default {
-  name: "SideBarComponent",
+  name: 'SideBarComponent',
   components: {
     ServiceTreePanelComponent,
     ChatFolders,
-    WeatherPanel,
+    WeatherPanel
   },
   props: {
     isOpen: {
       type: Boolean,
-      default: true,
-    },
+      default: true
+    }
   },
+  emits: ['open-chat', 'close-sidebar'],
   data() {
     return {
-      activeTab: "services",
-      activeSubTab: "all",
-      searchQuery: "",
+      activeTab: 'services',
+      activeSubTab: 'all',
+      searchQuery: '',
       isKeyboardActive: false,
       initialHeight: 0,
       isMobileDevice: false,
       isAndroid: false,
       sidebarHeight: 0,
-      currentLocale: "en",
+      currentLocale: 'en'
     };
   },
   mounted() {
     this.initialHeight = window.innerHeight;
-    this.sidebarHeight = this.$refs.sideBar
-      ? this.$refs.sideBar.offsetHeight
-      : 0;
+    this.sidebarHeight = this.$refs.sideBar ? this.$refs.sideBar.offsetHeight : 0;
     this.checkDevice();
-    window.addEventListener("resize", this.handleResize);
+    window.addEventListener('resize', this.handleResize);
     if (window.visualViewport) {
-      window.visualViewport.addEventListener(
-        "resize",
-        this.handleVisualViewportResize
-      );
+      window.visualViewport.addEventListener('resize', this.handleVisualViewportResize);
     }
     if (this.isAndroid) {
-      document.body.classList.add("android-device");
+      document.body.classList.add('android-device');
     }
     if (this.$i18n) {
       this.currentLocale = this.$i18n.locale;
     }
     // Debug: Log active tab computed background color
-    const activeTab = document.querySelector(".tab-button-active");
+    const activeTab = document.querySelector('.tab-button-active');
     console.log(
-      "[SIDEBAR] Active tab computed background color:",
-      activeTab
-        ? window.getComputedStyle(activeTab).backgroundColor
-        : "not found"
+      '[SIDEBAR] Active tab computed background color:',
+      activeTab ? window.getComputedStyle(activeTab).backgroundColor : 'not found'
     );
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener('resize', this.handleResize);
     if (window.visualViewport) {
-      window.visualViewport.removeEventListener(
-        "resize",
-        this.handleVisualViewportResize
-      );
+      window.visualViewport.removeEventListener('resize', this.handleVisualViewportResize);
     }
     if (this.isAndroid) {
-      document.body.classList.remove("android-device");
+      document.body.classList.remove('android-device');
     }
   },
   methods: {
     handleLocaleChange(newLocale) {
-      console.log("[SideBar] Locale changed to:", newLocale);
+      console.log('[SideBar] Locale changed to:', newLocale);
       this.currentLocale = newLocale;
       this.$forceUpdate();
     },
     checkDevice() {
       this.isMobileDevice =
         window.innerWidth <= 768 ||
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-          navigator.userAgent
-        );
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       this.isAndroid = /Android/i.test(navigator.userAgent);
     },
     handleResize() {
@@ -221,7 +194,7 @@ export default {
     },
     handleKeyboardFocus() {
       this.isKeyboardActive = true;
-      document.body.classList.add("keyboard-open");
+      document.body.classList.add('keyboard-open');
       if (this.isAndroid) {
         this.handleAndroidKeyboard();
         this.$nextTick(() => {
@@ -234,15 +207,15 @@ export default {
     handleKeyboardBlur() {
       setTimeout(() => {
         this.isKeyboardActive = false;
-        document.body.classList.remove("keyboard-open");
+        document.body.classList.remove('keyboard-open');
         if (this.isAndroid && this.$refs.sidebarContent) {
-          this.$refs.sidebarContent.style.maxHeight = "";
-          this.$refs.sidebarContent.style.height = "";
+          this.$refs.sidebarContent.style.maxHeight = '';
+          this.$refs.sidebarContent.style.height = '';
         }
       }, 300);
     },
     getTabLabel(tabKey) {
-      if (this.$t && typeof this.$t === "function") {
+      if (this.$t && typeof this.$t === 'function') {
         try {
           const i18nKey = `sidebar.tab.${tabKey}`;
           const translation = this.$t(i18nKey);
@@ -256,12 +229,12 @@ export default {
       return tabKey.charAt(0).toUpperCase() + tabKey.slice(1);
     },
     openChat(chatId) {
-      this.$emit("open-chat", chatId);
+      this.$emit('open-chat', chatId);
     },
     closeOverlay() {
-      this.$emit("close-sidebar");
-    },
-  },
+      this.$emit('close-sidebar');
+    }
+  }
 };
 </script>
 
@@ -274,7 +247,9 @@ export default {
   height: 100%;
   color: var(--text-primary);
   overflow: hidden !important;
-  transition: transform 0.3s ease, width 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    width 0.3s ease;
 }
 
 .sidebar-inner {
@@ -343,7 +318,9 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
 }
 
 .tab-button i {
@@ -606,77 +583,77 @@ export default {
 }
 
 /* Theme Styles - Dark and System Mode */
-[data-theme="dark"] .tab-button:hover:not(.tab-button-active) {
+[data-theme='dark'] .tab-button:hover:not(.tab-button-active) {
   background-color: rgba(78, 151, 209, 0.15);
   color: rgba(255, 255, 255, 0.9);
 }
 
-[data-theme="dark"] .tab-button {
+[data-theme='dark'] .tab-button {
   color: rgba(255, 255, 255, 0.7);
 }
 
-[data-theme="dark"] .tab-button i {
+[data-theme='dark'] .tab-button i {
   color: rgba(255, 255, 255, 0.7);
 }
 
-[data-theme="dark"] .chat-sub-tabs {
+[data-theme='dark'] .chat-sub-tabs {
   background-color: #2a2a2a;
   border-bottom-color: #444;
 }
 
-[data-theme="dark"] .chat-sub-tab {
+[data-theme='dark'] .chat-sub-tab {
   color: rgba(255, 255, 255, 0.7);
 }
 
-[data-theme="dark"] .chat-sub-tab.active {
+[data-theme='dark'] .chat-sub-tab.active {
   color: #4e97d1;
   border-bottom: 2px solid #4e97d1;
   font-weight: 500;
 }
 
-[data-theme="dark"] .chat-sub-tab:hover:not(.active) {
+[data-theme='dark'] .chat-sub-tab:hover:not(.active) {
   background-color: #333;
 }
 
-[data-theme="dark"] .sidebar-tabs {
+[data-theme='dark'] .sidebar-tabs {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
-[data-theme="dark"] .sidebar-section-title,
-[data-theme="dark"] .sidebar-header h3 {
+[data-theme='dark'] .sidebar-section-title,
+[data-theme='dark'] .sidebar-header h3 {
   color: rgba(255, 255, 255, 0.7);
 }
 
-[data-theme="dark"] .sidebar-content::-webkit-scrollbar {
+[data-theme='dark'] .sidebar-content::-webkit-scrollbar {
   width: 8px;
   background-color: #2a2a2a;
 }
 
-[data-theme="dark"] .sidebar-content::-webkit-scrollbar-track {
+[data-theme='dark'] .sidebar-content::-webkit-scrollbar-track {
   background-color: #2a2a2a;
 }
 
-[data-theme="dark"] .sidebar-content::-webkit-scrollbar-thumb {
+[data-theme='dark'] .sidebar-content::-webkit-scrollbar-thumb {
   background-color: rgba(100, 100, 100, 0.3);
   border-radius: 4px;
 }
 
-[data-theme="dark"] .sidebar-content::-webkit-scrollbar-thumb:hover {
+[data-theme='dark'] .sidebar-content::-webkit-scrollbar-thumb:hover {
   background-color: rgba(150, 150, 150, 0.4);
 }
 
-[data-theme="dark"] .sidebar-content {
+[data-theme='dark'] .sidebar-content {
   scrollbar-color: rgba(100, 100, 100, 0.3) #2a2a2a;
   scrollbar-width: thin;
 }
 
-[data-theme="dark"] .search-box {
+[data-theme='dark'] .search-box {
   background-color: #333;
   color: var(--text-primary);
   border-color: #444;
 }
 
-[data-theme="dark"] .empty-state {
+[data-theme='dark'] .empty-state {
   color: rgba(255, 255, 255, 0.5);
 }
 </style>

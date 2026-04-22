@@ -1,4 +1,4 @@
-import httpService from './httpService'
+import httpService from './httpService';
 
 /**
  * Service for managing chat history and conversations.
@@ -22,14 +22,14 @@ class ChatHistoryService {
         offset: options.offset || 0,
         includeArchived: options.includeArchived || false,
         filterStarred: options.filterStarred || false,
-        searchTerm: options.searchTerm || '',
-      }
+        searchTerm: options.searchTerm || ''
+      };
 
-      const response = await httpService.get('/chat/conversations', { params })
-      return response.data
+      const response = await httpService.get('/chat/conversations', { params });
+      return response.data;
     } catch (error) {
-      console.error('Error fetching user conversations:', error)
-      throw error
+      console.error('Error fetching user conversations:', error);
+      throw error;
     }
   }
 
@@ -40,11 +40,11 @@ class ChatHistoryService {
    */
   async getConversation(conversationId) {
     try {
-      const response = await httpService.get(`/chat/conversations/${conversationId}`)
-      return response.data
+      const response = await httpService.get(`/chat/conversations/${conversationId}`);
+      return response.data;
     } catch (error) {
-      console.error(`Error fetching conversation ${conversationId}:`, error)
-      throw error
+      console.error(`Error fetching conversation ${conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -60,14 +60,14 @@ class ChatHistoryService {
   async createConversation(conversationData) {
     try {
       if (!conversationData.title && !conversationData.initialMessage) {
-        throw new Error('Title or initial message is required')
+        throw new Error('Title or initial message is required');
       }
 
-      const response = await httpService.post('/chat/conversations', conversationData)
-      return response.data
+      const response = await httpService.post('/chat/conversations', conversationData);
+      return response.data;
     } catch (error) {
-      console.error('Error creating conversation:', error)
-      throw error
+      console.error('Error creating conversation:', error);
+      throw error;
     }
   }
 
@@ -86,14 +86,14 @@ class ChatHistoryService {
   async updateConversation(conversationId, updateData) {
     try {
       if (!conversationId) {
-        throw new Error('Conversation ID is required')
+        throw new Error('Conversation ID is required');
       }
 
-      const response = await httpService.patch(`/chat/conversations/${conversationId}`, updateData)
-      return response.data
+      const response = await httpService.patch(`/chat/conversations/${conversationId}`, updateData);
+      return response.data;
     } catch (error) {
-      console.error(`Error updating conversation ${conversationId}:`, error)
-      throw error
+      console.error(`Error updating conversation ${conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -105,14 +105,14 @@ class ChatHistoryService {
   async deleteConversation(conversationId) {
     try {
       if (!conversationId) {
-        throw new Error('Conversation ID is required')
+        throw new Error('Conversation ID is required');
       }
 
-      const response = await httpService.delete(`/chat/conversations/${conversationId}`)
-      return response.data
+      const response = await httpService.delete(`/chat/conversations/${conversationId}`);
+      return response.data;
     } catch (error) {
-      console.error(`Error deleting conversation ${conversationId}:`, error)
-      throw error
+      console.error(`Error deleting conversation ${conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -130,14 +130,14 @@ class ChatHistoryService {
       const params = {
         limit: options.limit || 50,
         offset: options.offset || 0,
-        newestFirst: options.newestFirst || false,
-      }
+        newestFirst: options.newestFirst || false
+      };
 
-      const response = await httpService.get(`/chat/conversations/${conversationId}/messages`, { params })
-      return response.data
+      const response = await httpService.get(`/chat/conversations/${conversationId}/messages`, { params });
+      return response.data;
     } catch (error) {
-      console.error(`Error fetching messages for conversation ${conversationId}:`, error)
-      throw error
+      console.error(`Error fetching messages for conversation ${conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -154,14 +154,17 @@ class ChatHistoryService {
   async addMessage(messageData) {
     try {
       if (!messageData.conversationId) {
-        throw new Error('Conversation ID is required')
+        throw new Error('Conversation ID is required');
       }
 
-      const response = await httpService.post(`/chat/conversations/${messageData.conversationId}/messages`, messageData)
-      return response.data
+      const response = await httpService.post(
+        `/chat/conversations/${messageData.conversationId}/messages`,
+        messageData
+      );
+      return response.data;
     } catch (error) {
-      console.error(`Error adding message to conversation ${messageData.conversationId}:`, error)
-      throw error
+      console.error(`Error adding message to conversation ${messageData.conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -173,11 +176,11 @@ class ChatHistoryService {
    */
   async markMessagesAsRead(conversationId, messageIds = []) {
     try {
-      const response = await httpService.post(`/chat/conversations/${conversationId}/messages/read`, { messageIds })
-      return response.data
+      const response = await httpService.post(`/chat/conversations/${conversationId}/messages/read`, { messageIds });
+      return response.data;
     } catch (error) {
-      console.error(`Error marking messages as read in conversation ${conversationId}:`, error)
-      throw error
+      console.error(`Error marking messages as read in conversation ${conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -188,11 +191,11 @@ class ChatHistoryService {
    */
   async findMessagesForQuery(queryId) {
     try {
-      const response = await httpService.get(`/chat/query/${queryId}/messages`)
-      return response.data
+      const response = await httpService.get(`/chat/query/${queryId}/messages`);
+      return response.data;
     } catch (error) {
-      console.error(`Error finding messages for query ${queryId}:`, error)
-      throw error
+      console.error(`Error finding messages for query ${queryId}:`, error);
+      throw error;
     }
   }
 
@@ -203,11 +206,11 @@ class ChatHistoryService {
    */
   async findOriginatingQuery(messageId) {
     try {
-      const response = await httpService.get(`/chat/messages/${messageId}/query`)
-      return response.data
+      const response = await httpService.get(`/chat/messages/${messageId}/query`);
+      return response.data;
     } catch (error) {
-      console.error(`Error finding originating query for message ${messageId}:`, error)
-      throw error
+      console.error(`Error finding originating query for message ${messageId}:`, error);
+      throw error;
     }
   }
 
@@ -222,11 +225,11 @@ class ChatHistoryService {
    */
   async createConversationFromQuery(queryId, options = {}) {
     try {
-      const response = await httpService.post(`/chat/query/${queryId}/conversation`, options)
-      return response.data
+      const response = await httpService.post(`/chat/query/${queryId}/conversation`, options);
+      return response.data;
     } catch (error) {
-      console.error(`Error creating conversation from query ${queryId}:`, error)
-      throw error
+      console.error(`Error creating conversation from query ${queryId}:`, error);
+      throw error;
     }
   }
 
@@ -242,21 +245,21 @@ class ChatHistoryService {
   async searchConversations(searchTerm, options = {}) {
     try {
       if (!searchTerm) {
-        throw new Error('Search term is required')
+        throw new Error('Search term is required');
       }
 
       const params = {
         q: searchTerm,
         limit: options.limit || 20,
         offset: options.offset || 0,
-        includeArchived: options.includeArchived || false,
-      }
+        includeArchived: options.includeArchived || false
+      };
 
-      const response = await httpService.get('/chat/search', { params })
-      return response.data
+      const response = await httpService.get('/chat/search', { params });
+      return response.data;
     } catch (error) {
-      console.error(`Error searching conversations with term "${searchTerm}":`, error)
-      throw error
+      console.error(`Error searching conversations with term "${searchTerm}":`, error);
+      throw error;
     }
   }
 
@@ -268,12 +271,12 @@ class ChatHistoryService {
   async getRecentConversations(limit = 5) {
     try {
       const response = await httpService.get('/chat/recent', {
-        params: { limit },
-      })
-      return response.data
+        params: { limit }
+      });
+      return response.data;
     } catch (error) {
-      console.error('Error fetching recent conversations:', error)
-      throw error
+      console.error('Error fetching recent conversations:', error);
+      throw error;
     }
   }
 
@@ -283,11 +286,11 @@ class ChatHistoryService {
    */
   async getUserConversationStats() {
     try {
-      const response = await httpService.get('/chat/stats')
-      return response.data
+      const response = await httpService.get('/chat/stats');
+      return response.data;
     } catch (error) {
-      console.error('Error fetching conversation statistics:', error)
-      throw error
+      console.error('Error fetching conversation statistics:', error);
+      throw error;
     }
   }
 
@@ -300,20 +303,20 @@ class ChatHistoryService {
    */
   async getUserFolders(options = {}) {
     try {
-      const params = {}
+      const params = {};
 
       if ('includeArchived' in options) {
-        params.includeArchived = options.includeArchived
+        params.includeArchived = options.includeArchived;
       }
       if ('parentFolderId' in options && options.parentFolderId !== undefined) {
-        params.parentFolderId = options.parentFolderId
+        params.parentFolderId = options.parentFolderId;
       }
 
-      const response = await httpService.get('/chat/folders', { params })
-      return response.data
+      const response = await httpService.get('/chat/folders', { params });
+      return response.data;
     } catch (error) {
-      console.error('Error fetching user folders:', error)
-      throw error
+      console.error('Error fetching user folders:', error);
+      throw error;
     }
   }
 
@@ -324,11 +327,11 @@ class ChatHistoryService {
    */
   async getFolder(folderId) {
     try {
-      const response = await httpService.get(`/chat/folders/${folderId}`)
-      return response.data
+      const response = await httpService.get(`/chat/folders/${folderId}`);
+      return response.data;
     } catch (error) {
-      console.error(`Error fetching folder ${folderId}:`, error)
-      throw error
+      console.error(`Error fetching folder ${folderId}:`, error);
+      throw error;
     }
   }
 
@@ -345,14 +348,14 @@ class ChatHistoryService {
   async createFolder(folderData) {
     try {
       if (!folderData.name) {
-        throw new Error('Folder name is required')
+        throw new Error('Folder name is required');
       }
 
-      const response = await httpService.post('/chat/folders', folderData)
-      return response.data
+      const response = await httpService.post('/chat/folders', folderData);
+      return response.data;
     } catch (error) {
-      console.error('Error creating folder:', error)
-      throw error
+      console.error('Error creating folder:', error);
+      throw error;
     }
   }
 
@@ -370,11 +373,11 @@ class ChatHistoryService {
    */
   async updateFolder(folderId, updateData) {
     try {
-      const response = await httpService.patch(`/chat/folders/${folderId}`, updateData)
-      return response.data
+      const response = await httpService.patch(`/chat/folders/${folderId}`, updateData);
+      return response.data;
     } catch (error) {
-      console.error(`Error updating folder ${folderId}:`, error)
-      throw error
+      console.error(`Error updating folder ${folderId}:`, error);
+      throw error;
     }
   }
 
@@ -387,13 +390,13 @@ class ChatHistoryService {
   async deleteFolder(folderId, deleteContents = false) {
     try {
       const response = await httpService.delete(`/chat/folders/${folderId}`, {
-        params: { deleteContents },
-      })
+        params: { deleteContents }
+      });
 
-      return response.data
+      return response.data;
     } catch (error) {
-      console.error(`Error deleting folder ${folderId}:`, error)
-      throw error
+      console.error(`Error deleting folder ${folderId}:`, error);
+      throw error;
     }
   }
 
@@ -404,11 +407,11 @@ class ChatHistoryService {
    */
   async getFolderPath(folderId) {
     try {
-      const response = await httpService.get(`/chat/folders/${folderId}/path`)
-      return response.data
+      const response = await httpService.get(`/chat/folders/${folderId}/path`);
+      return response.data;
     } catch (error) {
-      console.error(`Error getting path for folder ${folderId}:`, error)
-      throw error
+      console.error(`Error getting path for folder ${folderId}:`, error);
+      throw error;
     }
   }
 
@@ -422,19 +425,19 @@ class ChatHistoryService {
   async searchFolders(searchTerm, options = {}) {
     try {
       if (!searchTerm) {
-        throw new Error('Search term is required')
+        throw new Error('Search term is required');
       }
 
       const params = {
         q: searchTerm,
-        includeArchived: options.includeArchived || false,
-      }
+        includeArchived: options.includeArchived || false
+      };
 
-      const response = await httpService.get('/chat/folders/search', { params })
-      return response.data
+      const response = await httpService.get('/chat/folders/search', { params });
+      return response.data;
     } catch (error) {
-      console.error(`Error searching folders with term "${searchTerm}":`, error)
-      throw error
+      console.error(`Error searching folders with term "${searchTerm}":`, error);
+      throw error;
     }
   }
 
@@ -447,18 +450,18 @@ class ChatHistoryService {
   async reorderFolders(folderOrders, parentFolderId = null) {
     try {
       if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
-        throw new Error('Folder orders array is required')
+        throw new Error('Folder orders array is required');
       }
 
       const response = await httpService.post('/chat/folders/reorder', {
         folderOrders,
-        parentFolderId,
-      })
+        parentFolderId
+      });
 
-      return response.data
+      return response.data;
     } catch (error) {
-      console.error('Error reordering folders:', error)
-      throw error
+      console.error('Error reordering folders:', error);
+      throw error;
     }
   }
 
@@ -470,11 +473,11 @@ class ChatHistoryService {
    */
   async addConversationToFolder(folderId, conversationId) {
     try {
-      const response = await httpService.post(`/chat/folders/${folderId}/conversations/${conversationId}`)
-      return response.data
+      const response = await httpService.post(`/chat/folders/${folderId}/conversations/${conversationId}`);
+      return response.data;
     } catch (error) {
-      console.error(`Error adding conversation ${conversationId} to folder ${folderId}:`, error)
-      throw error
+      console.error(`Error adding conversation ${conversationId} to folder ${folderId}:`, error);
+      throw error;
     }
   }
 
@@ -485,14 +488,14 @@ class ChatHistoryService {
    */
   async getConversationFolder(conversationId) {
     try {
-      const response = await httpService.get(`/chat/conversations/${conversationId}/folder`)
-      return response.data
+      const response = await httpService.get(`/chat/conversations/${conversationId}/folder`);
+      return response.data;
     } catch (error) {
       if (error.response && error.response.status === 404) {
-        return { inFolder: false, folder: null }
+        return { inFolder: false, folder: null };
       }
-      console.error(`Error finding folder for conversation ${conversationId}:`, error)
-      throw error
+      console.error(`Error finding folder for conversation ${conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -507,13 +510,13 @@ class ChatHistoryService {
     try {
       const response = await httpService.post(`/chat/conversations/${conversationId}/move`, {
         sourceFolderId,
-        targetFolderId,
-      })
+        targetFolderId
+      });
 
-      return response.data
+      return response.data;
     } catch (error) {
-      console.error(`Error moving conversation ${conversationId}:`, error)
-      throw error
+      console.error(`Error moving conversation ${conversationId}:`, error);
+      throw error;
     }
   }
 
@@ -525,13 +528,13 @@ class ChatHistoryService {
    */
   async removeConversationFromFolder(conversationId, currentFolderId) {
     try {
-      const response = await httpService.delete(`/chat/folders/${currentFolderId}/conversations/${conversationId}`)
-      return response.data
+      const response = await httpService.delete(`/chat/folders/${currentFolderId}/conversations/${conversationId}`);
+      return response.data;
     } catch (error) {
-      console.error(`Error removing conversation ${conversationId} from folder ${currentFolderId}:`, error)
-      throw error
+      console.error(`Error removing conversation ${conversationId} from folder ${currentFolderId}:`, error);
+      throw error;
     }
   }
 }
 
-export default new ChatHistoryService()
+export default new ChatHistoryService();

@@ -20,10 +20,10 @@ class UserProfileService {
   }
 
   /**
- * Update current user profile
- * @param {Object} profileData - Updated profile data
- * @returns {Promise} Updated user profile
- */
+   * Update current user profile
+   * @param {Object} profileData - Updated profile data
+   * @returns {Promise} Updated user profile
+   */
   async updateProfile(profileData) {
     try {
       console.log('Updating user profile');
@@ -55,10 +55,10 @@ class UserProfileService {
   }
 
   /**
- * Check if the profile data contains any File objects
- * @param {Object} profileData - Profile data to check
- * @returns {Boolean} True if files are present
- */
+   * Check if the profile data contains any File objects
+   * @param {Object} profileData - Profile data to check
+   * @returns {Boolean} True if files are present
+   */
   checkForFiles(profileData) {
     // Check for File objects in any section
     for (const section in profileData) {
@@ -80,10 +80,10 @@ class UserProfileService {
    */
   prepareFormData(profileData) {
     const formData = new FormData();
-    
+
     // Clone the profile data to avoid modifying the original
     const dataToSend = JSON.parse(JSON.stringify(profileData));
-    
+
     // Process each section that might have file uploads
     const sectionsWithFiles = [
       'personalIdentification',
@@ -96,14 +96,14 @@ class UserProfileService {
       'criminalLegal',
       'transportation'
     ];
-    
+
     // Extract files and append them to form data
-    sectionsWithFiles.forEach(section => {
+    sectionsWithFiles.forEach((section) => {
       if (!dataToSend[section]) return;
-      
-      Object.keys(dataToSend[section]).forEach(field => {
+
+      Object.keys(dataToSend[section]).forEach((field) => {
         const value = dataToSend[section][field];
-        
+
         // Check if it's a File object
         if (value instanceof File) {
           formData.append(`${section}-${field}`, value);
@@ -112,14 +112,12 @@ class UserProfileService {
         }
       });
     });
-    
+
     // Append the non-file data as JSON
     formData.append('data', JSON.stringify(dataToSend));
-    
+
     return formData;
   }
-
 }
-
 
 export default new UserProfileService();

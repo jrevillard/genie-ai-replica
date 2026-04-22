@@ -196,7 +196,7 @@ const Map<String, dynamic> ptLocale = {
     "VN": "Vietnã",
     "YE": "Iêmen",
     "ZM": "Zâmbia",
-    "ZW": "Zimbábue"
+    "ZW": "Zimbábue",
   },
   "verification": {
     "verifying": "Verificando seu e-mail...",
@@ -209,7 +209,7 @@ const Map<String, dynamic> ptLocale = {
     "generalError":
         "Ocorreu um erro durante a verificação. Por favor, tente novamente mais tarde.",
     "proceedToLogin": "Prosseguir para Login",
-    "backToLogin": "Voltar para Login"
+    "backToLogin": "Voltar para Login",
   },
   "passwordResetConfirm": {
     "appTitle": "Genie AI",
@@ -244,15 +244,15 @@ const Map<String, dynamic> ptLocale = {
       "weak": "Fraca",
       "fair": "Razoável",
       "good": "Boa",
-      "strong": "Forte"
+      "strong": "Forte",
     },
     "passwordSuggestions": {
       "atLeast8Chars": "Use pelo menos 8 caracteres",
       "addUppercase": "Adicione letras maiúsculas",
       "addLowercase": "Adicione letras minúsculas",
       "addNumbers": "Adicione números",
-      "addSpecialChars": "Adicione caracteres especiais"
-    }
+      "addSpecialChars": "Adicione caracteres especiais",
+    },
   },
   "passwordReset": {
     "appTitle": "Genie AI",
@@ -269,7 +269,7 @@ const Map<String, dynamic> ptLocale = {
         "O link de redefinição de senha foi enviado para o seu e-mail",
     "resetRequestFailed":
         "Não foi possível enviar o link de redefinição de senha. Por favor, tente novamente.",
-    "checkEmail": "Por favor, verifique seu e-mail para mais instruções."
+    "checkEmail": "Por favor, verifique seu e-mail para mais instruções.",
   },
   "register": {
     "appTitle": "Genie AI",
@@ -313,7 +313,7 @@ const Map<String, dynamic> ptLocale = {
     "usernameInvalidChars":
         "O nome de usuário pode conter apenas letras, números, sublinhados, pontos e hifens",
     "networkError":
-        "Erro de rede. Por favor, verifique sua conexão e tente novamente."
+        "Erro de rede. Por favor, verifique sua conexão e tente novamente.",
   },
   "login": {
     "appTitle": "Genie AI",
@@ -340,7 +340,7 @@ const Map<String, dynamic> ptLocale = {
         "Muitas tentativas de login. Por favor, tente novamente mais tarde.",
     "loginFailed": "Falha no login. Por favor, tente novamente.",
     "oauthNotImplemented": "Login social ainda não implementado",
-    "savedLoginNotImplemented": "Login com conta salva ainda não implementado"
+    "savedLoginNotImplemented": "Login com conta salva ainda não implementado",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -359,8 +359,8 @@ const Map<String, dynamic> ptLocale = {
       "swahili": "Suaíli",
       "german": "Alemão",
       "spanish": "Espanhol",
-      "arabic": "Árabe"
-    }
+      "arabic": "Árabe",
+    },
   },
   "systemStatus": {
     "title": "Status do Serviço",
@@ -374,20 +374,20 @@ const Map<String, dynamic> ptLocale = {
     "checking": "Verificando...",
     "nextDeadline": "Próximo Prazo",
     "days": "dias",
-    "viewDetails": "Ver Detalhes"
+    "viewDetails": "Ver Detalhes",
   },
   "services": {
     "eCitizen": "Portal eCitizen",
     "taxFiling": "Sistema de Declaração de Impostos",
     "idApplication": "Solicitação de Identidade",
     "businessReg": "Registro de Empresas",
-    "drivingLicense": "Carteira de Motorista"
+    "drivingLicense": "Carteira de Motorista",
   },
   "deadlines": {
     "taxFiling": "Prazo para Declaração de Impostos",
     "businessRenewal": "Renovação de Licença Comercial",
     "idRenewal": "Renovação de Cartão de Identidade",
-    "vehicleRegistration": "Prazo para Registro de Veículo"
+    "vehicleRegistration": "Prazo para Registro de Veículo",
   },
   "sidebar": {
     "governmentServices": "Áreas de Conhecimento",
@@ -429,7 +429,7 @@ const Map<String, dynamic> ptLocale = {
       "rain": "Chuva",
       "shower": "Pancada de Chuva",
       "thunderstorm": "Tempestade",
-      "snow": "Neve"
+      "snow": "Neve",
     },
     "folders": "Pastas",
     "emptyFolder":
@@ -443,7 +443,7 @@ const Map<String, dynamic> ptLocale = {
       "all": "Todos os Chats",
       "folders": "Pastas",
       "starred": "Favoritos",
-      "archived": "Arquivados"
+      "archived": "Arquivados",
     },
     "savedChats": "Chats Salvos",
     "chats": "Chats",
@@ -502,7 +502,7 @@ const Map<String, dynamic> ptLocale = {
     "noConversations": "Nenhuma conversa encontrada",
     "noStarred": "Nenhuma conversa favorita",
     "noArchived": "Nenhuma conversa arquivada",
-    "folderEmptyState": "A pasta está vazia"
+    "folderEmptyState": "A pasta está vazia",
   },
   "leftPanel": {
     "cat1": {
@@ -512,8 +512,8 @@ const Map<String, dynamic> ptLocale = {
         "Carteiras de identidade nacional",
         "Passaportes",
         "Certidões de casamento e óbito",
-        "Registro de eleitores"
-      ]
+        "Registro de eleitores",
+      ],
     },
     "cat2": {
       "name": "2. Saúde e Serviços Sociais",
@@ -522,8 +522,8 @@ const Map<String, dynamic> ptLocale = {
         "Programas de vacinação",
         "Seguro de saúde",
         "Benefícios por invalidez",
-        "Assistência social e alimentar"
-      ]
+        "Assistência social e alimentar",
+      ],
     },
     "cat3": {
       "name": "3. Educação e Aprendizagem",
@@ -531,8 +531,8 @@ const Map<String, dynamic> ptLocale = {
         "Escolas públicas e universidades",
         "Bolsas de estudo e empréstimos estudantis",
         "Programas de educação de adultos",
-        "Recursos de aprendizagem online"
-      ]
+        "Recursos de aprendizagem online",
+      ],
     },
     "cat4": {
       "name": "4. Emprego e Serviços Trabalhistas",
@@ -540,8 +540,8 @@ const Map<String, dynamic> ptLocale = {
         "Busca de emprego e seguro-desemprego",
         "Proteção ao trabalhador e direitos trabalhistas",
         "Regulamentos de segurança no local de trabalho",
-        "Treinamento de habilidades e aprendizagem"
-      ]
+        "Treinamento de habilidades e aprendizagem",
+      ],
     },
     "cat5": {
       "name": "5. Impostos e Receita",
@@ -549,8 +549,8 @@ const Map<String, dynamic> ptLocale = {
         "Declaração de imposto de renda e reembolsos",
         "Pagamentos de imposto sobre a propriedade",
         "Conformidade fiscal empresarial",
-        "Alfândega e impostos de importação"
-      ]
+        "Alfândega e impostos de importação",
+      ],
     },
     "cat6": {
       "name": "6. Segurança Pública e Justiça",
@@ -558,8 +558,8 @@ const Map<String, dynamic> ptLocale = {
         "Polícia e serviços de emergência",
         "Tribunais e assistência jurídica",
         "Denúncia de crimes",
-        "Leis de proteção ao consumidor"
-      ]
+        "Leis de proteção ao consumidor",
+      ],
     },
     "cat7": {
       "name": "7. Transporte e Mobilidade",
@@ -567,8 +567,8 @@ const Map<String, dynamic> ptLocale = {
         "Carteiras de motorista e registro de veículos",
         "Transporte público e infraestrutura",
         "Violações de trânsito e multas",
-        "Programas de segurança no trânsito"
-      ]
+        "Programas de segurança no trânsito",
+      ],
     },
     "cat8": {
       "name": "8. Habitação e Desenvolvimento Urbano",
@@ -576,8 +576,8 @@ const Map<String, dynamic> ptLocale = {
         "Assistência à habitação pública",
         "Registro de propriedades e registros de terras",
         "Empréstimos e subsídios habitacionais",
-        "Zoneamento e licenças de construção"
-      ]
+        "Zoneamento e licenças de construção",
+      ],
     },
     "cat9": {
       "name": "9. Utilidades e Meio Ambiente",
@@ -585,8 +585,8 @@ const Map<String, dynamic> ptLocale = {
         "Serviços de água e eletricidade",
         "Gestão de resíduos e reciclagem",
         "Regulamentos ambientais",
-        "Iniciativas de energia renovável"
-      ]
+        "Iniciativas de energia renovável",
+      ],
     },
     "cat10": {
       "name": "10. Negócios e Comércio",
@@ -594,8 +594,8 @@ const Map<String, dynamic> ptLocale = {
         "Registro e licenciamento de empresas",
         "Regulamentos comerciais e licenças",
         "Subsídios e incentivos para pequenas empresas",
-        "E-commerce e suporte a negócios digitais"
-      ]
+        "E-commerce e suporte a negócios digitais",
+      ],
     },
     "cat11": {
       "name": "11. Previdência Social e Pensões",
@@ -603,8 +603,8 @@ const Map<String, dynamic> ptLocale = {
         "Benefícios de aposentadoria",
         "Gestão de fundos de pensão",
         "Benefícios para sobreviventes",
-        "Pensões por invalidez"
-      ]
+        "Pensões por invalidez",
+      ],
     },
     "cat12": {
       "name": "12. Comunidade e Engajamento Cívico",
@@ -612,9 +612,9 @@ const Map<String, dynamic> ptLocale = {
         "Votação e eleições",
         "Feedback público e reclamações de cidadãos",
         "Voluntariado e programas comunitários",
-        "Participação no governo local"
-      ]
-    }
+        "Participação no governo local",
+      ],
+    },
   },
   "settings": {
     "title": "Configurações",
@@ -630,7 +630,7 @@ const Map<String, dynamic> ptLocale = {
     "languages": {
       "english": "Inglês",
       "french": "Francês",
-      "swahili": "Suaíli"
+      "swahili": "Suaíli",
     },
     "theme": "Tema",
     "themes": {"light": "Claro", "dark": "Escuro", "system": "Sistema"},
@@ -662,14 +662,14 @@ const Map<String, dynamic> ptLocale = {
           "Isso limpará todos os seus dados de perfil e histórico de chat.",
       "confirmReset":
           "Tem certeza de que deseja redefinir todos os seus dados? Isso não pode ser desfeito.",
-      "resetComplete": "Seus dados foram redefinidos."
+      "resetComplete": "Seus dados foram redefinidos.",
     },
     "language": {"title": "Idioma", "selectLabel": "Idioma de Exibição"},
     "appearance": {
       "title": "Aparência",
       "lightTheme": "Claro",
       "darkTheme": "Escuro",
-      "systemTheme": "Sistema"
+      "systemTheme": "Sistema",
     },
     "confirmDeleteAccount":
         "Tem certeza de que deseja excluir sua conta? Esta ação não pode ser desfeita.",
@@ -717,7 +717,7 @@ const Map<String, dynamic> ptLocale = {
     "confirmResetUserData":
         "Tem certeza de que deseja redefinir todos os seus dados de perfil? Isso limpará todas as informações do perfil e histórico de chat, mas manterá suas credenciais de conta.",
     "reset": "Redefinir",
-    "deleteAccountTitle": "Excluir Conta"
+    "deleteAccountTitle": "Excluir Conta",
   },
   "userProfile": {
     "title": "Perfil do Usuário",
@@ -765,7 +765,7 @@ const Map<String, dynamic> ptLocale = {
       "tab9": "Seguridade Social e Bem-Estar",
       "tab10": "Registros Criminais e Legais",
       "tab11": "Transporte e Mobilidade",
-      "tab12": "Participação Cívica e Política"
+      "tab12": "Participação Cívica e Política",
     },
     "tabsShort": {
       "personal": "Pessoal",
@@ -779,14 +779,14 @@ const Map<String, dynamic> ptLocale = {
       "social": "Social",
       "criminal": "Criminal",
       "transport": "Transporte",
-      "civic": "Cívico"
+      "civic": "Cívico",
     },
     "actions": {
       "cancel": "Cancelar",
       "save": "Salvar Perfil",
       "previous": "Anterior",
       "next": "Próximo",
-      "saving": "Salvando..."
+      "saving": "Salvando...",
     },
     "fields": {
       "fullName": "Nome completo (incluindo apelidos)",
@@ -861,7 +861,7 @@ const Map<String, dynamic> ptLocale = {
       "electionHistory": "Histórico de participação em eleições",
       "partyMembership": "Filiação a partido político",
       "militaryStatus": "Status de serviço militar ou recrutamento",
-      "publicServiceRoles": "Cargos no serviço público"
+      "publicServiceRoles": "Cargos no serviço público",
     },
     "placeholders": {
       "fullName": "Digite seu nome legal completo",
@@ -871,7 +871,7 @@ const Map<String, dynamic> ptLocale = {
       "searchDisciplines": "Pesquisar disciplinas...",
       "selectDiscipline": "Selecione uma disciplina",
       "searchDegrees": "Pesquisar graus...",
-      "selectDegree": "Selecione um grau"
+      "selectDegree": "Selecione um grau",
     },
     "validation": {
       "nameRequired": "Nome completo é obrigatório",
@@ -882,7 +882,7 @@ const Map<String, dynamic> ptLocale = {
       "futureDate": "A data não pode ser no futuro",
       "invalidSelection": "Por favor, faça uma seleção válida",
       "passwordLength": "A senha deve ter pelo menos 8 caracteres",
-      "matchError": "Os campos não coincidem"
+      "matchError": "Os campos não coincidem",
     },
     "errors": {
       "savingFailed": "Falha ao salvar perfil",
@@ -891,7 +891,7 @@ const Map<String, dynamic> ptLocale = {
       "invalidFileType": "Tipo de arquivo inválido",
       "fileTooLarge": "O arquivo é muito grande",
       "countryLoadError": "Erro ao carregar países",
-      "countryUpdateError": "Erro ao atualizar país"
+      "countryUpdateError": "Erro ao atualizar país",
     },
     "notifications": {
       "saveSuccess": "Perfil salvo com sucesso",
@@ -904,7 +904,7 @@ const Map<String, dynamic> ptLocale = {
       "formChanged": "Você tem alterações não salvas",
       "sessionExpired": "Sua sessão expirou, por favor entre novamente",
       "profileUpdated": "Seu perfil foi atualizado",
-      "profileIncomplete": "Seu perfil está incompleto"
+      "profileIncomplete": "Seu perfil está incompleto",
     },
     "instructions": {
       "fullNameHelp":
@@ -920,7 +920,7 @@ const Map<String, dynamic> ptLocale = {
       "nextTab": "Continuar para a próxima seção",
       "previousTab": "Retornar à seção anterior",
       "saveInstructions": "Clique em Salvar para armazenar suas informações",
-      "cancelInstructions": "Clique em Cancelar para descartar alterações"
+      "cancelInstructions": "Clique em Cancelar para descartar alterações",
     },
     "completionStatus": {
       "notStarted": "Não Iniciado",
@@ -928,26 +928,26 @@ const Map<String, dynamic> ptLocale = {
       "complete": "Completo",
       "percentComplete": "{percent}% completo",
       "tabsCompleted": "{completed} de {total} seções completadas",
-      "tabComplete": "Aba completada!"
+      "tabComplete": "Aba completada!",
     },
     "gender": {
       "male": "Masculino",
       "female": "Feminino",
       "other": "Outro",
-      "preferNot": "Prefiro não dizer"
+      "preferNot": "Prefiro não dizer",
     },
     "maritalStatus": {
       "single": "Solteiro(a)",
       "married": "Casado(a)",
       "divorced": "Divorciado(a)",
       "widowed": "Viúvo(a)",
-      "other": "Outro"
+      "other": "Outro",
     },
     "residencyStatuses": {
       "citizen": "Cidadão",
       "permanentResident": "Residente Permanente",
       "temporaryResident": "Residente Temporário",
-      "other": "Outro"
+      "other": "Outro",
     },
     "employmentStatuses": {
       "employed": "Empregado",
@@ -956,7 +956,7 @@ const Map<String, dynamic> ptLocale = {
       "student": "Estudante",
       "retired": "Aposentado",
       "homemaker": "Dona(o) de Casa",
-      "other": "Outro"
+      "other": "Outro",
     },
     "educationLevels": {
       "primary": "Ensino Primário",
@@ -968,14 +968,14 @@ const Map<String, dynamic> ptLocale = {
       "master": "Mestrado",
       "doctoral": "Doutorado",
       "professional": "Grau Profissional",
-      "other": "Outro"
+      "other": "Outro",
     },
     "proficiencyLevels": {
       "native": "Nativo",
       "fluent": "Fluente",
       "advanced": "Avançado",
       "intermediate": "Intermediário",
-      "basic": "Básico"
+      "basic": "Básico",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -986,7 +986,7 @@ const Map<String, dynamic> ptLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
     },
     "languages": {
       "english": "Inglês",
@@ -1001,7 +1001,7 @@ const Map<String, dynamic> ptLocale = {
       "russian": "Russo",
       "hindi": "Hindi",
       "urdu": "Urdu",
-      "other": "Outro"
+      "other": "Outro",
     },
     "yesNo": {"yes": "Sim", "no": "Não"},
     "select": "Por favor, selecione",
@@ -1108,7 +1108,7 @@ const Map<String, dynamic> ptLocale = {
       "Medicina Veterinária",
       "Desenvolvimento Web",
       "Biologia da Vida Selvagem",
-      "Zoologia"
+      "Zoologia",
     ],
     "degreeOptions": [
       "Grau de Associado",
@@ -1138,7 +1138,7 @@ const Map<String, dynamic> ptLocale = {
       "Certificado Vocacional",
       "Certificado de Pós-Graduação",
       "Diploma de Pós-Graduação",
-      "Pós-Doutorado"
+      "Pós-Doutorado",
     ],
     "aria": {
       "tabList": "Seções do formulário de perfil",
@@ -1147,8 +1147,8 @@ const Map<String, dynamic> ptLocale = {
       "closeButton": "Fechar formulário de perfil",
       "saveButton": "Salvar dados do perfil",
       "requiredField": "Campo obrigatório",
-      "dropdownSelect": "Selecione uma opção"
-    }
+      "dropdownSelect": "Selecione uma opção",
+    },
   },
   "chatbot": {
     "placeholder": "Digite sua consulta aqui...",
@@ -1214,10 +1214,10 @@ const Map<String, dynamic> ptLocale = {
         "discardAndNew": "Descartar e Novo",
         "discardAndLoad": "Descartar e Carregar",
         "saveFirst": "Salvar Primeiro",
-        "export": "Exportar"
-      }
+        "export": "Exportar",
+      },
     },
-    "shareWhatsApp": "Compartilhar no WhatsApp"
+    "shareWhatsApp": "Compartilhar no WhatsApp",
   },
   "quickhelp": {
     "applyForID": "Pedir ID",
@@ -1263,7 +1263,7 @@ const Map<String, dynamic> ptLocale = {
         "Quero saber sobre o Programa de Habitação Acessível (Boma Yangu) no Quénia.",
     "findJobsUserPrompt":
         "Quero perguntar sobre oportunidades de emprego governamentais e candidaturas PSC no Quénia.",
-    "justChatUserPrompt": "Quero conversar em geral sobre a vida no Quénia."
+    "justChatUserPrompt": "Quero conversar em geral sobre a vida no Quénia.",
   },
   "common": {
     "cancel": "Cancelar",
@@ -1279,7 +1279,7 @@ const Map<String, dynamic> ptLocale = {
     "open": "Abrir",
     "done": "Concluído",
     "confirm": "Confirmar",
-    "edit": "Editar"
+    "edit": "Editar",
   },
   "feedback": {
     "title": "Feedback",
@@ -1293,7 +1293,7 @@ const Map<String, dynamic> ptLocale = {
     "thankYouMessage": "Obrigado pelo seu feedback!",
     "submitting": "Enviando...",
     "error": "Algo deu errado. Por favor, tente novamente.",
-    "success": "Obrigado pelo seu feedback!"
+    "success": "Obrigado pelo seu feedback!",
   },
   "responseRating": {
     "title": "Ajude-nos a Melhorar",
@@ -1305,11 +1305,11 @@ const Map<String, dynamic> ptLocale = {
       "2": "Pouco Útil",
       "3": "Moderadamente Útil",
       "4": "Muito Útil",
-      "5": "Mudança de Vida"
+      "5": "Mudança de Vida",
     },
     "additionalComments": "Comentários adicionais...",
     "submit": "Enviar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
   },
   "upload": {"alt": "Carregar"},
   "uploadDialog": {
@@ -1327,8 +1327,8 @@ const Map<String, dynamic> ptLocale = {
           "Arquivos de atalho (.url) não são suportados. Por favor, arraste o arquivo real.",
       "duplicate": "O arquivo \"{fileName}\" já foi adicionado.",
       "uploadSuccess": "Carregado com sucesso {fileName}",
-      "uploadFailed": "Falha ao carregar {fileName}."
-    }
+      "uploadFailed": "Falha ao carregar {fileName}.",
+    },
   },
   "about": {
     "title": "Sobre",
@@ -1336,6 +1336,6 @@ const Map<String, dynamic> ptLocale = {
     "description":
         "O Genie AI é o seu assistente inteligente para navegar pelos serviços e informações governamentais.",
     "techStack": "Tech Stack",
-    "copyright": "Todos os direitos reservados."
-  }
+    "copyright": "Todos os direitos reservados.",
+  },
 };

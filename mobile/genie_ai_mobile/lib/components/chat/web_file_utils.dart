@@ -47,8 +47,9 @@ Future<void> openWebFile({
 
           // Determine type
           final bool isMarkdown = _isMarkdown(docMetadata);
-          final String targetMimeType =
-              isMarkdown ? 'text/markdown' : _getMimeType(docMetadata);
+          final String targetMimeType = isMarkdown
+              ? 'text/markdown'
+              : _getMimeType(docMetadata);
 
           // 3. Unwrap JSON/Base64 if necessary
           final html.Blob blob = await _unwrapBlob(rawBlob, targetMimeType);
@@ -91,16 +92,21 @@ Future<void> openWebFile({
       openedWindow.close();
     } catch (_) {}
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("${tr('sidebar.launchError')}: $e")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text("${tr('sidebar.launchError')}: $e")));
   }
 }
 
 // --- HELPER FUNCTIONS (Restored Logic) ---
 
-void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
-    Map<String, dynamic> doc, Completer c, bool isDark) {
+void _handleMarkdownRender(
+  html.WindowBase win,
+  html.Blob blob,
+  Map<String, dynamic> doc,
+  Completer c,
+  bool isDark,
+) {
   final reader = html.FileReader();
   reader.onLoadEnd.listen((e) {
     try {
@@ -109,7 +115,8 @@ void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
       // Limit check (5MB) - if too large, download instead of render
       if (text.length > 5 * 1024 * 1024) {
         debugPrint(
-            "[WEB_UTILS] File too large for markdown render. Downloading.");
+          "[WEB_UTILS] File too large for markdown render. Downloading.",
+        );
         _downloadFallback(win, blob, doc);
         c.complete();
         return;
@@ -123,7 +130,8 @@ void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
       final String preBg = isDark ? '#161b22' : '#f6f8fa';
       final String codeBg = isDark ? 'rgba(110,118,129,0.4)' : '#f6f8fa';
 
-      final String styledHtml = '''
+      final String styledHtml =
+          '''
 <!DOCTYPE html>
 <html>
 <head>
@@ -156,7 +164,9 @@ $htmlContent
       win.location?.href = url;
 
       Future.delayed(
-          const Duration(seconds: 15), () => html.Url.revokeObjectUrl(url));
+        const Duration(seconds: 15),
+        () => html.Url.revokeObjectUrl(url),
+      );
       c.complete();
     } catch (err) {
       _downloadFallback(win, blob, doc);
@@ -167,7 +177,10 @@ $htmlContent
 }
 
 void _downloadFallback(
-    html.WindowBase win, html.Blob blob, Map<String, dynamic> doc) {
+  html.WindowBase win,
+  html.Blob blob,
+  Map<String, dynamic> doc,
+) {
   final url = html.Url.createObjectUrlFromBlob(blob);
   final anchor = html.AnchorElement(href: url)
     ..download = doc['fileName'] ?? 'document.md';
@@ -219,7 +232,8 @@ Future<html.Blob> _unwrapBlob(html.Blob originalBlob, String mimeType) async {
 bool _isMarkdown(Map<String, dynamic> doc) {
   final String? type = doc['type']?.toString().toLowerCase();
   if (type == 'markdown' || type == 'md') return true;
-  final String name = (doc['fileName'] ?? doc['document_name'] ?? doc['title'])
+  final String name =
+      (doc['fileName'] ?? doc['document_name'] ?? doc['title'])
           ?.toString()
           .toLowerCase() ??
       '';
@@ -228,7 +242,8 @@ bool _isMarkdown(Map<String, dynamic> doc) {
 
 String _getMimeType(Map<String, dynamic> doc) {
   final String? type = doc['type']?.toString().toLowerCase();
-  final String name = (doc['fileName'] ?? doc['document_name'] ?? doc['title'])
+  final String name =
+      (doc['fileName'] ?? doc['document_name'] ?? doc['title'])
           ?.toString()
           .toLowerCase() ??
       '';

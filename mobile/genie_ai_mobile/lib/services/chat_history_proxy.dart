@@ -23,19 +23,24 @@ class ChatHistoryProxy {
   }
 
   Future<Map<String, dynamic>> createConversation(
-      Map<String, dynamic> data) async {
+    Map<String, dynamic> data,
+  ) async {
     final res = await _api.post('chat/conversations', data);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> updateConversation(
-      String id, Map<String, dynamic> data) async {
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     final res = await _api.patch('chat/conversations/$id', data);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> deleteConversation(
-      String id, String userId) async {
+    String id,
+    String userId,
+  ) async {
     final Map<String, String> params = {'userId': userId};
     final res = await _api.delete('chat/conversations/$id', params: params);
     return jsonDecode(res.body) as Map<String, dynamic>;
@@ -43,15 +48,21 @@ class ChatHistoryProxy {
 
   // *** NEW METHOD ADDED ***
   Future<Map<String, dynamic>> addMessage(
-      String conversationId, Map<String, dynamic> messageData) async {
+    String conversationId,
+    Map<String, dynamic> messageData,
+  ) async {
     // Ensure userId is extracted from the messageData if present, though the backend usually gets it from the token/body
     final res = await _api.post(
-        'chat/conversations/$conversationId/messages', messageData);
+      'chat/conversations/$conversationId/messages',
+      messageData,
+    );
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  Future<List<dynamic>> getUserFolders(String userId,
-      {Map<String, dynamic>? options}) async {
+  Future<List<dynamic>> getUserFolders(
+    String userId, {
+    Map<String, dynamic>? options,
+  }) async {
     final Map<String, String> params = {'userId': userId};
     if (options != null) {
       options.forEach((key, value) {
@@ -69,23 +80,32 @@ class ChatHistoryProxy {
   }
 
   Future<Map<String, dynamic>> updateFolder(
-      String folderId, Map<String, dynamic> data) async {
+    String folderId,
+    Map<String, dynamic> data,
+  ) async {
     final res = await _api.patch('chat/folders/$folderId', data);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> deleteFolder(
-      String folderId, String userId) async {
+    String folderId,
+    String userId,
+  ) async {
     final Map<String, String> params = {'userId': userId};
     final res = await _api.delete('chat/folders/$folderId', params: params);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> addConversationToFolder(
-      String folderId, String convId, String userId) async {
+    String folderId,
+    String convId,
+    String userId,
+  ) async {
     final Map<String, String> data = {'userId': userId};
-    final res =
-        await _api.post('chat/folders/$folderId/conversations/$convId', data);
+    final res = await _api.post(
+      'chat/folders/$folderId/conversations/$convId',
+      data,
+    );
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
@@ -96,7 +116,8 @@ class ChatHistoryProxy {
   }
 
   Future<List<Map<String, dynamic>>> getMessagesForSession(
-      String sessionId) async {
+    String sessionId,
+  ) async {
     return [];
   }
 }

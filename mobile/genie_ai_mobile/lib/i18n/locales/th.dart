@@ -196,7 +196,7 @@ const Map<String, dynamic> thLocale = {
     "VN": "เวียดนาม",
     "YE": "เยเมน",
     "ZM": "แซมเบีย",
-    "ZW": "ซิมบับเว"
+    "ZW": "ซิมบับเว",
   },
   "verification": {
     "verifying": "กำลังตรวจสอบอีเมลของคุณ...",
@@ -209,7 +209,7 @@ const Map<String, dynamic> thLocale = {
     "generalError":
         "เกิดข้อผิดพลาดระหว่างการตรวจสอบ โปรดลองใหม่อีกครั้งในภายหลัง",
     "proceedToLogin": "ดำเนินการเข้าสู่ระบบ",
-    "backToLogin": "กลับไปหน้าเข้าสู่ระบบ"
+    "backToLogin": "กลับไปหน้าเข้าสู่ระบบ",
   },
   "passwordResetConfirm": {
     "appTitle": "Genie AI",
@@ -242,15 +242,15 @@ const Map<String, dynamic> thLocale = {
       "weak": "อ่อน",
       "fair": "พอใช้",
       "good": "ดี",
-      "strong": "รัดกุม"
+      "strong": "รัดกุม",
     },
     "passwordSuggestions": {
       "atLeast8Chars": "ใช้อย่างน้อย 8 ตัวอักษร",
       "addUppercase": "เพิ่มตัวพิมพ์ใหญ่",
       "addLowercase": "เพิ่มตัวพิมพ์เล็ก",
       "addNumbers": "เพิ่มตัวเลข",
-      "addSpecialChars": "เพิ่มอักขระพิเศษ"
-    }
+      "addSpecialChars": "เพิ่มอักขระพิเศษ",
+    },
   },
   "passwordReset": {
     "appTitle": "Genie AI",
@@ -265,7 +265,7 @@ const Map<String, dynamic> thLocale = {
     "invalidEmail": "โปรดป้อนที่อยู่อีเมลที่ถูกต้อง",
     "resetRequestSuccess": "ลิงก์รีเซ็ตรหัสผ่านถูกส่งไปยังอีเมลของคุณแล้ว",
     "resetRequestFailed": "ไม่สามารถส่งลิงก์รีเซ็ตรหัสผ่านได้ โปรดลองอีกครั้ง",
-    "checkEmail": "โปรดตรวจสอบอีเมลของคุณเพื่อดูคำแนะนำเพิ่มเติม"
+    "checkEmail": "โปรดตรวจสอบอีเมลของคุณเพื่อดูคำแนะนำเพิ่มเติม",
   },
   "register": {
     "appTitle": "Genie AI",
@@ -307,7 +307,7 @@ const Map<String, dynamic> thLocale = {
     "usernameInvalidChars":
         "ชื่อผู้ใช้ต้องประกอบด้วยตัวอักษร ตัวเลข ขีดล่าง จุด และขีดกลางเท่านั้น",
     "networkError":
-        "ข้อผิดพลาดของเครือข่าย โปรดตรวจสอบการเชื่อมต่อของคุณและลองอีกครั้ง"
+        "ข้อผิดพลาดของเครือข่าย โปรดตรวจสอบการเชื่อมต่อของคุณและลองอีกครั้ง",
   },
   "login": {
     "appTitle": "Genie AI",
@@ -335,7 +335,7 @@ const Map<String, dynamic> thLocale = {
     "loginFailed": "เข้าสู่ระบบล้มเหลว โปรดลองอีกครั้ง",
     "oauthNotImplemented": "การเข้าสู่ระบบด้วยโซเชียลยังไม่เปิดให้บริการ",
     "savedLoginNotImplemented":
-        "การเข้าสู่ระบบด้วยบัญชีที่บันทึกไว้ยังไม่เปิดให้บริการ"
+        "การเข้าสู่ระบบด้วยบัญชีที่บันทึกไว้ยังไม่เปิดให้บริการ",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -354,8 +354,8 @@ const Map<String, dynamic> thLocale = {
       "swahili": "สวาฮีลี",
       "german": "เยอรมัน",
       "spanish": "สเปน",
-      "arabic": "อาหรับ"
-    }
+      "arabic": "อาหรับ",
+    },
   },
   "systemStatus": {
     "title": "สถานะบริการ",
@@ -369,20 +369,20 @@ const Map<String, dynamic> thLocale = {
     "checking": "กำลังตรวจสอบ...",
     "nextDeadline": "กำหนดเส้นตายถัดไป",
     "days": "วัน",
-    "viewDetails": "ดูรายละเอียด"
+    "viewDetails": "ดูรายละเอียด",
   },
   "services": {
     "eCitizen": "พอร์ทัล eCitizen",
     "taxFiling": "ระบบยื่นภาษี",
     "idApplication": "การขอทำบัตรประชาชน",
     "businessReg": "การจดทะเบียนธุรกิจ",
-    "drivingLicense": "ใบอนุญาตขับขี่"
+    "drivingLicense": "ใบอนุญาตขับขี่",
   },
   "deadlines": {
     "taxFiling": "กำหนดเวลายื่นภาษี",
     "businessRenewal": "การต่ออายุใบอนุญาตประกอบธุรกิจ",
     "idRenewal": "การต่ออายุบัตรประชาชน",
-    "vehicleRegistration": "กำหนดเวลาต่อภาษีรถยนต์"
+    "vehicleRegistration": "กำหนดเวลาต่อภาษีรถยนต์",
   },
   "sidebar": {
     "governmentServices": "พื้นที่ความรู้",
@@ -420,7 +420,7 @@ const Map<String, dynamic> thLocale = {
       "rain": "ฝนตก",
       "shower": "ฝนปรอยๆ",
       "thunderstorm": "พายุฝนฟ้าคะนอง",
-      "snow": "หิมะตก"
+      "snow": "หิมะตก",
     },
     "folders": "โฟลเดอร์",
     "emptyFolder": "โฟลเดอร์นี้ว่างเปล่า ย้ายบทสนทนามาที่นี่จากเมนูแชท",
@@ -433,7 +433,7 @@ const Map<String, dynamic> thLocale = {
       "all": "แชททั้งหมด",
       "folders": "โฟลเดอร์",
       "starred": "ติดดาว",
-      "archived": "เก็บถาวร"
+      "archived": "เก็บถาวร",
     },
     "savedChats": "แชทที่บันทึกไว้",
     "chats": "แชท",
@@ -490,7 +490,7 @@ const Map<String, dynamic> thLocale = {
     "noConversations": "ไม่พบบทสนทนา",
     "noStarred": "ไม่มีบทสนทนาที่ติดดาว",
     "noArchived": "ไม่มีบทสนทนาที่เก็บถาวร",
-    "folderEmptyState": "โฟลเดอร์ว่างเปล่า"
+    "folderEmptyState": "โฟลเดอร์ว่างเปล่า",
   },
   "leftPanel": {
     "cat1": {
@@ -500,8 +500,8 @@ const Map<String, dynamic> thLocale = {
         "บัตรประชาชน",
         "หนังสือเดินทาง",
         "ทะเบียนสมรสและใบมรณบัตร",
-        "การลงทะเบียนผู้มีสิทธิเลือกตั้ง"
-      ]
+        "การลงทะเบียนผู้มีสิทธิเลือกตั้ง",
+      ],
     },
     "cat2": {
       "name": "2. การดูแลสุขภาพและบริการสังคม",
@@ -510,8 +510,8 @@ const Map<String, dynamic> thLocale = {
         "โครงการฉีดวัคซีน",
         "ประกันสุขภาพ",
         "สิทธิประโยชน์สำหรับผู้พิการ",
-        "สวัสดิการและความช่วยเหลือด้านอาหาร"
-      ]
+        "สวัสดิการและความช่วยเหลือด้านอาหาร",
+      ],
     },
     "cat3": {
       "name": "3. การศึกษาและการเรียนรู้",
@@ -519,8 +519,8 @@ const Map<String, dynamic> thLocale = {
         "โรงเรียนรัฐบาลและมหาวิทยาลัย",
         "ทุนการศึกษาและเงินกู้ยืมเพื่อการศึกษา",
         "โครงการการศึกษาผู้ใหญ่",
-        "แหล่งเรียนรู้ออนไลน์"
-      ]
+        "แหล่งเรียนรู้ออนไลน์",
+      ],
     },
     "cat4": {
       "name": "4. การจ้างงานและบริการแรงงาน",
@@ -528,8 +528,8 @@ const Map<String, dynamic> thLocale = {
         "การหางานและสิทธิประโยชน์การว่างงาน",
         "การคุ้มครองแรงงานและสิทธิแรงงาน",
         "กฎระเบียบความปลอดภัยในสถานที่ทำงาน",
-        "การฝึกอบรมทักษะและการฝึกงาน"
-      ]
+        "การฝึกอบรมทักษะและการฝึกงาน",
+      ],
     },
     "cat5": {
       "name": "5. ภาษีและรายได้",
@@ -537,8 +537,8 @@ const Map<String, dynamic> thLocale = {
         "การยื่นภาษีเงินได้และการขอคืนภาษี",
         "การชำระภาษีทรัพย์สิน",
         "การปฏิบัติตามภาษีธุรกิจ",
-        "ศุลกากรและอากรขาเข้า"
-      ]
+        "ศุลกากรและอากรขาเข้า",
+      ],
     },
     "cat6": {
       "name": "6. ความปลอดภัยสาธารณะและความยุติธรรม",
@@ -546,8 +546,8 @@ const Map<String, dynamic> thLocale = {
         "ตำรวจและบริการฉุกเฉิน",
         "ศาลและความช่วยเหลือทางกฎหมาย",
         "การรายงานอาชญากรรม",
-        "กฎหมายคุ้มครองผู้บริโภค"
-      ]
+        "กฎหมายคุ้มครองผู้บริโภค",
+      ],
     },
     "cat7": {
       "name": "7. การขนส่งและการสัญจร",
@@ -555,8 +555,8 @@ const Map<String, dynamic> thLocale = {
         "ใบขับขี่และการจดทะเบียนรถยนต์",
         "ระบบขนส่งสาธารณะและโครงสร้างพื้นฐาน",
         "การละเมิดกฎจราจรและค่าปรับ",
-        "โครงการความปลอดภัยทางถนน"
-      ]
+        "โครงการความปลอดภัยทางถนน",
+      ],
     },
     "cat8": {
       "name": "8. ที่อยู่อาศัยและการพัฒนาเมือง",
@@ -564,8 +564,8 @@ const Map<String, dynamic> thLocale = {
         "ความช่วยเหลือด้านที่อยู่อาศัยสาธารณะ",
         "การจดทะเบียนทรัพย์สินและที่ดิน",
         "สินเชื่อที่อยู่อาศัยและเงินอุดหนุน",
-        "การจัดโซนและใบอนุญาตก่อสร้าง"
-      ]
+        "การจัดโซนและใบอนุญาตก่อสร้าง",
+      ],
     },
     "cat9": {
       "name": "9. สาธารณูปโภคและสิ่งแวดล้อม",
@@ -573,8 +573,8 @@ const Map<String, dynamic> thLocale = {
         "บริการน้ำและไฟฟ้า",
         "การจัดการขยะและการรีไซเคิล",
         "กฎระเบียบด้านสิ่งแวดล้อม",
-        "โครงการพลังงานหมุนเวียน"
-      ]
+        "โครงการพลังงานหมุนเวียน",
+      ],
     },
     "cat10": {
       "name": "10. ธุรกิจและการค้า",
@@ -582,8 +582,8 @@ const Map<String, dynamic> thLocale = {
         "การจดทะเบียนธุรกิจและใบอนุญาต",
         "กฎระเบียบทางการค้าและใบอนุญาต",
         "เงินช่วยเหลือและแรงจูงใจสำหรับธุรกิจขนาดเล็ก",
-        "อีคอมเมิร์ซและการสนับสนุนธุรกิจดิจิทัล"
-      ]
+        "อีคอมเมิร์ซและการสนับสนุนธุรกิจดิจิทัล",
+      ],
     },
     "cat11": {
       "name": "11. ประกันสังคมและบำนาญ",
@@ -591,8 +591,8 @@ const Map<String, dynamic> thLocale = {
         "สิทธิประโยชน์เกษียณอายุ",
         "การจัดการกองทุนบำนาญ",
         "สิทธิประโยชน์สำหรับผู้รอดชีวิต",
-        "บำนาญทุพพลภาพ"
-      ]
+        "บำนาญทุพพลภาพ",
+      ],
     },
     "cat12": {
       "name": "12. ชุมชนและการมีส่วนร่วมของพลเมือง",
@@ -600,9 +600,9 @@ const Map<String, dynamic> thLocale = {
         "การลงคะแนนเสียงและการเลือกตั้ง",
         "ความคิดเห็นสาธารณะและการร้องเรียนของพลเมือง",
         "อาสาสมัครและโครงการชุมชน",
-        "การมีส่วนร่วมในรัฐบาลท้องถิ่น"
-      ]
-    }
+        "การมีส่วนร่วมในรัฐบาลท้องถิ่น",
+      ],
+    },
   },
   "settings": {
     "title": "การตั้งค่า",
@@ -618,7 +618,7 @@ const Map<String, dynamic> thLocale = {
     "languages": {
       "english": "อังกฤษ",
       "french": "ฝรั่งเศส",
-      "swahili": "สวาฮีลี"
+      "swahili": "สวาฮีลี",
     },
     "theme": "ธีม",
     "themes": {"light": "สว่าง", "dark": "มืด", "system": "ระบบ"},
@@ -650,14 +650,14 @@ const Map<String, dynamic> thLocale = {
           "การดำเนินการนี้จะล้างข้อมูลโปรไฟล์และประวัติการแชททั้งหมดของคุณ",
       "confirmReset":
           "คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตข้อมูลทั้งหมดของคุณ? การดำเนินการนี้ไม่สามารถย้อนกลับได้",
-      "resetComplete": "ข้อมูลของคุณถูกรีเซ็ตแล้ว"
+      "resetComplete": "ข้อมูลของคุณถูกรีเซ็ตแล้ว",
     },
     "language": {"title": "ภาษา", "selectLabel": "ภาษาที่แสดง"},
     "appearance": {
       "title": "ลักษณะที่ปรากฏ",
       "lightTheme": "สว่าง",
       "darkTheme": "มืด",
-      "systemTheme": "ระบบ"
+      "systemTheme": "ระบบ",
     },
     "confirmDeleteAccount":
         "คุณแน่ใจหรือไม่ว่าต้องการลบบัญชีของคุณ? การดำเนินการนี้ไม่สามารถย้อนกลับได้",
@@ -700,7 +700,7 @@ const Map<String, dynamic> thLocale = {
     "confirmResetUserData":
         "คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตข้อมูลโปรไฟล์ทั้งหมดของคุณ? การดำเนินการนี้จะล้างข้อมูลโปรไฟล์และประวัติการแชททั้งหมดของคุณ แต่จะเก็บข้อมูลการเข้าสู่ระบบบัญชีของคุณไว้",
     "reset": "รีเซ็ต",
-    "deleteAccountTitle": "ลบบัญชี"
+    "deleteAccountTitle": "ลบบัญชี",
   },
   "userProfile": {
     "title": "โปรไฟล์ผู้ใช้",
@@ -747,7 +747,7 @@ const Map<String, dynamic> thLocale = {
       "tab9": "ประกันสังคมและสวัสดิการ",
       "tab10": "ประวัติอาชญากรรมและกฎหมาย",
       "tab11": "การขนส่งและการสัญจร",
-      "tab12": "การมีส่วนร่วมของพลเมืองและการเมือง"
+      "tab12": "การมีส่วนร่วมของพลเมืองและการเมือง",
     },
     "tabsShort": {
       "personal": "ส่วนบุคคล",
@@ -761,14 +761,14 @@ const Map<String, dynamic> thLocale = {
       "social": "สังคม",
       "criminal": "อาชญากรรม",
       "transport": "การขนส่ง",
-      "civic": "พลเมือง"
+      "civic": "พลเมือง",
     },
     "actions": {
       "cancel": "ยกเลิก",
       "save": "บันทึกโปรไฟล์",
       "previous": "ก่อนหน้า",
       "next": "ถัดไป",
-      "saving": "กำลังบันทึก..."
+      "saving": "กำลังบันทึก...",
     },
     "fields": {
       "fullName": "ชื่อ-นามสกุล (รวมนามแฝง)",
@@ -842,7 +842,7 @@ const Map<String, dynamic> thLocale = {
       "electionHistory": "ประวัติการมีส่วนร่วมในการเลือกตั้ง",
       "partyMembership": "สมาชิกพรรคการเมือง",
       "militaryStatus": "สถานะทางทหารหรือการเกณฑ์ทหาร",
-      "publicServiceRoles": "บทบาทในบริการสาธารณะ"
+      "publicServiceRoles": "บทบาทในบริการสาธารณะ",
     },
     "placeholders": {
       "fullName": "ป้อนชื่อ-นามสกุลตามกฎหมายของคุณ",
@@ -852,7 +852,7 @@ const Map<String, dynamic> thLocale = {
       "searchDisciplines": "ค้นหาสาขาวิชา...",
       "selectDiscipline": "เลือกสาขาวิชา",
       "searchDegrees": "ค้นหาปริญญา...",
-      "selectDegree": "เลือกปริญญา"
+      "selectDegree": "เลือกปริญญา",
     },
     "validation": {
       "nameRequired": "จำเป็นต้องระบุชื่อ-นามสกุล",
@@ -863,7 +863,7 @@ const Map<String, dynamic> thLocale = {
       "futureDate": "วันที่ต้องไม่เป็นวันที่ในอนาคต",
       "invalidSelection": "โปรดทำการเลือกที่ถูกต้อง",
       "passwordLength": "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
-      "matchError": "ฟิลด์ไม่ตรงกัน"
+      "matchError": "ฟิลด์ไม่ตรงกัน",
     },
     "errors": {
       "savingFailed": "บันทึกโปรไฟล์ล้มเหลว",
@@ -872,7 +872,7 @@ const Map<String, dynamic> thLocale = {
       "invalidFileType": "ประเภทไฟล์ไม่ถูกต้อง",
       "fileTooLarge": "ไฟล์มีขนาดใหญ่เกินไป",
       "countryLoadError": "ข้อผิดพลาดในการโหลดประเทศ",
-      "countryUpdateError": "ข้อผิดพลาดในการอัปเดตประเทศ"
+      "countryUpdateError": "ข้อผิดพลาดในการอัปเดตประเทศ",
     },
     "notifications": {
       "saveSuccess": "บันทึกโปรไฟล์สำเร็จ",
@@ -885,7 +885,7 @@ const Map<String, dynamic> thLocale = {
       "formChanged": "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก",
       "sessionExpired": "เซสชันของคุณหมดอายุ โปรดเข้าสู่ระบบอีกครั้ง",
       "profileUpdated": "โปรไฟล์ของคุณได้รับการอัปเดตแล้ว",
-      "profileIncomplete": "โปรไฟล์ของคุณไม่สมบูรณ์"
+      "profileIncomplete": "โปรไฟล์ของคุณไม่สมบูรณ์",
     },
     "instructions": {
       "fullNameHelp":
@@ -901,7 +901,7 @@ const Map<String, dynamic> thLocale = {
       "nextTab": "ดำเนินการต่อไปยังส่วนถัดไป",
       "previousTab": "กลับไปยังส่วนก่อนหน้า",
       "saveInstructions": "คลิกบันทึกเพื่อจัดเก็บข้อมูลของคุณ",
-      "cancelInstructions": "คลิกยกเลิกเพื่อทิ้งการเปลี่ยนแปลง"
+      "cancelInstructions": "คลิกยกเลิกเพื่อทิ้งการเปลี่ยนแปลง",
     },
     "completionStatus": {
       "notStarted": "ยังไม่เริ่ม",
@@ -909,26 +909,26 @@ const Map<String, dynamic> thLocale = {
       "complete": "เสร็จสมบูรณ์",
       "percentComplete": "เสร็จสมบูรณ์ {percent}%",
       "tabsCompleted": "เสร็จสมบูรณ์ {completed} จาก {total} ส่วน",
-      "tabComplete": "แท็บเสร็จสมบูรณ์!"
+      "tabComplete": "แท็บเสร็จสมบูรณ์!",
     },
     "gender": {
       "male": "ชาย",
       "female": "หญิง",
       "other": "อื่นๆ",
-      "preferNot": "ไม่ต้องการระบุ"
+      "preferNot": "ไม่ต้องการระบุ",
     },
     "maritalStatus": {
       "single": "โสด",
       "married": "สมรส",
       "divorced": "หย่าร้าง",
       "widowed": "หม้าย",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "residencyStatuses": {
       "citizen": "พลเมือง",
       "permanentResident": "ผู้พำนักถาวร",
       "temporaryResident": "ผู้พำนักชั่วคราว",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "employmentStatuses": {
       "employed": "มีงานทำ",
@@ -937,7 +937,7 @@ const Map<String, dynamic> thLocale = {
       "student": "นักเรียน/นักศึกษา",
       "retired": "เกษียณอายุ",
       "homemaker": "พ่อบ้าน/แม่บ้าน",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "educationLevels": {
       "primary": "ประถมศึกษา",
@@ -949,14 +949,14 @@ const Map<String, dynamic> thLocale = {
       "master": "ปริญญาโท",
       "doctoral": "ปริญญาเอก",
       "professional": "ปริญญาวิชาชีพ",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "proficiencyLevels": {
       "native": "เจ้าของภาษา",
       "fluent": "คล่องแคล่ว",
       "advanced": "ขั้นสูง",
       "intermediate": "ปานกลาง",
-      "basic": "พื้นฐาน"
+      "basic": "พื้นฐาน",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -967,7 +967,7 @@ const Map<String, dynamic> thLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "ไม่ทราบ"
+      "unknown": "ไม่ทราบ",
     },
     "languages": {
       "english": "อังกฤษ",
@@ -982,7 +982,7 @@ const Map<String, dynamic> thLocale = {
       "russian": "รัสเซีย",
       "hindi": "ฮินดี",
       "urdu": "อูรดู",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "yesNo": {"yes": "ใช่", "no": "ไม่"},
     "select": "โปรดเลือก",
@@ -1089,7 +1089,7 @@ const Map<String, dynamic> thLocale = {
       "สัตวแพทยศาสตร์",
       "การพัฒนาเว็บ",
       "ชีววิทยาสัตว์ป่า",
-      "สัตววิทยา"
+      "สัตววิทยา",
     ],
     "degreeOptions": [
       "อนุปริญญา",
@@ -1119,7 +1119,7 @@ const Map<String, dynamic> thLocale = {
       "ใบรับรองวิชาชีพ",
       "ประกาศนียบัตรบัณฑิต",
       "อนุปริญญาบัณฑิต",
-      "หลังปริญญาเอก"
+      "หลังปริญญาเอก",
     ],
     "aria": {
       "tabList": "ส่วนของแบบฟอร์มโปรไฟล์",
@@ -1128,8 +1128,8 @@ const Map<String, dynamic> thLocale = {
       "closeButton": "ปิดแบบฟอร์มโปรไฟล์",
       "saveButton": "บันทึกข้อมูลโปรไฟล์",
       "requiredField": "ฟิลด์ที่จำเป็น",
-      "dropdownSelect": "เลือกตัวเลือก"
-    }
+      "dropdownSelect": "เลือกตัวเลือก",
+    },
   },
   "chatbot": {
     "placeholder": "พิมพ์คำถามของคุณที่นี่...",
@@ -1195,10 +1195,10 @@ const Map<String, dynamic> thLocale = {
         "discardAndNew": "ทิ้ง & ใหม่",
         "discardAndLoad": "ทิ้ง & โหลด",
         "saveFirst": "บันทึกก่อน",
-        "export": "ส่งออก"
-      }
+        "export": "ส่งออก",
+      },
     },
-    "shareWhatsApp": "แชร์ทาง WhatsApp"
+    "shareWhatsApp": "แชร์ทาง WhatsApp",
   },
   "quickhelp": {
     "applyForID": "ทำบัตรประชาชน",
@@ -1244,7 +1244,7 @@ const Map<String, dynamic> thLocale = {
         "ฉันต้องการทราบเกี่ยวกับโครงการบ้านเอื้ออาทร (Boma Yangu) ในเคนยา",
     "findJobsUserPrompt":
         "ฉันต้องการสอบถามเกี่ยวกับโอกาสงานราชการและการสมัคร PSC ในเคนยา",
-    "justChatUserPrompt": "ฉันต้องการคุยเล่นทั่วไปเกี่ยวกับชีวิตในเคนยา"
+    "justChatUserPrompt": "ฉันต้องการคุยเล่นทั่วไปเกี่ยวกับชีวิตในเคนยา",
   },
   "common": {
     "cancel": "ยกเลิก",
@@ -1260,7 +1260,7 @@ const Map<String, dynamic> thLocale = {
     "open": "เปิด",
     "done": "เสร็จสิ้น",
     "confirm": "ยืนยัน",
-    "edit": "แก้ไข"
+    "edit": "แก้ไข",
   },
   "feedback": {
     "title": "ข้อเสนอแนะ",
@@ -1274,7 +1274,7 @@ const Map<String, dynamic> thLocale = {
     "thankYouMessage": "ขอบคุณสำหรับข้อเสนอแนะของคุณ!",
     "submitting": "กำลังส่ง...",
     "error": "เกิดข้อผิดพลาดบางอย่าง โปรดลองอีกครั้ง",
-    "success": "ขอบคุณสำหรับข้อเสนอแนะของคุณ!"
+    "success": "ขอบคุณสำหรับข้อเสนอแนะของคุณ!",
   },
   "responseRating": {
     "title": "ช่วยเราปรับปรุง",
@@ -1286,11 +1286,11 @@ const Map<String, dynamic> thLocale = {
       "2": "มีประโยชน์เล็กน้อย",
       "3": "มีประโยชน์ปานกลาง",
       "4": "มีประโยชน์มาก",
-      "5": "เปลี่ยนชีวิต"
+      "5": "เปลี่ยนชีวิต",
     },
     "additionalComments": "ความคิดเห็นเพิ่มเติม...",
     "submit": "ส่ง",
-    "cancel": "ยกเลิก"
+    "cancel": "ยกเลิก",
   },
   "upload": {"alt": "อัปโหลด"},
   "uploadDialog": {
@@ -1307,8 +1307,8 @@ const Map<String, dynamic> thLocale = {
       "shortcutUnsupported": "ไม่รองรับไฟล์ทางลัด (.url) โปรดลากไฟล์จริง",
       "duplicate": "เพิ่มไฟล์ \"{fileName}\" แล้ว",
       "uploadSuccess": "อัปโหลด {fileName} สำเร็จ",
-      "uploadFailed": "อัปโหลด {fileName} ล้มเหลว"
-    }
+      "uploadFailed": "อัปโหลด {fileName} ล้มเหลว",
+    },
   },
   "about": {
     "title": "เกี่ยวกับ",
@@ -1316,6 +1316,6 @@ const Map<String, dynamic> thLocale = {
     "description":
         "Genie AI คือผู้ช่วยอัจฉริยะของคุณในการเข้าถึงบริการและข้อมูลภาครัฐ",
     "techStack": "เทคโนโลยีที่ใช้",
-    "copyright": "สงวนลิขสิทธิ์"
-  }
+    "copyright": "สงวนลิขสิทธิ์",
+  },
 };

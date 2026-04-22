@@ -22,10 +22,13 @@ class NavBarComponent extends StatelessWidget {
 
   // FIX: Made async because toggleUserOfflineMode returns Future<bool>
   Future<void> _handleConnectivityToggle(
-      BuildContext context, bool isOnline) async {
+    BuildContext context,
+    bool isOnline,
+  ) async {
     final bool newState = await ConnectivityService().toggleUserOfflineMode();
-    final message =
-        newState ? "Switched to Offline Mode" : "Switched to Online Mode";
+    final message = newState
+        ? "Switched to Offline Mode"
+        : "Switched to Online Mode";
 
     // Check mounted mostly for safety, though Stateless usually fine for SnackBar if context valid
     if (context.mounted) {
@@ -69,8 +72,10 @@ class NavBarComponent extends StatelessWidget {
                 width: 32,
                 height: 32,
                 child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-                    ? SvgPicture.asset(GenieAiConfig.iconPath,
-                        fit: BoxFit.contain)
+                    ? SvgPicture.asset(
+                        GenieAiConfig.iconPath,
+                        fit: BoxFit.contain,
+                      )
                     : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
               ),
               const SizedBox(width: 12),
@@ -131,7 +136,8 @@ class NavBarComponent extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(user: user)),
+                              builder: (_) => UserProfileScreen(user: user),
+                            ),
                           );
                           break;
                         case 'settings':
@@ -150,31 +156,34 @@ class NavBarComponent extends StatelessWidget {
                     },
                     itemBuilder: (BuildContext context) =>
                         <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
-                        value: 'profile',
-                        enabled: isOnline, // DISABLE PROFILE IF OFFLINE
-                        child: ListTile(
-                          leading: Icon(Icons.person_outline,
-                              color: isOnline ? null : Colors.grey),
-                          title: Text(
-                            'Profile',
-                            style:
-                                TextStyle(color: isOnline ? null : Colors.grey),
+                          PopupMenuItem<String>(
+                            value: 'profile',
+                            enabled: isOnline, // DISABLE PROFILE IF OFFLINE
+                            child: ListTile(
+                              leading: Icon(
+                                Icons.person_outline,
+                                color: isOnline ? null : Colors.grey,
+                              ),
+                              title: Text(
+                                'Profile',
+                                style: TextStyle(
+                                  color: isOnline ? null : Colors.grey,
+                                ),
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
                           ),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'settings',
-                        child: ListTile(
-                          leading: Icon(Icons.settings_outlined),
-                          title: Text('Settings'),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                    ],
+                          const PopupMenuItem<String>(
+                            value: 'settings',
+                            child: ListTile(
+                              leading: Icon(Icons.settings_outlined),
+                              title: Text('Settings'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
                   );
                 },
               ),

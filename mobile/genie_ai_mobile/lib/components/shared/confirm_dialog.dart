@@ -46,101 +46,97 @@ class ConfirmDialog extends StatelessWidget {
       child: SafeArea(
         child: Center(
           child: Container(
-          width: 400,
-          constraints: const BoxConstraints(maxWidth: 400),
-          margin: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Text(
-                  effectiveTitle,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: theme.textTheme.bodyLarge?.color,
+            width: 400,
+            constraints: const BoxConstraints(maxWidth: 400),
+            margin: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    effectiveTitle,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textTheme.bodyLarge?.color,
+                    ),
                   ),
                 ),
-              ),
-              // Body
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  effectiveMessage,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.grey[300] : Colors.grey[700],
-                    height: 1.5,
+                // Body
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    effectiveMessage,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      height: 1.5,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              // Footer / Actions
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.black12 : Colors.grey[50],
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
+                const SizedBox(height: 24),
+                // Footer / Actions
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.black12 : Colors.grey[50],
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                    border: Border(top: BorderSide(color: theme.dividerColor)),
                   ),
-                  border: Border(
-                    top: BorderSide(color: theme.dividerColor),
-                  ),
-                ),
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (secondaryText != null)
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (secondaryText != null)
+                        TextButton(
+                          onPressed: onSecondary,
+                          child: Text(
+                            secondaryText!,
+                            style: TextStyle(color: theme.primaryColor),
+                          ),
+                        ),
                       TextButton(
-                        onPressed: onSecondary,
+                        onPressed: onCancel,
                         child: Text(
-                          secondaryText!,
+                          effectiveCancelText,
                           style: TextStyle(
-                            color: theme.primaryColor,
+                            color: isDark ? Colors.white70 : Colors.grey[700],
                           ),
                         ),
                       ),
-                    TextButton(
-                      onPressed: onCancel,
-                      child: Text(
-                        effectiveCancelText,
-                        style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.grey[700],
+                      ElevatedButton(
+                        onPressed: onConfirm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.primaryColor,
+                          foregroundColor: Colors.white,
                         ),
+                        child: Text(effectiveConfirmText),
                       ),
-                    ),
-                    ElevatedButton(
-                      onPressed: onConfirm,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.primaryColor,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: Text(effectiveConfirmText),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }

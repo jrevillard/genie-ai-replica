@@ -9,12 +9,17 @@ class LabelProxy {
     return jsonDecode(res.body);
   }
 
-  Future<Map<String, dynamic>> createLabel(Map<String, dynamic> labelData) async {
+  Future<Map<String, dynamic>> createLabel(
+    Map<String, dynamic> labelData,
+  ) async {
     final res = await _api.post('labels', labelData);
     return jsonDecode(res.body);
   }
 
-  Future<Map<String, dynamic>> updateLabel(String id, Map<String, dynamic> updates) async {
+  Future<Map<String, dynamic>> updateLabel(
+    String id,
+    Map<String, dynamic> updates,
+  ) async {
     final res = await _api.patch('labels/$id', updates);
     return jsonDecode(res.body);
   }

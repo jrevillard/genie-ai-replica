@@ -18,7 +18,7 @@ describe('oidcConfig', () => {
     expect(oidcConfig.authority).toBe('http://localhost/auth/realms/genie');
     expect(oidcConfig.client_id).toBe('genie-app');
     expect(oidcConfig.response_type).toBe('code');
-    expect(oidcConfig.scope).toBe('openid profile email');
+    expect(oidcConfig.scope).toBe('openid profile email roles');
     expect(oidcConfig.automaticSilentRenew).toBe(true);
     expect(oidcConfig.storeAuthStateInCookie).toBe(false);
     expect(oidcConfig.redirect_uri).toMatch(/\/callback$/);

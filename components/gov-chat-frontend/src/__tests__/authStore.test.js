@@ -6,6 +6,7 @@ jest.mock('@/services/keycloakAuthService', () => ({
   default: {
     initialize: jest.fn(),
     logout: jest.fn(),
+    getAccessTokenClaims: jest.fn(() => ({ realm_access: { roles: ['user'] } })),
     onAccessTokenUpdated: jest.fn(),
     removeAccessTokenUpdatedCallback: jest.fn()
   }

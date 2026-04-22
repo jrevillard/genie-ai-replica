@@ -1,0 +1,23 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = ["build-patches/"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # flake8-bugbear
+  "SIM", # flake8-simplify
+]
+ignore = [
+  "E402", # module-import-not-at-top-of-file (OPEA pattern requires os.getenv before imports)
+  "E741", # ambiguous-variable-name (common in ML: `l`, `O`, `I`)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

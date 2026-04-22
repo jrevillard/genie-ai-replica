@@ -162,6 +162,25 @@ User Query → Backend (BFF) → ChatQnA Service → Embedding → Retriever (Ar
 | Cache | Redis |
 | API Gateway | Kong, NGINX |
 
+## Linting and Formatting
+
+ESLint 10 + Prettier 3 are configured across all JS components. Ruff is configured for Python (`genie-ai-overlay/`). Flutter's `analysis_options.yaml` configures Dart linting (`mobile/genie_ai_mobile/`). PostToolUse hooks automatically run ESLint on `.js`/`.vue` files and Ruff on `.py` files after edits.
+
+**Before completing a task, run:**
+```bash
+npm run lint            # Check all JS components
+npm run format:check    # Verify JS formatting without modifying files
+npm run lint:fix        # Auto-fix JS lint issues
+npm run format          # Auto-format all JS files
+npm run lint:py         # Check Python code (Ruff)
+npm run format:py:check # Check Python formatting (Ruff)
+npm run lint:py:fix     # Auto-fix Python lint issues
+npm run format:py       # Auto-format Python files
+npm run lint:dart       # Analyze Flutter/Dart code
+npm run format:dart:check # Check Dart formatting without modifying files
+npm run format:dart     # Auto-format Dart files
+```
+
 ## Code Standards Summary
 
 ### JavaScript/Vue 3
@@ -184,7 +203,7 @@ User Query → Backend (BFF) → ChatQnA Service → Embedding → Retriever (Ar
 
 ### Python (OPEA Services)
 
-- Follow PEP 8, use `black` formatter and `flake8` linter
+- Follow PEP 8, use `ruff` for linting and formatting (configured in `genie-ai-overlay/pyproject.toml`)
 - Copyright headers required (ITU, or Intel+ITU for OPEA adaptations)
 - Use `CustomLogger` from `comps` library
 - Environment via `os.getenv()` with defaults

@@ -1,7 +1,18 @@
 {
   "scripts": {
     "test:e2e": "npx playwright test tests/e2e/",
-    "test:e2e:list": "npx playwright test tests/e2e/ --list"
+    "test:e2e:list": "npx playwright test tests/e2e/ --list",
+    "lint": "npm run lint --prefix components/gov-chat-frontend && npm run lint --prefix components/gov-chat-backend && npm run lint --prefix components/document-repository && npm run lint --prefix components/shared/lib",
+    "lint:fix": "npm run lint:fix --prefix components/gov-chat-frontend && npm run lint:fix --prefix components/gov-chat-backend && npm run lint:fix --prefix components/document-repository && npm run lint:fix --prefix components/shared/lib",
+    "format": "npm run format --prefix components/gov-chat-frontend && npm run format --prefix components/gov-chat-backend && npm run format --prefix components/document-repository && npm run format --prefix components/shared/lib",
+    "format:check": "npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib",
+    "lint:py": "ruff check genie-ai-overlay/",
+    "lint:py:fix": "ruff check --fix genie-ai-overlay/",
+    "format:py": "ruff format genie-ai-overlay/",
+    "format:py:check": "ruff format --check genie-ai-overlay/",
+    "lint:dart": "cd mobile/genie_ai_mobile && flutter analyze",
+    "format:dart": "cd mobile/genie_ai_mobile && dart format .",
+    "format:dart:check": "cd mobile/genie_ai_mobile && dart format --set-exit-if-changed ."
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0"

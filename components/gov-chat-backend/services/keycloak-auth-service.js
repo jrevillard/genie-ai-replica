@@ -4,8 +4,6 @@ const { jwtVerify, createRemoteJWKSet } = require('jose');
 const { logger } = require('../shared-lib');
 const axios = require('axios');
 
-const userProvisioningService = require('./user-provisioning-service');
-
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
 const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID;
@@ -22,7 +20,7 @@ try {
   } else {
     logger.warn('[KeycloakAuth] KEYCLOAK_ADDITIONAL_REALMS must be a JSON object, ignoring');
   }
-} catch (e) {
+} catch {
   logger.warn('[KeycloakAuth] Invalid JSON in KEYCLOAK_ADDITIONAL_REALMS, ignoring');
 }
 
@@ -60,7 +58,7 @@ class TokenVerificationError extends Error {
  */
 function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
   let inner = createRemoteJWKSet(new URL(jwksUri));
-  let _jwksUri = jwksUri; // Store for re-fetch
+  const _jwksUri = jwksUri; // Store for re-fetch
   let createdAt = Date.now();
 
   /**
@@ -256,7 +254,7 @@ const keycloakAuthService = {
       const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
       unverifiedIss = payload.iss;
       unverifiedExp = payload.exp;
-    } catch (e) {
+    } catch {
       throw new TokenVerificationError('TOKEN_INVALID', 'Cannot decode JWT payload');
     }
 

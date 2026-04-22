@@ -89,7 +89,7 @@ const keycloakAuthMiddleware = {
       try {
         tokenPayload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
         tokenIssuer = tokenPayload.iss;
-      } catch (e) {
+      } catch {
         // If we can't extract issuer, we'll skip introspection
       }
 
@@ -128,12 +128,9 @@ const keycloakAuthMiddleware = {
       } catch (err) {
         if (err.code === 'TOKEN_EXPIRED') {
           // Check user status in Keycloak via UserInfo to determine if disabled/deleted
-          let userDisabled = false;
           if (token && tokenIssuer && tokenPayload) {
             const statusResult = await keycloakAuthService.checkUserStatusInKeycloak(token, tokenIssuer);
             if (statusResult && statusResult.disabled) {
-              userDisabled = true;
-
               // Update ArangoDB user to reflect disabled status
               try {
                 // Reuse already-parsed payload to extract sub for user identification

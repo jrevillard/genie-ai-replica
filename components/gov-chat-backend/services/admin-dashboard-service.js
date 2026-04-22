@@ -592,55 +592,6 @@ class AdminDashboardService {
    */
   async getLogsSummary(options = {}) {
     return this.logsService.getLogsSummary(options);
-    // Note I am just leaving this dead code here in case something comes up
-    const { date = new Date().toISOString().split('T')[0], level } = options;
-    logger.info(`Getting logs summary for date: ${date}, level: ${level}`);
-
-    try {
-      const logFile = path.join(__dirname, `../logs/combined-${date}.log`);
-      logger.debug(`Reading log file for summary: ${logFile}`);
-      let logs = [];
-
-      try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
-
-        logs = logLines.map(line => {
-          const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-          if (!match) return null;
-          const [, timestamp, level, service] = match;
-          return { level: level.toUpperCase(), service };
-        }).filter(log => log !== null);
-      } catch (error) {
-        logger.error(`Error reading log file ${logFile}: ${error.message}`);
-        return { byType: {}, byService: {} };
-      }
-
-      let filteredLogs = logs;
-      if (level) {
-        logger.debug(`Filtering logs by level: ${level}`);
-        filteredLogs = filteredLogs.filter(log => log.level.toLowerCase() === level.toLowerCase());
-      }
-
-      const byType = {};
-      const byService = {};
-
-      filteredLogs.forEach(log => {
-        byType[log.level] = (byType[log.level] || 0) + 1;
-        byService[log.service] = (byService[log.service] || 0) + 1;
-      });
-
-      const response = {
-        byType,
-        byService
-      };
-      logger.debug(`Logs summary response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in getLogsSummary: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
   }
 
   /**
@@ -1066,11 +1017,11 @@ class AdminDashboardService {
     logger.info(`Searching users with options: ${JSON.stringify(options)}`);
 
     try {
-      let { term = '', field = 'all', limit = 20, offset = 0 } = options;
+      const { term = '', field = 'all', limit = 20, offset = 0 } = options;
 
       // Correctly parse string query parameters to numbers
-      limit = parseInt(limit, 10) || 20;
-      offset = parseInt(offset, 10) || 0;
+      const parsedLimit = parseInt(limit, 10) || 20;
+      const parsedOffset = parseInt(offset, 10) || 0;
 
       let countQuery, usersQuery, queryParams;
 
@@ -1125,7 +1076,7 @@ class AdminDashboardService {
             FILTER u.deleted != true
             FILTER ${filterCondition}
             SORT u.updatedAt DESC
-            LIMIT ${offset}, ${limit}
+            LIMIT ${parsedOffset}, ${parsedLimit}
             RETURN {
               _key: u._key,
               loginName: u.loginName,
@@ -1150,7 +1101,7 @@ class AdminDashboardService {
           FOR u IN users
             FILTER u.deleted != true
             SORT u.updatedAt DESC
-            LIMIT ${offset}, ${limit}
+            LIMIT ${parsedOffset}, ${parsedLimit}
             RETURN {
               _key: u._key,
               loginName: u.loginName,

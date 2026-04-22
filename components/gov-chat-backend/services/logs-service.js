@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { logger } = require('../shared-lib');
-const { sanitizePath, isValidDateStr } = require('./path-sanitizer');
+const { isValidDateStr } = require('./path-sanitizer');
 const zlib = require('zlib');
 const util = require('util');
 
@@ -80,7 +80,7 @@ class LogsService {
         return { errors: [], warnings: [], date };
       }
   
-      let allParsedLogs = [];
+      const allParsedLogs = [];
       for (const logFile of logFiles) {
         try {
           const logContent = await this.readLogFile(logFile);
@@ -255,7 +255,7 @@ class LogsService {
     } catch (error) {
       if (error.code === 'ENOENT') {
         logger.debug(`File does not exist: ${filePath}`);
-        throw new Error(`File not found: ${filePath}`);
+        throw new Error(`File not found: ${filePath}`, { cause: error });
       }
       throw error;
     }
@@ -320,7 +320,7 @@ class LogsService {
   
       try {
         await fs.access(logDir);
-      } catch (error) {
+      } catch {
         logger.error(`Logs directory does not exist: ${logDir}`);
         return [];
       }
@@ -357,7 +357,7 @@ class LogsService {
             continue;
           }
   
-          const [, logType, fileDate] = dateMatch;
+          const [, , fileDate] = dateMatch;
           if (fileDate >= startDate && fileDate <= endDate) {
             const filePath = path.join(logDir, file);
             try {

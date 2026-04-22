@@ -63,7 +63,7 @@ module.exports = (chatHistoryService) => {
    */
   router.get('/conversations', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -183,7 +183,7 @@ module.exports = (chatHistoryService) => {
    */
   router.post('/conversations', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -282,7 +282,7 @@ module.exports = (chatHistoryService) => {
     try {
       const { conversationId } = req.params;
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -336,7 +336,7 @@ module.exports = (chatHistoryService) => {
     try {
       const { conversationId } = req.params;
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -469,7 +469,7 @@ module.exports = (chatHistoryService) => {
   router.post('/conversations/:conversationId/messages', async (req, res, next) => {
     try {
       const { conversationId } = req.params;
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -712,7 +712,7 @@ module.exports = (chatHistoryService) => {
     try {
       const { queryId } = req.params;
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -783,7 +783,7 @@ module.exports = (chatHistoryService) => {
    */
   router.get('/search', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -840,7 +840,7 @@ module.exports = (chatHistoryService) => {
    */
   router.get('/recent', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -881,7 +881,7 @@ module.exports = (chatHistoryService) => {
    */
   router.get('/stats', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -932,7 +932,7 @@ module.exports = (chatHistoryService) => {
    */
   router.get('/folders', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1004,7 +1004,7 @@ module.exports = (chatHistoryService) => {
    */
   router.post('/folders', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1034,7 +1034,7 @@ module.exports = (chatHistoryService) => {
               message: 'You do not have permission to create subfolders in this folder'
             });
           }
-        } catch (error) {
+        } catch {
           return res.status(404).json({ message: 'Parent folder not found' });
         }
       }
@@ -1163,7 +1163,7 @@ module.exports = (chatHistoryService) => {
     try {
       const { folderId } = req.params;
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1188,15 +1188,13 @@ module.exports = (chatHistoryService) => {
 
         if (updateData.parentFolderId) {
           try {
-            const parentFolder = await chatHistoryService.getFolder(updateData.parentFolderId);
-
             const folderPath = await chatHistoryService.getFolderPath(updateData.parentFolderId);
             if (folderPath.some(f => f._key === folderId)) {
               return res.status(400).json({
                 message: 'Cannot move a folder to its own subfolder'
               });
             }
-          } catch (error) {
+          } catch {
             return res.status(404).json({ message: 'Target parent folder not found' });
           }
         }
@@ -1247,7 +1245,7 @@ module.exports = (chatHistoryService) => {
       const { folderId } = req.params;
       const deleteContents = req.query.deleteContents === 'true';
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1299,7 +1297,7 @@ module.exports = (chatHistoryService) => {
    */
   router.get('/folders/search', async (req, res, next) => {
     try {
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1378,7 +1376,7 @@ module.exports = (chatHistoryService) => {
         return res.status(400).json({ message: 'Invalid folder orders data' });
       }
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1473,7 +1471,7 @@ module.exports = (chatHistoryService) => {
     try {
       const { folderId, conversationId } = req.params;
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1531,7 +1529,7 @@ module.exports = (chatHistoryService) => {
     try {
       const { folderId, conversationId } = req.params;
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');
@@ -1643,7 +1641,7 @@ module.exports = (chatHistoryService) => {
       const { conversationId } = req.params;
       const { sourceFolderId, targetFolderId } = req.body;
 
-      let userId = extractUserId(req);
+      const userId = extractUserId(req);
 
       if (!userId) {
         logger.warn('No userId available in request');

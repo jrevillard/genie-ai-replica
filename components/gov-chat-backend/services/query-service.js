@@ -1,7 +1,5 @@
 require('dotenv').config();
-const axios = require('axios');
-const { Database, aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
+const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
@@ -104,7 +102,7 @@ class QueryService {
     const lastMessage = queryData.messages[queryData.messages.length - 1].content.toLowerCase();
 
     let response = `This is a general mock response. You asked about "${lastMessage}" within the context of "${categoryLabel}".`;
-    let metadata = {
+    const metadata = {
       source_documents: [],
       confidence_score: Math.random() * (0.98 - 0.85) + 0.85,
     };
@@ -226,7 +224,7 @@ class QueryService {
       logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
       logger.info('[DEBUG] Starting validation of incoming data...');
-      let missingFields = [];
+      const missingFields = [];
 
       if (!queryData.userId) {
         logger.warn('[DEBUG] Validation FAILED: userId is missing.');
@@ -709,7 +707,7 @@ class QueryService {
     try {
       logger.info('QueryService.search_queries_start', { criteria, limit, offset });
 
-      let filterConditions = [];
+      const filterConditions = [];
 
       if (criteria.userId) {
         filterConditions.push(aql`q.userId == ${criteria.userId}`);

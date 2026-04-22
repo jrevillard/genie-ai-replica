@@ -57,7 +57,7 @@ class GpuTranslateBackend {
       logger.info(`[GPU-BACKEND] Code format: ${this.languageMap.codeFormat}`);
     } catch (error) {
       logger.error(`[GPU-BACKEND] Failed to load language map: ${error.message}`);
-      throw new Error(`Failed to load language map for model ${modelId}`);
+      throw new Error(`Failed to load language map for model ${modelId}`, { cause: error });
     }
   }
 
@@ -173,7 +173,7 @@ class GpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return this.languageMap && this.languageMap.languageMap.hasOwnProperty(isoCode);
+    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
   }
 
   /**
@@ -367,7 +367,7 @@ class GpuTranslateBackend {
         sourceCode: sourceCode,
         targetCode: targetCode
       });
-      throw new Error(`[GPU-BACKEND] Failed to perform translation: ${error.message}`);
+      throw new Error(`[GPU-BACKEND] Failed to perform translation: ${error.message}`, { cause: error });
     }
   }
 

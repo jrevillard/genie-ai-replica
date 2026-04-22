@@ -1,6 +1,5 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
 
 class SessionService {

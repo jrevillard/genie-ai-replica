@@ -434,7 +434,7 @@ module.exports = (serviceCategoryService) => {
     try {
       const { serviceId } = req.params;
       logger.info(`Attempting to delete service: ${serviceId}`);
-      const result = await serviceCategoryService.deleteService(serviceId);
+      await serviceCategoryService.deleteService(serviceId);
       logger.info(`Service ${serviceId} deleted successfully in ${Date.now() - start}ms`);
       res.status(200).json({ message: `Service ${serviceId} deleted successfully` });
     } catch (error)

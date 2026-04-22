@@ -1,6 +1,5 @@
 require('dotenv').config();
-const { Database, aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
+const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const ServiceCategoryService = require('../services/service-category-service');
 
@@ -585,30 +584,24 @@ class AnalyticsService {
       });
 
       // Calculate date range
-      let startDate, endDate;
-      const now = new Date();
+      let endDate;
       const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
       const endDateISO = selectedDateObj.toISOString();
 
       switch (period) {
         case 'daily':
-          startDate = new Date(selectedDateObj.setHours(0, 0, 0, 0)).toISOString();
           endDate = new Date(selectedDateObj.setHours(23, 59, 59, 999)).toISOString();
           break;
         case 'weekly':
-          startDate = new Date(selectedDateObj.setDate(selectedDateObj.getDate() - 6)).toISOString();
           endDate = endDateISO;
           break;
         case 'monthly':
-          startDate = new Date(selectedDateObj.setDate(selectedDateObj.getDate() - 29)).toISOString();
           endDate = endDateISO;
           break;
         case 'all-time':
-          startDate = '2020-01-01T00:00:00.000Z';
           endDate = endDateISO;
           break;
         default:
-          startDate = new Date(now.setDate(now.getDate() - 30)).toISOString();
           endDate = endDateISO;
       }
 
@@ -747,30 +740,24 @@ class AnalyticsService {
       });
 
       // Calculate date range
-      let startDate, endDate;
-      const now = new Date();
+      let endDate;
       const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
       const endDateISO = selectedDateObj.toISOString();
 
       switch (period) {
         case 'daily':
-          startDate = new Date(selectedDateObj.setHours(0, 0, 0, 0)).toISOString();
           endDate = new Date(selectedDateObj.setHours(23, 59, 59, 999)).toISOString();
           break;
         case 'weekly':
-          startDate = new Date(selectedDateObj.setDate(selectedDateObj.getDate() - 6)).toISOString();
           endDate = endDateISO;
           break;
         case 'monthly':
-          startDate = new Date(selectedDateObj.setDate(selectedDateObj.getDate() - 29)).toISOString();
           endDate = endDateISO;
           break;
         case 'all-time':
-          startDate = '2020-01-01T00:00:00.000Z';
           endDate = endDateISO;
           break;
         default:
-          startDate = new Date(now.setDate(now.getDate() - 30)).toISOString();
           endDate = endDateISO;
       }
 

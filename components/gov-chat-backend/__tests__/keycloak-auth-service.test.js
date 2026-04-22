@@ -9,7 +9,6 @@ process.env.KEYCLOAK_ADDITIONAL_REALMS = '';
 const {
   mockJwtPayload,
   mockExpiredPayload,
-  mockWrongAudPayload,
   generateMockJwtString
 } = require('../test-fixtures/mockJwtPayload');
 
@@ -25,10 +24,10 @@ jest.mock('../shared-lib', () => ({
 
 // Store references to mock functions
 // Use var so jest.mock factory (hoisted above) can access them via closures
-var mockJwtVerify;
-var mockCreateRemoteJWKSet;
-var mockFetch;
-var mockAxiosGet;
+let mockJwtVerify;
+let mockCreateRemoteJWKSet;
+let mockFetch;
+let mockAxiosGet;
 
 // Mock jose completely to avoid ESM issues
 jest.mock('jose', () => ({
@@ -45,7 +44,6 @@ jest.mock('axios', () => ({
 global.fetch = jest.fn();
 
 const keycloakAuthService = require('../services/keycloak-auth-service');
-const axios = require('axios');
 
 // Discovery response matching KEYCLOAK_URL + KEYCLOAK_REALM
 const mockDiscovery = {

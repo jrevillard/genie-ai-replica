@@ -118,7 +118,7 @@ async function main() {
     await initializeDatabase();
     await migrateUsersCollection();
     console.log('\nMigration complete. The "users" collection is ready for JIT provisioning.');
-  } catch (error) {
+  } catch {
     console.error('\nMigration failed.');
     process.exit(1);
   }

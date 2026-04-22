@@ -304,7 +304,7 @@ const adminController = {
 let DatabaseOperationsService;
 try {
   DatabaseOperationsService = require('../services/database-operations-service');
-} catch (error) {
+} catch {
   logger.warn('Database operations service not found. Database operations will not work.');
   DatabaseOperationsService = {
     optimizeDatabase: async () => ({ success: false, message: 'Database operations service not available' })

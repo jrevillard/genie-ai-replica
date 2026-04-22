@@ -354,7 +354,7 @@
         {
           "name": "cors",
           "id": "12578423-bed0-46e9-ac9b-6a0dc7d40c41",
-          "enabled": true,
+          "enabled": false,
           "config": {
             "preflight_continue": false,
             "credentials": true,
@@ -703,7 +703,7 @@
     {
       "name": "cors",
       "id": "2ea9bc50-0b87-4c47-a834-d0e1576b61e9",
-      "enabled": true,
+      "enabled": false,
       "service": {"name": "express-api"},
       "config": {
         "preflight_continue": false,
@@ -748,7 +748,7 @@
     {
       "name": "response-transformer",
       "id": "aa355c64-6061-452d-9cf7-ab8ae8a54600",
-      "enabled": true,
+      "enabled": false,
       "service": {"name": "express-api"},
       "config": {
         "rename": {

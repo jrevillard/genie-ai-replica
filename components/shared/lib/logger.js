@@ -10,7 +10,7 @@ const logFormat = format.printf(({ level, message, timestamp }) => {
 
 // Default configuration for the logger
 const loggerConfig = {
-  level: 'info',
+  level: process.env.LOG_LEVEL || 'info',
   format: format.combine(
     format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),

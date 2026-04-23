@@ -183,6 +183,7 @@ Set in `group_vars/<env>/vars.yml`:
 | `context_option` | `conversation-with-context-labels` | Conversation mode: `conversation-with-context-labels` (full context) or `single-message` (legacy) |
 | `cors_allowed_origins` | `""` | CORS allowed origins |
 | `csp_connect_src` | `""` | Nginx CSP connect sources |
+| `log_level` | `info` | Log level for backend and document-repository: `error`, `warn`, `info`, `debug` |
 
 ### Email Configuration (non-secret)
 

@@ -59,5 +59,10 @@ COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src
 # 2. Overwrite the default microservice entrypoint with modified version
 COPY genie-ai-overlay/reranker/genieai_reranking_microservice.py /app/comps/rerankings/src/opea_reranking_microservice.py
 
-# Step F: Run the new microservice entry point from its new location
+# Step F: Create non-root user and set permissions
+RUN useradd -ms /bin/bash user && \
+    chown -R user:user /app /home/user
+
+# Step G: Run the new microservice entry point from its new location
+USER user
 CMD ["python", "comps/rerankings/src/opea_reranking_microservice.py"]

@@ -73,14 +73,17 @@ RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py
 
 # --- Copy to the correct path where comps is located (/home/user/comps) ---
 # This copies the hacked api_protocol.py and constants.py
-COPY --chown=user:user genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
-COPY --chown=user:user genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
+COPY genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
+COPY genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 
 # This copies your main script
-COPY --chown=user:user genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
-COPY --chown=user:user genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py
-COPY --chown=user:user genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
+COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
+COPY genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py
+COPY genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
 
+# Step E: Ensure all application files are owned by user
+RUN chown -R user:user /app
 
-# Step E: Run our new GENIE-AI entry point
+# Step F: Run our new GENIE-AI entry point
+USER user
 ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]

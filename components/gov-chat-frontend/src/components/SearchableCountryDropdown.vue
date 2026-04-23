@@ -55,29 +55,30 @@ export default {
   props: {
     value: {
       type: String,
-      default: '',
+      default: ''
     },
     label: {
       type: String,
-      default: '',
+      default: ''
     },
     placeholder: {
       type: String,
-      default: 'Select a country',
+      default: 'Select a country'
     },
     searchPlaceholder: {
       type: String,
-      default: 'Search countries...',
+      default: 'Search countries...'
     },
     noResultsText: {
       type: String,
-      default: 'No matching countries found',
+      default: 'No matching countries found'
     },
     debug: {
       type: Boolean,
-      default: false,
-    },
+      default: false
+    }
   },
+  emits: ['update:name', 'input', 'change'],
   data() {
     return {
       showSearch: false,
@@ -101,99 +102,99 @@ export default {
         BR: 'Brazil',
         RU: 'Russia',
         ZA: 'South Africa',
-        ID: 'Indonesia',
+        ID: 'Indonesia'
       },
       debugInfo: {
         renderCount: 0,
         lastUpdated: '',
-        valueHistory: [],
+        valueHistory: []
       },
       isInitialized: false,
-      mutationObserver: null,
-    }
+      mutationObserver: null
+    };
   },
   computed: {
     displayCode() {
-      if (!this.value) return ''
+      if (!this.value) return '';
 
       // Try to find the name for this code
-      const countryName = this.getCountryNameByCode(this.value)
-      return countryName || this.value
-    },
+      const countryName = this.getCountryNameByCode(this.value);
+      return countryName || this.value;
+    }
   },
   watch: {
     value: {
       handler(newVal, oldVal) {
-        console.log(`Value CHANGED: ${oldVal} -> ${newVal}`)
-        this.debugInfo.valueHistory.push(`value changed: ${oldVal} -> ${newVal}`)
+        console.log(`Value CHANGED: ${oldVal} -> ${newVal}`);
+        this.debugInfo.valueHistory.push(`value changed: ${oldVal} -> ${newVal}`);
 
         if (newVal !== oldVal && this.isInitialized) {
           if (newVal) {
             // Add a slight delay to ensure all data is ready
             this.$nextTick(() => {
-              this.manuallySetCountryName(newVal)
-            })
+              this.manuallySetCountryName(newVal);
+            });
           } else {
-            this.selectedOption = ''
-            this.$emit('update:name', '')
+            this.selectedOption = '';
+            this.$emit('update:name', '');
           }
         }
-      },
+      }
     },
     allCountries: {
       handler(newCountries) {
-        console.log(`Countries list UPDATED with ${newCountries.length} countries`)
+        console.log(`Countries list UPDATED with ${newCountries.length} countries`);
 
         // Update the code-to-name map
         newCountries.forEach((country) => {
           if (country && country.code) {
-            this.codeToNameMap[country.code] = country.name
+            this.codeToNameMap[country.code] = country.name;
           }
-        })
+        });
 
         // Try to update selected option if we have a value
         if (this.value) {
           this.$nextTick(() => {
-            this.manuallySetCountryName(this.value)
-          })
+            this.manuallySetCountryName(this.value);
+          });
         }
-      },
-    },
+      }
+    }
   },
   created() {
-    console.log(`Dropdown CREATED with value: ${this.value}`)
-    this.debugInfo.valueHistory.push(`created: ${this.value}`)
+    console.log(`Dropdown CREATED with value: ${this.value}`);
+    this.debugInfo.valueHistory.push(`created: ${this.value}`);
 
     // Load countries first
-    this.loadCountries()
+    this.loadCountries();
   },
   mounted() {
-    console.log(`Dropdown MOUNTED with value: ${this.value}, selectedOption: ${this.selectedOption}`)
-    this.debugInfo.valueHistory.push(`mounted: ${this.value}`)
+    console.log(`Dropdown MOUNTED with value: ${this.value}, selectedOption: ${this.selectedOption}`);
+    this.debugInfo.valueHistory.push(`mounted: ${this.value}`);
 
     // Set initial value after mounting
     if (this.value) {
       this.$nextTick(() => {
-        this.manuallySetCountryName(this.value)
-      })
+        this.manuallySetCountryName(this.value);
+      });
     }
 
     // Mark component as initialized
-    this.isInitialized = true
+    this.isInitialized = true;
 
     // Add mutation observer to detect when this component is re-attached to DOM
-    this.setupMutationObserver()
+    this.setupMutationObserver();
   },
 
   beforeUnmount() {
     // Clean up the mutation observer
     if (this.mutationObserver) {
-      this.mutationObserver.disconnect()
+      this.mutationObserver.disconnect();
     }
   },
   updated() {
-    this.debugInfo.renderCount++
-    this.debugInfo.lastUpdated = new Date().toISOString()
+    this.debugInfo.renderCount++;
+    this.debugInfo.lastUpdated = new Date().toISOString();
   },
   methods: {
     setupMutationObserver() {
@@ -203,159 +204,159 @@ export default {
           for (const mutation of mutations) {
             if (mutation.type === 'childList' && mutation.addedNodes.length) {
               // Check if our component or any parent is being added back to DOM
-              let containsSelf = false
+              let containsSelf = false;
               mutation.addedNodes.forEach((node) => {
                 if ((node.contains && node.contains(this.$el)) || node === this.$el) {
-                  containsSelf = true
+                  containsSelf = true;
                 }
-              })
+              });
 
               if (containsSelf && this.value) {
-                console.log('Dropdown re-attached to DOM, restoring state for:', this.value)
+                console.log('Dropdown re-attached to DOM, restoring state for:', this.value);
                 this.$nextTick(() => {
-                  this.manuallySetCountryName(this.value)
-                })
+                  this.manuallySetCountryName(this.value);
+                });
               }
             }
           }
-        })
+        });
 
         // Observe changes to the body element
         this.mutationObserver.observe(document.body, {
           childList: true,
-          subtree: true,
-        })
+          subtree: true
+        });
       }
     },
 
     manuallySetCountryName(code) {
-      if (!code) return
+      if (!code) return;
 
-      console.log(`Trying to set country name for code: ${code}`)
-      const countryName = this.getCountryNameByCode(code)
+      console.log(`Trying to set country name for code: ${code}`);
+      const countryName = this.getCountryNameByCode(code);
 
       if (countryName) {
-        console.log(`Setting selectedOption to: ${countryName}`)
-        this.selectedOption = countryName
-        this.$emit('update:name', countryName)
+        console.log(`Setting selectedOption to: ${countryName}`);
+        this.selectedOption = countryName;
+        this.$emit('update:name', countryName);
       } else {
-        console.log(`Country name not found for code: ${code}`)
+        console.log(`Country name not found for code: ${code}`);
       }
     },
     getCountryNameByCode(code) {
-      if (!code) return ''
+      if (!code) return '';
 
       // Normalize the code to uppercase for consistent lookup
-      const normalizedCode = code.toUpperCase()
+      const normalizedCode = code.toUpperCase();
 
       // Try to find in code-to-name map first (should be fastest)
       if (this.codeToNameMap[normalizedCode]) {
-        return this.codeToNameMap[normalizedCode]
+        return this.codeToNameMap[normalizedCode];
       }
 
       // Then try to find in loaded countries
-      const country = this.allCountries.find((c) => c && c.code && c.code.toUpperCase() === normalizedCode)
+      const country = this.allCountries.find((c) => c && c.code && c.code.toUpperCase() === normalizedCode);
 
       if (country) {
         // Update the map for future lookups
-        this.codeToNameMap[normalizedCode] = country.name
-        return country.name
+        this.codeToNameMap[normalizedCode] = country.name;
+        return country.name;
       }
 
-      return ''
+      return '';
     },
     loadCountries() {
       try {
-        console.log('Loading countries')
-        let loadedCountries = []
+        console.log('Loading countries');
+        let loadedCountries = [];
 
         // Try to get translations if i18n is available
-        const hasI18n = this.$i18n && typeof this.$i18n.t === 'function'
-        const hasTeMethod = this.$te && typeof this.$te === 'function'
+        const hasI18n = this.$i18n && typeof this.$i18n.t === 'function';
+        const hasTeMethod = this.$te && typeof this.$te === 'function';
 
         if (hasI18n && hasTeMethod && this.$te('countries')) {
-          console.log('Using translated countries from i18n')
+          console.log('Using translated countries from i18n');
           try {
-            const translatedCountries = this.$t('countries')
+            const translatedCountries = this.$t('countries');
             if (typeof translatedCountries === 'object' && translatedCountries !== null) {
               loadedCountries = Object.keys(translatedCountries).map((code) => ({
                 code,
-                name: translatedCountries[code],
-              }))
+                name: translatedCountries[code]
+              }));
             } else {
-              console.warn('i18n countries not in expected format, using default countries')
-              loadedCountries = this.getDefaultCountries()
+              console.warn('i18n countries not in expected format, using default countries');
+              loadedCountries = this.getDefaultCountries();
             }
           } catch (translationError) {
-            console.error('Error getting translations:', translationError)
-            loadedCountries = this.getDefaultCountries()
+            console.error('Error getting translations:', translationError);
+            loadedCountries = this.getDefaultCountries();
           }
         } else {
-          console.log('No translations found, using default countries')
-          loadedCountries = this.getDefaultCountries()
+          console.log('No translations found, using default countries');
+          loadedCountries = this.getDefaultCountries();
         }
 
         // Sort countries by name with safe locale fallback
-        const locale = hasI18n && this.$i18n.locale ? this.$i18n.locale : 'en'
+        const locale = hasI18n && this.$i18n.locale ? this.$i18n.locale : 'en';
 
         try {
-          loadedCountries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase(), locale))
+          loadedCountries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase(), locale));
         } catch (sortError) {
-          console.warn('Error sorting countries, using basic sort:', sortError)
-          loadedCountries.sort((a, b) => a.name.localeCompare(b.name))
+          console.warn('Error sorting countries, using basic sort:', sortError);
+          loadedCountries.sort((a, b) => a.name.localeCompare(b.name));
         }
 
         // Build complete code to name map for faster lookup
         loadedCountries.forEach((country) => {
           if (country && country.code) {
-            this.codeToNameMap[country.code] = country.name
+            this.codeToNameMap[country.code] = country.name;
           }
-        })
+        });
 
         // Update the component data
-        this.allCountries = loadedCountries
-        this.filteredOptions = [...loadedCountries]
+        this.allCountries = loadedCountries;
+        this.filteredOptions = [...loadedCountries];
 
-        console.log(`Loaded ${loadedCountries.length} countries`)
+        console.log(`Loaded ${loadedCountries.length} countries`);
       } catch (error) {
-        console.error('Error loading countries:', error)
+        console.error('Error loading countries:', error);
         // Fallback to default countries
-        this.allCountries = this.getDefaultCountries()
-        this.filteredOptions = [...this.allCountries]
+        this.allCountries = this.getDefaultCountries();
+        this.filteredOptions = [...this.allCountries];
       }
     },
     toggleSearch() {
-      this.showSearch = true
-      this.searchTerm = this.selectedOption || ''
-      this.filterOptions()
+      this.showSearch = true;
+      this.searchTerm = this.selectedOption || '';
+      this.filterOptions();
       this.$nextTick(() => {
         if (this.$refs.searchInput) {
-          this.$refs.searchInput.focus()
+          this.$refs.searchInput.focus();
         }
-      })
+      });
     },
     filterOptions() {
       if (!this.searchTerm) {
-        this.filteredOptions = [...this.allCountries]
+        this.filteredOptions = [...this.allCountries];
       } else {
-        const searchTerm = this.searchTerm.toLowerCase()
-        this.filteredOptions = this.allCountries.filter((option) => option.name.toLowerCase().includes(searchTerm))
+        const searchTerm = this.searchTerm.toLowerCase();
+        this.filteredOptions = this.allCountries.filter((option) => option.name.toLowerCase().includes(searchTerm));
       }
-      this.selectedIndex = -1
+      this.selectedIndex = -1;
     },
     selectOption(code, name) {
-      console.log(`User selected: ${name} (${code})`)
-      this.selectedOption = name
-      this.showSearch = false
-      this.$emit('input', code)
-      this.$emit('update:name', name)
-      this.$emit('change', code)
+      console.log(`User selected: ${name} (${code})`);
+      this.selectedOption = name;
+      this.showSearch = false;
+      this.$emit('input', code);
+      this.$emit('update:name', name);
+      this.$emit('change', code);
     },
     handleBlur(event) {
       if (!event.relatedTarget || !event.relatedTarget.closest('.options-dropdown')) {
         setTimeout(() => {
-          this.showSearch = false
-        }, 150)
+          this.showSearch = false;
+        }, 150);
       }
     },
     selectActiveOption() {
@@ -364,19 +365,19 @@ export default {
         this.selectedIndex >= 0 &&
         this.selectedIndex < this.filteredOptions.length
       ) {
-        const selectedOption = this.filteredOptions[this.selectedIndex]
-        this.selectOption(selectedOption.code, selectedOption.name)
+        const selectedOption = this.filteredOptions[this.selectedIndex];
+        this.selectOption(selectedOption.code, selectedOption.name);
       } else if (this.filteredOptions.length > 0) {
-        const firstOption = this.filteredOptions[0]
-        this.selectOption(firstOption.code, firstOption.name)
+        const firstOption = this.filteredOptions[0];
+        this.selectOption(firstOption.code, firstOption.name);
       }
     },
     navigateOptions(direction) {
-      const optionsLength = this.filteredOptions.length
+      const optionsLength = this.filteredOptions.length;
       if (optionsLength > 0) {
-        this.selectedIndex = (this.selectedIndex + direction + optionsLength) % optionsLength
+        this.selectedIndex = (this.selectedIndex + direction + optionsLength) % optionsLength;
         if (this.selectedIndex >= 0 && this.selectedIndex < optionsLength) {
-          this.$refs.searchInput.focus()
+          this.$refs.searchInput.focus();
         }
       }
     },
@@ -576,11 +577,11 @@ export default {
         { code: 'VN', name: 'Vietnam' },
         { code: 'YE', name: 'Yemen' },
         { code: 'ZM', name: 'Zambia' },
-        { code: 'ZW', name: 'Zimbabwe' },
-      ]
-    },
-  },
-}
+        { code: 'ZW', name: 'Zimbabwe' }
+      ];
+    }
+  }
+};
 </script>
 
 <style scoped>

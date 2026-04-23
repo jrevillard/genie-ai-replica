@@ -15,8 +15,8 @@ jest.mock('../services/keycloakAuthService', () => ({
 }));
 
 // Mock axios
-let mockCapturedRequestHandlers = [];
-let mockCapturedResponseHandlers = [];
+const mockCapturedRequestHandlers = [];
+const mockCapturedResponseHandlers = [];
 
 jest.mock('axios', () => {
   const mockAxiosInstance = {
@@ -54,7 +54,7 @@ describe('httpService', () => {
   let mockAxiosInstance;
   let requestHandler;
   let responseSuccessHandler;
-  let responseErrorHandler;
+  
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -90,10 +90,9 @@ describe('httpService', () => {
 
       const result = await httpService.get('endpoint', { param1: 'value1' });
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-        expect.stringContaining('endpoint'),
-        { params: { param1: 'value1' } }
-      );
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith(expect.stringContaining('endpoint'), {
+        params: { param1: 'value1' }
+      });
       expect(result.data.result).toBe('success');
     });
 
@@ -112,11 +111,7 @@ describe('httpService', () => {
 
       const result = await httpService.post('endpoint', { data: 'test' });
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        expect.stringContaining('endpoint'),
-        { data: 'test' },
-        {}
-      );
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(expect.stringContaining('endpoint'), { data: 'test' }, {});
       expect(result.data.created).toBe(true);
     });
 
@@ -135,11 +130,7 @@ describe('httpService', () => {
 
       const result = await httpService.put('endpoint', { key: 'value' });
 
-      expect(mockAxiosInstance.put).toHaveBeenCalledWith(
-        expect.stringContaining('endpoint'),
-        { key: 'value' },
-        {}
-      );
+      expect(mockAxiosInstance.put).toHaveBeenCalledWith(expect.stringContaining('endpoint'), { key: 'value' }, {});
       expect(result.data.updated).toBe(true);
     });
 
@@ -158,10 +149,7 @@ describe('httpService', () => {
 
       const result = await httpService.delete('endpoint');
 
-      expect(mockAxiosInstance.delete).toHaveBeenCalledWith(
-        expect.stringContaining('endpoint'),
-        {}
-      );
+      expect(mockAxiosInstance.delete).toHaveBeenCalledWith(expect.stringContaining('endpoint'), {});
       expect(result.data.deleted).toBe(true);
     });
 
@@ -180,11 +168,7 @@ describe('httpService', () => {
 
       const result = await httpService.patch('endpoint', { field: 'value' });
 
-      expect(mockAxiosInstance.patch).toHaveBeenCalledWith(
-        expect.stringContaining('endpoint'),
-        { field: 'value' },
-        {}
-      );
+      expect(mockAxiosInstance.patch).toHaveBeenCalledWith(expect.stringContaining('endpoint'), { field: 'value' }, {});
       expect(result.data.patched).toBe(true);
     });
 
@@ -335,8 +319,8 @@ describe('httpService', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'Cache-Control': 'no-cache, no-store, must-revalidate, private',
-            'Pragma': 'no-cache',
-            'Expires': '-1'
+            Pragma: 'no-cache',
+            Expires: '-1'
           })
         })
       );

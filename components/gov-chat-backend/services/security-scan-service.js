@@ -1,12 +1,9 @@
-const fs = require('fs');
 const fsPromises = require('fs').promises;
 const path = require('path');
 const { logger } = require('../shared-lib');
 const { DateTime } = require('luxon');
 const axios = require('axios');
 const config = require('../config');
-const readline = require('readline');
-const zlib = require('zlib');
 const { exec } = require('child_process');
 const util = require('util');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
@@ -66,7 +63,7 @@ const securityScanService = {
         logger.info('Returning cached security scan results');
         return JSON.parse(data);
       }
-    } catch (err) {
+    } catch {
       console.debug('No valid cached results found');
     }
     return null;
@@ -276,7 +273,9 @@ const securityScanService = {
           url: jsonLog.url || extractUrl(jsonLog.message)
         };
       }
-    } catch (e) { }
+    } catch {
+      // Ignore parsing errors for non-standard log formats
+    }
     const fallbackMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(.+)$/);
     if (fallbackMatch) {
       const [, datetime, message] = fallbackMatch;
@@ -586,8 +585,8 @@ const securityScanService = {
       const allKeywords = [...new Set([...loginKeywords, ...suspiciousKeywords])];
       console.debug(`Checking logs with keywords: ${allKeywords.join(', ')}`);
 
-      let loginIssues = [];
-      let suspiciousIssues = [];
+      const loginIssues = [];
+      const suspiciousIssues = [];
 
       const today = new Date();
       const daysAgo = new Date(today);
@@ -840,7 +839,6 @@ if (!isMainThread) {
   const fs = require('fs');
   const readline = require('readline');
   const zlib = require('zlib');
-  const { DateTime } = require('luxon');
 
   const parseLogLine = securityScanService.parseLogLine;
 
@@ -852,7 +850,7 @@ if (!isMainThread) {
     linesSkipped: 0
   };
   const issueMap = new Map();
-  let invalidLogStream = null;
+  const invalidLogStream = null;
 
   try {
     // This stream is for debugging parsing issues, and can be created if needed

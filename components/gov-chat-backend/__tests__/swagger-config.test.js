@@ -29,10 +29,10 @@ jest.mock('swagger-jsdoc', () => {
 });
 
 jest.mock('swagger-ui-express', () => ({
-  serve: (req, res, next) => {},
+  serve: () => {},
   setup: (spec, options) => {
     capturedSetupOptions = options;
-    return (req, res, next) => {};
+    return () => {};
   }
 }));
 

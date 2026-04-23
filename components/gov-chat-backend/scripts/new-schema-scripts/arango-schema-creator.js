@@ -5,7 +5,7 @@ const fs = require('fs').promises;
 const readline = require('readline');
 
 // Redirect all console output to both console and log file
-let logBuffer = [];
+const logBuffer = [];
 
 function logToFile(message) {
   logBuffer.push(`${new Date().toISOString()}: ${message}`);

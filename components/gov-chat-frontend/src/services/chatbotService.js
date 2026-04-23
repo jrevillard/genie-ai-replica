@@ -41,7 +41,11 @@ export default {
 
       return response.data;
     } catch (error) {
-      console.error('Error submitting query:', error.message, error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data');
+      console.error(
+        'Error submitting query:',
+        error.message,
+        error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data'
+      );
       throw error;
     }
   },
@@ -96,6 +100,5 @@ export default {
       console.error('Error submitting feedback:', error);
       throw error;
     }
-  },
-
+  }
 };

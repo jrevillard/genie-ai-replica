@@ -1,5 +1,5 @@
 const { logger } = require('../shared-lib');
-const crypto = require('crypto'); // For generating cache key
+const nodeCrypto = require('crypto'); // For generating cache key
 const Redis = require('ioredis');  // For Redis cache
 
 // Import backend modules
@@ -235,7 +235,7 @@ class TranslationService {
           return await this.backend.translate(texts, sourceCode, targetCode);
         } catch (cpuError) {
           logger.error(`[TRANSLATION-SERVICE] CPU fallback also failed: ${cpuError.message}`);
-          throw new Error(`Translation failed on both GPU and CPU backends`);
+          throw new Error(`Translation failed on both GPU and CPU backends`, { cause: cpuError });
         }
       }
 
@@ -266,7 +266,7 @@ class TranslationService {
 
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
-    const docName = crypto.createHash('md5').update(markdownContent).digest('hex');
+    const docName = nodeCrypto.createHash('md5').update(markdownContent).digest('hex');
     // Create the cache key in the format <prefix>:<name>:<locale>
     const cacheKey = `translation:${docName}:${targetLang}`;
     // Key for in-flight tracking (combines doc hash and target language)

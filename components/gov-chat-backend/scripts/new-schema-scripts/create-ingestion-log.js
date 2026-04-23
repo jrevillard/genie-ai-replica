@@ -101,7 +101,7 @@ async function main() {
     await initializeDatabase();
     await createCollectionAndIndexes();
     console.log('\n✅ Setup complete. The "ingestion_log" collection and its indexes are ready.');
-  } catch (error) {
+  } catch {
     console.error('\n✗ Setup failed.');
     process.exit(1); // Exit with an error code
   }

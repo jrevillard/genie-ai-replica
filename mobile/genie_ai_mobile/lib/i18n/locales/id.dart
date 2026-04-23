@@ -196,7 +196,7 @@ const Map<String, dynamic> idLocale = {
     "VN": "Vietnam",
     "YE": "Yaman",
     "ZM": "Zambia",
-    "ZW": "Zimbabwe"
+    "ZW": "Zimbabwe",
   },
   "verification": {
     "verifying": "Memverifikasi email Anda...",
@@ -209,7 +209,7 @@ const Map<String, dynamic> idLocale = {
     "generalError":
         "Terjadi kesalahan selama verifikasi. Silakan coba lagi nanti.",
     "proceedToLogin": "Lanjutkan Masuk",
-    "backToLogin": "Kembali ke Masuk"
+    "backToLogin": "Kembali ke Masuk",
   },
   "passwordResetConfirm": {
     "appTitle": "Genie AI",
@@ -243,15 +243,15 @@ const Map<String, dynamic> idLocale = {
       "weak": "Lemah",
       "fair": "Cukup",
       "good": "Baik",
-      "strong": "Kuat"
+      "strong": "Kuat",
     },
     "passwordSuggestions": {
       "atLeast8Chars": "Gunakan setidaknya 8 karakter",
       "addUppercase": "Tambahkan huruf besar",
       "addLowercase": "Tambahkan huruf kecil",
       "addNumbers": "Tambahkan angka",
-      "addSpecialChars": "Tambahkan karakter khusus"
-    }
+      "addSpecialChars": "Tambahkan karakter khusus",
+    },
   },
   "passwordReset": {
     "appTitle": "Genie AI",
@@ -268,7 +268,7 @@ const Map<String, dynamic> idLocale = {
         "Tautan setel ulang kata sandi telah dikirim ke email Anda",
     "resetRequestFailed":
         "Tidak dapat mengirim tautan setel ulang kata sandi. Silakan coba lagi.",
-    "checkEmail": "Silakan periksa email Anda untuk instruksi lebih lanjut."
+    "checkEmail": "Silakan periksa email Anda untuk instruksi lebih lanjut.",
   },
   "register": {
     "appTitle": "Genie AI",
@@ -311,7 +311,7 @@ const Map<String, dynamic> idLocale = {
     "usernameInvalidChars":
         "Nama pengguna hanya boleh berisi huruf, angka, garis bawah, titik, dan tanda hubung",
     "networkError":
-        "Kesalahan jaringan. Harap periksa koneksi Anda dan coba lagi."
+        "Kesalahan jaringan. Harap periksa koneksi Anda dan coba lagi.",
   },
   "login": {
     "appTitle": "Genie AI",
@@ -339,7 +339,7 @@ const Map<String, dynamic> idLocale = {
     "loginFailed": "Gagal masuk. Silakan coba lagi.",
     "oauthNotImplemented": "Masuk sosial belum diimplementasikan",
     "savedLoginNotImplemented":
-        "Masuk dengan akun tersimpan belum diimplementasikan"
+        "Masuk dengan akun tersimpan belum diimplementasikan",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -358,8 +358,8 @@ const Map<String, dynamic> idLocale = {
       "swahili": "Swahili",
       "german": "Jerman",
       "spanish": "Spanyol",
-      "arabic": "Arab"
-    }
+      "arabic": "Arab",
+    },
   },
   "systemStatus": {
     "title": "Status Layanan",
@@ -373,20 +373,20 @@ const Map<String, dynamic> idLocale = {
     "checking": "Memeriksa...",
     "nextDeadline": "Tenggat Waktu Berikutnya",
     "days": "hari",
-    "viewDetails": "Lihat Detail"
+    "viewDetails": "Lihat Detail",
   },
   "services": {
     "eCitizen": "Portal eCitizen",
     "taxFiling": "Sistem Pelaporan Pajak",
     "idApplication": "Permohonan ID",
     "businessReg": "Pendaftaran Bisnis",
-    "drivingLicense": "Surat Izin Mengemudi"
+    "drivingLicense": "Surat Izin Mengemudi",
   },
   "deadlines": {
     "taxFiling": "Tenggat Waktu Pelaporan Pajak",
     "businessRenewal": "Pembaruan Izin Usaha",
     "idRenewal": "Pembaruan Kartu ID",
-    "vehicleRegistration": "Tenggat Waktu Pendaftaran Kendaraan"
+    "vehicleRegistration": "Tenggat Waktu Pendaftaran Kendaraan",
   },
   "sidebar": {
     "governmentServices": "Area Pengetahuan",
@@ -425,7 +425,7 @@ const Map<String, dynamic> idLocale = {
       "rain": "Hujan",
       "shower": "Hujan Ringan",
       "thunderstorm": "Badai Petir",
-      "snow": "Salju"
+      "snow": "Salju",
     },
     "folders": "Folder",
     "emptyFolder":
@@ -439,7 +439,7 @@ const Map<String, dynamic> idLocale = {
       "all": "Semua Obrolan",
       "folders": "Folder",
       "starred": "Berbintang",
-      "archived": "Diarsipkan"
+      "archived": "Diarsipkan",
     },
     "savedChats": "Obrolan Tersimpan",
     "chats": "Obrolan",
@@ -497,7 +497,7 @@ const Map<String, dynamic> idLocale = {
     "noConversations": "Tidak ada percakapan ditemukan",
     "noStarred": "Tidak ada percakapan berbintang",
     "noArchived": "Tidak ada percakapan diarsipkan",
-    "folderEmptyState": "Folder kosong"
+    "folderEmptyState": "Folder kosong",
   },
   "leftPanel": {
     "cat1": {
@@ -507,8 +507,8 @@ const Map<String, dynamic> idLocale = {
         "Kartu Tanda Penduduk (KTP)",
         "Paspor",
         "Akta perkawinan dan kematian",
-        "Pendaftaran pemilih"
-      ]
+        "Pendaftaran pemilih",
+      ],
     },
     "cat2": {
       "name": "2. Layanan Kesehatan & Sosial",
@@ -517,8 +517,8 @@ const Map<String, dynamic> idLocale = {
         "Program vaksinasi",
         "Asuransi kesehatan",
         "Tunjangan disabilitas",
-        "Bantuan kesejahteraan dan pangan"
-      ]
+        "Bantuan kesejahteraan dan pangan",
+      ],
     },
     "cat3": {
       "name": "3. Pendidikan & Pembelajaran",
@@ -526,8 +526,8 @@ const Map<String, dynamic> idLocale = {
         "Sekolah negeri dan universitas",
         "Beasiswa dan pinjaman pelajar",
         "Program pendidikan dewasa",
-        "Sumber belajar daring"
-      ]
+        "Sumber belajar daring",
+      ],
     },
     "cat4": {
       "name": "4. Ketenagakerjaan & Layanan Tenaga Kerja",
@@ -535,8 +535,8 @@ const Map<String, dynamic> idLocale = {
         "Pencarian kerja dan tunjangan pengangguran",
         "Perlindungan pekerja dan hak tenaga kerja",
         "Peraturan keselamatan kerja",
-        "Pelatihan keterampilan dan magang"
-      ]
+        "Pelatihan keterampilan dan magang",
+      ],
     },
     "cat5": {
       "name": "5. Pajak & Pendapatan",
@@ -544,8 +544,8 @@ const Map<String, dynamic> idLocale = {
         "Pelaporan dan pengembalian pajak penghasilan",
         "Pembayaran pajak properti",
         "Kepatuhan pajak bisnis",
-        "Bea cukai dan bea masuk"
-      ]
+        "Bea cukai dan bea masuk",
+      ],
     },
     "cat6": {
       "name": "6. Keselamatan Publik & Keadilan",
@@ -553,8 +553,8 @@ const Map<String, dynamic> idLocale = {
         "Polisi dan layanan darurat",
         "Layanan pengadilan dan bantuan hukum",
         "Pelaporan kejahatan",
-        "Hukum perlindungan konsumen"
-      ]
+        "Hukum perlindungan konsumen",
+      ],
     },
     "cat7": {
       "name": "7. Transportasi & Mobilitas",
@@ -562,8 +562,8 @@ const Map<String, dynamic> idLocale = {
         "Surat izin mengemudi dan pendaftaran kendaraan",
         "Transportasi umum dan infrastruktur",
         "Pelanggaran lalu lintas dan denda",
-        "Program keselamatan jalan raya"
-      ]
+        "Program keselamatan jalan raya",
+      ],
     },
     "cat8": {
       "name": "8. Perumahan & Pembangunan Kota",
@@ -571,8 +571,8 @@ const Map<String, dynamic> idLocale = {
         "Bantuan perumahan rakyat",
         "Pendaftaran properti dan catatan tanah",
         "Pinjaman perumahan dan subsidi",
-        "Zonasi dan izin bangunan"
-      ]
+        "Zonasi dan izin bangunan",
+      ],
     },
     "cat9": {
       "name": "9. Utilitas & Lingkungan",
@@ -580,8 +580,8 @@ const Map<String, dynamic> idLocale = {
         "Layanan air dan listrik",
         "Pengelolaan limbah dan daur ulang",
         "Peraturan lingkungan",
-        "Inisiatif energi terbarukan"
-      ]
+        "Inisiatif energi terbarukan",
+      ],
     },
     "cat10": {
       "name": "10. Bisnis & Perdagangan",
@@ -589,8 +589,8 @@ const Map<String, dynamic> idLocale = {
         "Pendaftaran dan perizinan bisnis",
         "Peraturan perdagangan dan izin",
         "Hibah dan insentif usaha kecil",
-        "E-commerce dan dukungan bisnis digital"
-      ]
+        "E-commerce dan dukungan bisnis digital",
+      ],
     },
     "cat11": {
       "name": "11. Jaminan Sosial & Pensiun",
@@ -598,8 +598,8 @@ const Map<String, dynamic> idLocale = {
         "Manfaat pensiun",
         "Pengelolaan dana pensiun",
         "Manfaat bagi ahli waris",
-        "Pensiun disabilitas"
-      ]
+        "Pensiun disabilitas",
+      ],
     },
     "cat12": {
       "name": "12. Komunitas & Keterlibatan Sipil",
@@ -607,9 +607,9 @@ const Map<String, dynamic> idLocale = {
         "Pemungutan suara dan pemilihan umum",
         "Umpan balik publik dan keluhan warga",
         "Sukarelawan dan program komunitas",
-        "Partisipasi pemerintah daerah"
-      ]
-    }
+        "Partisipasi pemerintah daerah",
+      ],
+    },
   },
   "settings": {
     "title": "Pengaturan",
@@ -625,7 +625,7 @@ const Map<String, dynamic> idLocale = {
     "languages": {
       "english": "Inggris",
       "french": "Prancis",
-      "swahili": "Swahili"
+      "swahili": "Swahili",
     },
     "theme": "Tema",
     "themes": {"light": "Terang", "dark": "Gelap", "system": "Sistem"},
@@ -657,14 +657,14 @@ const Map<String, dynamic> idLocale = {
           "Ini akan menghapus semua data profil dan riwayat obrolan Anda.",
       "confirmReset":
           "Apakah Anda yakin ingin menyetel ulang semua data Anda? Ini tidak dapat dibatalkan.",
-      "resetComplete": "Data Anda telah disetel ulang."
+      "resetComplete": "Data Anda telah disetel ulang.",
     },
     "language": {"title": "Bahasa", "selectLabel": "Bahasa Tampilan"},
     "appearance": {
       "title": "Tampilan",
       "lightTheme": "Terang",
       "darkTheme": "Gelap",
-      "systemTheme": "Sistem"
+      "systemTheme": "Sistem",
     },
     "confirmDeleteAccount":
         "Apakah Anda yakin ingin menghapus akun Anda? Tindakan ini tidak dapat dibatalkan.",
@@ -710,7 +710,7 @@ const Map<String, dynamic> idLocale = {
     "confirmResetUserData":
         "Apakah Anda yakin ingin menyetel ulang semua data profil Anda? Ini akan menghapus semua informasi profil dan riwayat obrolan Anda, tetapi tetap menyimpan kredensial akun Anda.",
     "reset": "Setel Ulang",
-    "deleteAccountTitle": "Hapus Akun"
+    "deleteAccountTitle": "Hapus Akun",
   },
   "userProfile": {
     "title": "Profil Pengguna",
@@ -757,7 +757,7 @@ const Map<String, dynamic> idLocale = {
       "tab9": "Jaminan Sosial & Kesejahteraan",
       "tab10": "Catatan Pidana & Hukum",
       "tab11": "Transportasi & Mobilitas",
-      "tab12": "Partisipasi Sipil & Politik"
+      "tab12": "Partisipasi Sipil & Politik",
     },
     "tabsShort": {
       "personal": "Pribadi",
@@ -771,14 +771,14 @@ const Map<String, dynamic> idLocale = {
       "social": "Sosial",
       "criminal": "Pidana",
       "transport": "Transportasi",
-      "civic": "Sipil"
+      "civic": "Sipil",
     },
     "actions": {
       "cancel": "Batal",
       "save": "Simpan Profil",
       "previous": "Sebelumnya",
       "next": "Berikutnya",
-      "saving": "Menyimpan..."
+      "saving": "Menyimpan...",
     },
     "fields": {
       "fullName": "Nama lengkap (termasuk alias)",
@@ -853,7 +853,7 @@ const Map<String, dynamic> idLocale = {
       "electionHistory": "Riwayat partisipasi pemilu",
       "partyMembership": "Keanggotaan partai politik",
       "militaryStatus": "Status dinas militer atau wajib militer",
-      "publicServiceRoles": "Peran layanan publik"
+      "publicServiceRoles": "Peran layanan publik",
     },
     "placeholders": {
       "fullName": "Masukkan nama lengkap resmi Anda",
@@ -863,7 +863,7 @@ const Map<String, dynamic> idLocale = {
       "searchDisciplines": "Cari disiplin ilmu...",
       "selectDiscipline": "Pilih disiplin ilmu",
       "searchDegrees": "Cari gelar...",
-      "selectDegree": "Pilih gelar"
+      "selectDegree": "Pilih gelar",
     },
     "validation": {
       "nameRequired": "Nama lengkap wajib diisi",
@@ -874,7 +874,7 @@ const Map<String, dynamic> idLocale = {
       "futureDate": "Tanggal tidak boleh di masa depan",
       "invalidSelection": "Harap buat pilihan yang valid",
       "passwordLength": "Kata sandi harus terdiri dari minimal 8 karakter",
-      "matchError": "Kolom tidak cocok"
+      "matchError": "Kolom tidak cocok",
     },
     "errors": {
       "savingFailed": "Gagal menyimpan profil",
@@ -883,7 +883,7 @@ const Map<String, dynamic> idLocale = {
       "invalidFileType": "Jenis berkas tidak valid",
       "fileTooLarge": "Berkas terlalu besar",
       "countryLoadError": "Kesalahan memuat negara",
-      "countryUpdateError": "Kesalahan memperbarui negara"
+      "countryUpdateError": "Kesalahan memperbarui negara",
     },
     "notifications": {
       "saveSuccess": "Profil berhasil disimpan",
@@ -896,7 +896,7 @@ const Map<String, dynamic> idLocale = {
       "formChanged": "Anda memiliki perubahan yang belum disimpan",
       "sessionExpired": "Sesi Anda telah berakhir, silakan masuk lagi",
       "profileUpdated": "Profil Anda telah diperbarui",
-      "profileIncomplete": "Profil Anda tidak lengkap"
+      "profileIncomplete": "Profil Anda tidak lengkap",
     },
     "instructions": {
       "fullNameHelp":
@@ -912,7 +912,7 @@ const Map<String, dynamic> idLocale = {
       "nextTab": "Lanjutkan ke bagian berikutnya",
       "previousTab": "Kembali ke bagian sebelumnya",
       "saveInstructions": "Klik Simpan untuk menyimpan informasi Anda",
-      "cancelInstructions": "Klik Batal untuk membuang perubahan"
+      "cancelInstructions": "Klik Batal untuk membuang perubahan",
     },
     "completionStatus": {
       "notStarted": "Belum Dimulai",
@@ -920,26 +920,26 @@ const Map<String, dynamic> idLocale = {
       "complete": "Selesai",
       "percentComplete": "{percent}% selesai",
       "tabsCompleted": "{completed} dari {total} bagian selesai",
-      "tabComplete": "Tab selesai!"
+      "tabComplete": "Tab selesai!",
     },
     "gender": {
       "male": "Pria",
       "female": "Wanita",
       "other": "Lainnya",
-      "preferNot": "Pilih untuk tidak mengatakan"
+      "preferNot": "Pilih untuk tidak mengatakan",
     },
     "maritalStatus": {
       "single": "Lajang",
       "married": "Menikah",
       "divorced": "Cerai",
       "widowed": "Janda/Duda",
-      "other": "Lainnya"
+      "other": "Lainnya",
     },
     "residencyStatuses": {
       "citizen": "Warga Negara",
       "permanentResident": "Penduduk Tetap",
       "temporaryResident": "Penduduk Sementara",
-      "other": "Lainnya"
+      "other": "Lainnya",
     },
     "employmentStatuses": {
       "employed": "Bekerja",
@@ -948,7 +948,7 @@ const Map<String, dynamic> idLocale = {
       "student": "Pelajar",
       "retired": "Pensiunan",
       "homemaker": "Ibu/Bapak Rumah Tangga",
-      "other": "Lainnya"
+      "other": "Lainnya",
     },
     "educationLevels": {
       "primary": "Pendidikan Dasar",
@@ -960,14 +960,14 @@ const Map<String, dynamic> idLocale = {
       "master": "Gelar Magister",
       "doctoral": "Gelar Doktor",
       "professional": "Gelar Profesional",
-      "other": "Lainnya"
+      "other": "Lainnya",
     },
     "proficiencyLevels": {
       "native": "Penutur Asli",
       "fluent": "Fasih",
       "advanced": "Mahir",
       "intermediate": "Menengah",
-      "basic": "Dasar"
+      "basic": "Dasar",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -978,7 +978,7 @@ const Map<String, dynamic> idLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Tidak Diketahui"
+      "unknown": "Tidak Diketahui",
     },
     "languages": {
       "english": "Inggris",
@@ -993,7 +993,7 @@ const Map<String, dynamic> idLocale = {
       "russian": "Rusia",
       "hindi": "Hindi",
       "urdu": "Urdu",
-      "other": "Lainnya"
+      "other": "Lainnya",
     },
     "yesNo": {"yes": "Ya", "no": "Tidak"},
     "select": "Silakan pilih",
@@ -1100,7 +1100,7 @@ const Map<String, dynamic> idLocale = {
       "Kedokteran Hewan",
       "Pengembangan Web",
       "Biologi Satwa Liar",
-      "Zoologi"
+      "Zoologi",
     ],
     "degreeOptions": [
       "Gelar Associate",
@@ -1130,7 +1130,7 @@ const Map<String, dynamic> idLocale = {
       "Sertifikat Kejuruan",
       "Sertifikat Pascasarjana",
       "Diploma Pascasarjana",
-      "Pasca Doktoral"
+      "Pasca Doktoral",
     ],
     "aria": {
       "tabList": "Bagian formulir profil",
@@ -1139,8 +1139,8 @@ const Map<String, dynamic> idLocale = {
       "closeButton": "Tutup formulir profil",
       "saveButton": "Simpan data profil",
       "requiredField": "Kolom wajib diisi",
-      "dropdownSelect": "Pilih opsi"
-    }
+      "dropdownSelect": "Pilih opsi",
+    },
   },
   "chatbot": {
     "placeholder": "Ketik pertanyaan Anda di sini...",
@@ -1206,10 +1206,10 @@ const Map<String, dynamic> idLocale = {
         "discardAndNew": "Buang & Baru",
         "discardAndLoad": "Buang & Muat",
         "saveFirst": "Simpan Dulu",
-        "export": "Ekspor"
-      }
+        "export": "Ekspor",
+      },
     },
-    "shareWhatsApp": "Bagikan di WhatsApp"
+    "shareWhatsApp": "Bagikan di WhatsApp",
   },
   "quickhelp": {
     "applyForID": "Ajukan KTP",
@@ -1256,7 +1256,7 @@ const Map<String, dynamic> idLocale = {
     "findJobsUserPrompt":
         "Saya ingin bertanya tentang peluang kerja pemerintah dan lamaran PSC di Kenya.",
     "justChatUserPrompt":
-        "Saya ingin mengobrol secara umum tentang kehidupan di Kenya."
+        "Saya ingin mengobrol secara umum tentang kehidupan di Kenya.",
   },
   "common": {
     "cancel": "Batal",
@@ -1272,7 +1272,7 @@ const Map<String, dynamic> idLocale = {
     "open": "Buka",
     "done": "Selesai",
     "confirm": "Konfirmasi",
-    "edit": "Edit"
+    "edit": "Edit",
   },
   "feedback": {
     "title": "Umpan Balik",
@@ -1286,7 +1286,7 @@ const Map<String, dynamic> idLocale = {
     "thankYouMessage": "Terima kasih atas umpan balik Anda!",
     "submitting": "Mengirim...",
     "error": "Terjadi kesalahan. Silakan coba lagi.",
-    "success": "Terima kasih atas umpan balik Anda!"
+    "success": "Terima kasih atas umpan balik Anda!",
   },
   "responseRating": {
     "title": "Bantu Kami Meningkatkan",
@@ -1298,11 +1298,11 @@ const Map<String, dynamic> idLocale = {
       "2": "Sedikit Membantu",
       "3": "Cukup Membantu",
       "4": "Sangat Membantu",
-      "5": "Mengubah Hidup"
+      "5": "Mengubah Hidup",
     },
     "additionalComments": "Komentar tambahan...",
     "submit": "Kirim",
-    "cancel": "Batal"
+    "cancel": "Batal",
   },
   "upload": {"alt": "Unggah"},
   "uploadDialog": {
@@ -1320,8 +1320,8 @@ const Map<String, dynamic> idLocale = {
           "Berkas pintasan (.url) tidak didukung. Harap seret berkas yang sebenarnya.",
       "duplicate": "Berkas \"{fileName}\" sudah ditambahkan.",
       "uploadSuccess": "Berhasil mengunggah {fileName}",
-      "uploadFailed": "Gagal mengunggah {fileName}."
-    }
+      "uploadFailed": "Gagal mengunggah {fileName}.",
+    },
   },
   "about": {
     "title": "Tentang",
@@ -1329,6 +1329,6 @@ const Map<String, dynamic> idLocale = {
     "description":
         "Genie AI adalah asisten cerdas Anda untuk menavigasi layanan dan informasi pemerintah.",
     "techStack": "Tech Stack",
-    "copyright": "Hak cipta dilindungi undang-undang."
-  }
+    "copyright": "Hak cipta dilindungi undang-undang.",
+  },
 };

@@ -4,9 +4,9 @@ module.exports = {
     debug: jest.fn(),
     info: jest.fn(),
     warn: jest.fn(),
-    error: jest.fn(),
+    error: jest.fn()
   },
   dbService: {
-    getConnection: jest.fn(),
-  },
+    getConnection: jest.fn()
+  }
 };

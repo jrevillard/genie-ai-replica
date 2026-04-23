@@ -8,6 +8,7 @@
 <script>
 export default {
   name: 'FileUploadComponent',
+  emits: ['fileUploaded'],
   methods: {
     /**
      * ADDED: Uses this.$i18n.t() for translation, matching AdminDashboard.vue
@@ -26,13 +27,13 @@ export default {
       return fallback || key;
     },
     onFileChange(e) {
-      const file = e.target.files[0]
+      const file = e.target.files[0];
       if (file) {
-        this.$emit('fileUploaded', file)
+        this.$emit('fileUploaded', file);
       }
     }
   }
-}
+};
 </script>
 
 <style scoped>
@@ -44,7 +45,7 @@ export default {
   cursor: pointer;
 }
 
-.icon-btn input[type="file"] {
+.icon-btn input[type='file'] {
   position: absolute;
   opacity: 0;
   left: 0;

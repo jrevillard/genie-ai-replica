@@ -3,39 +3,38 @@
 
 import os
 import time
-from typing import Any, Union, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 import openai
 from arango import ArangoClient
 from arango.database import StandardDatabase
+from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, ServiceType
+from comps.cores.proto.genieai_api_protocol import ChatCompletionRequest, RetrievalRequest, RetrievalRequestArangoDB
 from fastapi import HTTPException
 from langchain_arangodb import ArangoVector
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, ServiceType
-from comps.cores.proto.genieai_api_protocol import ChatCompletionRequest, RetrievalRequest, RetrievalRequestArangoDB
-
 from .config import (
     ARANGO_DB,
     ARANGO_DISTANCE_STRATEGY,
+    ARANGO_FILTER_STRATEGY,
     ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
     ARANGO_SEARCH_MODE,
     ARANGO_SEARCH_START,
+    ARANGO_TRAVERSAL_CONCURRENT_BATCHES,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
     ARANGO_TRAVERSAL_MAX_RETURNED,
     ARANGO_TRAVERSAL_QUERY,
     ARANGO_TRAVERSAL_SCORE_THRESHOLD,
-    ARANGO_TRAVERSAL_CONCURRENT_BATCHES,
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
-    ARANGO_FILTER_STRATEGY, 
     HF_TOKEN,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
@@ -55,13 +54,16 @@ from .config import (
     VLLM_TIMEOUT,
     VLLM_TOP_P,
 )
+
+
 # Defining a custom data subclass
-class GenieEmbedDoc(EmbedDoc): 
-    search_start: Optional[str] = None
-    enable_traversal: Optional[str] = None
-    traversal_max_depth: Optional[int] = None
-    traversal_max_returned: Optional[int] = None
-    traversal_score_threshold: Optional[float] = None
+class GenieEmbedDoc(EmbedDoc):
+    search_start: str | None = None
+    enable_traversal: str | None = None
+    traversal_max_depth: int | None = None
+    traversal_max_returned: int | None = None
+    traversal_score_threshold: float | None = None
+
 
 logger = CustomLogger("genieai_retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
@@ -158,7 +160,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         traversal_score_threshold: float,
         traversal_query: str,
         distance_strategy: str,
-        ) -> dict[str, Any]:
+    ) -> dict[str, Any]:
         """Fetch the neighborhoods of matched documents from an ArangoDB graph.
         This method retrieves neighborhoods of documents based on a specified graph traversal
         strategy, distance scoring, and other parameters. It supports different starting points
@@ -214,7 +216,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         neighborhoods = {}
 
         # Configure threading #
-        
+
         max_workers = ARANGO_TRAVERSAL_CONCURRENT_BATCHES
 
         if max_workers > 4:
@@ -226,8 +228,7 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         if max_workers < 1:
             logger.error(
-                f"[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES={max_workers} "
-                f"is invalid. Defaulting to 1."
+                f"[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES={max_workers} is invalid. Defaulting to 1."
             )
             max_workers = 1
 
@@ -252,7 +253,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                 sort_order=sort_order,
                 bind_vars=bind_vars,
                 collection_name=collection_name,
-                )
+            )
 
             query = f"""
                 FOR key IN @keys
@@ -273,13 +274,11 @@ class GenieaiArangoRetriever(OpeaComponent):
             traversal_finish = time.time()
 
             if logflag:
-                logger.info(f"Graph traversal completion time: {traversal_finish-traversal_start:4f} seconds")
+                logger.info(f"Graph traversal completion time: {traversal_finish - traversal_start:4f} seconds")
 
             return neighborhoods
 
-        logger.info(
-        f"[Arango Traversal] Running threaded mode with {max_workers} workers "
-        f"for {len(keys)} keys.")
+        logger.info(f"[Arango Traversal] Running threaded mode with {max_workers} workers for {len(keys)} keys.")
 
         def run_for_single_key(single_key: str):
 
@@ -302,7 +301,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                 sort_order=sort_order,
                 bind_vars=bind_vars,
                 collection_name=collection_name,
-                )
+            )
 
             # Query for 1 key
             query = f"""
@@ -333,7 +332,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         traversal_finish = time.time()
 
         if logflag:
-            logger.info(f"Graph traversal completion time: {traversal_finish-traversal_start:4f} seconds")
+            logger.info(f"Graph traversal completion time: {traversal_finish - traversal_start:4f} seconds")
 
         return neighborhoods
 
@@ -351,7 +350,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         sort_order,
         bind_vars,
         collection_name,
-        ):
+    ):
         """
         Builds the AQL sub-query exactly as your original code did.
         Moved into a helper to reuse it for threading.
@@ -443,7 +442,6 @@ class GenieaiArangoRetriever(OpeaComponent):
         # Fallback
         return ""
 
-
     def generate_summarization_prompt(self, query: str, text: str) -> str:
         """Generate a summarization prompt based on the provided query and text.
         This method creates a structured prompt to summarize a document retrieved
@@ -476,13 +474,14 @@ class GenieaiArangoRetriever(OpeaComponent):
             {text}
             ------
 
-            Provide a summary to include all content relevant to the query, using the RELATED INFORMATION section (if provided) as needed.
+            Provide a summary to include all content relevant to the query, using the
+            RELATED INFORMATION section (if provided) as needed.
 
             Your summary:
         """
 
     async def invoke(
-        self, input: Union[ChatCompletionRequest, RetrievalRequest, RetrievalRequestArangoDB, GenieEmbedDoc]
+        self, input: ChatCompletionRequest | RetrievalRequest | RetrievalRequestArangoDB | GenieEmbedDoc
     ) -> list:
         """Process the retrieval request and return relevant documents."""
         if logflag:
@@ -497,7 +496,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         input_dict = input.model_dump(exclude_none=True)
         query = input_dict.get("input", input_dict.get("text"))
         if logflag:
-            logger.info(f'Retriever Input Dict: {input_dict}')
+            logger.info(f"Retriever Input Dict: {input_dict}")
 
         if not query:
             logger.error("Query is empty. Please provide a valid query.")
@@ -542,13 +541,11 @@ class GenieaiArangoRetriever(OpeaComponent):
                 aql_filter_clause = f"FILTER (doc.chunk_labels != null) AND ({labels_array} ANY IN doc.chunk_labels)"
             else:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'."
+                    status_code=400, detail=f"Invalid filter_strategy: {filter_strategy}. Expected 'AND' or 'OR'."
                 )
-            
+
             if logflag:
                 logger.debug(f"Applying filter strategy '{filter_strategy}' with labels: {labels_to_filter}")
-
 
         if not graph_name:
             raise HTTPException(
@@ -569,8 +566,10 @@ class GenieaiArangoRetriever(OpeaComponent):
             )
 
         if logflag:
-            logger.debug(f"Graph name: {graph_name}, Start Collection name: {collection_name}, label filter clause: {aql_filter_clause}")
-            
+            logger.debug(
+                f"Graph name: {graph_name}, Start Collection name: "
+                f"{collection_name}, label filter clause: {aql_filter_clause}"
+            )
 
         #################
         # Validate Data #
@@ -588,10 +587,13 @@ class GenieaiArangoRetriever(OpeaComponent):
             collection_names = set()
             for e_d in self.db.graph(graph_name).edge_definitions():
                 collection_names.add(e_d["edge_collection"])
-                collection_names.update(e_d["from_vertex_collections"]) # list of source vertex collections
-                collection_names.update(e_d["to_vertex_collections"]) # list of destination vertex collections
+                collection_names.update(e_d["from_vertex_collections"])  # list of source vertex collections
+                collection_names.update(e_d["to_vertex_collections"])  # list of destination vertex collections
 
-            m = f"Collection '{collection_name}' does not exist in graph '{graph_name}'. Collections: {collection_names}"
+            m = (
+                f"Collection '{collection_name}' does not exist in graph "
+                f"'{graph_name}'. Collections: {collection_names}"
+            )
             logger.error(m)
             return []
 
@@ -603,7 +605,11 @@ class GenieaiArangoRetriever(OpeaComponent):
             return []
 
         if collection_count < num_centroids:
-            m = f"Collection '{collection_name}' has fewer documents ({collection_count}) than the number of centroids ({num_centroids}). Please adjust the number of centroids."
+            m = (
+                f"Collection '{collection_name}' has fewer documents "
+                f"({collection_count}) than the number of centroids "
+                f"({num_centroids}). Please adjust the number of centroids."
+            )
             logger.error(m)
             return []
 
@@ -623,7 +629,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
             return []
 
-        dimension = len(sample_embedding) 
+        dimension = len(sample_embedding)
 
         if dimension == 0:
             logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
@@ -668,46 +674,47 @@ class GenieaiArangoRetriever(OpeaComponent):
                 logger.error(f"Failed to embed query text: {e}")
                 return []
 
-
         try:
             if input.search_type == "similarity_score_threshold":
-                # Find documents whose vector embeddings are similar to a query embedding and also return how similar they are.
+                # Find documents whose vector embeddings are similar to a query
+                # embedding and also return how similar they are.
                 # Returns a list like: [(doc1, 0.92), (doc2, 0.89), ...]
                 docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
                     query=query,
-                    embedding=embedding, 
+                    embedding=embedding,
                     k=input.k,
                     score_threshold=input.score_threshold,
                     use_approx=use_approx_search,
-                    filter_clause=aql_filter_clause if search_start == 'chunk' else "",
+                    filter_clause=aql_filter_clause if search_start == "chunk" else "",
                 )
                 search_res = [{"doc": doc, "score": score} for doc, score in docs_and_similarities]
             elif input.search_type == "mmr":
-                # Find diverse but still relevant documents — useful when you want the results to not just be similar, but also not all the same.
+                # Find diverse but still relevant documents — useful when you want
+                # the results to not just be similar, but also not all the same.
                 # Balances similarity to the query and diversity between results.
                 # k: how many results to return
                 # fetch_k: how many top candidates to consider
                 # lambda_mult: the balance between similarity (high relevance) and novelty (diversity)
                 results = await vector_db.amax_marginal_relevance_search(
                     query=query,
-                    embedding=embedding, 
+                    embedding=embedding,
                     k=input.k,
                     fetch_k=input.fetch_k,
                     lambda_mult=input.lambda_mult,
                     use_approx=use_approx_search,
-                    filter_clause=aql_filter_clause if search_start == 'chunk' else "",  # might need to change to filter_clause as per: https://github.com/arangoml/langchain-arangodb/blob/a1d9a4c064413d5aedc2263540b852f6938421e9/libs/arangodb/langchain_arangodb/vectorstores/arangodb_vector.py#L581
+                    filter_clause=aql_filter_clause if search_start == "chunk" else "",
                 )
-                search_res = [{"doc":doc, "score":0.0} for doc in results]
-                
+                search_res = [{"doc": doc, "score": 0.0} for doc in results]
+
             else:
                 results = await vector_db.asimilarity_search(
                     query=query,
-                    embedding=embedding, 
+                    embedding=embedding,
                     k=input.k,
                     use_approx=use_approx_search,
-                    filter_clause=aql_filter_clause if search_start == 'chunk' else "",  # might need to change to filter_clause as per: https://github.com/arangoml/langchain-arangodb/blob/a1d9a4c064413d5aedc2263540b852f6938421e9/libs/arangodb/langchain_arangodb/vectorstores/arangodb_vector.py#L581
+                    filter_clause=aql_filter_clause if search_start == "chunk" else "",
                 )
-                search_res = [{"doc":doc, "score":0.0} for doc in results]
+                search_res = [{"doc": doc, "score": 0.0} for doc in results]
 
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
@@ -719,12 +726,11 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         logger.info(f"Found {len(search_res)} documents.")
         logger.info(f"Search results after similarity search: {search_res}")
-        
 
         # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
-        if search_start == 'chunk':
+        if search_start == "chunk":
             for r in search_res:
-                chunk_id = r['doc'].id if r['doc'].id else None
+                chunk_id = r["doc"].id if r["doc"].id else None
                 if chunk_id:
                     aql = f"""
                         FOR doc IN {collection_name}
@@ -734,23 +740,22 @@ class GenieaiArangoRetriever(OpeaComponent):
                     bind_vars = {"chunk_id": chunk_id}
                     cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
                     file_ids = list(doc for doc in cursor)
-                    r['doc'].metadata['file_ids'] = file_ids if file_ids else []
+                    r["doc"].metadata["file_ids"] = file_ids if file_ids else []
             logger.info(f"Adding file id metadata after similarity search: {search_res}")
-            
 
         #######################################################################
         # Traverse Source Documents (based on ARANGO_TRAVERSAL_ENABLED value) #
         #######################################################################
 
         if enable_traversal:
-            keys = [r['doc'].id for r in search_res]
+            keys = [r["doc"].id for r in search_res]
 
             neighborhoods = self.fetch_neighborhoods(
                 db=vector_db.db,
-                keys=keys, # A list of ids
+                keys=keys,  # A list of ids
                 graph_name=graph_name,
                 search_start=search_start,
-                query_embedding=embedding, 
+                query_embedding=embedding,
                 collection_name=collection_name,
                 traversal_max_depth=traversal_max_depth,
                 traversal_max_returned=traversal_max_returned,
@@ -759,27 +764,27 @@ class GenieaiArangoRetriever(OpeaComponent):
                 distance_strategy=distance_strategy,
             )
 
-            logger.info(f"Results after fetching neighborhood: {neighborhoods}") 
+            logger.info(f"Results after fetching neighborhood: {neighborhoods}")
             for r in search_res:
-                neighborhood = neighborhoods.get(r['doc'].id)
+                neighborhood = neighborhoods.get(r["doc"].id)
 
                 if not neighborhood:
                     continue
 
                 # Common header for added related info
-                r['doc'].page_content += "\n------\nRELATED INFORMATION:\n------\n"
+                r["doc"].page_content += "\n------\nRELATED INFORMATION:\n------\n"
 
-                if search_start == 'chunk':
-                    # neighborhood may be a list or other structure 
-                    r['doc'].page_content += str(neighborhood)
+                if search_start == "chunk":
+                    # neighborhood may be a list or other structure
+                    r["doc"].page_content += str(neighborhood)
 
-                elif search_start == 'edge':
+                elif search_start == "edge":
                     # neighborhood is expected to be a list with one dict: [{ "chunk_text": ..., "file_id": ... }]
                     first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
                     if isinstance(first, dict):
                         # first may contain 'chunk_text' and 'file_id' keys directly
-                        chunk_text = first.get('chunk_text')
-                        file_id = first.get('file_id')
+                        chunk_text = first.get("chunk_text")
+                        file_id = first.get("file_id")
                     else:
                         # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
                         chunk_text = None
@@ -787,13 +792,13 @@ class GenieaiArangoRetriever(OpeaComponent):
                         if isinstance(first, dict):
                             inner = next(iter(first.values()), None)
                             if isinstance(inner, dict):
-                                chunk_text = inner.get('chunk_text')
-                                file_id = inner.get('file_id')
+                                chunk_text = inner.get("chunk_text")
+                                file_id = inner.get("file_id")
 
                     if chunk_text:
-                        r['doc'].page_content += str(chunk_text)
+                        r["doc"].page_content += str(chunk_text)
                     if file_id:
-                        r['doc'].metadata['file_ids'] = r['doc'].metadata.get('file_ids', []) + [file_id]
+                        r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
                 else:
                     # search_start == 'node'
@@ -812,15 +817,14 @@ class GenieaiArangoRetriever(OpeaComponent):
                             inner = next(iter(maybe.values()), None)
 
                     if isinstance(inner, dict):
-                        chunk_text = inner.get('chunk_text')
-                        file_id = inner.get('file_id')
+                        chunk_text = inner.get("chunk_text")
+                        file_id = inner.get("file_id")
                         if chunk_text:
-                            r['doc'].page_content += str(chunk_text)
+                            r["doc"].page_content += str(chunk_text)
                         if file_id:
-                            r['doc'].metadata['file_ids'] = r['doc'].metadata.get('file_ids', []) + [file_id]
+                            r["doc"].metadata["file_ids"] = r["doc"].metadata.get("file_ids", []) + [file_id]
 
             logger.info(f"Added neighborhoods to {len(search_res)} documents.")
-
 
         ################################
         # Summarize Results (optional) #
@@ -828,18 +832,17 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         if enable_summarizer:
             for r in search_res:
-                prompt = self.generate_summarization_prompt(query, r['doc'].page_content)
+                prompt = self.generate_summarization_prompt(query, r["doc"].page_content)
                 res = self.llm.invoke(prompt)
                 summarized_text = res.content
 
                 logger.info(f"Summarized {r['doc'].id}")
 
-                r['doc'].page_content = summarized_text
-        
+                r["doc"].page_content = summarized_text
+
         if logflag:
             logger.debug(f"Final results of retrievers/src/integrations/arangodb_genieai.py: {search_res}")
 
-        
         ################################
         #  Returning Powerful Results  #
         ################################

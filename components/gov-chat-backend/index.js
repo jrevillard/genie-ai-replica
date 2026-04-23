@@ -30,8 +30,8 @@ io.on('connection', (socket) => {
     logger.info('WebSocket message received:', { message: msg, id: socket.id });
     socket.emit('message', 'Server response: ' + msg);
   });
-  socket.on('disconnect', (reason) => {
-    logger.info('WebSocket client disconnected:', { id: socket.id, reason });
+  socket.on('disconnect', () => {
+    logger.info('WebSocket client disconnected:', { id: socket.id });
   });
   socket.on('error', (error) => {
     logger.error('WebSocket error:', {
@@ -116,7 +116,7 @@ app.use(morgan(':method :url :status :response-time ms - Headers: :req[content-t
 // Block access to sensitive paths
 app.use((req, res, next) => {
   try {
-    if (req.path.match(/\/\.[^\/]+/) ||
+    if (req.path.match(/\/\.[^/]+/) ||
       req.path.includes('/BitKeeper') ||
       req.path.includes('/.git') ||
       req.path.includes('/.env')) {
@@ -1113,7 +1113,7 @@ async function startApp() {
   });
 
   // Error handling middleware
-  app.use((err, req, res, next) => {
+  app.use((err, req, res) => {
     logger.error(`Error processing ${req.method} ${req.url}:`, {
       error: err.message || 'Unknown error',
       stack: err.stack || 'No stack trace',

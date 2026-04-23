@@ -17,21 +17,27 @@ class PasswordProxy {
   }
 
   /// Reset password with token
-  Future<Map<String, dynamic>> resetPassword(String token, String newPassword) async {
+  Future<Map<String, dynamic>> resetPassword(
+    String token,
+    String newPassword,
+  ) async {
     // Note: The newPassword should be hashed using SHA-256 before this call
     final response = await _api.post('auth/reset-password/confirm', {
       'token': token,
-      'newPassword': newPassword
+      'newPassword': newPassword,
     });
     return jsonDecode(response.body);
   }
 
   /// Change password for an already authenticated user
-  Future<Map<String, dynamic>> changePassword(String currentPassword, String newPassword) async {
+  Future<Map<String, dynamic>> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
     // Note: Both passwords should be hashed using SHA-256
     final response = await _api.post('auth/change-password', {
       'currentPassword': currentPassword,
-      'newPassword': newPassword
+      'newPassword': newPassword,
     });
     return jsonDecode(response.body);
   }

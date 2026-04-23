@@ -52,7 +52,7 @@ class DatabaseOperationsService {
       logger.info('Database connection tested successfully');
     } catch (error) {
       logger.error(`Failed to initialize database connection: ${error.message}`, { stack: error.stack });
-      throw new Error('Database connection unavailable');
+      throw new Error('Database connection unavailable', { cause: error });
     }
   }
 
@@ -305,7 +305,6 @@ class DatabaseOperationsService {
       logger.info('Fetching database statistics');
       const collections = await this.db.collections();
       const stats = await this.db.route('/_api/statistics').get();
-      const dbInfo = await this.db.get();
 
       let totalSize = 0;
       const collectionStats = [];

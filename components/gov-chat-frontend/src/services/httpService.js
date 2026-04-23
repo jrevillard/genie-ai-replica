@@ -97,16 +97,10 @@ class HttpService {
     this.axios.defaults.headers.common['Content-Type'] = 'application/json';
 
     // Add request interceptor
-    this.axios.interceptors.request.use(
-      this.handleRequest.bind(this),
-      this.handleRequestError.bind(this)
-    );
+    this.axios.interceptors.request.use(this.handleRequest.bind(this), this.handleRequestError.bind(this));
 
     // Add response interceptor
-    this.axios.interceptors.response.use(
-      this.handleResponse.bind(this),
-      this.handleResponseError.bind(this)
-    );
+    this.axios.interceptors.response.use(this.handleResponse.bind(this), this.handleResponseError.bind(this));
   }
 
   /**
@@ -349,8 +343,8 @@ class HttpService {
     return this.axios.put(noCacheUrl, noCacheData, {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate, private',
-        'Pragma': 'no-cache',
-        'Expires': '-1',
+        Pragma: 'no-cache',
+        Expires: '-1',
         'X-Requested-With': 'XMLHttpRequest',
         'X-Timestamp': timestamp
       }

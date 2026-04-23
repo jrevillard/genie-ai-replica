@@ -221,7 +221,7 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/security-metrics', async (req, res, next) => {
+  router.get('/security-metrics', async (req, res) => {
     try {
       logger.info(`[ADMIN-ROUTES] Fetching security metrics for user: ${req.user?.email || 'unknown'}`);
       const lastScan = await securityScanService.getLastScanDetails();
@@ -262,7 +262,7 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/security-scan', async (req, res, next) => {
+  router.post('/security-scan', async (req, res) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security-scan route', {
       user: req.user?.iss_sub || 'unknown'
     });
@@ -296,7 +296,7 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/security/last-scan', async (req, res, next) => {
+  router.get('/security/last-scan', async (req, res) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security/last-scan route', {
       user: req.user?.iss_sub || 'unknown'
     });

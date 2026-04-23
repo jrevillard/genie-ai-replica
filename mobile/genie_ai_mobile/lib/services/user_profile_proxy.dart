@@ -22,7 +22,9 @@ class UserProfileProxy {
 
   /// PUT /api/users/:userId - update profile with actual userId
   Future<Map<String, dynamic>> updateProfile(
-      String userId, Map<String, dynamic> profileData) async {
+    String userId,
+    Map<String, dynamic> profileData,
+  ) async {
     final bool hasFiles = _containsFiles(profileData);
 
     if (!hasFiles) {
@@ -61,14 +63,14 @@ class UserProfileProxy {
 
       dataToSend[section].forEach((key, value) {
         if (value is XFile || value is File) {
-          final String filePath =
-              value is XFile ? value.path : (value as File).path;
+          final String filePath = value is XFile
+              ? value.path
+              : (value as File).path;
           final String filename = value is XFile
               ? value.name
-              : (value as File)
-                  .path
-                  .split(Platform.isWindows ? '\\' : '/')
-                  .last;
+              : (value as File).path
+                    .split(Platform.isWindows ? '\\' : '/')
+                    .last;
           final String fieldName = '$section-$key';
 
           fileFutures.add(
@@ -118,13 +120,16 @@ class UserProfileProxy {
 
   // Admin methods unchanged
   Future<Map<String, dynamic>> updateUserRole(
-      String userId, String role) async {
+    String userId,
+    String role,
+  ) async {
     final res = await _api.put('users/$userId/role', {'role': role});
     return jsonDecode(res.body);
   }
 
   Future<Map<String, dynamic>> searchUsers(
-      Map<String, dynamic> criteria) async {
+    Map<String, dynamic> criteria,
+  ) async {
     final res = await _api.get('users/search', params: criteria);
     return jsonDecode(res.body);
   }

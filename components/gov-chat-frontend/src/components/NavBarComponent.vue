@@ -18,6 +18,7 @@
         <div class="logo-container">
           <!-- Display SVG icon from config (file or inline) -->
           <img v-if="config.app.icon.type === 'file'" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <span v-else class="govt-logo" v-html="config.app.icon.value"></span>
         </div>
         <!-- Title from GENIE.AI config - Hide on mobile -->
@@ -373,31 +374,31 @@
 </template>
 
 <script>
-import LanguageSelector from '@/components/LanguageSelector.vue'
+import LanguageSelector from '@/components/LanguageSelector.vue';
 
 export default {
   name: 'NavBarComponent',
   components: {
-    LanguageSelector,
+    LanguageSelector
   },
   props: {
     isSidebarOpen: {
       type: Boolean,
-      default: true,
+      default: true
     },
     sidebarWidth: {
       type: Number,
-      default: 250, // Default sidebar width in pixels
+      default: 250 // Default sidebar width in pixels
     },
     // GENIE.AI configuration for title, icon, and navbar styling
     config: {
       type: Object,
-      required: true,
+      required: false,
       default: () => ({
         app: { title: 'Huduma AI', icon: { type: 'file', value: '/config/huduma-icon.svg' } },
-        theme: { navbar: { textColor: '#ffffff' } },
-      }),
-    },
+        theme: { navbar: { textColor: '#ffffff' } }
+      })
+    }
   },
   emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout', 'openAdmin'],
   data() {
@@ -411,52 +412,52 @@ export default {
           { name: 'Tax Filing System', status: 'degraded' },
           { name: 'ID Application', status: 'outage' },
           { name: 'Business Registration', status: 'operational' },
-          { name: 'Driving License', status: 'operational' },
-        ],
+          { name: 'Driving License', status: 'operational' }
+        ]
       },
       // Sample next deadline - would be personalized
       nextDeadline: {
         titleKey: 'taxFiling',
-        daysRemaining: 12,
-      },
-    }
+        daysRemaining: 12
+      }
+    };
   },
   computed: {
     operationalCount() {
-      return this.systemStatus.services.filter((s) => s.status === 'operational').length
+      return this.systemStatus.services.filter((s) => s.status === 'operational').length;
     },
     degradedCount() {
-      return this.systemStatus.services.filter((s) => s.status === 'degraded').length
+      return this.systemStatus.services.filter((s) => s.status === 'degraded').length;
     },
     outageCount() {
-      return this.systemStatus.services.filter((s) => s.status === 'outage').length
+      return this.systemStatus.services.filter((s) => s.status === 'outage').length;
     },
     totalServices() {
-      return this.systemStatus.services.length
+      return this.systemStatus.services.length;
     },
     getStatusDotClass() {
       switch (this.systemStatus.overall) {
         case 'operational':
-          return 'status-operational'
+          return 'status-operational';
         case 'degraded':
-          return 'status-degraded'
+          return 'status-degraded';
         case 'outage':
-          return 'status-outage'
+          return 'status-outage';
         default:
-          return ''
+          return '';
       }
     },
     statusText() {
       // Show in user's language
       switch (this.systemStatus.overall) {
         case 'operational':
-          return this.$t('systemStatus.allOperational')
+          return this.$t('systemStatus.allOperational');
         case 'degraded':
-          return this.$t('systemStatus.someIssues')
+          return this.$t('systemStatus.someIssues');
         case 'outage':
-          return this.$t('systemStatus.majorIssues')
+          return this.$t('systemStatus.majorIssues');
         default:
-          return this.$t('systemStatus.checking')
+          return this.$t('systemStatus.checking');
       }
     },
     // Compute if the user has admin role — reads directly from Vuex store to stay reactive
@@ -465,38 +466,38 @@ export default {
       if (!user) return false;
 
       const roles = user.roles || [];
-      return roles.map(r => r.toLowerCase()).includes('admin');
-    },
+      return roles.map((r) => r.toLowerCase()).includes('admin');
+    }
   },
   watch: {
     // Watch for locale changes and close/reopen dropdown to force refresh
     '$i18n.locale'(newLocale) {
-      this.currentLocale = newLocale
+      this.currentLocale = newLocale;
 
       // Only do this if the dropdown is open
       if (this.isStatusDropdownOpen) {
         // Briefly close and reopen to force re-render with new translations
-        const wasOpen = this.isStatusDropdownOpen
-        this.isStatusDropdownOpen = false
+        const wasOpen = this.isStatusDropdownOpen;
+        this.isStatusDropdownOpen = false;
 
         // Use nextTick to ensure Vue updates the DOM first
         this.$nextTick(() => {
           if (wasOpen) {
             // Small delay to ensure DOM updates
             setTimeout(() => {
-              this.isStatusDropdownOpen = true
-            }, 50)
+              this.isStatusDropdownOpen = true;
+            }, 50);
           }
-        })
+        });
       }
-    },
+    }
   },
   mounted() {
     // Close dropdown when clicking outside
-    document.addEventListener('click', this.handleClickOutside)
+    document.addEventListener('click', this.handleClickOutside);
   },
   beforeUnmount() {
-    document.removeEventListener('click', this.handleClickOutside)
+    document.removeEventListener('click', this.handleClickOutside);
   },
 
   methods: {
@@ -511,15 +512,15 @@ export default {
       }
     },
     toggleSidebar() {
-      this.$emit('toggleSidebar')
+      this.$emit('toggleSidebar');
     },
     toggleStatusDropdown() {
-      this.isStatusDropdownOpen = !this.isStatusDropdownOpen
+      this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
     },
     handleClickOutside(event) {
       // Handle both desktop and mobile status containers
-      const desktopContainer = this.$refs.statusContainer
-      const mobileContainer = this.$refs.mobileStatusContainer
+      const desktopContainer = this.$refs.statusContainer;
+      const mobileContainer = this.$refs.mobileStatusContainer;
 
       if (
         desktopContainer &&
@@ -527,15 +528,15 @@ export default {
         mobileContainer &&
         !mobileContainer.contains(event.target)
       ) {
-        this.isStatusDropdownOpen = false
+        this.isStatusDropdownOpen = false;
       }
     },
     viewStatusPage() {
-      this.$emit('viewStatusPage')
-      this.isStatusDropdownOpen = false
-    },
-  },
-}
+      this.$emit('viewStatusPage');
+      this.isStatusDropdownOpen = false;
+    }
+  }
+};
 </script>
 
 <style scoped>

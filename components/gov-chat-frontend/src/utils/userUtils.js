@@ -7,6 +7,6 @@
  * @returns {string|undefined}
  */
 export function getUserId(user) {
-  if (!user) return undefined
-  return user.iss_sub
+  if (!user) return undefined;
+  return user.iss_sub;
 }

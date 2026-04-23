@@ -59,11 +59,11 @@ async function verifyIntegration() {
     
     // Test adding feedback
     console.log("\nAdding feedback to the test query...");
-    const updatedQuery = await queryService.addFeedback(testQuery._key, {
+    await queryService.addFeedback(testQuery._key, {
       rating: 5,
       comment: "This is a test feedback comment"
     });
-    
+
     console.log(`Feedback added to query ${testQuery._key}`);
     
     // Check analytics collection for feedback record

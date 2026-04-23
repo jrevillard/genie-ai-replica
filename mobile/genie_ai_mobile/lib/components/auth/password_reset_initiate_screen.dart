@@ -101,10 +101,13 @@ class _PasswordResetInitiateScreenState
     return FutureBuilder(
       future: GenieAiConfig.load(),
       builder: (context, snapshot) {
-        if (!GenieAiConfig.isLoaded && snapshot.connectionState != ConnectionState.done) {
+        if (!GenieAiConfig.isLoaded &&
+            snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
-             backgroundColor: widget.isEmbedded ? Colors.transparent : colors['background'],
-             body: const Center(child: CircularProgressIndicator())
+            backgroundColor: widget.isEmbedded
+                ? Colors.transparent
+                : colors['background'],
+            body: const Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -125,7 +128,9 @@ class _PasswordResetInitiateScreenState
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                              color: Colors.black.withOpacity(0.1), blurRadius: 10)
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                          ),
                         ],
                       ),
                 child: Column(
@@ -136,9 +141,10 @@ class _PasswordResetInitiateScreenState
                     Text(
                       tr('passwordReset.resetPassword'),
                       style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                          color: colors['text'].withOpacity(0.7)),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: colors['text'].withOpacity(0.7),
+                      ),
                     ),
                     const SizedBox(height: 20),
                     if (_resetRequested)
@@ -153,87 +159,107 @@ class _PasswordResetInitiateScreenState
             ),
           ),
         );
-      }
+      },
     );
   }
 
   Widget _buildHeader(Map<String, dynamic> colors) {
-    return Column(children: [
-      // [MODIFIED] Replaced hardcoded Icon with Dynamic SVG/Image
-      SizedBox(
-        height: 80,
-        child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-            ? SvgPicture.asset(
-                GenieAiConfig.iconPath,
-                fit: BoxFit.contain,
-              )
-            : Image.asset(
-                GenieAiConfig.iconPath,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                   return const Icon(Icons.error, size: 40);
-                },
-              ),
-      ),
-      const SizedBox(height: 10),
-      // [MODIFIED] Use Dynamic Title
-      Text(
-        GenieAiConfig.title,
-        style: TextStyle(
-            fontSize: 28, fontWeight: FontWeight.bold, color: colors['text']),
-      ),
-    ]);
+    return Column(
+      children: [
+        // [MODIFIED] Replaced hardcoded Icon with Dynamic SVG/Image
+        SizedBox(
+          height: 80,
+          child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
+              ? SvgPicture.asset(GenieAiConfig.iconPath, fit: BoxFit.contain)
+              : Image.asset(
+                  GenieAiConfig.iconPath,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.error, size: 40);
+                  },
+                ),
+        ),
+        const SizedBox(height: 10),
+        // [MODIFIED] Use Dynamic Title
+        Text(
+          GenieAiConfig.title,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: colors['text'],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildFormView(Map<String, dynamic> colors, bool isDark) {
-    return Column(children: [
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          tr('passwordReset.emailLabel'),
-          style: TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w500, color: colors['text']),
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            tr('passwordReset.emailLabel'),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: colors['text'],
+            ),
+          ),
         ),
-      ),
-      const SizedBox(height: 6),
-      TextField(
-        controller: _emailController,
-        keyboardType: TextInputType.emailAddress,
-        onChanged: (_) => setState(() {}),
-        style: TextStyle(color: colors['text']),
-        decoration: InputDecoration(
-          hintText: tr('passwordReset.emailPlaceholder'),
-          hintStyle:
-              TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
-          filled: true,
-          fillColor:
-              isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF0F2F5),
-          border: OutlineInputBorder(
+        const SizedBox(height: 6),
+        TextField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          onChanged: (_) => setState(() {}),
+          style: TextStyle(color: colors['text']),
+          decoration: InputDecoration(
+            hintText: tr('passwordReset.emailPlaceholder'),
+            hintStyle: TextStyle(
+              color: isDark ? Colors.grey[500] : Colors.grey[600],
+            ),
+            filled: true,
+            fillColor: isDark
+                ? Colors.white.withOpacity(0.05)
+                : const Color(0xFFF0F2F5),
+            border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none),
-          errorText: _emailError.isEmpty ? null : _emailError,
+              borderSide: BorderSide.none,
+            ),
+            errorText: _emailError.isEmpty ? null : _emailError,
+          ),
         ),
-      ),
-      const SizedBox(height: 16),
-      ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: colors['primary'],
-          minimumSize: const Size(double.infinity, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: colors['primary'],
+            minimumSize: const Size(double.infinity, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          onPressed: (_isSubmitting || !_isValidEmail)
+              ? null
+              : _handleInitiateReset,
+          child: _isSubmitting
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Text(
+                  tr('passwordReset.resetButton'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
         ),
-        onPressed:
-            (_isSubmitting || !_isValidEmail) ? null : _handleInitiateReset,
-        child: _isSubmitting
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2))
-            : Text(tr('passwordReset.resetButton'),
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-    ]);
+      ],
+    );
   }
 
   Widget _buildSuccessView() {
@@ -245,42 +271,64 @@ class _PasswordResetInitiateScreenState
         border: Border.all(color: const Color(0x4D10B981)),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(children: [
-        Text(tr('passwordReset.resetRequestSuccess'),
+      child: Column(
+        children: [
+          Text(
+            tr('passwordReset.resetRequestSuccess'),
             textAlign: TextAlign.center,
             style: const TextStyle(
-                color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text(
-          tr('passwordReset.checkEmail'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFF10B981), fontSize: 13),
-        ),
-      ]),
+              color: Color(0xFF10B981),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            tr('passwordReset.checkEmail'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFF10B981), fontSize: 13),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildFooter(Map<String, dynamic> colors, bool isDark) {
-    return Column(children: [
-      const SizedBox(height: 16),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(tr('passwordReset.rememberPassword') + ' ',
-            style:
-                TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
-        GestureDetector(
-          onTap: () => Navigator.pushReplacementNamed(context, '/login'),
-          child: Text(tr('passwordReset.backToLogin'),
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              tr('passwordReset.rememberPassword') + ' ',
               style: TextStyle(
-                  color: colors['primary'], fontWeight: FontWeight.bold)),
+                color: isDark ? Colors.grey[400] : Colors.grey[700],
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+              child: Text(
+                tr('passwordReset.backToLogin'),
+                style: TextStyle(
+                  color: colors['primary'],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
-      ]),
-      const SizedBox(height: 24),
-      Text(tr('passwordReset.supportMessage'),
+        const SizedBox(height: 24),
+        Text(
+          tr('passwordReset.supportMessage'),
           style: TextStyle(
-              fontSize: 11, color: isDark ? Colors.grey[500] : Colors.grey)),
-      const SizedBox(height: 8),
-      LanguageSelector(textColor: colors['text']),
-    ]);
+            fontSize: 11,
+            color: isDark ? Colors.grey[500] : Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        LanguageSelector(textColor: colors['text']),
+      ],
+    );
   }
 
   Widget _buildCancelButton(Map<String, dynamic> colors) {
@@ -293,8 +341,10 @@ class _PasswordResetInitiateScreenState
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         onPressed: () => Navigator.of(context).pop(),
-        child: Text(tr('common.cancel'),
-            style: TextStyle(color: colors['primary'])),
+        child: Text(
+          tr('common.cancel'),
+          style: TextStyle(color: colors['primary']),
+        ),
       ),
     );
   }

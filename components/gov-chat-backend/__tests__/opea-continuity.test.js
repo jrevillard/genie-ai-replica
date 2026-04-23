@@ -19,16 +19,14 @@ jest.mock('../shared-lib', () => ({
   }
 }), { virtual: true });
 
-const supertest = require('supertest');
-
 // Mock keycloak-auth-service
-var mockVerifyToken = jest.fn();
+const mockVerifyToken = jest.fn();
 jest.mock('../services/keycloak-auth-service', () => ({
   verifyToken: (...args) => mockVerifyToken(...args)
 }));
 
 // Mock user-provisioning-service
-var mockProvisionUser = jest.fn();
+const mockProvisionUser = jest.fn();
 jest.mock('../services/user-provisioning-service', () => ({
   provisionUser: (...args) => mockProvisionUser(...args)
 }));

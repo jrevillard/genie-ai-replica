@@ -16,9 +16,7 @@ class SettingsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         // Glue the SettingsController to the theme selection DropdownButton.
@@ -39,10 +37,7 @@ class SettingsView extends StatelessWidget {
               value: ThemeMode.light,
               child: Text('Light Theme'),
             ),
-            DropdownMenuItem(
-              value: ThemeMode.dark,
-              child: Text('Dark Theme'),
-            )
+            DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark Theme')),
           ],
         ),
       ),

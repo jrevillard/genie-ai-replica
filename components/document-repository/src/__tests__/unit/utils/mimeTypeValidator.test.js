@@ -2,11 +2,11 @@ const {
   getFileExtension,
   getMimeType,
   getFileCategory,
-  isTextExtractable,
+  isTextExtractable
 } = require('../../../utils/mimeTypeValidator');
 
 jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn().mockResolvedValue(null),
+  fileTypeFromBuffer: jest.fn().mockResolvedValue(null)
 }));
 
 describe('mimeTypeValidator', () => {
@@ -51,7 +51,9 @@ describe('mimeTypeValidator', () => {
     });
 
     it('should categorize docx', () => {
-      expect(getFileCategory('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('document');
+      expect(getFileCategory('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(
+        'document'
+      );
     });
 
     // NOTE: The xlsx MIME type contains 'document', which matches before 'sheet'

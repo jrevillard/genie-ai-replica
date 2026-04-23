@@ -81,8 +81,9 @@ class _MyAppState extends State<MyApp> {
   Future<void> _loadAppConfiguration() async {
     try {
       debugPrint("[MAIN] Loading configuration...");
-      final String configString =
-          await rootBundle.loadString('assets/config/genie-ai-config.json');
+      final String configString = await rootBundle.loadString(
+        'assets/config/genie-ai-config.json',
+      );
       final Map<String, dynamic> config = json.decode(configString);
 
       // Initialize ThemeManager with the loaded config
@@ -128,8 +129,9 @@ class _MyAppState extends State<MyApp> {
           title: 'Genie AI',
           debugShowCheckedModeBanner: false,
           locale: I18nService().currentLocale,
-          supportedLocales:
-              I18nService().supportedLanguages.keys.map((code) => Locale(code)),
+          supportedLocales: I18nService().supportedLanguages.keys.map(
+            (code) => Locale(code),
+          ),
           localizationsDelegates: const [
             FallbackMaterialLocalizationsDelegate(),
             FallbackWidgetsLocalizationsDelegate(),
@@ -172,9 +174,7 @@ class _MyAppState extends State<MyApp> {
               final String? token = settings?.arguments as String?;
               if (token == null) {
                 return const Scaffold(
-                  body: Center(
-                    child: Text("Invalid or missing reset token"),
-                  ),
+                  body: Center(child: Text("Invalid or missing reset token")),
                 );
               }
               return PasswordResetConfirmScreen(token: token);
@@ -224,8 +224,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _isOnline = ConnectivityService().isOnline;
 
     // 3. Listen to Connectivity Stream for Sync Trigger
-    _connectivitySubscription =
-        ConnectivityService().isOnlineStream.listen((isOnline) {
+    _connectivitySubscription = ConnectivityService().isOnlineStream.listen((
+      isOnline,
+    ) {
       if (mounted) {
         setState(() {
           _isOnline = isOnline;
@@ -233,7 +234,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
         if (isOnline) {
           debugPrint(
-              "[MAIN] App is Online. Placeholder for future Sync Trigger.");
+            "[MAIN] App is Online. Placeholder for future Sync Trigger.",
+          );
           // TODO: TRIGGER SYNC SERVICE HERE WHEN IMPLEMENTED
           // e.g. SyncService().syncPendingData();
         }
@@ -287,8 +289,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     // Theme color logic for Binder Tabs
     // Dark Mode -> Green (Primary), Light Mode -> Grey
-    final Color binderColor =
-        widget.isDarkMode ? ThemeManager().getColors()['primary'] : Colors.grey;
+    final Color binderColor = widget.isDarkMode
+        ? ThemeManager().getColors()['primary']
+        : Colors.grey;
 
     return Scaffold(
       // Drawer is handled via Scaffold callbacks but triggered by BinderTabs
@@ -442,7 +445,7 @@ class _BinderTab extends StatelessWidget {
               color: Colors.black12,
               blurRadius: 4,
               offset: isLeft ? const Offset(2, 0) : const Offset(-2, 0),
-            )
+            ),
           ],
         ),
         child: Center(

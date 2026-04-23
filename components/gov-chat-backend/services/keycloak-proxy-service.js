@@ -8,7 +8,6 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
 const PROXY_CLIENT_ID = process.env.KEYCLOAK_PROXY_CLIENT_ID;
 const PROXY_CLIENT_SECRET = process.env.KEYCLOAK_PROXY_CLIENT_SECRET;
 
-const ALLOWED_ROLES = ['admin'];
 const FETCH_TIMEOUT_MS = 10000; // 10s timeout for Keycloak API calls
 
 // Service account token cache (lazy refresh on 401)
@@ -231,7 +230,7 @@ const keycloakProxyService = {
         error: arangoError.message,
         state: 'PARTIAL_ERASURE'
       });
-      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed');
+      throw new Error('Partial erasure: user deleted from Keycloak but ArangoDB erasure failed', { cause: arangoError });
     }
   },
 

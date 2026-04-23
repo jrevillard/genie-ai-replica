@@ -68,7 +68,7 @@ const labelService = {
       console.error(`Error deleting label ${labelId}:`, error);
       throw error;
     }
-  },
+  }
 };
 
 export default labelService;

@@ -1,7 +1,7 @@
 // Mock clamscan — require('clamscan') returns the constructor directly
 jest.mock('clamscan', () =>
   jest.fn().mockImplementation(() => ({
-    init: jest.fn().mockResolvedValue({ scanStream: jest.fn().mockResolvedValue({ isInfected: false }) }),
+    init: jest.fn().mockResolvedValue({ scanStream: jest.fn().mockResolvedValue({ isInfected: false }) })
   }))
 );
 

@@ -31,19 +31,17 @@ class ArangoToArcadeGraphTranslator {
     const params = { startKey };
 
     // Determine traversal direction
-    let edgeDirection = '';
-    switch (options.direction) {
+    const edgeDirection = (() => {
+      switch (options.direction) {
       case 'inbound':
-        edgeDirection = '<-';
-        break;
+        return '<-';
       case 'any':
-        edgeDirection = '-';
-        break;
+        return '-';
       case 'outbound':
       default:
-        edgeDirection = '-'; // Arcade MATCH uses -[edge]-> for outbound
-        break;
-    }
+        return '-'; // Arcade MATCH uses -[edge]-> for outbound
+      }
+    })();
     const arrow = options.direction === 'inbound' ? '' : '->';
 
 

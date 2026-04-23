@@ -21,7 +21,9 @@ class FallbackMaterialLocalizationsDelegate
     } catch (e) {
       // If the locale is not supported, fall back to English
       debugPrint("[FALLBACK] Locale $locale not supported, falling back to en");
-      return await GlobalMaterialLocalizations.delegate.load(const Locale('en'));
+      return await GlobalMaterialLocalizations.delegate.load(
+        const Locale('en'),
+      );
     }
   }
 

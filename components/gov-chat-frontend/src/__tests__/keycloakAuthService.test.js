@@ -223,10 +223,7 @@ describe('keycloakAuthService', () => {
       await keycloakAuthService.logout();
 
       expect(keycloakAuthService.isAuthenticated()).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[KeycloakAuth] Error during logout redirect:',
-        'Network error'
-      );
+      expect(consoleSpy).toHaveBeenCalledWith('[KeycloakAuth] Error during logout redirect:', 'Network error');
 
       consoleSpy.mockRestore();
     });

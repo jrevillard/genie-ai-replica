@@ -12,14 +12,14 @@
         </select>
       </div>
     </div>
-    
+
     <div class="chart-container">
-      <div ref="chartContainer" style="width: 100%; height: 100%;"></div>
+      <div ref="chartContainer" style="width: 100%; height: 100%"></div>
       <div v-if="loading" class="chart-loading">
         {{ $t('analytics.loading') }}
       </div>
     </div>
-    
+
     <div class="chart-metrics">
       <div class="metric-card">
         <div class="metric-value">{{ totalQueries.toLocaleString() }}</div>
@@ -44,7 +44,7 @@
 <script>
 export default {
   name: 'UsageTrendChart',
-  
+
   data() {
     return {
       selectedPeriod: 'month',
@@ -54,7 +54,7 @@ export default {
       averageResponseTime: 2.7,
       satisfactionRate: 0.91,
       chart: null,
-      
+
       // Sample chart data (will be translated)
       chartData: {
         week: [],
@@ -62,7 +62,7 @@ export default {
         quarter: [],
         year: []
       },
-      
+
       // Original data for each language
       chartDataByLanguage: {
         en: {
@@ -162,34 +162,34 @@ export default {
     };
   },
 
-  created() {
-    this.updateTranslations();
-  },
-  
   watch: {
-    selectedPeriod: function(newPeriod) {
+    selectedPeriod() {
       this.renderChart();
     }
   },
-  
+
+  created() {
+    this.updateTranslations();
+  },
+
   mounted() {
     this.initChart();
     window.addEventListener('resize', this.handleResize);
   },
-  
+
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
     this.disposeChart();
   },
-  
+
   methods: {
     updateTranslations() {
       // Get the current locale or default to English
       const locale = this.$i18n.locale || 'en';
-      
+
       // Get the data for the current locale or default to English
       const localeData = this.chartDataByLanguage[locale] || this.chartDataByLanguage['en'];
-      
+
       // Update the chart data
       this.chartData = {
         week: localeData.week,
@@ -197,45 +197,45 @@ export default {
         quarter: localeData.quarter,
         year: localeData.year
       };
-      
+
       // If chart is already initialized, re-render it
       if (this.chart) {
         this.renderChart();
       }
     },
-    
+
     async initChart() {
       try {
         // Import echarts library
         const echarts = await import('echarts');
-        
+
         // Render initial chart
         this.renderChart(echarts);
       } catch (error) {
         console.error('Failed to load chart library:', error);
       }
     },
-    
+
     async renderChart(echartLib = null) {
       if (!this.$refs.chartContainer) return;
-      
+
       this.loading = true;
-      
+
       // Use a timeout to ensure UI updates before chart rendering
       setTimeout(async () => {
         try {
           // Dispose of old chart properly before creating a new one
           this.disposeChart();
-          
+
           // Load echarts library if not provided
-          const echarts = echartLib || await import('echarts');
-          
+          const echarts = echartLib || (await import('echarts'));
+
           // Create new chart instance
           this.chart = echarts.init(this.$refs.chartContainer);
-          
+
           // Get data for the selected period
           const data = this.chartData[this.selectedPeriod];
-          
+
           // Set chart options
           const option = {
             tooltip: {
@@ -257,7 +257,7 @@ export default {
             },
             xAxis: {
               type: 'category',
-              data: data.map(item => item.date),
+              data: data.map((item) => item.date),
               axisTick: {
                 alignWithLabel: true
               }
@@ -278,7 +278,7 @@ export default {
                 },
                 symbol: 'circle',
                 symbolSize: 8,
-                data: data.map(item => item.queries),
+                data: data.map((item) => item.queries),
                 itemStyle: {
                   color: '#4e97d1'
                 },
@@ -300,7 +300,7 @@ export default {
                 name: this.$t('analytics.uniqueUsers'),
                 type: 'bar',
                 barWidth: '40%',
-                data: data.map(item => item.users),
+                data: data.map((item) => item.users),
                 itemStyle: {
                   color: {
                     type: 'linear',
@@ -318,14 +318,14 @@ export default {
               }
             ]
           };
-          
+
           // Apply the chart configuration
           this.chart.setOption(option);
-          
+
           // Update metrics based on period
           this.totalQueries = data.reduce((sum, item) => sum + item.queries, 0);
           this.uniqueUsers = Math.round(data.reduce((sum, item) => sum + item.users, 0) * 0.85); // Accounting for returning users
-          
+
           switch (this.selectedPeriod) {
             case 'week':
               this.averageResponseTime = 2.1;
@@ -344,7 +344,7 @@ export default {
               this.satisfactionRate = 0.85;
               break;
           }
-          
+
           // End loading state
           this.loading = false;
         } catch (error) {
@@ -353,7 +353,7 @@ export default {
         }
       }, 100);
     },
-    
+
     disposeChart() {
       if (this.chart) {
         try {
@@ -364,7 +364,7 @@ export default {
         this.chart = null;
       }
     },
-    
+
     handleResize() {
       if (this.chart) {
         try {
@@ -377,7 +377,7 @@ export default {
       }
     }
   }
-}
+};
 </script>
 
 <style scoped>
@@ -465,7 +465,7 @@ export default {
   .chart-metrics {
     flex-direction: column;
   }
-  
+
   .metric-card {
     margin: 4px 0;
   }

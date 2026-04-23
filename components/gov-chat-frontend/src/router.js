@@ -55,7 +55,7 @@ router.beforeEach(async (to) => {
   }
 
   // Public routes (callback) — always allow
-  if (to.matched.some(record => record.meta.requiresAuth === false)) {
+  if (to.matched.some((record) => record.meta.requiresAuth === false)) {
     return true;
   }
 

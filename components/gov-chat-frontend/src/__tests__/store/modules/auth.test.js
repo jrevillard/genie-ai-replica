@@ -401,9 +401,7 @@ describe('Vuex Auth Module', () => {
         const state = createState();
         const commit = createCommit(state);
 
-        await expect(
-          authModule.actions.login({ commit })
-        ).rejects.toThrow('Redirect failed');
+        await expect(authModule.actions.login({ commit })).rejects.toThrow('Redirect failed');
 
         expect(state.error).toEqual({
           code: 'LOGIN_ERROR',
@@ -488,9 +486,7 @@ describe('Vuex Auth Module', () => {
         const state = createState();
         const commit = createCommit(state);
 
-        await expect(
-          authModule.actions.handleCallback({ commit })
-        ).rejects.toThrow('Callback failed');
+        await expect(authModule.actions.handleCallback({ commit })).rejects.toThrow('Callback failed');
 
         expect(state.error).toEqual({
           code: 'CALLBACK_ERROR',
@@ -765,14 +761,16 @@ describe('Vuex Auth Module', () => {
 
     it('defaults roles to empty array when realm_access missing', async () => {
       mockGetAccessTokenClaims.mockImplementationOnce(() => null);
-      mockInitialize.mockResolvedValue(createMockOidcUser({
-        profile: {
-          sub: 'user-456',
-          iss: 'http://localhost:8080/realms/genie',
-          email: 'no-roles@example.com',
-          name: 'No Roles User'
-        }
-      }));
+      mockInitialize.mockResolvedValue(
+        createMockOidcUser({
+          profile: {
+            sub: 'user-456',
+            iss: 'http://localhost:8080/realms/genie',
+            email: 'no-roles@example.com',
+            name: 'No Roles User'
+          }
+        })
+      );
       const state = createState();
       const commit = createCommit(state);
 
@@ -782,15 +780,17 @@ describe('Vuex Auth Module', () => {
     });
 
     it('falls back to preferred_username when name is missing', async () => {
-      mockInitialize.mockResolvedValue(createMockOidcUser({
-        profile: {
-          sub: 'user-789',
-          iss: 'http://localhost:8080/realms/genie',
-          email: 'no-name@example.com',
-          preferred_username: 'nonameuser',
-          realm_access: { roles: [] }
-        }
-      }));
+      mockInitialize.mockResolvedValue(
+        createMockOidcUser({
+          profile: {
+            sub: 'user-789',
+            iss: 'http://localhost:8080/realms/genie',
+            email: 'no-name@example.com',
+            preferred_username: 'nonameuser',
+            realm_access: { roles: [] }
+          }
+        })
+      );
       const state = createState();
       const commit = createCommit(state);
 

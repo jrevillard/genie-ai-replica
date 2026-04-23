@@ -22,7 +22,7 @@ const config = {
       clientId: process.env.KEYCLOAK_CLIENT_ID,
       additionalRealms: (() => {
         try { return JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || '{}'); }
-        catch (e) { return {}; }
+        catch { return {}; }
       })()
     },
 

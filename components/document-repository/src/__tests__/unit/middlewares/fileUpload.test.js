@@ -41,13 +41,13 @@ describe('fileUpload security tests', () => {
 
     it('should detect non-ASCII for RFC 5987 encoding', () => {
       const sanitized = sanitizeFilename('documént.pdf');
-      const hasNonAscii = /[^\x00-\x7F]/.test(sanitized);
+      const hasNonAscii = sanitized.split('').some((char) => char.charCodeAt(0) > 127);
       expect(hasNonAscii).toBe(true);
     });
 
     it('should not trigger RFC 5987 for ASCII-only', () => {
       const sanitized = sanitizeFilename('report.pdf');
-      const hasNonAscii = /[^\x00-\x7F]/.test(sanitized);
+      const hasNonAscii = sanitized.split('').some((char) => char.charCodeAt(0) > 127);
       expect(hasNonAscii).toBe(false);
     });
   });
@@ -56,7 +56,7 @@ describe('fileUpload security tests', () => {
     // This mirrors the schema from fileController.js
     const MAX_BATCH_SIZE = 50;
     const batchFileIdsSchema = Joi.object({
-      fileIds: Joi.array().items(Joi.string().min(1)).min(1).max(MAX_BATCH_SIZE).required(),
+      fileIds: Joi.array().items(Joi.string().min(1)).min(1).max(MAX_BATCH_SIZE).required()
     });
 
     it('should accept a valid array of file IDs', () => {

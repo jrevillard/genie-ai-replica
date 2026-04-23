@@ -22,9 +22,9 @@ body {
 .brand-name,
 .nav-bar h4,
 .nav-bar .brand-name,
-[class*="brand-name"],
-.nav-bar [class*="title"],
-.nav-bar [class*="heading"] {
+[class*='brand-name'],
+.nav-bar [class*='title'],
+.nav-bar [class*='heading'] {
   color: var(--text-navbar, #ffffff) !important;
 }
 

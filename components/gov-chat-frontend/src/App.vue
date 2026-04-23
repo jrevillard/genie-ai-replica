@@ -18,10 +18,10 @@
       <nav-bar-component
         :is-sidebar-open="isSidebarOpen"
         :config="$config"
-        @toggleSidebar="toggleSidebar"
-        @openAnalytics="showAnalytics = true"
-        @openProfile="showUserProfile = true"
-        @openSettings="showSettings = true"
+        @toggle-sidebar="toggleSidebar"
+        @open-analytics="showAnalytics = true"
+        @open-profile="showUserProfile = true"
+        @open-settings="showSettings = true"
         @logout="handleLogout"
         @open-admin="showAdminDashboard = true"
       />
@@ -39,7 +39,7 @@
       <!-- Modal Dialogs -->
       <unified-analytics-component v-if="showAnalytics" @close="showAnalytics = false" />
       <user-profile-component v-if="showUserProfile" @cancel="showUserProfile = false" @save="handleProfileSave" />
-      <settings-component v-if="showSettings" @close="showSettings = false" @themeChanged="handleThemeChange" />
+      <settings-component v-if="showSettings" @close="showSettings = false" @theme-changed="handleThemeChange" />
       <AdminDashboard v-if="showAdminDashboard" @close="showAdminDashboard = false" />
     </template>
 
@@ -54,17 +54,18 @@
 </template>
 
 <script>
-import NavBarComponent from "./components/NavBarComponent.vue";
-import SideBarComponent from "./components/SideBarComponent.vue";
-import UnifiedAnalyticsComponent from "./components/UnifiedAnalytics.vue";
-import UserProfileComponent from "./components/UserProfileComponent.vue";
-import SettingsComponent from "./components/SettingsComponent.vue";
-import AdminDashboard from "./components/AdminDashboard.vue";
-import SplashScreen from "./components/SplashScreen.vue";
-import { mapGetters } from "vuex";
-import { eventBus } from "./eventBus.js";
-import chatHistoryService from "./services/chatHistoryService";
-import { getUserId } from "./utils/userUtils";
+import NavBarComponent from './components/NavBarComponent.vue';
+import SideBarComponent from './components/SideBarComponent.vue';
+import UnifiedAnalyticsComponent from './components/UnifiedAnalytics.vue';
+import UserProfileComponent from './components/UserProfileComponent.vue';
+import SettingsComponent from './components/SettingsComponent.vue';
+import AdminDashboard from './components/AdminDashboard.vue';
+import SplashScreen from './components/SplashScreen.vue';
+import { mapGetters } from 'vuex';
+import { eventBus } from './eventBus.js';
+import chatHistoryService from './services/chatHistoryService';
+import { getUserId } from './utils/userUtils';
+import { themeManager } from './utils/ThemeManager';
 
 export default {
   name: 'App',
@@ -75,7 +76,7 @@ export default {
     UserProfileComponent,
     SettingsComponent,
     AdminDashboard,
-    SplashScreen,
+    SplashScreen
   },
 
   data() {
@@ -90,131 +91,131 @@ export default {
         visible: false,
         message: '',
         type: 'success',
-        timer: null,
+        timer: null
       },
       showSplash: false,
-      isLoading: true,
-    }
+      isLoading: true
+    };
   },
   computed: {
     // --- ADDED THIS GETTER ---
-    ...mapGetters(['isAuthenticated', 'currentUser']),
+    ...mapGetters(['isAuthenticated', 'currentUser'])
   },
   watch: {
     isAuthenticated(newVal) {
       if (newVal) {
-        console.log('isAuthenticated changed to true, loading folders and triggering splash')
-        this.loadFoldersOnAuth()
+        console.log('isAuthenticated changed to true, loading folders and triggering splash');
+        this.loadFoldersOnAuth();
         // Show splash screen with a slight delay to ensure DOM readiness
         setTimeout(() => {
-          this.showSplash = true
-          console.log('Splash screen displayed')
+          this.showSplash = true;
+          console.log('Splash screen displayed');
           // Auto-hide splash after 3 seconds
           setTimeout(() => {
-            this.showSplash = false
-            console.log('Splash screen hidden')
-          }, 3000)
-        }, 100)
+            this.showSplash = false;
+            console.log('Splash screen hidden');
+          }, 3000);
+        }, 100);
       }
     },
     showSplash(newVal) {
-      console.log('showSplash changed to:', newVal)
-    },
+      console.log('showSplash changed to:', newVal);
+    }
   },
   // --- REPLACED YOUR MOUNTED HOOK WITH THIS ---
   async mounted() {
-    console.log('App.vue mounted')
+    console.log('App.vue mounted');
 
     try {
       // Wait for the auth state to be determined (OIDC initialization)
-      await this.$store.dispatch("initialize");
-      console.log("initAuth completed, isAuthenticated:", this.isAuthenticated);
+      await this.$store.dispatch('initialize');
+      console.log('initAuth completed, isAuthenticated:', this.isAuthenticated);
 
       // If authenticated, ALSO wait for critical data to load
       // This "await" is critical
       if (this.isAuthenticated) {
-        console.log('User is authenticated, now loading folders...')
-        await this.loadFoldersOnAuth()
-        console.log('Folders loaded.')
+        console.log('User is authenticated, now loading folders...');
+        await this.loadFoldersOnAuth();
+        console.log('Folders loaded.');
       }
 
       // Only set loading to false AFTER all essential data is ready
-      this.isLoading = false
+      this.isLoading = false;
     } catch (error) {
-      console.error('Critical initAuth or loadFolders failed:', error)
-      this.isLoading = false // Still stop loading on error
+      console.error('Critical initAuth or loadFolders failed:', error);
+      this.isLoading = false; // Still stop loading on error
       this.showNotification({
         message: 'Failed to initialize application',
         type: 'error',
-        duration: 5000,
-      })
+        duration: 5000
+      });
     }
 
     // The rest of your original mounted hook
-    const savedSidebarState = localStorage.getItem('sidebarOpen')
+    const savedSidebarState = localStorage.getItem('sidebarOpen');
     if (savedSidebarState !== null) {
-      this.isSidebarOpen = savedSidebarState === 'true'
+      this.isSidebarOpen = savedSidebarState === 'true';
     }
 
-    this.initTheme()
-    this.initFontSize()
-    this.checkScreenSize()
-    window.addEventListener('resize', this.checkScreenSize)
-    this.setupSystemThemeListener()
-    eventBus.$on('notification:show', this.showNotification)
+    this.initTheme();
+    this.initFontSize();
+    this.checkScreenSize();
+    window.addEventListener('resize', this.checkScreenSize);
+    this.setupSystemThemeListener();
+    eventBus.$on('notification:show', this.showNotification);
   },
   beforeUnmount() {
-    window.removeEventListener('resize', this.checkScreenSize)
+    window.removeEventListener('resize', this.checkScreenSize);
     if (this.systemThemeListener) {
-      window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener)
+      window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener);
     }
-    eventBus.$off('notification:show', this.showNotification)
+    eventBus.$off('notification:show', this.showNotification);
   },
   methods: {
     showNotification(payload) {
       if (this.notification.timer) {
-        clearTimeout(this.notification.timer)
+        clearTimeout(this.notification.timer);
       }
       this.notification = {
         visible: true,
         message: payload.message,
         type: payload.type || 'success',
-        timer: null,
-      }
-      console.log('Showing notification:', payload)
+        timer: null
+      };
+      console.log('Showing notification:', payload);
       this.notification.timer = setTimeout(() => {
-        this.hideNotification()
-      }, payload.duration || 3000)
+        this.hideNotification();
+      }, payload.duration || 3000);
     },
     hideNotification() {
-      this.notification.visible = false
+      this.notification.visible = false;
       if (this.notification.timer) {
-        clearTimeout(this.notification.timer)
-        this.notification.timer = null
+        clearTimeout(this.notification.timer);
+        this.notification.timer = null;
       }
-      console.log('Notification hidden')
+      console.log('Notification hidden');
     },
 
     initTheme() {
-      const savedTheme = localStorage.getItem('theme')
+      const savedTheme = localStorage.getItem('theme');
       if (savedTheme === 'dark' || savedTheme === 'light' || savedTheme === 'system') {
-        this.theme = savedTheme
+        this.theme = savedTheme;
       } else {
-        this.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        this.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
       // Sync ThemeManager state with the resolved theme
       // (ThemeManager.setTheme handles DOM attributes + dispatches themeChange)
-      themeManager.setTheme(this.theme)
+      themeManager.setTheme(this.theme);
     },
 
     initFontSize() {
       try {
-        const fontSize = localStorage.getItem('fontSize')
+        const fontSize = localStorage.getItem('fontSize');
         if (fontSize) {
-          document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`
+          document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`;
         }
       } catch (e) {
-        console.warn('Unable to get font size preference:', e)
+        console.warn('Unable to get font size preference:', e);
       }
     },
 
@@ -222,46 +223,46 @@ export default {
       if (this.theme === 'system' && window.matchMedia) {
         this.systemThemeListener = (e) => {
           // Let ThemeManager handle the actual theme resolution and DOM update
-          const resolved = e.matches ? 'dark' : 'light'
-          this.theme = resolved
-          themeManager.setTheme('system')
-          console.log('System theme changed')
-        }
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', this.systemThemeListener)
+          const resolved = e.matches ? 'dark' : 'light';
+          this.theme = resolved;
+          themeManager.setTheme('system');
+          console.log('System theme changed');
+        };
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', this.systemThemeListener);
       }
     },
 
     handleThemeChange(newTheme) {
-      console.log('Theme changed to:', newTheme)
-      this.theme = newTheme
+      console.log('Theme changed to:', newTheme);
+      this.theme = newTheme;
       try {
-        localStorage.setItem('theme', newTheme)
+        localStorage.setItem('theme', newTheme);
       } catch (e) {
-        console.warn('Unable to save theme preference:', e)
+        console.warn('Unable to save theme preference:', e);
       }
       // Let ThemeManager handle DOM attributes and event dispatch
-      themeManager.setTheme(newTheme)
+      themeManager.setTheme(newTheme);
       if (newTheme === 'system') {
-        this.setupSystemThemeListener()
+        this.setupSystemThemeListener();
       } else if (this.systemThemeListener) {
-        window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener)
-        this.systemThemeListener = null
+        window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener);
+        this.systemThemeListener = null;
       }
     },
 
     // --- REPLACED YOUR loadFoldersOnAuth METHOD WITH THIS ---
     async loadFoldersOnAuth() {
       try {
-        const user = this.currentUser
-        const userId = getUserId(user)
+        const user = this.currentUser;
+        const userId = getUserId(user);
         if (!userId) {
-          console.warn('loadFoldersOnAuth called, but user not ready.')
-          return
+          console.warn('loadFoldersOnAuth called, but user not ready.');
+          return;
         }
 
-        const response = await chatHistoryService.getUserFolders()
-        console.log('loadFoldersOnAuth: getUserFolders response:', response)
-        let foldersArray = Array.isArray(response) ? response : response?.folders || []
+        const response = await chatHistoryService.getUserFolders();
+        console.log('loadFoldersOnAuth: getUserFolders response:', response);
+        const foldersArray = Array.isArray(response) ? response : response?.folders || [];
         const processedFolders = foldersArray
           .filter((folder) => folder && (folder._key || folder.id))
           .map((folder) => ({
@@ -269,75 +270,75 @@ export default {
             name: folder.name || 'Unnamed Folder',
             description: folder.description || '',
             isDefault: folder.isDefault || false,
-            createdAt: folder.createdAt || new Date().toISOString(),
-          }))
+            createdAt: folder.createdAt || new Date().toISOString()
+          }));
         const defaultFolder = {
           id: 'default',
           name: 'All Chats',
           isDefault: true,
-          createdAt: new Date().toISOString(),
-        }
-        const allFolders = [defaultFolder, ...processedFolders]
-        await this.$store.dispatch('chatHistory/setFolders', allFolders)
-        console.log('loadFoldersOnAuth: Dispatched setFolders with:', allFolders)
-        const vuexFolders = this.$store.getters['chatHistory/getAllFolders']
-        console.log('loadFoldersOnAuth: Vuex folders after dispatch:', vuexFolders)
+          createdAt: new Date().toISOString()
+        };
+        const allFolders = [defaultFolder, ...processedFolders];
+        await this.$store.dispatch('chatHistory/setFolders', allFolders);
+        console.log('loadFoldersOnAuth: Dispatched setFolders with:', allFolders);
+        const vuexFolders = this.$store.getters['chatHistory/getAllFolders'];
+        console.log('loadFoldersOnAuth: Vuex folders after dispatch:', vuexFolders);
       } catch (error) {
-        console.error('loadFoldersOnAuth: Error loading folders:', error)
+        console.error('loadFoldersOnAuth: Error loading folders:', error);
         const defaultFolder = {
           id: 'default',
           name: 'All Chats',
           isDefault: true,
-          createdAt: new Date().toISOString(),
-        }
-        await this.$store.dispatch('chatHistory/setFolders', [defaultFolder])
-        console.log('loadFoldersOnAuth: Fallback to default folder:', defaultFolder)
+          createdAt: new Date().toISOString()
+        };
+        await this.$store.dispatch('chatHistory/setFolders', [defaultFolder]);
+        console.log('loadFoldersOnAuth: Fallback to default folder:', defaultFolder);
         this.showNotification({
           message: 'Failed to load folders. Using default folder.',
           type: 'error',
-          duration: 5000,
-        })
+          duration: 5000
+        });
       }
     },
 
     async handleLogout() {
       try {
-        await this.$store.dispatch('logout')
-        await this.$store.dispatch('chatHistory/clearFolders')
-        localStorage.removeItem('chatHistory')
+        await this.$store.dispatch('logout');
+        await this.$store.dispatch('chatHistory/clearFolders');
+        localStorage.removeItem('chatHistory');
       } catch (error) {
-        console.error('handleLogout: Error during logout:', error)
-        localStorage.removeItem('chatHistory')
+        console.error('handleLogout: Error during logout:', error);
+        localStorage.removeItem('chatHistory');
       } finally {
-        window.location.href = '/'
+        window.location.href = '/';
       }
     },
 
     toggleSidebar() {
-      this.isSidebarOpen = !this.isSidebarOpen
+      this.isSidebarOpen = !this.isSidebarOpen;
       try {
-        localStorage.setItem('sidebarOpen', this.isSidebarOpen.toString())
+        localStorage.setItem('sidebarOpen', this.isSidebarOpen.toString());
       } catch (e) {
-        console.warn('Unable to save sidebar state:', e)
+        console.warn('Unable to save sidebar state:', e);
       }
     },
 
     checkScreenSize() {
       if (window.innerWidth < 768 && this.isSidebarOpen) {
-        this.isSidebarOpen = false
+        this.isSidebarOpen = false;
       }
     },
 
     handleProfileSave(profileData) {
-      console.log('Profile saved:', profileData)
-      this.showUserProfile = false
+      console.log('Profile saved:', profileData);
+      this.showUserProfile = false;
     },
 
     openAdminDashboard() {
-      this.showAdminDashboard = true
-    },
-  },
-}
+      this.showAdminDashboard = true;
+    }
+  }
+};
 </script>
 
 <style>

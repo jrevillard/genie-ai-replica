@@ -7,13 +7,12 @@ Validates Bearer tokens forwarded by the backend using JWKS.
 Provides defense-in-depth: each service validates tokens independently.
 """
 
-import os
 import logging
+import os
 from datetime import datetime, timezone
 
-from jose import jwt, jwk, JWSError
-from jose.utils import base64url_decode
 import httpx
+from jose import JWSError, jwt
 
 logger = logging.getLogger("GENIE.AI_CHATQNA")
 
@@ -94,6 +93,7 @@ async def validate_token(token: str) -> dict | None:
 
         # Build RSA public key from JWKS
         from jose import jwk as jose_jwk
+
         public_key = jose_jwk.construct(key_data)
 
         expected_issuer = f"{KEYCLOAK_URL}/realms/{KC_REALM}"

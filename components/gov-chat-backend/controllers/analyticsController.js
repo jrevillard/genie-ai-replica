@@ -70,23 +70,24 @@ class AnalyticsController {
         
         // Get the requested metric
         switch (metric) {
-          case 'totalQueries':
+          case 'totalQueries': {
             // Get analytics with specific filters to extract just the needed metric
             const analyticsData = await this.analyticsService.getDashboardAnalytics(startDate, endDate);
             value = analyticsData.queries.total;
             logger.info(`Total queries metric retrieved: ${value}`);
             break;
-          
+          }
+
           case 'uniqueUsers':
             // Use the dedicated method for counting unique users
             value = await this.analyticsService.getUniqueUsersCount(startDate, endDate);
             logger.info(`Unique users metric retrieved: ${value}`);
             break;
-            
-          case 'averageResponseTime':
+
+          case 'averageResponseTime': {
             // Get query data and calculate average response time
             const queryAnalytics = await this.analyticsService.getDashboardAnalytics(startDate, endDate);
-            
+
             if (queryAnalytics.queries && typeof queryAnalytics.queries.avgResponseTime === 'number') {
               value = queryAnalytics.queries.avgResponseTime;
               logger.info(`Average response time retrieved: ${value} seconds`);
@@ -96,13 +97,15 @@ class AnalyticsController {
               logger.info('No response time data found, using default value: 2.8 seconds');
             }
             break;
-            
-          case 'satisfactionRate':
+          }
+
+          case 'satisfactionRate': {
             // Get satisfaction gauge data
             const gaugeData = await this.analyticsService.getSatisfactionGaugeData('monthly', endDate);
             value = gaugeData.currentValue;
             logger.info(`Satisfaction rate retrieved: ${value}%`);
             break;
+          }
             
           default:
             logger.warn(`Unsupported metric: ${metric}`);

@@ -1,6 +1,5 @@
 require('dotenv').config();
-const { Database, aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
+const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError, ForbiddenError } = require('../middleware/errors');
 
@@ -1008,7 +1007,7 @@ class ChatHistoryService {
 
       // Ensure all IDs exist
       const query = await this.db.collection('queries').document(queryId);
-      const conversation = await this.conversations.document(conversationId);
+      await this.conversations.document(conversationId);
       const message = await this.messages.document(messageId);
 
       // Check if message belongs to conversation

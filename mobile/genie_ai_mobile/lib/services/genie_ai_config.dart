@@ -11,13 +11,15 @@ class GenieAiConfig {
   static Future<void> load() async {
     if (_loaded) return;
     try {
-      final String jsonString = await rootBundle.loadString('assets/config/genie-ai-config.json');
+      final String jsonString = await rootBundle.loadString(
+        'assets/config/genie-ai-config.json',
+      );
       final Map<String, dynamic> config = json.decode(jsonString);
 
       // FIX: Access nested keys based on your JSON structure
       if (config.containsKey('app')) {
         final appConfig = config['app'];
-        
+
         // Get Title
         if (appConfig['title'] != null) {
           title = appConfig['title'];
@@ -27,7 +29,7 @@ class GenieAiConfig {
         // JSON structure was: "icon": { "type": "file", "value": "..." }
         if (appConfig['icon'] != null && appConfig['icon']['value'] != null) {
           iconPath = appConfig['icon']['value'];
-          
+
           // Remove leading slash if present (e.g. "/assets/..." -> "assets/...")
           if (iconPath.startsWith('/')) {
             iconPath = iconPath.substring(1);

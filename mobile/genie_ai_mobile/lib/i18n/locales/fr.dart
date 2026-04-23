@@ -196,7 +196,7 @@ const Map<String, dynamic> frLocale = {
     "VN": "Vietnam",
     "YE": "Yémen",
     "ZM": "Zambie",
-    "ZW": "Zimbabwe"
+    "ZW": "Zimbabwe",
   },
   "verification": {
     "verifying": "Vérification de votre e-mail...",
@@ -209,7 +209,7 @@ const Map<String, dynamic> frLocale = {
     "generalError":
         "Une erreur s'est produite lors de la vérification. Veuillez réessayer plus tard.",
     "proceedToLogin": "Procéder à la connexion",
-    "backToLogin": "Retour à la connexion"
+    "backToLogin": "Retour à la connexion",
   },
   "passwordResetConfirm": {
     "appTitle": "Genie AI",
@@ -244,15 +244,15 @@ const Map<String, dynamic> frLocale = {
       "weak": "Faible",
       "fair": "Moyen",
       "good": "Bon",
-      "strong": "Fort"
+      "strong": "Fort",
     },
     "passwordSuggestions": {
       "atLeast8Chars": "Utilisez au moins 8 caractères",
       "addUppercase": "Ajoutez des majuscules",
       "addLowercase": "Ajoutez des minuscules",
       "addNumbers": "Ajoutez des chiffres",
-      "addSpecialChars": "Ajoutez des caractères spéciaux"
-    }
+      "addSpecialChars": "Ajoutez des caractères spéciaux",
+    },
   },
   "passwordReset": {
     "appTitle": "Genie AI",
@@ -269,7 +269,7 @@ const Map<String, dynamic> frLocale = {
         "Le lien de réinitialisation du mot de passe a été envoyé à votre e-mail",
     "resetRequestFailed":
         "Impossible d'envoyer le lien de réinitialisation. Veuillez réessayer.",
-    "checkEmail": "Veuillez vérifier votre e-mail pour plus d'instructions."
+    "checkEmail": "Veuillez vérifier votre e-mail pour plus d'instructions.",
   },
   "register": {
     "appTitle": "Genie AI",
@@ -313,7 +313,7 @@ const Map<String, dynamic> frLocale = {
     "usernameInvalidChars":
         "Le nom d'utilisateur ne peut contenir que des lettres, des chiffres, des traits de soulignement, des points et des tirets",
     "networkError":
-        "Erreur réseau. Veuillez vérifier votre connexion et réessayer."
+        "Erreur réseau. Veuillez vérifier votre connexion et réessayer.",
   },
   "login": {
     "appTitle": "Genie AI",
@@ -342,7 +342,7 @@ const Map<String, dynamic> frLocale = {
     "oauthNotImplemented":
         "La connexion via les réseaux sociaux n'est pas encore implémentée",
     "savedLoginNotImplemented":
-        "La connexion avec un compte enregistré n'est pas encore implémentée"
+        "La connexion avec un compte enregistré n'est pas encore implémentée",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -361,8 +361,8 @@ const Map<String, dynamic> frLocale = {
       "swahili": "Swahili",
       "german": "Allemand",
       "spanish": "Espagnol",
-      "arabic": "Arabe"
-    }
+      "arabic": "Arabe",
+    },
   },
   "systemStatus": {
     "title": "État du service",
@@ -376,20 +376,20 @@ const Map<String, dynamic> frLocale = {
     "checking": "Vérification...",
     "nextDeadline": "Prochaine échéance",
     "days": "jours",
-    "viewDetails": "Voir les détails"
+    "viewDetails": "Voir les détails",
   },
   "services": {
     "eCitizen": "Portail eCitizen",
     "taxFiling": "Système de déclaration fiscale",
     "idApplication": "Demande de carte d'identité",
     "businessReg": "Enregistrement d'entreprise",
-    "drivingLicense": "Permis de conduire"
+    "drivingLicense": "Permis de conduire",
   },
   "deadlines": {
     "taxFiling": "Date limite de déclaration fiscale",
     "businessRenewal": "Renouvellement de licence commerciale",
     "idRenewal": "Renouvellement de carte d'identité",
-    "vehicleRegistration": "Date limite d'immatriculation du véhicule"
+    "vehicleRegistration": "Date limite d'immatriculation du véhicule",
   },
   "sidebar": {
     "governmentServices": "Domaines de connaissances",
@@ -430,7 +430,7 @@ const Map<String, dynamic> frLocale = {
       "rain": "Pluie",
       "shower": "Averse",
       "thunderstorm": "Orage",
-      "snow": "Neige"
+      "snow": "Neige",
     },
     "folders": "Dossiers",
     "emptyFolder":
@@ -444,7 +444,7 @@ const Map<String, dynamic> frLocale = {
       "all": "Tous les chats",
       "folders": "Dossiers",
       "starred": "Favoris",
-      "archived": "Archivés"
+      "archived": "Archivés",
     },
     "savedChats": "Chats enregistrés",
     "chats": "Chats",
@@ -505,7 +505,7 @@ const Map<String, dynamic> frLocale = {
     "noConversations": "Aucune conversation trouvée",
     "noStarred": "Aucune conversation favorite",
     "noArchived": "Aucune conversation archivée",
-    "folderEmptyState": "Le dossier est vide"
+    "folderEmptyState": "Le dossier est vide",
   },
   "leftPanel": {
     "cat1": {
@@ -515,8 +515,8 @@ const Map<String, dynamic> frLocale = {
         "Cartes d'identité nationales",
         "Passeports",
         "Certificats de mariage et de décès",
-        "Inscription des électeurs"
-      ]
+        "Inscription des électeurs",
+      ],
     },
     "cat2": {
       "name": "2. Santé et Services Sociaux",
@@ -525,8 +525,8 @@ const Map<String, dynamic> frLocale = {
         "Programmes de vaccination",
         "Assurance maladie",
         "Prestations d'invalidité",
-        "Aide sociale et alimentaire"
-      ]
+        "Aide sociale et alimentaire",
+      ],
     },
     "cat3": {
       "name": "3. Éducation et Apprentissage",
@@ -534,8 +534,8 @@ const Map<String, dynamic> frLocale = {
         "Écoles publiques et universités",
         "Bourses et prêts étudiants",
         "Programmes d'éducation pour adultes",
-        "Ressources d'apprentissage en ligne"
-      ]
+        "Ressources d'apprentissage en ligne",
+      ],
     },
     "cat4": {
       "name": "4. Emploi et Services du Travail",
@@ -543,8 +543,8 @@ const Map<String, dynamic> frLocale = {
         "Recherche d'emploi et allocations chômage",
         "Protection des travailleurs et droits du travail",
         "Réglementations sur la sécurité au travail",
-        "Formation professionnelle et apprentissage"
-      ]
+        "Formation professionnelle et apprentissage",
+      ],
     },
     "cat5": {
       "name": "5. Impôts et Revenus",
@@ -552,8 +552,8 @@ const Map<String, dynamic> frLocale = {
         "Déclaration de revenus et remboursements",
         "Paiements de la taxe foncière",
         "Conformité fiscale des entreprises",
-        "Douanes et droits d'importation"
-      ]
+        "Douanes et droits d'importation",
+      ],
     },
     "cat6": {
       "name": "6. Sécurité Publique et Justice",
@@ -561,8 +561,8 @@ const Map<String, dynamic> frLocale = {
         "Police et services d'urgence",
         "Tribunaux et aide juridique",
         "Signalement de crimes",
-        "Lois sur la protection des consommateurs"
-      ]
+        "Lois sur la protection des consommateurs",
+      ],
     },
     "cat7": {
       "name": "7. Transports et Mobilité",
@@ -570,8 +570,8 @@ const Map<String, dynamic> frLocale = {
         "Permis de conduire et immatriculation des véhicules",
         "Transports publics et infrastructures",
         "Infractions routières et amendes",
-        "Programmes de sécurité routière"
-      ]
+        "Programmes de sécurité routière",
+      ],
     },
     "cat8": {
       "name": "8. Logement et Développement Urbain",
@@ -579,8 +579,8 @@ const Map<String, dynamic> frLocale = {
         "Aide au logement social",
         "Enregistrement de propriété et registres fonciers",
         "Prêts et subventions au logement",
-        "Zonage et permis de construire"
-      ]
+        "Zonage et permis de construire",
+      ],
     },
     "cat9": {
       "name": "9. Services Publics et Environnement",
@@ -588,8 +588,8 @@ const Map<String, dynamic> frLocale = {
         "Services d'eau et d'électricité",
         "Gestion des déchets et recyclage",
         "Réglementations environnementales",
-        "Initiatives pour les énergies renouvelables"
-      ]
+        "Initiatives pour les énergies renouvelables",
+      ],
     },
     "cat10": {
       "name": "10. Affaires et Commerce",
@@ -597,8 +597,8 @@ const Map<String, dynamic> frLocale = {
         "Enregistrement et licences d'entreprise",
         "Réglementations commerciales et permis",
         "Subventions et incitations pour les petites entreprises",
-        "E-commerce et soutien aux entreprises numériques"
-      ]
+        "E-commerce et soutien aux entreprises numériques",
+      ],
     },
     "cat11": {
       "name": "11. Sécurité Sociale et Pensions",
@@ -606,8 +606,8 @@ const Map<String, dynamic> frLocale = {
         "Prestations de retraite",
         "Gestion des fonds de pension",
         "Prestations de survivant",
-        "Pensions d'invalidité"
-      ]
+        "Pensions d'invalidité",
+      ],
     },
     "cat12": {
       "name": "12. Communauté et Engagement Civique",
@@ -615,9 +615,9 @@ const Map<String, dynamic> frLocale = {
         "Vote et élections",
         "Retours du public et plaintes des citoyens",
         "Bénévolat et programmes communautaires",
-        "Participation au gouvernement local"
-      ]
-    }
+        "Participation au gouvernement local",
+      ],
+    },
   },
   "settings": {
     "title": "Paramètres",
@@ -633,7 +633,7 @@ const Map<String, dynamic> frLocale = {
     "languages": {
       "english": "Anglais",
       "french": "Français",
-      "swahili": "Swahili"
+      "swahili": "Swahili",
     },
     "theme": "Thème",
     "themes": {"light": "Clair", "dark": "Sombre", "system": "Système"},
@@ -665,14 +665,14 @@ const Map<String, dynamic> frLocale = {
           "Cela effacera toutes vos données de profil et votre historique de chat.",
       "confirmReset":
           "Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action est irréversible.",
-      "resetComplete": "Vos données ont été réinitialisées."
+      "resetComplete": "Vos données ont été réinitialisées.",
     },
     "language": {"title": "Langue", "selectLabel": "Langue d'affichage"},
     "appearance": {
       "title": "Apparence",
       "lightTheme": "Clair",
       "darkTheme": "Sombre",
-      "systemTheme": "Système"
+      "systemTheme": "Système",
     },
     "confirmDeleteAccount":
         "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
@@ -722,7 +722,7 @@ const Map<String, dynamic> frLocale = {
     "confirmResetUserData":
         "Êtes-vous sûr de vouloir réinitialiser toutes vos données de profil ? Cela effacera toutes vos informations de profil et votre historique de chat, mais conservera vos identifiants de compte.",
     "reset": "Réinitialiser",
-    "deleteAccountTitle": "Supprimer le compte"
+    "deleteAccountTitle": "Supprimer le compte",
   },
   "userProfile": {
     "title": "Profil utilisateur",
@@ -770,7 +770,7 @@ const Map<String, dynamic> frLocale = {
       "tab9": "Sécurité sociale et aide sociale",
       "tab10": "Casier judiciaire et juridique",
       "tab11": "Transports et mobilité",
-      "tab12": "Participation civique et politique"
+      "tab12": "Participation civique et politique",
     },
     "tabsShort": {
       "personal": "Personnel",
@@ -784,14 +784,14 @@ const Map<String, dynamic> frLocale = {
       "social": "Social",
       "criminal": "Criminel",
       "transport": "Transport",
-      "civic": "Civique"
+      "civic": "Civique",
     },
     "actions": {
       "cancel": "Annuler",
       "save": "Enregistrer le profil",
       "previous": "Précédent",
       "next": "Suivant",
-      "saving": "Enregistrement..."
+      "saving": "Enregistrement...",
     },
     "fields": {
       "fullName": "Nom complet (y compris les alias)",
@@ -866,7 +866,7 @@ const Map<String, dynamic> frLocale = {
       "electionHistory": "Historique de participation aux élections",
       "partyMembership": "Appartenance à un parti politique",
       "militaryStatus": "Service militaire ou statut de conscription",
-      "publicServiceRoles": "Rôles dans le service public"
+      "publicServiceRoles": "Rôles dans le service public",
     },
     "placeholders": {
       "fullName": "Entrez votre nom légal complet",
@@ -876,7 +876,7 @@ const Map<String, dynamic> frLocale = {
       "searchDisciplines": "Rechercher des disciplines...",
       "selectDiscipline": "Sélectionnez une discipline",
       "searchDegrees": "Rechercher des diplômes...",
-      "selectDegree": "Sélectionnez un diplôme"
+      "selectDegree": "Sélectionnez un diplôme",
     },
     "validation": {
       "nameRequired": "Le nom complet est requis",
@@ -887,7 +887,7 @@ const Map<String, dynamic> frLocale = {
       "futureDate": "La date ne peut pas être dans le futur",
       "invalidSelection": "Veuillez faire une sélection valide",
       "passwordLength": "Le mot de passe doit contenir au moins 8 caractères",
-      "matchError": "Les champs ne correspondent pas"
+      "matchError": "Les champs ne correspondent pas",
     },
     "errors": {
       "savingFailed": "Échec de l'enregistrement du profil",
@@ -896,7 +896,7 @@ const Map<String, dynamic> frLocale = {
       "invalidFileType": "Type de fichier invalide",
       "fileTooLarge": "Le fichier est trop volumineux",
       "countryLoadError": "Erreur lors du chargement des pays",
-      "countryUpdateError": "Erreur lors de la mise à jour du pays"
+      "countryUpdateError": "Erreur lors de la mise à jour du pays",
     },
     "notifications": {
       "saveSuccess": "Profil enregistré avec succès",
@@ -909,7 +909,7 @@ const Map<String, dynamic> frLocale = {
       "formChanged": "Vous avez des modifications non enregistrées",
       "sessionExpired": "Votre session a expiré, veuillez vous reconnecter",
       "profileUpdated": "Votre profil a été mis à jour",
-      "profileIncomplete": "Votre profil est incomplet"
+      "profileIncomplete": "Votre profil est incomplet",
     },
     "instructions": {
       "fullNameHelp":
@@ -926,7 +926,8 @@ const Map<String, dynamic> frLocale = {
       "previousTab": "Revenir à la section précédente",
       "saveInstructions":
           "Cliquez sur Enregistrer pour stocker vos informations",
-      "cancelInstructions": "Cliquez sur Annuler pour ignorer les modifications"
+      "cancelInstructions":
+          "Cliquez sur Annuler pour ignorer les modifications",
     },
     "completionStatus": {
       "notStarted": "Non commencé",
@@ -934,26 +935,26 @@ const Map<String, dynamic> frLocale = {
       "complete": "Terminé",
       "percentComplete": "{percent}% terminé",
       "tabsCompleted": "{completed} sur {total} sections terminées",
-      "tabComplete": "Onglet terminé !"
+      "tabComplete": "Onglet terminé !",
     },
     "gender": {
       "male": "Homme",
       "female": "Femme",
       "other": "Autre",
-      "preferNot": "Préfère ne pas répondre"
+      "preferNot": "Préfère ne pas répondre",
     },
     "maritalStatus": {
       "single": "Célibataire",
       "married": "Marié(e)",
       "divorced": "Divorcé(e)",
       "widowed": "Veuf/Veuve",
-      "other": "Autre"
+      "other": "Autre",
     },
     "residencyStatuses": {
       "citizen": "Citoyen",
       "permanentResident": "Résident permanent",
       "temporaryResident": "Résident temporaire",
-      "other": "Autre"
+      "other": "Autre",
     },
     "employmentStatuses": {
       "employed": "Employé",
@@ -962,7 +963,7 @@ const Map<String, dynamic> frLocale = {
       "student": "Étudiant",
       "retired": "Retraité",
       "homemaker": "Au foyer",
-      "other": "Autre"
+      "other": "Autre",
     },
     "educationLevels": {
       "primary": "Enseignement primaire",
@@ -974,14 +975,14 @@ const Map<String, dynamic> frLocale = {
       "master": "Master",
       "doctoral": "Doctorat",
       "professional": "Diplôme professionnel",
-      "other": "Autre"
+      "other": "Autre",
     },
     "proficiencyLevels": {
       "native": "Langue maternelle",
       "fluent": "Courant",
       "advanced": "Avancé",
       "intermediate": "Intermédiaire",
-      "basic": "Basique"
+      "basic": "Basique",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -992,7 +993,7 @@ const Map<String, dynamic> frLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Inconnu"
+      "unknown": "Inconnu",
     },
     "languages": {
       "english": "Anglais",
@@ -1007,7 +1008,7 @@ const Map<String, dynamic> frLocale = {
       "russian": "Russe",
       "hindi": "Hindi",
       "urdu": "Ourdou",
-      "other": "Autre"
+      "other": "Autre",
     },
     "yesNo": {"yes": "Oui", "no": "Non"},
     "select": "Veuillez sélectionner",
@@ -1114,7 +1115,7 @@ const Map<String, dynamic> frLocale = {
       "Médecine vétérinaire",
       "Développement Web",
       "Biologie de la faune",
-      "Zoologie"
+      "Zoologie",
     ],
     "degreeOptions": [
       "Diplôme d'associé",
@@ -1144,7 +1145,7 @@ const Map<String, dynamic> frLocale = {
       "Certificat professionnel",
       "Certificat d'études supérieures",
       "Diplôme d'études supérieures",
-      "Post-doctorat"
+      "Post-doctorat",
     ],
     "aria": {
       "tabList": "Sections du formulaire de profil",
@@ -1153,8 +1154,8 @@ const Map<String, dynamic> frLocale = {
       "closeButton": "Fermer le formulaire de profil",
       "saveButton": "Enregistrer les données du profil",
       "requiredField": "Champ requis",
-      "dropdownSelect": "Sélectionnez une option"
-    }
+      "dropdownSelect": "Sélectionnez une option",
+    },
   },
   "chatbot": {
     "placeholder": "Tapez votre demande ici...",
@@ -1222,10 +1223,10 @@ const Map<String, dynamic> frLocale = {
         "discardAndNew": "Ignorer et Nouveau",
         "discardAndLoad": "Ignorer et Charger",
         "saveFirst": "Enregistrer d'abord",
-        "export": "Exporter"
-      }
+        "export": "Exporter",
+      },
     },
-    "shareWhatsApp": "Partager sur WhatsApp"
+    "shareWhatsApp": "Partager sur WhatsApp",
   },
   "quickhelp": {
     "applyForID": "Demander une ID",
@@ -1271,7 +1272,7 @@ const Map<String, dynamic> frLocale = {
         "Je veux me renseigner sur le programme de logement abordable (Boma Yangu) au Kenya.",
     "findJobsUserPrompt":
         "Je veux poser des questions sur les opportunités d'emploi gouvernementales et les candidatures PSC au Kenya.",
-    "justChatUserPrompt": "Je veux discuter généralement de la vie au Kenya."
+    "justChatUserPrompt": "Je veux discuter généralement de la vie au Kenya.",
   },
   "common": {
     "cancel": "Annuler",
@@ -1287,7 +1288,7 @@ const Map<String, dynamic> frLocale = {
     "open": "Ouvrir",
     "done": "Fait",
     "confirm": "Confirmer",
-    "edit": "Modifier"
+    "edit": "Modifier",
   },
   "feedback": {
     "title": "Commentaires",
@@ -1301,7 +1302,7 @@ const Map<String, dynamic> frLocale = {
     "thankYouMessage": "Merci pour vos commentaires !",
     "submitting": "Envoi...",
     "error": "Une erreur s'est produite. Veuillez réessayer.",
-    "success": "Merci pour vos commentaires !"
+    "success": "Merci pour vos commentaires !",
   },
   "responseRating": {
     "title": "Aidez-nous à nous améliorer",
@@ -1313,11 +1314,11 @@ const Map<String, dynamic> frLocale = {
       "2": "Peu utile",
       "3": "Moyennement utile",
       "4": "Très utile",
-      "5": "Change la vie"
+      "5": "Change la vie",
     },
     "additionalComments": "Commentaires supplémentaires...",
     "submit": "Envoyer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
   },
   "upload": {"alt": "Télécharger"},
   "uploadDialog": {
@@ -1337,8 +1338,8 @@ const Map<String, dynamic> frLocale = {
           "Les fichiers de raccourci (.url) ne sont pas pris en charge. Veuillez faire glisser le fichier réel.",
       "duplicate": "Le fichier \"{fileName}\" a déjà été ajouté.",
       "uploadSuccess": "{fileName} téléchargé avec succès",
-      "uploadFailed": "Échec du téléchargement de {fileName}."
-    }
+      "uploadFailed": "Échec du téléchargement de {fileName}.",
+    },
   },
   "about": {
     "title": "À propos",
@@ -1346,6 +1347,6 @@ const Map<String, dynamic> frLocale = {
     "description":
         "Genie AI est votre assistant intelligent pour naviguer dans les services et informations gouvernementaux.",
     "techStack": "Pile technologique",
-    "copyright": "Tous droits réservés."
-  }
+    "copyright": "Tous droits réservés.",
+  },
 };

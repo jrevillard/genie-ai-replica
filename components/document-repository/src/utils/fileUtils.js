@@ -5,7 +5,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const crypto = require('crypto'); // For generating unique IDs and file hashes
+const cryptoModule = require('crypto'); // For generating unique IDs and file hashes
 const { logger } = require('../../shared-lib');
 
 /**
@@ -16,7 +16,7 @@ const generateUniqueFileId = () => {
   const timestamp = Date.now();
   const uuid = uuidv4().split('-')[0];
   const fileId = `${timestamp}_${uuid}`;
-  
+
   logger.debug(`Generated unique file ID: ${fileId}`);
   return fileId;
 };
@@ -54,15 +54,15 @@ const saveFileToDisk = async (buffer, filename, uploadDir) => {
   try {
     await ensureDirectoryExists(uploadDir);
     const filePath = path.join(uploadDir, filename);
-    
+
     logger.debug(`Writing file to ${filePath}`);
     await fs.writeFile(filePath, buffer);
-    
+
     logger.info(`Successfully saved file to ${filePath}`);
     return filePath;
   } catch (error) {
     logger.error(`Failed to save file ${filename} to ${uploadDir}: ${error.message}`, error);
-    throw new Error(`Failed to save file: ${error.message}`);
+    throw new Error(`Failed to save file: ${error.message}`, { cause: error });
   }
 };
 
@@ -78,7 +78,7 @@ const deleteFile = async (filePath) => {
   } catch (error) {
     if (error.code !== 'ENOENT') {
       logger.error(`Failed to delete file ${filePath}: ${error.message}`, error);
-      throw new Error(`Failed to delete file: ${error.message}`);
+      throw new Error(`Failed to delete file: ${error.message}`, { cause: error });
     }
     logger.warn(`File not found during delete (ENOENT): ${filePath}. Returning false.`);
     return false;
@@ -96,7 +96,7 @@ const getFileSize = async (filePath) => {
     return stats.size;
   } catch (error) {
     logger.error(`Failed to get file size for ${filePath}: ${error.message}`, error);
-    throw new Error(`Failed to get file size: ${error.message}`);
+    throw new Error(`Failed to get file size: ${error.message}`, { cause: error });
   }
 };
 
@@ -107,7 +107,7 @@ const getFileMetadata = async (filePath, originalFilename, mimeType) => {
   logger.debug(`Entering getFileMetadata for path: ${filePath}`);
   try {
     const stats = await fs.stat(filePath);
-    
+
     const metadata = {
       size: stats.size,
       createdAt: stats.birthtime,
@@ -120,7 +120,7 @@ const getFileMetadata = async (filePath, originalFilename, mimeType) => {
     return metadata;
   } catch (error) {
     logger.error(`Failed to get file metadata for ${filePath}: ${error.message}`, error);
-    throw new Error(`Failed to get file metadata: ${error.message}`);
+    throw new Error(`Failed to get file metadata: ${error.message}`, { cause: error });
   }
 };
 
@@ -135,29 +135,29 @@ function getMetadataFilePath(filePath) {
   const metaPath = path.join(dir, `${base}_meta.json`);
   logger.debug(`Metadata file path resolved to: ${metaPath}`);
   return metaPath;
-};
+}
 
 // Utility function to compute SHA-256 hash of a file
 const getFileHash = async (filePath) => {
   logger.debug(`Entering getFileHash for: ${filePath}`);
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
+    const hash = cryptoModule.createHash('sha256');
     const stream = require('fs').createReadStream(filePath);
-    
+
     stream.on('data', (data) => hash.update(data));
-    
+
     stream.on('end', () => {
       const fileHash = hash.digest('hex');
       logger.info(`Successfully generated SHA-256 hash for ${filePath}`);
       resolve(fileHash);
     });
-    
+
     stream.on('error', (error) => {
       logger.error(`Error streaming file for hash ${filePath}: ${error.message}`, error);
       reject(error);
     });
   });
-}
+};
 
 module.exports = {
   generateUniqueFileId,

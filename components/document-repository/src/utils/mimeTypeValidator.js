@@ -39,9 +39,11 @@ const validateFileType = async (file) => {
     logger.debug('3. Validating MIME type from file buffer...');
     const detectedType = await fileTypeFromBuffer(file.buffer);
     logger.debug(`Detected buffer MIME type: ${detectedType ? detectedType.mime : 'unknown'}`);
-    
+
     if (detectedType && !config.upload.allowedMimeTypes.includes(detectedType.mime)) {
-      logger.warn(`Validation failed for ${file.originalname}: Detected MIME type ${detectedType.mime} does not match allowed types.`);
+      logger.warn(
+        `Validation failed for ${file.originalname}: Detected MIME type ${detectedType.mime} does not match allowed types.`
+      );
       return {
         isValid: false,
         error: `Detected MIME type ${detectedType.mime} does not match allowed types`
@@ -93,7 +95,7 @@ const getFileCategory = (mimeType) => {
   else if (mimeType.includes('html')) category = 'html';
   else if (mimeType.includes('text')) category = 'text';
   else category = 'other';
-  
+
   logger.debug(`Returning category: ${category}`);
   return category;
 };

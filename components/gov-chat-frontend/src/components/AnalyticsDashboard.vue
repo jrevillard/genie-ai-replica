@@ -99,8 +99,8 @@
         <CategoryDistributionChart
           v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
           :data="analytics.queryDistribution"
-          :externalData="true"
-          :renderKey="currentLocale"
+          :external-data="true"
+          :render-key="currentLocale"
         />
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
@@ -113,7 +113,7 @@
         <TopQueriesChart
           v-if="analytics.topQueries && analytics.topQueries.length > 0"
           :data="analytics.topQueries"
-          :renderKey="currentLocale"
+          :render-key="currentLocale"
         />
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
@@ -126,8 +126,8 @@
         <UsageTrendChart
           v-if="timeSeriesData && timeSeriesData.length > 0"
           :data="timeSeriesData"
-          :externalData="true"
-          :renderKey="currentLocale"
+          :external-data="true"
+          :render-key="currentLocale"
         />
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
@@ -138,17 +138,17 @@
 </template>
 
 <script>
-import analyticsService from '../services/analyticsService'
-import CategoryDistributionChart from './charts/CategoryDistributionChart.vue'
-import TopQueriesChart from './charts/TopQueriesChart.vue'
-import UsageTrendChart from './charts/UsageTrendChart.vue'
+import analyticsService from '../services/analyticsService';
+import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
+import TopQueriesChart from './charts/TopQueriesChart.vue';
+import UsageTrendChart from './charts/UsageTrendChart.vue';
 
 export default {
   name: 'AnalyticsDashboard',
   components: {
     CategoryDistributionChart,
     TopQueriesChart,
-    UsageTrendChart,
+    UsageTrendChart
   },
   data() {
     return {
@@ -162,52 +162,52 @@ export default {
         averageResponseTime: 0,
         satisfactionRate: 0,
         queryDistribution: [],
-        topQueries: [],
+        topQueries: []
       },
       comparison: {
         totalQueries: null,
         uniqueUsers: null,
         averageResponseTime: null,
-        satisfactionRate: null,
+        satisfactionRate: null
       },
       timeSeriesData: [],
-      theme: null,
-    }
+      theme: null
+    };
   },
   computed: {
     /**
      * Current locale - used to trigger reactivity on language change
      */
     currentLocale() {
-      return this.$i18n.locale
+      return this.$i18n.locale;
     },
     /**
      * Today's date in YYYY-MM-DD format
      */
     todayStr() {
-      return new Date().toISOString().split('T')[0]
-    },
+      return new Date().toISOString().split('T')[0];
+    }
   },
   watch: {
     // Watch for language changes - force complete refresh
     '$i18n.locale': {
       handler() {
-        console.log('Language changed, reloading dashboard:', this.$i18n.locale)
+        console.log('Language changed, reloading dashboard:', this.$i18n.locale);
         // Force full reload of data when language changes
-        this.loadAnalytics()
+        this.loadAnalytics();
       },
-      immediate: true,
-    },
+      immediate: true
+    }
   },
   created() {
-    console.log('Analytics dashboard created with locale:', this.$i18n.locale)
-    this.loadAnalytics()
+    console.log('Analytics dashboard created with locale:', this.$i18n.locale);
+    this.loadAnalytics();
     // Initialize theme
-    this.theme = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light'
+    this.theme = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
   },
   mounted() {
     // Ensure theme is applied on mount
-    this.applyTheme()
+    this.applyTheme();
   },
   beforeUnmount() {
     // Cleanup handled by Vue reactivity — no intervals to clear
@@ -216,55 +216,55 @@ export default {
     applyTheme() {
       // Get current theme from ThemeManager
       // Use saved theme preference or data-theme attribute
-      let themeMode = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light'
+      let themeMode = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
       // Validate themeMode
       if (!['light', 'dark', 'system'].includes(themeMode)) {
-        console.warn(`[AnalyticsDashboard] Invalid themeMode: ${themeMode}, defaulting to light`)
-        themeMode = 'light'
+        console.warn(`[AnalyticsDashboard] Invalid themeMode: ${themeMode}, defaulting to light`);
+        themeMode = 'light';
       }
-      this.theme = themeMode
-      console.log(`[AnalyticsDashboard] Applied theme: ${themeMode}`)
+      this.theme = themeMode;
+      console.log(`[AnalyticsDashboard] Applied theme: ${themeMode}`);
       // Force re-render of charts
       this.$nextTick(() => {
-        this.loadAnalytics()
-      })
+        this.loadAnalytics();
+      });
     },
     /**
      * Load analytics data based on selected period and date
      */
     // AnalyticsDashboard.vue
     async loadAnalytics() {
-      this.isLoading = true
-      this.error = null
+      this.isLoading = true;
+      this.error = null;
 
       try {
-        const { startDate, endDate } = this.calculateTimeSeriesParams()
-        const analyticsData = await analyticsService.getDashboardAnalytics(this.selectedPeriod, this.selectedDate)
+        const { startDate, endDate } = this.calculateTimeSeriesParams();
+        const analyticsData = await analyticsService.getDashboardAnalytics(this.selectedPeriod, this.selectedDate);
 
-        const uniqueUsers = await analyticsService.getUniqueUsersCount(startDate, endDate)
+        const uniqueUsers = await analyticsService.getUniqueUsersCount(startDate, endDate);
 
         this.analytics = {
           ...analyticsData,
-          uniqueUsers,
-        }
+          uniqueUsers
+        };
 
-        console.log('Dashboard data loaded:', this.analytics)
+        console.log('Dashboard data loaded:', this.analytics);
 
-        await this.loadComparisonData()
-        await this.loadTimeSeriesData()
+        await this.loadComparisonData();
+        await this.loadTimeSeriesData();
       } catch (error) {
-        console.error('Error loading analytics data:', error)
+        console.error('Error loading analytics data:', error);
         this.analytics = {
           totalQueries: 0,
           uniqueUsers: 0,
           averageResponseTime: 0,
           satisfactionRate: 0,
           queryDistribution: [],
-          topQueries: [],
-        }
-        this.timeSeriesData = []
+          topQueries: []
+        };
+        this.timeSeriesData = [];
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
@@ -274,10 +274,10 @@ export default {
     async loadComparisonData() {
       try {
         // Calculate the previous period based on current selection
-        const { previousPeriod, previousDate } = this.calculatePreviousPeriod()
+        const { previousPeriod, previousDate } = this.calculatePreviousPeriod();
 
         // Get comparison data for all key metrics
-        const metrics = ['totalQueries', 'uniqueUsers', 'averageResponseTime', 'satisfactionRate']
+        const metrics = ['totalQueries', 'uniqueUsers', 'averageResponseTime', 'satisfactionRate'];
 
         // Process each metric one by one
         for (const metric of metrics) {
@@ -287,27 +287,27 @@ export default {
             this.selectedDate,
             previousPeriod,
             previousDate
-          )
+          );
 
           // Calculate percentage change
           if (comparisonData.previous !== null && comparisonData.previous !== undefined) {
             this.comparison[metric] = analyticsService.calculatePercentChange(
               comparisonData.current,
               comparisonData.previous
-            )
+            );
           } else {
-            this.comparison[metric] = null
+            this.comparison[metric] = null;
           }
         }
       } catch (error) {
-        console.error('Error loading comparison data:', error)
+        console.error('Error loading comparison data:', error);
         // Non-critical error, continue without comparison data
         this.comparison = {
           totalQueries: null,
           uniqueUsers: null,
           averageResponseTime: null,
-          satisfactionRate: null,
-        }
+          satisfactionRate: null
+        };
       }
     },
 
@@ -316,43 +316,43 @@ export default {
      */
     async loadTimeSeriesData() {
       try {
-        this.timeSeriesData = [] // Clear existing data
+        this.timeSeriesData = []; // Clear existing data
 
         // Get time series parameters
-        const params = this.calculateTimeSeriesParams()
+        const params = this.calculateTimeSeriesParams();
 
         // Make API request
-        const url = `/api/analytics/timeseries/queries`
+        const url = `/api/analytics/timeseries/queries`;
 
-        console.log(`Fetching time series data from ${url} with params:`, params)
+        console.log(`Fetching time series data from ${url} with params:`, params);
 
         const response = await fetch(
           `${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`
-        )
+        );
 
         if (!response.ok) {
-          throw new Error(`API request failed with status ${response.status}`)
+          throw new Error(`API request failed with status ${response.status}`);
         }
 
-        const data = await response.json()
+        const data = await response.json();
 
         if (Array.isArray(data) && data.length > 0) {
-          console.log('Time series data loaded successfully:', data)
+          console.log('Time series data loaded successfully:', data);
 
           // Process the data to ensure it has the expected format
           this.timeSeriesData = data.map((item) => ({
             timestamp: item.timestamp || '',
             dateLabel: this.formatDateLabel(item.timestamp, params.interval),
             value: typeof item.value === 'number' ? item.value : 0,
-            userCount: typeof item.userCount === 'number' ? item.userCount : 0,
-          }))
+            userCount: typeof item.userCount === 'number' ? item.userCount : 0
+          }));
         } else {
-          console.warn('Empty or invalid time series data received:', data)
-          this.timeSeriesData = []
+          console.warn('Empty or invalid time series data received:', data);
+          this.timeSeriesData = [];
         }
       } catch (error) {
-        console.error('Error loading time series data:', error)
-        this.timeSeriesData = []
+        console.error('Error loading time series data:', error);
+        this.timeSeriesData = [];
       }
     },
 
@@ -360,13 +360,13 @@ export default {
      * Format date for display
      */
     formatDate(dateString) {
-      if (!dateString) return ''
+      if (!dateString) return '';
 
       try {
-        const date = new Date(dateString)
-        return date.toLocaleDateString(this.$i18n.locale)
-      } catch (e) {
-        return dateString
+        const date = new Date(dateString);
+        return date.toLocaleDateString(this.$i18n.locale);
+      } catch {
+        return dateString;
       }
     },
 
@@ -377,33 +377,31 @@ export default {
      * @returns {string} Formatted date label
      */
     formatDateLabel(timestamp, interval) {
-      if (!timestamp) return ''
+      if (!timestamp) return '';
 
-      const date = new Date(timestamp)
-      if (isNaN(date.getTime())) return timestamp
-
-      const options = { locale: this.$i18n.locale }
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return timestamp;
 
       switch (interval) {
         case 'hourly':
           return date.toLocaleTimeString(this.$i18n.locale, {
             hour: '2-digit',
-            minute: '2-digit',
-          })
+            minute: '2-digit'
+          });
         case 'daily':
           return date.toLocaleDateString(this.$i18n.locale, {
             month: 'short',
-            day: 'numeric',
-          })
+            day: 'numeric'
+          });
         case 'weekly':
-          return `W${this.getWeekNumber(date)} ${date.toLocaleDateString(this.$i18n.locale, { month: 'short' })}`
+          return `W${this.getWeekNumber(date)} ${date.toLocaleDateString(this.$i18n.locale, { month: 'short' })}`;
         case 'monthly':
           return date.toLocaleDateString(this.$i18n.locale, {
             month: 'short',
-            year: 'numeric',
-          })
+            year: 'numeric'
+          });
         default:
-          return date.toLocaleDateString(this.$i18n.locale)
+          return date.toLocaleDateString(this.$i18n.locale);
       }
     },
 
@@ -413,29 +411,29 @@ export default {
      * @returns {number} Week number
      */
     getWeekNumber(date) {
-      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-      const dayNum = d.getUTCDay() || 7
-      d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-      return Math.ceil(((d - yearStart) / 86400000 + 1) / 7)
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
     },
 
     /**
      * Format numeric values for display
      */
     formatValue(value, format = 'number') {
-      if (value === null || value === undefined) return '-'
+      if (value === null || value === undefined) return '-';
 
       // Use current locale for number formatting
       switch (format) {
         case 'number':
-          return value.toLocaleString(this.$i18n.locale)
+          return value.toLocaleString(this.$i18n.locale);
         case 'time':
-          return `${value.toLocaleString(this.$i18n.locale)}s`
+          return `${value.toLocaleString(this.$i18n.locale)}s`;
         case 'percent':
-          return `${value.toLocaleString(this.$i18n.locale)}%`
+          return `${value.toLocaleString(this.$i18n.locale)}%`;
         default:
-          return value.toString()
+          return value.toString();
       }
     },
 
@@ -443,105 +441,105 @@ export default {
      * Format trend percentage for display
      */
     formatTrend(percentChange, isInverse = false) {
-      const prefix = percentChange > 0 ? '+' : ''
+      const prefix = percentChange > 0 ? '+' : '';
       const suffix = isInverse
         ? percentChange > 0
           ? ' ' + this.$t('analytics.slower')
           : ' ' + this.$t('analytics.faster')
-        : ''
+        : '';
 
-      return `${prefix}${percentChange.toFixed(1)}%${suffix}`
+      return `${prefix}${percentChange.toFixed(1)}%${suffix}`;
     },
 
     /**
      * Get CSS class for trend indicator
      */
     getTrendClass(change, isInverse = false) {
-      return analyticsService.getTrendColor(change, isInverse)
+      return analyticsService.getTrendColor(change, isInverse);
     },
 
     /**
      * Calculate previous period based on current selection
      */
     calculatePreviousPeriod() {
-      const currentDate = new Date(this.selectedDate)
-      let previousDate, previousPeriod
+      const currentDate = new Date(this.selectedDate);
+      let previousDate, previousPeriod;
 
       switch (this.selectedPeriod) {
         case 'daily':
           // Previous day
-          previousDate = new Date(currentDate)
-          previousDate.setDate(currentDate.getDate() - 1)
-          previousPeriod = 'daily'
-          break
+          previousDate = new Date(currentDate);
+          previousDate.setDate(currentDate.getDate() - 1);
+          previousPeriod = 'daily';
+          break;
 
         case 'weekly':
           // Previous week
-          previousDate = new Date(currentDate)
-          previousDate.setDate(currentDate.getDate() - 7)
-          previousPeriod = 'weekly'
-          break
+          previousDate = new Date(currentDate);
+          previousDate.setDate(currentDate.getDate() - 7);
+          previousPeriod = 'weekly';
+          break;
 
         case 'monthly':
           // Previous month
-          previousDate = new Date(currentDate)
-          previousDate.setMonth(currentDate.getMonth() - 1)
-          previousPeriod = 'monthly'
-          break
+          previousDate = new Date(currentDate);
+          previousDate.setMonth(currentDate.getMonth() - 1);
+          previousPeriod = 'monthly';
+          break;
 
         case 'all-time':
           // Compare with previous equivalent time period
           // For all-time, we'll compare with half the total time
-          previousPeriod = 'all-time'
-          previousDate = null // Not needed for all-time
-          break
+          previousPeriod = 'all-time';
+          previousDate = null; // Not needed for all-time
+          break;
       }
 
       return {
         previousPeriod,
-        previousDate: previousDate ? previousDate.toISOString().split('T')[0] : null,
-      }
+        previousDate: previousDate ? previousDate.toISOString().split('T')[0] : null
+      };
     },
 
     /**
      * Calculate time series parameters based on current selection
      */
     calculateTimeSeriesParams() {
-      let interval, startDate, endDate
+      let interval, startDate;
 
       // End date is always selected date or today
-      endDate = this.selectedDate || new Date().toISOString().split('T')[0]
+      const endDate = this.selectedDate || new Date().toISOString().split('T')[0];
 
       switch (this.selectedPeriod) {
         case 'daily':
           // For daily view, show hourly data for the selected day
-          interval = 'hourly'
-          startDate = endDate
-          break
+          interval = 'hourly';
+          startDate = endDate;
+          break;
 
         case 'weekly':
           // For weekly view, show daily data for the week
-          interval = 'daily'
-          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 6)).toISOString().split('T')[0]
-          break
+          interval = 'daily';
+          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 6)).toISOString().split('T')[0];
+          break;
 
         case 'monthly':
           // For monthly view, show daily data for the month
-          interval = 'daily'
-          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 29)).toISOString().split('T')[0]
-          break
+          interval = 'daily';
+          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 29)).toISOString().split('T')[0];
+          break;
 
         case 'all-time':
           // For all-time view, show monthly data
-          interval = 'monthly'
-          startDate = '2020-01-01' // Arbitrary start date in the past
-          break
+          interval = 'monthly';
+          startDate = '2020-01-01'; // Arbitrary start date in the past
+          break;
       }
 
-      return { interval, startDate, endDate }
-    },
-  },
-}
+      return { interval, startDate, endDate };
+    }
+  }
+};
 </script>
 
 <style scoped>

@@ -98,7 +98,6 @@ module.exports = (userService) => {
    */
   router.get('/context', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
-      const userId = req.user.iss_sub;
       const userKey = req.user._key;
       const user = await userService.getUserProfile(userKey);
 
@@ -241,7 +240,7 @@ module.exports = (userService) => {
       if (req.body.data) {
         try {
           profileData = JSON.parse(req.body.data);
-        } catch (error) {
+        } catch {
           return res.status(400).json({ success: false, message: 'Invalid profile data format' });
         }
       } else {

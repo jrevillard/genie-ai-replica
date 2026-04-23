@@ -40,7 +40,6 @@ const documentFileService = {
       // Instead of returning the whole response.data object,
       // we extract and return the nested 'data' property which contains the file.
       return response.data.data;
-
     } catch (error) {
       console.error(`Error fetching metadata for file ${fileId}:`, error);
       throw error;
@@ -55,7 +54,7 @@ const documentFileService = {
   async uploadFile(formData) {
     try {
       const response = await httpService.post('/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       return response.data;
     } catch (error) {
@@ -252,7 +251,7 @@ const documentFileService = {
       throw error;
     }
   },
-  
+
   /**
    * Sends a kill signal to a running ingestion task.
    * @param {string} fileId - The ID of the file associated with the ingestion job.

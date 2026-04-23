@@ -117,7 +117,7 @@ function createTestRouter(store) {
       await store.dispatch('initialize');
     }
 
-    if (to.matched.some(record => record.meta.requiresAuth === false)) {
+    if (to.matched.some((record) => record.meta.requiresAuth === false)) {
       return true;
     }
 
@@ -269,7 +269,7 @@ describe('CallbackView behavior', () => {
 
     try {
       await mockDispatch('handleCallback');
-    } catch (e) {
+    } catch {
       mockRouterReplace('/');
     }
 

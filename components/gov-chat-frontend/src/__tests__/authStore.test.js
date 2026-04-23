@@ -82,9 +82,7 @@ describe('Vuex auth module', () => {
 
       await authStore.actions.logout({ commit, state });
 
-      const clearAuthCalls = commit.mock.calls.filter(
-        (call) => call[0] === 'clearAuth'
-      );
+      const clearAuthCalls = commit.mock.calls.filter((call) => call[0] === 'clearAuth');
       expect(clearAuthCalls.length).toBeGreaterThanOrEqual(1);
     });
 

@@ -41,10 +41,14 @@ class ConnectivityService {
     await recheckConnectivity();
 
     // 2. Listen for Stream changes (Immediate reaction)
-    _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+    _connectivity.onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) {
       debugPrint('[Connectivity] Stream Event: $results');
       // Use first result or default to none
-      final result = results.isNotEmpty ? results.first : ConnectivityResult.none;
+      final result = results.isNotEmpty
+          ? results.first
+          : ConnectivityResult.none;
       _updateHardwareStatus(result);
     });
 
@@ -53,7 +57,8 @@ class ConnectivityService {
     _startMonitoring();
 
     debugPrint(
-        '[Connectivity] Service Initialized. Online: $isOnline (Hardware: $_isNetworkHardwareAvailable, Override: $_userOfflineOverride)');
+      '[Connectivity] Service Initialized. Online: $isOnline (Hardware: $_isNetworkHardwareAvailable, Override: $_userOfflineOverride)',
+    );
   }
 
   void _startMonitoring() {
@@ -78,9 +83,12 @@ class ConnectivityService {
     _isChecking = true;
 
     try {
-      List<ConnectivityResult> results = await _connectivity.checkConnectivity();
+      List<ConnectivityResult> results = await _connectivity
+          .checkConnectivity();
       // Use first result or default to none
-      ConnectivityResult result = results.isNotEmpty ? results.first : ConnectivityResult.none;
+      ConnectivityResult result = results.isNotEmpty
+          ? results.first
+          : ConnectivityResult.none;
       // debugPrint('[Connectivity] Raw hardware check result: $result');
 
       // FALLBACK CHECK:
@@ -90,13 +98,15 @@ class ConnectivityService {
         // debugPrint('[Connectivity] Hardware says NONE. Attempting DNS lookup fallback...');
         try {
           final stopwatch = Stopwatch()..start();
-          final lookup = await InternetAddress.lookup('google.com')
-              .timeout(const Duration(seconds: 2));
+          final lookup = await InternetAddress.lookup(
+            'google.com',
+          ).timeout(const Duration(seconds: 2));
           stopwatch.stop();
 
           if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {
             debugPrint(
-                '[Connectivity] Hardware said NONE, but DNS lookup succeeded (${stopwatch.elapsedMilliseconds}ms). Forcing Online.');
+              '[Connectivity] Hardware said NONE, but DNS lookup succeeded (${stopwatch.elapsedMilliseconds}ms). Forcing Online.',
+            );
             // Treat as mobile (doesn't matter which, as long as not none)
             result = ConnectivityResult.mobile;
           }
@@ -120,7 +130,8 @@ class ConnectivityService {
     // Only emit if state effectively changes
     if (_isNetworkHardwareAvailable != hasConnection) {
       debugPrint(
-          '[Connectivity] Hardware Status Changed: $result (Available: $hasConnection)');
+        '[Connectivity] Hardware Status Changed: $result (Available: $hasConnection)',
+      );
       _isNetworkHardwareAvailable = hasConnection;
       _emitStatus();
     } else {
@@ -132,7 +143,8 @@ class ConnectivityService {
   /// Returns the new state of the override (true = forced offline).
   Future<bool> toggleUserOfflineMode() async {
     debugPrint(
-        '[Connectivity] User toggling offline mode. Current Override: $_userOfflineOverride');
+      '[Connectivity] User toggling offline mode. Current Override: $_userOfflineOverride',
+    );
     _userOfflineOverride = !_userOfflineOverride;
 
     // If going ONLINE, force a check immediately to ensure we are actually connected
@@ -146,7 +158,8 @@ class ConnectivityService {
     _emitStatus();
 
     debugPrint(
-        '[Connectivity] User Override Toggled Final State: $_userOfflineOverride');
+      '[Connectivity] User Override Toggled Final State: $_userOfflineOverride',
+    );
     return _userOfflineOverride;
   }
 
@@ -162,7 +175,8 @@ class ConnectivityService {
   void _emitStatus() {
     final bool status = isOnline;
     debugPrint(
-        '[Connectivity] Emitting final status: $status (Hardware: $_isNetworkHardwareAvailable, UserOverride: $_userOfflineOverride)');
+      '[Connectivity] Emitting final status: $status (Hardware: $_isNetworkHardwareAvailable, UserOverride: $_userOfflineOverride)',
+    );
     _statusController.add(status);
   }
 

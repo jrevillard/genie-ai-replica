@@ -102,6 +102,7 @@
           <div class="message-bubble">
             <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
             <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
+            <!-- eslint-disable-next-line vue/no-v-html -->
             <div v-else v-html="renderMarkdown(msg.content)"></div>
           </div>
           <!-- Feedback and confidence score for bot messages -->
@@ -254,20 +255,20 @@
 </template>
 
 <script>
-import { eventBus } from '../eventBus.js'
-import notificationService from '../services/notificationService'
-import { mapGetters, mapActions } from 'vuex'
-import { getUserId } from '../utils/userUtils'
-import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
-import ModalDialog from './ModalDialog.vue'
-import RightSideBarComponent from './RightSideBarComponent.vue'
-import chatbotService from '../services/chatbotService'
-import serviceTreeService from '../services/serviceTreeService' // *** NEW: Import serviceTreeService
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import chatHistoryService from '../services/chatHistoryService'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
-import jsPDF from 'jspdf'
+import { eventBus } from '../eventBus.js';
+import notificationService from '../services/notificationService';
+import { mapGetters, mapActions } from 'vuex';
+import { getUserId } from '../utils/userUtils';
+import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
+import ModalDialog from './ModalDialog.vue';
+import RightSideBarComponent from './RightSideBarComponent.vue';
+import chatbotService from '../services/chatbotService';
+import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import chatHistoryService from '../services/chatHistoryService';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import jsPDF from 'jspdf';
 
 export default {
   name: 'ChatBotComponent',
@@ -275,7 +276,7 @@ export default {
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
-    ConfirmDialog,
+    ConfirmDialog
   },
 
   data() {
@@ -287,16 +288,16 @@ export default {
       selectedContextItems: [],
       feedbackDialog: {
         visible: false,
-        message: null,
+        message: null
       },
       saveChatDialog: {
         visible: false,
         title: '',
-        folderId: 'default',
+        folderId: 'default'
       },
       exportDialog: {
         visible: false,
-        filename: '',
+        filename: ''
       },
       currentChatId: null,
       currentChatTitle: '',
@@ -309,7 +310,7 @@ export default {
         online: true,
         lastResponseTime: null, // Replaced avgResponseTime
         errorMessage: '', // Added for error messages
-        lastUpdated: new Date(),
+        lastUpdated: new Date()
       },
       quickHelpButtons: [],
       showNewChatConfirm: false,
@@ -317,11 +318,11 @@ export default {
         title: '',
         message: '',
         confirmText: '',
-        cancelText: '',
+        cancelText: ''
       },
       lastSavedState: {
         messages: [],
-        contextItems: [],
+        contextItems: []
       },
       showLoadConfirm: false,
       loadConfirmDialog: {
@@ -329,120 +330,120 @@ export default {
         message: '',
         confirmText: '',
         cancelText: '',
-        secondaryText: '',
+        secondaryText: ''
       },
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
       isSaving: false, // Loading state for save operation to prevent double-save
       relatedDocuments: [], // Holds documents for the right sidebar
-      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
-    }
+      hiddenPromptForNextMessage: null // Stores hidden prompt for dual-prompt mechanism
+    };
   },
 
   computed: {
     ...mapGetters('chatHistory', ['getAllFolders', 'getChatById']),
 
     folders() {
-      return this.getAllFolders
+      return this.getAllFolders;
     },
 
     chatPreview() {
-      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user')
+      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user');
       if (userMessage) {
-        return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content
+        return userMessage.content.length > 50 ? userMessage.content.substring(0, 47) + '...' : userMessage.content;
       }
-      return 'New conversation'
-    },
+      return 'New conversation';
+    }
   },
 
   watch: {
     currentLocale: function () {
-      this.updateDialogTexts()
-    },
+      this.updateDialogTexts();
+    }
   },
 
   created() {
     eventBus.$on('chat-deleted', (deletedChatId) => {
       if (this.conversationId === deletedChatId) {
-        this.conversationId = null
-        this.currentChatId = null
+        this.conversationId = null;
+        this.currentChatId = null;
         this.chatMessages = [
           {
             sender: 'bot',
             content: this.translate('chatbot.welcomeMessage'),
             timestamp: new Date().toISOString(),
-            isSaved: true,
-          },
-        ]
-        this.newMessage = ''
-        this.selectedContextItems = []
-        this.relatedDocuments = []
+            isSaved: true
+          }
+        ];
+        this.newMessage = '';
+        this.selectedContextItems = [];
+        this.relatedDocuments = [];
         this.lastSavedState = {
           messages: JSON.parse(JSON.stringify(this.chatMessages)),
-          contextItems: [],
-        }
-        console.log(`Reset conversation ID after deletion of chat ${deletedChatId}`)
+          contextItems: []
+        };
+        console.log(`Reset conversation ID after deletion of chat ${deletedChatId}`);
       }
-    })
+    });
 
     eventBus.$on('load-conversation', (conversationId) => {
       if (conversationId === this.conversationId) {
         // Same conversation, no need to load
-        return
+        return;
       }
       if (this.hasUnsavedChanges()) {
-        this.pendingConversationId = conversationId
-        this.showLoadConfirm = true
+        this.pendingConversationId = conversationId;
+        this.showLoadConfirm = true;
       } else {
-        this.chatMessages = [] // Clear previous messages
-        this.selectedContextItems = []
-        this.relatedDocuments = []
-        this.lastSavedState = { messages: [], contextItems: [] } // Reset state
-        this.loadExistingConversation(conversationId)
+        this.chatMessages = []; // Clear previous messages
+        this.selectedContextItems = [];
+        this.relatedDocuments = [];
+        this.lastSavedState = { messages: [], contextItems: [] }; // Reset state
+        this.loadExistingConversation(conversationId);
       }
-    })
+    });
   },
 
   mounted() {
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
         sender: 'bot',
-        content: this.translate('chatbot.welcomeMessage'),
-      })
+        content: this.translate('chatbot.welcomeMessage')
+      });
     }
 
     if (this.$root.$i18n) {
-      this.currentLocale = this.$root.$i18n.locale
+      this.currentLocale = this.$root.$i18n.locale;
       this.$watch(
         () => this.$root.$i18n.locale,
         (newLocale) => {
-          this.currentLocale = newLocale
+          this.currentLocale = newLocale;
           // Update context labels when locale changes
           this.selectedContextItems = this.selectedContextItems.map((item) => ({
             ...item,
-            service: this.safeTranslate(item.serviceKey || item.service),
-          }))
-          this.loadServiceCategories() // Reload categories for the new locale
+            service: this.safeTranslate(item.serviceKey || item.service)
+          }));
+          this.loadServiceCategories(); // Reload categories for the new locale
         }
-      )
+      );
     }
 
-    eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected)
-    eventBus.$on('open-chat', this.loadChatFromHistory)
-    this.scrollToBottom()
-    this.loadQuickHelpButtons()
-    this.loadServiceCategories() // Fetch categories on mount
+    eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
+    eventBus.$on('open-chat', this.loadChatFromHistory);
+    this.scrollToBottom();
+    this.loadQuickHelpButtons();
+    this.loadServiceCategories(); // Fetch categories on mount
 
     // Removed the statusUpdateInterval
-    this.updateDialogTexts()
+    this.updateDialogTexts();
   },
 
   beforeUnmount() {
-    eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected)
-    eventBus.$off('open-chat', this.loadChatFromHistory)
-    eventBus.$off('chat-deleted') // Clean up the chat-deleted listener
+    eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
+    eventBus.$off('open-chat', this.loadChatFromHistory);
+    eventBus.$off('chat-deleted'); // Clean up the chat-deleted listener
     // Removed clearInterval
-    eventBus.$off('load-conversation')
+    eventBus.$off('load-conversation');
   },
 
   methods: {
@@ -452,51 +453,51 @@ export default {
     async loadServiceCategories() {
       try {
         // Use the service which handles transformation and localization
-        this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale)
+        this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
         console.log(
           '[ChatBotComponent] Service categories loaded for lookup via serviceTreeService:',
           this.serviceCategories
-        )
+        );
       } catch (error) {
-        console.error('[ChatBotComponent] Failed to load service categories:', error)
-        notificationService.error('Could not load service categories.')
+        console.error('[ChatBotComponent] Failed to load service categories:', error);
+        notificationService.error('Could not load service categories.');
       }
     },
 
     // *** UPDATED: Find category label by its key in the transformed tree data ***
     getCategoryLabelById(id) {
       if (id === null || id === undefined) {
-        const selectedServices = this.selectedContextItems.map((item) => item.serviceKey)
+        const selectedServices = this.selectedContextItems.map((item) => item.serviceKey);
         if (selectedServices.includes('quickhelp.justChat')) {
-          return 'General'
+          return 'General';
         }
-        return null
+        return null;
       }
 
       // The service returns `catKey` which corresponds to the numeric ID
-      const category = this.serviceCategories.find((cat) => cat.catKey == id.toString())
+      const category = this.serviceCategories.find((cat) => cat.catKey == id.toString());
       if (category) {
         // The service already provides the localized name in the `name` property
-        return category.name || `Category ${id}`
+        return category.name || `Category ${id}`;
       }
 
-      console.warn(`[ChatBotComponent] Category label for ID "${id}" not found.`)
-      return `Category ${id}` // Fallback
+      console.warn(`[ChatBotComponent] Category label for ID "${id}" not found.`);
+      return `Category ${id}`; // Fallback
     },
 
     checkContextConfig(context) {
-      const user = this.$store.getters.currentUser
-      if (!user || !(user.roles || []).map(r => r.toLowerCase()).includes('admin')) return
+      const user = this.$store.getters.currentUser;
+      if (!user || !(user.roles || []).map((r) => r.toLowerCase()).includes('admin')) return;
 
-      const warnings = []
+      const warnings = [];
       if (context.categoryLabel && /^Category \d+$/.test(context.categoryLabel)) {
-        warnings.push(`Category "${context.categoryLabel}" not found in knowledge hierarchy`)
+        warnings.push(`Category "${context.categoryLabel}" not found in knowledge hierarchy`);
       }
       if (context.serviceLabels?.length > 0) {
         for (const label of context.serviceLabels) {
-          const item = this.selectedContextItems.find((i) => i.service === label)
+          const item = this.selectedContextItems.find((i) => i.service === label);
           if (item?.serviceKey?.startsWith('quickhelp.') && item.serviceKey !== 'quickhelp.justChat') {
-            warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`)
+            warnings.push(`Service "${label}" uses a UI label that may not match the knowledge hierarchy`);
           }
         }
       }
@@ -504,7 +505,7 @@ export default {
         notificationService.warning(
           `Configuration mismatch: ${warnings.join('; ')}. Please check the Quick Help and knowledge hierarchy configuration.`,
           8000
-        )
+        );
       }
     },
 
@@ -521,41 +522,41 @@ export default {
           Pendidikan: 'context.education',
           Pajak: 'context.tax',
           Pensiun: 'context.retirement',
-          'Lainnya - Pribadi': 'context.personalOther',
-        }
-        const translationKey = serviceKeyMap[key] || key
+          'Lainnya - Pribadi': 'context.personalOther'
+        };
+        const translationKey = serviceKeyMap[key] || key;
         if (typeof translationKey === 'string' && translationKey.trim()) {
-          const translated = this.$t(translationKey)
-          return translated !== translationKey ? translated : key
+          const translated = this.$t(translationKey);
+          return translated !== translationKey ? translated : key;
         }
-        console.warn(`Invalid translation key: ${key}`)
-        return this.$t('context.fallback') || key || 'Unknown'
+        console.warn(`Invalid translation key: ${key}`);
+        return this.$t('context.fallback') || key || 'Unknown';
       } catch (error) {
-        console.error(`Translation error for key ${key}:`, error)
-        return this.$t('context.fallback') || key || 'Unknown'
+        console.error(`Translation error for key ${key}:`, error);
+        return this.$t('context.fallback') || key || 'Unknown';
       }
     },
 
     // Render Markdown safely
     renderMarkdown(content) {
       try {
-        const html = marked.parse(content)
-        return DOMPurify.sanitize(html)
+        const html = marked.parse(content);
+        return DOMPurify.sanitize(html);
       } catch (error) {
-        console.error('Error rendering Markdown:', error)
-        return DOMPurify.sanitize(content)
+        console.error('Error rendering Markdown:', error);
+        return DOMPurify.sanitize(content);
       }
     },
 
     async loadQuickHelpButtons() {
-      console.log('[ChatBotComponent] Loading Quick Help buttons from config')
+      console.log('[ChatBotComponent] Loading Quick Help buttons from config');
       try {
-        const { loadConfig } = await import('../main.js')
-        const config = await loadConfig()
-        const buttons = config?.features?.chat?.quickHelp?.buttons || []
+        const { loadConfig } = await import('../main.js');
+        const config = await loadConfig();
+        const buttons = config?.features?.chat?.quickHelp?.buttons || [];
         this.quickHelpButtons = buttons.map((button) => {
           if (this.$t(button.title) === button.title) {
-            console.warn(`[ChatBotComponent] Missing i18n key: ${button.title}`)
+            console.warn(`[ChatBotComponent] Missing i18n key: ${button.title}`);
           }
           return {
             service: this.$t(button.title),
@@ -564,135 +565,135 @@ export default {
             hiddenPromptKey: button.action.hiddenPrompt,
             icon: button.icon.value,
             category: button.category,
-            id: button.id,
-          }
-        })
+            id: button.id
+          };
+        });
         console.log(
           `[ChatBotComponent] Loaded ${buttons.length} Quick Help buttons:`,
           buttons.map((b) => ({
             id: b.id,
             title: b.title,
-            category: b.category,
+            category: b.category
           }))
-        )
+        );
       } catch (error) {
-        console.error('[ChatBotComponent] Failed to load Quick Help config:', error)
-        this.quickHelpButtons = []
+        console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
+        this.quickHelpButtons = [];
       }
     },
 
     getCurrentTheme() {
-      const documentTheme = document.documentElement.getAttribute('data-theme')
-      const bodyTheme = document.body.getAttribute('data-theme')
-      return documentTheme || bodyTheme || 'light'
+      const documentTheme = document.documentElement.getAttribute('data-theme');
+      const bodyTheme = document.body.getAttribute('data-theme');
+      return documentTheme || bodyTheme || 'light';
     },
 
     // formatUptime method removed
 
     handleSidebarToggle(collapsed) {
-      console.log('Sidebar collapsed state:', collapsed)
+      console.log('Sidebar collapsed state:', collapsed);
     },
 
     handleOpenDocument(doc) {
-      console.log('Document opened:', doc)
+      console.log('Document opened:', doc);
     },
 
     translate(key) {
-      return this.$t(key)
+      return this.$t(key);
     },
 
     selectQuickHelpOption(option) {
-      console.log(`[ChatBotComponent] Quick Help button clicked: id=${option.id}, textKey=${option.textKey}`)
-      const rawOption = option && option.__v_isReactive ? { ...option } : option || {}
+      console.log(`[ChatBotComponent] Quick Help button clicked: id=${option.id}, textKey=${option.textKey}`);
+      const rawOption = option && option.__v_isReactive ? { ...option } : option || {};
       if (!rawOption.service) {
-        console.error('Invalid quick help option, missing service:', rawOption)
-        return
+        console.error('Invalid quick help option, missing service:', rawOption);
+        return;
       }
-      const categoryId = rawOption.category || (rawOption.service !== this.$t('quickhelp.justChat') ? 'general' : null)
+      const categoryId = rawOption.category || (rawOption.service !== this.$t('quickhelp.justChat') ? 'general' : null);
 
       const contextExists = this.selectedContextItems.some(
         (item) => item.service === rawOption.service && item.category === categoryId
-      )
+      );
 
       if (!contextExists) {
         this.selectedContextItems.push({
           service: rawOption.service,
           serviceKey: rawOption.textKey,
           category: categoryId,
-          selected: true,
-        })
-        console.log(`Added new context item: ${rawOption.service} with category ID ${categoryId}`)
+          selected: true
+        });
+        console.log(`Added new context item: ${rawOption.service} with category ID ${categoryId}`);
       } else {
-        console.log(`Context item ${rawOption.service} with category ID ${categoryId} already exists`)
+        console.log(`Context item ${rawOption.service} with category ID ${categoryId} already exists`);
       }
 
       if (rawOption.service !== this.$t('quickhelp.justChat')) {
-        this.currentCategoryId = categoryId
-        console.log(`Set current category ID to ${this.currentCategoryId} from quick help option.`)
+        this.currentCategoryId = categoryId;
+        console.log(`Set current category ID to ${this.currentCategoryId} from quick help option.`);
       } else {
-        this.currentCategoryId = this.currentCategoryId || null
+        this.currentCategoryId = this.currentCategoryId || null;
       }
 
-      this.showQuickHelp = false
+      this.showQuickHelp = false;
       if (rawOption.hiddenPromptKey) {
         // Display the visible text in the chat (what user sees)
-        const visibleMessage = this.$t(rawOption.visibleTextKey)
-        this.newMessage = visibleMessage
+        const visibleMessage = this.$t(rawOption.visibleTextKey);
+        this.newMessage = visibleMessage;
 
         // Store the hidden prompt to send to backend (what LLM sees)
-        this.hiddenPromptForNextMessage = this.$t(rawOption.hiddenPromptKey)
-        this.sendMessage()
+        this.hiddenPromptForNextMessage = this.$t(rawOption.hiddenPromptKey);
+        this.sendMessage();
       }
     },
 
     handleTextareaFocus() {
-      this.showQuickHelp = false
+      this.showQuickHelp = false;
     },
 
     handleTreeNodeSelected(item) {
       if (!item || typeof item !== 'object' || !item.service) {
-        console.warn('Invalid tree node selected:', item)
-        return
+        console.warn('Invalid tree node selected:', item);
+        return;
       }
 
       if (item.selected) {
         const exists = this.selectedContextItems.some(
           (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
-        )
+        );
         if (!exists) {
           this.selectedContextItems.push({
             service: this.safeTranslate(item.service),
             serviceKey: item.service,
             category: item.category || 'general',
-            selected: true,
-          })
+            selected: true
+          });
           console.log(
             `Added sidebar context item: ${this.safeTranslate(
               item.service
             )} with category ID ${item.category || 'general'}`
-          )
-          notificationService.info(this.translate('chatbot.contextAdded'), 1500)
+          );
+          notificationService.info(this.translate('chatbot.contextAdded'), 1500);
           if (!this.currentCategoryId) {
-            this.currentCategoryId = item.category || null
-            console.log(`Set current category ID to ${this.currentCategoryId} from sidebar node.`)
+            this.currentCategoryId = item.category || null;
+            console.log(`Set current category ID to ${this.currentCategoryId} from sidebar node.`);
           }
         } else {
           console.log(
             `Context item ${this.safeTranslate(item.service)} with category ID ${item.category} already exists`
-          )
+          );
         }
       } else {
         const index = this.selectedContextItems.findIndex(
           (existing) => existing.service === this.safeTranslate(item.service) && existing.category === item.category
-        )
+        );
         if (index !== -1) {
-          const removedItem = this.selectedContextItems.splice(index, 1)[0]
-          console.log(`Removed sidebar context item: ${removedItem.service} with category ID ${removedItem.category}`)
-          notificationService.info(this.translate('chatbot.contextRemoved'), 1500)
-          eventBus.$emit('contextItemRemoved', removedItem)
+          const removedItem = this.selectedContextItems.splice(index, 1)[0];
+          console.log(`Removed sidebar context item: ${removedItem.service} with category ID ${removedItem.category}`);
+          notificationService.info(this.translate('chatbot.contextRemoved'), 1500);
+          eventBus.$emit('contextItemRemoved', removedItem);
           if (this.selectedContextItems.length === 0) {
-            this.currentCategoryId = null
-            console.log('Cleared current category ID as no context items remain.')
+            this.currentCategoryId = null;
+            console.log('Cleared current category ID as no context items remain.');
           }
         }
       }
@@ -700,72 +701,72 @@ export default {
 
     removeContextItem(index) {
       if (this.selectedContextItems.length > index) {
-        const removedItem = this.selectedContextItems.splice(index, 1)[0]
-        console.log(`Removed context item: ${removedItem.service} at index ${index}`)
+        const removedItem = this.selectedContextItems.splice(index, 1)[0];
+        console.log(`Removed context item: ${removedItem.service} at index ${index}`);
       }
       if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
-        const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId)
+        const quickHelpOption = this.quickHelpButtons.find((option) => option.category === this.currentCategoryId);
         if (quickHelpOption) {
           this.selectedContextItems = [
             {
               service: this.safeTranslate(quickHelpOption.textKey),
               serviceKey: quickHelpOption.textKey,
               category: this.currentCategoryId,
-              selected: true,
-            },
-          ]
+              selected: true
+            }
+          ];
           console.log(
             `Restored context item for category ID ${
               this.currentCategoryId
             }: ${this.safeTranslate(quickHelpOption.textKey)}`
-          )
+          );
         } else {
-          this.currentCategoryId = null
+          this.currentCategoryId = null;
         }
       }
     },
 
     async sendMessage() {
-      const content = this.newMessage.trim()
-      if (!content) return
+      const content = this.newMessage.trim();
+      if (!content) return;
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
-      const messageForBackend = this.hiddenPromptForNextMessage || content
-      const messageForDisplay = content
+      const messageForBackend = this.hiddenPromptForNextMessage || content;
+      const messageForDisplay = content;
 
       this.chatMessages.push({
         sender: 'user',
         content: messageForDisplay,
         timestamp: new Date().toISOString(),
-        isSaved: false,
-      })
-      this.newMessage = ''
-      this.showQuickHelp = false
-      this.isLoading = true
+        isSaved: false
+      });
+      this.newMessage = '';
+      this.showQuickHelp = false;
+      this.isLoading = true;
       // Clear hidden prompt after use
-      this.hiddenPromptForNextMessage = null
+      this.hiddenPromptForNextMessage = null;
       // Do NOT clear relatedDocuments here. We want to keep previous docs visible.
 
-      const startTime = performance.now() // Start timing
+      const startTime = performance.now(); // Start timing
 
       try {
-        const useConversationContext = this.selectedContextItems.length > 0
-        const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message'
-        let queryData
-        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId)
-        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`)
+        const useConversationContext = this.selectedContextItems.length > 0;
+        const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message';
+        let queryData;
+        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
+        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
         if (contextOption === 'conversation-with-labels') {
-          const serviceLabels = this.selectedContextItems.map((item) => item.service)
+          const serviceLabels = this.selectedContextItems.map((item) => item.service);
           // Build messages array, replacing last user message with hidden prompt if available
           const messagesForQuery = this.chatMessages.map((msg) => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content,
-          }))
+            content: msg.content
+          }));
 
           // Replace the last user message with the hidden prompt (for dual-prompt mechanism)
-          const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user')
+          const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user');
           if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
-            messagesForQuery[lastUserMsgIndex].content = messageForBackend
+            messagesForQuery[lastUserMsgIndex].content = messageForBackend;
           }
 
           queryData = {
@@ -775,34 +776,34 @@ export default {
             context: {
               categoryLabel: categoryLabel,
               serviceLabels: serviceLabels,
-              language: this.currentLocale.toUpperCase(),
+              language: this.currentLocale.toUpperCase()
             },
             contextOption: 'conversation-with-context-labels',
-            timestamp: new Date().toISOString(),
-          }
+            timestamp: new Date().toISOString()
+          };
         } else {
           queryData = {
             sessionId: this.currentSessionId || 'new-session',
             text: messageForBackend,
             contextOption: contextOption,
-            timestamp: new Date().toISOString(),
-          }
+            timestamp: new Date().toISOString()
+          };
         }
-        console.log('Submitting query with data:', JSON.stringify(queryData, null, 2))
+        console.log('Submitting query with data:', JSON.stringify(queryData, null, 2));
 
-        this.checkContextConfig(queryData.context)
+        this.checkContextConfig(queryData.context);
 
-        const result = await chatbotService.submitQuery(queryData)
+        const result = await chatbotService.submitQuery(queryData);
 
         // --- Success State Update ---
-        const endTime = performance.now()
-        this.systemStatus.lastResponseTime = Math.round(endTime - startTime)
-        this.systemStatus.online = true
-        this.systemStatus.errorMessage = ''
-        this.systemStatus.lastUpdated = new Date()
+        const endTime = performance.now();
+        this.systemStatus.lastResponseTime = Math.round(endTime - startTime);
+        this.systemStatus.online = true;
+        this.systemStatus.errorMessage = '';
+        this.systemStatus.lastUpdated = new Date();
         // --------------------------
 
-        console.log('Query result:', result)
+        console.log('Query result:', result);
         const botMessage = {
           sender: 'bot',
           content: result.response || this.translate('chatbot.processingError'),
@@ -810,12 +811,12 @@ export default {
           timestamp: new Date().toISOString(),
           isSaved: false,
           // CRITICAL FIX: Attach the full metadata object so it can be saved later
-          metadata: result.metadata || {},
-        }
+          metadata: result.metadata || {}
+        };
 
         if (result.metadata) {
           if (result.metadata.confidence_score) {
-            botMessage.confidenceScore = result.metadata.confidence_score
+            botMessage.confidenceScore = result.metadata.confidence_score;
           }
           if (result.metadata.source_documents && Array.isArray(result.metadata.source_documents)) {
             // Transform new documents
@@ -831,110 +832,110 @@ export default {
               url: doc.url,
               score: doc.score,
               categoryLabel: doc.categoryLabel,
-              serviceLabels: doc.serviceLabels,
-            }))
+              serviceLabels: doc.serviceLabels
+            }));
 
             // Incremental Update: Add new documents to the top, filtering out duplicates
-            const existingIds = new Set(this.relatedDocuments.map((d) => d.id))
-            const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id))
+            const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
+            const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
 
             // Add unique new docs to start of array (newest at top)
-            this.relatedDocuments.unshift(...uniqueNewDocs)
+            this.relatedDocuments.unshift(...uniqueNewDocs);
           }
         }
-        this.chatMessages.push(botMessage)
+        this.chatMessages.push(botMessage);
         if (result.sessionId) {
-          this.currentSessionId = result.sessionId
+          this.currentSessionId = result.sessionId;
         }
       } catch (error) {
         // --- Error State Update ---
-        this.systemStatus.lastResponseTime = null // No successful response time
-        this.systemStatus.online = false
-        this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError')
-        this.systemStatus.lastUpdated = new Date()
+        this.systemStatus.lastResponseTime = null; // No successful response time
+        this.systemStatus.online = false;
+        this.systemStatus.errorMessage = error.message || this.translate('chatbot.processingError');
+        this.systemStatus.lastUpdated = new Date();
         // ------------------------
 
-        console.error('Error sending query:', error)
+        console.error('Error sending query:', error);
         this.chatMessages.push({
           sender: 'bot',
           content: this.translate('chatbot.processingError'),
           timestamp: new Date().toISOString(),
-          isSaved: false,
-        })
-        notificationService.error(this.translate('chatbot.processingError'))
+          isSaved: false
+        });
+        notificationService.error(this.translate('chatbot.processingError'));
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
-      this.scrollToBottom()
+      this.scrollToBottom();
       if (this.currentChatId) {
-        this.updateChatInHistory()
+        this.updateChatInHistory();
       }
     },
 
     openFeedbackDialog(index) {
       this.feedbackDialog = {
         visible: true,
-        message: this.chatMessages[index],
-      }
+        message: this.chatMessages[index]
+      };
     },
 
     closeFeedbackDialog() {
-      this.feedbackDialog.visible = false
+      this.feedbackDialog.visible = false;
     },
 
     async handleFeedbackSubmit(feedback) {
-      const queryId = feedback.message.queryId
+      const queryId = feedback.message.queryId;
       if (!queryId) {
-        console.error('Cannot submit feedback: No queryId found for message')
-        notificationService.error(this.translate('chatbot.feedbackMissingQueryId'))
-        this.closeFeedbackDialog()
-        return
+        console.error('Cannot submit feedback: No queryId found for message');
+        notificationService.error(this.translate('chatbot.feedbackMissingQueryId'));
+        this.closeFeedbackDialog();
+        return;
       }
       try {
         await chatbotService.submitFeedback(queryId, {
           rating: feedback.rating || (feedback.thumbFeedback === 'up' ? 4 : 2),
           comment: feedback.text || '',
-          providedAt: new Date().toISOString(),
-        })
-        console.log('Feedback submitted successfully for queryId:', queryId)
-        notificationService.success(this.translate('chatbot.feedbackSubmitted'))
+          providedAt: new Date().toISOString()
+        });
+        console.log('Feedback submitted successfully for queryId:', queryId);
+        notificationService.success(this.translate('chatbot.feedbackSubmitted'));
       } catch (error) {
-        console.error('Error submitting feedback for queryId:', queryId, error)
-        notificationService.error(this.translate('chatbot.feedbackError'))
+        console.error('Error submitting feedback for queryId:', queryId, error);
+        notificationService.error(this.translate('chatbot.feedbackError'));
       }
-      this.closeFeedbackDialog()
+      this.closeFeedbackDialog();
     },
 
     scrollToBottom() {
       this.$nextTick(() => {
-        const container = this.$refs.chatWindow
+        const container = this.$refs.chatWindow;
         if (container) {
-          container.scrollTop = container.scrollHeight
+          container.scrollTop = container.scrollHeight;
         }
-      })
+      });
     },
 
     async loadExistingConversation(conversationId) {
       try {
-        console.log(`[DEBUG] Loading conversation ${conversationId} - Starting request...`)
-        const conversation = await this.chatHistoryService.getConversation(conversationId)
+        console.log(`[DEBUG] Loading conversation ${conversationId} - Starting request...`);
+        const conversation = await this.chatHistoryService.getConversation(conversationId);
 
         if (!conversation) {
-          throw new Error('Conversation not found')
+          throw new Error('Conversation not found');
         }
 
         // DEBUG: Log the full response from backend
-        console.log('[DEBUG] Conversation loaded successfully:', conversation)
-        console.log('[DEBUG] conversation.files raw data:', conversation.files)
+        console.log('[DEBUG] Conversation loaded successfully:', conversation);
+        console.log('[DEBUG] conversation.files raw data:', conversation.files);
 
-        this.conversationId = conversation._key
-        this.currentChatId = conversation._key
-        this.currentChatTitle = conversation.title || this.generateChatTitle()
-        this.currentCategoryId = conversation.categoryId || null
+        this.conversationId = conversation._key;
+        this.currentChatId = conversation._key;
+        this.currentChatTitle = conversation.title || this.generateChatTitle();
+        this.currentCategoryId = conversation.categoryId || null;
 
         // NEW: Populate related documents from history (files property from backend)
         if (conversation.files && Array.isArray(conversation.files)) {
-          console.log(`[DEBUG] Found ${conversation.files.length} files. Mapping to relatedDocuments...`)
+          console.log(`[DEBUG] Found ${conversation.files.length} files. Mapping to relatedDocuments...`);
 
           this.relatedDocuments = conversation.files.map((file) => {
             // Debug individual file mapping
@@ -948,28 +949,28 @@ export default {
               url: file.url,
               score: file.score,
               categoryLabel: file.categoryLabel,
-              serviceLabels: file.labels || [],
-            }
-            return mapped
-          })
+              serviceLabels: file.labels || []
+            };
+            return mapped;
+          });
 
-          console.log('[DEBUG] Final mapped relatedDocuments:', this.relatedDocuments)
+          console.log('[DEBUG] Final mapped relatedDocuments:', this.relatedDocuments);
         } else {
-          console.warn("[DEBUG] No 'files' array found in conversation response or it is empty.")
-          this.relatedDocuments = []
+          console.warn("[DEBUG] No 'files' array found in conversation response or it is empty.");
+          this.relatedDocuments = [];
         }
 
-        this.chatMessages = []
-        const messages = conversation.messages || []
+        this.chatMessages = [];
+        const messages = conversation.messages || [];
         messages.forEach((msg) => {
           this.chatMessages.push({
             sender: msg.sender === 'user' ? 'user' : 'bot',
             content: msg.content,
             timestamp: msg.timestamp || new Date().toISOString(),
             queryId: msg.queryId || null,
-            isSaved: true,
-          })
-        })
+            isSaved: true
+          });
+        });
 
         if (this.chatMessages.length === 0) {
           this.chatMessages.push({
@@ -977,180 +978,180 @@ export default {
             content: this.translate('chatbot.welcomeMessage'),
             timestamp: new Date().toISOString(),
             queryId: null,
-            isSaved: true,
-          })
+            isSaved: true
+          });
         }
 
-        this.selectedContextItems = []
+        this.selectedContextItems = [];
         if (conversation.tags && Array.isArray(conversation.tags)) {
-          console.log(`Conversation tags:`, conversation.tags)
+          console.log(`Conversation tags:`, conversation.tags);
           conversation.tags.forEach((tag) => {
             this.selectedContextItems.push({
               service: this.safeTranslate(tag || `category.${this.currentCategoryId || 'general'}`),
               serviceKey: tag || `category.${this.currentCategoryId || 'general'}`,
               category: this.currentCategoryId || 'general',
-              selected: true,
-            })
-          })
+              selected: true
+            });
+          });
         } else if (this.currentCategoryId) {
           this.selectedContextItems.push({
             service: this.getCategoryLabelById(this.currentCategoryId),
             serviceKey: `category.${this.currentCategoryId}`,
             category: this.currentCategoryId,
-            selected: true,
-          })
-          console.log(`No tags, using fallback category ID: ${this.currentCategoryId}`)
+            selected: true
+          });
+          console.log(`No tags, using fallback category ID: ${this.currentCategoryId}`);
         }
 
         this.lastSavedState = {
           messages: JSON.parse(JSON.stringify(this.chatMessages)),
-          contextItems: JSON.parse(JSON.stringify(this.selectedContextItems)),
-        }
+          contextItems: JSON.parse(JSON.stringify(this.selectedContextItems))
+        };
 
-        this.newMessage = ''
-        this.showQuickHelp = false
-        this.scrollToBottom()
+        this.newMessage = '';
+        this.showQuickHelp = false;
+        this.scrollToBottom();
 
-        this.updateChatInHistory()
+        this.updateChatInHistory();
 
-        notificationService.success(this.translate('chatbot.conversationLoaded'))
+        notificationService.success(this.translate('chatbot.conversationLoaded'));
       } catch (error) {
-        console.error('Error loading conversation:', error)
-        notificationService.error(this.translate('chatbot.loadError'))
+        console.error('Error loading conversation:', error);
+        notificationService.error(this.translate('chatbot.loadError'));
       }
     },
 
     hasUnsavedChanges() {
       if (!this.conversationId && !this.currentChatId) {
-        const hasUserMessages = this.chatMessages.some((msg) => msg.sender === 'user')
-        const hasContextItems = this.selectedContextItems.length > 0
-        return hasUserMessages || hasContextItems
+        const hasUserMessages = this.chatMessages.some((msg) => msg.sender === 'user');
+        const hasContextItems = this.selectedContextItems.length > 0;
+        return hasUserMessages || hasContextItems;
       }
 
       const hasNewMessages = this.chatMessages.some(
         (msg) => !msg.isSaved && (msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId))
-      )
+      );
       if (hasNewMessages) {
-        return true
+        return true;
       }
 
       if (this.selectedContextItems.length !== this.lastSavedState.contextItems.length) {
-        return true
+        return true;
       }
       for (let i = 0; i < this.selectedContextItems.length; i++) {
         if (
           this.selectedContextItems[i].service !== this.lastSavedState.contextItems[i]?.service ||
           this.selectedContextItems[i].category !== this.lastSavedState.contextItems[i]?.category
         ) {
-          return true
+          return true;
         }
       }
 
-      return false
+      return false;
     },
 
     async loadConversationConfirmed() {
-      this.showLoadConfirm = false
+      this.showLoadConfirm = false;
       if (this.pendingConversationId) {
-        await this.loadExistingConversation(this.pendingConversationId)
-        this.pendingConversationId = null
+        await this.loadExistingConversation(this.pendingConversationId);
+        this.pendingConversationId = null;
       }
     },
 
     cancelLoadConversation() {
-      this.showLoadConfirm = false
-      this.pendingConversationId = null
+      this.showLoadConfirm = false;
+      this.pendingConversationId = null;
     },
 
     async saveAndLoadConversation() {
-      this.showLoadConfirm = false
+      this.showLoadConfirm = false;
       if (this.conversationId || this.currentChatId) {
-        await this.updateExistingChat()
+        await this.updateExistingChat();
       } else {
         this.saveChatDialog = {
           visible: true,
           title: this.generateChatTitle(),
-          folderId: 'default',
-        }
+          folderId: 'default'
+        };
         await new Promise((resolve) => {
           const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
             if (!newVal) {
-              unwatch()
-              resolve()
+              unwatch();
+              resolve();
             }
-          })
-        })
+          });
+        });
       }
       if (this.pendingConversationId) {
-        await this.loadExistingConversation(this.pendingConversationId)
-        this.pendingConversationId = null
+        await this.loadExistingConversation(this.pendingConversationId);
+        this.pendingConversationId = null;
       }
     },
 
     saveChatToHistory() {
       if (this.conversationId || this.currentChatId) {
-        this.updateExistingChat()
+        this.updateExistingChat();
       } else {
         this.saveChatDialog = {
           visible: true,
           title: this.generateChatTitle(),
-          folderId: 'default',
-        }
+          folderId: 'default'
+        };
       }
     },
 
     getContextTags() {
-      return this.selectedContextItems.map((item) => item.serviceKey || item.service).filter((tag) => tag)
+      return this.selectedContextItems.map((item) => item.serviceKey || item.service).filter((tag) => tag);
     },
 
     async handleSaveChat() {
       // Prevent double-save
       if (this.isSaving) {
-        console.log('Save already in progress, ignoring duplicate click')
-        return
+        console.log('Save already in progress, ignoring duplicate click');
+        return;
       }
 
-      console.log('handleSaveChat called')
-      this.isSaving = true
+      console.log('handleSaveChat called');
+      this.isSaving = true;
 
       try {
         console.log('Saving chat with data:', {
           title: this.saveChatDialog.title,
           folderId: this.saveChatDialog.folderId,
-          messages: this.chatMessages,
-        })
+          messages: this.chatMessages
+        });
 
-        const currentUser = this.$store.getters.currentUser
+        const currentUser = this.$store.getters.currentUser;
         if (!currentUser || !getUserId(currentUser)) {
-          throw new Error('User not authenticated')
+          throw new Error('User not authenticated');
         }
 
-        const firstUserMessage = this.chatMessages.find((msg) => msg.sender === 'user')?.content || ''
+        const firstUserMessage = this.chatMessages.find((msg) => msg.sender === 'user')?.content || '';
 
         const conversationData = {
           title: this.saveChatDialog.title || this.generateChatTitle(),
           initialMessage: firstUserMessage,
           categoryId: this.currentCategoryId || null,
-          tags: this.getContextTags(),
-        }
+          tags: this.getContextTags()
+        };
 
         if (this.conversationId) {
-          throw new Error('handleSaveChat should not be called for existing conversations')
+          throw new Error('handleSaveChat should not be called for existing conversations');
         }
 
-        console.log('chatHistoryService.createConversation called with:', conversationData)
-        const conversation = await this.chatHistoryService.createConversation(conversationData)
-        console.log('Conversation created:', conversation)
-        this.conversationId = conversation._key
+        console.log('chatHistoryService.createConversation called with:', conversationData);
+        const conversation = await this.chatHistoryService.createConversation(conversationData);
+        console.log('Conversation created:', conversation);
+        this.conversationId = conversation._key;
 
         for (const message of this.chatMessages) {
           if (
             (message.sender === 'bot' && !message.queryId) ||
             (message.sender === 'user' && message.content === firstUserMessage && !message.isSaved)
           ) {
-            console.log(`Skipping message: ${message.content}`)
-            message.isSaved = true
-            continue
+            console.log(`Skipping message: ${message.content}`);
+            message.isSaved = true;
+            continue;
           }
 
           if (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) {
@@ -1159,12 +1160,12 @@ export default {
               content: message.content,
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
-              metadata: message.metadata || {},
-            }
-            console.log('Adding message with data:', messageData)
-            console.log('chatHistoryService.addMessage called with:', messageData)
-            await this.chatHistoryService.addMessage(messageData)
-            message.isSaved = true
+              metadata: message.metadata || {}
+            };
+            console.log('Adding message with data:', messageData);
+            console.log('chatHistoryService.addMessage called with:', messageData);
+            await this.chatHistoryService.addMessage(messageData);
+            message.isSaved = true;
           }
         }
 
@@ -1175,66 +1176,63 @@ export default {
           folderId: this.saveChatDialog.folderId || 'default',
           messageCount: this.chatMessages.filter(
             (msg) => msg.sender === 'user' || (msg.sender === 'bot' && msg.queryId)
-          ).length,
-        }
-        console.log('Dispatching createChat with:', chatData)
-        await this.$store.dispatch('chatHistory/createChat', chatData)
-        console.log('Vuex chats state after createChat:', this.$store.state.chatHistory.chats)
+          ).length
+        };
+        console.log('Dispatching createChat with:', chatData);
+        await this.$store.dispatch('chatHistory/createChat', chatData);
+        console.log('Vuex chats state after createChat:', this.$store.state.chatHistory.chats);
 
         if (this.saveChatDialog.folderId && this.saveChatDialog.folderId !== 'default') {
           console.log('chatHistoryService.addConversationToFolder called with:', {
             folderId: this.saveChatDialog.folderId,
-            conversationId: conversation._key,
-          })
-          await this.chatHistoryService.addConversationToFolder(
-            this.saveChatDialog.folderId,
-            conversation._key
-          )
-          console.log(`Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`)
+            conversationId: conversation._key
+          });
+          await this.chatHistoryService.addConversationToFolder(this.saveChatDialog.folderId, conversation._key);
+          console.log(`Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`);
           console.log('Dispatching addChatToFolder with:', {
             chatId: conversation._key,
-            folderId: this.saveChatDialog.folderId,
-          })
+            folderId: this.saveChatDialog.folderId
+          });
           await this.$store.dispatch('chatHistory/addChatToFolder', {
             chatId: conversation._key,
-            folderId: this.saveChatDialog.folderId,
-          })
+            folderId: this.saveChatDialog.folderId
+          });
           console.log(
             'Vuex folderChats state after addChatToFolder:',
             this.$store.state.chatHistory.folderChats[this.saveChatDialog.folderId]
-          )
+          );
         }
 
-        this.currentChatId = conversation._key
-        this.currentChatTitle = conversationData.title
-        this.lastSavedState.messages = [...this.chatMessages]
-        this.lastSavedState.contextItems = [...this.selectedContextItems]
-        this.updateChatInHistory()
+        this.currentChatId = conversation._key;
+        this.currentChatTitle = conversationData.title;
+        this.lastSavedState.messages = [...this.chatMessages];
+        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.updateChatInHistory();
 
-        notificationService.success(this.translate('chatbot.chatSaved'))
-        this.saveChatDialog.visible = false
+        notificationService.success(this.translate('chatbot.chatSaved'));
+        this.saveChatDialog.visible = false;
 
-        console.log(`Emitting conversation-saved event for conversation ${conversation._key}`)
-        eventBus.$emit('conversation-saved', conversation._key)
+        console.log(`Emitting conversation-saved event for conversation ${conversation._key}`);
+        eventBus.$emit('conversation-saved', conversation._key);
       } catch (error) {
-        console.error('Error saving chat:', error)
-        notificationService.error('Failed to save chat. Please try again.')
-        throw error
+        console.error('Error saving chat:', error);
+        notificationService.error('Failed to save chat. Please try again.');
+        throw error;
       } finally {
-        this.isSaving = false
+        this.isSaving = false;
       }
     },
 
     async updateExistingChat() {
-      console.log('updateExistingChat called')
+      console.log('updateExistingChat called');
       try {
-        const currentUser = this.$store.getters.currentUser
+        const currentUser = this.$store.getters.currentUser;
         if (!currentUser || !getUserId(currentUser)) {
-          throw new Error('User not authenticated')
+          throw new Error('User not authenticated');
         }
 
         if (!this.conversationId) {
-          throw new Error('Conversation ID is required for updating an existing chat')
+          throw new Error('Conversation ID is required for updating an existing chat');
         }
 
         const updateData = {
@@ -1242,19 +1240,19 @@ export default {
           categoryId: this.currentCategoryId || null,
           tags: this.getContextTags(),
           isStarred: false,
-          isArchived: false,
-        }
+          isArchived: false
+        };
         console.log('chatHistoryService.updateConversation called with:', {
           conversationId: this.conversationId,
-          updateData,
-        })
-        const conversation = await this.chatHistoryService.updateConversation(this.conversationId, updateData)
-        console.log('Conversation updated:', conversation)
+          updateData
+        });
+        const conversation = await this.chatHistoryService.updateConversation(this.conversationId, updateData);
+        console.log('Conversation updated:', conversation);
 
         for (const message of this.chatMessages) {
           if (message.isSaved) {
-            console.log(`Skipping already saved message: ${message.content}`)
-            continue
+            console.log(`Skipping already saved message: ${message.content}`);
+            continue;
           }
           if (message.sender === 'user' || (message.sender === 'bot' && message.queryId)) {
             const messageData = {
@@ -1262,25 +1260,25 @@ export default {
               content: message.content,
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
-              metadata: message.metadata || {},
-            }
-            console.log('Adding message with data:', messageData)
-            console.log('chatHistoryService.addMessage called with:', messageData)
-            await this.chatHistoryService.addMessage(messageData)
-            message.isSaved = true
+              metadata: message.metadata || {}
+            };
+            console.log('Adding message with data:', messageData);
+            console.log('chatHistoryService.addMessage called with:', messageData);
+            await this.chatHistoryService.addMessage(messageData);
+            message.isSaved = true;
           }
         }
 
-        this.currentChatId = this.conversationId
-        this.lastSavedState.messages = [...this.chatMessages]
-        this.lastSavedState.contextItems = [...this.selectedContextItems]
-        this.updateChatInHistory()
+        this.currentChatId = this.conversationId;
+        this.lastSavedState.messages = [...this.chatMessages];
+        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.updateChatInHistory();
 
-        notificationService.success(this.translate('chatbot.chatUpdated'))
+        notificationService.success(this.translate('chatbot.chatUpdated'));
       } catch (error) {
-        console.error('Error updating chat:', error)
-        notificationService.error('Failed to update chat. Please try again.')
-        throw error
+        console.error('Error updating chat:', error);
+        notificationService.error('Failed to update chat. Please try again.');
+        throw error;
       }
     },
 
@@ -1289,275 +1287,275 @@ export default {
         this.updateChat({
           chatId: this.currentChatId,
           preview: this.chatPreview,
-          fullChatData: JSON.stringify(this.chatMessages),
-        })
+          fullChatData: JSON.stringify(this.chatMessages)
+        });
       }
     },
 
     loadChatFromHistory(chatId) {
-      const chat = this.getChatById(chatId)
-      if (!chat) return
+      const chat = this.getChatById(chatId);
+      if (!chat) return;
       try {
-        const storedChatData = localStorage.getItem(`chat_data_${chatId}`)
+        const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
         if (storedChatData) {
-          this.chatMessages = JSON.parse(storedChatData)
+          this.chatMessages = JSON.parse(storedChatData);
         } else {
           this.chatMessages = [
             {
               sender: 'bot',
-              content: this.translate('chatbot.welcomeMessage'),
-            },
-          ]
+              content: this.translate('chatbot.welcomeMessage')
+            }
+          ];
         }
-        this.currentChatId = chatId
-        this.showQuickHelp = false
-        this.scrollToBottom()
+        this.currentChatId = chatId;
+        this.showQuickHelp = false;
+        this.scrollToBottom();
       } catch (error) {
-        console.error('Error loading chat:', error)
-        notificationService.error(this.translate('chatbot.loadError'))
+        console.error('Error loading chat:', error);
+        notificationService.error(this.translate('chatbot.loadError'));
       }
     },
 
     generateChatTitle() {
-      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user')
+      const userMessage = this.chatMessages.find((msg) => msg.sender === 'user');
       if (userMessage) {
-        return userMessage.content.length > 20 ? userMessage.content.substring(0, 17) + '...' : userMessage.content
+        return userMessage.content.length > 20 ? userMessage.content.substring(0, 17) + '...' : userMessage.content;
       }
-      const now = new Date()
-      return `Chat - ${now.toLocaleDateString()}`
+      const now = new Date();
+      return `Chat - ${now.toLocaleDateString()}`;
     },
 
     startNewChat() {
       if (this.hasUnsavedChanges()) {
-        this.showNewChatConfirm = true
+        this.showNewChatConfirm = true;
         this.newChatDialog = {
           title: this.translate('chatbot.newChatTitle'),
           message: this.translate('chatbot.unsavedChanges'),
           confirmText: this.translate('chatbot.saveAndStartNew'),
           cancelText: this.translate('chatbot.discardAndStartNew'),
-          secondaryText: this.translate('common.cancel'),
-        }
+          secondaryText: this.translate('common.cancel')
+        };
       } else {
-        this.startNewChatConfirmed()
+        this.startNewChatConfirmed();
       }
     },
 
     async saveAndStartNewChat() {
-      this.showNewChatConfirm = false
+      this.showNewChatConfirm = false;
       try {
         if (this.conversationId || this.currentChatId) {
-          await this.updateExistingChat()
+          await this.updateExistingChat();
         } else {
           this.saveChatDialog = {
             visible: true,
             title: this.generateChatTitle(),
-            folderId: 'default',
-          }
+            folderId: 'default'
+          };
           await new Promise((resolve) => {
             const unwatch = this.$watch('saveChatDialog.visible', (newVal) => {
               if (!newVal) {
-                unwatch()
-                resolve()
+                unwatch();
+                resolve();
               }
-            })
-          })
+            });
+          });
         }
-        this.startNewChatConfirmed()
+        this.startNewChatConfirmed();
       } catch (error) {
-        console.error('Error saving before starting new chat:', error)
-        notificationService.error('Failed to save changes. Please try again.')
+        console.error('Error saving before starting new chat:', error);
+        notificationService.error('Failed to save changes. Please try again.');
       }
     },
 
     startNewChatConfirmed() {
-      this.showNewChatConfirm = false
+      this.showNewChatConfirm = false;
       this.chatMessages = [
         {
           sender: 'bot',
           content: this.translate('chatbot.welcomeMessage'),
           timestamp: new Date().toISOString(),
-          isSaved: true,
-        },
-      ]
-      this.currentChatId = null
-      this.conversationId = null
-      this.selectedContextItems = []
-      this.newMessage = ''
-      this.currentCategoryId = null
-      this.currentChatTitle = ''
-      this.showQuickHelp = true
-      this.relatedDocuments = []
+          isSaved: true
+        }
+      ];
+      this.currentChatId = null;
+      this.conversationId = null;
+      this.selectedContextItems = [];
+      this.newMessage = '';
+      this.currentCategoryId = null;
+      this.currentChatTitle = '';
+      this.showQuickHelp = true;
+      this.relatedDocuments = [];
       this.lastSavedState = {
         messages: JSON.parse(JSON.stringify(this.chatMessages)),
-        contextItems: [],
-      }
-      this.scrollToBottom()
-      notificationService.info(this.translate('chatbot.newChatStarted'), 1500)
+        contextItems: []
+      };
+      this.scrollToBottom();
+      notificationService.info(this.translate('chatbot.newChatStarted'), 1500);
     },
 
     cancelNewChat() {
-      this.showNewChatConfirm = false
+      this.showNewChatConfirm = false;
     },
 
     openExportDialog() {
       this.exportDialog = {
         visible: true,
-        filename: this.generateChatTitle(),
-      }
+        filename: this.generateChatTitle()
+      };
     },
 
     _processInlineTokens(tokens) {
-      const parts = []
+      const parts = [];
       if (!tokens) {
-        return parts
+        return parts;
       }
 
       tokens.forEach((token) => {
         switch (token.type) {
           case 'strong': {
-            const boldParts = this._processInlineTokens(token.tokens)
-            boldParts.forEach((p) => (p.style = 'bold'))
-            parts.push(...boldParts)
-            break
+            const boldParts = this._processInlineTokens(token.tokens);
+            boldParts.forEach((p) => (p.style = 'bold'));
+            parts.push(...boldParts);
+            break;
           }
           case 'em': {
-            const italicParts = this._processInlineTokens(token.tokens)
-            italicParts.forEach((p) => (p.style = 'italic'))
-            parts.push(...italicParts)
-            break
+            const italicParts = this._processInlineTokens(token.tokens);
+            italicParts.forEach((p) => (p.style = 'italic'));
+            parts.push(...italicParts);
+            break;
           }
           case 'codespan':
-            parts.push({ text: token.text, style: 'code' })
-            break
+            parts.push({ text: token.text, style: 'code' });
+            break;
           case 'link': {
-            const linkParts = this._processInlineTokens(token.tokens)
-            linkParts.forEach((p) => (p.style = 'link'))
-            parts.push(...linkParts)
-            break
+            const linkParts = this._processInlineTokens(token.tokens);
+            linkParts.forEach((p) => (p.style = 'link'));
+            parts.push(...linkParts);
+            break;
           }
           case 'text':
-            parts.push({ text: token.text, style: 'normal' })
-            break
+            parts.push({ text: token.text, style: 'normal' });
+            break;
           default:
             if (token.text) {
-              parts.push({ text: token.text, style: 'normal' })
+              parts.push({ text: token.text, style: 'normal' });
             }
-            break
+            break;
         }
-      })
-      return parts
+      });
+      return parts;
     },
 
     parseMarkdownForPDF(markdown) {
       try {
-        const tokens = marked.lexer(markdown)
-        const result = []
-        let listCounter = 0
-        let listOrdered = false
+        const tokens = marked.lexer(markdown);
+        const result = [];
+        let listCounter = 0;
+        let listOrdered = false;
 
         tokens.forEach((token) => {
           switch (token.type) {
             case 'space':
-              result.push({ type: 'space' })
-              break
+              result.push({ type: 'space' });
+              break;
             case 'hr':
-              result.push({ type: 'hr' })
-              break
+              result.push({ type: 'hr' });
+              break;
             case 'heading': {
-              const headingParts = this._processInlineTokens(token.tokens)
-              headingParts.forEach((p) => (p.style = `h${token.depth}`))
-              result.push({ type: 'line', indent: 0, content: headingParts })
-              break
+              const headingParts = this._processInlineTokens(token.tokens);
+              headingParts.forEach((p) => (p.style = `h${token.depth}`));
+              result.push({ type: 'line', indent: 0, content: headingParts });
+              break;
             }
             case 'paragraph':
               result.push({
                 type: 'line',
                 indent: 0,
-                content: this._processInlineTokens(token.tokens),
-              })
-              break
+                content: this._processInlineTokens(token.tokens)
+              });
+              break;
             case 'list':
-              listOrdered = token.ordered
-              listCounter = token.start ? token.start - 1 : 0
+              listOrdered = token.ordered;
+              listCounter = token.start ? token.start - 1 : 0;
               token.items.forEach((item) => {
-                listCounter++
-                const prefix = listOrdered ? `${listCounter}. ` : '- '
-                const itemContent = this._processInlineTokens(item.tokens[0].tokens)
-                itemContent.unshift({ text: prefix, style: 'normal' })
-                result.push({ type: 'line', indent: 15, content: itemContent })
-              })
-              break
+                listCounter++;
+                const prefix = listOrdered ? `${listCounter}. ` : '- ';
+                const itemContent = this._processInlineTokens(item.tokens[0].tokens);
+                itemContent.unshift({ text: prefix, style: 'normal' });
+                result.push({ type: 'line', indent: 15, content: itemContent });
+              });
+              break;
             case 'code': {
-              const codeLines = token.text.split('\n')
+              const codeLines = token.text.split('\n');
               codeLines.forEach((line) => {
                 result.push({
                   type: 'line',
                   indent: 10,
-                  content: [{ text: line, style: 'code' }],
-                })
-              })
-              break
+                  content: [{ text: line, style: 'code' }]
+                });
+              });
+              break;
             }
             case 'blockquote': {
-              const quoteContent = token.tokens.map((tok) => this._processInlineTokens(tok.tokens))
+              const quoteContent = token.tokens.map((tok) => this._processInlineTokens(tok.tokens));
               quoteContent.forEach((lineContent) => {
                 result.push({
                   type: 'line',
                   indent: 20,
                   isQuote: true,
-                  content: lineContent,
-                })
-              })
-              break
+                  content: lineContent
+                });
+              });
+              break;
             }
           }
-        })
+        });
 
-        return result
+        return result;
       } catch (error) {
-        console.error('Error parsing markdown for PDF:', error)
+        console.error('Error parsing markdown for PDF:', error);
         return [
           {
             type: 'line',
             indent: 0,
-            content: [{ text: markdown, style: 'normal' }],
-          },
-        ]
+            content: [{ text: markdown, style: 'normal' }]
+          }
+        ];
       }
     },
 
     exportChatToPDF() {
       try {
-        const doc = new jsPDF()
-        let yOffset = 20
-        const pageHeight = doc.internal.pageSize.height
-        const topMargin = 20
-        const bottomMargin = 20
-        const leftMargin = 15
-        const rightMargin = doc.internal.pageSize.width - 15
+        const doc = new jsPDF();
+        let yOffset = 20;
+        const pageHeight = doc.internal.pageSize.height;
+        const topMargin = 20;
+        const bottomMargin = 20;
+        const leftMargin = 15;
+        const rightMargin = doc.internal.pageSize.width - 15;
 
         const checkPageBreak = (neededHeight = 10) => {
           if (yOffset + neededHeight > pageHeight - bottomMargin) {
-            doc.addPage()
-            yOffset = topMargin
+            doc.addPage();
+            yOffset = topMargin;
           }
-        }
+        };
 
-        doc.setFontSize(16)
-        doc.setFont('helvetica', 'bold')
-        doc.text(this.currentChatTitle || this.generateChatTitle(), leftMargin, yOffset)
-        yOffset += 15
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(this.currentChatTitle || this.generateChatTitle(), leftMargin, yOffset);
+        yOffset += 15;
 
         this.chatMessages.forEach((msg) => {
-          checkPageBreak(20)
-          yOffset += 5
+          checkPageBreak(20);
+          yOffset += 5;
 
-          doc.setFontSize(10)
-          doc.setFont('helvetica', 'bold')
-          const sender = msg.sender === 'user' ? 'User' : 'Bot'
-          const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : new Date().toLocaleString()
-          doc.text(`${sender} (${timestamp}):`, leftMargin, yOffset)
-          yOffset += 6
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          const sender = msg.sender === 'user' ? 'User' : 'Bot';
+          const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : new Date().toLocaleString();
+          doc.text(`${sender} (${timestamp}):`, leftMargin, yOffset);
+          yOffset += 6;
 
           const parsedContent =
             msg.sender === 'bot' && msg.content
@@ -1566,93 +1564,93 @@ export default {
                   {
                     type: 'line',
                     content: [{ text: msg.content || '', style: 'normal' }],
-                    indent: 0,
-                  },
-                ]
+                    indent: 0
+                  }
+                ];
 
           parsedContent.forEach((block) => {
-            checkPageBreak()
+            checkPageBreak();
 
             if (block.type === 'space') {
-              yOffset += 5
-              return
+              yOffset += 5;
+              return;
             }
             if (block.type === 'hr') {
-              doc.setDrawColor(150)
-              doc.line(leftMargin, yOffset + 2, rightMargin, yOffset + 2)
-              yOffset += 6
-              return
+              doc.setDrawColor(150);
+              doc.line(leftMargin, yOffset + 2, rightMargin, yOffset + 2);
+              yOffset += 6;
+              return;
             }
             if (!block.content || block.content.length === 0) {
-              yOffset += 3
-              return
+              yOffset += 3;
+              return;
             }
 
-            let xOffset = leftMargin + (block.indent || 0)
+            let xOffset = leftMargin + (block.indent || 0);
 
             if (block.isQuote) {
-              doc.setFillColor(230, 230, 230)
-              doc.rect(leftMargin, yOffset - 4, 3, 6, 'F')
+              doc.setFillColor(230, 230, 230);
+              doc.rect(leftMargin, yOffset - 4, 3, 6, 'F');
             }
 
-            let linePartsQueue = [...block.content]
+            const linePartsQueue = [...block.content];
 
             while (linePartsQueue.length > 0) {
-              const part = linePartsQueue.shift()
-              const availableWidth = rightMargin - xOffset
+              const part = linePartsQueue.shift();
+              const availableWidth = rightMargin - xOffset;
 
-              doc.setFontSize(12)
-              let fontStyle = 'normal'
-              if (part.style === 'bold') fontStyle = 'bold'
-              if (part.style === 'italic') fontStyle = 'italic'
-              doc.setFont('helvetica', fontStyle)
+              doc.setFontSize(12);
+              let fontStyle = 'normal';
+              if (part.style === 'bold') fontStyle = 'bold';
+              if (part.style === 'italic') fontStyle = 'italic';
+              doc.setFont('helvetica', fontStyle);
 
               if (part.style && part.style.startsWith('h')) {
-                const level = parseInt(part.style.replace('h', '')) || 1
-                doc.setFontSize(12 + (6 - level) * 2)
-                doc.setFont('helvetica', 'bold')
+                const level = parseInt(part.style.replace('h', '')) || 1;
+                doc.setFontSize(12 + (6 - level) * 2);
+                doc.setFont('helvetica', 'bold');
               } else if (part.style === 'code') {
-                doc.setFont('courier', 'normal')
-                doc.setFontSize(10)
+                doc.setFont('courier', 'normal');
+                doc.setFontSize(10);
               }
 
-              const splitText = doc.splitTextToSize(part.text, availableWidth)
+              const splitText = doc.splitTextToSize(part.text, availableWidth);
 
-              doc.text(splitText[0], xOffset, yOffset)
-              xOffset += (doc.getStringUnitWidth(splitText[0]) * doc.getFontSize()) / doc.internal.scaleFactor
+              doc.text(splitText[0], xOffset, yOffset);
+              xOffset += (doc.getStringUnitWidth(splitText[0]) * doc.getFontSize()) / doc.internal.scaleFactor;
 
               if (splitText.length > 1) {
-                const remainingText = splitText.slice(1).join(' ')
+                const remainingText = splitText.slice(1).join(' ');
                 linePartsQueue.unshift({
                   text: remainingText,
-                  style: part.style,
-                })
+                  style: part.style
+                });
 
-                yOffset += 6
-                checkPageBreak()
-                xOffset = leftMargin + (block.indent || 0)
+                yOffset += 6;
+                checkPageBreak();
+                xOffset = leftMargin + (block.indent || 0);
                 if (block.isQuote) {
-                  doc.setFillColor(230, 230, 230)
-                  doc.rect(leftMargin, yOffset - 4, 3, 6, 'F')
+                  doc.setFillColor(230, 230, 230);
+                  doc.rect(leftMargin, yOffset - 4, 3, 6, 'F');
                 }
               }
             }
-            yOffset += 6
-          })
-        })
+            yOffset += 6;
+          });
+        });
 
-        let filename = this.exportDialog.filename.trim()
+        let filename = this.exportDialog.filename.trim();
         if (!filename.toLowerCase().endsWith('.pdf')) {
-          filename += '.pdf'
+          filename += '.pdf';
         }
-        filename = filename.replace(/[^a-zA-Z0-9\-_.]/g, '_')
+        filename = filename.replace(/[^a-zA-Z0-9\-_.]/g, '_');
 
-        doc.save(filename)
-        notificationService.success(this.translate('chatbot.exportSuccess'))
-        this.exportDialog.visible = false
+        doc.save(filename);
+        notificationService.success(this.translate('chatbot.exportSuccess'));
+        this.exportDialog.visible = false;
       } catch (error) {
-        console.error('Error exporting chat to PDF:', error)
-        notificationService.error(this.translate('chatbot.exportError'))
+        console.error('Error exporting chat to PDF:', error);
+        notificationService.error(this.translate('chatbot.exportError'));
       }
     },
 
@@ -1662,18 +1660,18 @@ export default {
         message: this.translate('chatbot.unsavedChanges'),
         confirmText: this.translate('chatbot.saveAndStartNew'),
         cancelText: this.translate('chatbot.discardAndStartNew'),
-        secondaryText: this.translate('common.cancel'),
-      }
+        secondaryText: this.translate('common.cancel')
+      };
       this.loadConfirmDialog = {
         title: this.translate('chatbot.loadConfirmTitle'),
         message: this.translate('chatbot.loadConfirmMessage'),
         confirmText: this.translate('chatbot.loadAndDiscard'),
         cancelText: this.translate('common.cancel'),
-        secondaryText: this.translate('chatbot.saveAndLoad'),
-      }
-    },
-  },
-}
+        secondaryText: this.translate('chatbot.saveAndLoad')
+      };
+    }
+  }
+};
 </script>
 
 <style scoped>

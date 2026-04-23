@@ -82,14 +82,14 @@ RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "
 
 # Step G: Pre-install EasyOCR models (auto-download during build)
 # This prevents the service from hanging on its one-time model download at runtime.
-RUN mkdir -p /tmp/easyocr /root/.EasyOCR/model /root/.EasyOCR/config && \
+RUN mkdir -p /tmp/easyocr /home/user/.EasyOCR/model /home/user/.EasyOCR/config && \
 # 1. Download the 'en' (English) recognition model
     wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
 # 2. Download the text detection model
     wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
 # 3. Unzip the models
-    unzip -o /tmp/easyocr/english_g2.zip -d /root/.EasyOCR/model && \
-    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /root/.EasyOCR/model && \
+    unzip -o /tmp/easyocr/english_g2.zip -d /home/user/.EasyOCR/model && \
+    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /home/user/.EasyOCR/model && \
 # 4. Cleanup
     rm -rf /tmp/easyocr
 
@@ -121,5 +121,10 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
     sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py
 
-# Step K: Run the new GENIE-AI entry point from its new location
+# Step K: Create non-root user and set permissions
+RUN useradd -ms /bin/bash user && \
+    chown -R user:user /app /home/user
+
+# Step L: Run the new GENIE-AI entry point from its new location
+USER user
 CMD ["python", "comps/dataprep/src/genieai_dataprep_microservice.py"]

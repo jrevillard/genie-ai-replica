@@ -19,6 +19,7 @@ logger = logging.getLogger("GENIE.AI_CHATQNA")
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
 KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "genie-app")
+KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
 
 # JWKS cache
 _jwks_keys = None
@@ -34,7 +35,7 @@ async def _fetch_jwks():
     if _jwks_keys and (now - _jwks_fetched_at) < _JWKS_CACHE_TTL:
         return _jwks_keys
 
-    jwks_uri = f"{KEYCLOAK_URL}/realms/{KC_REALM}/protocol/openid-connect/certs"
+    jwks_uri = f"{KEYCLOAK_INTERNAL_URL}/realms/{KC_REALM}/protocol/openid-connect/certs"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(jwks_uri)

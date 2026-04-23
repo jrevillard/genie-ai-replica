@@ -14,6 +14,9 @@ import fcntl
 import os
 import time
 
+# --- CRITICAL FIX: Import Custom Component FIRST to register it ---
+from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
+
 # --- Import the entire base dataprep microservice safely ---
 import opea_dataprep_microservice as base
 

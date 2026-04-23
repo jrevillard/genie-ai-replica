@@ -1,9 +1,6 @@
 #!/bin/bash
-# Copyright (C) 2025 Intel Corporation
-# SPDX-License-Identifier: Apache-2.0
-
+cd /app/ChatQnA
 chatqna_arg=$CHATQNA_TYPE
-
 if [[ $chatqna_arg == "CHATQNA_FAQGEN" ]]; then
     python chatqna.py --faqgen
 elif [[ $chatqna_arg == "CHATQNA_NO_RERANK" ]]; then

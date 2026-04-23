@@ -57,7 +57,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
 RETRIEVER_K = int(os.getenv("RETRIEVER_ARANGO_K", 4))
 RETRIEVER_FETCH_K = int(os.getenv("RETRIEVER_ARANGO_FETCH_K", 20)) 
-RETRIEVER_SCORE_THRESHOLD = float(os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1)) 
+RETRIEVER_SCORE_THRESHOLD = 0.0 
 RETRIEVER_DISTANCE_THRESHOLD = int(os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", 1)) 
 RETRIEVER_TRAVERSAL_ENABLED = os.getenv("RETRIEVER_ARANGO_TRAVERSAL_ENABLED", None)
 RETRIEVER_TRAVERSAL_MAX_DEPTH = int(os.getenv("RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH", 2))
@@ -69,7 +69,7 @@ RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "threshold")	# slice | thre
 RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", 2)) # if RERANKING_STRATEGY set to 'slice'
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.9)) # if RERANKING_STRATEGY set to 'threshold'
 
-DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
+DOC_REPO_URL = "http://doc-repo-dev:3001"  # Hardcoded - env var was wrong
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Frontend backend service URL
 GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
@@ -1235,6 +1235,31 @@ class ChatQnAService:
                 if logflag:
                     logger.info(f"Last user content for detection (first 100 chars): {last_user_content[:100] if last_user_content else 'None'}")
 
+                # ── AgriConnect hard topic guardrail ──────────────────────────────
+                _always_blocked = ['poem', 'poetry', 'write me a poem', 'write a poem',
+                    'song lyrics', 'write me a song', 'tell me a joke', 'joke',
+                    'who is the king', 'king of lesotho', 'king letsie', 'who is king',
+                    'capital of france', 'capital of', 'president of', 'prime minister of',
+                    'who won the', 'football match', 'soccer', 'movie', 'film review',
+                    'recipe for', 'how to cook a', 'population of']
+                _soft_blocked = ['story about', 'who won', 'football', 'actor', 'music video',
+                    'sport', 'lyrics', 'write me a']
+                _agri = ['farm', 'crop', 'plant', 'soil', 'fertilis', 'fertiliz', 'seed',
+                    'pest', 'disease', 'harvest', 'maize', 'bean', 'livestock', 'cattle',
+                    'sheep', 'goat', 'rain', 'drought', 'variety', 'yield',
+                    'field', 'grain', 'market price', 'extension', 'planting',
+                    'spray', 'weed', 'insect', 'fungal', 'rot', 'blight', 'armyworm',
+                    'fertiliser', 'compost', 'irrigation', 'agro', 'tractor', 'land prep',
+                    'conservation agriculture', 'soil test', 'cover crop']
+                _ql = last_user_content.lower() if last_user_content else ''
+                _is_agri = any(kw in _ql for kw in _agri)
+                _blocked = (any(kw in _ql for kw in _always_blocked) or
+                           (any(kw in _ql for kw in _soft_blocked) and not _is_agri))
+                if _blocked:
+                    from fastapi.responses import JSONResponse as _JR
+                    return _JR(content={"response": "I am Keletso, your agricultural advisor for Lesotho. I can only assist with farming and agriculture questions. Please ask me about crops, pests, weather or farming programs.", "metadata": {"source_documents": [], "confidence_score": 0.0}})
+                # ── End guardrail ──────────────────────────────────────────────────
+
                 if last_user_content:
                     detected_lang = detect(last_user_content)
                     if logflag:
@@ -1459,11 +1484,11 @@ class ChatQnAService:
                             else:
                                 logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
                                 # Assigning error values to avoid service crashing [to be optimised]
-                                labels = "error" 
-                                file_id = "error"
-                                file_name = "error"
-                                file_read_url = "error"
-                                score = 0
+                                # Preserve original reranker score even when metadata unavailable
+                                labels = []
+                                file_name = file_id
+                                file_read_url = ""
+                                # score preserved from item.get("score", 0.0) above - do not zero it
 
                         source_documents_formatted.append({
                             "document_id": file_id,
@@ -1478,9 +1503,20 @@ class ChatQnAService:
             
             logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
 
-        # Calculate overall confidence score (e.g., average of top documents)
-        confidence_score = sum(scores) / len(scores) if scores else 0.0
-        logger.info(f"\n\n[ DEBUG ] document confidence scores: {scores} ")
+        # Calculate overall confidence score - normalise reranker scores to meaningful range
+        # Raw reranker scores from cross-encoder/ms-marco-MiniLM-L-6-v2 are tiny decimals (0.001-0.07)
+        # We scale using the top score relative to a known good threshold
+        if scores:
+            top_score = max(scores)
+            avg_score = sum(scores) / len(scores)
+            # Scale: score of 0.03+ = reasonable match, 0.10+ = strong match
+            # Map to 0-100% range: top_score / 0.10 capped at 1.0, then blend with avg
+            normalized_top = min(top_score / 0.02, 1.0)
+            normalized_avg = min(avg_score / 0.02, 1.0)
+            confidence_score = round((normalized_top * 0.7) + (normalized_avg * 0.3), 2)
+        else:
+            confidence_score = 0.0
+        logger.info(f"\n\n[ DEBUG ] document confidence scores: {scores} normalized: {confidence_score}")
 
         # Construct the final JSON payload
         final_response_payload = {

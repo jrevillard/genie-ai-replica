@@ -434,6 +434,8 @@ services:
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
+      # Logging (error, warn, info, debug)
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       # CORS (deployment-specific, localhost defaults)
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}

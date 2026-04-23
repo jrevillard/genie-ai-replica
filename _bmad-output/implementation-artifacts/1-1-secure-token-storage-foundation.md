@@ -1,6 +1,6 @@
 # Story 1.1: Secure Token Storage Foundation
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -26,30 +26,30 @@ so that authentication tokens are encrypted at rest and the auth stack is fully 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add new dependencies to pubspec.yaml (AC: #1)
-  - [ ] 1.1: Add `flutter_secure_storage: ^8.1.0` to dependencies
-  - [ ] 1.2: Add `flutter_appauth: ^11.0.0` to dependencies
-  - [ ] 1.3: Add `flutter_riverpod: ^3.0.0` to dependencies
-  - [ ] 1.4: Add `app_links: ^6.3.3` to dependencies (replaces unmaintained `uni_links`)
-  - [ ] 1.5: Run `flutter pub get` and verify all packages resolve
-  - [ ] 1.6: Verify `shared_preferences` and `crypto` remain in pubspec.yaml (Epic 6 removal)
-- [ ] Task 2: Create `lib/services/auth/token_storage.dart` (AC: #2, #3, #4, #5, #6)
-  - [ ] 2.1: Create `lib/services/auth/` directory
-  - [ ] 2.2: Define abstract `TokenStorage` class with 5 methods: `getAccessToken()`, `getIdToken()`, `getRefreshToken()`, `getAccessTokenExpiration()`, `saveTokens(...)`, `deleteAll()`
-  - [ ] 2.3: Implement `SecureTokenStorage` using `flutter_secure_storage` — stores/reads all tokens as single JSON blob under key `auth_tokens`
-  - [ ] 2.4: Handle `expiresIn` conversion: store as absolute `DateTime` (ISO 8601 string), read back as `DateTime`
-  - [ ] 2.5: Implement `InMemoryTokenStorage` using a `Map<String, String>` — identical API, no platform deps
-  - [ ] 2.6: Wrap `deleteAll()` in try-catch in `SecureTokenStorage` — silently handle keystore unavailability
-  - [ ] 2.7: Handle JSON parse errors gracefully (corrupt storage → return null)
-- [ ] Task 3: Write unit tests for `TokenStorage` (AC: #5)
-  - [ ] 3.1: Create `test/services/auth/` directory
-  - [ ] 3.2: Create `test/services/auth/token_storage_test.dart`
-  - [ ] 3.3: Test `InMemoryTokenStorage`: save tokens, read each individually, verify values match
-  - [ ] 3.4: Test `InMemoryTokenStorage`: `getAccessTokenExpiration()` returns correct DateTime
-  - [ ] 3.5: Test `InMemoryTokenStorage`: `deleteAll()` clears all tokens, subsequent reads return null
-  - [ ] 3.6: Test `InMemoryTokenStorage`: save with expiresIn=3600, verify expiration is ~1 hour from now
-  - [ ] 3.7: Test `InMemoryTokenStorage`: calling getters before save returns null
-  - [ ] 3.8: Run `flutter test test/services/auth/token_storage_test.dart` — all pass
+- [x] Task 1: Add new dependencies to pubspec.yaml (AC: #1)
+  - [x] 1.1: Add `flutter_secure_storage: ^8.1.0` to dependencies
+  - [x] 1.2: Add `flutter_appauth: ^11.0.0` to dependencies
+  - [x] 1.3: Add `flutter_riverpod: ^3.0.0` to dependencies
+  - [x] 1.4: Add `app_links: ^6.3.3` to dependencies (replaces unmaintained `uni_links`)
+  - [x] 1.5: Run `flutter pub get` and verify all packages resolve
+  - [x] 1.6: Verify `shared_preferences` and `crypto` remain in pubspec.yaml (Epic 6 removal)
+- [x] Task 2: Create `lib/services/auth/token_storage.dart` (AC: #2, #3, #4, #5, #6)
+  - [x] 2.1: Create `lib/services/auth/` directory
+  - [x] 2.2: Define abstract `TokenStorage` class with 5 methods: `getAccessToken()`, `getIdToken()`, `getRefreshToken()`, `getAccessTokenExpiration()`, `saveTokens(...)`, `deleteAll()`
+  - [x] 2.3: Implement `SecureTokenStorage` using `flutter_secure_storage` — stores/reads all tokens as single JSON blob under key `auth_tokens`
+  - [x] 2.4: Handle `expiresIn` conversion: store as absolute `DateTime` (ISO 8601 string), read back as `DateTime`
+  - [x] 2.5: Implement `InMemoryTokenStorage` using a `Map<String, String>` — identical API, no platform deps
+  - [x] 2.6: Wrap `deleteAll()` in try-catch in `SecureTokenStorage` — silently handle keystore unavailability
+  - [x] 2.7: Handle JSON parse errors gracefully (corrupt storage → return null)
+- [x] Task 3: Write unit tests for `TokenStorage` (AC: #5)
+  - [x] 3.1: Create `test/services/auth/` directory
+  - [x] 3.2: Create `test/services/auth/token_storage_test.dart`
+  - [x] 3.3: Test `InMemoryTokenStorage`: save tokens, read each individually, verify values match
+  - [x] 3.4: Test `InMemoryTokenStorage`: `getAccessTokenExpiration()` returns correct DateTime
+  - [x] 3.5: Test `InMemoryTokenStorage`: `deleteAll()` clears all tokens, subsequent reads return null
+  - [x] 3.6: Test `InMemoryTokenStorage`: save with expiresIn=3600, verify expiration is ~1 hour from now
+  - [x] 3.7: Test `InMemoryTokenStorage`: calling getters before save returns null
+  - [x] 3.8: Run `flutter test test/services/auth/token_storage_test.dart` — all pass
 
 ## Dev Notes
 
@@ -163,8 +163,30 @@ abstract class TokenStorage {
 
 ### Agent Model Used
 
+glm-5-turbo
+
 ### Debug Log References
+
+(none)
 
 ### Completion Notes List
 
+- Added 4 new dependencies to pubspec.yaml: flutter_secure_storage ^8.1.0, flutter_appauth ^11.0.0, flutter_riverpod ^3.0.0, app_links ^6.3.3
+- Created abstract TokenStorage class with 5 methods + saveTokens with DateTime parameter
+- Implemented SecureTokenStorage using flutter_secure_storage with JSON blob under single key auth_tokens
+- Implemented InMemoryTokenStorage using Map<String, String> for testability without platform deps
+- deleteAll() in SecureTokenStorage silently catches keystore errors
+- JSON parse errors return null (corrupt storage treated as unauthenticated)
+- 11 unit tests covering all InMemoryTokenStorage behaviors — all pass
+- Full test suite passes (13/13), no regressions
+
 ### File List
+
+- mobile/genie_ai_mobile/pubspec.yaml (modified)
+- mobile/genie_ai_mobile/lib/services/auth/token_storage.dart (new)
+- mobile/genie_ai_mobile/test/services/auth/token_storage_test.dart (new)
+
+## Change Log
+
+- 2026-04-23: Story implemented — TokenStorage abstraction, SecureTokenStorage, InMemoryTokenStorage, 11 unit tests
+- 2026-04-23: Code review — 2 fixes applied (M4: narrow _readBlob catch to FormatException; M3: clarify deleteAll scope), 3 pushbacks (M1: YAGNI multi-read; M2/M5: SecureTokenStorage tests deferred to Epic 6 integration per AC5), 2 invalid (L1: const impossible with mutable map; L2: Dart single-threaded)

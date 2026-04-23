@@ -84,8 +84,10 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 2. **Refresh token rotation:** FR5 specifies storing the new refresh token returned by Keycloak. Keycloak supports refresh token rotation (each refresh issues a new RT and invalidates the old one), but it must be explicitly enabled on the Keycloak client. The architecture must ensure the mobile Keycloak client has refresh token rotation enabled, and the app correctly replaces the stored RT on each refresh.
 3. **Auth state service pattern (NFR6):** NFR6 requires auth state to be recalculated on every token operation with no stale state possible. This implies a centralized `AuthState` service with a reactive stream (`Stream<AuthStatus>`) that the entire UI subscribes to. The web equivalent is the Vuex auth module. Flutter needs a pattern decision: `ChangeNotifier`, `StreamBuilder`, or a lightweight state management solution. This decision affects the entire app architecture.
 4. **`flutter_secure_storage` abstraction for CI:** Unit tests in CI (Docker runner) cannot access platform keystore/keychain. The storage layer needs an injectable wrapper with a mock implementation for tests. This is a testability constraint that shapes the auth service constructor design.
-5. **White-label delivery pipeline friction:** Each new deployment requires manual Keycloak client creation. This is an operational friction point that the architecture should document. At Growth phase, consider a backend provisioning endpoint or a script to automate Keycloak client creation.
-6. **401 → refresh → retry race condition (FR8):** The PRD test matrix covers this as unit test only. An API call in flight when the token expires triggers 401 → silent refresh → request retry. This pattern should also be covered by integration tests with a mock backend, not just Dart unit tests.
+5. **White-label delivery pipeline friction:** Each new deployment requires a Keycloak client. The project already uses `keycloak-config-cli` (adorsys/keycloak-config-cli) with `genie-realm.yaml` for automated realm configuration. The mobile client is added as a new section in `genie-realm.yaml` with environment variables (`KC_MOBILE_CLIENT_ID`, `KC_MOBILE_REDIRECT_SCHEME`). This reuses the existing infrastructure — no manual Keycloak console setup required.
+6. **Token expiration detection:** The app does not parse JWTs locally. Token expiration is tracked via the `expiresIn` field from `flutter_appauth`'s `TokenResponse`, stored as an absolute `DateTime` in `TokenStorage`. When `validateTokens()` runs on `AppLifecycleState.resumed`, it compares `DateTime.now()` with the stored expiration date — no JWT decoding, no network roundtrip. If expired, a silent refresh is attempted. This is the standard pattern used by `AppAuth-iOS` and `AppAuth-Android`.
+
+7. **401 → refresh → retry race condition (FR8):** The PRD test matrix covers this as unit test only. An API call in flight when the token expires triggers 401 → silent refresh → request retry. This pattern should also be covered by integration tests with a mock backend, not just Dart unit tests.
 
 ## Integration Component Evaluation
 
@@ -131,6 +133,7 @@ mobile/genie_ai_mobile/
 | `crypto` | `^3.0.3` | Remove | **Remove** (SHA-256 login hashing, verify no other usage first) |
 | `http` | `^1.6.0` | Keep | Keep — base HTTP client, Bearer interceptor added here |
 | `connectivity_plus` | `^7.0.0` | Keep | Keep (network detection, NFR4) |
+| `uni_links` | Latest stable | **Add** | Deep link handler (OIDC callback + Universal Links routing) |
 | `url_launcher` | `^6.3.1` | Keep | Keep (Keycloak `end_session_endpoint` redirect) |
 | `flutter_lints` | `^6.0.0` | Keep | Keep |
 
@@ -143,7 +146,7 @@ mobile/genie_ai_mobile/
 | `flutter_riverpod` | `^2.6.1`+ | State management — `StateNotifierProvider` for auth and future reactive states | New |
 | Auth state service | New file | Riverpod `StateNotifierProvider<AuthNotifier, AuthStatus>` — centralized reactive auth state | New |
 | Token storage abstraction | New file | `TokenStorage` abstract class + `SecureTokenStorage` (prod) + `InMemoryTokenStorage` (test) | New |
-| Deep link handler | New file | Custom URL scheme routing for OIDC callback | New |
+| Deep link handler | New file | Custom URL scheme routing for OIDC callback via `uni_links` | New |
 | HTTP Bearer interceptor | Modify `api_service.dart` | `http.BaseClient` override injecting Bearer token + 401 → refresh → retry | Modified |
 
 ### ApiService Rewrite Scope
@@ -205,7 +208,6 @@ The PRD mobile aligns with the existing web architecture decision:
 - D6: AppLifecycle + Deep Link + Flavor strategy — multi-concern integration layer
 
 **Deferred Decisions (Post-MVP):**
-- Automated Keycloak client provisioning per deployment — manual setup documented in deployment guide
 - Push notification integration with auth state — not in scope
 
 ### D1: Auth State Machine
@@ -229,23 +231,25 @@ class AuthState {
 
 ### D2: TokenStorage Interface
 
-**Decision:** Four-method interface with `id_token` stored, constructor injection.
+**Decision:** Five-method interface with `id_token` and `expires_in` stored, constructor injection. Token expiration tracked via `expiresIn` from `flutter_appauth` `TokenResponse` — stored as absolute `DateTime`, no JWT parsing needed.
 
 ```dart
 abstract class TokenStorage {
   Future<String?> getAccessToken();
   Future<String?> getIdToken();
   Future<String?> getRefreshToken();
+  Future<DateTime?> getAccessTokenExpiration();
   Future<void> saveTokens({
     required String accessToken,
     required String idToken,
     required String refreshToken,
+    required DateTime accessTokenExpiration,
   });
   Future<void> deleteAll();
 }
 ```
 
-- Rationale: Four methods — `saveTokens` writes all three tokens, `deleteAll` clears everything on logout. `id_token` stored because Keycloak `end_session_endpoint` accepts `id_token_hint` for session targeting. Constructor injection allows `SecureTokenStorage` (prod, `flutter_secure_storage`) and `InMemoryTokenStorage` (test) without platform dependency.
+- Rationale: Five methods — `saveTokens` writes all three tokens plus the expiration date from `flutter_appauth`'s `TokenResponse.expiresIn`. `deleteAll` clears everything on logout. `id_token` stored because Keycloak `end_session_endpoint` accepts `id_token_hint` for session targeting. `getAccessTokenExpiration()` returns the stored absolute expiration date for token validity checks. Constructor injection allows `SecureTokenStorage` (prod, `flutter_secure_storage`) and `InMemoryTokenStorage` (test) without platform dependency.
 - **Atomicity caveat:** `flutter_secure_storage` does not support transactions — each `write()` call is independent. If the app crashes between writing the access token and refresh token, storage is in a partial state. **Mitigation:** on app startup, `AuthNotifier` checks all three tokens are present; if any is missing, treat as `unauthenticated`. Alternatively, `SecureTokenStorage` can serialize all three tokens as a single JSON blob written to one key (`auth_tokens`) to achieve atomicity at the application level.
 - Affects: `token_storage.dart`, `auth_notifier.dart` constructor, unit test setup
 
@@ -441,7 +445,7 @@ class AuthNotifier extends StateNotifier<AuthState> with WidgetsBindingObserver 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      validateTokens(); // silent check, refresh if expired
+      validateTokens(); // silent check via stored expiresIn, refresh if expired
     }
   }
 }
@@ -452,7 +456,7 @@ class AuthNotifier extends StateNotifier<AuthState> with WidgetsBindingObserver 
 **Deep Link Strategy:**
 - Custom URL scheme (`genieai://callback`) for OIDC callback — configured per flavor in `AndroidManifest.xml` / `Info.plist`
 - Universal Links (iOS) / App Links (Android) for password reset — domain-verified deep links prevent app interception. Requires server-side files (`apple-app-site-association`, `assetlinks.json`) hosted on each deployment's Keycloak domain
-- Deep link handler in `main.dart` via `uni_links` or platform-specific intent filters
+- Deep link handler in `main.dart` via `uni_links` (flutter_appauth + uni_links are the proven mobile OIDC stack)
 - **Implementation note:** Universal Links / App Links require server-side configuration (hosted JSON files on Keycloak domain) + platform-specific setup in `AndroidManifest.xml` (intent-filter with `autoVerify`) and `Info.plist` (Associated Domains entitlement). The deployment guide must document these server-side files per deployment.
 
 - Affects: `lib/config/` directory, `auth_notifier.dart`, `main.dart`, Android/iOS platform config
@@ -917,7 +921,6 @@ The following issues were identified through adversarial and edge-case review an
 - Flavor system supports white-label multi-deployment without code generation tooling
 
 **Areas for Future Enhancement:**
-- Automated Keycloak client provisioning per deployment
 - Biometric authentication as additional factor
 - iOS CI pipeline (currently best-effort, Android primary)
 
@@ -931,13 +934,14 @@ The following issues were identified through adversarial and edge-case review an
 - Never re-introduce `badCertificateCallback`, `shared_preferences`, or plaintext token storage
 
 **First Implementation Priority:**
-1. `pubspec.yaml` — add dependencies (flutter_appauth, flutter_secure_storage, flutter_riverpod), remove (shared_preferences, crypto)
-2. `services/auth/token_storage.dart` — abstract class + implementations
-3. `services/auth/auth_state.dart` — enum + class
-4. `services/auth/auth_notifier.dart` — core logic
-5. `services/auth/auth_providers.dart` — Riverpod wiring
-6. `services/api_service.dart` — add AuthInterceptor
-7. `config/` — flavor system
-8. `main.dart` — ProviderScope, remove badCertificateCallback, deep link handler
-9. Legacy removal — delete auth screens, auth_proxy.dart, password_proxy.dart
-10. Tests — unit tests for all auth components
+1. `pubspec.yaml` — add dependencies (flutter_appauth, flutter_secure_storage, flutter_riverpod, uni_links), remove (shared_preferences, crypto) in Epic 6
+2. `services/auth/token_storage.dart` — abstract class + implementations (5-method interface with `getAccessTokenExpiration()`)
+3. `services/auth/auth_state.dart` — enum + class (three-state machine)
+4. `services/auth/auth_notifier.dart` — core logic (expiresIn-based expiration, no JWT parsing)
+5. `services/auth/auth_providers.dart` — Riverpod wiring (StateNotifierProvider pattern)
+6. `services/api_service.dart` — add AuthInterceptor (`Completer<String?>` mutex, `http.BaseClient` override)
+7. `config/` — flavor system (gradle productFlavors + iOS XCConfig + `--dart-define`)
+8. `main.dart` — ProviderScope, remove badCertificateCallback, deep link handler (uni_links)
+9. `configs/keycloak/genie-realm.yaml` — add mobile client via keycloak-config-cli (env vars: `KC_MOBILE_CLIENT_ID`, `KC_MOBILE_REDIRECT_SCHEME`)
+10. Legacy removal — delete auth screens, auth_proxy.dart, password_proxy.dart (Epic 6, after all consumers migrated)
+11. Tests — unit tests for all auth components (flutter_appauth + flutter_secure_storage mocked via TokenStorage interface)

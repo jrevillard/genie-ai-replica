@@ -477,7 +477,6 @@ services:
       --served-model-name ${VLLM_LLM_MODEL_ID}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-4096}
       --max_num_seqs 1024
-      --kv-cache-dtype auto
       --dtype=${VLLM_DTYPE:-auto}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
@@ -529,7 +528,6 @@ services:
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.3}
       --served-model-name ${VLLM_TRANSLATION_MODEL_ID}
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
-      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-auto}
       --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
       --port ${VLLM_TRANSLATION_SERVICE_PORT}
       --no-enable-chunked-prefill

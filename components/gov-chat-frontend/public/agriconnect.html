@@ -661,6 +661,25 @@ function setTopic(t){
 }
 
 function sendQ(txt){const inp=document.getElementById('chat-inp');if(inp)inp.value=txt;sendMsg();}
+async function sendQueryWithText(txt){
+  if(!txt)return;
+  const tid=addTyping();
+  const tm={general:'General',maize:'Crop Farming',beans:'Crop Farming',pest:'Pest Management',weather:'Weather Advisory'};
+  const lm={general:['Just Chat'],maize:['Maize Farming'],beans:['Beans Farming'],pest:['Pest & Disease Control'],weather:['Weather Advice']};
+  try{
+    const r=await fetch(API+'/queries',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},signal:AbortSignal.timeout(300000),body:JSON.stringify({userId,sessionId:sessId,messages:[{role:'user',content:txt}],contextOption:'single-message',context:{categoryLabel:tm[topic]||'General',serviceLabels:lm[topic]||['Just Chat'],language:'EN'}})});
+    const d=await r.json();
+    rmTyping(tid);
+    if(d.response){
+      const rawConf=d.metadata&&d.metadata.confidence_score?d.metadata.confidence_score:0;
+      const conf=Math.min(Math.round(rawConf*100),100);
+      const hasSrc=!!(d.metadata&&d.metadata.source_documents&&d.metadata.source_documents.length);
+      addBubble(d.response,'ai',hasSrc,conf);
+    }else addBubble('Sorry, encountered an error: '+(d.message||'Unknown'),'ai',false,0);
+  }catch(e){rmTyping(tid);addBubble('Connection error. Please check your network.','ai');}
+  const m=document.getElementById('chat-msgs');if(m)m.scrollTop=m.scrollHeight;
+  saveChatHistory();
+}
 
 async function sendMsg(){
   // Refresh token before long query to prevent expiry during wait
@@ -686,12 +705,13 @@ async function sendMsg(){
     const d=await r.json();
     rmTyping(tid);
     if(d.response){
-      const conf=d.metadata&&d.metadata.confidence_score?d.metadata.confidence_score:0;
+      const rawConf=d.metadata&&d.metadata.confidence_score?d.metadata.confidence_score:0;
+      const conf=Math.min(Math.round(rawConf*100),100);
       const hasSrc=!!(d.metadata&&d.metadata.source_documents&&d.metadata.source_documents.length);
       addBubble(d.response,'ai',hasSrc,conf);
     }else if(d.error==='Unauthorized'||(d.message&&d.message.includes('log in'))){
       const su=localStorage.getItem('ac_loginName'),sh=localStorage.getItem('ac_loginHash');
-      if(su&&sh){fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginName:su,encPassword:sh})}).then(r=>r.json()).then(dd=>{if(dd.accessToken){token=dd.accessToken;localStorage.setItem('ac_token',token);addBubble('Session refreshed. Please ask again.','ai',false,0);}else addBubble('Session expired. Please reload.','ai',false,0);}).catch(()=>addBubble('Session expired. Please reload.','ai',false,0));}
+      if(su&&sh){fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginName:su,encPassword:sh})}).then(r=>r.json()).then(dd=>{if(dd.accessToken){token=dd.accessToken;localStorage.setItem('ac_token',token);sendQueryWithText(txt);}else addBubble('Session expired. Please reload.','ai',false,0);}).catch(()=>addBubble('Session expired. Please reload.','ai',false,0));}
       else addBubble('Session expired. Please reload.','ai',false,0);
     }else addBubble('Sorry, encountered an error: '+(d.message||'Unknown'),'ai',false,0);
   }catch(e){rmTyping(tid);addBubble('Connection error. Please check your network.','ai');}

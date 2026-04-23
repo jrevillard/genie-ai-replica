@@ -1,0 +1,48 @@
+[
+  {
+    "category": "Weather Forecasts",
+    "services": [
+      "Short-term Forecast (1-7 days)",
+      "Extended Forecast (8-15 days)",
+      "Seasonal Outlook (1-6 months)"
+    ]
+  },
+  {
+    "category": "Extreme Weather Alerts",
+    "services": [
+      "Drought Alerts",
+      "Flood & Waterlogging Alerts",
+      "Heat Wave Alerts",
+      "Cold Spell & Frost Alerts",
+      "Cyclone & Storm Surge Alerts",
+      "Heavy Rainfall Alerts"
+    ]
+  },
+  {
+    "category": "Crop Alert Thresholds",
+    "services": [
+      "Rice Threshold Profiles",
+      "Other Crop Threshold Profiles"
+    ]
+  },
+  {
+    "category": "Agricultural Guidance",
+    "services": [
+      "Crop Management",
+      "Irrigation & Water Management",
+      "Pest & Disease Management"
+    ]
+  },
+  {
+    "category": "Geospatial Risk Profiles",
+    "services": [
+      "Geospatial Model Interpretation"
+    ]
+  },
+  {
+    "category": "General Reference",
+    "services": [
+      "Government Information & Schemes"
+    ]
+  }
+]

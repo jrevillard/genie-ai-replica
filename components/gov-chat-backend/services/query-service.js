@@ -396,8 +396,23 @@ class QueryService {
         const weatherEnabled = process.env.WEATHER_ENABLED === 'true';
         const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://localhost:8000';
         const lastUserMsg = [...(queryData.messages || [])].reverse().find(m => m.role === 'user')?.content || queryText;
-        const WEATHER_KW = ['weather', 'forecast', 'rain', 'rainfall', 'temperature', 'humid', 'storm', 'flood', 'cyclone', 'monsoon', 'climate'];
-        const isWeatherQuery = weatherEnabled && WEATHER_KW.some(kw => lastUserMsg.toLowerCase().includes(kw));
+
+        // Weather routing: requires either an unambiguous weather term, OR a measurable
+        // weather parameter combined with a temporal/forecast signal.
+        // This prevents knowledge-base queries like "minimum temperature for wheat"
+        // from being misrouted to the live weather forecast service.
+        const WEATHER_VARS       = ['weather', 'rainfall', 'storm', 'flood', 'cyclone', 'monsoon'];
+        const WEATHER_MEASURABLES = ['temperature', 'rain', 'humid', 'climate', 'forecast'];
+        const TEMPORAL_SIGNALS   = ['next', 'tomorrow', 'today', 'tonight', 'this week',
+                                    'this month', 'will it', 'going to', 'expected', 'predicted'];
+
+        const lowerMsg           = lastUserMsg.toLowerCase();
+        const hasWeatherVar      = WEATHER_VARS.some(kw => lowerMsg.includes(kw));
+        const hasWeatherMeasurable = WEATHER_MEASURABLES.some(kw => lowerMsg.includes(kw));
+        const hasTemporal        = TEMPORAL_SIGNALS.some(kw => lowerMsg.includes(kw));
+        const isWeatherQuery     = weatherEnabled && (hasWeatherVar || (hasWeatherMeasurable && hasTemporal));
+
+        logger.info(`[WEATHER] routing check — hasWeatherVar=${hasWeatherVar} hasWeatherMeasurable=${hasWeatherMeasurable} hasTemporal=${hasTemporal} → isWeatherQuery=${isWeatherQuery}`);
 
         if (isWeatherQuery) {
           logger.info(`[WEATHER] Weather query detected — routing to weather-mcp-service: "${lastUserMsg}"`);

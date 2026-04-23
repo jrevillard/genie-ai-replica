@@ -41,8 +41,8 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Secure Keycloak Login
-  epic-1: backlog
-  1-1-secure-token-storage-foundation: backlog
+  epic-1: in-progress
+  1-1-secure-token-storage-foundation: ready-for-dev
   1-2-auth-state-machine-flavor-configuration: backlog
   1-3a-keycloak-login-via-system-browser: backlog
   1-3b-deep-link-handler-custom-url-scheme: backlog

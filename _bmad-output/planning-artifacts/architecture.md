@@ -128,12 +128,12 @@ mobile/genie_ai_mobile/
 |---|---|---|---|
 | `flutter_appauth` | Absent | Latest stable | **Add** |
 | `flutter_secure_storage` | Absent | Latest stable | **Add** |
-| `flutter_riverpod` | Absent | `^2.6.1`+ | **Add** (state management) |
+| `flutter_riverpod` | Absent | `^3.0.0` | **Add** (state management) |
 | `shared_preferences` | `^2.2.2` | Remove | **Remove** — `flutter_secure_storage` replaces it for all storage |
 | `crypto` | `^3.0.3` | Remove | **Remove** (SHA-256 login hashing, verify no other usage first) |
 | `http` | `^1.6.0` | Keep | Keep — base HTTP client, Bearer interceptor added here |
 | `connectivity_plus` | `^7.0.0` | Keep | Keep (network detection, NFR4) |
-| `uni_links` | Latest stable | **Add** | Deep link handler (OIDC callback + Universal Links routing) |
+| `app_links` | `^6.3.3` | **Add** | Deep link handler (OIDC callback + Universal Links routing) |
 | `url_launcher` | `^6.3.1` | Keep | Keep (Keycloak `end_session_endpoint` redirect) |
 | `flutter_lints` | `^6.0.0` | Keep | Keep |
 
@@ -143,10 +143,10 @@ mobile/genie_ai_mobile/
 |---|---|---|---|
 | `flutter_appauth` | Latest stable | OIDC Authorization Code + PKCE via system browser | New |
 | `flutter_secure_storage` | Latest stable | Platform keystore/keychain for all storage (tokens + prefs) | New |
-| `flutter_riverpod` | `^2.6.1`+ | State management — `StateNotifierProvider` for auth and future reactive states | New |
-| Auth state service | New file | Riverpod `StateNotifierProvider<AuthNotifier, AuthStatus>` — centralized reactive auth state | New |
+| `flutter_riverpod` | `^3.0.0` | State management — `NotifierProvider` for auth and future reactive states | New |
+| Auth state service | New file | Riverpod `NotifierProvider<AuthNotifier, AuthStatus>` — centralized reactive auth state | New |
 | Token storage abstraction | New file | `TokenStorage` abstract class + `SecureTokenStorage` (prod) + `InMemoryTokenStorage` (test) | New |
-| Deep link handler | New file | Custom URL scheme routing for OIDC callback via `uni_links` | New |
+| Deep link handler | New file | Custom URL scheme routing for OIDC callback via `app_links` | New |
 | HTTP Bearer interceptor | Modify `api_service.dart` | `http.BaseClient` override injecting Bearer token + 401 → refresh → retry | Modified |
 
 ### ApiService Rewrite Scope
@@ -175,7 +175,7 @@ The PRD mobile aligns with the existing web architecture decision:
 
 **Decision: Riverpod as state management from day one**
 
-- Rationale: Auth is not the only reactive state the app will need (chat messages, loading states, user profile). Starting with a bare `StreamController` and migrating to Riverpod mid-MVP is wasted work. Riverpod's entry cost is minimal (`Provider` + `ref.watch`) and it's the Flutter 2026 standard. One migration avoided.
+- Rationale: Auth is not the only reactive state the app will need (chat messages, loading states, user profile). Starting with a bare `StreamController` and migrating to Riverpod mid-MVP is wasted work. Riverpod's entry cost is minimal (`Provider` + `ref.watch`) and it's the Flutter 2026 standard. Riverpod 3.0 uses `Notifier` / `NotifierProvider` (the `StateNotifier` / `StateNotifierProvider` pattern is deprecated). One migration avoided.
 
 **Decision: `flutter_secure_storage` replaces `shared_preferences` entirely**
 
@@ -226,7 +226,7 @@ class AuthState {
 }
 ```
 
-- Rationale: Three states cover every UI scenario — no need for `initial` (app starts `unauthenticated`, tokens loaded asynchronously, state flips to `authenticated` if valid). No `retryCount` — retryable/non-retryable is a property of the error, not a counter. The `error` state includes `retryable: bool` so the UI can offer a retry button only when it makes sense (network error = retryable, invalid_grant = not retryable).
+- Rationale: Three states cover every UI scenario — no need for `initial` (app starts `unauthenticated`, tokens loaded asynchronously, state flips to `authenticated` if valid). No `retryCount` — retryable/non-retryable is a property of the error, not a counter. The `error` state includes `retryable: bool` so the UI can offer a retry button only when it makes sense (network error = retryable, invalid_grant = not retryable). `AuthNotifier` extends Riverpod 3.0 `Notifier<AuthState>` with `ref.watch()` in `build()` for dependency injection.
 - Affects: `auth_notifier.dart`, `auth_state.dart`, all UI widgets consuming auth state via `ref.watch(authProvider)`
 
 ### D2: TokenStorage Interface
@@ -342,7 +342,7 @@ class AuthInterceptor extends http.BaseClient {
 
 ```
 lib/services/auth/
-├── auth_notifier.dart      # StateNotifier<AuthState> — core logic
+├── auth_notifier.dart      # Notifier<AuthState> — core logic
 ├── auth_state.dart          # AuthStatus enum + AuthState class
 ├── auth_providers.dart      # Provider declarations
 └── token_storage.dart       # Abstract TokenStorage + implementations
@@ -363,19 +363,34 @@ final apiServiceProvider = Provider<ApiService>((ref) {
   return ApiService(keycloakConfig: getConfig());
 });
 
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final tokenStorage = ref.watch(tokenStorageProvider);
-  final apiService = ref.watch(apiServiceProvider);
-  final keycloakService = ref.watch(keycloakServiceProvider);
-  return AuthNotifier(
-    tokenStorage: tokenStorage,
-    apiService: apiService,
-    keycloakService: keycloakService,
-  );
-});
+final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);
 ```
 
-- Rationale: Four files — `auth_state.dart` (pure data, no deps), `token_storage.dart` (storage abstraction), `auth_notifier.dart` (business logic), `auth_providers.dart` (Riverpod wiring). Clean separation of concerns. `apiServiceProvider` and `keycloakServiceProvider` are declared at the same level and shared across the app. Tests override `tokenStorageProvider` with `InMemoryTokenStorage`.
+```dart
+// auth_notifier.dart
+class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
+  late final TokenStorage _tokenStorage;
+  late final ApiService _apiService;
+  late final KeycloakService _keycloakService;
+
+  @override
+  AuthState build() {
+    _tokenStorage = ref.watch(tokenStorageProvider);
+    _apiService = ref.watch(apiServiceProvider);
+    _keycloakService = ref.watch(keycloakServiceProvider);
+    WidgetsBinding.instance.addObserver(this);
+    ref.onDispose(() {
+      WidgetsBinding.instance.removeObserver(this);
+    });
+    return const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  // ... login(), refreshToken(), logout() methods
+  // ... didChangeAppLifecycleState() stays the same
+}
+```
+
+- Rationale: Four files — `auth_state.dart` (pure data, no deps), `token_storage.dart` (storage abstraction), `auth_notifier.dart` (business logic), `auth_providers.dart` (Riverpod wiring). Clean separation of concerns. `apiServiceProvider` and `keycloakServiceProvider` are declared at the same level and shared across the app. Tests override `tokenStorageProvider` with `InMemoryTokenStorage`. In Riverpod 3.0, `NotifierProvider` with `AuthNotifier.new` replaces the deprecated `StateNotifierProvider` pattern. Dependencies are injected via `ref.watch()` in the `build()` method instead of constructor parameters, and cleanup uses `ref.onDispose()` instead of overriding `dispose()`.
 - Affects: All files in `services/auth/`, `main.dart` (ProviderScope), test setup
 
 ### D6: AppLifecycle + Deep Link + Flavor Strategy
@@ -424,22 +439,21 @@ KeycloakConfig getConfig() {
 
 **AppLifecycle Integration:**
 ```dart
-class AuthNotifier extends StateNotifier<AuthState> with WidgetsBindingObserver {
-  AuthNotifier({
-    required TokenStorage tokenStorage,
-    required ApiService apiService,
-    required KeycloakService keycloakService,
-  }) : super(const AuthState(status: AuthStatus.unauthenticated)) {
-    _tokenStorage = tokenStorage;
-    _apiService = apiService;
-    _keycloakService = keycloakService;
-    WidgetsBinding.instance.addObserver(this);
-  }
+class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
+  late final TokenStorage _tokenStorage;
+  late final ApiService _apiService;
+  late final KeycloakService _keycloakService;
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
+  AuthState build() {
+    _tokenStorage = ref.watch(tokenStorageProvider);
+    _apiService = ref.watch(apiServiceProvider);
+    _keycloakService = ref.watch(keycloakServiceProvider);
+    WidgetsBinding.instance.addObserver(this);
+    ref.onDispose(() {
+      WidgetsBinding.instance.removeObserver(this);
+    });
+    return const AuthState(status: AuthStatus.unauthenticated);
   }
 
   @override
@@ -448,16 +462,18 @@ class AuthNotifier extends StateNotifier<AuthState> with WidgetsBindingObserver 
       validateTokens(); // silent check via stored expiresIn, refresh if expired
     }
   }
+
+  // ... login(), refreshToken(), logout() methods stay the same
 }
 ```
 
-- Rationale: `WidgetsBindingObserver` on `AuthNotifier` — when app resumes, silently validate tokens and refresh if needed. Non-blocking: doesn't show loading UI, just ensures tokens are fresh. **Critical:** `addObserver` in constructor, `removeObserver` in `dispose()` — prevents memory leak and ensures lifecycle events stop firing after the notifier is disposed.
+- Rationale: `WidgetsBindingObserver` on `AuthNotifier` — when app resumes, silently validate tokens and refresh if needed. Non-blocking: doesn't show loading UI, just ensures tokens are fresh. **Critical:** `addObserver` in `build()`, `removeObserver` in `ref.onDispose()` — prevents memory leak and ensures lifecycle events stop firing after the notifier is disposed. Riverpod 3.0's `Notifier` base class uses `ref.watch()` in `build()` for dependency injection instead of constructor parameters.
 
 **Deep Link Strategy:**
 - Custom URL scheme (`genieai://callback`) for OIDC callback — configured per flavor in `AndroidManifest.xml` / `Info.plist`
 - Universal Links (iOS) / App Links (Android) for password reset — domain-verified deep links prevent app interception. Requires server-side files (`apple-app-site-association`, `assetlinks.json`) hosted on each deployment's Keycloak domain
-- Deep link handler in `main.dart` via `uni_links` (flutter_appauth + uni_links are the proven mobile OIDC stack)
-- **Implementation note:** Universal Links / App Links require server-side configuration (hosted JSON files on Keycloak domain) + platform-specific setup in `AndroidManifest.xml` (intent-filter with `autoVerify`) and `Info.plist` (Associated Domains entitlement). The deployment guide must document these server-side files per deployment.
+- Deep link handler in `main.dart` via `app_links` (flutter_appauth + app_links are the proven mobile OIDC stack; `app_links` replaces the unmaintained `uni_links`)
+- **Implementation note:** `app_links` provides a unified `AppLinks()` singleton with `uriLinkStream` for listening to deep link callbacks. Universal Links / App Links require server-side configuration (hosted JSON files on Keycloak domain) + platform-specific setup in `AndroidManifest.xml` (intent-filter with `autoVerify`) and `Info.plist` (Associated Domains entitlement). The deployment guide must document these server-side files per deployment.
 
 - Affects: `lib/config/` directory, `auth_notifier.dart`, `main.dart`, Android/iOS platform config
 
@@ -466,10 +482,10 @@ class AuthNotifier extends StateNotifier<AuthState> with WidgetsBindingObserver 
 **Implementation Sequence:**
 1. TokenStorage abstraction + InMemoryTokenStorage (test) + SecureTokenStorage (prod)
 2. AuthState + AuthStatus (pure data classes)
-3. AuthNotifier with login/refresh/logout logic
-4. Riverpod providers + ProviderScope in main.dart
+3. AuthNotifier (`Notifier<AuthState>`) with login/refresh/logout logic
+4. Riverpod providers (`NotifierProvider`) + ProviderScope in main.dart
 5. AuthInterceptor on ApiService (401 → refresh → retry)
-6. AppLifecycle binding + deep link handler
+6. AppLifecycle binding (`WidgetsBindingObserver` + `ref.onDispose()`) + deep link handler (`app_links`)
 7. Flavor config system + build commands
 8. Legacy auth code removal
 9. `badCertificateCallback` removal from main.dart
@@ -499,9 +515,9 @@ class AuthNotifier extends StateNotifier<AuthState> with WidgetsBindingObserver 
 - Provider references: `camelCaseProvider` suffix — `authProvider`, `tokenStorageProvider`, `apiServiceProvider`
 
 **Riverpod Naming:**
-- StateNotifierProvider: `<name>Provider` — `authProvider`
+- NotifierProvider: `<name>Provider` — `authProvider`
 - Plain Provider (dependency): `<name>Provider` — `tokenStorageProvider`, `apiServiceProvider`
-- StateNotifier class: `<Name>Notifier` — `AuthNotifier`
+- Notifier class: `<Name>Notifier` — `AuthNotifier`
 - State class: `<Name>State` — `AuthState`
 - Status enum: `<Name>Status` — `AuthStatus`
 
@@ -630,7 +646,7 @@ test/
 **All AI Agents MUST:**
 - Follow the three-state auth machine (`authenticated`, `unauthenticated`, `error`) — no additional states
 - Use `TokenStorage` abstraction — never access `flutter_secure_storage` directly from business logic
-- Use Riverpod providers for dependency injection — no manual service locator or `getIt`
+- Use Riverpod providers for dependency injection — `NotifierProvider` with `ref.watch()` in `build()` for notifiers, plain `Provider` for dependencies — no manual service locator or `getIt`
 - Store tokens only via `TokenStorage.saveTokens()` — no scattered `SharedPreferences` or file writes
 - Use `http.BaseClient` override pattern for the auth interceptor — no middleware pattern
 - Follow the flavor config system — no runtime URL construction from user input
@@ -659,7 +675,7 @@ mobile/genie_ai_mobile/
 │   │       └── itu.dart                  # ITU production deployment flavor
 │   ├── services/
 │   │   ├── auth/
-│   │   │   ├── auth_notifier.dart        # StateNotifier<AuthState> — login, refresh, logout, lifecycle
+│   │   │   ├── auth_notifier.dart        # Notifier<AuthState> — login, refresh, logout, lifecycle
 │   │   │   ├── auth_state.dart           # AuthStatus enum + AuthState class
 │   │   │   ├── auth_providers.dart       # authProvider + tokenStorageProvider declarations
 │   │   │   └── token_storage.dart        # Abstract TokenStorage + SecureTokenStorage + InMemoryTokenStorage
@@ -698,7 +714,7 @@ mobile/genie_ai_mobile/
 │   └── app/src/main/AndroidManifest.xml  # MODIFIED — add deep link intent filter per flavor
 ├── ios/
 │   └── Runner/Info.plist                 # MODIFIED — add URL scheme per flavor
-├── pubspec.yaml                          # MODIFIED — add flutter_appauth, flutter_secure_storage, flutter_riverpod; remove shared_preferences, crypto
+├── pubspec.yaml                          # MODIFIED — add flutter_appauth, flutter_secure_storage, flutter_riverpod, app_links; remove shared_preferences, crypto
 └── analysis_options.yaml                 # EXISTING — ensure lint rules cover auth patterns
 ```
 
@@ -747,9 +763,9 @@ mobile/genie_ai_mobile/
 ### Integration Points
 
 **Internal Communication:**
-- `AuthNotifier` → `TokenStorage`: constructor injection
-- `AuthNotifier` → `ApiService`: constructor injection via `apiServiceProvider`
-- `AuthNotifier` → `KeycloakService`: constructor injection
+- `AuthNotifier` → `TokenStorage`: `ref.watch()` in `build()`
+- `AuthNotifier` → `ApiService`: `ref.watch()` in `build()` via `apiServiceProvider`
+- `AuthNotifier` → `KeycloakService`: `ref.watch()` in `build()`
 - `AuthInterceptor` → `AuthNotifier`: reads tokens, triggers refresh
 - UI → `AuthNotifier`: via `ref.watch(authProvider)` and `ref.read(authProvider.notifier)`
 
@@ -784,14 +800,14 @@ Logout:   AuthNotifier.logout()
 ### Coherence Validation
 
 **Decision Compatibility:**
-- Riverpod + StateNotifier + TokenStorage abstraction: coherent stack. StateNotifier holds business logic, TokenStorage provides injectable persistence, Riverpod wires dependencies. No conflicts.
+- Riverpod + Notifier + TokenStorage abstraction: coherent stack. Notifier holds business logic, TokenStorage provides injectable persistence, Riverpod wires dependencies. No conflicts.
 - `flutter_appauth` + system browser + custom URL scheme: standard OIDC mobile pattern. `flutter_appauth` handles PKCE, browser redirect, and callback extraction. Compatible with Android intent filters and iOS URL schemes.
 - `flutter_secure_storage` + `shared_preferences` removal: `flutter_secure_storage` uses `EncryptedSharedPreferences` on Android — drop-in replacement. No feature regression.
 - AuthInterceptor (http.BaseClient override) + existing proxy pattern: `ApiService` is already the shared HTTP client. Adding `AuthInterceptor` as a wrapping `BaseClient` preserves the existing `*_proxy.dart` consumption pattern without changes to downstream proxies.
 
 **Pattern Consistency:**
 - Naming follows Dart conventions (snake_case files, PascalCase classes, camelCase members)
-- Provider naming follows Riverpod conventions (`*Provider` suffix for declarations, `*Notifier` for StateNotifiers)
+- Provider naming follows Riverpod conventions (`*Provider` suffix for declarations, `*Notifier` for Notifiers)
 - State update pattern is consistent: all changes through `AuthNotifier.state =`, all reads through `ref.watch(authProvider)`
 - Error handling is consistent: all auth errors become `AuthState.error`, no exceptions leak to UI
 
@@ -833,7 +849,7 @@ Logout:   AuthNotifier.logout()
 
 **Decision Completeness:**
 - All critical decisions documented with rationale
-- Technology versions specified (latest stable for flutter_appauth, flutter_secure_storage, flutter_riverpod)
+- Technology versions specified (latest stable for flutter_appauth, flutter_secure_storage, flutter_riverpod 3.0, app_links 6.3.3)
 - Implementation patterns comprehensive enough for AI agents
 - Concrete code examples provided for all major patterns (state machine, token storage, interceptor, logout, providers, config)
 
@@ -877,9 +893,10 @@ The following issues were identified through adversarial and edge-case review an
 6. **`dart:developer log()` doesn't persist** — contradicts NFR9 30-day retention. Fixed: specified persistent file-based logging requirement.
 7. **Data flow showed spurious `unauthenticated` state** after `saveTokens()`. Fixed: direct transition to `authenticated`.
 8. **`KeycloakService` missing from provider graph** — no `keycloakServiceProvider`. Fixed: added to D5 providers.
-9. **`WidgetsBindingObserver` registration/disposal missing** — would leak or never fire. Fixed: added `addObserver` in constructor, `removeObserver` in `dispose()`.
+9. **`WidgetsBindingObserver` registration/disposal missing** — would leak or never fire. Fixed: added `addObserver` in `build()`, `removeObserver` in `ref.onDispose()`.
 10. **`saveTokens()` atomicity claim** — `flutter_secure_storage` has no transactions. Fixed: documented limitation and mitigation (JSON blob or startup validation).
 11. **FR21 deferral contradicted PRD MVP** — Universal Links listed as MVP in PRD but were deferred in architecture. Fixed: reverted deferral, FR21 stays in MVP scope with implementation notes for server-side file requirements.
+12. **Riverpod 2.x → 3.0 migration** — `StateNotifier` / `StateNotifierProvider` are deprecated in Riverpod 3.0. Fixed: migrated all code examples to `Notifier<AuthState>` / `NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new)` pattern with `ref.watch()` in `build()` for dependency injection and `ref.onDispose()` for cleanup. Also replaced `uni_links` (unmaintained) with `app_links` (^6.3.3) for deep link handling — `AppLinks()` singleton with `uriLinkStream`.
 
 ### Architecture Completeness Checklist
 
@@ -891,7 +908,7 @@ The following issues were identified through adversarial and edge-case review an
 
 **Architectural Decisions**
 - [x] Critical decisions documented (D1-D6) with rationale and code examples
-- [x] Technology stack fully specified (flutter_appauth, flutter_secure_storage, flutter_riverpod)
+- [x] Technology stack fully specified (flutter_appauth, flutter_secure_storage, flutter_riverpod 3.0, app_links)
 - [x] Integration patterns defined (token passthrough, OIDC PKCE, interceptor)
 - [x] Performance considerations addressed (silent refresh, no loading UI, Completer mutex)
 
@@ -934,14 +951,14 @@ The following issues were identified through adversarial and edge-case review an
 - Never re-introduce `badCertificateCallback`, `shared_preferences`, or plaintext token storage
 
 **First Implementation Priority:**
-1. `pubspec.yaml` — add dependencies (flutter_appauth, flutter_secure_storage, flutter_riverpod, uni_links), remove (shared_preferences, crypto) in Epic 6
+1. `pubspec.yaml` — add dependencies (flutter_appauth, flutter_secure_storage, flutter_riverpod, app_links), remove (shared_preferences, crypto) in Epic 6
 2. `services/auth/token_storage.dart` — abstract class + implementations (5-method interface with `getAccessTokenExpiration()`)
 3. `services/auth/auth_state.dart` — enum + class (three-state machine)
-4. `services/auth/auth_notifier.dart` — core logic (expiresIn-based expiration, no JWT parsing)
-5. `services/auth/auth_providers.dart` — Riverpod wiring (StateNotifierProvider pattern)
+4. `services/auth/auth_notifier.dart` — core logic (`Notifier<AuthState>` with `ref.watch()` in `build()`, expiresIn-based expiration, no JWT parsing)
+5. `services/auth/auth_providers.dart` — Riverpod wiring (`NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new)`)
 6. `services/api_service.dart` — add AuthInterceptor (`Completer<String?>` mutex, `http.BaseClient` override)
 7. `config/` — flavor system (gradle productFlavors + iOS XCConfig + `--dart-define`)
-8. `main.dart` — ProviderScope, remove badCertificateCallback, deep link handler (uni_links)
+8. `main.dart` — ProviderScope, remove badCertificateCallback, deep link handler (`AppLinks()` singleton)
 9. `configs/keycloak/genie-realm.yaml` — add mobile client via keycloak-config-cli (env vars: `KC_MOBILE_CLIENT_ID`, `KC_MOBILE_REDIRECT_SCHEME`)
 10. Legacy removal — delete auth screens, auth_proxy.dart, password_proxy.dart (Epic 6, after all consumers migrated)
 11. Tests — unit tests for all auth components (flutter_appauth + flutter_secure_storage mocked via TokenStorage interface)

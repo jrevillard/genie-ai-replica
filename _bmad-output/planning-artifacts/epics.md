@@ -67,13 +67,13 @@ This document provides the complete epic and story breakdown for genie-ai Mobile
 From Architecture document:
 
 - **Token passthrough architecture** — No GENIE.AI JWT issued. Keycloak tokens validated directly at backend via JWKS, JIT provisioning by {iss}#{sub}, downstream headers (X-User-Id, X-User-Roles, X-Issuer). Mobile sends raw Keycloak access token as Bearer token. Zero or minimal backend changes expected.
-- **Riverpod as state management** — `flutter_riverpod` ^2.6.1+ for reactive state. StateNotifierProvider for auth and future reactive states. ProviderScope wraps the app in main.dart.
+- **Riverpod as state management** — `flutter_riverpod` ^3.0.0 for reactive state. NotifierProvider for auth and future reactive states. ProviderScope wraps the app in main.dart.
 - **TokenStorage injectable abstraction** — Abstract class with SecureTokenStorage (prod, flutter_secure_storage) and InMemoryTokenStorage (test). Constructor injection for testability without platform dependencies. Atomicity via single JSON blob or startup validation.
 - **Auth state machine — 3 states** — `AuthStatus { authenticated, unauthenticated, error }` with `AuthState` class containing userId, displayName, errorMessage, retryable flag. No initial state, no retryCount.
 - **AuthInterceptor (http.BaseClient override)** — Bearer token injection + 401→refresh→retry with single retry. Completer<String?> mutex for concurrent refresh serialization. Request cloning before first send (BaseRequest single-use).
 - **Logout via Future.wait** — Parallel calls to POST /api/auth/logout (backend) and Keycloak end_session_endpoint (direct), each individually wrapped in .catchError. deleteAll() runs regardless. No backend changes required.
 - **Flavor config system** — lib/config/ directory with KeycloakConfig data class + getConfig(). Environment configs (dev, staging, e2e) at config/ root. Deployment flavors in config/flavors/ (e.g., itu.dart). Selected via --dart-define=FLAVOR=<name> at build time. No code generation (no flavorizr, no build_runner).
-- **AppLifecycle integration** — WidgetsBindingObserver on AuthNotifier. validateTokens() on AppLifecycleState.resumed (non-blocking, silent). addObserver in constructor, removeObserver in dispose().
+- **AppLifecycle integration** — WidgetsBindingObserver on AuthNotifier. validateTokens() on AppLifecycleState.resumed (non-blocking, silent). addObserver in constructor, removeObserver via ref.onDispose().
 - **Deep link dual mechanism** — Custom URL scheme per flavor for OIDC callback (genieai://callback). Universal Links (iOS) / App Links (Android) for password reset — requires server-side files (apple-app-site-association, assetlinks.json) on each deployment's Keycloak domain.
 - **flutter_secure_storage replaces shared_preferences entirely** — EncryptedSharedPreferences on Android, Keychain on iOS. Remove shared_preferences dependency.
 - **Persistent file-based logging** — NFR9 requires 30-day retention. dart:developer log() does not persist and is stripped in release builds. Use lightweight persistent logging package with FileOutput sink, automatic rotation/retention.
@@ -164,7 +164,7 @@ So that authentication tokens are encrypted at rest and the auth stack is fully 
 **Acceptance Criteria:**
 
 **Given** the app dependencies are configured
-**When** `flutter_secure_storage`, `flutter_appauth`, `flutter_riverpod`, and `uni_links` are added to `pubspec.yaml`
+**When** `flutter_secure_storage`, `flutter_appauth`, `flutter_riverpod`, and `app_links` are added to `pubspec.yaml`
 **Then** all packages resolve successfully with `flutter pub get`
 **And** `shared_preferences` and `crypto` remain in `pubspec.yaml` (removed later in Epic 6)
 
@@ -276,7 +276,7 @@ So that I can authenticate securely without the app handling my password directl
 
 **Given** `Riverpod` providers are configured
 **When** `authProvider` is read
-**Then** it returns a `StateNotifierProvider<AuthNotifier, AuthState>`
+**Then** it returns a `NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new)`
 **And** `tokenStorageProvider` injects `SecureTokenStorage`
 **And** `keycloakServiceProvider` injects `KeycloakService` with the flavor config
 
@@ -315,7 +315,7 @@ So that the authorization code from Keycloak is delivered back to the app after 
 
 **Given** the system browser redirects to the app's custom URL scheme with an authorization code
 **When** the deep link is received by the app
-**Then** `uni_links` captures the callback URI
+**Then** `app_links` captures the callback URI
 **And** the authorization code and state parameter are extracted from the URI
 **And** the token exchange is triggered via `KeycloakService`
 
@@ -534,7 +534,7 @@ So that I am not stuck with an expired session and see the login screen promptly
 
 **Given** `AuthNotifier` is disposed
 **When** the widget tree is torn down
-**Then** `WidgetsBinding.instance.removeObserver(this)` is called — no memory leak, no stale lifecycle events
+**Then** `ref.onDispose()` calls `WidgetsBinding.instance.removeObserver(this)` — no memory leak, no stale lifecycle events
 
 **Given** `AuthNotifier` is constructed
 **When** initialization completes

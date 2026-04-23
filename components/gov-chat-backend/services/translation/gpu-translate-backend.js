@@ -22,6 +22,7 @@ class GpuTranslateBackend {
     this.languageMap = null;
     this.fallbackMap = null;
     this.healthCheckPassed = false;
+    this.maxModelLen = 4096; // Will be updated from /v1/models during init
 
     logger.info(`[GPU-BACKEND] Initializing with model: ${this.modelId}`);
     logger.info(`[GPU-BACKEND] Endpoint: ${this.endpoint}`);
@@ -73,8 +74,9 @@ class GpuTranslateBackend {
     try {
       logger.info('[GPU-BACKEND] Starting initialization: Performing health check...');
 
-      // Perform health check
+      // Perform health check and fetch model info
       await this.healthCheck();
+      await this.fetchModelInfo();
 
       this.initialized = true;
       this.healthCheckPassed = true;
@@ -136,6 +138,57 @@ class GpuTranslateBackend {
   }
 
   /**
+   * Fetch model info (max_model_len) from vLLM /v1/models endpoint
+   */
+  async fetchModelInfo() {
+    try {
+      const url = new URL(this.endpoint);
+      const isHttps = url.protocol === 'https:';
+      const client = isHttps ? https : http;
+
+      await new Promise((resolve, reject) => {
+        const options = {
+          hostname: url.hostname,
+          port: url.port || this.port,
+          path: '/v1/models',
+          method: 'GET',
+          timeout: 5000,
+        };
+
+        const req = client.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              const model = parsed.data?.find(m => m.id === this.modelId);
+              if (model?.max_model_len) {
+                this.maxModelLen = model.max_model_len;
+                logger.info(`[GPU-BACKEND] Model max context length: ${this.maxModelLen} tokens`);
+              } else {
+                logger.warn(`[GPU-BACKEND] Model ${this.modelId} not found in /v1/models response, using default max_tokens`);
+              }
+              resolve();
+            } catch (e) {
+              logger.warn(`[GPU-BACKEND] Failed to parse /v1/models response: ${e.message}`);
+              resolve();
+            }
+          });
+        });
+
+        req.on('error', (error) => {
+          logger.warn(`[GPU-BACKEND] Failed to fetch model info: ${error.message}`);
+          resolve(); // Don't fail init — use default max_tokens
+        });
+        req.on('timeout', () => { req.destroy(); resolve(); });
+        req.end();
+      });
+    } catch (error) {
+      logger.warn(`[GPU-BACKEND] fetchModelInfo error: ${error.message}`);
+    }
+  }
+
+  /**
    * Get model-specific language code
    * @param {string} isoCode - ISO 639-1 language code
    * @returns {string} Model-specific language code
@@ -193,6 +246,9 @@ class GpuTranslateBackend {
    * @returns {Object} Formatted request body
    */
   formatRequest(modelId, sourceCode, targetCode, text) {
+    // Reserve tokens for the prompt (~128 tokens) so total stays within maxModelLen
+    const maxTokens = Math.max(128, this.maxModelLen - 128);
+
     // TranslateGemma format (structured chat with language codes)
     if (modelId.includes('translategemma')) {
       return {
@@ -207,7 +263,7 @@ class GpuTranslateBackend {
           }]
         }],
         temperature: 0.0,
-        max_tokens: 4096
+        max_tokens: maxTokens
       };
     }
 
@@ -226,7 +282,7 @@ class GpuTranslateBackend {
           content: prompt
         }],
         temperature: 0.3,
-        max_tokens: 4096
+        max_tokens: maxTokens
       };
     }
 
@@ -238,7 +294,7 @@ class GpuTranslateBackend {
         content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
       }],
       temperature: 0.3,
-      max_tokens: 4096
+      max_tokens: maxTokens
     };
   }
 
@@ -383,6 +439,7 @@ class GpuTranslateBackend {
       codeFormat: this.languageMap?.codeFormat || 'unknown',
       endpoint: this.endpoint,
       port: this.port,
+      maxModelLen: this.maxModelLen,
       initialized: this.initialized,
       healthCheckPassed: this.healthCheckPassed,
     };

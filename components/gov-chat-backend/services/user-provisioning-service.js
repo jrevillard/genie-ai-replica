@@ -69,7 +69,7 @@ const userProvisioningService = {
       throw new Error('Missing iss_sub in decoded token');
     }
 
-    logger.info(`[UserProvisioning] name: "${decodedToken.name}", preferred_username: "${decodedToken.preferred_username}", email: "${decodedToken.email}", realm_access: ${JSON.stringify(decodedToken.realm_access)}, resource_access: ${JSON.stringify(decodedToken.resource_access)}`);
+    logger.debug(`[UserProvisioning] name: "${decodedToken.name}", preferred_username: "${decodedToken.preferred_username}", email: "${decodedToken.email}", realm_access: ${JSON.stringify(decodedToken.realm_access)}, resource_access: ${JSON.stringify(decodedToken.resource_access)}`);
 
     // Check cache first — avoids ArangoDB round-trip on every request
     evictExpired();

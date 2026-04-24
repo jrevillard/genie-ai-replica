@@ -14,13 +14,7 @@ import fcntl
 import os
 import time
 
-# --- CRITICAL FIX: Import Custom Component FIRST to register it ---
-from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
-
-# --- Import the entire base dataprep microservice safely ---
 import opea_dataprep_microservice as base
-
-# --- Use same shared OPEA components ---
 from comps import (
     CustomLogger,
     ServiceType,
@@ -28,14 +22,13 @@ from comps import (
     register_statistics,
     statistics_dict,
 )
-
-# --- Import custom Pydantic model from our overlay protocol ---
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
 from fastapi import HTTPException
-from genieai_dataprep_loader import GenieDataprepLoader
-
-# --- CRITICAL FIX: Import Custom Component FIRST to register it ---
 from pydantic import BaseModel
+
+# Side-effect: registers GenieArangoDataprep with OpeaComponentRegistry (must precede GenieDataprepLoader)
+from integrations.genieai_dataprep_arangodb import GenieArangoDataprep  # noqa: F401  # isort: skip
+from genieai_dataprep_loader import GenieDataprepLoader
 
 logger = CustomLogger("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)

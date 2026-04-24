@@ -692,7 +692,6 @@ export default {
   },
   brandName: 'Genie AI: مساعدك الحكومي الرقمي',
   nav: {
-    systemStatus: 'حالة النظام',
     menu: 'القائمة',
     analytics: 'التحليلات',
     userProfile: 'ملف المستخدم',
@@ -708,32 +707,12 @@ export default {
       swahili: 'السواحلية'
     }
   },
-  systemStatus: {
-    title: 'حالة الخدمة',
-    services: 'الخدمات',
-    operational: 'يعمل',
-    degraded: 'متدهور',
-    outage: 'انقطاع',
-    allOperational: 'جميع الأنظمة',
-    someIssues: 'بعض المشكلات',
-    majorIssues: 'مشكلات كبيرة',
-    checking: 'جاري التحقق...',
-    nextDeadline: 'الموعد النهائي التالي',
-    days: 'أيام',
-    viewDetails: 'عرض التفاصيل'
-  },
   services: {
     eCitizen: 'بوابة eCitizen',
     taxFiling: 'نظام تقديم الضرائب',
     idApplication: 'طلب الهوية',
     businessReg: 'تسجيل الأعمال',
     drivingLicense: 'رخصة القيادة'
-  },
-  deadlines: {
-    taxFiling: 'الموعد النهائي لتقديم الضرائب',
-    businessRenewal: 'تجديد ترخيص الأعمال',
-    idRenewal: 'تجديد بطاقة الهوية',
-    vehicleRegistration: 'الموعد النهائي لتسجيل المركبة'
   },
   sidebar: {
     governmentServices: 'مجالات المعرفة',

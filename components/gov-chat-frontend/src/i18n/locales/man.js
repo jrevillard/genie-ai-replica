@@ -644,7 +644,6 @@ export default {
   },
   brandName: 'Genie AI: I la Gomnati Baaralaa',
   nav: {
-    systemStatus: 'Sistemoo Cokoyaa',
     menu: 'Katifol',
     analytics: 'Kibaro Lataramoo',
     userProfile: 'Moo-kibaroo',
@@ -660,32 +659,12 @@ export default {
       swahili: 'Sawali-kang'
     }
   },
-  systemStatus: {
-    title: 'Baaralaa Cokoyaa',
-    services: 'Baaralu',
-    operational: 'A ka baara',
-    degraded: 'A dooyata-le',
-    outage: 'A fitiyata',
-    allOperational: 'Sistemol bee',
-    someIssues: 'Kuraa doolu',
-    majorIssues: 'Kuraa baalu',
-    checking: 'A ka kumpabo...',
-    nextDeadline: 'Waatoo tambi-da nooma',
-    days: 'tilungol',
-    viewDetails: 'Kibarol bee je'
-  },
   services: {
     eCitizen: 'e-Jamo Portal',
     taxFiling: 'Jooyaa Lataramoo',
     idApplication: 'ID Ñiningo',
     businessReg: 'Bita Lataramoo',
     drivingLicense: 'Moto Bula-Laisins'
-  },
-  deadlines: {
-    taxFiling: 'Jooyaa Tambi-da',
-    businessRenewal: 'Bita Laisins Kurandi',
-    idRenewal: 'ID Kaard Kurandi',
-    vehicleRegistration: 'Moto Lataramoo Tambi-da'
   },
   sidebar: {
     governmentServices: 'Longo Dulaalu',

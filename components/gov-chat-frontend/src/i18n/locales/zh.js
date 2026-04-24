@@ -651,7 +651,6 @@ export default {
   },
   brandName: 'Genie AI：您的数字政府助手',
   nav: {
-    systemStatus: '系统状态',
     menu: '菜单',
     analytics: '分析',
     userProfile: '用户资料',
@@ -667,32 +666,12 @@ export default {
       swahili: '斯瓦希里语'
     }
   },
-  systemStatus: {
-    title: '服务状态',
-    services: '服务',
-    operational: '运行中',
-    degraded: '降级',
-    outage: '中断',
-    allOperational: '所有系统',
-    someIssues: '一些问题',
-    majorIssues: '重大问题',
-    checking: '检查中...',
-    nextDeadline: '下一个截止日期',
-    days: '天',
-    viewDetails: '查看详情'
-  },
   services: {
     eCitizen: 'eCitizen 门户',
     taxFiling: '报税系统',
     idApplication: 'ID 申请',
     businessReg: '业务注册',
     drivingLicense: '驾照'
-  },
-  deadlines: {
-    taxFiling: '报税截止日期',
-    businessRenewal: '营业执照续期',
-    idRenewal: '身份证续期',
-    vehicleRegistration: '车辆注册截止日期'
   },
   sidebar: {
     governmentServices: '知识领域',

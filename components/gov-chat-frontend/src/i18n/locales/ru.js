@@ -654,7 +654,6 @@ export default {
   },
   brandName: 'Genie AI: Ваш цифровой правительственный помощник',
   nav: {
-    systemStatus: 'Статус системы',
     menu: 'Меню',
     analytics: 'Аналитика',
     userProfile: 'Профиль пользователя',
@@ -670,32 +669,12 @@ export default {
       swahili: 'Суахили'
     }
   },
-  systemStatus: {
-    title: 'Статус службы',
-    services: 'Службы',
-    operational: 'Работает',
-    degraded: 'Снижено',
-    outage: 'Отключение',
-    allOperational: 'Все системы',
-    someIssues: 'Некоторые проблемы',
-    majorIssues: 'Крупные проблемы',
-    checking: 'Проверка...',
-    nextDeadline: 'Следующий срок',
-    days: 'дней',
-    viewDetails: 'Просмотреть детали'
-  },
   services: {
     eCitizen: 'Портал eCitizen',
     taxFiling: 'Система подачи налогов',
     idApplication: 'Заявка на ID',
     businessReg: 'Регистрация бизнеса',
     drivingLicense: 'Водительские права'
-  },
-  deadlines: {
-    taxFiling: 'Срок подачи налогов',
-    businessRenewal: 'Продление лицензии на бизнес',
-    idRenewal: 'Продление удостоверения личности',
-    vehicleRegistration: 'Срок регистрации транспортного средства'
   },
   sidebar: {
     governmentServices: 'Области знаний',

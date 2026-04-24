@@ -646,7 +646,6 @@ export default {
   },
   brandName: 'Genie AI: Asisten Digital Pemerintah Anda',
   nav: {
-    systemStatus: 'Status Sistem',
     menu: 'Menu',
     analytics: 'Analitik',
     userProfile: 'Profil Pengguna',
@@ -662,32 +661,12 @@ export default {
       swahili: 'Swahili'
     }
   },
-  systemStatus: {
-    title: 'Status Layanan',
-    services: 'Layanan',
-    operational: 'Beroperasi',
-    degraded: 'Terganggu',
-    outage: 'Padam',
-    allOperational: 'Semua Sistem Beroperasi',
-    someIssues: 'Beberapa Masalah',
-    majorIssues: 'Masalah Besar',
-    checking: 'Memeriksa...',
-    nextDeadline: 'Tenggat Berikutnya',
-    days: 'hari',
-    viewDetails: 'Lihat Detail'
-  },
   services: {
     eCitizen: 'Portal eCitizen',
     taxFiling: 'Sistem Pelaporan Pajak',
     idApplication: 'Aplikasi KTP',
     businessReg: 'Pendaftaran Usaha',
     drivingLicense: 'Surat Izin Mengemudi'
-  },
-  deadlines: {
-    taxFiling: 'Tenggat Pelaporan Pajak',
-    businessRenewal: 'Perpanjangan Izin Usaha',
-    idRenewal: 'Perpanjangan KTP',
-    vehicleRegistration: 'Tenggat Registrasi Kendaraan'
   },
   sidebar: {
     governmentServices: 'Area Pengetahuan',

@@ -649,7 +649,6 @@ export default {
   },
   brandName: 'Genie AI: Mothusi wa hao wa Mmuso wa Digital',
   nav: {
-    systemStatus: 'Boemo ba Sistimi',
     menu: 'Lenane',
     analytics: 'Tshekatsheko',
     userProfile: 'Profaele ya Mosebedisi',
@@ -665,32 +664,12 @@ export default {
       swahili: 'Seswahili'
     }
   },
-  systemStatus: {
-    title: 'Boemo ba Tshebeletso',
-    services: 'Ditshebeletso',
-    operational: 'Ea sebetsa',
-    degraded: 'E Fokotsehile',
-    outage: 'Ho Kgaohwa',
-    allOperational: 'Disistimi Tsohle',
-    someIssues: 'Mathata a mang',
-    majorIssues: 'Mathata a Maholo',
-    checking: 'Ea hlahloba...',
-    nextDeadline: 'Nako ya ho Qetela e Latelang',
-    days: 'matsatsi',
-    viewDetails: 'Bona Dintlha'
-  },
   services: {
     eCitizen: 'eCitizen Portal',
     taxFiling: 'Sistimi ya ho Kenya Lekgetho',
     idApplication: 'Kopo ya ID',
     businessReg: 'Ngwadisong ya Kgwebo',
     drivingLicense: 'Laesense ya ho Kganna'
-  },
-  deadlines: {
-    taxFiling: 'Nako ya ho Qetela ya ho Kenya Lekgetho',
-    businessRenewal: 'Ntjhafatso ya Laesense ya Kgwebo',
-    idRenewal: 'Ntjhafatso ya Karata ya ID',
-    vehicleRegistration: 'Nako ya ho Qetela ya Ngwadisong ya Koloi'
   },
   sidebar: {
     governmentServices: 'Dibaka tsa Tsebo',

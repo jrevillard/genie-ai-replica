@@ -18,12 +18,15 @@ import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
 // ===========================================================================
-import 'package:genie_ai_mobile/components/auth/login_screen.dart';
+import 'package:genie_ai_mobile/components/auth/oidc_login_screen.dart';
 import 'package:genie_ai_mobile/components/auth/register_screen.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/components/auth/registration_success_screen.dart';
 import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.dart';
 import 'package:genie_ai_mobile/components/auth/password_reset_confirm_screen.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
+import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
+import 'package:genie_ai_mobile/services/auth/auth_state.dart';
 
 // ===========================================================================
 // COMPONENT IMPORTS
@@ -64,16 +67,14 @@ void main() async {
   );
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
-  // User session state
-  Map<String, dynamic>? _user;
+class _MyAppState extends ConsumerState<MyApp> {
   bool _isConfigLoaded = false;
 
   @override
@@ -94,6 +95,9 @@ class _MyAppState extends State<MyApp> {
       // Initialize ThemeManager with the loaded config
       ThemeManager().setConfiguration(config);
 
+      // Load GenieAiConfig for branding (iconPath, title) used by OidcLoginScreen
+      await GenieAiConfig.load();
+
       debugPrint("[MAIN] Configuration loaded successfully.");
     } catch (e) {
       debugPrint("[MAIN] Error loading configuration: $e");
@@ -111,22 +115,16 @@ class _MyAppState extends State<MyApp> {
     ThemeManager().toggleTheme();
   }
 
-  void _handleLogin(Map<String, dynamic> user) {
-    debugPrint("User logged in: ${user['email'] ?? 'unknown'}");
-    setState(() {
-      _user = user;
-    });
-  }
-
-  void _handleLogout() {
-    debugPrint("User logged out");
-    setState(() {
-      _user = null;
-    });
+  // Logout is deferred to Epic 2 (Story 2.1) — AuthNotifier.logout()
+  // This no-op keeps MainScreen compilation working until then.
+  void _onLogoutPlaceholder() {
+    debugPrint("[MAIN] Logout not yet implemented (deferred to Epic 2)");
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return AnimatedBuilder(
       animation: Listenable.merge([ThemeManager(), I18nService()]),
       builder: (context, child) {
@@ -158,21 +156,28 @@ class _MyAppState extends State<MyApp> {
             }
             return child!;
           },
-          home: _user == null
-              ? LoginScreen(onLoginSuccess: _handleLogin)
-              : MainScreen(
-                  user: _user!,
+          home: authState.status == AuthStatus.authenticated
+              ? MainScreen(
+                  // TODO(Epic 2): accessToken is empty until AuthInterceptor
+                  // provides real tokens to downstream components.
+                  user: {
+                    'id': authState.userId ?? '',
+                    'accessToken': '',
+                  },
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
-                  onLogout: _handleLogout,
-                ),
+                  onLogout: _onLogoutPlaceholder,
+                )
+              : const OidcLoginScreen(),
           routes: {
-            '/login': (context) => LoginScreen(onLoginSuccess: _handleLogin),
+            '/login': (context) => const OidcLoginScreen(),
             '/register': (context) => const RegisterScreen(),
             '/registration-success': (context) =>
                 const RegistrationSuccessScreen(),
             '/password-reset': (context) => const PasswordResetInitiateScreen(),
-            '/profile': (context) => UserProfileScreen(user: _user ?? {}),
+            '/profile': (context) => UserProfileScreen(
+              user: {'id': authState.userId ?? ''},
+            ),
             '/about': (context) => const AboutScreen(),
             '/password-reset-confirm': (context) {
               final settings = ModalRoute.of(context)?.settings;
@@ -440,7 +445,7 @@ class _BinderTab extends StatelessWidget {
         width: 10, // Slim Width
         height: 60, // Height matching Navbar approx
         decoration: BoxDecoration(
-          color: color.withOpacity(0.45), // Transparent
+          color: color.withValues(alpha: 0.45), // Transparent
           borderRadius: BorderRadius.horizontal(
             right: isLeft ? const Radius.circular(10) : Radius.zero,
             left: !isLeft ? const Radius.circular(10) : Radius.zero,
@@ -456,7 +461,7 @@ class _BinderTab extends StatelessWidget {
         child: Center(
           child: Icon(
             isLeft ? Icons.chevron_right : Icons.chevron_left,
-            color: Colors.white.withOpacity(0.8),
+            color: Colors.white.withValues(alpha: 0.8),
             size: 12,
           ),
         ),

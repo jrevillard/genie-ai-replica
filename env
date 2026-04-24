@@ -212,6 +212,12 @@ HUGGING_FACE_HUB_TOKEN=
 # They serve the same purpose but at different stages (build-time vs runtime).
 # CSP_CONNECT_SRC=
 
+# Log level for backend and document-repository services
+# Used by: backend (shared-lib/logger.js), document-repository (appConfig.js)
+# Values: error, warn, info, debug
+# Default: info
+# LOG_LEVEL=debug
+
 # Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
 # Controls how long an inactive analytics session is kept before automatic cleanup.
 # Used by: backend (session-service.js)

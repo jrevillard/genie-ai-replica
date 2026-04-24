@@ -165,7 +165,11 @@ class GenieUserProfileClient:
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
 
         try:
-            async with aiohttp.ClientSession() as session, session.get(url, headers=headers) as response:
+            _timeout = aiohttp.ClientTimeout(total=30)
+            async with (
+                aiohttp.ClientSession(timeout=_timeout) as session,
+                session.get(url, headers=headers) as response,
+            ):
                 if response.status == 200:
                     profile_data = await response.json()
                     logger.info("Successfully retrieved user profile")
@@ -822,7 +826,7 @@ class ChatQnAService:
 
         try:
             async with (
-                aiohttp.ClientSession() as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
                 session.get(file_get_metadata_url, headers=headers) as response,
             ):
                 if response.status == 200:
@@ -1235,7 +1239,7 @@ class ChatQnAService:
             logger.warning("No Authorization header in request — service-to-service calls will fail")
 
         # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
-        logger.info(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")
+        logger.debug(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")
 
         user_details = {}
 
@@ -1249,7 +1253,7 @@ class ChatQnAService:
         chat_request = ChatCompletionRequest.parse_obj(data)
 
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
-        logger.info(f"Parsed chat request: {chat_request}")
+        logger.debug(f"Parsed chat request: {chat_request}")
 
         retrieval_context = {}
 
@@ -1258,7 +1262,7 @@ class ChatQnAService:
                 retrieval_context = chat_request.context.model_dump(exclude_unset=True)
             except Exception:
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
-        logger.info(f"Context: {retrieval_context}")
+        logger.debug(f"Context: {retrieval_context}")
         # -----------------------------------------------
 
         if logflag:
@@ -1570,7 +1574,7 @@ class ChatQnAService:
 
                         score = item.get("score", 0.0)
                         # Construct the file read URL (assuming a standard pattern)
-                        file_read_url = f"https://<HOST>/<PORT>/api/files/{file_id}/viewbrowser" if file_id else ""
+                        file_read_url = f"{BACKEND_SERVICE_URL}/api/files/{file_id}/viewbrowser" if file_id else ""
 
                         labels = []
                         file_name = ""

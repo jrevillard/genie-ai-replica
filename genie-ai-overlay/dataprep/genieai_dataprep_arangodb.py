@@ -104,23 +104,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def _log_environment_variables(self):
         """Debug: Print all critical environment variables at startup."""
-        print("\n" + "=" * 60)
-        print(" GENIE-AI DATAPREP CONFIGURATION ")
-        print("=" * 60)
-        print(f" DOCUMENT_REPO_URL    : {DOCUMENT_REPOSITORY_URL}")
-        print(f" BACKEND_SERVICE_URL  : {BACKEND_SERVICE_URL}")
-        print(" OIDC_AUTH            : Keycloak service account (client_credentials)")
-        print(f" GUARDRAIL_ENABLED    : {GUARDRAIL_ENABLED} ({GUARDRAIL_URL})")
-        print("-" * 60)
-        print(f" LABELING_STRATEGY    : {LABELING_STRATEGY}")
-        print(f" EMBEDDING_THRESHOLD  : {EMBEDDING_LABEL_THRESHOLD}")
-        print(f" BM25_THRESHOLD       : {BM25_LABEL_THRESHOLD}")
-        print(f" EXTRACTION_METHOD    : {CONTENT_EXTRACTION_METHOD}")
-        print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
-        print(f" ARANGO_DB            : {os.getenv('ARANGO_DB')}")
-        print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
-        print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
-        print("=" * 60 + "\n")
+        logger.debug(f"GENIE-AI DATAPREP CONFIGURATION: "
+                     f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
+                     f"BACKEND={BACKEND_SERVICE_URL}, "
+                     f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
+                     f"LABELING={LABELING_STRATEGY}, "
+                     f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
+                     f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
+                     f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
+                     f"LLM={os.getenv('VLLM_ENDPOINT')}, "
+                     f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
+                     f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
+                     f"BATCHES={MAX_CONCURRENT_BATCHES}")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
@@ -152,7 +147,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # Also apply semaphore here to be safe
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession() as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
                 session.patch(url, json=payload, headers=headers) as response,
             ):
                 if response.status != 200:
@@ -178,7 +173,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # FIX: Limit concurrency of log writes to prevent 429 flooding
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession() as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
                 session.post(url, json=payload, headers=headers) as response,
             ):
                 # Ignore 429s in logs specifically to prevent recursion or spam
@@ -204,7 +199,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         try:
             async with (
                 self._log_semaphore,
-                aiohttp.ClientSession() as session,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
                 session.get(url, headers=headers) as response,
             ):
                 if response.status == 200:
@@ -282,7 +277,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if not GUARDRAIL_ENABLED:
             return {"success": True}
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             for i, text in enumerate(plain_chunks):
                 try:
                     async with session.post(GUARDRAIL_URL, json={"text": text}) as resp:
@@ -304,14 +299,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
         model = os.getenv("VLLM_MODEL_ID")
 
-        # Debug Requirement 3: Print what is sent to LLM
-        print("\n" + "-" * 60)
-        print(" DEBUG: LLM LABELING INPUTS ")
-        print("-" * 60)
-        print(f" Taxonomy ({len(all_labels)} labels): {all_labels}")
-        print(f" File Metadata Labels: {file_labels}")
-        print(f" System Prompt: {LABEL_SELECTOR_SYSTEM_PROMPT}")
-        print("-" * 60 + "\n")
+        # Debug: Log what is sent to LLM
+        logger.debug(f"LLM LABELING INPUTS: "
+                     f"taxonomy ({len(all_labels)} labels): {all_labels}, "
+                     f"file_labels: {file_labels}, "
+                     f"system_prompt ({len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars)")
 
         # Parallel Processing with Semaphore
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)  # Reuse same concurrency limit or define a new one

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../config/keycloak_config.dart';
+import '../auth/auth_logger.dart';
 
 class OidcEndpoints {
   final String authorizationEndpoint;
@@ -47,21 +48,37 @@ class OidcEndpoints {
 class KeycloakService {
   final KeycloakConfig keycloakConfig;
   final http.Client _httpClient;
+  final AuthLogger? _logger;
   OidcEndpoints? _cachedEndpoints;
 
   KeycloakService({
     required this.keycloakConfig,
     http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+    AuthLogger? logger,
+  })  : _httpClient = httpClient ?? http.Client(),
+        _logger = logger;
 
   Future<OidcEndpoints?> discoverEndpoints() async {
     if (_cachedEndpoints != null) return _cachedEndpoints;
+    _logger?.logAuthEvent(
+      message: 'Endpoint discovery started',
+      source: 'KeycloakService.discoverEndpoints',
+    );
     try {
       final uri = Uri.parse(
         '${keycloakConfig.realmUrl}/.well-known/openid-configuration',
       );
       final response = await _httpClient.get(uri);
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        _logger?.logAuthFailure(
+          errorCode: 'DISCOVERY_HTTP_ERROR',
+          keycloakEndpoint: keycloakConfig.realmUrl,
+          httpStatus: response.statusCode,
+          message: 'Discovery returned HTTP ${response.statusCode}',
+          source: 'KeycloakService.discoverEndpoints',
+        );
+        return null;
+      }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       _cachedEndpoints = OidcEndpoints(
         authorizationEndpoint: json['authorization_endpoint'] as String,
@@ -69,14 +86,43 @@ class KeycloakService {
         userinfoEndpoint: json['userinfo_endpoint'] as String,
         endSessionEndpoint: json['end_session_endpoint'] as String,
       );
+      _logger?.logAuthEvent(
+        message: 'Endpoint discovery successful',
+        source: 'KeycloakService.discoverEndpoints',
+      );
       return _cachedEndpoints;
     } on SocketException {
+      _logger?.logAuthFailure(
+        errorCode: 'DISCOVERY_NETWORK_ERROR',
+        keycloakEndpoint: keycloakConfig.realmUrl,
+        networkReachable: false,
+        message: 'Network unreachable during discovery',
+        source: 'KeycloakService.discoverEndpoints',
+      );
       return null;
     } on http.ClientException {
+      _logger?.logAuthFailure(
+        errorCode: 'DISCOVERY_CLIENT_ERROR',
+        keycloakEndpoint: keycloakConfig.realmUrl,
+        message: 'HTTP client error during discovery',
+        source: 'KeycloakService.discoverEndpoints',
+      );
       return null;
     } on FormatException {
+      _logger?.logAuthFailure(
+        errorCode: 'DISCOVERY_PARSE_ERROR',
+        keycloakEndpoint: keycloakConfig.realmUrl,
+        message: 'Invalid JSON in discovery response',
+        source: 'KeycloakService.discoverEndpoints',
+      );
       return null;
     } on TypeError {
+      _logger?.logAuthFailure(
+        errorCode: 'DISCOVERY_PARSE_ERROR',
+        keycloakEndpoint: keycloakConfig.realmUrl,
+        message: 'Unexpected response structure in discovery',
+        source: 'KeycloakService.discoverEndpoints',
+      );
       return null;
     }
   }

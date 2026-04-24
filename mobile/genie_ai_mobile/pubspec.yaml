@@ -55,6 +55,10 @@ dependencies:
   # App Package Info (Version, Build Number)
   package_info_plus: ^9.0.0
 
+  # Structured logging for auth diagnostics
+  talker: ^4.5.0
+  talker_flutter: ^4.5.0
+
   flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:

@@ -297,40 +297,28 @@ So that I can authenticate securely without the app handling my password directl
 **When** no tokens exist in `TokenStorage`
 **Then** the auth state remains `unauthenticated`
 
-### Story 1.3b: Deep Link Handler & Custom URL Scheme
+### Story 1.3b: Custom URL Scheme Registration
 
 As a mobile app,
-I want to receive the OIDC callback via a custom URL scheme,
-So that the authorization code from Keycloak is delivered back to the app after authentication.
+I want the custom URL scheme registered on Android and iOS,
+So that `flutter_appauth` can receive the OIDC callback from Keycloak after authentication.
+
+**Note:** `flutter_appauth` v11 handles the OIDC callback entirely internally via native AppAuth SDKs (`RedirectUriReceiverActivity` on Android, auto-registration on iOS). No `app_links` integration or manual deep link handling is needed for OIDC. The `DeepLinkHandler` service (using `app_links`) is deferred to Epic 5 when non-OIDC deep links are needed.
 
 **Acceptance Criteria:**
 
 **Given** the app is built with a specific flavor
-**When** the `AndroidManifest.xml` is configured
-**Then** an intent filter is registered for the custom URL scheme (e.g., `com.itu.genieai://callback`)
+**When** `build.gradle` defines `appAuthRedirectScheme` in `manifestPlaceholders`
+**Then** `flutter_appauth`'s `RedirectUriReceiverActivity` is configured with the correct custom URL scheme (e.g., `com.itu.genieai.dev`)
 
 **Given** the app is built with a specific flavor
-**When** the `Info.plist` is configured
-**Then** the custom URL scheme (e.g., `com.itu.genieai`) is registered under `CFBundleURLTypes`
+**When** `Info.plist` is configured
+**Then** the custom URL scheme (e.g., `com.itu.genieai.dev`) is registered under `CFBundleURLTypes`
 
-**Given** the system browser redirects to the app's custom URL scheme with an authorization code
-**When** the deep link is received by the app
-**Then** `app_links` captures the callback URI
-**And** the authorization code and state parameter are extracted from the URI
-**And** the token exchange is triggered via `KeycloakService`
-
-**Given** the deep link callback is received but the network is unavailable
-**When** the token exchange fails
-**Then** the auth state transitions to `AuthState(status: AuthStatus.error, retryable: true, errorMessage: 'Connection failed')`
-**And** the user can retry by tapping "Sign in" again (Keycloak SSO will recognize the active session)
-
-**Given** the deep link callback is malformed (missing code parameter)
-**When** the URI is parsed
-**Then** the auth state transitions to `AuthState(status: AuthStatus.unauthenticated)` — no crash, no error, just back to login
-
-**Given** a deep link is received while the app is already running
-**When** the deep link is processed
-**Then** the token exchange and auth state update work identically to a cold-start callback
+**Given** the user completes authentication in the system browser
+**When** Keycloak redirects to `{redirectScheme}://callback?code=...`
+**Then** `flutter_appauth` intercepts the callback, exchanges the authorization code for tokens, and `AuthNotifier.authorize()` completes successfully
+**And** the auth state transitions to `AuthState.authenticated()`
 
 ### Story 1.4: Login Screen UI & Accessibility
 
@@ -725,6 +713,8 @@ So that I can create and publish a new deployment in under a day.
 ## Epic 5: Account Recovery & Deep Links
 
 A user can reset their password via the Keycloak browser. Password reset and email verification links open correctly in the system browser (not intercepted by the app).
+
+**Note:** Story 1.3b originally included a `DeepLinkHandler` service using `app_links` for deep link management. After architectural review (Party Mode), this was deferred to Epic 5 since no non-OIDC deep links exist in Epics 1-4. The `app_links` package (^6.3.3) remains in `pubspec.yaml` but is unused until this epic. The DeepLinkHandler implementation, `app_links` integration (`uriLinkStream`, `getInitialLink`), and `FlutterDeepLinkingEnabled=false` configuration will be added in Story 5.2 alongside Universal Links / App Links setup.
 
 ### Story 5.1: Password Reset via Keycloak Browser
 

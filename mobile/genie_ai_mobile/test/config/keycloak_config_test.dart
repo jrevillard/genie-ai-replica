@@ -7,14 +7,16 @@ import 'package:genie_ai_mobile/config/flavors/itu.dart' as flavors;
 
 void main() {
   group('KeycloakConfig', () {
-    test('holds all 4 fields correctly', () {
+    test('holds all 5 fields correctly', () {
       const config = KeycloakConfig(
         keycloakUrl: 'https://example.com',
+        realm: 'genie',
         clientId: 'test-client',
         redirectScheme: 'com.example.app',
         backendUrl: 'https://api.example.com',
       );
       expect(config.keycloakUrl, 'https://example.com');
+      expect(config.realm, 'genie');
       expect(config.clientId, 'test-client');
       expect(config.redirectScheme, 'com.example.app');
       expect(config.backendUrl, 'https://api.example.com');
@@ -23,11 +25,23 @@ void main() {
     test('has const constructor', () {
       const config = KeycloakConfig(
         keycloakUrl: '',
+        realm: '',
         clientId: '',
         redirectScheme: '',
         backendUrl: '',
       );
       expect(config, isA<KeycloakConfig>());
+    });
+
+    test('computes realmUrl from keycloakUrl and realm', () {
+      const config = KeycloakConfig(
+        keycloakUrl: 'https://example.com',
+        realm: 'myrealm',
+        clientId: 'c',
+        redirectScheme: 's',
+        backendUrl: 'b',
+      );
+      expect(config.realmUrl, equals('https://example.com/realms/myrealm'));
     });
   });
 
@@ -42,6 +56,8 @@ void main() {
 
     test('has dev-specific values', () {
       expect(devConfig.keycloakUrl, equals('http://localhost:8080'));
+      expect(devConfig.realm, equals('genie'));
+      expect(devConfig.realmUrl, equals('http://localhost:8080/realms/genie'));
       expect(devConfig.clientId, equals('genie-mobile-dev'));
       expect(devConfig.redirectScheme, equals('com.itu.genieai.dev'));
       expect(devConfig.backendUrl, equals('http://localhost:3000'));
@@ -59,6 +75,8 @@ void main() {
 
     test('has staging-specific values', () {
       expect(stagingConfig.keycloakUrl, equals('https://staging-keycloak.example.com'));
+      expect(stagingConfig.realm, equals('genie'));
+      expect(stagingConfig.realmUrl, equals('https://staging-keycloak.example.com/realms/genie'));
       expect(stagingConfig.clientId, equals('genie-mobile-staging'));
       expect(stagingConfig.redirectScheme, equals('com.itu.genieai.staging'));
       expect(stagingConfig.backendUrl, equals('https://staging-api.example.com'));
@@ -76,6 +94,8 @@ void main() {
 
     test('has e2e-specific values', () {
       expect(e2eConfig.keycloakUrl, equals('http://localhost:8080'));
+      expect(e2eConfig.realm, equals('genie'));
+      expect(e2eConfig.realmUrl, equals('http://localhost:8080/realms/genie'));
       expect(e2eConfig.clientId, equals('genie-mobile-e2e'));
       expect(e2eConfig.redirectScheme, equals('com.itu.genieai.e2e'));
       expect(e2eConfig.backendUrl, equals('http://localhost:3000'));
@@ -93,6 +113,8 @@ void main() {
 
     test('has ITU-specific values', () {
       expect(flavors.config.keycloakUrl, equals('https://keycloak.itu.int'));
+      expect(flavors.config.realm, equals('genie'));
+      expect(flavors.config.realmUrl, equals('https://keycloak.itu.int/realms/genie'));
       expect(flavors.config.clientId, equals('genie-mobile-itu'));
       expect(flavors.config.redirectScheme, equals('com.itu.genieai'));
       expect(flavors.config.backendUrl, equals('https://api.itu.int'));

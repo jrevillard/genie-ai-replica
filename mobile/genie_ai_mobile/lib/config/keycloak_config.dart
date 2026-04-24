@@ -5,16 +5,20 @@ import 'flavors/itu.dart' as flavors;
 
 class KeycloakConfig {
   final String keycloakUrl;
+  final String realm;
   final String clientId;
   final String redirectScheme;
   final String backendUrl;
 
   const KeycloakConfig({
     required this.keycloakUrl,
+    required this.realm,
     required this.clientId,
     required this.redirectScheme,
     required this.backendUrl,
   });
+
+  String get realmUrl => '$keycloakUrl/realms/$realm';
 
   @override
   bool operator ==(Object other) =>
@@ -22,13 +26,14 @@ class KeycloakConfig {
       other is KeycloakConfig &&
           runtimeType == other.runtimeType &&
           keycloakUrl == other.keycloakUrl &&
+          realm == other.realm &&
           clientId == other.clientId &&
           redirectScheme == other.redirectScheme &&
           backendUrl == other.backendUrl;
 
   @override
   int get hashCode =>
-      Object.hash(keycloakUrl, clientId, redirectScheme, backendUrl);
+      Object.hash(keycloakUrl, realm, clientId, redirectScheme, backendUrl);
 }
 
 KeycloakConfig getConfig() {

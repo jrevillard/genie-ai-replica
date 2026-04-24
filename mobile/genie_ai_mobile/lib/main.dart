@@ -28,6 +28,7 @@ import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 // ===========================================================================
 // COMPONENT IMPORTS
 // ===========================================================================
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
@@ -56,7 +57,11 @@ void main() async {
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 
-  runApp(const MyApp());
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {

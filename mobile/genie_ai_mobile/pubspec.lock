@@ -327,7 +327,7 @@ packages:
     source: hosted
     version: "11.0.0"
   flutter_appauth_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: flutter_appauth_platform_interface
       sha256: "6c3c2f3a0060a2bf34880ca75b997b675f148275659c6abe2ff15d0819861259"

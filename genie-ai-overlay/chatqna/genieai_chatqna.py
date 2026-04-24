@@ -165,7 +165,11 @@ class GenieUserProfileClient:
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
 
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session, session.get(url, headers=headers) as response:
+            _timeout = aiohttp.ClientTimeout(total=30)
+            async with (
+                aiohttp.ClientSession(timeout=_timeout) as session,
+                session.get(url, headers=headers) as response,
+            ):
                 if response.status == 200:
                     profile_data = await response.json()
                     logger.info("Successfully retrieved user profile")

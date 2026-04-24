@@ -146,7 +146,7 @@ class GpuTranslateBackend {
       const isHttps = url.protocol === 'https:';
       const client = isHttps ? https : http;
 
-      await new Promise((resolve, reject) => {
+      await new Promise((resolve) => {
         const options = {
           hostname: url.hostname,
           port: url.port || this.port,

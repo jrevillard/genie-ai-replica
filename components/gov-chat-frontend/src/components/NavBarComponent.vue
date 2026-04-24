@@ -26,62 +26,6 @@
 
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
-          <!-- Status Indicator for Mobile -->
-          <div ref="mobileStatusContainer" class="status-indicator-container">
-            <button
-              class="status-indicator-btn mobile-status-btn"
-              aria-label="System Status"
-              @click="toggleStatusDropdown"
-            >
-              <span class="status-dot" :class="getStatusDotClass"></span>
-              <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
-            </button>
-
-            <!-- Status Dropdown (shared with desktop version) -->
-            <div v-if="isStatusDropdownOpen" class="status-dropdown">
-              <div class="status-dropdown-header">
-                <h4>{{ $t('systemStatus.title') }}</h4>
-                <div class="status-summary">
-                  <span>{{ totalServices }} {{ $t('systemStatus.services') }}</span>
-                </div>
-              </div>
-
-              <div class="status-counts">
-                <div class="status-count-item">
-                  <span class="status-dot status-operational"></span>
-                  <span class="status-label">{{ $t('systemStatus.operational') }}</span>
-                  <span class="status-value">{{ operationalCount }}</span>
-                </div>
-                <div class="status-count-item">
-                  <span class="status-dot status-degraded"></span>
-                  <span class="status-label">{{ $t('systemStatus.degraded') }}</span>
-                  <span class="status-value">{{ degradedCount }}</span>
-                </div>
-                <div class="status-count-item">
-                  <span class="status-dot status-outage"></span>
-                  <span class="status-label">{{ $t('systemStatus.outage') }}</span>
-                  <span class="status-value">{{ outageCount }}</span>
-                </div>
-              </div>
-
-              <div v-if="nextDeadline" class="next-deadline">
-                <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
-                <div class="deadline-info">
-                  <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                  <span class="deadline-days" :class="{ urgent: nextDeadline.daysRemaining < 7 }">
-                    {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="status-footer">
-                <a href="#" @click.prevent="viewStatusPage">
-                  {{ $t('systemStatus.viewDetails') }}
-                </a>
-              </div>
-            </div>
-          </div>
-
           <!-- Language Selector for Mobile -->
           <div class="language-select-container mobile-language-select">
             <language-selector />
@@ -198,61 +142,8 @@
         </div>
       </div>
 
-      <!-- Main navbar area with status - Only visible on desktop -->
-      <div class="nav-main desktop-only">
-        <!-- Status Indicator -->
-        <div ref="statusContainer" class="status-indicator-container">
-          <button class="status-indicator-btn" aria-label="System Status" @click="toggleStatusDropdown">
-            <span class="status-dot" :class="getStatusDotClass"></span>
-            <span class="status-text">{{ statusText }}</span>
-            <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
-          </button>
-
-          <!-- Status Dropdown -->
-          <div v-if="isStatusDropdownOpen" class="status-dropdown">
-            <div class="status-dropdown-header">
-              <h4>{{ $t('systemStatus.title') }}</h4>
-              <div class="status-summary">
-                <span>{{ totalServices }} {{ $t('systemStatus.services') }}</span>
-              </div>
-            </div>
-
-            <div class="status-counts">
-              <div class="status-count-item">
-                <span class="status-dot status-operational"></span>
-                <span class="status-label">{{ $t('systemStatus.operational') }}</span>
-                <span class="status-value">{{ operationalCount }}</span>
-              </div>
-              <div class="status-count-item">
-                <span class="status-dot status-degraded"></span>
-                <span class="status-label">{{ $t('systemStatus.degraded') }}</span>
-                <span class="status-value">{{ degradedCount }}</span>
-              </div>
-              <div class="status-count-item">
-                <span class="status-dot status-outage"></span>
-                <span class="status-label">{{ $t('systemStatus.outage') }}</span>
-                <span class="status-value">{{ outageCount }}</span>
-              </div>
-            </div>
-
-            <div v-if="nextDeadline" class="next-deadline">
-              <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
-              <div class="deadline-info">
-                <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                <span class="deadline-days" :class="{ urgent: nextDeadline.daysRemaining < 7 }">
-                  {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
-                </span>
-              </div>
-            </div>
-
-            <div class="status-footer">
-              <a href="#" @click.prevent="viewStatusPage">
-                {{ $t('systemStatus.viewDetails') }}
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Main navbar area - Only visible on desktop -->
+      <div class="nav-main desktop-only"></div>
 
       <!-- Right section with language and user controls - Only visible on desktop -->
       <div class="nav-right desktop-only">
@@ -400,67 +291,11 @@ export default {
       })
     }
   },
-  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout', 'openAdmin'],
+  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'logout', 'openAdmin'],
   data() {
-    return {
-      isStatusDropdownOpen: false,
-      // Sample system status data - would be fetched from an API
-      systemStatus: {
-        overall: 'degraded', // 'operational', 'degraded', or 'outage'
-        services: [
-          { name: 'eCitizen Portal', status: 'operational' },
-          { name: 'Tax Filing System', status: 'degraded' },
-          { name: 'ID Application', status: 'outage' },
-          { name: 'Business Registration', status: 'operational' },
-          { name: 'Driving License', status: 'operational' }
-        ]
-      },
-      // Sample next deadline - would be personalized
-      nextDeadline: {
-        titleKey: 'taxFiling',
-        daysRemaining: 12
-      }
-    };
+    return {};
   },
   computed: {
-    operationalCount() {
-      return this.systemStatus.services.filter((s) => s.status === 'operational').length;
-    },
-    degradedCount() {
-      return this.systemStatus.services.filter((s) => s.status === 'degraded').length;
-    },
-    outageCount() {
-      return this.systemStatus.services.filter((s) => s.status === 'outage').length;
-    },
-    totalServices() {
-      return this.systemStatus.services.length;
-    },
-    getStatusDotClass() {
-      switch (this.systemStatus.overall) {
-        case 'operational':
-          return 'status-operational';
-        case 'degraded':
-          return 'status-degraded';
-        case 'outage':
-          return 'status-outage';
-        default:
-          return '';
-      }
-    },
-    statusText() {
-      // Show in user's language
-      switch (this.systemStatus.overall) {
-        case 'operational':
-          return this.$t('systemStatus.allOperational');
-        case 'degraded':
-          return this.$t('systemStatus.someIssues');
-        case 'outage':
-          return this.$t('systemStatus.majorIssues');
-        default:
-          return this.$t('systemStatus.checking');
-      }
-    },
-    // Compute if the user has admin role — reads directly from Vuex store to stay reactive
     isAdmin() {
       const user = this.$store.getters.currentUser;
       if (!user) return false;
@@ -470,35 +305,12 @@ export default {
     }
   },
   watch: {
-    // Watch for locale changes and close/reopen dropdown to force refresh
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
-
-      // Only do this if the dropdown is open
-      if (this.isStatusDropdownOpen) {
-        // Briefly close and reopen to force re-render with new translations
-        const wasOpen = this.isStatusDropdownOpen;
-        this.isStatusDropdownOpen = false;
-
-        // Use nextTick to ensure Vue updates the DOM first
-        this.$nextTick(() => {
-          if (wasOpen) {
-            // Small delay to ensure DOM updates
-            setTimeout(() => {
-              this.isStatusDropdownOpen = true;
-            }, 50);
-          }
-        });
-      }
     }
   },
-  mounted() {
-    // Close dropdown when clicking outside
-    document.addEventListener('click', this.handleClickOutside);
-  },
-  beforeUnmount() {
-    document.removeEventListener('click', this.handleClickOutside);
-  },
+  mounted() {},
+  beforeUnmount() {},
 
   methods: {
     //Logout handler — delegates to Vuex store (keycloakAuthService handles Keycloak redirect)
@@ -513,27 +325,6 @@ export default {
     },
     toggleSidebar() {
       this.$emit('toggleSidebar');
-    },
-    toggleStatusDropdown() {
-      this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
-    },
-    handleClickOutside(event) {
-      // Handle both desktop and mobile status containers
-      const desktopContainer = this.$refs.statusContainer;
-      const mobileContainer = this.$refs.mobileStatusContainer;
-
-      if (
-        desktopContainer &&
-        !desktopContainer.contains(event.target) &&
-        mobileContainer &&
-        !mobileContainer.contains(event.target)
-      ) {
-        this.isStatusDropdownOpen = false;
-      }
-    },
-    viewStatusPage() {
-      this.$emit('viewStatusPage');
-      this.isStatusDropdownOpen = false;
     }
   }
 };
@@ -704,215 +495,6 @@ export default {
   transform-origin: center;
 }
 
-/* Status Indicator */
-.status-indicator-container {
-  position: relative;
-  margin-left: auto;
-  margin-right: 10px;
-}
-
-.status-indicator-btn {
-  display: flex;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  color: white;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  position: relative;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.status-indicator-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
-}
-
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 8px;
-  transition: transform 0.2s ease;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
-}
-
-.status-indicator-btn:hover .status-dot {
-  transform: scale(1.1);
-}
-
-.status-text {
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.status-operational {
-  background-color: #10b981; /* Green */
-}
-
-.status-degraded {
-  background-color: #f59e0b; /* Yellow/Orange */
-}
-
-.status-outage {
-  background-color: #ef4444; /* Red */
-}
-
-/* Status Dropdown */
-.status-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 260px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  color: #333;
-  font-size: 0.85rem;
-  z-index: 30;
-  overflow: hidden;
-  animation: dropdownFadeIn 0.2s ease-out;
-}
-
-@keyframes dropdownFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.status-dropdown-header {
-  padding: 14px 16px;
-  border-bottom: 1px solid #eee;
-  background: #f8f9fa;
-}
-
-.status-dropdown-header h4 {
-  margin: 0 0 6px 0;
-  font-weight: 600;
-  color: #333;
-  font-size: 1rem;
-}
-
-.status-summary {
-  display: flex;
-  justify-content: space-between;
-  color: #666;
-  font-size: 0.8rem;
-}
-
-.status-counts {
-  padding: 12px 16px;
-  border-bottom: 1px solid #eee;
-}
-
-.status-count-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  padding: 4px 0;
-  transition: background-color 0.2s;
-  border-radius: 4px;
-}
-
-.status-count-item:hover {
-  background-color: #f8f9fa;
-}
-
-.status-count-item:last-child {
-  margin-bottom: 0;
-}
-
-.status-label {
-  flex: 1;
-  margin-left: 8px;
-  color: #555;
-}
-
-.status-value {
-  font-weight: 600;
-  color: #333;
-  background: #f5f5f5;
-  border-radius: 12px;
-  min-width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 8px;
-}
-
-.next-deadline {
-  padding: 14px 16px;
-  border-bottom: 1px solid #eee;
-}
-
-.next-deadline h4 {
-  margin: 0 0 8px 0;
-  font-weight: 600;
-  color: #333;
-  font-size: 1rem;
-}
-
-.deadline-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  border-radius: 4px;
-}
-
-.deadline-info:hover {
-  background-color: #f8f9fa;
-}
-
-.deadline-title {
-  color: #555;
-}
-
-.deadline-days {
-  font-weight: 600;
-  color: #2563eb; /* Blue */
-  background: #eef2ff;
-  padding: 4px 10px;
-  border-radius: 12px;
-}
-
-.deadline-days.urgent {
-  color: #ef4444; /* Red */
-  background: #fee2e2;
-}
-
-.status-footer {
-  padding: 12px 16px;
-  text-align: center;
-  background: #f9fafb;
-}
-
-.status-footer a {
-  color: #2563eb;
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  padding: 6px 12px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-  display: inline-block;
-}
-
-.status-footer a:hover {
-  text-decoration: none;
-  background-color: #e0e7ff;
-}
-
 /* Button styling */
 .icon-btn {
   background: rgba(255, 255, 255, 0.1);
@@ -1020,15 +602,6 @@ export default {
 }
 
 .icon-btn:hover .tooltip {
-  opacity: 1;
-  visibility: visible;
-}
-
-.status-indicator-btn .tooltip {
-  bottom: -34px;
-}
-
-.status-indicator-btn:hover .tooltip {
   opacity: 1;
   visibility: visible;
 }
@@ -1152,18 +725,6 @@ export default {
   margin-left: auto;
 }
 
-.mobile-status-btn {
-  padding: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  justify-content: center;
-}
-
-.mobile-status-btn .status-dot {
-  margin-right: 0;
-}
-
 .mobile-language-select {
   width: 60px;
   margin-left: 8px;
@@ -1196,26 +757,9 @@ export default {
   .brand-name {
     font-size: 1.1rem;
   }
-
-  .status-text {
-    font-size: 0.8rem;
-  }
 }
 
 @media (max-width: 900px) {
-  .status-text {
-    display: none;
-  }
-
-  .status-indicator-btn {
-    padding: 0 10px;
-    width: 36px;
-  }
-
-  .status-dot {
-    margin-right: 0;
-  }
-
   .brand-name {
     font-size: 1rem;
     max-width: 300px;
@@ -1247,22 +791,6 @@ export default {
 
   .nav-bar {
     padding: 0 12px;
-  }
-
-  .status-dropdown {
-    width: 240px;
-    right: -40px;
-  }
-
-  .status-dropdown::before {
-    content: '';
-    position: absolute;
-    top: -4px;
-    right: 50px;
-    width: 8px;
-    height: 8px;
-    background: white;
-    transform: rotate(45deg);
   }
 
   .mobile-language-select :deep(select) {
@@ -1323,24 +851,9 @@ export default {
     height: 54px;
   }
 
-  /* Position status dropdown on small screens */
-  .status-dropdown {
-    width: 220px;
-    right: -30px;
-  }
-
-  .status-dropdown::before {
-    right: 40px;
-  }
-
   /* Space mobile controls more compactly */
   .mobile-btn {
     margin-left: 6px;
-    width: 32px;
-    height: 32px;
-  }
-
-  .mobile-status-btn {
     width: 32px;
     height: 32px;
   }
@@ -1363,19 +876,15 @@ html[data-theme='system'].dark-mode .nav-bar {
 /* Buttons and Controls - Dark Mode */
 [data-theme='dark'] .icon-btn,
 [data-theme='dark'] .hamburger-btn,
-[data-theme='dark'] .status-indicator-btn,
 [data-theme='dark'] .language-select-container,
 html[data-theme='dark'] .icon-btn,
 html[data-theme='dark'] .hamburger-btn,
-html[data-theme='dark'] .status-indicator-btn,
 html[data-theme='dark'] .language-select-container,
 [data-theme='system'].dark-mode .icon-btn,
 [data-theme='system'].dark-mode .hamburger-btn,
-[data-theme='system'].dark-mode .status-indicator-btn,
 [data-theme='system'].dark-mode .language-select-container,
 html[data-theme='system'].dark-mode .icon-btn,
 html[data-theme='system'].dark-mode .hamburger-btn,
-html[data-theme='system'].dark-mode .status-indicator-btn,
 html[data-theme='system'].dark-mode .language-select-container {
   background: rgba(255, 255, 255, 0.08);
 }
@@ -1383,115 +892,16 @@ html[data-theme='system'].dark-mode .language-select-container {
 /* Button Hover States - Dark Mode */
 [data-theme='dark'] .icon-btn:hover,
 [data-theme='dark'] .hamburger-btn:hover,
-[data-theme='dark'] .status-indicator-btn:hover,
 [data-theme='dark'] .language-select-container:hover,
 html[data-theme='dark'] .icon-btn:hover,
 html[data-theme='dark'] .hamburger-btn:hover,
-html[data-theme='dark'] .status-indicator-btn:hover,
 html[data-theme='dark'] .language-select-container:hover,
 [data-theme='system'].dark-mode .icon-btn:hover,
 [data-theme='system'].dark-mode .hamburger-btn:hover,
-[data-theme='system'].dark-mode .status-indicator-btn:hover,
 [data-theme='system'].dark-mode .language-select-container:hover,
 html[data-theme='system'].dark-mode .icon-btn:hover,
 html[data-theme='system'].dark-mode .hamburger-btn:hover,
-html[data-theme='system'].dark-mode .status-indicator-btn:hover,
 html[data-theme='system'].dark-mode .language-select-container:hover {
   background: rgba(255, 255, 255, 0.15);
-}
-
-/* Status Dropdown - Dark Mode */
-[data-theme='dark'] .status-dropdown,
-html[data-theme='dark'] .status-dropdown,
-[data-theme='system'].dark-mode .status-dropdown,
-html[data-theme='system'].dark-mode .status-dropdown {
-  background: #1f2937;
-  border: 1px solid #374151;
-}
-
-[data-theme='dark'] .status-dropdown-header,
-html[data-theme='dark'] .status-dropdown-header,
-[data-theme='system'].dark-mode .status-dropdown-header,
-html[data-theme='system'].dark-mode .status-dropdown-header {
-  background: #111827;
-  border-bottom: 1px solid #374151;
-}
-
-[data-theme='dark'] .status-dropdown-header h4,
-[data-theme='dark'] .next-deadline h4,
-html[data-theme='dark'] .status-dropdown-header h4,
-html[data-theme='dark'] .next-deadline h4,
-[data-theme='system'].dark-mode .status-dropdown-header h4,
-[data-theme='system'].dark-mode .next-deadline h4,
-html[data-theme='system'].dark-mode .status-dropdown-header h4,
-html[data-theme='system'].dark-mode .next-deadline h4 {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-[data-theme='dark'] .status-dropdown .status-label,
-[data-theme='dark'] .deadline-title,
-html[data-theme='dark'] .status-dropdown .status-label,
-html[data-theme='dark'] .deadline-title,
-[data-theme='system'].dark-mode .status-dropdown .status-label,
-[data-theme='system'].dark-mode .deadline-title,
-html[data-theme='system'].dark-mode .status-dropdown .status-label,
-html[data-theme='system'].dark-mode .deadline-title {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme='dark'] .status-summary,
-html[data-theme='dark'] .status-summary,
-[data-theme='system'].dark-mode .status-summary,
-html[data-theme='system'].dark-mode .status-summary {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-[data-theme='dark'] .status-count-item:hover,
-[data-theme='dark'] .deadline-info:hover,
-html[data-theme='dark'] .status-count-item:hover,
-html[data-theme='dark'] .deadline-info:hover,
-[data-theme='system'].dark-mode .status-count-item:hover,
-[data-theme='system'].dark-mode .deadline-info:hover,
-html[data-theme='system'].dark-mode .status-count-item:hover,
-html[data-theme='system'].dark-mode .deadline-info:hover {
-  background-color: #111827;
-}
-
-[data-theme='dark'] .status-value,
-html[data-theme='dark'] .status-value,
-[data-theme='system'].dark-mode .status-value,
-html[data-theme='system'].dark-mode .status-value {
-  background: #374151;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-[data-theme='dark'] .status-footer,
-html[data-theme='dark'] .status-footer,
-[data-theme='system'].dark-mode .status-footer,
-html[data-theme='system'].dark-mode .status-footer {
-  background: #111827;
-  border-top: 1px solid #374151;
-}
-
-[data-theme='dark'] .status-footer a,
-html[data-theme='dark'] .status-footer a,
-[data-theme='system'].dark-mode .status-footer a,
-html[data-theme='system'].dark-mode .status-footer a {
-  color: #60a5fa;
-}
-
-[data-theme='dark'] .status-footer a:hover,
-html[data-theme='dark'] .status-footer a:hover,
-[data-theme='system'].dark-mode .status-footer a:hover,
-html[data-theme='system'].dark-mode .status-footer a:hover {
-  background-color: #1e3a58;
-}
-
-/* Fix dropdown arrow in dark mode */
-[data-theme='dark'] .status-dropdown::before,
-html[data-theme='dark'] .status-dropdown::before,
-[data-theme='system'].dark-mode .status-dropdown::before,
-html[data-theme='system'].dark-mode .status-dropdown::before {
-  background: #111827;
 }
 </style>

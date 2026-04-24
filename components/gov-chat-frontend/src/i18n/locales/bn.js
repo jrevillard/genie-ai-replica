@@ -645,7 +645,6 @@ export default {
   },
   brandName: 'Genie AI: আপনার ডিজিটাল সরকারি সহকারী',
   nav: {
-    systemStatus: 'সিস্টেম স্ট্যাটাস',
     menu: 'মেনু',
     analytics: 'অ্যানালিটিক্স',
     userProfile: 'ব্যবহারকারীর প্রোফাইল',
@@ -661,32 +660,12 @@ export default {
       swahili: 'সোয়াহিলি'
     }
   },
-  systemStatus: {
-    title: 'পরিষেবা স্ট্যাটাস',
-    services: 'পরিষেবা',
-    operational: 'কার্যকর',
-    degraded: 'অবনতি (Degraded)',
-    outage: 'বিভ্রাট (Outage)',
-    allOperational: 'সমস্ত সিস্টেম',
-    someIssues: 'কিছু সমস্যা',
-    majorIssues: 'বড় সমস্যা',
-    checking: 'চেক করা হচ্ছে...',
-    nextDeadline: 'পরবর্তী সময়সীমা',
-    days: 'দিন',
-    viewDetails: 'বিস্তারিত দেখুন'
-  },
   services: {
     eCitizen: 'ই-সিটিজেন পোর্টাল',
     taxFiling: 'ট্যাক্স ফাইলিং সিস্টেম',
     idApplication: 'আইডি আবেদন',
     businessReg: 'ব্যবসা নিবন্ধন',
     drivingLicense: 'ড্রাইভিং লাইসেন্স'
-  },
-  deadlines: {
-    taxFiling: 'ট্যাক্স ফাইলিং সময়সীমা',
-    businessRenewal: 'বিজনেস লাইসেন্স নবায়ন',
-    idRenewal: 'আইডি কার্ড নবায়ন',
-    vehicleRegistration: 'গাড়ী নিবন্ধনের সময়সীমা'
   },
   sidebar: {
     governmentServices: 'জ্ঞান এলাকা',

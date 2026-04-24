@@ -659,7 +659,6 @@ export default {
   },
   brandName: 'Genie AI: Ihr digitaler Regierungsassistent',
   nav: {
-    systemStatus: 'Systemstatus',
     menu: 'Menü',
     analytics: 'Analyse',
     userProfile: 'Benutzerprofil',
@@ -675,32 +674,12 @@ export default {
       swahili: 'Swahili'
     }
   },
-  systemStatus: {
-    title: 'Dienststatus',
-    services: 'Dienste',
-    operational: 'Betriebsbereit',
-    degraded: 'Beeinträchtigt',
-    outage: 'Ausfall',
-    allOperational: 'Alle Systeme',
-    someIssues: 'Einige Probleme',
-    majorIssues: 'Große Probleme',
-    checking: 'Überprüfen...',
-    nextDeadline: 'Nächster Termin',
-    days: 'Tage',
-    viewDetails: 'Details anzeigen'
-  },
   services: {
     eCitizen: 'eCitizen-Portal',
     taxFiling: 'Steuererklärungssystem',
     idApplication: 'ID-Antrag',
     businessReg: 'Geschäftsregistrierung',
     drivingLicense: 'Führerschein'
-  },
-  deadlines: {
-    taxFiling: 'Frist für Steuererklärung',
-    businessRenewal: 'Erneuerung der Gewerbelizenz',
-    idRenewal: 'Erneuerung des Personalausweises',
-    vehicleRegistration: 'Frist für Fahrzeugregistrierung'
   },
   sidebar: {
     governmentServices: 'Wissensbereiche',

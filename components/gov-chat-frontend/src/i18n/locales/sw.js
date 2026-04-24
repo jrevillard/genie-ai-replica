@@ -654,7 +654,6 @@ export default {
   },
   brandName: 'Genie AI: Msaidizi Wako wa Kiserikali wa Kidijitali',
   nav: {
-    systemStatus: 'Hali ya Mfumo',
     menu: 'Menyu',
     analytics: 'Takwimu',
     userProfile: 'Profaili',
@@ -670,32 +669,12 @@ export default {
       swahili: 'Kiswahili'
     }
   },
-  systemStatus: {
-    title: 'Hali ya Huduma',
-    services: 'Huduma',
-    operational: 'Inafanya Kazi',
-    degraded: 'Ina Shida Ndogo',
-    outage: 'Haifanyi Kazi',
-    allOperational: 'Mifumo Yote',
-    someIssues: 'Shida Chache',
-    majorIssues: 'Shida Kubwa',
-    checking: 'Inakagua...',
-    nextDeadline: 'Tarehe ya Mwisho Ijayo',
-    days: 'siku',
-    viewDetails: 'Angalia Maelezo Zaidi'
-  },
   services: {
     eCitizen: 'Tovuti ya eCitizen',
     taxFiling: 'Mfumo wa Kutuma Kodi',
     idApplication: 'Maombi ya Kitambulisho',
     businessReg: 'Usajili wa Biashara',
     drivingLicense: 'Leseni ya Udereva'
-  },
-  deadlines: {
-    taxFiling: 'Tarehe ya Mwisho ya Kutuma Kodi',
-    businessRenewal: 'Kuhuisha Leseni ya Biashara',
-    idRenewal: 'Kuhuisha Kitambulisho',
-    vehicleRegistration: 'Tarehe ya Mwisho ya Usajili wa Gari'
   },
   sidebar: {
     governmentServices: 'Maeneo ya Maarifa',

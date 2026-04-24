@@ -654,7 +654,6 @@ export default {
   },
   brandName: 'Genie AI: ผู้ช่วยรัฐบาลดิจิทัลของคุณ',
   nav: {
-    systemStatus: 'สถานะระบบ',
     menu: 'เมนู',
     analytics: 'การวิเคราะห์',
     userProfile: 'โปรไฟล์ผู้ใช้',
@@ -670,32 +669,12 @@ export default {
       swahili: 'สวาฮิลี'
     }
   },
-  systemStatus: {
-    title: 'สถานะบริการ',
-    services: 'บริการ',
-    operational: 'ใช้งานได้',
-    degraded: 'เสื่อมโทรม',
-    outage: 'ขัดข้อง',
-    allOperational: 'ระบบทั้งหมด',
-    someIssues: 'ปัญหาบางอย่าง',
-    majorIssues: 'ปัญหาหลัก',
-    checking: 'กำลังตรวจสอบ...',
-    nextDeadline: 'กำหนดเวลาถัดไป',
-    days: 'วัน',
-    viewDetails: 'ดูรายละเอียด'
-  },
   services: {
     eCitizen: 'พอร์ทัล eCitizen',
     taxFiling: 'ระบบยื่นภาษี',
     idApplication: 'การสมัคร ID',
     businessReg: 'การจดทะเบียนธุรกิจ',
     drivingLicense: 'ใบขับขี่'
-  },
-  deadlines: {
-    taxFiling: 'กำหนดเวลายื่นภาษี',
-    businessRenewal: 'การต่ออายุใบอนุญาตธุรกิจ',
-    idRenewal: 'การต่ออายุบัตรประชาชน',
-    vehicleRegistration: 'กำหนดเวลาจดทะเบียนยานพาหนะ'
   },
   sidebar: {
     governmentServices: 'พื้นที่ความรู้',

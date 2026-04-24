@@ -45,5 +45,22 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- WARNING: This value MUST match the FLAVOR-specific redirectScheme in KeycloakConfig. -->
+				<!-- Currently hardcoded for DEV flavor. For other flavors, update before building: -->
+				<!--   staging: com.itu.genieai.staging -->
+				<!--   e2e:     com.itu.genieai.e2e -->
+				<!--   itu:     com.itu.genieai -->
+				<!-- If this scheme does not match the build flavor, the OIDC callback will silently fail. -->
+				<string>com.itu.genieai.dev</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

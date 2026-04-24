@@ -45,8 +45,8 @@ development_status:
   1-1-secure-token-storage-foundation: done
   1-2-auth-state-machine-flavor-configuration: done
   1-3a-keycloak-login-via-system-browser: done
-  1-3b-deep-link-handler-custom-url-scheme: ready-for-dev
-  1-4-login-screen-ui-accessibility: backlog
+  1-3b-deep-link-handler-custom-url-scheme: done
+  1-4-login-screen-ui-accessibility: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Persistent Authenticated Session

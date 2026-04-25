@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agriconnect-v1';
+const CACHE_NAME = 'agriconnect-v2';
 const OFFLINE_URLS = [
   '/agriconnect.html',
   '/manifest.json'

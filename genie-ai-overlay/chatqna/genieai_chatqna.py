@@ -1241,7 +1241,9 @@ class ChatQnAService:
                     'who is the king', 'king of lesotho', 'king letsie', 'who is king',
                     'capital of france', 'capital of', 'president of', 'prime minister of',
                     'who won the', 'football match', 'soccer', 'movie', 'film review',
-                    'recipe for', 'how to cook a', 'population of']
+                    'recipe for', 'how to cook', 'what can i eat', 'what to eat',
+                    'what do you eat', 'cook with', 'eat with', 'eat beans with',
+                    'eat maize with', 'population of', 'how to make', 'ingredients for']
                 _soft_blocked = ['story about', 'who won', 'football', 'actor', 'music video',
                     'sport', 'lyrics', 'write me a']
                 _agri = ['farm', 'crop', 'plant', 'soil', 'fertilis', 'fertiliz', 'seed',

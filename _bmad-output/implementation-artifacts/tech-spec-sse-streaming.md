@@ -136,6 +136,7 @@ Implement SSE streaming across the full stack:
    - `data: {"type":"metadata","source_documents":[...],"confidence_score":0.87,"responseTime":5234}\n\n` — final metadata
    - `data: {"type":"done","queryId":"12345"}\n\n` — stream completion
    - `data: {"type":"error","message":"...","code":"STREAM_TIMEOUT"}\n\n` — error events
+   - `: keepalive\n\n` — SSE comment (heartbeat every 15s during idle, prevents proxy timeout drops)
 7. **Keep non-streaming endpoint**: Existing `POST /api/queries` remains as fallback. New `POST /api/queries/stream` is the streaming endpoint.
 8. **Separate streaming route**: A dedicated `/api/queries/stream` route allows per-route Kong buffering disabled and timeout configuration without affecting other API routes.
 9. **No compression middleware conflict**: The backend has no compression middleware configured — good for SSE, no risk of response buffering from gzip/brotli.
@@ -154,45 +155,64 @@ Implement SSE streaming across the full stack:
     - Add a new route `query-stream-route` for path `/api/queries/stream` with `request_buffering: false` and `response_buffering: false`, `strip_path: false`, `preserve_host: true`, `protocols: ["http", "https"]`
     - Update the `express-api` service: set `read_timeout: 3600000`, `write_timeout: 3600000`, `connect_timeout: 60000` (connect stays at 60s, read/write go to 1 hour)
     - Wire the new route to the `express-api` service and `express-api-servers` upstream
-  - Notes: The existing `query-route` for `/api/queries` must remain unchanged (non-streaming fallback). Only the new `/api/queries/stream` route gets buffering disabled.
+  - Notes: The existing `query-route` for `/api/queries` must remain unchanged (non-streaming fallback). Only the new `/api/queries/stream` route gets buffering disabled. **Kong 3.8 uses longest-prefix path matching**, so `/api/queries/stream` will match before `/api/queries`. Verify this ordering during smoke testing (Test 2).
 
 - [ ] **Task 2: Update NGINX configuration for SSE passthrough**
   - File: `api-gateway-solution/nginx/conf/default.conf.template`
-  - Action: Add a **nested location block** for the streaming endpoint INSIDE the existing `/api/` location block. Do NOT modify the parent `/api/` location — this preserves buffering for all other API routes (beneficial for JSON compression):
+  - Action: Add a **sibling location block** for the streaming endpoint, positioned **before** the existing `/api/` location block. NGINX does NOT support nested prefix locations — placing one inside `/api/` would cause a config error. As a sibling with a longer prefix, NGINX's longest-prefix-match will route `/api/queries/stream` to this block while other `/api/*` routes continue using the parent block. **You must duplicate** the security headers (`include conf.d/security-headers.inc`), CORS headers, CSP header, and OPTIONS preflight handling from the `/api/` block into the new location, because NGINX does NOT inherit `add_header` directives from sibling locations:
     ```nginx
-    # Inside the existing /api/ location block, add:
+    # Add BEFORE the existing /api/ location block:
     location /api/queries/stream {
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_set_header X-Accel-Buffering no;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
+        include conf.d/security-headers.inc;
+
+        add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+        add_header 'Access-Control-Allow-Credentials' 'true' always;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; ..." always;
+
+        if ($request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' 'https://${NGINX_PUBLIC_DOMAIN}' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+            add_header 'Access-Control-Max-Age' 86400 always;
+            return 204;
+        }
+
         proxy_pass http://$kong_addr;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # SSE-specific: disable all buffering
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header X-Accel-Buffering no;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
     }
     ```
-  - Notes: NGINX nested locations use longest prefix match, so `/api/queries/stream` will hit this block while other `/api/*` routes continue to use the parent block's buffering. This is a surgical change that doesn't affect other API routes.
+  - Notes: This is a surgical change that doesn't affect other API routes. The header duplication is necessary because NGINX `add_header` directives in a location block completely replace (not augment) headers from the parent server block. Copy the exact CSP value from the existing `/api/` block.
 
 - [ ] **Task 3: Add SSE environment variables**
   - File: `env`
-  - Action: Add to the appropriate section:
+  - Action: Add a commented-out documentation line (NOT an active variable with default — that violates DRY):
     ```
-    # SSE Streaming
-    OPEA_STREAMING=${OPEA_STREAMING:-true}
-    OPEA_STREAM_TIMEOUT=${OPEA_STREAM_TIMEOUT:-300000}
+    # SSE Streaming (defaults in code — uncomment to override)
+    # OPEA_STREAMING=false
+    # CHATQNA_STREAM_TIMEOUT=300000
     ```
-  - Notes: `OPEA_STREAMING` enables/disables the streaming endpoint. `OPEA_STREAM_TIMEOUT` is the backend timeout for ChatQnA streaming connections (default 5 minutes). These follow the project's DRY convention — defaults in code, overrides in env.
+  - Notes: Per DRY convention, defaults live in code (`const streamingEnabled = process.env.OPEA_STREAMING !== 'false'`), not in the `env` template. The `env` template is only for secrets and deployment-specific overrides. The variable name `CHATQNA_STREAM_TIMEOUT` (not `OPEA_STREAM_TIMEOUT`) clearly indicates it configures the backend's axios timeout to ChatQnA, avoiding confusion with any OPEA-native environment variables.
 
 - [ ] **Task 4: Update docker-compose.yaml for SSE**
   - File: `docker-compose.yaml`
   - Action:
     - In the `backend` service environment section, add:
       - `OPEA_STREAMING: ${OPEA_STREAMING:-true}`
-      - `OPEA_STREAM_TIMEOUT: ${OPEA_STREAM_TIMEOUT:-300000}`
+      - `CHATQNA_STREAM_TIMEOUT: ${CHATQNA_STREAM_TIMEOUT:-300000}`
   - Notes: Kong and NGINX config changes are picked up from their respective config files mounted into the containers. The backend needs the new env vars passed through. Also update `components/gov-chat-backend/index.js` line 1153-1155 to increase `server.setTimeout(3600000)` (1 hour) to match Kong's timeout.
 
 - [ ] **Task 5: Update Ansible env template**
@@ -201,7 +221,7 @@ Implement SSE streaming across the full stack:
     ```jinja2
     # Section: SSE Streaming
     {% if opea_streaming is defined %}OPEA_STREAMING={{ opea_streaming }}{% endif %}
-    {% if opea_stream_timeout is defined %}OPEA_STREAM_TIMEOUT={{ opea_stream_timeout }}{% endif %}
+    {% if chatqna_stream_timeout is defined %}CHATQNA_STREAM_TIMEOUT={{ chatqna_stream_timeout }}{% endif %}
     ```
   - Notes: Follow the existing pattern of `{% if var is defined %}` conditional inclusion. Add defaults to `deploy/ansible/group_vars/all.yml` if needed.
 
@@ -239,7 +259,7 @@ Implement SSE streaming across the full stack:
     2. Validates auth (same as existing route — `req.user?.iss_sub`)
     3. Calls `queryService.initStreamQuery(queryData, authHeaders)` to get queryId + OPEA payload
     4. Sets SSE response headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`
-    5. Calls ChatQnA with `axios.post(opeaUrl, opeaPayload, { headers, responseType: 'stream', timeout: OPEA_STREAM_TIMEOUT })`
+    5. Calls ChatQnA with `axios.post(opeaUrl, opeaPayload, { headers, responseType: 'stream', timeout: CHATQNA_STREAM_TIMEOUT })`
     6. Pipes the response through the SSE parser:
        - For each data line: parse via `parseChatQnASSELine()`, write `data: {"type":"chunk","content":"..."}\n\n` to client
        - Accumulate full response text
@@ -247,18 +267,20 @@ Implement SSE streaming across the full stack:
     7. On `[DONE]`:
        - Calculate responseTime
        - Send `data: {"type":"metadata",...}\n\n` event (source_documents from retriever call + doc-repo fetch, or empty array if retrieval fails)
-       - If user language != EN: call translation service, send `data: {"type":"translation","content":"..."}\n\n`
+       - If user language != EN: call `translationService.translateMarkdown(fullResponseText, 'en', targetLang)` — use `translateMarkdown()` (NOT `translate()` which expects `string[]` and will iterate over characters if given a single string). Send `data: {"type":"translation","content":"..."}\n\n`
        - Call `queryService.finalizeStreamQuery(queryId, fullText, responseTime, metadata)`
        - Send `data: {"type":"done","queryId":"..."}\n\n`
        - Call `res.end()`
     8. On error: send `data: {"type":"error","message":"...","code":"..."}\n\n`, call `res.end()`
     9. On client disconnect (`req.on('close')`): abort the ChatQnA axios request, log cleanup
   - Notes:
-    - The auth middleware `keycloakAuthMiddleware.authenticate` is already applied to all routes in this router (line 8) — no additional auth needed
+    - The auth middleware `keycloakAuthMiddleware.authenticate` is already applied to all routes in this router (line 8) — no additional auth needed. **KNOWN DEBT**: `index.js` also applies auth middleware at the app mount level (line ~1070), so streaming requests pass through auth twice. This adds latency before the first SSE event. Acceptable for v1 (existing pattern for all routes).
+    - **HELMET COMPATIBILITY**: `helmet()` is configured globally in `index.js`. Verify it does not strip or modify the `Content-Type: text/event-stream` response header. If it does, add `res.removeHeader('X-Content-Type-Options')` before setting SSE headers.
+    - **BODY PARSER LIMIT**: `bodyParser.json({ limit: '50mb' })` is applied globally. Conversation payloads exceeding 50MB will fail with 413 before reaching the streaming handler. This is a constraint, not a bug — document for users with very long conversation histories.
     - Use `req.on('close')` to detect client disconnect and abort upstream connection
     - The streaming route handler calls ChatQnA DIRECTLY using axios with `responseType: 'stream'` — the existing `opea-worker.js` is NOT used and NOT modified. Worker threads are only for non-streaming queries.
     - Add `const axios = require('axios')` at the top of `query-routes.js` (it's not currently imported there — only `opea-worker.js` imports it)
-    - The translation service is already available via `require('./translation-service')` — call its `translate()` method with the accumulated text
+    - The translation service is already available via `require('./translation-service')` — call `translateMarkdown()` (NOT `translate()`) — see F5 below
 
 - [ ] **Task 10: Handle post-stream metadata retrieval**
   - File: `components/gov-chat-backend/routes/query-routes.js` (within the streaming route handler from Task 9)
@@ -292,7 +314,8 @@ Implement SSE streaming across the full stack:
     9. Callbacks: `onChunk(content)`, `onMetadata(metadata)`, `onTranslation(content)`, `onDone(data)`, `onError(error)`
   - Notes:
     - Uses native Fetch API (not axios) because axios doesn't support streaming responses well
-    - Import keycloakAuthService: `import { keycloakAuthService } from '@/services/keycloakAuthService'`
+    - Import keycloakAuthService as a **default** import: `import keycloakAuthService from '@/services/keycloakAuthService'` (it uses `export default`, NOT named export — curly braces would return undefined)
+    - **AbortController**: Create an `AbortController` and pass its `signal` to the `fetch()` call. Return the controller (or expose an `abort()` method) so the component can cancel the stream on navigation (`beforeUnmount()`) or when the user sends a new message. Without this, the browser continues downloading SSE events after the user leaves the chat.
     - SSE line buffering: split on `\n`, keep the last incomplete line in a buffer variable
     - Handle the case where a single chunk contains multiple SSE events
 
@@ -332,8 +355,8 @@ Implement SSE streaming across the full stack:
 
 - [ ] **Task 14: Add SSE package to Flutter**
   - File: `mobile/genie_ai_mobile/pubspec.yaml`
-  - Action: Add `sse_client: ^0.2.0` (or latest stable) to dependencies
-  - Notes: Run `flutter pub get` after adding. Verify the package supports POST requests with body (some SSE clients only support GET). If `sse_client` doesn't support POST, use `http` package with manual SSE line parsing as fallback.
+  - Action: No new package needed — use the existing `http: ^1.6.0` package with manual SSE line parsing. The W3C `EventSource` API and most SSE client packages (including `sse_client`) only support GET requests, but streaming requires POST with a JSON body.
+  - Notes: The `http` package's `http.Client.send()` returns an `http.StreamedResponse` whose `stream` property provides a byte stream. Read chunks, buffer incomplete lines, parse `data: ` prefixes, `JSON.decode()` the payloads, and dispatch to callbacks. This is the same pattern as the Vue implementation but in Dart.
 
 - [ ] **Task 15: Update Flutter chatbot_proxy.dart for streaming**
   - File: `mobile/genie_ai_mobile/lib/services/chatbot_proxy.dart`
@@ -595,12 +618,15 @@ docker compose up -d --force-recreate --no-deps backend
 ### Notes
 
 - Local build at `C:\Dev\builds\main` uses `docker-compose-rtx4060.yaml` override — do NOT modify `docker-compose.yaml` patches; apply local build patches after sync
+- **RTX 4060 streaming expectations**: With 8GB VRAM at 35% utilization, time-to-first-token may be 3-5 seconds (vs < 2s on production GPU), chunks may be smaller, and translation may fail if the translation guardrail vLLM is also consuming GPU memory. Test streaming with translation guardrail both running and stopped.
 - Backend uses CommonJS — never use ES imports
 - Frontend uses Options API — never use Composition API or `<script setup>`
-- i18n: use `translate('key', 'default')` — never `$t()`
-- All changes to environment must propagate to: `env` template, `docker-compose.yaml`, Ansible `env.j2`
+- i18n: use `translate('key', 'default')` or the existing `safeTranslate()` helper in ChatBotComponent.vue (line ~530) — never `$t()`
+- All changes to environment must propagate to: `docker-compose.yaml`, Ansible `env.j2`. Per DRY convention, defaults live in CODE, not in the `env` template.
 - Kong config is applied via `kong-config` one-shot service using `manage-kong-config.sh`
 - OPEA 1.3 source is NOT vendored locally — cloned during Docker build from GitHub (GenAIExamples v1.3 + GenAIComps v1.3)
 - ChatQnA connects DIRECTLY to vLLM:8000 bypassing the textgen wrapper service
 - Document-repository has no batch metadata endpoint — backend BFF must use `Promise.all()` for parallel fetches
 - No existing test files in the project — Jest configured but no tests written
+- **Rate-limiting risk**: A streaming connection counts as a single Kong request but holds open for minutes. A malicious actor could open 1000 simultaneous streaming connections. The existing rate-limiting (1000/min) doesn't protect against this. Future enhancement: add concurrent connection limiting per user for the streaming endpoint.
+- **Metadata trust**: Source documents shown after streaming may differ from what ChatQnA used internally. Consider showing a disclaimer in the UI or skipping metadata entirely for v1 to avoid misleading users in a public-sector context.

@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2d6a4f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Keletso">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>AgriConnect — Agricultural Extension Services</title>
 <style>
@@ -730,10 +735,11 @@ function addBubble(txt,sender,src,conf){src=src||false;conf=conf||0;
   }else{
     const adv=src?'<div style="display:flex;align-items:center;gap:4px;margin-bottom:8px"><span style="font-size:9px;font-weight:900;color:var(--secondary);text-transform:uppercase;letter-spacing:.05em;background:rgba(144,76,39,.12);padding:2px 8px;border-radius:5px">Advisory · Keletso</span></div>':'';
     const brd=src?' style="border-left:4px solid var(--secondary-c)"':'';
-    const confPct=conf>0?Math.round(conf*100):null;
+    const confPct=conf>0?Math.min(Math.round(conf),100):null;
     let confBar='';
     if(confPct!==null){const col=confPct>=60?'#16a34a':confPct>=35?'#d97706':'#ba1a1a';confBar='<div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(193,201,191,.2)"><div style="flex:1;background:var(--surf-highest);border-radius:999px;height:4px"><div style="background:'+col+';height:4px;border-radius:999px;width:'+Math.min(confPct,100)+'%"></div></div><span style="font-size:9px;font-weight:700;color:'+col+'">'+confPct+'% confidence</span></div>';}
-    const fb='<div style="display:flex;gap:6px;margin-top:6px"><button onclick="submitFeedback(this,1)" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Helpful</button><button onclick="submitFeedback(this,-1)" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Not helpful</button></div>';
+    const fbId='fb'+Date.now();
+    const fb='<div style="margin-top:6px"><div style="display:flex;gap:6px"><button onclick="submitFeedback(this,1,\''+fbId+'\')" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Helpful</button><button onclick="submitFeedback(this,-1,\''+fbId+'\')" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Not helpful</button></div><div id="'+fbId+'" style="display:none;margin-top:8px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.25);border-radius:10px;padding:10px"><div style="font-size:9px;font-weight:700;color:var(--on-sv);margin-bottom:6px">&#9998; How would you improve this answer?</div><textarea placeholder="Type a better answer or correction here..." style="width:100%;min-height:70px;background:var(--surf-lo);border:1px solid rgba(193,201,191,.3);border-radius:7px;padding:7px;font-size:10px;color:var(--on-sv);resize:vertical;box-sizing:border-box;font-family:inherit"></textarea><div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end"><button onclick="cancelImprove(\''+fbId+'\')" style="padding:3px 10px;border-radius:7px;background:transparent;border:1px solid rgba(193,201,191,.3);font-size:9px;color:var(--on-sv);cursor:pointer">Cancel</button><button onclick="submitImprove(\''+fbId+'\')" style="padding:3px 10px;border-radius:7px;background:var(--primary);border:none;font-size:9px;font-weight:700;color:#fff;cursor:pointer">Submit improvement</button></div></div></div>';
     d.innerHTML='<div class="chat-ai"'+brd+'>'+adv+'<p style="font-size:13px;font-weight:500;line-height:1.6;color:var(--on-surface)">'+fmt(txt)+'</p>'+confBar+fb+'</div><span style="font-size:9px;color:var(--outline);font-weight:700;margin-left:4px">'+now+'</span>';
   }
   m.appendChild(d);m.scrollTop=m.scrollHeight;
@@ -789,10 +795,44 @@ function switchLang(lang){
   }
 }
 
-function submitFeedback(btn,score){
+function submitFeedback(btn,score,formId){
   btn.parentElement.querySelectorAll('button').forEach(b=>{b.style.background='var(--surf-mid)';b.style.color='var(--on-sv)';});
-  if(score===1){btn.style.background='var(--primary)';btn.style.color='#fff';showToast('Thank you for your feedback');}
-  else{btn.style.background='var(--error-c)';btn.style.color='var(--error)';showToast('Feedback noted - we will improve');}
+  const form=document.getElementById(formId);
+  if(score===1){
+    btn.style.background='var(--primary)';btn.style.color='#fff';
+    showToast('Thank you for your feedback');
+    if(form) form.style.display='none';
+  } else {
+    btn.style.background='var(--error-c)';btn.style.color='var(--error)';
+    if(form){
+      form.style.display='block';
+      setTimeout(()=>{const ta=form.querySelector('textarea');if(ta)ta.focus();},100);
+    }
+  }
+}
+function cancelImprove(formId){
+  const form=document.getElementById(formId);
+  if(form) form.style.display='none';
+}
+function submitImprove(formId){
+  const form=document.getElementById(formId);
+  if(!form) return;
+  const textarea=form.querySelector('textarea');
+  const improvement=textarea.value.trim();
+  if(!improvement){ showToast('Please write your improvement first'); return; }
+  const allMsgs=document.getElementById('chat-msgs');
+  let question='';
+  if(allMsgs){
+    const userDivs=[...allMsgs.querySelectorAll('.chat-user')];
+    if(userDivs.length>0) question=userDivs[userDivs.length-1].innerText;
+  }
+  try{
+    const feedbacks=JSON.parse(localStorage.getItem('ac_feedback')||'[]');
+    feedbacks.push({ts:new Date().toISOString(),question:question,improvement:improvement});
+    localStorage.setItem('ac_feedback',JSON.stringify(feedbacks.slice(-100)));
+  }catch(e){}
+  form.innerHTML='<div style="font-size:10px;color:var(--primary);font-weight:700;padding:4px 0">&#10003; Thank you! Your improvement has been saved and will help train Keletso.</div>';
+  showToast('Improvement submitted — thank you!');
 }
 
 function saveChatHistory(){
@@ -818,7 +858,10 @@ function loadChatHistory(){
       else{d.style.cssText='display:flex;flex-direction:column;gap:2px;align-items:flex-start;max-width:92%';d.innerHTML=b.h;}
       m.appendChild(d);
     });
-    setTimeout(()=>{m.scrollTop=m.scrollHeight;},200);
+    // Scroll immediately and again after animations settle
+    m.scrollTop=m.scrollHeight;
+    setTimeout(()=>{m.scrollTop=m.scrollHeight;},100);
+    setTimeout(()=>{m.scrollTop=m.scrollHeight;},500);
   }catch(e){}
 }
 
@@ -1405,5 +1448,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   </div>
 </div>
 
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('AgriConnect SW registered:', reg.scope))
+      .catch(err => console.log('SW registration failed:', err));
+  });
+}
+</script>
 </body>
 </html>

@@ -221,6 +221,11 @@ button:active{transform:scale(.97)}
     <!-- 4. QUICK ACTIONS -->
     <div>
       <h2 style="font-size:11px;font-weight:900;color:var(--primary);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;padding:0 2px">Quick Actions</h2>
+      <div id="pwa-home-install-btn" onclick="triggerPWAInstall()" style="display:flex;align-items:center;gap:12px;background:var(--primary);color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer;box-shadow:0 2px 8px rgba(45,106,79,.3)">
+        <span style="font-size:22px">&#128242;</span>
+        <div style="flex:1"><div style="font-size:13px;font-weight:700">Install Keletso App</div><div style="font-size:11px;opacity:0.85">Add to your home screen for quick access</div></div>
+        <span style="font-size:18px;opacity:0.7">&#8250;</span>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="goTo('farmers')" style="display:flex;align-items:center;gap:10px;background:var(--primary-c);border-radius:14px;padding:14px;cursor:pointer">
           <div style="width:38px;height:38px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👥</div>
@@ -1482,46 +1487,37 @@ if ('serviceWorker' in navigator) {
 <script>
 // PWA Install Prompt
 let deferredPrompt = null;
-const banner = document.getElementById('pwa-install-banner');
-const installBtn = document.getElementById('pwa-install-btn');
-const dismissBtn = document.getElementById('pwa-dismiss-btn');
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  // Show banner after 3 seconds
-  setTimeout(() => {
-    if (deferredPrompt && banner) {
-      banner.style.display = 'flex';
-    }
-  }, 3000);
+  // Show the install button when prompt is available
+  const btn = document.getElementById('pwa-home-install-btn');
+  if (btn) btn.style.display = 'flex';
 });
 
-if (installBtn) {
-  installBtn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log('PWA install outcome:', outcome);
-    deferredPrompt = null;
-    banner.style.display = 'none';
-  });
-}
-
-if (dismissBtn) {
-  dismissBtn.addEventListener('click', () => {
-    banner.style.display = 'none';
-    // Don't show again for this session
-    deferredPrompt = null;
-  });
-}
-
-// Hide banner if already installed
 window.addEventListener('appinstalled', () => {
-  banner.style.display = 'none';
   deferredPrompt = null;
-  console.log('AgriConnect PWA installed successfully');
+  const btn = document.getElementById('pwa-home-install-btn');
+  if (btn) btn.style.display = 'none';
+  showToast('Keletso installed successfully!');
 });
+
+function triggerPWAInstall() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(({ outcome }) => {
+      deferredPrompt = null;
+      if (outcome === 'accepted') {
+        const btn = document.getElementById('pwa-home-install-btn');
+        if (btn) btn.style.display = 'none';
+      }
+    });
+  } else {
+    // Fallback instructions
+    showToast('Tap browser menu \u2192 Add to Home Screen');
+  }
+}
 </script>
 
 </body>

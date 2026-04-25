@@ -417,6 +417,8 @@ services:
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
       # Translation cache (required, no default in code)
+      - OPEA_STREAMING=${OPEA_STREAMING:-true}
+      - CHATQNA_STREAM_TIMEOUT=${CHATQNA_STREAM_TIMEOUT:-300000}
       - TRANSLATION_CACHE=${TRANSLATION_CACHE:-on}
       - TRANSLATION_CACHE_HOST=${TRANSLATION_CACHE_HOST:-redis-cache}
       - TRANSLATION_CACHE_PORT=${TRANSLATION_CACHE_PORT:-6379}

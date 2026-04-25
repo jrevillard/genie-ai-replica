@@ -1,5 +1,6 @@
 // src/services/chatbotService.js - Chatbot Service
 import httpService from './httpService';
+import keycloakAuthService from './keycloakAuthService';
 
 export default {
   /**
@@ -48,6 +49,98 @@ export default {
       );
       throw error;
     }
+  },
+
+  /**
+   * Submit a streaming query via SSE.
+   * Uses native Fetch API (not axios) for streaming response support.
+   * @param {Object} queryData - Query data
+   * @param {Object} callbacks - { onChunk, onMetadata, onTranslation, onDone, onError }
+   * @returns {AbortController} Controller to cancel the stream
+   */
+  submitQueryStream(queryData, callbacks) {
+    const controller = new AbortController();
+    const baseUrl = window.APP_CONFIG?.apiUrl || process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
+    const token = keycloakAuthService.getAccessToken();
+    const url = `${baseUrl}/queries/stream`;
+
+    const payload = {
+      ...queryData,
+      timestamp: new Date().toISOString()
+    };
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    })
+      .then((response) => {
+        if (!response.ok) {
+          return response
+            .json()
+            .then((err) => {
+              throw new Error(err.message || `HTTP ${response.status}`);
+            })
+            .catch(() => {
+              throw new Error(`HTTP ${response.status}`);
+            });
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function processChunk({ done, value }) {
+          if (done) return;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            if (trimmed.startsWith(': ')) continue; // SSE comment/keepalive
+
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              switch (data.type) {
+                case 'chunk':
+                  callbacks.onChunk?.(data.content);
+                  break;
+                case 'metadata':
+                  callbacks.onMetadata?.(data);
+                  break;
+                case 'translation':
+                  callbacks.onTranslation?.(data.content);
+                  break;
+                case 'done':
+                  callbacks.onDone?.(data);
+                  return;
+                case 'error':
+                  callbacks.onError?.(new Error(data.message || 'Stream error'));
+                  return;
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for non-data lines
+            }
+          }
+
+          return reader.read().then(processChunk);
+        }
+
+        return reader.read().then(processChunk);
+      })
+      .catch((error) => {
+        if (error.name === 'AbortError') return;
+        callbacks.onError?.(error);
+      });
+
+    return controller;
   },
 
   /**

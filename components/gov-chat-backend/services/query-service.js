@@ -210,6 +210,189 @@ class QueryService {
   }
 
   /**
+   * Parse a raw SSE line from ChatQnA's align_generator output.
+   * ChatQnA outputs Python repr() of bytes: data: b'text'\n\n
+   * @param {string} line - Raw SSE data line (without "data: " prefix)
+   * @returns {Object} Parsed event: { type: 'chunk'|'done'|'error', content?: string }
+   */
+  parseChatQnASSELine(line) {
+    const trimmed = line.trim();
+    if (trimmed === '[DONE]') {
+      return { type: 'done' };
+    }
+    // Match Python repr: b'...' or b"..."
+    const match = trimmed.match(/^b(['"])(.*)\1$/s);
+    if (match) {
+      const quote = match[1];
+      let content = match[2];
+      // Decode Python repr escape sequences.
+      // Order matters: \\ must be handled before \x to avoid consuming escaped backslashes.
+      // Use placeholder for \\ so \x doesn't match the second backslash in \\xHH.
+      const BS = '\x00BS\x00';
+      content = content
+        .replace(/\\\\/g, BS)
+        .replace(/(?:\\x([0-9a-fA-F]{2}))+/g, (m) => {
+          const hex = m.replace(/\\x/g, '');
+          return Buffer.from(hex, 'hex').toString('utf8');
+        })
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '\t')
+        .replace(/\\r/g, '\r')
+        .replace(quote === "'" ? /\\'/g : /\\"/g, quote === '"' ? '"' : "'")
+        .replace(new RegExp(BS, 'g'), '\\');
+      return { type: 'chunk', content };
+    }
+    return { type: 'error', raw: trimmed };
+  }
+
+  /**
+   * Initialize a streaming query — validate, save to DB, build OPEA payload.
+   * Returns early without calling ChatQnA (caller handles the stream).
+   * @param {Object} queryData - Query data from the request
+   * @param {Object} authHeaders - Auth headers to forward to OPEA
+   * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
+   */
+  async initStreamQuery(queryData, _authHeaders) {
+    logger.info('QueryService.init_stream_query_start');
+
+    // Validation (reuse same logic as createQuery)
+    const missingFields = [];
+    if (!queryData.userId) missingFields.push('userId');
+    if (!queryData.sessionId) missingFields.push('sessionId');
+
+    if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
+      if (queryData.text) {
+        queryData.messages = [{ role: 'user', content: queryData.text }];
+      } else {
+        missingFields.push('messages');
+      }
+    }
+
+    if (!queryData.context) {
+      queryData.context = { categoryLabel: 'General', serviceLabels: [] };
+    } else {
+      if (!Array.isArray(queryData.context.serviceLabels)) {
+        queryData.context.serviceLabels = [];
+      }
+      if (!queryData.context.categoryLabel) {
+        queryData.context.categoryLabel = 'General';
+      }
+    }
+
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
+    }
+
+    const lastMessage = queryData.messages[queryData.messages.length - 1];
+    const queryText = lastMessage ? lastMessage.content : '';
+
+    // Resolve categoryId
+    let categoryId = queryData.categoryId || null;
+    if (queryData.context?.categoryLabel && !categoryId) {
+      try {
+        const categoryQuery = aql`
+            FOR cat IN ${this.serviceCategories}
+              FILTER cat.nameEN == ${queryData.context.categoryLabel}
+              LIMIT 1
+              RETURN cat._key
+          `;
+        const cursor = await this.db.query(categoryQuery);
+        categoryId = await cursor.next();
+      } catch (error) {
+        logger.error(`Error resolving categoryId: ${error.message}`);
+      }
+    }
+
+    // Resolve serviceIds
+    let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
+    if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
+      try {
+        const servicesQuery = aql`
+            FOR svc IN ${this.services}
+              FILTER svc.nameEN IN ${queryData.context.serviceLabels}
+              RETURN svc._key
+          `;
+        const cursor = await this.db.query(servicesQuery);
+        serviceIds = await cursor.all();
+      } catch (error) {
+        logger.error(`Error resolving serviceIds: ${error.message}`);
+      }
+    }
+
+    const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
+
+    const basicQueryDoc = {
+      userId: queryData.userId,
+      sessionId: queryData.sessionId,
+      timestamp: queryData.timestamp || new Date().toISOString(),
+      isAnswered: false,
+      categoryId,
+      serviceId: serviceIds.length > 0 ? serviceIds : null,
+      responseTime: 0,
+      contextOption: backendMode,
+      messages: queryData.messages,
+      context: queryData.context,
+      text: queryText
+    };
+
+    const query = await this.queries.save(basicQueryDoc);
+    const queryId = query._key;
+    logger.info('QueryService.stream_query_created', { queryId });
+
+    // Build OPEA payload with stream: true
+    const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+    const opeaPort = process.env.OPEA_PORT || '8888';
+    const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+
+    let opeaPayload;
+    if (backendMode === 'single-message') {
+      opeaPayload = { messages: queryText, stream: true };
+    } else {
+      opeaPayload = {
+        messages: queryData.messages,
+        context: {
+          categoryLabel: queryData.context.categoryLabel,
+          serviceLabels: queryData.context.serviceLabels,
+          language: queryData.context.language
+        },
+        stream: true
+      };
+    }
+
+    return { queryId, opeaUrl, opeaPayload, queryData };
+  }
+
+  /**
+   * Finalize a streaming query — update DB with response and metadata.
+   * @param {string} queryId - The query ID
+   * @param {string} responseText - The full accumulated response text
+   * @param {number} responseTime - Response time in milliseconds
+   * @param {Object} metadata - Metadata object (source_documents, confidence_score)
+   */
+  async finalizeStreamQuery(queryId, responseText, responseTime, metadata) {
+    logger.info('QueryService.finalize_stream_query_start', { queryId });
+
+    const updateData = {
+      response: responseText,
+      responseTime,
+      isAnswered: true,
+      metadata
+    };
+    await this.queries.update(queryId, updateData);
+
+    // Record analytics
+    if (this.analyticsService) {
+      try {
+        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+      } catch (error) {
+        logger.error('QueryService.stream_analytics_failed', { queryId, error: error.message });
+      }
+    }
+
+    logger.info('QueryService.finalize_stream_query_complete', { queryId, responseTime });
+  }
+
+  /**
    * Create a new query
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query

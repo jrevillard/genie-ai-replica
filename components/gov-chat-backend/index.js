@@ -1149,11 +1149,11 @@ async function startApp() {
       logger.info(`Server is running on port ${PORT}`);
       logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
     });
-    // Set server timeout to 300 seconds
+    // Set server timeout to 1 hour (must match Kong/NGINX streaming timeouts)
     if (typeof server.setTimeout === 'function') {
-      server.setTimeout(300000);
+      server.setTimeout(3600000);
     }
-    logger.info(`Server timeout set to 300 seconds`);
+    logger.info(`Server timeout set to 3600 seconds`);
   } catch (error) {
     logger.error('Failed to start server:', {
       error: error.message,

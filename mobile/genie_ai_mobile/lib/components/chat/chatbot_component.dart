@@ -47,6 +47,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   List<Map<String, dynamic>> get messages => _messages;
   bool get isQuickHelpVisible => _showQuickHelpOverlay;
   bool _isLoading = false;
+  bool _isStreaming = false;
 
   // Dirty State Tracking
   int _lastSavedMessageCount = 0;
@@ -335,19 +336,30 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _sendMessage(String text, {String? hiddenPrompt}) async {
-    if (text.trim().isEmpty || _isLoading) return;
+    if (text.trim().isEmpty || _isLoading || _isStreaming) return;
 
     final userMessage = {
       'role': 'user',
-      'content': text.trim(), // Visible to user in UI
-      'actualContent': hiddenPrompt ?? text.trim(), // Hidden Prompt for LLM
+      'content': text.trim(),
+      'actualContent': hiddenPrompt ?? text.trim(),
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': false,
     };
 
+    final lastMessageIndex = _messages.length;
+
     setState(() {
       _messages.add(userMessage);
-      _isLoading = true;
+      _isLoading = false;
+      _isStreaming = true;
+      // Push placeholder bot message for streaming
+      _messages.add({
+        'role': 'assistant',
+        'content': '',
+        'timestamp': DateTime.now().toIso8601String(),
+        'isSaved': false,
+        'isStreaming': true,
+      });
     });
 
     _inputController.clear();
@@ -361,14 +373,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       final List<Map<String, dynamic>> messagesForApi = _messages.map((m) {
         return {
           'role': m['role'],
-          // Send actualContent (hidden prompt) to the LLM if it exists, else content
           'content': m['actualContent'] ?? m['content'],
         };
       }).toList();
 
       final String currentLanguage = I18nService().currentLocale.languageCode;
 
-      final response = await _chatBotProxy.submitQuery(
+      final streamedResponse = await _chatBotProxy.submitQueryStream(
         sessionId: sessionId,
         messages: messagesForApi,
         userId: widget.userId,
@@ -377,37 +388,82 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         language: currentLanguage,
       );
 
-      final String? queryId = response['queryId'];
-      final Map<String, dynamic>? metadata = response['metadata'];
+      if (streamedResponse.statusCode != 200) {
+        throw Exception('Stream request failed: ${streamedResponse.statusCode}');
+      }
 
-      final assistantMessage = {
-        'id': response['queryId'],
-        'queryId': response['queryId'],
-        'role': 'assistant',
-        'content': response['response'] ?? 'No response received',
-        'timestamp': DateTime.now().toIso8601String(),
-        'sources': metadata?['sources'] ?? [],
-        'confidence': metadata?['confidence_score'],
-        'metadata': metadata,
-        'isSaved': false,
-      };
+      String buffer = '';
+      await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+        buffer += chunk;
+        final lines = buffer.split('\n');
+        buffer = lines.removeLast(); // Keep incomplete line
 
-      final List<dynamic> newDocs =
-          metadata?['sources'] ?? metadata?['source_documents'] ?? [];
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty || !trimmed.startsWith('data: ')) continue;
 
-      setState(() {
-        _messages.add(assistantMessage);
-        _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
-        _isLoading = false;
-      });
+          try {
+            final data = jsonDecode(trimmed.substring(6)) as Map<String, dynamic>;
+            final type = data['type'] as String?;
 
-      widget.onRelatedDocumentsUpdate(_relatedDocuments);
-      _scrollToBottom();
-      _updateQuickHelpVisibility();
+            if (type == 'chunk') {
+              final content = data['content'] as String? ?? '';
+              if (mounted) {
+                setState(() {
+                  _messages[lastMessageIndex + 1]['content'] =
+                      (_messages[lastMessageIndex + 1]['content'] as String) + content;
+                });
+                _scrollToBottom();
+              }
+            } else if (type == 'metadata') {
+              final sourceDocs = data['source_documents'] as List<dynamic>? ?? [];
+              final confidenceScore = data['confidence_score'] as num?;
+              if (mounted) {
+                setState(() {
+                  _messages[lastMessageIndex + 1]['confidence'] = confidenceScore;
+                  _messages[lastMessageIndex + 1]['metadata'] = data;
+                  _messages[lastMessageIndex + 1]['sources'] = sourceDocs;
+                  _relatedDocuments = _mergeUniqueDocs(sourceDocs, _relatedDocuments);
+                });
+                widget.onRelatedDocumentsUpdate(_relatedDocuments);
+              }
+            } else if (type == 'translation') {
+              final translatedContent = data['content'] as String? ?? '';
+              if (mounted) {
+                setState(() {
+                  _messages[lastMessageIndex + 1]['content'] = translatedContent;
+                });
+                _scrollToBottom();
+              }
+            } else if (type == 'done') {
+              final queryId = data['queryId'] as String?;
+              if (mounted) {
+                setState(() {
+                  _isStreaming = false;
+                  _messages[lastMessageIndex + 1]['isStreaming'] = false;
+                  _messages[lastMessageIndex + 1]['queryId'] = queryId;
+                });
+              }
+            } else if (type == 'error') {
+              debugPrint("[CHATBOT] Stream error: ${data['message']}");
+            }
+          } catch (e) {
+            // Ignore JSON parse errors for non-data lines
+          }
+        }
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
-      NotificationService.error(tr('chatbot.processingError'));
-      debugPrint("[CHATBOT] Send error: $e");
+      debugPrint("[CHATBOT] Stream error: $e");
+      if (mounted) {
+        setState(() {
+          _isStreaming = false;
+          _messages[lastMessageIndex + 1]['isStreaming'] = false;
+          if ((_messages[lastMessageIndex + 1]['content'] as String).isEmpty) {
+            _messages[lastMessageIndex + 1]['content'] = tr('chatbot.processingError');
+          }
+        });
+        NotificationService.error(tr('chatbot.streamingError'));
+      }
     }
   }
 
@@ -961,7 +1017,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                 child: ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
-                  itemCount: _messages.length + (_isLoading ? 1 : 0),
+                  itemCount: _messages.length + (_isLoading && !_isStreaming ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == _messages.length && _isLoading) {
                       return Padding(
@@ -1174,7 +1230,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         IconButton(
                           icon: const Icon(Icons.send),
                           color: colors['primary'],
-                          onPressed: _isLoading
+                          onPressed: _isLoading || _isStreaming
                               ? null
                               : () => _sendMessage(_inputController.text),
                         ),

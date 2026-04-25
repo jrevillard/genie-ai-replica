@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
+const translationService = require('../services/translation-service');
 
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
@@ -79,6 +83,274 @@ module.exports = (queryService) => {
       next(error);
     }
   });
+
+  /**
+   * @swagger
+   * /queries/stream:
+   *   post:
+   *     summary: Stream a query response via SSE
+   *     description: Creates a query and streams the LLM response as SSE events.
+   *       Events: chunk, metadata, translation, done, error.
+   *     tags: [Queries]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - sessionId
+   *             properties:
+   *               sessionId:
+   *                 type: string
+   *               messages:
+   *                 type: array
+   *                 items:
+   *                   type: object
+   *                   properties:
+   *                     role:
+   *                       type: string
+   *                     content:
+   *                       type: string
+   *               context:
+   *                 type: object
+   *                 properties:
+   *                   categoryLabel:
+   *                     type: string
+   *                   serviceLabels:
+   *                     type: array
+   *                     items:
+   *                       type: string
+   *                   language:
+   *                     type: string
+   *     responses:
+   *       200:
+   *         description: SSE stream of response chunks
+   *         content:
+   *           text/event-stream:
+   *             schema:
+   *               type: string
+   *       501:
+   *         description: Streaming is disabled
+   */
+  router.post('/stream', async (req, res) => {
+    const streamingEnabled = process.env.OPEA_STREAMING !== 'false';
+    if (!streamingEnabled) {
+      return res.status(501).json({ error: 'STREAMING_DISABLED', message: 'SSE streaming is disabled. Set OPEA_STREAMING=true to enable.' });
+    }
+
+    const userId = req.user?.iss_sub;
+    if (!userId) {
+      return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+    }
+
+    const queryData = { ...req.body, userId };
+    let opeaController = null;
+
+    try {
+      const { queryId, opeaUrl, opeaPayload } = await queryService.initStreamQuery(queryData, { authorization: req.headers.authorization });
+
+      // SSE response headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      });
+
+      const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 300000;
+      opeaController = new AbortController();
+
+      const opeaResponse = await axios.post(opeaUrl, opeaPayload, {
+        headers: { 'Content-Type': 'application/json' },
+        responseType: 'stream',
+        timeout: streamTimeout,
+        signal: opeaController.signal,
+        httpAgent: new http.Agent({ keepAlive: true }),
+        httpsAgent: new https.Agent({ keepAlive: true })
+      });
+
+      const stream = opeaResponse.data;
+      let fullResponseText = '';
+      const startTime = Date.now();
+      let buffer = '';
+
+      stream.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+          const dataContent = trimmed.slice(6);
+          const parsed = queryService.parseChatQnASSELine(dataContent);
+
+          if (parsed.type === 'chunk') {
+            fullResponseText += parsed.content;
+            res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
+          } else if (parsed.type === 'done') {
+            handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res);
+          } else if (parsed.type === 'error') {
+            logger.warn('QueryService.sse_parse_error', { raw: parsed.raw });
+          }
+        }
+      });
+
+      stream.on('error', (error) => {
+        logger.error('QueryService.opea_stream_error', { error: error.message, queryId });
+        if (!res.headersSent) {
+          res.status(502).json({ error: 'CHATQNA_STREAM_ERROR', message: error.message });
+        } else {
+          res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: 'CHATQNA_STREAM_ERROR' })}\n\n`);
+          res.end();
+        }
+      });
+
+      stream.on('end', () => {
+        if (fullResponseText && res.writableEnded === false) {
+          handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res);
+        }
+      });
+
+      req.on('close', () => {
+        if (opeaController && !opeaController.signal.aborted) {
+          opeaController.abort();
+          logger.info('QueryService.stream_client_disconnected', { queryId });
+          if (fullResponseText) {
+            queryService.finalizeStreamQuery(queryId, fullResponseText, Date.now() - startTime, {
+              source_documents: [],
+              confidence_score: 0
+            }).catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
+          }
+        }
+      });
+
+      const keepalive = setInterval(() => {
+        if (res.writableEnded) {
+          clearInterval(keepalive);
+          return;
+        }
+        res.write(': keepalive\n\n');
+      }, 15000);
+
+    } catch (error) {
+      logger.error('QueryService.stream_setup_error', { error: error.message });
+      if (!res.headersSent) {
+        if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
+          res.status(504).json({ error: 'CHATQNA_UNAVAILABLE', message: 'ChatQnA service unavailable or timed out' });
+        } else {
+          res.status(500).json({ error: 'STREAM_ERROR', message: error.message });
+        }
+      } else {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: 'STREAM_ERROR' })}\n\n`);
+        res.end();
+      }
+    }
+  });
+
+  async function handleStreamDone(queryId, fullResponseText, startTime, queryData, req, res) {
+    if (res.writableEnded) return;
+
+    const responseTime = Date.now() - startTime;
+    let metadata = { source_documents: [], confidence_score: 0 };
+
+    try {
+      metadata = await retrieveStreamMetadata(queryData, req.headers.authorization);
+    } catch (error) {
+      logger.warn('QueryService.stream_metadata_failed', { queryId, error: error.message });
+    }
+
+    res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
+
+    const userLanguage = queryData.context?.language;
+    if (userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
+      try {
+        await translationService.init();
+        const translated = await translationService.translateMarkdown(fullResponseText, 'en', userLanguage);
+        res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
+      } catch (error) {
+        logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Translation failed', code: 'TRANSLATION_FAILED' })}\n\n`);
+      }
+    }
+
+    try {
+      await queryService.finalizeStreamQuery(queryId, fullResponseText, responseTime, metadata);
+    } catch (error) {
+      logger.error('QueryService.stream_finalize_failed', { queryId, error: error.message });
+    }
+
+    res.write(`data: ${JSON.stringify({ type: 'done', queryId })}\n\n`);
+    res.end();
+    logger.info('QueryService.stream_complete', { queryId, responseTime });
+  }
+
+  async function retrieveStreamMetadata(queryData, authHeader) {
+    const lastMessage = queryData.messages[queryData.messages.length - 1];
+    const queryText = lastMessage ? lastMessage.content : '';
+
+    if (!queryText) {
+      return { source_documents: [], confidence_score: 0 };
+    }
+
+    let retrievedDocs = [];
+    try {
+      const retrieverUrl = 'http://retriever-arango-service:7000/v1/retrieval';
+      const retrieverResponse = await axios.post(retrieverUrl, {
+        messages: queryText,
+        k: 4
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000
+      });
+
+      const result = retrieverResponse.data;
+      retrievedDocs = result.retrieved_docs || result.documents || [];
+    } catch (error) {
+      logger.warn('QueryService.retriever_call_failed', { error: error.message });
+      return { source_documents: [], confidence_score: 0 };
+    }
+
+    if (retrievedDocs.length === 0) {
+      return { source_documents: [], confidence_score: 0 };
+    }
+
+    const sourceDocuments = [];
+    const scores = [];
+
+    for (const doc of retrievedDocs) {
+      const docMetadata = doc.metadata || {};
+      const fileIds = docMetadata.file_ids || [];
+
+      if (fileIds.length > 0) {
+        try {
+          const fileResponse = await axios.get(
+            `http://document-repository:3001/api/files/${fileIds[0]}`,
+            { headers: { Authorization: authHeader }, timeout: 5000 }
+          );
+          const fileInfo = fileResponse.data;
+          sourceDocuments.push({
+            document_id: fileIds[0],
+            document_name: fileInfo.file_name || fileInfo.original_name || 'Unknown',
+            url: fileInfo.url || '',
+            categoryLabel: fileInfo.labels?.categoryLabel || queryData.context?.categoryLabel || 'General',
+            serviceLabels: fileInfo.labels?.serviceLabels || [],
+            score: docMetadata.score || docMetadata.similarity_score || 0
+          });
+          scores.push(docMetadata.score || docMetadata.similarity_score || 0);
+        } catch (error) {
+          logger.warn('QueryService.file_metadata_fetch_failed', { fileId: fileIds[0], error: error.message });
+        }
+      }
+    }
+
+    const confidenceScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    return { source_documents: sourceDocuments, confidence_score: Math.round(confidenceScore * 100) / 100 };
+  }
 
   /**
    * @swagger

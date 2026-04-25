@@ -1139,6 +1139,7 @@ const Map<String, dynamic> enLocale = {
     "fileReceived": "File received successfully.",
     "fileUploadError": "Error uploading file.",
     "processingError": "Error processing your request.",
+    "streamingError": "Response was interrupted. Please try again.",
     "welcomeMessage":
         "Welcome! How can I assist you with Kenya government services today?",
     "attachFile": "Attach File",

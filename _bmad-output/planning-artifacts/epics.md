@@ -801,6 +801,16 @@ So that all API calls are authenticated through Keycloak tokens and legacy crede
 **Then** the import is removed
 **And** `grep -r "package:crypto" lib/` returns no results — `crypto` can be safely removed from `pubspec.yaml`
 
+**Given** `api_service.dart` has `@Deprecated` methods (`setToken`, `clearToken`, `getHeaders`, `accessToken`) and a legacy `factory ApiService({AuthLogger? logger})` constructor from Story 2.2
+**When** the migration is complete
+**Then** all `@Deprecated` methods and the legacy factory constructor are removed
+**And** `// TODO(epic-6)` grep markers are cleaned up
+**And** `grep -r "TODO(epic-6)" lib/` returns no results
+
+**Given** `file_proxy.dart` calls `_api.getHeaders()` for multipart uploads
+**When** the migration is complete
+**Then** `file_proxy.dart` is migrated to use `apiServiceProvider` (Riverpod) instead of `getHeaders()` for Bearer token injection
+
 ### Story 6.2: Legacy Auth Code Removal
 
 As a mobile app,

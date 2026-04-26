@@ -50,15 +50,15 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Persistent Authenticated Session
-  epic-2: in-progress
-  2-0-persistent-auth-logging-infrastructure: in-progress
+  epic-2: done
+  2-0-persistent-auth-logging-infrastructure: done
   2-1-silent-token-refresh-logout: done
   2-2-auth-interceptor-api-service-refactor: done
   epic-2-retrospective: optional
 
   # Epic 3: Reliable Auth Experience
-  epic-3: backlog
-  3-1-applifecycle-token-validation: backlog
+  epic-3: in-progress
+  3-1-applifecycle-token-validation: ready-for-dev
   3-2-network-error-detection-recovery: backlog
   3-3-auth-error-state-machine: backlog
   epic-3-retrospective: optional

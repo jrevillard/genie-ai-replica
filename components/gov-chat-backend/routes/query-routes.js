@@ -270,7 +270,7 @@ module.exports = (queryService) => {
     if (userLanguage && userLanguage.toUpperCase() !== 'EN' && fullResponseText) {
       try {
         await translationService.init();
-        const translated = await translationService.translateMarkdown(fullResponseText, 'en', userLanguage);
+        const translated = await translationService.translateMarkdown(fullResponseText, 'en', userLanguage.toLowerCase());
         res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
       } catch (error) {
         logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });

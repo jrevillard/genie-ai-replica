@@ -1,0 +1,8 @@
+issue_tracking:
+  enabled: true
+  platform: gitlab
+  host: opensource.unicc.org
+  project: un/itu/genie-ai
+  branch_patterns:
+    prd: "feat/{prd_key}/prd"
+    story: "feat/{prd_key}/{story_key}"

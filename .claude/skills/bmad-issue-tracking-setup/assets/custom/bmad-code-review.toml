@@ -1,0 +1,80 @@
+# Issue Tracking override for bmad-code-review
+# Posts review findings as a comment on the issue and updates status.
+# Overrides merge: scalars win, arrays append.
+# Requires BMM 6.4.0+ (customize.toml support for this skill).
+
+[workflow]
+
+# Array (append): runs after greet but before the workflow begins.
+activation_steps_append = [
+  "Check that `branch_patterns` is set in `issue_tracking` in `_bmad/bmm/config.yaml`. If not set, output 'Branch strategy not configured. Open a new session and run /bmad-issue-tracking-setup (step 6b) to configure branch patterns. When done, come back here and say done.' and stop.",
+  "Read `branch_patterns.prd` and `branch_patterns.story` from `issue_tracking` in `_bmad/bmm/config.yaml`, and `prd_key` from the PRD frontmatter. Resolve both patterns with `{prd_key}`. List all local branches matching the story branch pattern. For each matching branch, read `sprint-status.yaml` and find stories with status `review`. If there are several, ask the user which story to review. Create or switch to the selected story worktree.",
+]
+
+# Scalar: runs after the code review workflow completes.
+on_complete = """
+Check `issue_tracking` in `_bmad/bmm/config.yaml`:
+- If the section does not exist, or `platform` is not set: output "Issue tracking not configured. Open a new session and run `/bmad-issue-tracking-setup` (step 5) to configure the platform. When done, come back here and say 'done' — the configuration will be re-verified and then continue these instructions." and stop.
+- If `branch_patterns` is not set: output "Branch strategy not configured. Open a new session and run `/bmad-issue-tracking-setup` (step 6b) to configure branch patterns. When done, come back here and say 'done' — the configuration will be re-verified and then continue these instructions." and stop.
+
+After completing the code review, sync the story's status and post a review summary to the issue tracker. Follow the shared sync task at `{project-root}/_bmad/_config/custom/bmad-bmm-issue-sync.md`. Specifically:
+
+1. Follow Step 1 (detect platform and project, verify connectivity). Stop if the issue tracker is unavailable.
+2. Read prd_key from the PRD file frontmatter. If not found, ask the user and offer to persist it.
+3. Find the issue whose description contains the story key. If not found, skip.
+4. Update the issue status:
+   - If review passed (no critical or important open issues): set status label to `done`, close the issue.
+   - If review found issues requiring fixes: set status label to `in-progress`, reopen if closed.
+5. Post a review summary comment on the issue. Write the comment to `/tmp/code-review-comment.md`. Fill in the template below with actual values from the review (these are illustrative placeholders, NOT config variables). For `**Reviewer:**`, use "AI Code Review" if the review was performed by the AI agent, or the user's name if invoked manually. Use this template:
+
+```
+## Code Review
+**Reviewer:** {name of reviewer}
+**Verdict:** passed | changes requested
+
+### Verifications
+- {e.g., linting: passed}
+- {e.g., tests: passed}
+- {e.g., type checking: passed}
+
+### Findings
+
+#### Critical
+1. {description} — `{file}:{line}`
+
+#### Important
+1. {description} — `{file}:{line}`
+
+#### Minor
+1. {description}
+
+### Fixed
+- {what was corrected during the review}
+
+### Remaining
+- {what still needs to be addressed, or "none" if all fixed}
+```
+
+If there are no findings at all, simplify to:
+
+```
+## Code Review
+**Reviewer:** {name of reviewer}
+**Verdict:** passed
+
+### Verifications
+- linting: passed
+- tests: passed
+
+No issues found.
+```
+
+6. Post the comment using the platform-appropriate add-comment command (see sync task command table: Add comment row).
+7. Commit all changes in the current worktree.
+8. Push the story branch to the remote.
+9. If the review passed, ask the user if they want to merge the MR now (story branch → PRD branch). If yes, merge it:
+   - **GitLab:** `glab mr merge {mr_iid} --remove-source-branch --hostname $HOST`
+   - **GitHub:** `gh pr merge {pr_number} --delete-branch`
+10. Exit the worktree. Remove it if the MR was merged, otherwise keep it.
+11. Clean up temp files.
+"""

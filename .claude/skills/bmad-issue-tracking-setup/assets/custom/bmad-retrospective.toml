@@ -1,0 +1,28 @@
+# Issue Tracking override for bmad-retrospective
+# Creates an issue (GitLab or GitHub) when a retrospective is saved.
+# Overrides merge: scalars win, arrays append.
+# Requires BMM 6.4.0+ (customize.toml support for this skill).
+
+[workflow]
+
+# Scalar: runs after Step 12 (Final Summary and Handoff).
+on_complete = """
+Check `issue_tracking` in `_bmad/bmm/config.yaml`:
+- If the section does not exist, or `platform` is not set: output "Issue tracking not configured. Open a new session and run `/bmad-issue-tracking-setup` (step 5) to configure the platform. When done, come back here and say 'done' — the configuration will be re-verified and then continue these instructions." and stop.
+- If `branch_patterns` is not set: output "Branch strategy not configured. Open a new session and run `/bmad-issue-tracking-setup` (step 6b) to configure branch patterns. When done, come back here and say 'done' — the configuration will be re-verified and then continue these instructions." and stop.
+
+After saving the retrospective document and updating sprint-status, create an issue for the retrospective by following the shared sync task at `{project-root}/_bmad/_config/custom/bmad-bmm-issue-sync.md`. Specifically:
+
+1. Follow Step 1 (detect platform and project, verify connectivity). Stop if the issue tracker is unavailable.
+2. Read prd_key from the PRD file frontmatter. If not found, ask the user and offer to persist it.
+3. Search for an existing retrospective issue whose title starts with "Retrospective: Epic {epic_number}" or whose description contains "epic-{epic_number}-retrospective". If found, skip creation.
+4. If no issue exists, create it with:
+   - Title: "Retrospective: Epic {epic_number}" (where {epic_number} is extracted from the sprint-status key, e.g., `3` from `epic-3-retrospective`)
+   - Labels: type{sep}retrospective, status{sep}done, prd{sep}{prd_key}, {prd_key}{sep}epic-{epic_number} (use :: for GitLab, : for GitHub)
+   - Description: the retrospective document content
+   Use the platform-appropriate CLI command (glab for GitLab, gh for GitHub).
+   Since the initial status label is `done`, close the issue immediately after creation:
+   - **GitLab:** `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "state_event=close"` (do NOT send `labels` parameter)
+   - **GitHub:** `gh issue close {number} -R "$OWNER/$REPO" [--hostname $HOST]`
+   Clean up temp files.
+"""

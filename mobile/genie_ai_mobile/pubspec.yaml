@@ -23,7 +23,8 @@ dependencies:
 
   # Authentication & secure storage
   flutter_secure_storage: ^8.1.0
-  flutter_appauth: ^11.0.0
+  flutter_appauth:
+    path: flutter_appauth/flutter_appauth
   flutter_riverpod: ^3.0.0
   app_links: ^6.3.3
 
@@ -65,8 +66,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  flutter_appauth_platform_interface: ^11.0.0
-
+  flutter_appauth_platform_interface: ^12.0.0
 flutter:
   uses-material-design: true
 

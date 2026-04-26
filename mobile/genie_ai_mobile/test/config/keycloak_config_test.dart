@@ -7,7 +7,7 @@ import 'package:genie_ai_mobile/config/flavors/itu.dart' as flavors;
 
 void main() {
   group('KeycloakConfig', () {
-    test('holds all 5 fields correctly', () {
+    test('holds all 6 fields correctly', () {
       const config = KeycloakConfig(
         keycloakUrl: 'https://example.com',
         realm: 'genie',
@@ -20,6 +20,7 @@ void main() {
       expect(config.clientId, 'test-client');
       expect(config.redirectScheme, 'com.example.app');
       expect(config.backendUrl, 'https://api.example.com');
+      expect(config.allowInsecureConnections, isFalse);
     });
 
     test('has const constructor', () {
@@ -55,12 +56,12 @@ void main() {
     });
 
     test('has dev-specific values', () {
-      expect(devConfig.keycloakUrl, equals('http://localhost:8080'));
+      expect(devConfig.keycloakUrl, equals('https://10.0.2.2:8443/auth'));
       expect(devConfig.realm, equals('genie'));
-      expect(devConfig.realmUrl, equals('http://localhost:8080/realms/genie'));
+      expect(devConfig.realmUrl, equals('https://10.0.2.2:8443/auth/realms/genie'));
       expect(devConfig.clientId, equals('genie-mobile-dev'));
       expect(devConfig.redirectScheme, equals('com.itu.genieai.dev'));
-      expect(devConfig.backendUrl, equals('http://localhost:3000'));
+      expect(devConfig.backendUrl, equals('https://10.0.2.2:8443/api'));
     });
   });
 

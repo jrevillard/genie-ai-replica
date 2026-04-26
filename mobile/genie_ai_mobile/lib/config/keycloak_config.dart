@@ -9,6 +9,7 @@ class KeycloakConfig {
   final String clientId;
   final String redirectScheme;
   final String backendUrl;
+  final bool allowInsecureConnections;
 
   const KeycloakConfig({
     required this.keycloakUrl,
@@ -16,6 +17,7 @@ class KeycloakConfig {
     required this.clientId,
     required this.redirectScheme,
     required this.backendUrl,
+    this.allowInsecureConnections = false,
   });
 
   String get realmUrl => '$keycloakUrl/realms/$realm';
@@ -29,11 +31,12 @@ class KeycloakConfig {
           realm == other.realm &&
           clientId == other.clientId &&
           redirectScheme == other.redirectScheme &&
-          backendUrl == other.backendUrl;
+          backendUrl == other.backendUrl &&
+          allowInsecureConnections == other.allowInsecureConnections;
 
   @override
   int get hashCode =>
-      Object.hash(keycloakUrl, realm, clientId, redirectScheme, backendUrl);
+      Object.hash(keycloakUrl, realm, clientId, redirectScheme, backendUrl, allowInsecureConnections);
 }
 
 KeycloakConfig getConfig() {

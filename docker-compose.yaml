@@ -404,7 +404,7 @@ services:
       - ARANGO_USER=${ARANGO_USER:-root}
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
-      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
@@ -467,7 +467,7 @@ services:
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
-      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -890,7 +890,7 @@ services:
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
-      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_DATAPREP_CLIENT_ID: ${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
       KC_DATAPREP_CLIENT_SECRET: ${KC_DATAPREP_CLIENT_SECRET:-}
@@ -1023,7 +1023,7 @@ services:
       TRANSLATION_SERVICE_PORT: 9031
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
-      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
@@ -1144,7 +1144,7 @@ services:
       - KC_DB_USERNAME=${KC_DB_USERNAME:-keycloak}
       - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
       - KC_PROXY_HEADERS=xforwarded
-      - KC_HOSTNAME=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KC_HOSTNAME=https://${KC_HOSTNAME_DOMAIN:-${NGINX_PUBLIC_DOMAIN:-localhost}}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Enable HTTP — NGINX handles TLS termination, Keycloak only needs HTTP internally
       - KC_HTTP_ENABLED=true
       # SMTP (reuses EMAIL_* from Section 2)

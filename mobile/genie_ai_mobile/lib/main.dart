@@ -115,10 +115,8 @@ class _MyAppState extends ConsumerState<MyApp> {
     ThemeManager().toggleTheme();
   }
 
-  // Logout is deferred to Epic 2 (Story 2.1) — AuthNotifier.logout()
-  // This no-op keeps MainScreen compilation working until then.
-  void _onLogoutPlaceholder() {
-    debugPrint("[MAIN] Logout not yet implemented (deferred to Epic 2)");
+  void _onLogout() {
+    ref.read(authProvider.notifier).logout();
   }
 
   @override
@@ -166,7 +164,7 @@ class _MyAppState extends ConsumerState<MyApp> {
                   },
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
-                  onLogout: _onLogoutPlaceholder,
+                  onLogout: _onLogout,
                 )
               : const OidcLoginScreen(),
           routes: {

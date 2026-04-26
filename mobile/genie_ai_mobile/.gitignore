@@ -41,3 +41,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local flutter_appauth fork (dev only — revert pubspec.yaml before merge)
+/flutter_appauth/

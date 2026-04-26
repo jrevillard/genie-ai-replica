@@ -52,8 +52,8 @@ development_status:
   # Epic 2: Persistent Authenticated Session
   epic-2: in-progress
   2-0-persistent-auth-logging-infrastructure: in-progress
-  2-1-silent-token-refresh-logout: backlog
-  2-2-auth-interceptor-api-service-refactor: backlog
+  2-1-silent-token-refresh-logout: done
+  2-2-auth-interceptor-api-service-refactor: done
   epic-2-retrospective: optional
 
   # Epic 3: Reliable Auth Experience

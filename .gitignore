@@ -104,3 +104,9 @@ english_g2.zip
 
 # Roo local state
 .roo/
+
+# Stray SSL certificates (dev artifacts, never commit)
+*.pem
+*.crt
+!configs/**/*.crt
+!configs/**/*.pem

@@ -1,9 +1,10 @@
 import 'keycloak_config.dart';
 
 const devConfig = KeycloakConfig(
-  keycloakUrl: 'http://localhost:8080',
+  keycloakUrl: 'https://10.0.2.2:8443/auth',
   realm: 'genie',
   clientId: 'genie-mobile-dev',
   redirectScheme: 'com.itu.genieai.dev',
-  backendUrl: 'http://localhost:3000',
+  backendUrl: 'https://10.0.2.2:8443/api',
+  allowInsecureConnections: true,
 );

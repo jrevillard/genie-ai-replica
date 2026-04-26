@@ -126,4 +126,69 @@ class KeycloakService {
       return null;
     }
   }
+
+  Future<bool> endSession({String? idTokenHint}) async {
+    final endpoints = await discoverEndpoints();
+    if (endpoints == null) return false;
+
+    _logger?.logAuthEvent(
+      message: 'Keycloak end_session initiated',
+      source: 'KeycloakService.endSession',
+    );
+
+    try {
+      final queryParams = <String, String>{
+        if (idTokenHint != null && idTokenHint.isNotEmpty)
+          'id_token_hint': idTokenHint,
+        'client_id': keycloakConfig.clientId,
+      };
+      final uri = Uri.parse(endpoints.endSessionEndpoint).replace(
+        queryParameters: queryParams,
+      );
+
+      final response = await _httpClient.get(uri);
+
+      if (response.statusCode == 200 || response.statusCode == 302) {
+        _logger?.logAuthEvent(
+          message: 'Keycloak end_session successful',
+          source: 'KeycloakService.endSession',
+        );
+        return true;
+      }
+
+      _logger?.logAuthFailure(
+        errorCode: 'KEYCLOAK_LOGOUT_FAILED',
+        keycloakEndpoint: endpoints.endSessionEndpoint,
+        httpStatus: response.statusCode,
+        message: 'end_session returned HTTP ${response.statusCode}',
+        source: 'KeycloakService.endSession',
+      );
+      return false;
+    } on SocketException {
+      _logger?.logAuthFailure(
+        errorCode: 'KEYCLOAK_NETWORK_ERROR',
+        keycloakEndpoint: keycloakConfig.realmUrl,
+        networkReachable: false,
+        message: 'Network unreachable during end_session',
+        source: 'KeycloakService.endSession',
+      );
+      return false;
+    } on http.ClientException {
+      _logger?.logAuthFailure(
+        errorCode: 'KEYCLOAK_CLIENT_ERROR',
+        keycloakEndpoint: keycloakConfig.realmUrl,
+        message: 'HTTP client error during end_session',
+        source: 'KeycloakService.endSession',
+      );
+      return false;
+    } catch (e) {
+      _logger?.logAuthFailure(
+        errorCode: 'KEYCLOAK_LOGOUT_ERROR',
+        keycloakEndpoint: keycloakConfig.realmUrl,
+        message: 'Error during end_session: $e',
+        source: 'KeycloakService.endSession',
+      );
+      return false;
+    }
+  }
 }

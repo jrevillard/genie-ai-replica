@@ -186,6 +186,136 @@ void main() {
         expect(endpoints.toString(), contains('http://token'));
       });
     });
+
+    group('endSession', () {
+      test('returns true on HTTP 200', () async {
+        final httpClient = MockHttpClient(MockHttpClientConfig(
+          responseBody: jsonEncode(wellKnownResponse),
+        ));
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: httpClient,
+        );
+
+        final result = await service.endSession(idTokenHint: 'test-id-token');
+
+        expect(result, isTrue);
+      });
+
+      test('returns true on HTTP 302 (redirect)', () async {
+        // First call (discovery) returns 200, second call (endSession) returns 302
+        final discoveryClient = MockHttpClient(MockHttpClientConfig(
+          responseBody: jsonEncode(wellKnownResponse),
+        ));
+        final redirectClient = MockHttpClient(MockHttpClientConfig(
+          statusCode: 302,
+          responseBody: '',
+        ));
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: _SequentialHttpClient([discoveryClient, redirectClient]),
+        );
+
+        final result = await service.endSession(idTokenHint: 'test-id-token');
+
+        expect(result, isTrue);
+      });
+
+      test('returns false on HTTP 400 error', () async {
+        final httpClient = MockHttpClient(MockHttpClientConfig(
+          statusCode: 400,
+          responseBody: 'Bad Request',
+        ));
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: httpClient,
+        );
+
+        final result = await service.endSession(idTokenHint: 'test-id-token');
+
+        expect(result, isFalse);
+      });
+
+      test('returns false on HTTP 500 error', () async {
+        final httpClient = MockHttpClient(MockHttpClientConfig(
+          statusCode: 500,
+          responseBody: 'Internal Server Error',
+        ));
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: httpClient,
+        );
+
+        final result = await service.endSession(idTokenHint: 'test-id-token');
+
+        expect(result, isFalse);
+      });
+
+      test('returns false on SocketException (network unreachable)', () async {
+        final httpClient = MockHttpClient(MockHttpClientConfig(
+          throwException: SocketException('Network unreachable'),
+        ));
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: httpClient,
+        );
+
+        final result = await service.endSession(idTokenHint: 'test-id-token');
+
+        expect(result, isFalse);
+      });
+
+      test('returns false on ClientException (connection reset)', () async {
+        final httpClient = MockHttpClient(MockHttpClientConfig(
+          throwException: http.ClientException('Connection reset'),
+        ));
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: httpClient,
+        );
+
+        final result = await service.endSession(idTokenHint: 'test-id-token');
+
+        expect(result, isFalse);
+      });
+
+      test('returns false when discovery fails (endpoints null)', () async {
+        final httpClient = MockHttpClient(MockHttpClientConfig(
+          statusCode: 500,
+          responseBody: 'Discovery failed',
+        ));
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: httpClient,
+        );
+
+        // First call to endSession will try discovery which fails
+        final result = await service.endSession(idTokenHint: 'test-id-token');
+
+        expect(result, isFalse);
+      });
+
+      test('calls endpoint even with empty idTokenHint', () async {
+        var callCount = 0;
+        final httpClient = MockHttpClient(MockHttpClientConfig(
+          responseBody: jsonEncode(wellKnownResponse),
+        ));
+        final countingClient = _CountingHttpClient(httpClient, () => callCount++);
+        final service = KeycloakService(
+          keycloakConfig: testConfig,
+          httpClient: countingClient,
+        );
+
+        // First call is discovery, second is endSession
+        await service.discoverEndpoints();
+        final beforeCount = callCount;
+
+        await service.endSession(idTokenHint: '');
+
+        // Discovery was cached (callCount 1), endSession made 1 more call
+        expect(callCount, equals(beforeCount + 1));
+      });
+    });
   });
 }
 
@@ -199,5 +329,20 @@ class _CountingHttpClient extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     _onCall();
     return _inner.send(request);
+  }
+}
+
+class _SequentialHttpClient extends http.BaseClient {
+  final List<http.Client> _clients;
+  int _index = 0;
+
+  _SequentialHttpClient(this._clients);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (_index >= _clients.length) {
+      throw StateError('No more mock clients in sequence');
+    }
+    return _clients[_index++].send(request);
   }
 }

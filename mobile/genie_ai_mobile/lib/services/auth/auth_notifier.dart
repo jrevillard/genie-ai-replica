@@ -6,13 +6,22 @@ import 'auth_logger.dart';
 import 'auth_providers.dart';
 import 'auth_state.dart';
 import 'token_storage.dart';
+import '../api_service.dart';
 import '../keycloak/keycloak_service.dart';
+
+AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
+    AuthorizationServiceConfiguration(
+      authorizationEndpoint: e.authorizationEndpoint,
+      tokenEndpoint: e.tokenEndpoint,
+      endSessionEndpoint: e.endSessionEndpoint,
+    );
 
 class AuthNotifier extends Notifier<AuthState> {
   late final TokenStorage _tokenStorage;
   late final KeycloakService _keycloakService;
   late final AppAuth _appAuth;
   late final AuthLogger _authLogger;
+  late final ApiService _apiService;
 
   @override
   AuthState build() {
@@ -20,6 +29,7 @@ class AuthNotifier extends Notifier<AuthState> {
     _keycloakService = ref.watch(keycloakServiceProvider);
     _appAuth = ref.watch(appAuthProvider);
     _authLogger = ref.read(authLoggerProvider);
+    _apiService = ref.watch(apiServiceProvider);
     Future.microtask(() => _initializeAuth());
     return const AuthState.unauthenticated();
   }
@@ -82,8 +92,10 @@ class AuthNotifier extends Notifier<AuthState> {
         AuthorizationTokenRequest(
           _keycloakService.keycloakConfig.clientId,
           '${_keycloakService.keycloakConfig.redirectScheme}://callback',
-          discoveryUrl: _keycloakService.keycloakConfig.realmUrl,
+          serviceConfiguration: _serviceConfiguration(endpoints),
           scopes: ['openid', 'profile', 'email', 'offline_access'],
+          allowInsecureConnections:
+              _keycloakService.keycloakConfig.allowInsecureConnections,
         ),
       );
 
@@ -168,14 +180,29 @@ class AuthNotifier extends Notifier<AuthState> {
     }
 
     try {
+      final discoveryEndpoints = await _keycloakService.discoverEndpoints();
+      if (!ref.mounted) return;
+      if (discoveryEndpoints == null) {
+        _authLogger.logAuthFailure(
+          errorCode: 'REFRESH_DISCOVERY_FAILED',
+          keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
+          message: 'Endpoint discovery failed during token refresh',
+          source: 'AuthNotifier.refreshToken',
+        );
+        state = const AuthState.unauthenticated();
+        return;
+      }
+
       final tokenResponse = await _appAuth.token(
         TokenRequest(
           _keycloakService.keycloakConfig.clientId,
           '${_keycloakService.keycloakConfig.redirectScheme}://callback',
-          discoveryUrl: _keycloakService.keycloakConfig.realmUrl,
+          serviceConfiguration: _serviceConfiguration(discoveryEndpoints),
           grantType: 'refresh_token',
           refreshToken: currentRefreshToken,
           scopes: ['openid', 'profile', 'email', 'offline_access'],
+          allowInsecureConnections:
+              _keycloakService.keycloakConfig.allowInsecureConnections,
         ),
       );
 
@@ -216,8 +243,37 @@ class AuthNotifier extends Notifier<AuthState> {
       );
       await _tokenStorage.deleteAll();
       if (!ref.mounted) return;
-      state = const AuthState.unauthenticated();
+      state = const AuthState(
+        status: AuthStatus.unauthenticated,
+        errorMessage: 'Your session has expired. Please sign in again.',
+      );
     }
+  }
+
+  Future<void> logout() async {
+    _authLogger.logAuthEvent(
+      message: 'Logout initiated',
+      source: 'AuthNotifier.logout',
+    );
+
+    final idToken = await _tokenStorage.getIdToken();
+    if (!ref.mounted) return;
+
+    await Future.wait<void>([
+      _apiService.post('auth/logout', {}).then((_) {}).catchError((_) {}),
+      _keycloakService.endSession(idTokenHint: idToken).catchError((_) => false),
+    ]);
+    if (!ref.mounted) return;
+
+    await _tokenStorage.deleteAll().catchError((_) {});
+    if (!ref.mounted) return;
+
+    _authLogger.logAuthEvent(
+      message: 'Logout completed',
+      source: 'AuthNotifier.logout',
+    );
+
+    state = const AuthState.unauthenticated();
   }
 
   Future<void> validateTokens() async {

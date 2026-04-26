@@ -1,47 +1,62 @@
-// lib/services/api_service.dart
 import 'dart:convert';
+import 'package:genie_ai_mobile/config/keycloak_config.dart' show getConfig;
 import 'package:http/http.dart' as http;
 
 import 'auth/auth_logger.dart';
 
 class ApiService {
-  AuthLogger? _logger;
+  final http.Client _httpClient;
+  final String baseUrl;
+  final AuthLogger? _logger;
 
-  String get baseUrl => 'https://genie-ai.itu.int/api';
+  // Backward-compatible: existing code calls ApiService(logger: logger).
+  // The logger parameter is accepted but http.Client defaults to a new instance
+  // and baseUrl defaults to config — this matches the old singleton behavior.
+  // TODO(epic-6): remove — all consumers migrated to apiServiceProvider
+  ApiService({
+    http.Client? httpClient,
+    String? baseUrl,
+    AuthLogger? logger,
+  })  : _httpClient = httpClient ?? http.Client(),
+        baseUrl = baseUrl ?? getConfig().backendUrl,
+        _logger = logger;
 
-  String? _accessToken;
-
-  static final ApiService _instance = ApiService._internal();
-  factory ApiService({AuthLogger? logger}) {
-    if (logger != null) _instance._logger = logger;
-    return _instance;
-  }
-  ApiService._internal();
-
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
   void setToken(String token) {
-    _logger?.logAuthEvent(
-      message: 'Access token set',
+    _logger?.logApiError(
+      httpStatus: 0,
+      endpoint: 'deprecated',
+      message: 'setToken() is deprecated — use AuthInterceptor',
       source: 'ApiService.setToken',
     );
-    _accessToken = token;
   }
 
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
   void clearToken() {
-    _logger?.logAuthEvent(
-      message: 'Access token cleared',
+    _logger?.logApiError(
+      httpStatus: 0,
+      endpoint: 'deprecated',
+      message: 'clearToken() is deprecated — use AuthInterceptor',
       source: 'ApiService.clearToken',
     );
-    _accessToken = null;
   }
 
-  String? get accessToken => _accessToken;
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
+  String? get accessToken => null;
 
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
   Map<String, String> getHeaders({String contentType = 'application/json'}) {
-    final headers = <String, String>{
-      'Content-Type': contentType,
-      if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
-    };
-    return headers;
+    _logger?.logApiError(
+      httpStatus: 0,
+      endpoint: 'deprecated',
+      message: 'getHeaders() is deprecated — use AuthInterceptor',
+      source: 'ApiService.getHeaders',
+    );
+    return {'Content-Type': contentType};
   }
 
   Future<http.Response> get(
@@ -58,7 +73,7 @@ class ApiService {
     );
 
     try {
-      final response = await http.get(uri, headers: getHeaders());
+      final response = await _httpClient.get(uri, headers: {'Content-Type': 'application/json'});
       _logResponse(response, endpoint);
       return response;
     } catch (e, _) {
@@ -76,9 +91,9 @@ class ApiService {
     );
 
     try {
-      final response = await http.post(
+      final response = await _httpClient.post(
         uri,
-        headers: getHeaders(),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
       _logResponse(response, endpoint);
@@ -98,9 +113,9 @@ class ApiService {
     );
 
     try {
-      final response = await http.put(
+      final response = await _httpClient.put(
         uri,
-        headers: getHeaders(),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
       _logResponse(response, endpoint);
@@ -123,9 +138,9 @@ class ApiService {
     );
 
     try {
-      final response = await http.patch(
+      final response = await _httpClient.patch(
         uri,
-        headers: getHeaders(),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
       _logResponse(response, endpoint);
@@ -150,7 +165,7 @@ class ApiService {
     );
 
     try {
-      final response = await http.delete(uri, headers: getHeaders());
+      final response = await _httpClient.delete(uri, headers: {'Content-Type': 'application/json'});
       _logResponse(response, endpoint);
       return response;
     } catch (e, _) {

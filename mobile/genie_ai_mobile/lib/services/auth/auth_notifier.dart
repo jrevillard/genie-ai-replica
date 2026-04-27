@@ -292,7 +292,8 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     if (expiration == null || expiration.isBefore(DateTime.now())) {
       _authLogger.logAuthFailure(
         errorCode: 'TOKEN_EXPIRED',
-        message: 'Access token expired — attempting refresh',
+        message:
+            'Access token expired or expiration unknown — attempting refresh',
         source: 'AuthNotifier.validateTokens',
       );
       await refreshToken();
@@ -308,6 +309,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!ref.mounted) return;
     if (state == AppLifecycleState.resumed &&
         this.state.status == AuthStatus.authenticated) {
       _authLogger.logAuthEvent(

@@ -1,6 +1,6 @@
 # Story 3.1: AppLifecycle Token Validation
 
-Status: review
+Status: done
 
 ## Story
 
@@ -280,3 +280,14 @@ N/A
 
 - `mobile/genie_ai_mobile/lib/services/auth/auth_notifier.dart` — MODIFIED
 - `mobile/genie_ai_mobile/test/services/auth/auth_notifier_test.dart` — MODIFIED
+
+### Review Findings
+
+- [x] [Review][Patch] Missing `ref.mounted` guard in `didChangeAppLifecycleState` [`auth_notifier.dart:310`] — Fixed: added `if (!ref.mounted) return;` as first line.
+- [x] [Review][Patch] Misleading log for null expiration in `validateTokens()` [`auth_notifier.dart:295`] — Fixed: changed message to `'Access token expired or expiration unknown — attempting refresh'`.
+- [x] [Review][Defer] Concurrent `validateTokens()` calls not guarded [`auth_notifier.dart:317`] — deferred, known limitation documented in spec for Story 3.2
+- [x] [Review][Defer] Observer tests (AC5/AC6) use absence-of-exception as assertion [`auth_notifier_test.dart:638-648`] — deferred, adequate per spec guidance ("No WidgetsBinding mock needed")
+- [x] [Review][Defer] Idempotence test relies on synchronous mock completion [`auth_notifier_test.dart:654`] — deferred, related to concurrent validateTokens limitation
+- [x] [Review][Defer] `validateTokens()` can race with `logout()` [`auth_notifier.dart:284`] — deferred, pre-existing issue made more reachable by lifecycle trigger
+- [x] [Review][Defer] `validateTokens()` can race with `authorize()` [`auth_notifier.dart:73`] — deferred, narrow scenario (user authenticated AND mid-re-authorization AND app resumes)
+- [x] [Review][Defer] Logging asymmetry in `validateTokens()` success/failure paths [`auth_notifier.dart:298-305`] — deferred, style preference

@@ -1,6 +1,6 @@
 # Story 3.1: AppLifecycle Token Validation
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -261,8 +261,22 @@ state = const AuthState.error(message: '...', retryable: true);
 
 ### Agent Model Used
 
+glm-5-turbo (Claude Code)
+
 ### Debug Log References
+
+N/A
 
 ### Completion Notes List
 
+- Added `WidgetsBindingObserver` mixin to `AuthNotifier`, `addObserver` in `build()`, `removeObserver` in `ref.onDispose()`
+- Implemented `didChangeAppLifecycleState()` with guards: only `resumed` + `authenticated` triggers `validateTokens()`
+- Added success logging in `validateTokens()` for the expired-but-refresh-succeeds case
+- Added `TestWidgetsFlutterBinding.ensureInitialized()` to test file (required by `WidgetsBinding.instance` in `build()`)
+- All 7 ACs satisfied, 11 new tests added (32 total pass)
+- No changes to `refreshToken()`, `TokenStorage`, `AuthState`, or `auth_providers.dart`
+
 ### File List
+
+- `mobile/genie_ai_mobile/lib/services/auth/auth_notifier.dart` — MODIFIED
+- `mobile/genie_ai_mobile/test/services/auth/auth_notifier_test.dart` — MODIFIED

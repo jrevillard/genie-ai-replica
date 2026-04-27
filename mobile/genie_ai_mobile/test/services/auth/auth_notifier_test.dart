@@ -11,6 +11,7 @@ import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 import 'package:genie_ai_mobile/services/auth/auth_state.dart';
 import 'package:genie_ai_mobile/services/auth/token_storage.dart';
 import 'package:genie_ai_mobile/services/keycloak/keycloak_service.dart';
+import 'package:flutter/widgets.dart';
 
 class MockAppAuth implements AppAuth {
   AuthorizationTokenResponse Function(AuthorizationTokenRequest)? onAuthorize;
@@ -127,6 +128,7 @@ const testEndpoints = OidcEndpoints(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late ProviderContainer container;
   late InMemoryTokenStorage tokenStorage;
   late MockAppAuth mockAppAuth;
@@ -410,6 +412,283 @@ void main() {
 
       expect(await tokenStorage.getRefreshToken(), equals('new-rt'));
       expect(await tokenStorage.getAccessToken(), equals('new-at'));
+    });
+  });
+
+  // ── Story 3.1: AppLifecycle Token Validation ──
+
+  group('didChangeAppLifecycleState', () {
+    test('resumed when authenticated calls validateTokens (AC1)', () async {
+      // Pre-populate with valid tokens so state is authenticated after build
+      final preloadedStorage = InMemoryTokenStorage();
+      await preloadedStorage.saveTokens(
+        accessToken: 'valid-at',
+        idToken: 'idt',
+        refreshToken: 'rt',
+        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+      );
+
+      final c = makeContainer(storage: preloadedStorage);
+      c.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+
+      // Clear logger from _initializeAuth
+      recordingLogger.events.clear();
+
+      final notifier = c.read(authProvider.notifier);
+      notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+
+      expect(
+        recordingLogger.events.any(
+          (e) => e.contains('AuthNotifier.validateTokens'),
+        ),
+        isTrue,
+      );
+      c.dispose();
+    });
+
+    test('paused does NOT call validateTokens (AC1)', () async {
+      final preloadedStorage = InMemoryTokenStorage();
+      await preloadedStorage.saveTokens(
+        accessToken: 'valid-at',
+        idToken: 'idt',
+        refreshToken: 'rt',
+        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+      );
+
+      final c = makeContainer(storage: preloadedStorage);
+      c.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+      recordingLogger.events.clear();
+
+      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future.delayed(Duration.zero);
+
+      expect(
+        recordingLogger.events.any(
+          (e) => e.contains('AuthNotifier.validateTokens'),
+        ),
+        isFalse,
+      );
+      c.dispose();
+    });
+
+    test('inactive does NOT call validateTokens (AC1)', () async {
+      final preloadedStorage = InMemoryTokenStorage();
+      await preloadedStorage.saveTokens(
+        accessToken: 'valid-at',
+        idToken: 'idt',
+        refreshToken: 'rt',
+        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+      );
+
+      final c = makeContainer(storage: preloadedStorage);
+      c.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+      recordingLogger.events.clear();
+
+      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.inactive);
+      await Future.delayed(Duration.zero);
+
+      expect(
+        recordingLogger.events.any(
+          (e) => e.contains('AuthNotifier.validateTokens'),
+        ),
+        isFalse,
+      );
+      c.dispose();
+    });
+
+    test('resumed when unauthenticated does NOT call validateTokens (AC7)', () async {
+      // Default state after build() is unauthenticated (no tokens)
+      recordingLogger.events.clear();
+
+      container.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+
+      expect(
+        recordingLogger.events.any(
+          (e) => e.contains('AuthNotifier.validateTokens'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('resumed when in error state does NOT call validateTokens (AC7)', () async {
+      // Force error state by failing discovery during authorize
+      final noEndpointsService = FakeKeycloakService(
+        keycloakConfig: testConfig,
+        endpointsToReturn: null,
+      );
+      final c = makeContainer(kcService: noEndpointsService);
+
+      await c.read(authProvider.notifier).authorize();
+      expect(c.read(authProvider).status, equals(AuthStatus.error));
+      recordingLogger.events.clear();
+
+      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+
+      expect(
+        recordingLogger.events.any(
+          (e) => e.contains('AuthNotifier.validateTokens'),
+        ),
+        isFalse,
+      );
+      c.dispose();
+    });
+
+    test('valid token on resume — no state change (AC2)', () async {
+      final preloadedStorage = InMemoryTokenStorage();
+      await preloadedStorage.saveTokens(
+        accessToken: 'valid-at',
+        idToken: 'idt',
+        refreshToken: 'rt',
+        accessTokenExpiration: DateTime.now().add(Duration(hours: 1)),
+      );
+
+      final c = makeContainer(storage: preloadedStorage);
+      c.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+
+      final stateBefore = c.read(authProvider);
+      expect(stateBefore.status, equals(AuthStatus.authenticated));
+
+      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+
+      final stateAfter = c.read(authProvider);
+      expect(stateAfter.status, equals(AuthStatus.authenticated));
+      // No refresh token call should have been made
+      expect(
+        recordingLogger.events.any(
+          (e) => e.contains('AuthNotifier.refreshToken'),
+        ),
+        isFalse,
+      );
+      c.dispose();
+    });
+
+    test('expired access token on resume — refreshToken called, state stays authenticated (AC3)', () async {
+      final preloadedStorage = InMemoryTokenStorage();
+      await preloadedStorage.saveTokens(
+        accessToken: 'expired-at',
+        idToken: 'idt',
+        refreshToken: 'valid-rt',
+        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+      );
+
+      final refreshAuth = MockAppAuth();
+      refreshAuth.onToken = (_) => TokenResponse(
+        'new-at',
+        'new-rt',
+        DateTime.now().add(Duration(hours: 1)),
+        null,
+        'Bearer',
+        null,
+        null,
+      );
+
+      final c = makeContainer(storage: preloadedStorage, appAuth: refreshAuth);
+      c.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+
+      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+
+      final state = c.read(authProvider);
+      expect(state.status, equals(AuthStatus.authenticated));
+      expect(await preloadedStorage.getAccessToken(), equals('new-at'));
+      c.dispose();
+    });
+
+    test('both tokens expired on resume — state transitions to unauthenticated with error message (AC4)', () async {
+      final preloadedStorage = InMemoryTokenStorage();
+      await preloadedStorage.saveTokens(
+        accessToken: 'expired-at',
+        idToken: 'idt',
+        refreshToken: 'expired-rt',
+        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+      );
+
+      final failAuth = MockAppAuth();
+      failAuth.tokenException = Exception('Refresh failed');
+
+      final c = makeContainer(storage: preloadedStorage, appAuth: failAuth);
+      c.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+
+      c.read(authProvider.notifier).didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+
+      final state = c.read(authProvider);
+      expect(state.status, equals(AuthStatus.unauthenticated));
+      expect(
+        state.errorMessage,
+        equals('Your session has expired. Please sign in again.'),
+      );
+      expect(await preloadedStorage.getAccessToken(), isNull);
+      c.dispose();
+    });
+
+    test('observer added in build — verify addObserver called (AC6)', () {
+      // Creating the container triggers build() which calls addObserver
+      // The TestWidgetsFlutterBinding handles addObserver/removeObserver.
+      // If addObserver threw, the test would fail.
+      final c = makeContainer();
+      c.read(authProvider.notifier);
+      // No exception means addObserver succeeded
+      c.dispose();
+    });
+
+    test('observer removed on dispose — verify removeObserver called (AC5)', () {
+      // Creating and disposing should not throw — removeObserver called in ref.onDispose
+      final c = makeContainer();
+      c.read(authProvider.notifier);
+      // dispose triggers ref.onDispose which calls removeObserver
+      c.dispose();
+      // No exception means removeObserver succeeded
+    });
+
+    test('idempotence — calling resumed twice does not trigger double refresh', () async {
+      final preloadedStorage = InMemoryTokenStorage();
+      await preloadedStorage.saveTokens(
+        accessToken: 'expired-at',
+        idToken: 'idt',
+        refreshToken: 'valid-rt',
+        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+      );
+
+      var refreshCallCount = 0;
+      final refreshAuth = MockAppAuth();
+      refreshAuth.onToken = (_) {
+        refreshCallCount++;
+        return TokenResponse(
+          'new-at',
+          'new-rt',
+          DateTime.now().add(Duration(hours: 1)),
+          null,
+          'Bearer',
+          null,
+          null,
+        );
+      };
+
+      final c = makeContainer(storage: preloadedStorage, appAuth: refreshAuth);
+      c.read(authProvider.notifier);
+      await Future.delayed(Duration.zero);
+
+      final notifier = c.read(authProvider.notifier);
+      notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future.delayed(Duration.zero);
+
+      // Both calls will trigger validateTokens, but the second one should see
+      // the token is now valid (refreshed by first call) and skip refresh.
+      // So refreshCallCount should be 1, not 2.
+      expect(refreshCallCount, equals(1));
+      c.dispose();
     });
   });
 

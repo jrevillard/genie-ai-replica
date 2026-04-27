@@ -1,5 +1,6 @@
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart';
 
 import 'app_auth.dart';
 import 'auth_logger.dart';
@@ -16,7 +17,7 @@ AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
       endSessionEndpoint: e.endSessionEndpoint,
     );
 
-class AuthNotifier extends Notifier<AuthState> {
+class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   late final TokenStorage _tokenStorage;
   late final KeycloakService _keycloakService;
   late final AppAuth _appAuth;
@@ -30,6 +31,10 @@ class AuthNotifier extends Notifier<AuthState> {
     _appAuth = ref.watch(appAuthProvider);
     _authLogger = ref.read(authLoggerProvider);
     _apiService = ref.watch(apiServiceProvider);
+    WidgetsBinding.instance.addObserver(this);
+    ref.onDispose(() {
+      WidgetsBinding.instance.removeObserver(this);
+    });
     Future.microtask(() => _initializeAuth());
     return const AuthState.unauthenticated();
   }
@@ -291,6 +296,25 @@ class AuthNotifier extends Notifier<AuthState> {
         source: 'AuthNotifier.validateTokens',
       );
       await refreshToken();
+      if (!ref.mounted) return;
+      if (state.status == AuthStatus.authenticated) {
+        _authLogger.logAuthEvent(
+          message: 'Token refresh succeeded after expired access token',
+          source: 'AuthNotifier.validateTokens',
+        );
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        this.state.status == AuthStatus.authenticated) {
+      _authLogger.logAuthEvent(
+        message: 'App resumed — triggering token validation',
+        source: 'AuthNotifier.didChangeAppLifecycleState',
+      );
+      validateTokens();
     }
   }
 }

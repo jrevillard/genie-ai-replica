@@ -58,7 +58,7 @@ development_status:
 
   # Epic 3: Reliable Auth Experience
   epic-3: in-progress
-  3-1-applifecycle-token-validation: ready-for-dev
+  3-1-applifecycle-token-validation: review
   3-2-network-error-detection-recovery: backlog
   3-3-auth-error-state-machine: backlog
   epic-3-retrospective: optional

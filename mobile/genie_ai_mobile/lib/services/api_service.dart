@@ -1,42 +1,62 @@
-// lib/services/api_service.dart
 import 'dart:convert';
+import 'package:genie_ai_mobile/config/keycloak_config.dart' show getConfig;
 import 'package:http/http.dart' as http;
 
+import 'auth/auth_logger.dart';
+
 class ApiService {
-  // Changed from static const to instance getter
-  // This allows instance access (_api.baseUrl) while keeping the value constant
-  //String get baseUrl => 'https://localhost/api';
-  // For production, you can easily switch:
-  String get baseUrl => 'https://genie-ai.itu.int/api';
+  final http.Client _httpClient;
+  final String baseUrl;
+  final AuthLogger? _logger;
 
-  String? _accessToken;
+  // Backward-compatible: existing code calls ApiService(logger: logger).
+  // The logger parameter is accepted but http.Client defaults to a new instance
+  // and baseUrl defaults to config — this matches the old singleton behavior.
+  // TODO(epic-6): remove — all consumers migrated to apiServiceProvider
+  ApiService({
+    http.Client? httpClient,
+    String? baseUrl,
+    AuthLogger? logger,
+  })  : _httpClient = httpClient ?? http.Client(),
+        baseUrl = baseUrl ?? getConfig().backendUrl,
+        _logger = logger;
 
-  // Singleton pattern
-  static final ApiService _instance = ApiService._internal();
-  factory ApiService() => _instance;
-  ApiService._internal();
-
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
   void setToken(String token) {
-    print(
-      '[ApiService] Setting access token: ${token.substring(0, token.length > 5 ? 5 : token.length)}...',
+    _logger?.logApiError(
+      httpStatus: 0,
+      endpoint: 'deprecated',
+      message: 'setToken() is deprecated — use AuthInterceptor',
+      source: 'ApiService.setToken',
     );
-    _accessToken = token;
   }
 
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
   void clearToken() {
-    print('[ApiService] Clearing access token');
-    _accessToken = null;
+    _logger?.logApiError(
+      httpStatus: 0,
+      endpoint: 'deprecated',
+      message: 'clearToken() is deprecated — use AuthInterceptor',
+      source: 'ApiService.clearToken',
+    );
   }
 
-  String? get accessToken => _accessToken;
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
+  String? get accessToken => null;
 
+  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
+  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
   Map<String, String> getHeaders({String contentType = 'application/json'}) {
-    final headers = <String, String>{
-      'Content-Type': contentType,
-      if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
-    };
-    // print('[ApiService] Generated Headers: $headers');
-    return headers;
+    _logger?.logApiError(
+      httpStatus: 0,
+      endpoint: 'deprecated',
+      message: 'getHeaders() is deprecated — use AuthInterceptor',
+      source: 'ApiService.getHeaders',
+    );
+    return {'Content-Type': contentType};
   }
 
   Future<http.Response> get(
@@ -47,16 +67,17 @@ class ApiService {
       queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );
 
-    print('----------------------------------------------------------------');
-    print('[API Request] GET');
-    print('URL: $uri');
+    _logger?.logAuthEvent(
+      message: 'GET $endpoint',
+      source: 'ApiService.get',
+    );
 
     try {
-      final response = await http.get(uri, headers: getHeaders());
-      _logResponse(response);
+      final response = await _httpClient.get(uri, headers: {'Content-Type': 'application/json'});
+      _logResponse(response, endpoint);
       return response;
-    } catch (e, stackTrace) {
-      _logError(e, stackTrace);
+    } catch (e, _) {
+      _logError(e, endpoint);
       rethrow;
     }
   }
@@ -64,21 +85,21 @@ class ApiService {
   Future<http.Response> post(String endpoint, Map<String, dynamic> data) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
-    print('----------------------------------------------------------------');
-    print('[API Request] POST');
-    print('URL: $uri');
-    print('Body: ${jsonEncode(data)}');
+    _logger?.logAuthEvent(
+      message: 'POST $endpoint',
+      source: 'ApiService.post',
+    );
 
     try {
-      final response = await http.post(
+      final response = await _httpClient.post(
         uri,
-        headers: getHeaders(),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
-      _logResponse(response);
+      _logResponse(response, endpoint);
       return response;
-    } catch (e, stackTrace) {
-      _logError(e, stackTrace);
+    } catch (e, _) {
+      _logError(e, endpoint);
       rethrow;
     }
   }
@@ -86,21 +107,21 @@ class ApiService {
   Future<http.Response> put(String endpoint, Map<String, dynamic> data) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
-    print('----------------------------------------------------------------');
-    print('[API Request] PUT');
-    print('URL: $uri');
-    print('Body: ${jsonEncode(data)}');
+    _logger?.logAuthEvent(
+      message: 'PUT $endpoint',
+      source: 'ApiService.put',
+    );
 
     try {
-      final response = await http.put(
+      final response = await _httpClient.put(
         uri,
-        headers: getHeaders(),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
-      _logResponse(response);
+      _logResponse(response, endpoint);
       return response;
-    } catch (e, stackTrace) {
-      _logError(e, stackTrace);
+    } catch (e, _) {
+      _logError(e, endpoint);
       rethrow;
     }
   }
@@ -111,21 +132,21 @@ class ApiService {
   ) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
-    print('----------------------------------------------------------------');
-    print('[API Request] PATCH');
-    print('URL: $uri');
-    print('Body: ${jsonEncode(data)}');
+    _logger?.logAuthEvent(
+      message: 'PATCH $endpoint',
+      source: 'ApiService.patch',
+    );
 
     try {
-      final response = await http.patch(
+      final response = await _httpClient.patch(
         uri,
-        headers: getHeaders(),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
-      _logResponse(response);
+      _logResponse(response, endpoint);
       return response;
-    } catch (e, stackTrace) {
-      _logError(e, stackTrace);
+    } catch (e, _) {
+      _logError(e, endpoint);
       rethrow;
     }
   }
@@ -138,30 +159,38 @@ class ApiService {
       queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );
 
-    print('----------------------------------------------------------------');
-    print('[API Request] DELETE');
-    print('URL: $uri');
+    _logger?.logAuthEvent(
+      message: 'DELETE $endpoint',
+      source: 'ApiService.delete',
+    );
 
     try {
-      final response = await http.delete(uri, headers: getHeaders());
-      _logResponse(response);
+      final response = await _httpClient.delete(uri, headers: {'Content-Type': 'application/json'});
+      _logResponse(response, endpoint);
       return response;
-    } catch (e, stackTrace) {
-      _logError(e, stackTrace);
+    } catch (e, _) {
+      _logError(e, endpoint);
       rethrow;
     }
   }
 
-  void _logResponse(http.Response response) {
-    print('[API Response] Status Code: ${response.statusCode}');
-    print('Body: ${response.body}');
-    print('----------------------------------------------------------------');
+  void _logResponse(http.Response response, String endpoint) {
+    if (response.statusCode >= 400) {
+      _logger?.logApiError(
+        httpStatus: response.statusCode,
+        endpoint: endpoint,
+        message: 'HTTP ${response.statusCode}',
+        source: 'ApiService',
+      );
+    }
   }
 
-  void _logError(Object error, StackTrace stackTrace) {
-    print('!!!!!!!!!!! [API EXCEPTION] !!!!!!!!!!!');
-    print('Error: $error');
-    print('Stack Trace: $stackTrace');
-    print('----------------------------------------------------------------');
+  void _logError(Object error, String endpoint) {
+    _logger?.logApiError(
+      httpStatus: 0,
+      endpoint: endpoint,
+      message: '$error',
+      source: 'ApiService',
+    );
   }
 }

@@ -28,6 +28,38 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions "environment"
+
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai.dev"
+            ]
+        }
+        staging {
+            dimension "environment"
+            applicationIdSuffix ".staging"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai.staging"
+            ]
+        }
+        e2e {
+            dimension "environment"
+            applicationIdSuffix ".e2e"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai.e2e"
+            ]
+        }
+        itu {
+            dimension "environment"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai"
+            ]
+        }
+    }
+
     buildTypes {
         release {
             signingConfig = signingConfigs.debug

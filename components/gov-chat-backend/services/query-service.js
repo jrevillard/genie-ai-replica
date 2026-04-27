@@ -8,6 +8,47 @@ const path = require('path');
 const toolRegistry = require('./tool-registry');
 const { runWithTools } = require('./tool-orchestrator');
 
+/**
+ * Three-tier hybrid weather router.
+ *
+ * Tier 1 — hard weather terms:  route to weather immediately, no LLM.
+ * Tier 2 — no weather signals:  route to RAG immediately, no LLM.
+ * Tier 3 — ambiguous terms:     ask Granite to classify YES/NO; fallback=RAG on timeout/error.
+ */
+async function classifyWeatherWithLLM(query) {
+  const vllmBase = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
+  const model    = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-3.3-2b-instruct';
+  try {
+    const resp = await axios.post(
+      `${vllmBase}/v1/chat/completions`,
+      {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a query classifier. Reply with exactly one word: YES or NO. No punctuation.',
+          },
+          {
+            role: 'user',
+            content:
+              `Is the following query asking for a real-time weather forecast or ` +
+              `current/future meteorological conditions for a specific location?\n\nQuery: "${query}"`,
+          },
+        ],
+        max_tokens: 3,
+        temperature: 0,
+      },
+      { timeout: 2500 },
+    );
+    const answer = (resp.data?.choices?.[0]?.message?.content || '').trim().toUpperCase();
+    logger.info(`[WEATHER] LLM classifier → "${answer}"`);
+    return answer.startsWith('YES');
+  } catch (err) {
+    logger.warn(`[WEATHER] LLM classifier failed (${err.message}) — defaulting to RAG`);
+    return false;
+  }
+}
+
 class QueryService {
   constructor() {
     this.dbService = dbService; // Store the service reference instead of the promise
@@ -390,29 +431,68 @@ class QueryService {
 
       } else {
         // ── Weather Query Direct Routing ─────────────────────────────────────
-        // Port 9000 on OPEA does not support OpenAI tool_calls. Instead we detect
-        // weather questions by keyword and call the Python weather-mcp-service
-        // /query endpoint directly (Gemini intent → Mapbox → BMD → Gemini answer).
+        // Port 9000 on OPEA does not support OpenAI tool_calls. Weather queries
+        // are detected by the hybrid router above and forwarded to the weather-mcp-service.
         const weatherEnabled = process.env.WEATHER_ENABLED === 'true';
         const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://localhost:8000';
         const lastUserMsg = [...(queryData.messages || [])].reverse().find(m => m.role === 'user')?.content || queryText;
 
-        // Weather routing: requires either an unambiguous weather term, OR a measurable
-        // weather parameter combined with a temporal/forecast signal.
-        // This prevents knowledge-base queries like "minimum temperature for wheat"
-        // from being misrouted to the live weather forecast service.
-        const WEATHER_VARS       = ['weather', 'rainfall', 'storm', 'flood', 'cyclone', 'monsoon'];
-        const WEATHER_MEASURABLES = ['temperature', 'rain', 'humid', 'climate', 'forecast'];
-        const TEMPORAL_SIGNALS   = ['next', 'tomorrow', 'today', 'tonight', 'this week',
-                                    'this month', 'will it', 'going to', 'expected', 'predicted'];
+        // Hybrid weather router — five tiers (evaluated in order):
+        //   Tier 0: document/knowledge signals present   → RAG    (overrides everything)
+        //   Tier 1: hard weather event terms present     → weather (no LLM)
+        //   Tier 2: agricultural/knowledge terms present → RAG    (no LLM)
+        //   Tier 3: ambiguous weather terms present      → Granite LLM YES/NO
+        //   Tier 4: no signals at all                   → RAG    (no LLM)
+        //
+        // Tier 0 fires first: words like "uploaded", "listed", "threshold", "calendar"
+        // prove the user is querying a document — never a live forecast request.
+        // "weather" moved to WEATHER_AMBIGUOUS: it appears in document titles
+        // ("Crop Weather Calendar") and is not unambiguous enough for Tier 1.
+        const RAG_OVERRIDE = [
+          'uploaded', 'listed', 'according to', 'in the document', 'from the document',
+          'threshold', 'calendar', 'table', 'chart', 'section', 'page', 'schedule',
+          'what does', 'what is listed', 'what is stated', 'document says',
+        ];
+        const WEATHER_HARD      = ['rainfall', 'storm', 'flood', 'cyclone', 'monsoon', 'typhoon'];
+        const AGRO_TERMS        = [
+          'soil', 'crop', 'plant', 'pest', 'disease', 'seed', 'harvest', 'fertilizer',
+          'worm', 'insect', 'fungus', 'larvae', 'larva', 'bacteria', 'bacterial', 'viral',
+          'nitrogen', 'phosphorus', 'germination', 'irrigation', 'variety', 'hybrid',
+          'cultivation', 'paddy', 'rice', 'wheat', 'potato', 'maize', 'vegetable',
+          'infestation', 'blight', 'mite', 'aphid', 'thrip', 'nematode',
+        ];
+        const WEATHER_AMBIGUOUS = ['weather', 'temperature', 'rain', 'humid', 'climate', 'forecast', 'wind', 'drought'];
 
-        const lowerMsg           = lastUserMsg.toLowerCase();
-        const hasWeatherVar      = WEATHER_VARS.some(kw => lowerMsg.includes(kw));
-        const hasWeatherMeasurable = WEATHER_MEASURABLES.some(kw => lowerMsg.includes(kw));
-        const hasTemporal        = TEMPORAL_SIGNALS.some(kw => lowerMsg.includes(kw));
-        const isWeatherQuery     = weatherEnabled && (hasWeatherVar || (hasWeatherMeasurable && hasTemporal));
+        const lowerMsg       = lastUserMsg.toLowerCase();
+        const hasRagOverride = RAG_OVERRIDE.some(kw => lowerMsg.includes(kw));
+        const hasHardSignal  = WEATHER_HARD.some(kw => lowerMsg.includes(kw));
+        const hasAgroTerm    = AGRO_TERMS.some(kw => lowerMsg.includes(kw));
+        const hasAmbiguous   = WEATHER_AMBIGUOUS.some(kw => lowerMsg.includes(kw));
 
-        logger.info(`[WEATHER] routing check — hasWeatherVar=${hasWeatherVar} hasWeatherMeasurable=${hasWeatherMeasurable} hasTemporal=${hasTemporal} → isWeatherQuery=${isWeatherQuery}`);
+        let isWeatherQuery = false;
+        if (weatherEnabled) {
+          if (hasRagOverride) {
+            // Tier 0: document/knowledge query signals — always RAG, no LLM call needed
+            logger.info('[WEATHER] Tier 0 — document/knowledge signal detected → RAG');
+          } else if (hasHardSignal) {
+            // Tier 1: unambiguous weather event — route to weather even if agro terms present
+            // e.g. "Should I harvest before the cyclone?" is still a weather question
+            isWeatherQuery = true;
+            logger.info('[WEATHER] Tier 1 — hard weather keyword → weather');
+          } else if (hasAgroTerm) {
+            // Tier 2: agricultural/knowledge context — route to RAG without LLM call
+            // Agro terms (soil, pest, crop, worm…) never appear in real forecast queries
+            logger.info('[WEATHER] Tier 2 — agricultural term detected → RAG');
+          } else if (hasAmbiguous) {
+            // Tier 3: ambiguous measurable (weather, temperature, rain…) with no other context
+            // Only here do we call the LLM classifier
+            logger.info('[WEATHER] Tier 3 — ambiguous term, calling LLM classifier …');
+            isWeatherQuery = await classifyWeatherWithLLM(lastUserMsg);
+            logger.info(`[WEATHER] Tier 3 — LLM result → isWeatherQuery=${isWeatherQuery}`);
+          } else {
+            logger.info('[WEATHER] Tier 4 — no weather signals → RAG');
+          }
+        }
 
         if (isWeatherQuery) {
           logger.info(`[WEATHER] Weather query detected — routing to weather-mcp-service: "${lastUserMsg}"`);

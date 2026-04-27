@@ -961,3 +961,27 @@ The script will authenticate via the `/api/auth/login` endpoint and use the retu
 5. Monitor production deployment.
 
 **Note**: The quality of your knowledge categorization and translations directly impacts RAG response quality. Well-structured categories and accurate translations lead to better context understanding and more relevant AI responses.
+
+
+
+
+                                                                                                                                                                                                                                                                                          
+  # List all files in DB using the inspect-chunks.py                                                                                                                                                                                                                                                                 
+  python3 inspect-chunks.py --list                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                          
+  # Partial name — shows a picker if multiple matches                                                                                                                                                                                                                                     
+  python3 inspect-chunks.py potato                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                          
+  # Exact name — if only one match, goes straight to chunks                                                                                                                                                                                                                               
+  python3 inspect-chunks.py potato_calendar_dhaka.md
+                                                                                                                                                                                                                                                                                          
+  # Direct file_id — no ambiguity                                                                                                                                                                                                                                                         
+  python3 inspect-chunks.py --file-id 1777230779535_a5e215b2
+                                                                              
+
+  # from the scripts/new-schema-scripts directory:                                                                                                                                                                                                                                        
+  node inspect-chunks.js --list                                                                                                                                                                                                                                                           
+  node inspect-chunks.js potato                          # partial — shows picker                                                                                                                                                                                                         
+  node inspect-chunks.js potato_calendar_dhaka.md        # exact name                                                                                                                                                                                                                     
+  node inspect-chunks.js --file-id 1777230779535_a5e215b2   
+                                                                              

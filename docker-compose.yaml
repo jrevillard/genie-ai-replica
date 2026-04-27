@@ -220,9 +220,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=${WEATHER_MCP_PORT}
-      # Optional API keys (define in .env)
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - MAPBOX_ACCESS_TOKEN=${MAPBOX_ACCESS_TOKEN}
+      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
+      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
     env_file:
       - .env
     networks:

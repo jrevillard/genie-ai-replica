@@ -250,7 +250,7 @@
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome to GENIE.AI, for Global Empowerment, Intelligence and Equity",
+      "welcomeMessage": "Welcome! I'm MEWA, your agricultural early warning assistant for Bangladesh. How can I help you today?",
       "botName": "GENIE.AI",
       "quickHelp": {
         "buttons": [
@@ -264,7 +264,7 @@
             "category": null,
             "action": {
               "visibleText": "quickhelp.justChatUserPrompt",
-              "hiddenPrompt": "quickhelp.justChatPrompt"
+              "hiddenPrompt": "You are MEWA, an agricultural early warning assistant for Bangladesh. Be friendly, helpful, and knowledgeable about Bangladesh agriculture, weather patterns, crop management, pest risks, and early warning systems. Your primary strength is helping farmers and citizens understand weather conditions and their impact on agricultural activities. Always refer to the application as 'MEWA'."
             },
             "styles": {
               "backgroundColor": "#D3E0EA",
@@ -282,7 +282,7 @@
             "category": "1",
             "action": {
               "visibleText": "quickhelp.applyForIDUserPrompt",
-              "hiddenPrompt": "quickhelp.applyForIDPrompt"
+              "hiddenPrompt": "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about weather forecasts. Help them understand the current and upcoming weather conditions for their district and how it may affect their farming activities. If they mention a district name, focus on that area."
             },
             "styles": {
               "backgroundColor": "#D3E0EA",
@@ -297,10 +297,10 @@
               "type": "file",
               "value": "/config/quickhelp/taxes-revenue.svg"
             },
-            "category": "5",
+            "category": "2",
             "action": {
               "visibleText": "quickhelp.payTaxesUserPrompt",
-              "hiddenPrompt": "quickhelp.payTaxesPrompt"
+              "hiddenPrompt": "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about extreme weather or flood alerts. Provide clear, actionable information about severe weather events such as floods, cyclones, heavy rainfall, or storms. Advise on protective actions for crops and personal safety."
             },
             "styles": {
               "backgroundColor": "#D3E0EA",
@@ -315,10 +315,10 @@
               "type": "file",
               "value": "/config/quickhelp/business-trade.svg"
             },
-            "category": "8",
+            "category": "4",
             "action": {
               "visibleText": "quickhelp.startBusinessUserPrompt",
-              "hiddenPrompt": "quickhelp.startBusinessPrompt"
+              "hiddenPrompt": "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about crop management advice. Provide practical guidance on crop selection, planting schedules, fertilization, irrigation, and pest management based on the current season and regional weather patterns in Bangladesh."
             },
             "styles": {
               "backgroundColor": "#D3E0EA",
@@ -333,10 +333,10 @@
               "type": "file",
               "value": "/config/quickhelp/healthcare-social.svg"
             },
-            "category": "2",
+            "category": "3",
             "action": {
               "visibleText": "quickhelp.findHealthcareUserPrompt",
-              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
+              "hiddenPrompt": "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about crop alert thresholds. Explain the specific meteorological and soil conditions that trigger warnings for major Bangladesh crops such as rice, wheat, jute, and vegetables. Describe what protective actions farmers should take when thresholds are exceeded."
             },
             "styles": {
               "backgroundColor": "#D3E0EA",
@@ -351,10 +351,10 @@
               "type": "file",
               "value": "/config/quickhelp/education-learning.svg"
             },
-            "category": "3",
+            "category": "5",
             "action": {
               "visibleText": "quickhelp.educationServicesUserPrompt",
-              "hiddenPrompt": "quickhelp.educationServicesPrompt"
+              "hiddenPrompt": "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking about geospatial risk profiles. Explain flood-prone zones, cyclone-risk corridors, drought-susceptible areas, and how geographic location affects agricultural risk in Bangladesh districts."
             },
             "styles": {
               "backgroundColor": "#D3E0EA",
@@ -369,46 +369,10 @@
               "type": "file",
               "value": "/config/quickhelp/transportation-mobility.svg"
             },
-            "category": "7",
+            "category": "6",
             "action": {
               "visibleText": "quickhelp.transportLicensesUserPrompt",
-              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "housing-urban",
-            "title": "quickhelp.housingPrograms",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/housing-urban.svg"
-            },
-            "category": "9",
-            "action": {
-              "visibleText": "quickhelp.housingProgramsUserPrompt",
-              "hiddenPrompt": "quickhelp.housingProgramsPrompt"
-            },
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
-            }
-          },
-          {
-            "id": "employment-labor",
-            "title": "quickhelp.findJobs",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/employment-labor.svg"
-            },
-            "category": "4",
-            "action": {
-              "visibleText": "quickhelp.findJobsUserPrompt",
-              "hiddenPrompt": "quickhelp.findJobsPrompt"
+              "hiddenPrompt": "You are MEWA, an agricultural early warning assistant for Bangladesh. The user is asking for general agricultural reference information. Provide factual, practical information about Bangladesh agriculture, including crop calendars, common pests and diseases, soil types, and best practices for smallholder farmers."
             },
             "styles": {
               "backgroundColor": "#D3E0EA",

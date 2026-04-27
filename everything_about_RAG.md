@@ -1084,6 +1084,7 @@ QUERY FLOW
 | 2026-04-21 | Dataprep Dockerfile | docling installs torch 2.11 (CUDA 13.0), host only supports CUDA 12.2 → CPU only | Added Step F2: force-reinstall torch 2.5.1+cu121 | `Dockerfile-dataprep_genie-ai` |
 | 2026-04-21 | Dataprep Dockerfile | torch 2.5.1 pulls numpy 2.x → easyocr/scipy incompatibility → container crash | Added `numpy<2 scipy` reinstall at end of Step F2 | `Dockerfile-dataprep_genie-ai` |
 | 2026-04-21 | Taxonomy / Frontend | After hierarchy import: category names blank, selecting one label selects all | AQL: set `catCode=_key`, insert EN records into `serviceCategoryTranslations` and `serviceTranslations` | ArangoDB direct |
+| 2026-04-24 | Taxonomy / Frontend | Same blank label bug reappeared after truncating taxonomy collections to replace schema | Reapplied same three AQL fixes via `truncate-taxonomy.py` + manual re-run | ArangoDB direct |
 | 2026-04-21 | Reranker | `RERANKING_THRESHOLD=0.90` eliminated all docs (cross-encoder scores ~0.27) | Changed `RERANKING_THRESHOLD=0.01` | `.env` |
 | 2026-04-21 | Reranker | Threshold 0.01 still eliminated all docs (scores ~0.003 due to graph traversal text corrupting reranker input) | Changed `RERANKING_STRATEGY=slice` | `.env` |
 
@@ -1196,4 +1197,77 @@ docker compose up -d reranker     # after RERANKING_* changes
 docker compose up -d retriever    # after RETRIEVER_ARANGO_* changes
 docker compose up -d chatqna      # after CHATQNA_* or LLM changes
 docker compose up -d dataprep     # after LABELING_* or CONTENT_EXTRACTION_* changes
+```
+
+
+
+
+
+````markdown
+# How Chunking Works
+
+Yes, it's LangChain's `RecursiveCharacterTextSplitter` — but with some important nuances.
+
+## The Splitter
+
+```python
+RecursiveCharacterTextSplitter(
+    chunk_size=doc_path.chunk_size,      # in characters, not words
+    chunk_overlap=doc_path.chunk_overlap,
+    add_start_index=True,
+    separators=get_separators(),
+)
+````
+
+Character-based, not word-based. `chunk_size=500` means **500 characters** (roughly 80–120 words depending on content).
+
+## Separator Hierarchy
+
+The **"Recursive"** part is key — it tries each separator in order, splitting only when the chunk would exceed the limit:
+
+1. `\n\n` — paragraph break (preferred, keeps paragraphs whole)
+2. `\n` — line break
+3. ` ` — space (word boundary)
+4. `.` — sentence end
+5. `,` — clause boundary
+6. Zero-width/fullwidth Unicode chars (CJK support)
+7. `""` — last resort: split mid-character
+
+So it tries to split at natural boundaries (**paragraphs → sentences → words**), not blindly at a fixed position.
+
+## Your Configured Sizes
+
+| File type | Chunk size (chars)                    | Overlap (chars) |
+| --------- | ------------------------------------- | --------------- |
+| `.md`     | 500                                   | 50              |
+| `.txt`    | 500                                   | 50              |
+| `.pdf`    | 500                                   | 50              |
+| `.docx`   | 1000                                  | 50              |
+| `.xlsx`   | 1500                                  | 50              |
+| `.html`   | uses `HTMLHeaderTextSplitter` instead | —               |
+
+The **50-character overlap** means the end of one chunk is repeated at the start of the next, so a sentence cut at a boundary doesn't lose context entirely.
+
+## HTML is Different
+
+HTML doesn't use `RecursiveCharacterTextSplitter` at all — it uses `HTMLHeaderTextSplitter`, which splits on `<h1>` and `<h2>` tags.
+
+Each section under a heading becomes its own chunk, regardless of length. This is more semantically meaningful for structured HTML docs.
+
+## The Filter Step
+
+After splitting, every chunk passes through `is_valid_content()`:
+
+* Must be **>70% alphanumeric characters**
+* Must have **<50% problematic lines** (very short, repetitive, etc.)
+
+Chunks that fail are silently dropped — this is why JSON fails (too many `{`, `"`, `:` characters pulling the alphanumeric ratio below 70%).
+
+## The `potato_calendar_dhaka.md` Example
+
+That file produced **21 chunks** from a **500-char / 50-char-overlap** split on a Markdown file.
+
+Chunk 1 had `"105 days"` in it — that's content that lived within 500 characters of each other in the original document, kept together because the splitter found a `\n\n` boundary nearby.
+
+```
 ```

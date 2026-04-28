@@ -478,12 +478,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 # We need to wrap the synchronous graph transformer calls in asyncio.to_thread
                 # to avoid blocking the event loop if they are heavy CPU tasks.
-                graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
+                graph_docs = self.llm_transformer.convert_to_graph_documents(batch_docs)
+
+                logger.info(f"Batch {current_batch_num}: convert_to_graph_documents returned {len(graph_docs)} docs")
+                for gd_idx, gd in enumerate(graph_docs):
+                    logger.info(f"  GraphDoc {gd_idx}: {len(gd.nodes)} nodes, {len(gd.relationships)} rels, source={'yes' if gd.source else 'no'}")
 
                 if graph_docs:
-                    # Run graph insertion in a thread as well if it's blocking
-                    await asyncio.to_thread(
-                        self.graph.add_graph_documents,
+                    # Run synchronously in the event loop thread.
+                    # Cannot use asyncio.to_thread — HuggingFaceHubEmbeddings
+                    # internally uses httpx which deadlocks in thread pool workers
+                    # when called from within a Uvicorn async context.
+                    self.graph.add_graph_documents(
                         graph_documents=graph_docs,
                         include_source=getattr(input, "include_chunks", True),
                         graph_name=graph_name,
@@ -495,8 +501,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         embed_relationships=getattr(input, "embed_edges", True),
                         capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
                     )
+                    logger.info(f"Batch {current_batch_num}: graph documents inserted successfully")
             except (ValidationError, Exception) as ve:
-                logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
+                import traceback
+                logger.error(f"Batch {current_batch_num} failed graph extraction: {ve}")
+                traceback.print_exc()
                 await self._write_ingestion_log(
                     input.file_id,
                     "WARN",
@@ -507,12 +516,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # Retry logic for individual docs in case of failure
                 for retry_doc in batch_docs:
                     try:
-                        retry_graph_docs = await asyncio.to_thread(
-                            self.llm_transformer.convert_to_graph_documents, [retry_doc]
-                        )
+                        retry_graph_docs = self.llm_transformer.convert_to_graph_documents([retry_doc])
                         if retry_graph_docs:
-                            await asyncio.to_thread(
-                                self.graph.add_graph_documents,
+                            self.graph.add_graph_documents(
                                 graph_documents=retry_graph_docs,
                                 include_source=getattr(input, "include_chunks", True),
                                 graph_name=graph_name,
@@ -598,21 +604,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
                 semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
-                tasks = []
-
+                # Process batches sequentially to avoid asyncio/thread deadlocks
+                # with HuggingFaceHubEmbeddings in Uvicorn's event loop
                 for i in range(0, len(documents_to_process), BATCH_SIZE):
                     batch_docs = documents_to_process[i : i + BATCH_SIZE]
                     current_batch_num = (i // BATCH_SIZE) + 1
-
-                    # Schedule batch processing with concurrency control
-                    task = asyncio.create_task(
-                        self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
-                    )
-                    tasks.append(task)
-
-                # Wait for all batches to complete
-                if tasks:
-                    await asyncio.gather(*tasks)
+                    await self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
 
                 # 6. Final Status Update
                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))

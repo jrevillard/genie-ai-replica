@@ -118,8 +118,17 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 # Step J: Lighten library load & Fix Duplicate Registration
 # 1. Comment out unused integrations in the *base* OPEA microservice.
 # 2. Fix the duplicate import path for 'arangodb.py' to resolve the ValueError.
+# 1. Comment out unused integrations and fix import path.
+# 2. Comment out the base loader initialization (our genie microservice creates its own loader
+#    AFTER registering the GenieArangoDataprep component).
 RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
-    sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py
+    sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
+    python3 -c "\
+f='/app/comps/dataprep/src/opea_dataprep_microservice.py'; \
+t=open(f).read(); \
+t=t.replace('loader = OpeaDataprepLoader(\n    dataprep_component_name,\n    description=f\"OPEA DATAPREP Component: {dataprep_component_name}\",\n)', 'loader = None  # deferred to genie entrypoint'); \
+open(f,'w').write(t); \
+print('Loader deferred')"
 
 # Step K: Create non-root user and set permissions
 RUN useradd -ms /bin/bash user && \

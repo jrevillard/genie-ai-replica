@@ -332,7 +332,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             ],
                         )
                         parsed = json.loads(response.choices[0].message.content)
-                        suggested_labels = parsed.get("labels", [])
+                        suggested_labels = [l for l in parsed.get("labels", []) if l is not None]
 
                         # Validate label format — retry if LLM returned objects instead of strings
                         valid, bad_items = _validate_labels(suggested_labels)
@@ -358,7 +358,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"Chunk {i}: LLM failed to return valid labels after 3 "
                         f"attempts. Falling back to file metadata labels: {file_labels}",
                     )
-                    suggested_labels = list(file_labels) if file_labels else []
+                    suggested_labels = [l for l in file_labels if l is not None] if file_labels else []
 
                 final_labels = set()
 

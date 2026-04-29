@@ -44,6 +44,15 @@ _recovery/
 haystack-stack/_recovery/
 haystack-stack/backups/
 
+# ─── Runtime container state (ArcadeDB + Redis + trace logs).
+#     These get rewritten on every container start, so committing
+#     them produces noisy "modified" diffs on every restart. The
+#     directory layout itself is recreated by docker compose on
+#     first up; nothing useful is lost by gitignoring them.
+haystack-stack/data/arcadedb/
+haystack-stack/data/redis/
+haystack-stack/evidence_reports/traces/
+
 # ─── Vite / Rollup caches ────────────────────────────────────────
 .vite/
 **/node_modules/.vite/

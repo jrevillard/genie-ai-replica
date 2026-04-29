@@ -1,0 +1,85 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Amina Care — unified compose for backend + all three channels
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Purpose: one `docker compose -f docker-compose.all.yml up -d` boots the
+# whole Amina stack PLUS every channel bridge (Telegram, WhatsApp, Messenger)
+# against the same shared Redis + ArcadeDB + agent.
+#
+# Architecture:
+#
+#     ┌─────────────┐   telegram polling    ┌──────────────────────┐
+#     │  Telegram   │ ───────────────────▶  │ multichannel-access  │
+#     └─────────────┘                       │  (sidecar, port 8020)│
+#                                           └──────────┬───────────┘
+#                                                      │ HTTP
+#                                                      ▼
+#     ┌─────────────┐   webhook POST        ┌──────────────────────┐
+#     │  WhatsApp   │ ───────────────────▶  │  haystack-chatqna    │
+#     │  Cloud API  │                       │  /api/v1/meta/webhook│
+#     └─────────────┘                       │  /whatsapp           │
+#                                           │                      │
+#     ┌─────────────┐   webhook POST        │  /api/v1/meta/webhook│
+#     │  Messenger  │ ───────────────────▶  │  /messenger          │
+#     │  Platform   │                       │                      │
+#     └─────────────┘                       │  + all core services │
+#                                           └──────────────────────┘
+#
+# The Telegram bridge is a separate process (multichannel-access) because
+# Telegram uses long-poll / webhook-to-port. WhatsApp and Messenger use
+# Meta Graph webhooks straight into the haystack backend, so they do NOT
+# need a sidecar — the meta_routes.py module serves them in-process.
+#
+# How it wires together:
+#   1. `include:` pulls in the full haystack-stack compose unchanged, so
+#      arcadedb / redis / voice-stt / voice-tts / dataprep / haystack-chatqna
+#      / superset all come up on network `chatqna_default`.
+#   2. multichannel-access is defined below as a NEW top-level service on
+#      the same network. Its Redis URL points at the shared `redis` (not a
+#      second instance) and its GATEWAY_URL points at `haystack-chatqna`.
+#
+# Meta credentials: add to haystack-stack/.env (not this file). See
+# .env.meta.example at the repo root for the full template.
+#
+# Telegram credentials: multichannel-access/.env already holds
+# TELEGRAM_BOT_TOKEN — left alone.
+# ─────────────────────────────────────────────────────────────────────────────
+
+include:
+  - ./haystack-stack/docker-compose.yml
+
+services:
+  # Telegram bridge — unchanged behaviour, just re-declared here so it
+  # shares the haystack network and depends on the real haystack backend.
+  # We deliberately drop the multichannel-redis container that the original
+  # standalone compose used, and point REDIS_URL at the shared haystack
+  # redis instead. That way caregiver state, session state, and bridge
+  # state all live in one place.
+  multichannel-access:
+    build:
+      context: ./components/multichannel-access
+      dockerfile: docker/dockerfile
+    container_name: multichannel-access
+    env_file:
+      - ./components/multichannel-access/.env
+    environment:
+      GATEWAY_URL:        http://haystack-chatqna:8000
+      REDIS_URL:          redis://redis:6379/0
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      LOG_LEVEL:          ${LOG_LEVEL:-INFO}
+    ports:
+      - "8020:8020"
+    depends_on:
+      redis:
+        condition: service_healthy
+      haystack-chatqna:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8020/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - chatqna_default

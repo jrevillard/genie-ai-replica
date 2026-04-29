@@ -1,0 +1,996 @@
+/* ============================================================
+   AMINA · National Health Observatory
+   ------------------------------------------------------------
+   Institutional light-paper palette with deep-navy accents.
+   One humanist sans for all text; monospace for tabular data.
+   No decorative serifs — designed to read like an official
+   statistics bureau, not a magazine. Scoped to .amina-gov-scope.
+   ============================================================ */
+
+.amina-gov-scope {
+  /* ── Daylight tokens ───────────────────────────── */
+  --gv-paper:     #fcfbf7;   /* warm ivory paper */
+  --gv-paper-2:   #f6f3ec;   /* paper shadow / inset */
+  --gv-paper-3:   #eeeae0;   /* deeper inset */
+  --gv-card:      #ffffff;
+  --gv-card-soft: #fbfaf6;
+
+  --gv-ink:       #0a1535;   /* near-black navy */
+  --gv-ink-2:     #1e293b;   /* slate 800 */
+  --gv-ink-3:     #475569;   /* slate 600 */
+  --gv-ink-4:     #94a3b8;   /* slate 400 */
+
+  --gv-rule:      #e3ddd0;   /* ivory rule */
+  --gv-rule-2:    #ebe7dc;
+  --gv-rule-3:    #d4cdbc;
+
+  /* Authority blue — Gambian/MoH feel, slightly darker than royal */
+  --gv-blue:       #1e3a8a;
+  --gv-blue-2:     #1d4ed8;
+  --gv-blue-soft:  #dbeafe;
+  --gv-blue-line:  #bfdbfe;
+
+  /* Secondary — public-health cyan */
+  --gv-teal:       #0e7490;
+  --gv-teal-soft:  #cffafe;
+
+  /* Signals */
+  --gv-ok:         #047857;
+  --gv-ok-soft:    #d1fae5;
+  --gv-warn:       #b45309;
+  --gv-warn-soft:  #fef3c7;
+  --gv-alert:      #b91c1c;
+  --gv-alert-soft: #fee2e2;
+
+  /* Sovereign accent — used sparingly for MoH emphasis */
+  --gv-crimson:    #9f1239;
+  --gv-emerald:    #047857;
+
+  --gv-shell-bg:   #06091a;         /* deep navy shell */
+  --gv-shell-fg:   #e2e8f0;
+  --gv-shell-muted:#94a3b8;
+  --gv-shell-rule: rgba(148, 163, 184, 0.14);
+
+  position: fixed; inset: 0;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "side topbar"
+    "side main";
+  background: var(--gv-paper);
+  color: var(--gv-ink);
+  font-family: var(--a-font-ui, "Geist", system-ui, sans-serif);
+  overflow: hidden;
+}
+
+/* ── Left rail — deep-navy sidebar ──────────────── */
+
+.amina-gov-scope .gv-side {
+  grid-area: side;
+  background: linear-gradient(180deg, #050717, var(--gv-shell-bg));
+  color: var(--gv-shell-fg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--gv-shell-rule);
+}
+.amina-gov-scope .gv-brand {
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid var(--gv-shell-rule);
+  position: relative;
+}
+.amina-gov-scope .gv-brand::before {
+  content: "";
+  position: absolute;
+  left: 20px; top: 22px;
+  width: 30px; height: 30px; border-radius: 8px;
+  background:
+    linear-gradient(135deg, var(--gv-blue-2), var(--gv-blue)),
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 60%);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 3px 10px rgba(29, 78, 216, 0.35);
+}
+.amina-gov-scope .gv-brand::after {
+  content: "G";
+  position: absolute;
+  left: 30px; top: 27px;
+  width: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0;
+}
+.amina-gov-scope .gv-brand-pad { height: 32px; }
+.amina-gov-scope .gv-brand-title {
+  margin-top: 18px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: #f8fafc;
+}
+.amina-gov-scope .gv-brand-sub {
+  margin-top: 6px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9.5px; letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gv-shell-muted);
+}
+
+.amina-gov-scope .gv-nav-label {
+  padding: 18px 20px 6px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9.5px; letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.55);
+  font-weight: 600;
+}
+.amina-gov-scope .gv-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 10px 18px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.amina-gov-scope .gv-nav-item {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.72);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
+}
+.amina-gov-scope .gv-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #f1f5f9;
+}
+.amina-gov-scope .gv-nav-item[aria-current="page"] {
+  background: linear-gradient(90deg,
+    rgba(30, 64, 175, 0.28) 0%,
+    rgba(30, 64, 175, 0.08) 100%);
+  border-color: rgba(96, 165, 250, 0.22);
+  color: #f8fafc;
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 #60a5fa;
+}
+.amina-gov-scope .gv-nav-icon {
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(148, 163, 184, 0.8);
+}
+.amina-gov-scope .gv-nav-item[aria-current="page"] .gv-nav-icon {
+  color: #93c5fd;
+}
+.amina-gov-scope .gv-nav-hint {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9.5px;
+  color: rgba(148, 163, 184, 0.55);
+  letter-spacing: 0.08em;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(148, 163, 184, 0.10);
+}
+
+.amina-gov-scope .gv-clearance {
+  margin: 12px 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg,
+      rgba(30, 64, 175, 0.18),
+      rgba(30, 64, 175, 0.04));
+  border: 1px solid rgba(96, 165, 250, 0.20);
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.85);
+  line-height: 1.5;
+}
+.amina-gov-scope .gv-clearance-label {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9.5px; letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: #93c5fd;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.amina-gov-scope .gv-clearance-body {
+  color: rgba(226, 232, 240, 0.70);
+  font-size: 11px;
+}
+.amina-gov-scope .gv-clearance-body strong { color: #f1f5f9; font-weight: 600; }
+
+.amina-gov-scope .gv-side-foot {
+  padding: 12px 14px 16px;
+  border-top: 1px solid var(--gv-shell-rule);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.amina-gov-scope .gv-side-btn {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(203, 213, 225, 0.8);
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.amina-gov-scope .gv-side-btn:hover {
+  background: rgba(255,255,255,0.04); color: #f1f5f9;
+}
+
+/* ── Topbar — official ribbon ──────────────────── */
+
+.amina-gov-scope .gv-topbar {
+  grid-area: topbar;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 28px;
+  background:
+    linear-gradient(90deg,
+      #fbfaf6 0%,
+      #f6f3ec 100%);
+  border-bottom: 1px solid var(--gv-rule);
+  min-height: 56px;
+}
+.amina-gov-scope .gv-topbar-crumbs {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 11.5px;
+  color: var(--gv-ink-3);
+  letter-spacing: 0.02em;
+}
+.amina-gov-scope .gv-topbar-crumbs .sep { color: var(--gv-ink-4); }
+.amina-gov-scope .gv-topbar-crumbs .cur { color: var(--gv-ink); font-weight: 600; }
+.amina-gov-scope .gv-topbar-meta {
+  display: flex; gap: 10px; align-items: center;
+  font-size: 11.5px;
+  color: var(--gv-ink-3);
+}
+.amina-gov-scope .gv-topbar-meta .dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gv-emerald);
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.12);
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.amina-gov-scope .gv-period-toggle {
+  display: inline-flex;
+  border: 1px solid var(--gv-rule-3);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+.amina-gov-scope .gv-period-toggle button {
+  padding: 6px 11px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-right: 1px solid var(--gv-rule-2);
+}
+.amina-gov-scope .gv-period-toggle button:last-child { border-right: none; }
+.amina-gov-scope .gv-period-toggle button[aria-pressed="true"] {
+  background: var(--gv-ink);
+  color: #fff;
+}
+.amina-gov-scope .gv-topbar-actions { display: inline-flex; gap: 8px; }
+
+/* Banner under topbar — "Restricted · Aggregate only · No PII" */
+.amina-gov-scope .gv-banner {
+  grid-area: topbar;
+  align-self: end;
+  justify-self: stretch;
+  display: none;
+}
+
+/* ── Buttons shared with ops palette (light) ───── */
+
+.amina-gov-scope .gv-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  border-radius: 6px;
+  border: 1px solid var(--gv-rule-3);
+  background: #fff;
+  color: var(--gv-ink);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 140ms ease, border-color 140ms ease;
+  white-space: nowrap;
+}
+.amina-gov-scope .gv-btn:hover { background: var(--gv-paper-2); border-color: var(--gv-ink-4); }
+.amina-gov-scope .gv-btn.primary {
+  background: var(--gv-ink);
+  color: #fff;
+  border-color: var(--gv-ink);
+}
+.amina-gov-scope .gv-btn.primary:hover { background: #131e45; }
+.amina-gov-scope .gv-btn.blue {
+  background: var(--gv-blue-2); color: #fff; border-color: var(--gv-blue-2);
+}
+.amina-gov-scope .gv-btn.blue:hover { background: #1e40af; }
+.amina-gov-scope .gv-btn.ghost {
+  background: transparent; border-color: transparent; color: var(--gv-ink-2);
+}
+.amina-gov-scope .gv-btn.ghost:hover { background: var(--gv-paper-2); color: var(--gv-ink); }
+
+/* ── Main canvas ───────────────────────────────── */
+
+.amina-gov-scope .gv-main {
+  grid-area: main;
+  overflow-y: auto;
+  background: var(--gv-paper);
+  padding: 0;
+  min-height: 0;
+}
+.amina-gov-scope .gv-main-inner {
+  max-width: 1320px;
+  padding: 26px 32px 72px;
+  margin: 0 auto;
+}
+
+/* Hero — official section header */
+.amina-gov-scope .gv-hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: flex-end;
+  padding-bottom: 18px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--gv-rule);
+}
+.amina-gov-scope .gv-hero-kicker {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+  margin-bottom: 10px;
+}
+.amina-gov-scope .gv-hero-kicker .rule {
+  width: 18px; height: 1px; background: var(--gv-ink-4);
+}
+.amina-gov-scope .gv-hero h1 {
+  margin: 0;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--gv-ink);
+}
+.amina-gov-scope .gv-hero-sub {
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: var(--gv-ink-2);
+  max-width: 62ch;
+  line-height: 1.55;
+}
+.amina-gov-scope .gv-hero-meta {
+  display: flex; gap: 10px; align-items: center;
+}
+
+/* Pills — authority labels */
+.amina-gov-scope .gv-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 4px;
+  color: var(--gv-ink-3);
+  background: var(--gv-paper-2);
+  border: 1px solid var(--gv-rule);
+}
+.amina-gov-scope .gv-pill.blue    { color: var(--gv-blue); background: var(--gv-blue-soft); border-color: var(--gv-blue-line); }
+.amina-gov-scope .gv-pill.ok      { color: var(--gv-ok); background: var(--gv-ok-soft); border-color: rgba(4,120,87,0.22); }
+.amina-gov-scope .gv-pill.warn    { color: var(--gv-warn); background: var(--gv-warn-soft); border-color: rgba(180,83,9,0.22); }
+.amina-gov-scope .gv-pill.alert   { color: var(--gv-alert); background: var(--gv-alert-soft); border-color: rgba(185,28,28,0.22); }
+.amina-gov-scope .gv-pill.crimson { color: var(--gv-crimson); background: #fff1f2; border-color: rgba(159,18,57,0.22); }
+.amina-gov-scope .gv-pill.teal    { color: var(--gv-teal); background: var(--gv-teal-soft); border-color: rgba(14,116,144,0.22); }
+.amina-gov-scope .gv-pill .dot {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Restriction ribbon — Aggregate only / No PII ──── */
+
+.amina-gov-scope .gv-ribbon {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 16px;
+  background:
+    linear-gradient(90deg,
+      rgba(30, 58, 138, 0.06) 0%,
+      rgba(30, 58, 138, 0.01) 40%,
+      rgba(30, 58, 138, 0.00) 100%);
+  border: 1px solid var(--gv-rule);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 11.5px;
+  color: var(--gv-ink-2);
+}
+.amina-gov-scope .gv-ribbon svg { color: var(--gv-blue); flex-shrink: 0; }
+.amina-gov-scope .gv-ribbon strong { color: var(--gv-ink); font-weight: 600; }
+.amina-gov-scope .gv-ribbon .sep { color: var(--gv-ink-4); margin: 0 4px; }
+
+/* ── Hero KPI strip ─────────────────────────────── */
+
+.amina-gov-scope .gv-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin-bottom: 26px;
+  background: var(--gv-card);
+  border: 1px solid var(--gv-rule);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(10, 21, 53, 0.02);
+}
+.amina-gov-scope .gv-kpi {
+  padding: 20px 22px;
+  border-right: 1px solid var(--gv-rule-2);
+  position: relative;
+}
+.amina-gov-scope .gv-kpi:last-child { border-right: none; }
+.amina-gov-scope .gv-kpi-label {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 10px; letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.amina-gov-scope .gv-kpi-label svg { color: var(--gv-blue-2); }
+.amina-gov-scope .gv-kpi-value {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--gv-ink);
+  font-variant-numeric: tabular-nums;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.amina-gov-scope .gv-kpi-value .unit {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--gv-ink-3);
+  font-weight: 500;
+}
+.amina-gov-scope .gv-kpi-meta {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--gv-ink-3);
+  display: flex; align-items: center; gap: 8px;
+}
+.amina-gov-scope .gv-kpi-meta .delta {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-weight: 600;
+}
+.amina-gov-scope .gv-kpi-meta .delta.up   { color: var(--gv-ok); }
+.amina-gov-scope .gv-kpi-meta .delta.down { color: var(--gv-alert); }
+.amina-gov-scope .gv-kpi-meta .delta.flat { color: var(--gv-ink-3); }
+.amina-gov-scope .gv-kpi-spark {
+  margin-top: 10px;
+  color: var(--gv-blue-2);
+  opacity: 0.65;
+}
+
+/* ── Panel — the workhorse card ──────────────── */
+
+.amina-gov-scope .gv-panel {
+  background: var(--gv-card);
+  border: 1px solid var(--gv-rule);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(10, 21, 53, 0.02);
+}
+.amina-gov-scope .gv-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gv-rule);
+  background: var(--gv-card-soft);
+}
+.amina-gov-scope .gv-panel-head h2 {
+  margin: 0;
+  font-family: var(--a-font-ui, "Geist", sans-serif);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: var(--gv-ink);
+  display: flex; align-items: center; gap: 10px;
+}
+.amina-gov-scope .gv-panel-head h2 .count {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gv-ink-3);
+}
+.amina-gov-scope .gv-panel-tools {
+  display: flex; gap: 6px; align-items: center;
+  font-size: 11.5px;
+  color: var(--gv-ink-3);
+}
+.amina-gov-scope .gv-panel-body { padding: 18px; }
+.amina-gov-scope .gv-panel-body.tight { padding: 0; }
+
+/* ── Row layouts ───────────────────────────────── */
+
+.amina-gov-scope .gv-grid-2  { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.amina-gov-scope .gv-grid-3  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.amina-gov-scope .gv-grid-62 { display: grid; grid-template-columns: 1.7fr 1fr; gap: 18px; }
+.amina-gov-scope .gv-grid-12-5 { display: grid; grid-template-columns: 1.2fr 0.5fr; gap: 18px; }
+.amina-gov-scope .gv-stack { display: flex; flex-direction: column; gap: 18px; }
+
+/* ── Large chart — 30-day trend ────────────────── */
+
+.amina-gov-scope .gv-chart {
+  position: relative;
+  width: 100%;
+}
+.amina-gov-scope .gv-chart-big {
+  width: 100%;
+  height: 220px;
+}
+.amina-gov-scope .gv-chart-total {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-weight: 500;
+  font-size: 34px;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--gv-ink);
+  font-variant-numeric: tabular-nums;
+}
+.amina-gov-scope .gv-chart-caption {
+  margin-top: 4px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+}
+
+/* ── Horizontal bar list ───────────────────────── */
+
+.amina-gov-scope .gv-hbar {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.amina-gov-scope .gv-hbar-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 4px;
+  font-size: 12px;
+}
+.amina-gov-scope .gv-hbar-label { color: var(--gv-ink); font-weight: 500; }
+.amina-gov-scope .gv-hbar-value {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--gv-ink-3);
+}
+.amina-gov-scope .gv-hbar-track {
+  grid-column: 1 / -1;
+  height: 6px; border-radius: 3px;
+  background: var(--gv-paper-3);
+  overflow: hidden;
+}
+.amina-gov-scope .gv-hbar-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--gv-blue-2);
+  transition: width 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.amina-gov-scope .gv-hbar-fill.ok    { background: var(--gv-ok); }
+.amina-gov-scope .gv-hbar-fill.warn  { background: var(--gv-warn); }
+.amina-gov-scope .gv-hbar-fill.alert { background: var(--gv-alert); }
+.amina-gov-scope .gv-hbar-fill.teal  { background: var(--gv-teal); }
+
+/* ── Tables ─────────────────────────────────────── */
+
+.amina-gov-scope .gv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.amina-gov-scope .gv-table thead th {
+  text-align: left;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+  padding: 10px 14px;
+  background: var(--gv-card-soft);
+  border-bottom: 1px solid var(--gv-rule);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.amina-gov-scope .gv-table thead th.num { text-align: right; }
+.amina-gov-scope .gv-table tbody tr { border-bottom: 1px solid var(--gv-rule-2); }
+.amina-gov-scope .gv-table tbody tr:last-child { border-bottom: none; }
+.amina-gov-scope .gv-table tbody tr:hover { background: var(--gv-card-soft); }
+.amina-gov-scope .gv-table td {
+  padding: 10px 14px;
+  color: var(--gv-ink);
+  vertical-align: middle;
+}
+.amina-gov-scope .gv-table td.num {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--gv-ink-2);
+}
+.amina-gov-scope .gv-table td .muted { color: var(--gv-ink-3); font-family: var(--a-font-mono, ui-monospace); font-size: 11px; }
+
+/* ── Donut legend layout ──────────────────────── */
+
+.amina-gov-scope .gv-donut-wrap {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+.amina-gov-scope .gv-donut-center {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--gv-ink);
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+}
+.amina-gov-scope .gv-donut-legend {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12px;
+}
+.amina-gov-scope .gv-donut-legend-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.amina-gov-scope .gv-donut-legend-row .swatch {
+  width: 10px; height: 10px; border-radius: 2px;
+}
+.amina-gov-scope .gv-donut-legend-row .label { color: var(--gv-ink-2); }
+.amina-gov-scope .gv-donut-legend-row .value {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--gv-ink);
+  font-weight: 600;
+}
+
+/* ── Surveillance condition grid ────────────────── */
+
+.amina-gov-scope .gv-cond-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.amina-gov-scope .gv-cond-card {
+  padding: 14px 16px;
+  border: 1px solid var(--gv-rule);
+  border-radius: 10px;
+  background: var(--gv-card-soft);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.amina-gov-scope .gv-cond-card.alert {
+  border-color: rgba(185, 28, 28, 0.35);
+  background:
+    linear-gradient(180deg,
+      rgba(185, 28, 28, 0.04),
+      rgba(185, 28, 28, 0.01));
+}
+.amina-gov-scope .gv-cond-card-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.amina-gov-scope .gv-cond-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--gv-ink);
+  letter-spacing: 0.005em;
+}
+.amina-gov-scope .gv-cond-stats {
+  display: flex; gap: 14px;
+  font-size: 11px;
+  color: var(--gv-ink-3);
+  font-family: var(--a-font-mono, ui-monospace);
+}
+.amina-gov-scope .gv-cond-stats strong {
+  color: var(--gv-ink);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+/* ── Indicator gauge row ────────────────────────── */
+
+.amina-gov-scope .gv-gauge {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--gv-rule-2);
+}
+.amina-gov-scope .gv-gauge:last-child { border-bottom: none; }
+.amina-gov-scope .gv-gauge-label {
+  font-size: 12.5px;
+  color: var(--gv-ink);
+  font-weight: 500;
+}
+.amina-gov-scope .gv-gauge-value {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gv-ink);
+  font-variant-numeric: tabular-nums;
+}
+.amina-gov-scope .gv-gauge-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--gv-paper-3);
+  position: relative;
+  overflow: hidden;
+}
+.amina-gov-scope .gv-gauge-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--gv-blue-2);
+  transition: width 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.amina-gov-scope .gv-gauge-fill.ok    { background: var(--gv-ok); }
+.amina-gov-scope .gv-gauge-fill.warn  { background: var(--gv-warn); }
+.amina-gov-scope .gv-gauge-fill.alert { background: var(--gv-alert); }
+.amina-gov-scope .gv-gauge-target {
+  position: absolute; top: -2px; bottom: -2px;
+  width: 2px;
+  background: var(--gv-ink);
+  opacity: 0.5;
+}
+.amina-gov-scope .gv-gauge-caption {
+  grid-column: 1 / -1;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 10px;
+  color: var(--gv-ink-3);
+  display: flex; justify-content: space-between;
+  margin-top: 2px;
+}
+
+/* ── Regional map (redesigned) ─────────────────── */
+
+.amina-gov-scope .gv-map {
+  width: 100%;
+  height: 340px;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(30, 64, 175, 0.035), transparent 60%),
+    var(--gv-paper-2);
+  border-radius: 10px;
+  padding: 14px;
+}
+.amina-gov-scope .gv-map-legend {
+  display: flex; gap: 14px; align-items: center;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--gv-ink-3);
+}
+.amina-gov-scope .gv-map-legend .swatches {
+  display: inline-flex; border-radius: 3px; overflow: hidden;
+  border: 1px solid var(--gv-rule-3);
+}
+.amina-gov-scope .gv-map-legend .sw {
+  display: inline-block; width: 22px; height: 8px;
+}
+
+/* ── Methodology / notes block ─────────────────── */
+
+.amina-gov-scope .gv-note {
+  padding: 14px 18px;
+  background: var(--gv-paper-2);
+  border: 1px solid var(--gv-rule);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--gv-ink-2);
+  line-height: 1.6;
+}
+.amina-gov-scope .gv-note strong { color: var(--gv-ink); font-weight: 600; }
+.amina-gov-scope .gv-note code {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #fff;
+  border: 1px solid var(--gv-rule);
+  color: var(--gv-ink);
+}
+
+/* ── Report / digest document layout ───────────── */
+
+.amina-gov-scope .gv-doc {
+  background: #fff;
+  border: 1px solid var(--gv-rule);
+  border-radius: 10px;
+  padding: 44px 56px;
+  box-shadow: 0 2px 18px rgba(10, 21, 53, 0.05);
+}
+.amina-gov-scope .gv-doc-masthead {
+  text-align: center;
+  padding-bottom: 22px;
+  border-bottom: 2px solid var(--gv-ink);
+  margin-bottom: 24px;
+}
+.amina-gov-scope .gv-doc-crest {
+  width: 44px; height: 44px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, #1d4ed8, #1e3a8a);
+  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.25);
+}
+.amina-gov-scope .gv-doc-title {
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.005em;
+  color: var(--gv-ink);
+  margin: 0 0 6px;
+}
+.amina-gov-scope .gv-doc-org {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+}
+.amina-gov-scope .gv-doc-section {
+  margin-top: 20px;
+}
+.amina-gov-scope .gv-doc-section-title {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--gv-rule);
+  font-weight: 600;
+}
+
+/* ── Reports NL query ──────────────────────────── */
+
+.amina-gov-scope .gv-nlq {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 14px;
+  background: var(--gv-paper-2);
+  border: 1px solid var(--gv-rule);
+  border-radius: 10px;
+}
+.amina-gov-scope .gv-nlq input {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--gv-rule-3);
+  background: #fff;
+  color: var(--gv-ink);
+  font-family: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+.amina-gov-scope .gv-nlq input:focus {
+  border-color: var(--gv-blue-2);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.10);
+}
+.amina-gov-scope .gv-nlq-suggestions {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 10px;
+}
+.amina-gov-scope .gv-nlq-suggestion {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--gv-rule-3);
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 11px;
+  color: var(--gv-ink-2);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.amina-gov-scope .gv-nlq-suggestion:hover {
+  background: var(--gv-paper);
+  color: var(--gv-ink);
+}
+
+/* ── Replay log ─────────────────────────────────── */
+
+.amina-gov-scope .gv-replay-turn {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--gv-rule-2);
+}
+.amina-gov-scope .gv-replay-turn:last-child { border-bottom: none; }
+.amina-gov-scope .gv-replay-turn.assistant { background: var(--gv-paper-2); }
+.amina-gov-scope .gv-replay-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.amina-gov-scope .gv-replay-role {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gv-ink-3);
+  font-weight: 600;
+}
+.amina-gov-scope .gv-replay-body {
+  font-size: 13px;
+  color: var(--gv-ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.amina-gov-scope .gv-replay-tools {
+  margin-top: 8px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 11px;
+  color: var(--gv-ink-3);
+}
+
+/* ── Scrollbars ─────────────────────────────────── */
+
+.amina-gov-scope .gv-main::-webkit-scrollbar,
+.amina-gov-scope .gv-nav::-webkit-scrollbar { width: 10px; }
+.amina-gov-scope .gv-main::-webkit-scrollbar-thumb {
+  background: var(--gv-rule-3);
+  border-radius: 10px;
+  border: 2px solid var(--gv-paper);
+}
+.amina-gov-scope .gv-nav::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  border: 2px solid var(--gv-shell-bg);
+}
+
+/* ── Print styles ───────────────────────────────── */
+
+@media print {
+  .amina-gov-scope { position: static; display: block; background: #fff; color: #000; }
+  .amina-gov-scope .gv-side,
+  .amina-gov-scope .gv-topbar { display: none; }
+  .amina-gov-scope .gv-main   { padding: 0; overflow: visible; }
+  .amina-gov-scope .gv-main-inner { padding: 0; max-width: none; }
+  .amina-gov-scope .gv-panel { break-inside: avoid; box-shadow: none; }
+  .amina-gov-scope .gv-ribbon { display: none; }
+}

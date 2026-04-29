@@ -1,9 +1,60 @@
+# ─── Node / npm ──────────────────────────────────────────────────
 node_modules/
-.env
-.env.local
-.DS_Store
-*.log
-logs
-*.log.gz
+
+# ─── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Build outputs ───────────────────────────────────────────────
 dist/
 build/
+*.log
+*.log.gz
+logs/
+
+# ─── OS ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Model binaries (too big for git; rehydrate from sibling
+#     genie-ai-replica or download per setup docs). Keeping the
+#     directories themselves so bind-mounts have a target. ────────
+*.bin
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.gguf
+**/whispercpp/models/*.bin
+**/piper/models/*.onnx
+**/data/huggingface-cache/
+
+# ─── Local recovery / backup workspaces ──────────────────────────
+_local_backup/
+_recovery/
+haystack-stack/_recovery/
+haystack-stack/backups/
+
+# ─── Vite / Rollup caches ────────────────────────────────────────
+.vite/
+**/node_modules/.vite/
+
+# ─── Editor / IDE ────────────────────────────────────────────────
+.vscode/*.local
+.idea/
+
+# ─── DO commit .env files. Per project decision 2026-04-30 the
+#     `.env` files (including haystack-stack/.env) are committed
+#     so the AminaCare branch is self-contained for downstream
+#     deployers. Rotate keys whenever this branch is shared. ─────
+!.env
+!.env.*

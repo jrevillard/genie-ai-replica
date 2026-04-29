@@ -1,0 +1,43 @@
+# Optional GPU override for voice-stt.
+#
+# This file is OPT-IN. Plain `docker compose up` uses the CPU build and
+# requires NO GPU on the host. To enable GPU acceleration, layer this file
+# on top of the base compose:
+#
+#   docker compose -f components/docker-compose.yaml \
+#                  -f components/docker-compose.gpu.yml \
+#                  up voice-stt
+#
+# Prerequisites on the Docker host:
+#   - NVIDIA GPU + driver (verify with `nvidia-smi` on the host)
+#   - nvidia-container-toolkit installed and Docker daemon configured
+#     to expose the nvidia runtime
+#   - On Docker Desktop / WSL2: GPU support enabled in the Docker
+#     Desktop settings ("Settings -> Resources -> WSL Integration -> GPU")
+#
+# Behaviour:
+#   - The build target switches to `gpu-runtime`, which produces a larger
+#     image (~3 GB) containing BOTH the CPU and CUDA whisper-server binaries.
+#   - At container start, entrypoint.sh detects nvidia-smi + cuda binary
+#     and selects CUDA. If detection fails (e.g. no GPU on this host)
+#     and STT_BACKEND=auto (the default), it falls back to CPU silently.
+#     If STT_BACKEND=cuda is forced and GPU is missing, the container
+#     exits with code 2 unless STT_ALLOW_FALLBACK=true.
+
+services:
+  voice-stt:
+    build:
+      target: gpu-runtime
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      # auto already, but make it explicit so this file is self-documenting.
+      STT_BACKEND: "auto"
+      # Override to "cuda" if you want hard-fail on missing GPU.
+      # STT_BACKEND: "cuda"
+      # STT_ALLOW_FALLBACK: "false"

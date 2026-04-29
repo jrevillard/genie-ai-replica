@@ -1,0 +1,89 @@
+en_term,mnk_term,domain,do_not_translate
+blood pressure,yele fankoo,clinical,
+blood sugar,yele sukkaroo,clinical,
+blood glucose,yele sukkaroo,clinical,
+glucose,sukkaroo,clinical,
+sugar,sukkaroo,clinical,
+headache,kung dimi,clinical,
+fever,kandi jaatoo,clinical,
+pain,dimi,clinical,
+stomach,konoo,anatomy,
+abdomen,konoo,anatomy,
+abdominal pain,konoo dimi,clinical,
+stomach pain,konoo dimi,clinical,
+head,kungo,anatomy,
+body,balajaatoo,anatomy,
+breath,niijiyo,anatomy,
+breathing,niijiyo,clinical,
+blood,yeloo,anatomy,
+heart,jusoo,anatomy,
+illness,kuuraŋo,clinical,
+sickness,kuuraŋo,clinical,
+sick,saasaaringo,clinical,
+symptom,taamasiroo,clinical,
+symptoms,taamasiroolu,clinical,
+warning sign,taamasiroo,clinical,
+warning signs,taamasiroolu,clinical,
+diabetes,sukari-kuuraŋo,clinical,
+vomit,foonoo,clinical,
+vomiting,foonoo,clinical,
+nausea,jusu-koyaa,clinical,
+rapid,tariyaa,general,
+fast,tariyaa,general,
+medicine,saraabu,clinical,
+medication,saraabu,clinical,
+doctor,doktoro,clinical,
+nurse,sayifoo,clinical,
+clinic,saraabuubaa,clinical,
+hospital,saraabuubaa baa,clinical,
+health post,kendeyaa dulaa,clinical,
+nearest,sutiyaa la,general,
+emergency,sutoo kuuraŋo,clinical,
+medical emergency,saraabu sutoo,clinical,
+help,maakoyiroo,general,
+helping,maakoyiroo,general,
+water,jiyo,general,
+drink,miŋ,general,
+drinking,miŋ,general,
+food,domoroo,general,
+meal,domorisoo,general,
+meals,domorisiloolu,general,
+healthy,kendeyaa,general,
+health,kendeyaa,general,
+diet,domoroo siifaa,general,
+traditional,aadoo,general,
+moderation,kuliyaa,general,
+important,nafamaa,general,
+beneficial,nafaa,general,
+vital,nafamaa baa,general,
+plenty,siyaa,general,
+visit,naŋo,general,
+last visit,naŋo laban,clinical,
+check,kisikisi,clinical,
+monitor,kisikisiroo,clinical,
+community,kafoo,general,
+community health worker,kafoo kendeyaa dookuulaa,clinical,
+health worker,kendeyaa dookuulaa,clinical,
+pregnancy,konoto,clinical,
+child,diŋo,general,
+metformin,,medication,true
+amlodipine,,medication,true
+paracetamol,,medication,true
+insulin,,medication,true
+Banjul,,place,true
+EFSTH,,place,true
+Kanifing,,place,true
+benachin,,food,true
+domoda,,food,true
+supakanja,,food,true
+bissap,,food,true
+attaya,,food,true
+bouye,,food,true
+moringa,,food,true
+DKA,,clinical,true
+Diabetic Ketoacidosis,,clinical,true
+Ketoacidosis,,clinical,true
+hyperglycemia,,clinical,true
+hypoglycemia,,clinical,true
+mg/dL,,unit,true
+mmol/L,,unit,true

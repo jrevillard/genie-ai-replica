@@ -1,0 +1,136 @@
+services:
+
+  # ============================
+  # ArcadeDB (knowledge graph + vector store)
+  # ============================
+  arcadedb:
+    image: arcadedata/arcadedb:latest
+    container_name: arcadedb
+    restart: unless-stopped
+    ports:
+      - "2480:2480"
+      - "2424:2424"
+    environment:
+      JAVA_OPTS: >-
+        -Darcadedb.server.rootPassword=${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+        -Darcadedb.server.defaultDatabases=${ARCADEDB_DB:-genie}[root]
+      rootPassword: ${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+    volumes:
+      - arcadedb_data:/home/arcadedb/databases
+    # -- NEW: Health check (wget because ArcadeDB image has no curl) --
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2480/api/v1/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - chatqna_default
+
+
+  # ============================
+  # Whisper.cpp (STT)
+  # ============================
+  voice-stt:
+    image: ghcr.io/ggml-org/whisper.cpp:main
+    container_name: voice-stt
+    entrypoint: []
+    command: ["/app/build/bin/whisper-server", "-m", "/models/ggml-base.en.bin", "--host", "0.0.0.0", "--port", "8080"]
+    volumes:
+      - ../components/voice-gateway/infra/whispercpp/models:/models:ro
+    ports:
+      - "8087:8080"
+    restart: unless-stopped
+    # -- NEW: Health check --
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - chatqna_default
+
+
+  # ============================
+  # Piper TTS (Text-to-Speech)
+  # ============================
+  voice-tts:
+    build:
+      context: ./tts-service
+    container_name: voice-tts
+    restart: unless-stopped
+    environment:
+      PIPER_MODEL_PATH: /models/piper/en_US-lessac-medium.onnx
+    volumes:
+      - ../components/voice-gateway/infra/piper/models:/models/piper:ro
+    ports:
+      - "5500:5500"
+    # -- NEW: Health check (FastAPI /health endpoint) --
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5500/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - chatqna_default
+
+
+  # ============================
+  # Haystack ChatQnA (RAG + LLM - the brain)
+  # ============================
+  haystack-chatqna:
+    build:
+      context: ./haystack-chatqna
+    container_name: haystack-chatqna
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      # Google Gemini (kept as fallback)
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-}
+      # OpenAI (primary LLM)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      # ArcadeDB
+      ARCADEDB_HOST: arcadedb
+      ARCADEDB_PORT: 2480
+      ARCADEDB_URL: http://arcadedb:2480
+      ARCADEDB_DB: ${ARCADEDB_DB:-genie}
+      ARCADEDB_USER: root
+      ARCADEDB_PASSWORD: ${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+      # Whisper STT
+      WHISPER_URL: http://voice-stt:8080
+      # Piper TTS
+      TTS_URL: http://voice-tts:5500
+    # -- NEW: Health check (FastAPI /health endpoint, longer start for model loading) --
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    # -- NEW: Wait for all dependencies to be healthy before starting --
+    depends_on:
+      arcadedb:
+        condition: service_healthy
+      voice-stt:
+        condition: service_healthy
+      voice-tts:
+        condition: service_healthy
+    networks:
+      - chatqna_default
+
+
+volumes:
+  arcadedb_data:
+
+
+networks:
+  chatqna_default:
+    driver: bridge

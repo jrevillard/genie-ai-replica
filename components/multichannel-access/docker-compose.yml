@@ -1,0 +1,53 @@
+services:
+  # Redis (sessions, rate limiting)
+  redis:
+    image: redis:7-alpine
+    container_name: multichannel-redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - chatqna_default
+
+  # Multichannel Access (Telegram -> Haystack)
+  multichannel-access:
+    build:
+      context: .
+      dockerfile: docker/dockerfile
+    container_name: multichannel-access
+    env_file:
+      - .env
+    environment:
+      GATEWAY_URL: http://haystack-chatqna:8000
+      REDIS_URL: redis://redis:6379/0
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    ports:
+      - "8020:8020"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8020/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - chatqna_default
+
+volumes:
+  redis-data:
+
+networks:
+  chatqna_default:
+    name: haystack-stack_chatqna_default
+    external: true

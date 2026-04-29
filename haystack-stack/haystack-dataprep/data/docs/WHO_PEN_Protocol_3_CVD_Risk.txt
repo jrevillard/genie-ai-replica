@@ -1,0 +1,147 @@
+WHO PEN Protocol 3 — Cardiovascular Disease Risk Assessment and Management
+
+PROTOCOL 3: CVD RISK ASSESSMENT
+
+1. PURPOSE
+- Identify individuals at high risk of heart attack, stroke, and other cardiovascular events
+- Use WHO/ISH Cardiovascular Risk Prediction Charts for Sub-Saharan Africa
+- Target those who will benefit most from preventive treatment
+- Prioritize resources in low-resource settings like The Gambia
+
+2. WHO SHOULD BE ASSESSED
+- All adults aged 40+ years
+- Younger adults (30+) with: known hypertension, diabetes, smoking, family history of premature CVD
+- Anyone with symptoms suggestive of CVD: chest pain on exertion, shortness of breath, leg pain when walking
+
+3. RISK FACTORS ASSESSED
+a) Non-modifiable:
+   - Age (risk increases with age)
+   - Sex (men at higher risk, women catch up after menopause)
+   - Family history of premature CVD (father < 55, mother < 65)
+
+b) Modifiable:
+   - Smoking status (current smoker = highest risk multiplier)
+   - Blood pressure (measured at visit)
+   - Diabetes status (known diabetes or fasting glucose >= 126)
+   - Total cholesterol (if available — if not, use chart without cholesterol)
+   - Physical inactivity
+   - Unhealthy diet (high salt, high fat, low fruit/vegetable)
+   - Harmful alcohol use
+   - Overweight/obesity (BMI > 25)
+
+4. HOW TO USE WHO/ISH RISK CHARTS
+- Select chart for: Sub-Saharan Africa region
+- Find the panel matching: sex + diabetes status + smoking status
+- Cross-reference: age group (rows) × systolic BP (columns)
+- If cholesterol available: use chart WITH cholesterol column
+- If not available: use chart WITHOUT cholesterol
+- Color coding:
+  * GREEN (< 10%): LOW risk — lifestyle advice only
+  * YELLOW (10-20%): MODERATE risk — lifestyle + consider medication
+  * ORANGE (20-30%): HIGH risk — lifestyle + medication recommended
+  * RED (30-40%): HIGH risk — aggressive treatment needed
+  * DARK RED (> 40%): VERY HIGH risk — immediate treatment + referral
+
+5. MANAGEMENT BY RISK LEVEL
+
+LOW RISK (< 10%):
+- Lifestyle counseling every 12 months
+- Repeat risk assessment every 3-5 years
+- Address individual risk factors if present
+
+MODERATE RISK (10-20%):
+- Intensive lifestyle counseling
+- Treat hypertension if BP >= 140/90
+- Treat diabetes if present
+- Consider statin if cholesterol elevated
+- Repeat assessment annually
+
+HIGH RISK (20-30%):
+- All lifestyle interventions
+- Antihypertensive medication (target < 140/90, < 130/80 if diabetic)
+- Statin therapy (Simvastatin 20-40mg or Atorvastatin 10-20mg)
+- Aspirin 75-100mg daily (if no contraindications)
+- Diabetes treatment if present
+- Monitor every 3-6 months
+
+VERY HIGH RISK (> 30%) OR EXISTING CVD:
+- Maximum lifestyle interventions
+- Combination antihypertensive therapy
+- Statin therapy (higher dose if tolerated)
+- Aspirin 75-100mg daily
+- Diabetes treatment optimized
+- Consider referral to specialist
+- Monitor every 1-3 months
+
+6. STROKE RECOGNITION AND RESPONSE
+FAST Assessment:
+- Face: ask patient to smile. Does one side droop?
+- Arms: ask to raise both arms. Does one drift down?
+- Speech: ask to repeat a simple sentence. Is speech slurred or strange?
+- Time: if ANY of these signs → call 199 IMMEDIATELY
+
+Additional stroke signs: sudden severe headache, sudden confusion, sudden vision loss in one or both eyes, sudden difficulty walking or loss of balance
+
+POST-STROKE CARE:
+- Rehabilitation starts in hospital
+- Long-term: aspirin, statin, BP medication (ACEI preferred)
+- Target BP < 140/90 post-stroke
+- Monitor for depression (common after stroke)
+- Prevent recurrence: medication adherence + lifestyle changes
+
+7. HEART ATTACK RECOGNITION AND RESPONSE
+Symptoms: chest pain/pressure/tightness (may radiate to left arm, jaw, back), sweating, nausea, shortness of breath, feeling of doom
+- Some patients (especially women, diabetics, elderly) may have ATYPICAL symptoms: just nausea, fatigue, or upper back pain
+
+IMMEDIATE ACTION:
+- Call 199 or go to nearest hospital (EFSTH) IMMEDIATELY
+- Chew one Aspirin 300mg if available (not swallow — chew for faster absorption)
+- Sit upright, stay calm
+- Do NOT lie flat
+- Do NOT drive yourself — have someone drive you or wait for ambulance
+
+8. PERIPHERAL VASCULAR DISEASE
+- Symptoms: leg pain when walking (claudication) that improves with rest
+- Advanced: pain at rest, non-healing wounds on feet/legs, colour changes
+- Risk factors: same as CVD (smoking is the strongest)
+- Management: stop smoking (critical), walking exercise program, aspirin, statin
+- Referral: if rest pain, non-healing ulcers, or gangrene
+
+9. PREVENTION STRATEGIES FOR THE GAMBIAN CONTEXT
+Diet:
+- Reduce salt: half Maggi cube, less dried/salted fish, rinse preserved foods
+- Reduce fat: less palm oil in cooking, grill or steam instead of fry
+- Increase fish: fresh fish 2-3 times per week (omega-3 protection)
+- Increase vegetables: moringa, okra, bitter leaf, sweet potato leaves
+- Whole grains: millet (chere), fonio over white rice
+- Fruits: mango, papaya, orange, banana, baobab (bouye)
+- Healthy drinks: bissap (hibiscus), ginger water, baobab juice
+
+Exercise:
+- Walking to market, farming, household chores all count
+- Aim for 30 minutes of brisk activity most days
+- Even 10-minute walks 3 times daily is beneficial
+- Avoid heavy exertion in peak heat (noon to 3pm)
+
+Smoking:
+- Tobacco use is the single most modifiable CVD risk factor
+- Quitting at any age reduces risk significantly
+- After 1 year smoke-free: CVD risk drops by 50%
+- After 5 years: stroke risk drops to near non-smoker level
+- Support: 5As approach (Ask, Advise, Assess, Assist, Arrange follow-up)
+
+10. REFERRAL CRITERIA
+- 10-year CVD risk > 30%
+- Existing CVD (previous heart attack, stroke, TIA)
+- BP not controlled on 3 medications
+- Suspected familial hypercholesterolemia
+- Young patient (< 40) with CVD event
+- Chest pain on exertion (needs cardiac evaluation)
+
+GAMBIAN CONTEXT:
+- WHO/ISH charts for AFR-D region (Sub-Saharan Africa, high adult mortality)
+- Cholesterol testing limited to regional hospitals — use non-laboratory charts at health post level
+- Aspirin and Simvastatin available on essential medicines list
+- EFSTH has ECG and basic cardiac care capability
+- CVD is the leading cause of death globally and rising rapidly in The Gambia due to urbanization and dietary changes
+- Traditional cardiovascular protective factors in Gambian diet: fish consumption, physical labor, community social support

@@ -1,0 +1,181 @@
+WHO PEN Protocol 5 — Early Detection and Referral of Cancer
+
+PROTOCOL 5: CANCER SCREENING AND EARLY DETECTION
+
+1. PURPOSE
+- Cancer is increasingly common in The Gambia due to aging population and lifestyle changes
+- Early detection dramatically improves survival for many cancer types
+- Health workers at primary care level can identify warning signs and refer promptly
+- Focus on cancers that can be detected early: cervical, breast, oral, and common childhood cancers
+
+2. GENERAL CANCER WARNING SIGNS (Red Flags)
+Any of these should prompt referral for investigation:
+- Unexplained weight loss (more than 5kg in 1-2 months without trying)
+- Persistent fatigue not explained by other conditions
+- Unexplained pain that persists for more than 2-3 weeks
+- Lump or thickening anywhere on the body that is new or growing
+- Wound or sore that does not heal within 3 weeks
+- Unusual bleeding or discharge
+- Change in bowel or bladder habits lasting more than 2 weeks
+- Difficulty swallowing that persists
+- Persistent hoarseness or cough lasting more than 3 weeks
+- Change in appearance of a mole or skin lesion
+- Night sweats (drenching, not related to hot weather)
+
+3. CERVICAL CANCER
+
+Risk factors:
+- HPV infection (human papillomavirus) — main cause
+- Early sexual debut (before age 18)
+- Multiple sexual partners
+- HIV infection
+- Smoking
+- Not being screened previously
+- Immunosuppression
+
+Warning signs (refer immediately):
+- Post-coital bleeding (bleeding after sexual intercourse)
+- Abnormal vaginal bleeding (between periods, after menopause)
+- Persistent vaginal discharge (especially foul-smelling or blood-stained)
+- Pelvic pain (persistent)
+- Pain during intercourse
+
+Screening:
+- WHO recommends screening all women aged 30-49 (can extend to 25-65 in high-risk populations)
+- VIA (Visual Inspection with Acetic Acid): available at health centre level
+  * Apply 3-5% acetic acid to cervix, wait 1 minute
+  * White areas (acetowhite) suggest pre-cancerous changes
+  * Positive VIA → immediate cryotherapy or LEEP (if available) or refer
+- HPV testing: more sensitive, available at some facilities
+- Pap smear: requires lab processing — available at regional hospitals
+
+Prevention:
+- HPV vaccination: WHO recommends for girls aged 9-14 (before sexual debut)
+- The Gambia has introduced HPV vaccination in its national immunization program
+- Screening every 3-5 years for VIA-negative women
+- Condom use reduces HPV transmission risk
+
+Treatment of pre-cancer:
+- Cryotherapy: freezing treatment at health centre, done same day as VIA (screen-and-treat approach)
+- LEEP: loop electrosurgical excision — available at some hospitals
+- Early invasive cancer: needs surgery and/or radiotherapy at EFSTH or abroad
+
+4. BREAST CANCER
+
+Risk factors:
+- Age (risk increases after 40)
+- Family history (mother, sister with breast cancer)
+- Early menarche (first period before age 12) or late menopause
+- Never breastfed
+- Obesity (especially after menopause)
+- Hormonal contraceptive use (slight increase)
+- Alcohol use
+
+Warning signs (refer immediately):
+- New lump in breast or armpit (painless lumps are MORE concerning than painful ones)
+- Change in breast size or shape
+- Skin changes: dimpling, puckering, redness, orange-peel texture
+- Nipple changes: inversion, discharge (especially bloody), rash on nipple
+- Persistent breast pain (especially if one-sided)
+
+Clinical Breast Examination (CBE):
+- Should be performed by trained health worker at every visit for women 30+
+- Systematic inspection and palpation of both breasts and axillae
+- Patient examined in sitting and supine positions
+- ANY suspicious finding → refer for further investigation (ultrasound, biopsy)
+
+Breast Self-Examination:
+- Teach all women to examine their breasts monthly
+- Best time: 5-7 days after start of period (when breasts are least lumpy)
+- Look in mirror: arms at sides, then raised, then on hips — check for changes
+- Feel: use pads of three middle fingers, circular motion, cover entire breast + armpit
+- Report any change to health worker promptly
+- Most lumps are NOT cancer — but all should be checked
+
+Treatment:
+- Depends on stage — surgery, chemotherapy, radiotherapy, hormonal therapy
+- Early-stage breast cancer has 5-year survival > 90% with treatment
+- Late-stage: much lower survival — emphasizes importance of early detection
+- Treatment available at EFSTH and referral abroad for complex cases
+
+5. ORAL CANCER
+
+Risk factors:
+- Tobacco use (smoking AND chewing)
+- Betel nut chewing (less common in Gambia)
+- Heavy alcohol use
+- HPV infection
+- Poor oral hygiene
+- Sun exposure (lip cancer)
+
+Warning signs:
+- White or red patch in mouth that doesn't go away in 2 weeks
+- Sore or ulcer in mouth that doesn't heal in 3 weeks
+- Persistent sore throat or feeling of something stuck
+- Difficulty chewing or moving tongue
+- Numbness in mouth or lips
+- Lump in neck
+- Loose teeth without dental cause
+- Jaw swelling
+
+Action: Any of these lasting > 2-3 weeks → refer to hospital for biopsy
+
+6. CHILDHOOD CANCERS
+Common childhood cancers that present at primary care:
+- Burkitt lymphoma: rapidly growing jaw or abdominal mass (common in Sub-Saharan Africa, linked to malaria and EBV)
+- Retinoblastoma: white pupil reflex (cat's eye), squinting — check with torch/flashlight
+- Wilms tumor: abdominal mass in child, often painless
+- Leukemia: persistent fever, pallor, bruising, bone pain, enlarged lymph nodes
+
+Red flags in children (refer urgently):
+- Unexplained weight loss
+- Persistent fever > 2 weeks not responding to malaria/antibiotic treatment
+- Unusual bruising or bleeding
+- Persistent bone/joint pain
+- Growing lump or mass
+- White reflex in eye (check with torch)
+- Persistent headache with vomiting (especially morning)
+- Night sweats
+
+7. CANCER AND NCD OVERLAP
+- Diabetes increases risk of: liver, pancreatic, colorectal, breast, bladder cancer
+- Hypertension increases risk of: kidney cancer
+- Obesity increases risk of: many cancers (breast, colorectal, endometrial, kidney, liver)
+- Smoking increases risk of: lung, bladder, cervical, oral, pancreatic, kidney cancer
+- NCD lifestyle interventions (healthy diet, exercise, no tobacco) also PREVENT cancer
+
+8. PAIN MANAGEMENT IN CANCER
+WHO Pain Ladder:
+Step 1 (mild pain): Paracetamol 500-1000mg every 6 hours, Ibuprofen 400mg every 8 hours
+Step 2 (moderate pain): Add Codeine or Tramadol
+Step 3 (severe pain): Oral Morphine (needs prescription, may be limited availability)
+
+IMPORTANT: Cancer pain should be treated. Patients should not suffer in silence.
+Refer to hospital if pain is not controlled with Step 1-2 medications.
+
+9. PSYCHOSOCIAL SUPPORT
+- Cancer diagnosis causes significant psychological distress
+- Acknowledge fear and grief — listen without rushing
+- Involve family with patient's permission
+- Connect with cancer support groups if available
+- Spiritual support (Imam, pastor) if patient requests
+- Address practical concerns: cost of treatment, transport, childcare
+- Palliative care discussion when appropriate — focus on comfort and dignity
+
+10. REFERRAL PATHWAY
+- Health post/CHW → Health centre (VIA, CBE, general examination)
+- Health centre → Regional hospital (ultrasound, basic lab tests, biopsy)
+- Regional hospital → EFSTH (surgery, pathology, chemotherapy)
+- EFSTH → Abroad (radiotherapy, complex surgery — if funding available)
+
+GAMBIAN CONTEXT:
+- Cervical cancer is the most common cancer in Gambian women
+- Breast cancer is the second most common
+- HPV vaccination program introduced for girls aged 9-14
+- VIA screening available at some health centres — expanding
+- EFSTH has surgical capability and basic chemotherapy
+- Radiotherapy NOT available in Gambia — patients referred abroad (Senegal, Morocco)
+- MRC Gambia at Fajara conducts cancer research — may have clinical trials
+- Cancer Society of The Gambia provides some support services
+- Traditional healers often first point of contact — encourage patients to ALSO seek medical evaluation
+- Late presentation is common — community education is critical

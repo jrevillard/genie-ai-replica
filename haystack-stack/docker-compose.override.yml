@@ -1,0 +1,374 @@
+# AMINA Care — compose override
+# ==============================
+# Bind-mounts the additive guard + training-consent + literacy files
+# into haystack-chatqna without rebuilding the image, and swaps the
+# uvicorn entry point to the combined shim.
+#
+# Layers installed by this override:
+#   1. Overflow guard   — pre-trim + retry-on-overflow for OpenAI clients
+#   2. Training consent — consent store + export endpoints
+#   3. Literacy mode    — education-level verification + 3 literacy modes
+#   4. Arcade db issues - error handling for DHIS2 and supply ledger + caregiver inbox
+# Persistent host dirs:
+#   ./training_exports   → /app/training/collected   (JSONL exports)
+#   ./education_certs    → /app/data/education_certs (uploaded certs)
+#
+# Entry:
+#   src.main_with_rag_tuning:app   (replaces src.main:app)
+
+services:
+  voice-stt:
+    # --threads 4 matches the 4-CPU cap below. Doubled from the
+    # original 2/2 config to roughly halve transcription latency
+    # without changing the model.
+    # Switched from small.en (488 MB, ~5.3 s for 1 s audio) to
+    # base.en (148 MB, ~1.5–2 s for 1 s audio) on 2026-04-30 to
+    # cut perceived voice-input latency. Accuracy hit is small for
+    # conversational health questions; trade-off chosen for UX.
+    # Compression-bomb attacks are blocked upstream by stt_upload_guard
+    # (8 MB) + stt_duration_guard (6 min) + rate_limiter (30/min/IP),
+    # so the larger CPU surface area cannot be weaponized.
+    command: ["/app/build/bin/whisper-server", "-m", "/models/ggml-base.en.bin", "--host", "0.0.0.0", "--port", "8080", "--threads", "4"]
+    # ── Phase 1 (revised): cap voice-stt at 4 CPUs / 3 GB. Still
+    #    bounded so it cannot swamp the 16-core host, but big enough
+    #    that whisper-small.en runs at usable speed on real audio.
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 3G
+  voice-tts:
+    # Cap TTS at 1 CPU/1GB — long synthesis spikes shouldn't starve others.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+  voice-tts-mnk:
+    volumes:
+      - ./tts-mms-service/server.py:/app/server.py:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+  dataprep-worker:
+    # PDF/docling ingestion can spike CPU on large documents.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+  arcadedb:
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+  haystack-chatqna:
+    # Phase 1: cap the heavy hitter at 6 CPUs / 5GB. Allows 4 uvicorn
+    # workers room to breathe while leaving headroom for voice-stt + TTS
+    # + dataprep on the 16-core host.
+    deploy:
+      resources:
+        limits:
+          cpus: "6.0"
+          memory: 5G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      PYTHONPATH: /app/src
+      REDIS_HOST: amina-redis
+      # LLM fallback policy (see services/llm_provider_policy.py)
+      LLM_FALLBACK_MODE:        ${LLM_FALLBACK_MODE:-warn}
+      SHOW_LLM_PROVIDER_BADGE:  ${SHOW_LLM_PROVIDER_BADGE:-true}
+      AMINA_REQUIRE_LORA:       ${AMINA_REQUIRE_LORA:-false}
+      AMINA_REQUIRE_LORA_FOR_GUEST: ${AMINA_REQUIRE_LORA_FOR_GUEST:-false}
+      # LoRA is disabled for maintenance — its cloudflared tunnel is down
+      # and waiting for the LoRA timeout adds 10-15s per turn before
+      # falling back. Hard-coded to "false" (no ${...} substitution) so
+      # this override beats whatever haystack-stack/.env says. Re-enable
+      # by flipping back to "true" here AND putting amina-lora back
+      # in LLM_FALLBACK_CHAIN once the LoRA endpoint is healthy.
+      USE_FINETUNED_MODEL:      "false"
+      LLM_FALLBACK_CHAIN:       "mistral,groq,gemini,base"
+      # Mistral AI (OpenAI-compatible API). Set MISTRAL_API_KEY in your
+      # .env to activate. open-mistral-7b is free-tier and fast.
+      MISTRAL_API_KEY:          ${MISTRAL_API_KEY:-}
+      MISTRAL_BASE_URL:         ${MISTRAL_BASE_URL:-https://api.mistral.ai/v1}
+      MISTRAL_MODEL:            ${MISTRAL_MODEL:-open-mistral-7b}
+      # AMINA Mistral -- locally fine-tuned Mistral-7B-Instruct-v0.3 served
+      # by vLLM on the GPU box (e.g. amina-a40), exposed via Tailscale Funnel.
+      # When AMINA_MISTRAL_BASE_URL is unset the client is not initialised
+      # and model_preference="amina-mistral" falls through to the standard
+      # fallback chain. Set in haystack-stack/.env once vLLM is up.
+      AMINA_MISTRAL_API_KEY:    ${AMINA_MISTRAL_API_KEY:-}
+      AMINA_MISTRAL_BASE_URL:   ${AMINA_MISTRAL_BASE_URL:-}
+      AMINA_MISTRAL_MODEL:      ${AMINA_MISTRAL_MODEL:-amina-mistral}
+      # Agent Platform v1 — DEFAULT IS OFF.
+      # Recommended staged rollout (see docs/AGENT_PLATFORM_V1.md):
+      #   1. AMINA_AGENTIC_MODE=shadow  + MODES_ALLOWED=advanced  (observe 2-4w)
+      #   2. AMINA_AGENTIC_MODE=assist  + MODES_ALLOWED=advanced  (advanced only)
+      #   3. expand MODES_ALLOWED=advanced,basic later if metrics support it
+      AMINA_AGENTIC_MODE:           ${AMINA_AGENTIC_MODE:-off}
+      AMINA_AGENTIC_MODES_ALLOWED:  ${AMINA_AGENTIC_MODES_ALLOWED:-advanced}
+      AMINA_AGENTIC_MAX_TOOL_CALLS: ${AMINA_AGENTIC_MAX_TOOL_CALLS:-3}
+      AMINA_AGENTIC_MAX_PLANNING_ROUNDS: ${AMINA_AGENTIC_MAX_PLANNING_ROUNDS:-1}
+      AMINA_AGENTIC_TRACE_ENABLED:  ${AMINA_AGENTIC_TRACE_ENABLED:-true}
+      AMINA_AGENTIC_FAIL_OPEN:      ${AMINA_AGENTIC_FAIL_OPEN:-true}
+      AMINA_AGENTIC_PROVIDER:       ${AMINA_AGENTIC_PROVIDER:-auto}
+      # Phase 2: native function-calling. DEFAULT IS OFF.
+      # Phase 4 staging recipe (set via env or .env, do not hard-code here):
+      #   AMINA_AGENTIC_MODE=shadow
+      #   AMINA_AGENTIC_NATIVE_TOOLS=true
+      #   AMINA_AGENTIC_NATIVE_FORMAT=openai
+      AMINA_AGENTIC_NATIVE_TOOLS:   ${AMINA_AGENTIC_NATIVE_TOOLS:-false}
+      AMINA_AGENTIC_NATIVE_FORMAT:  ${AMINA_AGENTIC_NATIVE_FORMAT:-auto}
+      # Evidence Layer — DEFAULT IS OFF (admin must toggle ON via UI).
+      # See docs/EVIDENCE_LAYER.md for the full lifecycle.
+      AMINA_EVIDENCE_LAYER_DEFAULT: ${AMINA_EVIDENCE_LAYER_DEFAULT:-off}
+      AMINA_EVIDENCE_TRACE_ENABLED: ${AMINA_EVIDENCE_TRACE_ENABLED:-true}
+      AMINA_EVIDENCE_EVAL_ENABLED:  ${AMINA_EVIDENCE_EVAL_ENABLED:-true}
+      AMINA_EVIDENCE_FAIL_OPEN:     ${AMINA_EVIDENCE_FAIL_OPEN:-true}
+      AMINA_EVIDENCE_STORE:         ${AMINA_EVIDENCE_STORE:-redis}
+      AMINA_EVIDENCE_HASH_SALT:     ${AMINA_EVIDENCE_HASH_SALT:-amina-evidence-v1}
+      AMINA_EVIDENCE_REPORTS_DIR:   ${AMINA_EVIDENCE_REPORTS_DIR:-/app/reports/evidence}
+      AMINA_EVIDENCE_EVAL_TIMEOUT_S: ${AMINA_EVIDENCE_EVAL_TIMEOUT_S:-30}
+      AMINA_EVIDENCE_EVAL_CONCURRENCY: ${AMINA_EVIDENCE_EVAL_CONCURRENCY:-2}
+      # Meta channels (WhatsApp Business Cloud + Facebook Messenger).
+      # All defaults are empty → routes mount in DEMO MODE (signature
+      # verification bypassed, no outbound replies). Layer the
+      # docker-compose.meta-channels.yml override (or set these in
+      # your .env) to bring the channels live with real credentials.
+      MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:-}
+      MESSENGER_VERIFY_TOKEN:      ${MESSENGER_VERIFY_TOKEN:-amina_health_2026}
+      MESSENGER_APP_SECRET:        ${MESSENGER_APP_SECRET:-}
+      WHATSAPP_ACCESS_TOKEN:       ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID:    ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_VERIFY_TOKEN:       ${WHATSAPP_VERIFY_TOKEN:-amina_health_2026}
+      WHATSAPP_APP_SECRET:         ${WHATSAPP_APP_SECRET:-}
+      META_GRAPH_VERSION:          ${META_GRAPH_VERSION:-v19.0}
+      # Twilio WhatsApp Sandbox MVP adapter (independent of Meta WhatsApp).
+      # Sandbox doesn't require auth-token for inbound TwiML reply; only
+      # set these when you flip TWILIO_VALIDATE_SIGNATURE=true.
+      TWILIO_AUTH_TOKEN:           ${TWILIO_AUTH_TOKEN:-}
+      # ACCOUNT_SID enables async-via-REST mode (recommended): on inbound
+      # webhook we ack with empty TwiML in <100ms and POST the actual
+      # reply to Twilio's REST API. Sidesteps Twilio's 15s webhook
+      # timeout (error 11200) on slow agent turns. Without ACCOUNT_SID
+      # the route falls back to sync TwiML mode (timeout-prone).
+      TWILIO_ACCOUNT_SID:          ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_VALIDATE_SIGNATURE:   ${TWILIO_VALIDATE_SIGNATURE:-false}
+      # Agent-call shaping: match the response style web "Advanced mode"
+      # produces. Without these, inbound gets the guest greeting path.
+      TWILIO_AGENT_USER_ROLE:        ${TWILIO_AGENT_USER_ROLE:-patient}
+      # Default flipped from amina-lora -> mistral while LoRA is in
+      # maintenance. Set explicitly via .env once LoRA endpoint is back.
+      TWILIO_AGENT_MODEL_PREFERENCE: ${TWILIO_AGENT_MODEL_PREFERENCE:-mistral}
+      TWILIO_AGENT_CHANNEL:          ${TWILIO_AGENT_CHANNEL:-twilio_whatsapp}
+    volumes:
+      # ── Overflow guard ───────────────────────────────────────────────
+      - ./haystack-chatqna/src/services/overflow_guard.py:/app/src/services/overflow_guard.py:ro
+      - ./haystack-chatqna/src/services/overflow_guard_patch.py:/app/src/services/overflow_guard_patch.py:ro
+      - ./haystack-chatqna/src/main_with_guard.py:/app/src/main_with_guard.py:ro
+      # ── Training consent + export ────────────────────────────────────
+      - ./haystack-chatqna/src/services/training_consent.py:/app/src/services/training_consent.py:ro
+      - ./haystack-chatqna/src/services/training_export.py:/app/src/services/training_export.py:ro
+      - ./haystack-chatqna/src/api/training_routes.py:/app/src/api/training_routes.py:ro
+      - ./haystack-chatqna/src/main_with_training.py:/app/src/main_with_training.py:ro
+      # ── Literacy mode + verification ─────────────────────────────────
+      - ./haystack-chatqna/src/services/literacy_service.py:/app/src/services/literacy_service.py:ro
+      - ./haystack-chatqna/src/services/certificate_storage.py:/app/src/services/certificate_storage.py:ro
+      - ./haystack-chatqna/src/api/literacy_routes.py:/app/src/api/literacy_routes.py:ro
+      - ./haystack-chatqna/src/main_with_literacy.py:/app/src/main_with_literacy.py:ro
+      # ── Care routes (supply + dual-path role rules + dev override) ──
+      # Added 2026-04-30 so role-rule changes (CAREPATH_WRITE_ROLES,
+      # CARE_TRUST_BODY_ROLE) take effect on restart without rebuilding
+      # the haystack-chatqna image.
+      - ./haystack-chatqna/src/api/care_routes.py:/app/src/api/care_routes.py:ro
+      - ./haystack-chatqna/src/api/supply_ledger_routes.py:/app/src/api/supply_ledger_routes.py:ro
+      - ./haystack-chatqna/src/api/dualpath_ledger_routes.py:/app/src/api/dualpath_ledger_routes.py:ro
+      # ── DHIS2 routes (DHIS2_DEV_ADMIN_BYPASS) ────────────────────────
+      - ./haystack-chatqna/src/api/dhis2_routes.py:/app/src/api/dhis2_routes.py:ro
+      - ./haystack-chatqna/src/api/dhis2_history_routes.py:/app/src/api/dhis2_history_routes.py:ro
+      # ── Guest / free-tier chat gating + translator doc i18n ─────────
+      - ./haystack-chatqna/src/api/agent_routes.py:/app/src/api/agent_routes.py:ro
+      - ./haystack-chatqna/src/services/document_gen.py:/app/src/services/document_gen.py:ro
+      - ./haystack-chatqna/src/services/translator.py:/app/src/services/translator.py:ro
+      - ./haystack-chatqna/src/services/repetition_guard.py:/app/src/services/repetition_guard.py:ro
+      - ./haystack-chatqna/src/agent/amina_agent.py:/app/src/agent/amina_agent.py:ro
+      # ── Intent router + learner + conversational pacer + gap-closers ─
+      - ./haystack-chatqna/src/services/intent_router.py:/app/src/services/intent_router.py:ro
+      - ./haystack-chatqna/src/services/intent_learner.py:/app/src/services/intent_learner.py:ro
+      - ./haystack-chatqna/src/services/conversational_pacer.py:/app/src/services/conversational_pacer.py:ro
+      - ./haystack-chatqna/src/services/stance_classifier.py:/app/src/services/stance_classifier.py:ro
+      - ./haystack-chatqna/src/services/intent_pattern_graph.py:/app/src/services/intent_pattern_graph.py:ro
+      - ./haystack-chatqna/src/services/four_layer_router.py:/app/src/services/four_layer_router.py:ro
+      - ./haystack-chatqna/src/services/density_compressor.py:/app/src/services/density_compressor.py:ro
+      - ./haystack-chatqna/src/services/response_shaper.py:/app/src/services/response_shaper.py:ro
+      - ./haystack-chatqna/src/services/safety_contract.py:/app/src/services/safety_contract.py:ro
+      # ── Caregiver intelligence pipeline ──────────────────────────────
+      - ./haystack-chatqna/src/services/caregiver_amina_service.py:/app/src/services/caregiver_amina_service.py:ro
+      - ./haystack-chatqna/src/services/caregiver_alert_chat.py:/app/src/services/caregiver_alert_chat.py:ro
+      # ── Admin + Gov materialized-view routes ───────────────────────
+      - ./haystack-chatqna/src/api/admin_mv_routes.py:/app/src/api/admin_mv_routes.py:ro
+      # ── Patient AMINA ID routes ────────────────────────────────────
+      - ./haystack-chatqna/src/api/patient_id_routes.py:/app/src/api/patient_id_routes.py:ro
+      # ── Intent review admin API ─────────────────────────────────────
+      - ./haystack-chatqna/src/api/intent_review_routes.py:/app/src/api/intent_review_routes.py:ro
+      - ./haystack-chatqna/src/main_with_intent_review.py:/app/src/main_with_intent_review.py:ro
+      # ── STT logging fix ───────────────────────────────────────────────
+      - ./haystack-chatqna/src/main_with_stt_fix.py:/app/src/main_with_stt_fix.py:ro
+      # ── RAG tuning (grounded prompts, score threshold, weighted RRF) ──
+      - ./haystack-chatqna/src/services/rag_tuner.py:/app/src/services/rag_tuner.py:ro
+      - ./haystack-chatqna/src/services/rag_eval.py:/app/src/services/rag_eval.py:ro
+      - ./haystack-chatqna/src/main_with_rag_tuning.py:/app/src/main_with_rag_tuning.py:ro
+      # ── Clinical validation (benchmark + eval runner + outcome dashboard) ──
+      - ./haystack-chatqna/eval:/app/eval:ro
+      - ./haystack-chatqna/src/services/clinical_outcome_dashboard.py:/app/src/services/clinical_outcome_dashboard.py:ro
+      - ./haystack-chatqna/src/api/clinical_outcome_routes.py:/app/src/api/clinical_outcome_routes.py:ro
+      # ── Re-ranker registry + feedback + fine-tuning ──────────────────
+      - ./haystack-chatqna/src/services/reranker_registry.py:/app/src/services/reranker_registry.py:ro
+      - ./haystack-chatqna/src/services/reranker_feedback.py:/app/src/services/reranker_feedback.py:ro
+      - ./haystack-chatqna/training/finetune_reranker.py:/app/training/finetune_reranker.py:ro
+      # ── Safety consensus context patch (lifestyle false-positive fix) ──
+      - ./haystack-chatqna/src/services/safety_consensus_patch.py:/app/src/services/safety_consensus_patch.py:ro
+      # ── NLP negation-aware symptom detection ───────────────────────────
+      - ./haystack-chatqna/src/services/negation_detector.py:/app/src/services/negation_detector.py:ro
+      - ./haystack-chatqna/src/services/negation_patch.py:/app/src/services/negation_patch.py:ro
+      # ── Topic anchor (prevents drift on ambiguous messages) ────────────
+      - ./haystack-chatqna/src/services/topic_anchor.py:/app/src/services/topic_anchor.py:ro
+      - ./haystack-chatqna/src/services/topic_anchor_patch.py:/app/src/services/topic_anchor_patch.py:ro
+      # ── SSE streaming chat endpoint ────────────────────────────────────
+      - ./haystack-chatqna/src/api/streaming_routes.py:/app/src/api/streaming_routes.py:ro
+      # ── Scout directory (patient-facing browse + suggestions) ──────────
+      - ./haystack-chatqna/src/services/scout_directory_service.py:/app/src/services/scout_directory_service.py:ro
+      - ./haystack-chatqna/src/api/scout_directory_routes.py:/app/src/api/scout_directory_routes.py:ro
+      # ── Translation v3 (phrase bank + quality gate + bilingual builder) ─
+      - ./haystack-chatqna/src/services/mandinka_phrases.py:/app/src/services/mandinka_phrases.py:ro
+      - ./haystack-chatqna/src/services/translation_gate.py:/app/src/services/translation_gate.py:ro
+      - ./haystack-chatqna/src/services/bilingual_response.py:/app/src/services/bilingual_response.py:ro
+      - ./haystack-chatqna/src/services/translation_v3_integration.py:/app/src/services/translation_v3_integration.py:ro
+      - ./haystack-chatqna/src/services/diet_plan_fix.py:/app/src/services/diet_plan_fix.py:ro
+      # ── Conversation → inbox linker ────────────────────────────────────
+      - ./haystack-chatqna/src/services/conversation_inbox_link.py:/app/src/services/conversation_inbox_link.py:ro
+      # ── Summary backfill + fallback (extractive when LLM quota exhausted) ─
+      - ./haystack-chatqna/src/services/summary_backfill.py:/app/src/services/summary_backfill.py:ro
+      # ── NLP download intent detection (broadened export triggers) ──────
+      - ./haystack-chatqna/src/services/download_intent_patch.py:/app/src/services/download_intent_patch.py:ro
+      # ── Mandinka 6-layer NLP pipeline ──────────────────────────────────
+      - ./haystack-chatqna/src/nlp/__init__.py:/app/src/nlp/__init__.py:ro
+      - ./haystack-chatqna/src/nlp/mandinka_spellcheck.py:/app/src/nlp/mandinka_spellcheck.py:ro
+      - ./haystack-chatqna/src/nlp/code_switch_detector.py:/app/src/nlp/code_switch_detector.py:ro
+      - ./haystack-chatqna/src/nlp/medical_ner.py:/app/src/nlp/medical_ner.py:ro
+      - ./haystack-chatqna/src/nlp/manding_transfer.py:/app/src/nlp/manding_transfer.py:ro
+      - ./haystack-chatqna/src/nlp/mandinka_sentiment.py:/app/src/nlp/mandinka_sentiment.py:ro
+      - ./haystack-chatqna/src/nlp/intent_normalizer.py:/app/src/nlp/intent_normalizer.py:ro
+      - ./haystack-chatqna/src/nlp/translation_corrector.py:/app/src/nlp/translation_corrector.py:ro
+      - ./haystack-chatqna/src/nlp/mandinka_temporal.py:/app/src/nlp/mandinka_temporal.py:ro
+      - ./haystack-chatqna/src/nlp/notification_intent.py:/app/src/nlp/notification_intent.py:ro
+      - ./haystack-chatqna/src/services/nlp_pipeline_integration.py:/app/src/services/nlp_pipeline_integration.py:ro
+      # ── Caregiver registration v2 (multi-role, Alkalo SMS, approval chain) ──
+      - ./haystack-chatqna/src/models/caregiver_roles.py:/app/src/models/caregiver_roles.py:ro
+      - ./haystack-chatqna/src/api/caregiver_registration_v2_routes.py:/app/src/api/caregiver_registration_v2_routes.py:ro
+      - ./haystack-chatqna/src/services/alkalo_verification.py:/app/src/services/alkalo_verification.py:ro
+      - ./haystack-chatqna/src/services/caregiver_registration_notifications.py:/app/src/services/caregiver_registration_notifications.py:ro
+      # ── Observatory gov auth (triple-factor + OTP + RBAC + audit) ────
+      - ./haystack-chatqna/src/models/gov_auth.py:/app/src/models/gov_auth.py:ro
+      - ./haystack-chatqna/src/services/observatory_security.py:/app/src/services/observatory_security.py:ro
+      - ./haystack-chatqna/src/services/observatory_rbac.py:/app/src/services/observatory_rbac.py:ro
+      - ./haystack-chatqna/src/api/observatory_auth.py:/app/src/api/observatory_auth.py:ro
+      - ./haystack-chatqna/src/api/observatory_admin.py:/app/src/api/observatory_admin.py:ro
+      # ── Observatory phone-auth (Live: phone + OTP + 4-digit PIN, 3 super-admins) ──
+      - ./haystack-chatqna/src/models/phone_auth.py:/app/src/models/phone_auth.py:ro
+      - ./haystack-chatqna/src/services/observatory_phone_security.py:/app/src/services/observatory_phone_security.py:ro
+      - ./haystack-chatqna/src/api/observatory_phone_auth.py:/app/src/api/observatory_phone_auth.py:ro
+      - ./haystack-chatqna/src/services/openapi_recovery.py:/app/src/services/openapi_recovery.py:ro
+      # ── Pre-existing fix: protocol_repo shim (reranker_feedback.py already mounted at line 82) ──
+      - ./haystack-chatqna/src/repositories/protocol_repo.py:/app/src/repositories/protocol_repo.py:ro
+      # ── Observatory synthetic-data governance (consent + disclaimer + headers) ──
+      - ./haystack-chatqna/src/services/observatory_synthetic.py:/app/src/services/observatory_synthetic.py:ro
+      - ./haystack-chatqna/src/api/observatory_disclaimer.py:/app/src/api/observatory_disclaimer.py:ro
+      # ── STT upload-size guard (prevents whisper queue saturation) ──
+      - ./haystack-chatqna/src/services/stt_upload_guard.py:/app/src/services/stt_upload_guard.py:ro
+      # ── STT duration guard (compression-bomb defense, 6-min cap) ──
+      - ./haystack-chatqna/src/services/stt_duration_guard.py:/app/src/services/stt_duration_guard.py:ro
+      # ── Phase 3: Redis-backed per-IP / global rate limiter ──
+      - ./haystack-chatqna/src/services/rate_limiter.py:/app/src/services/rate_limiter.py:ro
+      # ── Phase 4: per-worker voice concurrency cap (whisper queue defense) ──
+      - ./haystack-chatqna/src/services/voice_concurrency_limiter.py:/app/src/services/voice_concurrency_limiter.py:ro
+      # ── Phase 6.1: caregiver policy review/acceptance models + repo ──
+      - ./haystack-chatqna/src/models/policy_review.py:/app/src/models/policy_review.py:ro
+      - ./haystack-chatqna/src/services/policy_acceptance_repo.py:/app/src/services/policy_acceptance_repo.py:ro
+      # ── Phase 6.2: policy broadcast service (uses existing inbox_service) ──
+      - ./haystack-chatqna/src/services/policy_notification.py:/app/src/services/policy_notification.py:ro
+      # ── Phase 6.3: policy review API (notify, accept, status, compliance) ──
+      - ./haystack-chatqna/src/api/policy_review_routes.py:/app/src/api/policy_review_routes.py:ro
+      # ── Caregiver registration: optional-invite shim (admin-approval queue path) ──
+      - ./haystack-chatqna/src/services/caregiver_registration_optional_invite.py:/app/src/services/caregiver_registration_optional_invite.py:ro
+      # ── Guest chat patch: bypass CHW pipeline for unauthenticated sessions ──
+      - ./haystack-chatqna/src/services/guest_chat_patch.py:/app/src/services/guest_chat_patch.py:ro
+      # ── LLM provider policy + response-header middleware (mode/fallback/strict) ──
+      - ./haystack-chatqna/src/services/llm_provider_policy.py:/app/src/services/llm_provider_policy.py:ro
+      - ./haystack-chatqna/src/services/llm_provider_middleware.py:/app/src/services/llm_provider_middleware.py:ro
+      # ── Basic/Beginner UX intent router (deterministic gate, advanced flow untouched) ──
+      - ./haystack-chatqna/src/services/basic_beginner_intent_router.py:/app/src/services/basic_beginner_intent_router.py:ro
+      - ./haystack-chatqna/src/services/basic_beginner_chat_patch.py:/app/src/services/basic_beginner_chat_patch.py:ro
+      # ── Prescription upload: broaden MIME whitelist (jpg/png/webp/heic/gif/bmp/tiff/avif + empty content-type) ──
+      - ./haystack-chatqna/src/services/prescription_upload_patch.py:/app/src/services/prescription_upload_patch.py:ro
+      # ── Agent Platform v1: bounded shadow/assist agentic runtime (default mode=off) ──
+      - ./haystack-chatqna/src/agent_platform/__init__.py:/app/src/agent_platform/__init__.py:ro
+      - ./haystack-chatqna/src/agent_platform/config.py:/app/src/agent_platform/config.py:ro
+      - ./haystack-chatqna/src/agent_platform/models.py:/app/src/agent_platform/models.py:ro
+      - ./haystack-chatqna/src/agent_platform/tool_schemas.py:/app/src/agent_platform/tool_schemas.py:ro
+      - ./haystack-chatqna/src/agent_platform/tool_registry.py:/app/src/agent_platform/tool_registry.py:ro
+      - ./haystack-chatqna/src/agent_platform/tool_policy.py:/app/src/agent_platform/tool_policy.py:ro
+      - ./haystack-chatqna/src/agent_platform/tool_executor.py:/app/src/agent_platform/tool_executor.py:ro
+      - ./haystack-chatqna/src/agent_platform/planner.py:/app/src/agent_platform/planner.py:ro
+      - ./haystack-chatqna/src/agent_platform/tracing.py:/app/src/agent_platform/tracing.py:ro
+      - ./haystack-chatqna/src/agent_platform/adapters.py:/app/src/agent_platform/adapters.py:ro
+      - ./haystack-chatqna/src/agent_platform/runtime.py:/app/src/agent_platform/runtime.py:ro
+      # Phase 2 + 3 additions (must be bind-mounted so the Phase 4 live
+      # validation actually exercises the new code, not the v1 image).
+      - ./haystack-chatqna/src/agent_platform/native_tools.py:/app/src/agent_platform/native_tools.py:ro
+      - ./haystack-chatqna/src/agent_platform/readiness.py:/app/src/agent_platform/readiness.py:ro
+      - ./haystack-chatqna/src/services/agentic_runtime_patch.py:/app/src/services/agentic_runtime_patch.py:ro
+      # ── Evidence Layer (admin-toggled observability + synthetic evals; default OFF) ──
+      - ./haystack-chatqna/src/evidence_layer/__init__.py:/app/src/evidence_layer/__init__.py:ro
+      - ./haystack-chatqna/src/evidence_layer/config.py:/app/src/evidence_layer/config.py:ro
+      - ./haystack-chatqna/src/evidence_layer/models.py:/app/src/evidence_layer/models.py:ro
+      - ./haystack-chatqna/src/evidence_layer/state.py:/app/src/evidence_layer/state.py:ro
+      - ./haystack-chatqna/src/evidence_layer/trace_capture.py:/app/src/evidence_layer/trace_capture.py:ro
+      - ./haystack-chatqna/src/evidence_layer/eval_cases.py:/app/src/evidence_layer/eval_cases.py:ro
+      - ./haystack-chatqna/src/evidence_layer/eval_runner.py:/app/src/evidence_layer/eval_runner.py:ro
+      - ./haystack-chatqna/src/evidence_layer/report_writer.py:/app/src/evidence_layer/report_writer.py:ro
+      - ./haystack-chatqna/src/evidence_layer/routes.py:/app/src/evidence_layer/routes.py:ro
+      - ./haystack-chatqna/src/evidence_layer/patch.py:/app/src/evidence_layer/patch.py:ro
+      - ./haystack-chatqna/evals:/app/evals:ro
+      # ── Meta channels (WhatsApp Business + Messenger) — Stage 1 mount ──
+      - ./haystack-chatqna/src/services/meta_bridge.py:/app/src/services/meta_bridge.py:ro
+      - ./haystack-chatqna/src/api/meta_routes.py:/app/src/api/meta_routes.py:ro
+      # ── Twilio WhatsApp Sandbox MVP adapter (additive, separate from Meta) ──
+      - ./haystack-chatqna/src/api/twilio_whatsapp_routes.py:/app/src/api/twilio_whatsapp_routes.py:ro
+      # ── Persistent host dirs ─────────────────��───────────────────────
+      - ./training_exports:/app/training/collected
+      - ./education_certs:/app/data/education_certs
+      - ./caregiver_uploads:/app/data/caregiver_uploads
+      - ./evidence_reports:/app/reports/evidence
+    command:
+      # Chain: rag_tuning → stt_fix → intent_review → … → main
+      # rag_tuning applies grounded prompts, score threshold, weighted RRF,
+      # and top-k boost to the live Haystack pipeline at startup.
+      - uvicorn
+      - src.main_with_rag_tuning:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "4"
+      - --limit-concurrency
+      - "200"

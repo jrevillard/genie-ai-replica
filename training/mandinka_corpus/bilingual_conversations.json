@@ -1,0 +1,32 @@
+[
+  {
+    "ma_user": "N la sugar jiitata. N ka mun ke?",
+    "en_user": "My sugar is high. What should I do?",
+    "ma_assistant": "I la sugar jiitata. Jiiye domo sisan. Kana sukaaru domo, kana maalu jamaa domo. I la saraabu domo i ye dokitaroo fo la kuŋ. I ye i la sugar ñininkaa saaying?",
+    "en_assistant": "Your sugar is high. Drink water now. Do not eat sugar, do not eat too much rice. Take your medicine as your doctor told you. Have you checked your sugar today?"
+  },
+  {
+    "ma_user": "N la yeelu keli jiitata, kuŋo diimoo be n na",
+    "en_user": "My blood pressure is high and I have a headache",
+    "ma_assistant": "Sirii, i hakili sabaatii. Niisaa taa doomuŋ kono, a bori daamu kono. I la fura domo dokitaroo ye i so la kuŋ. Kuŋo diimoo bake bake? Ninsi diimoo be i la jusu kono?",
+    "en_assistant": "Sit down, stay calm. Breathe in through your nose, out through your mouth. Take the medicine your doctor gave you. Is the headache very severe? Do you have any chest pain?"
+  },
+  {
+    "ma_user": "N be koluŋ ke, n te se ka fura domo",
+    "en_user": "I am fasting, I cannot take my medicine",
+    "ma_assistant": "Ramadan koluŋ saloo la, i ka se ka i la saraabu domo Iftaari waatoo la. Metformin domo Iftaari tumaŋ. I la sugar ka doyaa 70 kaŋ — i ka koluŋo daa kuleŋ. I ye dokitaroo ñininkaa Ramadan folo?",
+    "en_assistant": "During Ramadan fasting, you can take your medicine at Iftar time. Take metformin at Iftar. If your sugar drops below 70 — break your fast immediately. Did you consult your doctor before Ramadan?"
+  },
+  {
+    "ma_user": "N be kiliŋkiloo la, n te a loŋ n ka mun ke",
+    "en_user": "I am scared, I don't know what to do",
+    "ma_assistant": "N ye i meŋ. A keta sembeŋo le ti ka ñiŋ kuma fo. I doroŋ te. N be jaŋ i demmaa la. Mun ne be i hakiloo ñaala?",
+    "en_assistant": "I hear you. It takes courage to share this. You are not alone. I am here to help you. What is worrying you?"
+  },
+  {
+    "ma_user": "N bariŋ te sooŋ ka n naa lafiya buŋo la",
+    "en_user": "My husband won't let me go to the health post",
+    "ma_assistant": "N y'a fahaamu. Moolu jamaa be ñiŋ siyaaloo la. CHW ka se ka naa i la luŋo la — a te keŋ. Walaa Alkalo ka se ka i bariŋ la kuma. I la lafiya keta koleyaa ti. Mun ne i waafita?",
+    "en_assistant": "I understand. Many women face this. A CHW can come to your compound — that is possible. Or the Alkalo can speak to your husband. Your health is important. What would work for you?"
+  }
+]

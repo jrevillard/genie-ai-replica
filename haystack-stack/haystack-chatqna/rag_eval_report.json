@@ -1,0 +1,237 @@
+{
+  "timestamp": "2026-04-24T19:14:37.893984",
+  "total_tests": 39,
+  "passed": 39,
+  "failed": 0,
+  "pass_rate": 1.0,
+  "profile_classification": {
+    "accuracy": 1.0,
+    "results": [
+      {
+        "status": "PASS",
+        "query": "What is the fasting blood sugar target for type 2 diabetes",
+        "expected": "clinical_specific",
+        "predicted": "clinical_specific"
+      },
+      {
+        "status": "PASS",
+        "query": "My sugar was 250 this morning what should I do",
+        "expected": "clinical_specific",
+        "predicted": "clinical_specific"
+      },
+      {
+        "status": "PASS",
+        "query": "Can I eat benachin if I have diabetes",
+        "expected": "diet_lifestyle",
+        "predicted": "diet_lifestyle"
+      },
+      {
+        "status": "PASS",
+        "query": "What foods should I avoid with type 2 diabetes",
+        "expected": "diet_lifestyle",
+        "predicted": "diet_lifestyle"
+      },
+      {
+        "status": "PASS",
+        "query": "How often should I check my HbA1c",
+        "expected": "clinical_specific",
+        "predicted": "clinical_specific"
+      },
+      {
+        "status": "PASS",
+        "query": "What is the target blood pressure for a diabetic patient",
+        "expected": "clinical_specific",
+        "predicted": "clinical_specific"
+      },
+      {
+        "status": "PASS",
+        "query": "My BP is 180 over 110 what should I do",
+        "expected": "clinical_specific",
+        "predicted": "clinical_specific"
+      },
+      {
+        "status": "PASS",
+        "query": "How to reduce salt in my cooking",
+        "expected": "diet_lifestyle",
+        "predicted": "diet_lifestyle"
+      },
+      {
+        "status": "PASS",
+        "query": "Is domoda okay for someone with high blood pressure",
+        "expected": "diet_lifestyle",
+        "predicted": "diet_lifestyle"
+      },
+      {
+        "status": "PASS",
+        "query": "My father is having chest pain and sweating",
+        "expected": "emergency",
+        "predicted": "emergency"
+      },
+      {
+        "status": "PASS",
+        "query": "Someone collapsed and is not breathing",
+        "expected": "emergency",
+        "predicted": "emergency"
+      },
+      {
+        "status": "PASS",
+        "query": "I think I am having a heart attack",
+        "expected": "emergency",
+        "predicted": "emergency"
+      },
+      {
+        "status": "PASS",
+        "query": "Can I fast during Ramadan with diabetes",
+        "expected": "ramadan_cultural",
+        "predicted": "ramadan_cultural"
+      },
+      {
+        "status": "PASS",
+        "query": "What should I eat for suhoor if I have high blood pressure",
+        "expected": "ramadan_cultural",
+        "predicted": "ramadan_cultural"
+      },
+      {
+        "status": "PASS",
+        "query": "When should I break my fast if my sugar drops",
+        "expected": "ramadan_cultural",
+        "predicted": "ramadan_cultural"
+      },
+      {
+        "status": "PASS",
+        "query": "What are the side effects of metformin",
+        "expected": "medication_info",
+        "predicted": "medication_info"
+      },
+      {
+        "status": "PASS",
+        "query": "I stopped taking my amlodipine because I feel fine",
+        "expected": "medication_info",
+        "predicted": "medication_info"
+      },
+      {
+        "status": "PASS",
+        "query": "My pharmacy ran out of my blood pressure medicine",
+        "expected": "medication_info",
+        "predicted": "medication_info"
+      },
+      {
+        "status": "PASS",
+        "query": "What exercise is good for diabetes",
+        "expected": "diet_lifestyle",
+        "predicted": "diet_lifestyle"
+      },
+      {
+        "status": "PASS",
+        "query": "How much moringa should I take daily",
+        "expected": "diet_lifestyle",
+        "predicted": "diet_lifestyle"
+      },
+      {
+        "status": "PASS",
+        "query": "Is groundnut oil better than palm oil for cooking",
+        "expected": "diet_lifestyle",
+        "predicted": "diet_lifestyle"
+      },
+      {
+        "status": "PASS",
+        "query": "I am scared I just found out I have diabetes",
+        "expected": "default",
+        "predicted": "default"
+      },
+      {
+        "status": "PASS",
+        "query": "Tell me about NCDs in The Gambia",
+        "expected": "default",
+        "predicted": "default"
+      },
+      {
+        "status": "PASS",
+        "query": "What is WHO PEN protocol",
+        "expected": "clinical_specific",
+        "predicted": "clinical_specific"
+      }
+    ]
+  },
+  "weighted_rrf": {
+    "passed": 15,
+    "failed": 0,
+    "results": [
+      {
+        "name": "basic merge produces results",
+        "passed": true,
+        "detail": "got 4 docs"
+      },
+      {
+        "name": "overlapping docs rank higher (d1, d2 in top 3)",
+        "passed": true,
+        "detail": "d1 rank=1, d2 rank=0"
+      },
+      {
+        "name": "score threshold filters d4 (score=0.30 < threshold=0.50)",
+        "passed": true,
+        "detail": "d4 filtered"
+      },
+      {
+        "name": "d3 passes threshold (score=0.55 > 0.50)",
+        "passed": true,
+        "detail": "d3 present"
+      },
+      {
+        "name": "all merged docs have rrf_score metadata",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "rrf_scores in descending order",
+        "passed": true,
+        "detail": "scores: [0.0163, 0.0161, 0.0089, 0.0071]"
+      },
+      {
+        "name": "emergency profile keeps d4 (threshold=0.30, score=0.30)",
+        "passed": true,
+        "detail": "d4 included"
+      },
+      {
+        "name": "empty inputs return empty list",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "vector-only merge works",
+        "passed": true,
+        "detail": "got 3 docs"
+      },
+      {
+        "name": "keyword-only merge works",
+        "passed": true,
+        "detail": "got 3 docs"
+      },
+      {
+        "name": "emergency query augmentation adds prefix",
+        "passed": true,
+        "detail": "got: Emergency medical response for: chest pain"
+      },
+      {
+        "name": "medication query augmentation adds prefix",
+        "passed": true,
+        "detail": "got: Medication information and protocol for: metformin side effects"
+      },
+      {
+        "name": "default profile has no prefix",
+        "passed": true,
+        "detail": "got: general question"
+      },
+      {
+        "name": "medication profile: keyword-only doc (m2) included",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "diet profile: vector docs rank above keyword-only",
+        "passed": true,
+        "detail": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,86 @@
+# AMINA Care -- multichannel-access optional Cloudflare QUICK-tunnel sidecar.
+# ============================================================================
+# Strict-additive override. Layer this file ON TOP of docker-compose.yml when
+# you need a public HTTPS URL for the Telegram webhook RIGHT NOW and you
+# don't want to set up a Cloudflare account / named tunnel first.
+#
+# How it differs from docker-compose.cloudflare-tunnel.yml:
+#
+#                           quick tunnel (this file)        named tunnel
+#                           ---------------------------     ---------------
+#   Account required        no                              yes
+#   Token required          no                              yes (CLOUDFLARED_TUNNEL_TOKEN)
+#   Public hostname         random *.trycloudflare.com      whatever DNS you map
+#   Persistent across       NO -- new URL on each restart   YES
+#   container restarts
+#   Suitable for            local dev / quick demo          staging + production
+#
+# Usage:
+#
+#   docker compose `
+#     -f components/multichannel-access/docker-compose.yml `
+#     -f components/multichannel-access/docker-compose.quick-tunnel.yml `
+#     up -d
+#
+# Then capture the public URL from the sidecar logs and register it with
+# Telegram via the bundled ops script:
+#
+#   docker logs amina-cf-quick-tunnel 2>&1 | Select-String -Pattern 'trycloudflare\.com'
+#   .\scripts\telegram_webhook_ops.ps1 -PublicUrl "https://<...>.trycloudflare.com" -SetWebhook -Verify
+#
+# When you're done, tear it down with:
+#
+#   docker compose -f components/multichannel-access/docker-compose.yml `
+#                  -f components/multichannel-access/docker-compose.quick-tunnel.yml `
+#                  down cf-quick-tunnel
+#
+# The base multichannel-access service is unaffected.
+
+services:
+
+  cf-quick-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: amina-cf-quick-tunnel
+    restart: unless-stopped
+    # The default user (uid 65532 nonroot) cannot write to the
+    # docker-managed cf-tunnel-logs volume, which is created
+    # root-owned. We override to root so cloudflared can create
+    # /shared/quick-tunnel.log. The container is still namespace-
+    # isolated; this only affects file ownership INSIDE the volume.
+    user: "0:0"
+    # No token, no login -- "tunnel --url <local>" creates an ephemeral
+    # *.trycloudflare.com hostname automatically.
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --url
+      - http://multichannel-access:8020
+      - --metrics
+      - 0.0.0.0:2000
+      # Mirror logs to a file in a shared volume so the
+      # telegram-webhook-watcher sidecar can tail the URL banner
+      # without needing access to the Docker socket. Logs still go
+      # to stderr too, so `docker logs amina-cf-quick-tunnel` keeps
+      # working as before.
+      - --logfile
+      - /shared/quick-tunnel.log
+    depends_on:
+      multichannel-access:
+        condition: service_healthy
+    networks:
+      - chatqna_default
+    volumes:
+      - cf-tunnel-logs:/shared
+    # Healthcheck via cloudflared's local metrics endpoint -- passes
+    # once the tunnel has registered with the Cloudflare edge.
+    healthcheck:
+      test: ["CMD", "cloudflared", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  # Shared between cf-quick-tunnel and telegram-webhook-watcher.
+  # Holds cloudflared's logfile output. Nothing else writes to it.
+  cf-tunnel-logs:

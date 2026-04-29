@@ -1,0 +1,93 @@
+
+[1mAMINA · Admin + Gov console sanity[0m
+  API  = http://localhost:8000
+  Vite = http://localhost:5173
+
+[1m═══ Backend sanity @ http://localhost:8000 ═══[0m
+  [[92mPASS[0m] 1. haystack-chatqna is reachable
+  [[92mPASS[0m] 2. admin_mv_routes imports cleanly
+  [[92mPASS[0m] 3. all expected MV endpoints are registered
+  [[92mPASS[0m] 4. auth gate returns 200 (dev) or 401 (prod) as designed
+  [[92mPASS[0m] 5.  admin/mv/command-center returns JSON
+  [[92mPASS[0m] 6.  admin/mv/service-health returns JSON
+  [[92mPASS[0m] 7.  admin/mv/agent-lab returns JSON
+  [[92mPASS[0m] 8.  admin/mv/cost returns JSON
+  [[92mPASS[0m] 9.  gov/mv/national-pulse returns JSON
+  [[92mPASS[0m] 10. gov/mv/regional returns JSON
+  [[92mPASS[0m] 11. gov/mv/surveillance returns JSON
+  [[92mPASS[0m] 12. gov/mv/indicators returns JSON
+  [[92mPASS[0m] 13. gov/mv/network-health returns JSON
+  [[92mPASS[0m] 14. admin/mv/patient/{id}/360 returns JSON
+  [[92mPASS[0m] 15. gov/national-pulse has the expected shape
+  [[92mPASS[0m] 16. gov/regional returns all 7 Gambia regions
+  [[92mPASS[0m] 17. gov/surveillance has z-score + anomaly per condition
+  [[92mPASS[0m] 18. gov/indicators carries WHO-PEN, HEARTS, SDG3 groups
+  [[92mPASS[0m] 19. gov/network-health has 1 row per region with required keys
+  [[92mPASS[0m] 20. admin/command-center shape is valid
+  [[92mPASS[0m] 21. service-health enumerates all expected services
+  [[92mPASS[0m] 22. agent-lab returns 5 models × full metric set
+  [[92mPASS[0m] 23. cost returns ≥3 providers + non-negative total_usd
+  [[92mPASS[0m] 24. admin/patient/.../360 returns profile + vitals + consults + team
+  [[92mPASS[0m] 25. guest chat (no auth) returns a real response
+  [[92mPASS[0m] 26. invalid bearer is treated as guest (no 401 leak)
+  [[92mPASS[0m] G1. gov/login succeeds for seeded officer MOH-2026-0001
+  [[92mPASS[0m] G2. gov/login 401s on wrong password
+  [[92mPASS[0m] G3. gov/login 401s on wrong National ID
+  [[92mPASS[0m] G4. gov/login 401s on unknown staff ID
+  [[92mPASS[0m] P1. patient email-login returns success + token + patient
+  [[92mPASS[0m] P2. caregiver login returns token + caregiver_id + patient_id
+  [[92mPASS[0m] P3. patient phone-OTP send returns a valid method (SMS or dev)
+  [[92mPASS[0m] P4. LoginPage persists tokens + routes each role to its dashboard
+  [[92mPASS[0m] G5. issued JWT carries role=gov
+
+[1m═══ Frontend sanity @ http://localhost:5173 ═══[0m
+  [[92mPASS[0m] 27. compiles: src/styles/admin-tokens.css
+  [[92mPASS[0m] 28. compiles: src/styles/care-records.css
+  [[92mPASS[0m] 29. compiles: src/admin/primitives/index.jsx
+  [[92mPASS[0m] 30. compiles: src/admin/CommandPalette.jsx
+  [[92mPASS[0m] 31. compiles: src/admin/hooks/useAdminApi.js
+  [[92mPASS[0m] 32. compiles: src/admin/AdminShell.jsx
+  [[92mPASS[0m] 33. compiles: src/admin/GovPortalModal.jsx
+  [[92mPASS[0m] 34. compiles: src/admin/sections/CommandCenter.jsx
+  [[92mPASS[0m] 35. compiles: src/admin/sections/PatientDetailSheet.jsx
+  [[92mPASS[0m] 36. compiles: src/admin/sections/PeopleSection.jsx
+  [[92mPASS[0m] 37. compiles: src/admin/sections/CareSection.jsx
+  [[92mPASS[0m] 38. compiles: src/admin/sections/CareRecords.jsx
+  [[92mPASS[0m] 39. compiles: src/admin/sections/AgentLab.jsx
+  [[92mPASS[0m] 40. compiles: src/admin/sections/Integrations.jsx
+  [[92mPASS[0m] 41. compiles: src/admin/sections/Governance.jsx
+  [[92mPASS[0m] 42. compiles: src/gov/GovShell.jsx
+  [[92mPASS[0m] 43. compiles: src/gov/registerPwa.js
+  [[92mPASS[0m] 44. compiles: src/gov/sections/NationalPulse.jsx
+  [[92mPASS[0m] 45. compiles: src/gov/sections/RegionalMap.jsx
+  [[92mPASS[0m] 46. compiles: src/gov/sections/Surveillance.jsx
+  [[92mPASS[0m] 47. compiles: src/gov/sections/Indicators.jsx
+  [[92mPASS[0m] 48. compiles: src/gov/sections/NetworkHealth.jsx
+  [[92mPASS[0m] 49. compiles: src/gov/sections/Reports.jsx
+  [[92mPASS[0m] 50. compiles: src/router/AppRouter.jsx
+  [[92mPASS[0m] 51. compiles: src/AdminDashboard.jsx
+  [[92mPASS[0m] 52. compiles: src/router/pages/ChatPage.jsx
+  [[92mPASS[0m] 53. compiles: src/router/pages/LoginPage.jsx
+  [[92mPASS[0m] 52. /gov-sw.js is served at the site root
+  [[92mPASS[0m] 53. index.html preloads Fraunces + Geist
+
+[1m═══ Router + contract ═══[0m
+  [[92mPASS[0m] 54. AdminDashboard preserves public signature + embed props
+  [[92mPASS[0m] 55. AppRouter imports AdminShell + GovShell + PWA registrar
+  [[92mPASS[0m] 56. AppRouter declares #/admin/console and #/gov routes
+  [[92mPASS[0m] 57. LoginPage has 3 tabs only — no gov in public login
+  [[92mPASS[0m] 58. GovPortalModal is wired into AdminShell (flag + POST + topbar button)
+  [[92mPASS[0m] 59. HomePage has no Gov card · admin-nav links intact
+  [[92mPASS[0m] 60. every admin/ named import from primitives resolves to a real export
+  [[92mPASS[0m] 61. CareRecords workspace wired + reads live consultations/community/knowledge
+  [[92mPASS[0m] 62. People workspace wired + reads live patients/caregivers/literacy/transfers
+  [[92mPASS[0m] 63. Integrations workspace wired + reads live DHIS2 config/metrics/history
+  [[92mPASS[0m] 64. DHIS2 Tracker workspace replaces legacy panel with all sub-tabs wired
+  [[92mPASS[0m] 65. Governance workspace wired + reads live audit + cost
+  [[92mPASS[0m] 66. LegacyFallback archive surface replaces ghost-button toggles in every section
+  [[92mPASS[0m] 67. Government Observatory redesigned with daylight ops palette
+  [[92mPASS[0m] 68. Signed summary report (PDF) wired with 3-signature authorisation block
+
+[1m═══ Summary ═══[0m
+
+  [92m[1m✔ 79/79 checks passed[0m

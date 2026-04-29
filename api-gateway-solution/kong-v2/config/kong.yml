@@ -1,0 +1,36 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: genie-graph-service
+    url: http://genie-graph-service:8200
+
+    routes:
+      - name: graph-query
+        paths: ["/graph/query"]
+        methods: ["POST"]
+        strip_path: false
+
+      - name: graph-vertex
+        paths: ["/graph/vertex"]
+        methods: ["POST"]
+        strip_path: false
+
+      - name: graph-edge
+        paths: ["/graph/edge"]
+        methods: ["POST"]
+        strip_path: false
+
+      - name: graph-health
+        paths: ["/health"]
+        methods: ["GET"]
+        strip_path: false
+
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 60
+
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 1024

@@ -1,0 +1,594 @@
+/* ============================================================
+   AMINA · Governance
+   Extends integrations.css (shares ops canvas tokens).
+   Scoped to .amina-admin-scope so it doesn't leak.
+   ============================================================ */
+
+.amina-admin-scope .ops-root.gov-root {
+  --ops-teal:      #0f766e;
+  --ops-teal-soft: #ccfbf1;
+}
+
+/* friendly helper nudge under KPI strip */
+.amina-admin-scope .gov-nudge {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  background: linear-gradient(180deg, #fffdf6, #fbf7e9);
+  border: 1px solid #ede0b8;
+  border-radius: 10px;
+  margin: 16px 0 22px;
+}
+.amina-admin-scope .gov-nudge .ico {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #fff; border: 1px solid #e6dcb0;
+  display: flex; align-items: center; justify-content: center;
+  color: #a16207;
+}
+.amina-admin-scope .gov-nudge .txt { font-size: 13px; color: var(--ops-ink-2); line-height: 1.5; }
+.amina-admin-scope .gov-nudge .txt strong { color: var(--ops-ink); font-weight: 600; }
+.amina-admin-scope .gov-nudge .txt .sub { display: block; font-size: 11.5px; color: var(--ops-ink-3); margin-top: 2px; }
+
+/* page head accent */
+.amina-admin-scope .gov-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 4px;
+  color: var(--ops-ink-3);
+  background: var(--ops-paper);
+  border: 1px solid var(--ops-rule);
+}
+.amina-admin-scope .gov-pill.teal {
+  color: var(--ops-teal);
+  background: var(--ops-teal-soft);
+  border-color: #99f6e4;
+}
+.amina-admin-scope .gov-pill.classified {
+  color: #be123c;
+  background: #fff5f5;
+  border-color: rgba(190,18,60,0.25);
+}
+
+/* =============== audit stream =============== */
+.amina-admin-scope .audit-helper {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  background: var(--ops-paper);
+  border: 1px solid var(--ops-rule);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  font-size: 12.5px;
+  color: var(--ops-ink-2);
+}
+.amina-admin-scope .audit-helper svg { color: var(--ops-teal, #0f766e); flex-shrink: 0; }
+.amina-admin-scope .audit-helper strong { color: var(--ops-ink); font-weight: 600; }
+.amina-admin-scope .audit-helper .spacer { flex: 1; }
+.amina-admin-scope .audit-helper kbd {
+  font-family: var(--a-font-mono);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--ops-rule-3);
+  background: var(--ops-paper-2);
+  color: var(--ops-ink-3);
+}
+.amina-admin-scope .audit-filters {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, 1fr) auto;
+  gap: 8px;
+  padding: 12px;
+  background: var(--ops-paper);
+  border: 1px solid var(--ops-rule);
+  border-top: 1px solid var(--ops-rule-2);
+  border-bottom: none;
+}
+.amina-admin-scope .audit-filters .f {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.amina-admin-scope .audit-filters label {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+}
+.amina-admin-scope .audit-filters select,
+.amina-admin-scope .audit-filters input[type="text"],
+.amina-admin-scope .audit-filters input[type="search"],
+.amina-admin-scope .audit-filters input[type="date"] {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ops-rule-3);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--ops-ink);
+  font-family: var(--a-font-mono);
+  font-size: 12px;
+}
+.amina-admin-scope .audit-filters .search-field {
+  position: relative;
+}
+.amina-admin-scope .audit-filters .search-field svg {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--ops-ink-4);
+}
+.amina-admin-scope .audit-filters .search-field input {
+  padding-left: 30px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.amina-admin-scope .audit-filters .reset {
+  align-self: flex-end;
+  height: 30px;
+}
+
+.amina-admin-scope .audit-table-wrap {
+  border: 1px solid var(--ops-rule);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  background: var(--ops-paper);
+  overflow: hidden;
+}
+.amina-admin-scope .audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.amina-admin-scope .audit-table thead th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  padding: 10px 14px;
+  background: var(--ops-paper-2);
+  border-bottom: 1px solid var(--ops-rule);
+  white-space: nowrap;
+}
+.amina-admin-scope .audit-table tbody tr {
+  border-bottom: 1px solid var(--ops-rule-2);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.amina-admin-scope .audit-table tbody tr:hover { background: var(--ops-paper-2); }
+.amina-admin-scope .audit-table tbody tr[data-open="true"] { background: #fbfaf6; }
+.amina-admin-scope .audit-table td {
+  padding: 9px 14px;
+  vertical-align: middle;
+}
+.amina-admin-scope .audit-table td.mono {
+  font-family: var(--a-font-mono);
+  font-size: 11.5px;
+  color: var(--ops-ink-2);
+  letter-spacing: 0.01em;
+}
+.amina-admin-scope .audit-table td .sev {
+  display: inline-flex; width: 4px; height: 4px; border-radius: 50%;
+  margin-right: 8px; vertical-align: middle;
+}
+.amina-admin-scope .audit-table td .sev.ok   { background: var(--ops-emerald); }
+.amina-admin-scope .audit-table td .sev.info { background: var(--ops-indigo); }
+.amina-admin-scope .audit-table td .sev.warn { background: var(--ops-amber); }
+.amina-admin-scope .audit-table td .sev.err  { background: var(--ops-rose); }
+
+.amina-admin-scope .audit-actor {
+  display: flex; align-items: center; gap: 8px;
+}
+.amina-admin-scope .audit-actor .av {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #22d3ee);
+  color: #fff; font-size: 10px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+.amina-admin-scope .audit-actor .av.sys { background: #334155; }
+.amina-admin-scope .audit-actor .n { font-size: 12px; color: var(--ops-ink); font-weight: 500; }
+.amina-admin-scope .audit-actor .r { font-size: 10.5px; color: var(--ops-ink-3); letter-spacing: 0.02em; }
+
+.amina-admin-scope .audit-action {
+  font-family: var(--a-font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ops-ink);
+  letter-spacing: 0.01em;
+}
+.amina-admin-scope .audit-resource {
+  font-family: var(--a-font-mono);
+  font-size: 11.5px;
+  color: var(--ops-ink-2);
+}
+.amina-admin-scope .audit-resource .kind {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  margin-right: 4px;
+}
+
+.amina-admin-scope .audit-hash {
+  font-family: var(--a-font-mono);
+  font-size: 10.5px;
+  color: var(--ops-ink-3);
+  letter-spacing: 0.02em;
+}
+
+/* expanded event detail */
+.amina-admin-scope .audit-detail {
+  background: #faf8f1;
+  border-top: 1px solid var(--ops-rule);
+  border-bottom: 1px solid var(--ops-rule);
+}
+.amina-admin-scope .audit-detail td { padding: 16px 18px !important; cursor: default; }
+.amina-admin-scope .audit-detail-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr 280px;
+  gap: 24px;
+  align-items: start;
+}
+.amina-admin-scope .audit-detail .meta .k {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  margin-top: 8px;
+}
+.amina-admin-scope .audit-detail .meta .v {
+  font-family: var(--a-font-mono);
+  font-size: 11.5px;
+  color: var(--ops-ink);
+  margin-top: 2px;
+}
+.amina-admin-scope .audit-detail pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--ops-rule);
+  border-radius: 6px;
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ops-ink-2);
+  overflow-x: auto;
+  max-height: 260px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.amina-admin-scope .audit-detail .chain {
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  color: var(--ops-ink-2);
+  line-height: 1.7;
+}
+.amina-admin-scope .audit-detail .chain .row { display: grid; grid-template-columns: 70px 1fr; gap: 8px; }
+.amina-admin-scope .audit-detail .chain .k { color: var(--ops-ink-3); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; padding-top: 2px; }
+.amina-admin-scope .audit-detail .chain .hash { word-break: break-all; }
+
+.amina-admin-scope .audit-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--ops-paper-2);
+  border-top: 1px solid var(--ops-rule);
+  font-size: 12px;
+  color: var(--ops-ink-3);
+}
+.amina-admin-scope .audit-foot .pager { display: flex; gap: 4px; }
+.amina-admin-scope .audit-foot .pager button {
+  width: 28px; height: 26px;
+  border: 1px solid var(--ops-rule-3);
+  background: #fff;
+  border-radius: 4px;
+  color: var(--ops-ink-2);
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.amina-admin-scope .audit-foot .pager button[aria-current="page"] {
+  background: var(--ops-ink);
+  color: #fff;
+  border-color: var(--ops-ink);
+}
+.amina-admin-scope .audit-foot .pager button:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+
+/* =============== RBAC matrix =============== */
+.amina-admin-scope .rbac-wrap {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 16px;
+}
+.amina-admin-scope .rbac-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.amina-admin-scope .rbac-matrix th,
+.amina-admin-scope .rbac-matrix td {
+  border-bottom: 1px solid var(--ops-rule-2);
+  border-right: 1px solid var(--ops-rule-2);
+  padding: 9px 10px;
+  text-align: center;
+  vertical-align: middle;
+}
+.amina-admin-scope .rbac-matrix th:first-child,
+.amina-admin-scope .rbac-matrix td:first-child {
+  text-align: left;
+  border-right: 1px solid var(--ops-rule);
+}
+.amina-admin-scope .rbac-matrix thead th {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  font-weight: 600;
+  background: var(--ops-paper-2);
+  border-bottom: 1px solid var(--ops-rule);
+  padding: 10px 8px;
+  white-space: nowrap;
+}
+.amina-admin-scope .rbac-matrix .role-cell {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ops-ink);
+  display: flex; align-items: center; gap: 8px;
+}
+.amina-admin-scope .rbac-matrix .role-cell .rdot {
+  width: 8px; height: 8px; border-radius: 2px;
+  background: var(--ops-violet);
+}
+.amina-admin-scope .rbac-matrix .role-count {
+  font-family: var(--a-font-mono);
+  font-size: 10.5px;
+  color: var(--ops-ink-3);
+  font-weight: 400;
+  margin-left: auto;
+}
+.amina-admin-scope .perm {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 4px;
+  font-size: 11px;
+}
+.amina-admin-scope .perm.grant { background: var(--ops-emerald-soft); color: var(--ops-emerald); }
+.amina-admin-scope .perm.deny  { background: #f1f5f9; color: #cbd5e1; }
+.amina-admin-scope .perm.cond  { background: var(--ops-amber-soft); color: var(--ops-amber); }
+
+/* members panel */
+.amina-admin-scope .member-list {
+  font-size: 12.5px;
+}
+.amina-admin-scope .member-row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ops-rule-2);
+}
+.amina-admin-scope .member-row:last-child { border-bottom: none; }
+.amina-admin-scope .member-row .av {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #22d3ee);
+  color: #fff; font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.amina-admin-scope .member-row .n { font-size: 12.5px; color: var(--ops-ink); font-weight: 500; }
+.amina-admin-scope .member-row .e { font-family: var(--a-font-mono); font-size: 11px; color: var(--ops-ink-3); }
+
+/* access requests */
+.amina-admin-scope .access-req {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ops-rule-2);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.amina-admin-scope .access-req:last-child { border-bottom: none; }
+.amina-admin-scope .access-req .req-title {
+  font-size: 13px; color: var(--ops-ink); font-weight: 600;
+}
+.amina-admin-scope .access-req .req-sub {
+  font-family: var(--a-font-mono);
+  font-size: 11px; color: var(--ops-ink-3);
+  margin-top: 3px;
+}
+.amina-admin-scope .access-req .actions { display: flex; gap: 6px; }
+
+/* =============== broadcast =============== */
+.amina-admin-scope .bc-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+.amina-admin-scope .bc-template {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ops-rule-2);
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.amina-admin-scope .bc-template:last-child { border-bottom: none; }
+.amina-admin-scope .bc-template .channel {
+  display: flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px;
+  border-radius: 6px;
+  background: var(--ops-paper-2);
+  border: 1px solid var(--ops-rule);
+  color: var(--ops-ink-2);
+}
+.amina-admin-scope .bc-template .channel.sms  { color: var(--ops-indigo); background: #eef2ff; border-color: #c7d2fe; }
+.amina-admin-scope .bc-template .channel.ivr  { color: var(--ops-emerald); background: var(--ops-emerald-soft); border-color: #a7f3d0; }
+.amina-admin-scope .bc-template .channel.push { color: var(--ops-amber); background: var(--ops-amber-soft); border-color: #fde68a; }
+.amina-admin-scope .bc-template .name { font-size: 13px; color: var(--ops-ink); font-weight: 600; }
+.amina-admin-scope .bc-template .preview {
+  font-family: var(--a-font-mono);
+  font-size: 11.5px;
+  color: var(--ops-ink-3);
+  margin-top: 4px;
+  line-height: 1.5;
+  max-width: 420px;
+}
+.amina-admin-scope .bc-template .stats {
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  color: var(--ops-ink-3);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.amina-admin-scope .bc-template .stats .big {
+  font-size: 16px; color: var(--ops-ink); display: block; margin-bottom: 2px;
+}
+
+.amina-admin-scope .bc-recent-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 70px 90px;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ops-rule-2);
+  align-items: center;
+  font-size: 12px;
+}
+.amina-admin-scope .bc-recent-row:last-child { border-bottom: none; }
+.amina-admin-scope .bc-recent-row .ts {
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  color: var(--ops-ink-3);
+}
+.amina-admin-scope .bc-recent-row .bar-cell {
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  color: var(--ops-ink-2);
+  text-align: right;
+}
+.amina-admin-scope .delivery-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.amina-admin-scope .delivery-bar .fill {
+  height: 100%;
+  background: var(--ops-emerald);
+  border-radius: 2px;
+}
+
+/* =============== cost =============== */
+.amina-admin-scope .cost-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+.amina-admin-scope .cost-chart {
+  padding: 18px 20px;
+  height: 260px;
+  position: relative;
+}
+.amina-admin-scope .cost-bars {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+  align-items: end;
+  height: 200px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--ops-rule);
+  padding-bottom: 1px;
+}
+.amina-admin-scope .cost-stack {
+  display: flex; flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  gap: 2px;
+}
+.amina-admin-scope .cost-seg {
+  width: 100%;
+  min-height: 2px;
+}
+.amina-admin-scope .cost-seg.infer   { background: var(--ops-violet); }
+.amina-admin-scope .cost-seg.voice   { background: var(--ops-indigo); }
+.amina-admin-scope .cost-seg.sms     { background: var(--ops-emerald); }
+.amina-admin-scope .cost-seg.hosting { background: var(--ops-amber); }
+.amina-admin-scope .cost-axis {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+  font-family: var(--a-font-mono);
+  font-size: 10px;
+  color: var(--ops-ink-4);
+  text-align: center;
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+.amina-admin-scope .cost-legend {
+  display: flex; gap: 14px; font-size: 11.5px; color: var(--ops-ink-2);
+  margin-bottom: 4px; align-items: center;
+}
+.amina-admin-scope .cost-legend .sw {
+  display: inline-block;
+  width: 10px; height: 10px; border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.amina-admin-scope .budget-row {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ops-rule-2);
+}
+.amina-admin-scope .budget-row:last-child { border-bottom: none; }
+.amina-admin-scope .budget-row .top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12.5px;
+}
+.amina-admin-scope .budget-row .label { color: var(--ops-ink); font-weight: 600; }
+.amina-admin-scope .budget-row .num {
+  font-family: var(--a-font-mono);
+  font-size: 12px;
+  color: var(--ops-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.amina-admin-scope .budget-row .bar {
+  height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;
+  margin-top: 8px;
+}
+.amina-admin-scope .budget-row .bar .fill { height: 100%; background: var(--ops-indigo); border-radius: 3px; }
+.amina-admin-scope .budget-row .bar .fill.warn { background: var(--ops-amber); }
+.amina-admin-scope .budget-row .bar .fill.err  { background: var(--ops-rose); }
+.amina-admin-scope .budget-row .sub {
+  font-size: 11px;
+  color: var(--ops-ink-3);
+  margin-top: 6px;
+  font-family: var(--a-font-mono);
+}
+
+/* operator usage table */
+.amina-admin-scope .op-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.amina-admin-scope .op-table th,
+.amina-admin-scope .op-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--ops-rule-2);
+  text-align: left;
+}
+.amina-admin-scope .op-table th {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  font-weight: 600;
+  background: var(--ops-paper-2);
+}
+.amina-admin-scope .op-table td.num {
+  text-align: right;
+  font-family: var(--a-font-mono);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,135 @@
+WHO PEN Protocol 2 — Cardiovascular Risk Management and Hypertension Treatment
+
+PROTOCOL 2: HYPERTENSION MANAGEMENT
+
+1. SCREENING AND DIAGNOSIS
+- Measure blood pressure in ALL adults aged 18+ at every health facility visit
+- Proper measurement technique:
+  * Patient seated for 5 minutes, back supported, feet flat on floor
+  * No caffeine, exercise, or smoking 30 minutes before measurement
+  * Use appropriate cuff size (too small = falsely high reading)
+  * Take 2 readings, 1-2 minutes apart — use the average
+- Hypertension diagnosis: requires ELEVATED readings on 2 SEPARATE visits
+  * Normal: SBP < 120 AND DBP < 80 mmHg
+  * Elevated: SBP 120-129 AND DBP < 80
+  * Stage 1 Hypertension: SBP 130-139 OR DBP 80-89
+  * Stage 2 Hypertension: SBP >= 140 OR DBP >= 90
+  * Hypertensive Crisis: SBP > 180 OR DBP > 120 — EMERGENCY
+
+2. CARDIOVASCULAR RISK ASSESSMENT
+- Use WHO/ISH CVD Risk Prediction Charts (specific for Sub-Saharan Africa)
+- Risk factors assessed: age, sex, smoking status, blood pressure, diabetes status, total cholesterol
+- Risk categories:
+  * LOW (< 10% 10-year risk): lifestyle modification only
+  * MODERATE (10-20%): lifestyle + consider single drug
+  * HIGH (20-30%): lifestyle + single drug therapy
+  * VERY HIGH (> 30%): lifestyle + combination drug therapy
+- All patients with existing CVD (previous heart attack, stroke) = VERY HIGH risk
+
+3. TREATMENT TARGETS
+- General population: BP < 140/90 mmHg
+- Patients with diabetes: BP < 130/80 mmHg
+- Patients with kidney disease: BP < 130/80 mmHg
+- Elderly (> 80 years): BP < 150/90 mmHg (less aggressive to avoid falls)
+
+4. LIFESTYLE MANAGEMENT (FIRST-LINE FOR ALL)
+- Salt reduction: < 5g per day (approximately 1 teaspoon)
+  * Practical: use half a Maggi cube instead of full, cook with herbs/spices instead of salt
+  * Avoid processed foods, salted fish, heavily salted sauces
+  * Reduce netetu (fermented locust beans) quantity or rinse before cooking
+- DASH-style diet adapted to Gambian foods:
+  * Increase: moringa leaves, okra, bitter leaf, baobab fruit (bouye), hibiscus (bissap)
+  * Increase: fish (fresh, not dried/salted), beans (nyebbeh), millet (chere)
+  * Reduce: palm oil, groundnut oil quantities (use less oil in domoda/benachin)
+  * Reduce: white rice portions, increase vegetable portions
+  * Fruits: mango, papaya, orange, banana, watermelon — 2-3 servings daily
+- Physical activity: 150 minutes per week moderate intensity
+  * Walking briskly for 30 minutes, 5 days per week
+  * Household work, farming, walking to market all count
+  * Avoid heavy lifting if BP is very high (> 160/100)
+- Weight management: even 5 kg weight loss can reduce BP by 5-10 mmHg
+- Tobacco cessation: smoking cessation reduces CVD risk by 50% within 1 year
+- Alcohol reduction: limit to 1-2 drinks per day maximum, none if possible
+- Stress management: deep breathing, prayer/meditation, community support (Bantaba)
+
+5. PHARMACOLOGICAL TREATMENT
+FIRST-LINE MEDICATIONS (available on WHO Essential Medicines List):
+a) ACE Inhibitors (ACEI): Enalapril 5-20mg daily, Lisinopril 10-40mg daily
+   - Preferred for: diabetics, kidney disease, heart failure
+   - Side effects: dry cough (10-20%), dizziness
+   - Contraindicated in pregnancy
+
+b) Calcium Channel Blockers (CCB): Amlodipine 5-10mg daily, Nifedipine 30-60mg daily
+   - Preferred for: elderly, Black/African patients (often more effective)
+   - Side effects: ankle swelling, headache, flushing
+   - Generally well-tolerated
+
+c) Thiazide Diuretics: Hydrochlorothiazide 12.5-25mg daily, Bendroflumethiazide
+   - Preferred for: elderly, uncomplicated hypertension
+   - Side effects: frequent urination, potassium loss, glucose elevation
+   - Monitor potassium, watch for gout
+
+d) ARBs (Angiotensin Receptor Blockers): Losartan 50-100mg daily
+   - Alternative to ACEI if cough develops
+   - Similar benefits to ACEI without cough
+   - Contraindicated in pregnancy
+
+TREATMENT ALGORITHM:
+Step 1: Single drug — ACEI or CCB (CCB preferred in Black/African populations)
+Step 2: If not at target after 4-8 weeks, add second drug (ACEI + CCB, or ACEI + Thiazide)
+Step 3: If not at target, triple combination (ACEI + CCB + Thiazide)
+Step 4: If still not controlled → REFER to specialist
+
+IMPORTANT: WHO PEN recommends starting with LOW-dose combination therapy rather than high-dose single drug — better BP control with fewer side effects
+
+6. HYPERTENSIVE EMERGENCIES
+- BP > 180/120 with organ damage symptoms:
+  * Severe headache, visual changes, chest pain, shortness of breath, confusion, seizure
+  * Nosebleed that won't stop
+- ACTION: Call 199 or go to EFSTH IMMEDIATELY
+- While waiting: sit upright, stay calm, deep breathing, loosen tight clothing
+- Do NOT give extra BP medication at home during a crisis
+
+7. MONITORING SCHEDULE
+- After starting medication: recheck BP in 2-4 weeks
+- Once stable: every 3 months
+- Blood tests (potassium, creatinine, glucose): every 6-12 months
+- More frequent monitoring if: diabetes, kidney disease, elderly
+- Home BP monitoring if available: morning and evening readings, record in diary
+
+8. MEDICATION ADHERENCE
+- Common reasons for non-adherence in Gambian context:
+  * Cost of medications
+  * Feeling well (no symptoms) → thinking medication not needed
+  * Side effects (especially frequent urination with thiazides)
+  * Running out of medication between clinic visits
+  * Traditional medicine use instead of prescribed medicine
+- Strategies:
+  * Explain that hypertension is usually silent — "the river can erode banks quietly"
+  * Align medication times with daily routine (prayers, meals)
+  * Simplify regimen — once-daily medications when possible
+  * Involve family member as medication buddy
+  * CHW follow-up visits for adherence support
+
+9. SPECIAL POPULATIONS
+- Pregnancy: STOP ACEI/ARBs immediately if pregnancy suspected. Use Methyldopa or Labetalol.
+- Breastfeeding: Amlodipine, Enalapril are generally safe. Avoid Atenolol.
+- Elderly (> 65): start at half dose, titrate slowly, watch for orthostatic hypotension (dizziness on standing)
+- Diabetes: target < 130/80, prefer ACEI/ARB, avoid high-dose thiazides (worsen glucose)
+- Kidney disease: ACEI/ARB preferred (protects kidneys), monitor potassium carefully
+
+10. REFERRAL CRITERIA
+- BP not controlled on 3 medications at adequate doses
+- Suspected secondary hypertension (young patient < 30, sudden onset, resistant to treatment)
+- Hypertensive emergency (BP > 180/120 with symptoms)
+- Pregnancy with hypertension
+- New kidney impairment or worsening renal function
+- Recurrent electrolyte abnormalities
+
+GAMBIAN CONTEXT:
+- Most common antihypertensives available at health centres: Amlodipine, Hydrochlorothiazide, Enalapril
+- BP measurement equipment available at health posts (manual sphygmomanometer)
+- Digital BP monitors increasingly available at health centres
+- Traditional remedies often used alongside: kinkeliba tea, bitter leaf. Advise patients to inform their doctor.
+- Salt intake in Gambia is HIGH due to Maggi cubes, dried fish, and sauces — salt reduction is the single most impactful lifestyle change
+- Bissap (hibiscus) tea has evidence for modest BP reduction — can be encouraged as part of healthy diet

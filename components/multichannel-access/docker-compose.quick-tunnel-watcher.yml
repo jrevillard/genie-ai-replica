@@ -1,0 +1,78 @@
+# AMINA Care -- Telegram quick-tunnel auto-registration watcher.
+# ============================================================================
+# Strict-additive override. Layer this file on top of:
+#   docker-compose.yml + docker-compose.quick-tunnel.yml
+#
+# What it does
+# ------------
+# When you run a Cloudflare quick tunnel without a domain, the public
+# URL is a random *.trycloudflare.com hostname. The hostname changes
+# every time you restart cf-quick-tunnel, so Telegram's registered
+# webhook goes stale. This sidecar polls the cloudflared logfile,
+# detects the latest URL, and re-registers it via the existing
+# /telegram/set-webhook endpoint -- so the bot self-heals after every
+# tunnel rotation with no manual copy/paste.
+#
+# Security note
+# -------------
+# This watcher does NOT mount /var/run/docker.sock. Mounting the
+# Docker socket would grant root-equivalent host access to any
+# attacker who could write to the watcher container. Instead, the
+# cf-quick-tunnel service writes its log to a SHARED named volume
+# (cf-tunnel-logs in docker-compose.quick-tunnel.yml) and the watcher
+# mounts that volume read-only. Same outcome, much smaller attack
+# surface.
+#
+# Token safety
+# ------------
+# The watcher never reads or prints TELEGRAM_BOT_TOKEN. The token
+# stays inside the multichannel-access container; the watcher drives
+# everything through the sidecar's HTTP /telegram/* endpoints.
+#
+# Usage
+# -----
+#   docker compose `
+#     -f components/multichannel-access/docker-compose.yml `
+#     -f components/multichannel-access/docker-compose.quick-tunnel.yml `
+#     -f components/multichannel-access/docker-compose.quick-tunnel-watcher.yml `
+#     up -d
+#
+# Stop with:
+#   docker compose <same -f's> down
+#
+# Tail logs:
+#   docker logs -f telegram-webhook-watcher
+
+services:
+
+  telegram-webhook-watcher:
+    image: python:3.11-slim
+    container_name: telegram-webhook-watcher
+    restart: unless-stopped
+    working_dir: /app
+    command: ["python", "/app/telegram_auto_webhook.py"]
+    environment:
+      SERVICE_URL:        http://multichannel-access:8020
+      TUNNEL_LOG_FILE:    /var/log/cloudflared/quick-tunnel.log
+      POLL_SECONDS:       "10"
+      STARTUP_GRACE_SECS: "15"
+      PYTHONUNBUFFERED:   "1"
+    volumes:
+      # The watcher script is mounted read-only from the repo so it
+      # can be edited without rebuilding an image.
+      - ./ops/telegram_auto_webhook.py:/app/telegram_auto_webhook.py:ro
+      # Shared volume populated by cf-quick-tunnel's --logfile output.
+      - cf-tunnel-logs:/var/log/cloudflared:ro
+    depends_on:
+      multichannel-access:
+        condition: service_healthy
+      cf-quick-tunnel:
+        condition: service_started
+    networks:
+      - chatqna_default
+
+# The cf-tunnel-logs volume is declared in docker-compose.quick-tunnel.yml.
+# Re-declaring it here keeps this file self-explanatory when read alone,
+# and docker compose merges identically-named top-level volumes.
+volumes:
+  cf-tunnel-logs:

@@ -1,0 +1,150 @@
+/*
+ * LiteracyShell.css — literacy-mode visual overrides.
+ * ====================================================
+ * Rules are keyed on a body attribute set by LiteracyBootstrap.jsx:
+ *
+ *   <body data-literacy-mode="beginner">
+ *   <body data-literacy-mode="basic">
+ *   <body data-literacy-mode="advanced">   (= default, no overrides)
+ *
+ * The goal is NOT to replace App.jsx. It is to nudge the existing UI
+ * towards bigger fonts, bigger tap targets, simpler chrome for users
+ * with lower literacy — without editing App.jsx. All overrides use
+ * :where(...) or relatively low specificity so they degrade gracefully
+ * if App.jsx changes in the future.
+ *
+ * Advanced mode:     no overrides — the app ships "as-is".
+ * Basic mode:        slightly larger base font, bigger buttons.
+ * Beginner mode:     much larger base font, very big buttons,
+ *                    simplified chrome (hides dense secondary content
+ *                    marked with .literacy-hide-beginner).
+ *
+ * Tag any element you want hidden in beginner mode with the class
+ * `literacy-hide-beginner`. Tag anything you want hidden in basic too
+ * with `literacy-hide-basic`. (These classes are opt-in — nothing is
+ * hidden by default because the current components don't use them.)
+ */
+
+/* ── Base font scaling ─────────────────────────────────────────────── */
+
+body[data-literacy-mode="basic"] {
+  font-size: 17px;
+}
+
+body[data-literacy-mode="beginner"] {
+  font-size: 19px;
+  line-height: 1.65;
+}
+
+
+/* ── Button tap targets ────────────────────────────────────────────── */
+/* Target <button> elements that aren't part of a modal dialog so the
+   custom onboarding gate and consent gate still look the way they
+   were designed. */
+
+body[data-literacy-mode="basic"] button:not([data-literacy-ignore]):not([role="dialog"] button) {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+body[data-literacy-mode="beginner"] button:not([data-literacy-ignore]):not([role="dialog"] button) {
+  min-height: 54px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+
+/* ── Input field sizing ────────────────────────────────────────────── */
+
+body[data-literacy-mode="basic"] input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+body[data-literacy-mode="basic"] textarea {
+  font-size: 16px;
+  padding: 12px 14px;
+}
+
+body[data-literacy-mode="beginner"] input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+body[data-literacy-mode="beginner"] textarea {
+  font-size: 18px;
+  padding: 14px 16px;
+  line-height: 1.5;
+}
+
+
+/* ── Opt-in hide classes ───────────────────────────────────────────── */
+
+body[data-literacy-mode="beginner"] .literacy-hide-beginner,
+body[data-literacy-mode="beginner"] .literacy-hide-simple {
+  display: none !important;
+}
+
+body[data-literacy-mode="basic"] .literacy-hide-basic,
+body[data-literacy-mode="basic"] .literacy-hide-simple {
+  display: none !important;
+}
+
+
+/* ── Beginner-mode extras ──────────────────────────────────────────── */
+/* Slightly more breathing room between stacked elements in beginner */
+
+body[data-literacy-mode="beginner"] p,
+body[data-literacy-mode="beginner"] li {
+  line-height: 1.7;
+}
+
+/* Make the primary chat send button visually obvious */
+body[data-literacy-mode="beginner"] button[data-literacy-primary],
+body[data-literacy-mode="beginner"] button.literacy-primary {
+  min-height: 62px !important;
+  font-size: 19px !important;
+  font-weight: 800 !important;
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4) !important;
+}
+
+
+/* ── Mode badge (rendered by LiteracyBootstrap) ────────────────────── */
+
+#amina-literacy-badge {
+  position: fixed;
+  bottom: 14px;
+  left: 14px;
+  z-index: 9998;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-literacy-mode="beginner"] #amina-literacy-badge {
+  background: rgba(14, 165, 233, 0.92);
+  color: #fff;
+  font-size: 12px;
+  padding: 8px 14px;
+}
+
+body[data-literacy-mode="basic"] #amina-literacy-badge {
+  background: rgba(99, 102, 241, 0.92);
+  color: #fff;
+}
+
+/* In advanced mode the 4 right-side floating controls (InboxBell 490,
+ * RoleSwitcher 548, LanguagePicker 606, ScribeFab 664) occupy the
+ * empty column under the "Today & Care" cards. The mode badge goes
+ * directly below that stack (ScribeFab bottom ≈ top:716 → badge at
+ * top:740, 24px gap) so it fills the same empty area without hiding
+ * the default-corner badge behind the main chat panel. */
+body[data-literacy-mode="advanced"] #amina-literacy-badge {
+  top: 740px !important;
+  right: 20px !important;
+  bottom: auto !important;
+  left: auto !important;
+  background: rgba(236, 72, 153, 0.92);
+  color: #fff;
+}

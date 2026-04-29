@@ -1,0 +1,197 @@
+IDF-DAR Practical Guidelines — Diabetes Management During Ramadan
+Source: International Diabetes Federation — Diabetes and Ramadan Alliance (IDF-DAR) Practical Guidelines 2021
+Updated with DaR-ADA-IDF Ramadan Guidelines 2026
+Reference: https://idf.org/media/uploads/2024/07/IDF_DaR_Practical_Guidelines_Ramadan.pdf
+
+1. RISK STRATIFICATION FOR FASTING DURING RAMADAN
+
+LOW RISK (0-3 points on IDF-DAR risk score):
+- Well-controlled Type 2 diabetes on lifestyle or low-risk medications (metformin, DPP-4 inhibitors)
+- No history of hypoglycemia
+- No complications
+- Fasting is probably safe with medical evaluation, medication adjustment, and strict monitoring
+
+MODERATE RISK (3.5-6 points):
+- Type 2 diabetes on sulfonylureas or multiple medications
+- Safety uncertain; requires evaluation, adjustment, and monitoring
+- Fasting is permitted but patients may decline after consulting physicians
+
+HIGH RISK (>6 points — fasting is probably unsafe, advise against fasting):
+- Severe hypoglycemia within 3 months before Ramadan
+- Recurrent hypoglycemia or hypoglycemia unawareness
+- Type 1 diabetes in adolescents/young adults
+- Unstable cardiovascular disease or stroke
+- Chronic kidney disease stage 4-5
+- On dialysis or post-kidney transplant
+- Multiple antidiabetic medications (4 or more drugs, or 3+ with specific high-risk combinations)
+- Pregnancy with diabetes
+- Poorly controlled diabetes (HbA1c >9%)
+
+2. PRE-RAMADAN ASSESSMENT (6-8 weeks before Ramadan, maximum 12 weeks)
+
+Assess:
+- Type and duration of diabetes
+- Current medication regimen and glycemic control (HbA1c)
+- Hypoglycemia history and awareness
+- Self-management capability (can patient check own glucose?)
+- Diabetes complications and comorbidities
+- Recent severe illness
+- Renal function (eGFR)
+- Access to glucose monitoring
+
+Educate patient on:
+- Risk quantification and religious exemptions (Islam permits medical exemption from fasting)
+- Blood glucose monitoring techniques
+- Fluid and dietary guidance
+- Physical activity advice during fasting
+- Medication adjustments explained clearly
+- Hypoglycemia/hyperglycemia recognition
+- When to break the fast immediately
+
+3. WHEN TO BREAK THE FAST — MANDATORY THRESHOLDS
+
+BREAK FAST IMMEDIATELY if:
+- Blood glucose < 70 mg/dL (3.9 mmol/L) — HYPOGLYCEMIA
+- Blood glucose > 300 mg/dL (16.6 mmol/L) — HYPERGLYCEMIA
+- Symptoms of hypoglycemia occur: shakiness, sweating, anxiety, trembling, rapid heartbeat, tingling around mouth, irritability, difficulty concentrating
+- Symptoms of hyperglycemia occur: excessive thirst, dry mouth, tiredness, blurred vision, headache
+- Symptoms of dehydration or acute illness
+
+RECHECK if: blood glucose between 70-90 mg/dL (3.9-5.0 mmol/L) — recheck within 1 hour
+
+4. MEDICATION ADJUSTMENTS DURING RAMADAN
+
+METFORMIN:
+- No dose reduction required (low hypoglycemia risk)
+- Once daily: take at Iftar (sunset meal)
+- Twice daily: take at Iftar and Suhoor (pre-dawn meal)
+- Three times daily: morning dose moved to Suhoor; combined evening dose at Iftar
+- Prolonged release formulation: take at Iftar
+
+SULFONYLUREAS (use 2nd generation — gliclazide or glimepiride preferred):
+- Once daily with good control: reduce dose, take at Iftar
+- Twice daily with good control: Iftar dose unchanged, Suhoor dose reduced
+- AVOID older agents (glibenclamide) — higher hypoglycemia risk
+- Use gliclazide, gliclazide MR, or glimepiride instead
+
+DPP-4 INHIBITORS (sitagliptin, vildagliptin):
+- No dose modification required
+- Once daily: take at Iftar
+- Twice daily (vildagliptin): take at Iftar and Suhoor
+
+SGLT2 INHIBITORS (empagliflozin, dapagliflozin):
+- No dose modification required
+- Take at Iftar
+- Must be started 2-4 weeks before Ramadan for blood glucose to stabilize
+- Monitor for dehydration during fasting
+
+GLP-1 RECEPTOR AGONISTS (liraglutide, semaglutide):
+- Low hypoglycemia risk when used alone
+- Dose must be titrated 2-4 weeks before Ramadan
+- Higher risk if combined with insulin or sulfonylureas
+
+BASAL INSULIN (Glargine, Degludec, Detemir):
+- Reduce dose by 30-40%
+- Take at Iftar
+- Monitor with 5-7 point glucose checks
+
+RAPID-ACTING INSULIN (Lispro, Aspart):
+- Suhoor dose: reduce by 30-50%
+- Skip pre-lunch dose entirely (patient is fasting)
+- Iftar dose: adjust based on 2-hour post-Iftar blood glucose
+
+TWICE-DAILY NPH/REGULAR INSULIN:
+- NPH at Iftar: no modification
+- NPH at Suhoor: reduce by 50%
+- Regular at Suhoor: reduce by 50%
+- Regular at Iftar: unchanged (adjust per post-Iftar glucose)
+
+INSULIN + SULFONYLUREAS COMBINATION:
+- Highest risk combination: reduce insulin dose by 25-50%
+- Consider switching sulfonylurea to DPP-4 inhibitor if possible
+
+SMBG-GUIDED INSULIN TITRATION:
+- BG < 70 mg/dL or symptoms: reduce insulin by 4 units
+- BG < 90 mg/dL: reduce by 2 units
+- BG 90-126 mg/dL: no change
+- BG > 126 mg/dL: increase by 2 units
+- BG > 200 mg/dL: increase by 4 units
+
+5. BLOOD GLUCOSE MONITORING SCHEDULE
+
+HIGH-RISK PATIENTS (7-point monitoring):
+1. When fasting begins (after Suhoor)
+2. Post-breakfast (before fasting)
+3. Pre-lunch (mid-fast)
+4. Post-lunch (mid-fast)
+5. Pre-dinner (before Iftar)
+6. Post-dinner (after Iftar)
+7. Midnight
+Plus: whenever symptoms occur or patient feels unwell
+
+MODERATE-TO-LOW RISK: minimum 1-2 daily readings; 5-point monitoring preferred
+
+6. NUTRITION GUIDANCE DURING RAMADAN
+
+MEAL DISTRIBUTION:
+- Suhoor (pre-dawn): 30-40% of daily calories, 3-5 carbohydrate exchanges
+- Iftar snack: 10-20% of calories, 1-2 carbohydrate exchanges
+- Iftar main meal: 40-50% of calories, 3-6 carbohydrate exchanges
+- Healthy snack (if needed): 10-20%, 1-2 exchanges
+(1 carbohydrate exchange = 15 grams carbohydrate)
+
+MACRONUTRIENT TARGETS:
+- Carbohydrate: ≤130 g/day (40-45% of calories) — low glycemic index preferred
+- Protein: ≥1.2 g/kg body weight (20-30% of calories)
+- Fat: 30-35% of calories, saturated fat <7%
+- Fiber: 20-35 g/day
+- Cholesterol: <300 mg/day
+
+SUHOOR recommendations:
+- Eat as late as possible (close to Fajr)
+- Include fiber-rich foods for sustained energy (whole grains, beans, vegetables)
+- Include protein (eggs, beans, yogurt)
+- Drink water adequately
+- Avoid salty foods (increase thirst during fasting)
+
+IFTAR recommendations:
+- Start with dates and water (traditional, low glycemic)
+- Avoid high-carbohydrate calorie-dense meals
+- Avoid fried foods and sugary desserts
+- Include vegetables and lean protein
+- Drink 2-3 liters of water between Iftar and Suhoor
+
+GAMBIAN CONTEXT:
+- Suhoor: chere (millet porridge) with milk + banana — good sustained energy
+- Iftar: dates + water, then light domoda with vegetables, reduce white rice
+- Avoid: heavy benachin with excess oil at Iftar, sweet attaya with 4+ spoons sugar
+- Encourage: bouye (baobab) drink, bissap (unsweetened), moringa in stew
+
+7. PHYSICAL ACTIVITY DURING RAMADAN
+
+- Continue normal physical activity but avoid rigorous exercise during fasting hours
+- Taraweeh prayers (bowing, kneeling, rising) count as daily exercise
+- Avoid heavy activity in last few hours of fasting (highest hypoglycemia risk)
+- Best time for exercise: 1-2 hours after Iftar
+- If exercising during fast: carry glucose tablets/sugar
+
+8. SPECIAL POPULATIONS
+
+PREGNANT WOMEN WITH DIABETES:
+- Blood glucose targets: fasting 70-95 mg/dL, post-meal <120 mg/dL
+- Break fast if: BG <70, reduced fetal movement, feeling unwell
+- Insulin and metformin are treatment of choice
+- Avoid glibenclamide during Ramadan
+- 7-point glucose monitoring
+
+ELDERLY (≥65 years):
+- Higher risk of hypoglycemia and emergency visits
+- Use medications with lower hypo risk (avoid glibenclamide)
+- Increase SMBG frequency
+- Ensure caregiver support for medication management
+- Individualized diet and activity plan
+
+9. HOSPITALIZATION RISK DATA
+- Type 1 diabetes patients: 4.7-fold increase in severe hypoglycemia requiring hospitalization during Ramadan
+- Type 2 diabetes patients: 7.5-fold increase in severe hyperglycemia requiring hospitalization
+- Pre-Ramadan assessment and medication adjustment significantly reduces these risks

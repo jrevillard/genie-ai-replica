@@ -1,0 +1,107 @@
+version: "3.9"
+
+services:
+  kong-db:
+    image: postgres:15
+    container_name: kong-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kongpass
+    volumes:
+      - kong_pg_data:/var/lib/postgresql/data
+    networks:
+      - genie-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong -d kong"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kong-migrations:
+    image: kong:3.6
+    container_name: kong-migrations
+    restart: "no"
+    depends_on:
+      kong-db:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+    command: kong migrations bootstrap
+    networks:
+      - genie-net
+
+  # Import declarative config into the DB AFTER migrations.
+  kong-bootstrap:
+    image: kong:3.6
+    container_name: kong-bootstrap
+    restart: "no"
+    depends_on:
+      kong-db:
+        condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+    volumes:
+      - ../config/kong.yml:/kong/kong.yml:ro
+    command: kong config db_import /kong/kong.yml
+    networks:
+      - genie-net
+
+  kong-v2:
+    image: kong:3.6
+    container_name: genie-kong-v2
+    restart: unless-stopped
+    depends_on:
+      kong-db:
+        condition: service_healthy
+      kong-migrations:
+        condition: service_completed_successfully
+      kong-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+
+      # logs
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+
+      # listen internally on defaults
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
+      KONG_ADMIN_GUI_URL: http://localhost:9002
+    ports:
+      - "9000:8000"  # Public gateway
+      - "9001:8001"  # Admin API
+      - "9002:8002"  # Kong Manager UI
+    networks:
+      - genie-net
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  genie-net:
+    external: true
+
+volumes:
+  kong_pg_data:

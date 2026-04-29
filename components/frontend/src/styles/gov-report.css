@@ -1,0 +1,636 @@
+/* ============================================================
+   AMINA · Government summary report
+   ------------------------------------------------------------
+   Proper multi-sheet A4 document — every sheet carries its own
+   classification strip, running head and page number. Three
+   sheets total: Cover, Clinical, Authorisation.
+   Scoped to .amina-gov-scope.
+   ============================================================ */
+
+/* ── Overlay (solid backdrop — observatory must not bleed through) ── */
+
+.amina-gov-scope .gr-overlay {
+  position: fixed; inset: 0;
+  background: #0a1020;
+  z-index: 100;
+  display: flex; flex-direction: column;
+  overflow: auto;
+  animation: gr-fade-in 180ms ease-out;
+}
+@keyframes gr-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.amina-gov-scope .gr-overlay-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 0 44px;
+  background:
+    radial-gradient(
+      ellipse at top,
+      rgba(30, 64, 175, 0.10),
+      transparent 55%
+    ),
+    #0a1020;
+}
+
+/* ── Toolbar ─────────────────────────────────────── */
+
+.amina-gov-scope .gr-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex; align-items: center; gap: 14px;
+  padding: 11px 28px;
+  background: rgba(4, 8, 20, 0.96);
+  color: #f1f5f9;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.amina-gov-scope .gr-toolbar-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+.amina-gov-scope .gr-toolbar-kicker {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #93c5fd;
+  font-weight: 600;
+}
+.amina-gov-scope .gr-toolbar-spacer { flex: 1; }
+.amina-gov-scope .gr-toolbar-hint {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.75);
+}
+.amina-gov-scope .gr-toolbar-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 32px; padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.amina-gov-scope .gr-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+.amina-gov-scope .gr-toolbar-btn.primary {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+.amina-gov-scope .gr-toolbar-btn.primary:hover {
+  background: #2563eb;
+}
+
+/* ── Sheet (A4 page) ─────────────────────────────── */
+
+.amina-gov-scope .gr-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 92vw;
+  margin: 0 auto 22px;
+  background: #fff;
+  color: #0a1535;
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.45);
+  font-family: var(--a-font-ui, "Geist", system-ui, sans-serif);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  position: relative;
+}
+
+/* Classification strip — actual DOM element, appears on every sheet */
+.amina-gov-scope .gr-class-strip {
+  padding: 6mm 22mm 3mm;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 8pt;
+  letter-spacing: 0.28em;
+  text-align: center;
+  color: #9f1239;
+  font-weight: 600;
+  border-bottom: 0.75px solid #f5e7eb;
+}
+.amina-gov-scope .gr-class-strip.bottom {
+  border-bottom: none;
+  border-top: 0.75px solid #f5e7eb;
+  padding: 3mm 22mm 6mm;
+}
+
+/* Running head — compact header shown on every sheet */
+.amina-gov-scope .gr-running-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 4mm 22mm 3mm;
+  font-size: 8.5pt;
+  color: #475569;
+  border-bottom: 0.5px solid #e3ddd0;
+}
+.amina-gov-scope .gr-running-head-org {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 600;
+  color: #0a1535;
+  letter-spacing: 0.01em;
+}
+.amina-gov-scope .gr-running-head-mini-crest {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #1d4ed8, #1e3a8a 55%, #0a1535 100%);
+  border: 1px solid #fff;
+  outline: 0.5px solid #0a1535;
+}
+.amina-gov-scope .gr-running-head-title {
+  text-align: center;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.amina-gov-scope .gr-running-head-ref {
+  text-align: right;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 8.5pt;
+  color: #475569;
+}
+
+/* Content region */
+.amina-gov-scope .gr-sheet-body {
+  padding: 4mm 22mm 6mm;
+  overflow: hidden;
+}
+
+/* Page footer — page number + ref on every sheet */
+.amina-gov-scope .gr-page-foot {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 3mm 22mm 4mm;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 8pt;
+  color: #64748b;
+  letter-spacing: 0.04em;
+  border-top: 0.5px solid #e3ddd0;
+}
+.amina-gov-scope .gr-page-foot .mid {
+  font-weight: 600;
+  color: #0a1535;
+  letter-spacing: 0.08em;
+}
+.amina-gov-scope .gr-page-foot .right { text-align: right; }
+
+/* ── Cover masthead (sheet 1 only) ────────────────── */
+
+.amina-gov-scope .gr-masthead {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 2.5px solid #0a1535;
+  margin-bottom: 4px;
+  position: relative;
+}
+.amina-gov-scope .gr-masthead::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -5px;
+  height: 1px;
+  background: #0a1535;
+}
+.amina-gov-scope .gr-crest {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, #1d4ed8, #1e3a8a 55%, #0a1535 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  box-shadow: 0 2px 6px rgba(10, 21, 53, 0.25);
+  border: 1.5px solid #fff;
+  outline: 1px solid #0a1535;
+  outline-offset: 1px;
+}
+.amina-gov-scope .gr-masthead-org {
+  font-size: 11.5pt;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #0a1535;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+.amina-gov-scope .gr-masthead-dept {
+  font-size: 9.5pt;
+  color: #475569;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+.amina-gov-scope .gr-masthead-meta {
+  text-align: right;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9pt;
+  color: #475569;
+  line-height: 1.6;
+}
+.amina-gov-scope .gr-masthead-meta strong {
+  color: #0a1535; font-weight: 600;
+}
+
+/* Title block */
+.amina-gov-scope .gr-title-block {
+  padding: 18px 0 18px;
+  border-bottom: 1px solid #e3ddd0;
+  margin-bottom: 18px;
+}
+.amina-gov-scope .gr-title-kicker {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.amina-gov-scope .gr-title {
+  font-size: 18pt;
+  font-weight: 700;
+  color: #0a1535;
+  line-height: 1.22;
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+.amina-gov-scope .gr-subtitle {
+  font-size: 10.5pt;
+  color: #334155;
+  margin-top: 6px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+.amina-gov-scope .gr-title-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: #fbfaf6;
+  border: 1px solid #e3ddd0;
+  border-radius: 4px;
+}
+.amina-gov-scope .gr-title-meta .k {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 7.5pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+.amina-gov-scope .gr-title-meta .v {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 9.5pt;
+  color: #0a1535;
+  font-weight: 600;
+}
+
+/* ── Section ─────────────────────────────────────── */
+
+.amina-gov-scope .gr-section {
+  margin: 18px 0 14px;
+  break-inside: avoid;
+}
+.amina-gov-scope .gr-section:first-child { margin-top: 8px; }
+.amina-gov-scope .gr-section-h {
+  display: flex; align-items: baseline; gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #0a1535;
+  margin-bottom: 10px;
+}
+.amina-gov-scope .gr-section-num {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 10pt;
+  font-weight: 700;
+  color: #1e3a8a;
+  letter-spacing: 0.04em;
+}
+.amina-gov-scope .gr-section-title {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #0a1535;
+  letter-spacing: -0.005em;
+}
+.amina-gov-scope .gr-section-sub {
+  font-size: 8.5pt;
+  color: #64748b;
+  margin-left: auto;
+  font-family: var(--a-font-mono, ui-monospace);
+  letter-spacing: 0.02em;
+}
+.amina-gov-scope .gr-p {
+  margin: 0 0 10px;
+  color: #1e293b;
+  line-height: 1.55;
+  font-size: 10pt;
+}
+
+/* ── KPI panel inside report ─────────────────────── */
+
+.amina-gov-scope .gr-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin: 10px 0;
+  border: 1px solid #d4cdbc;
+  background: #fff;
+}
+.amina-gov-scope .gr-kpi {
+  padding: 10px 12px;
+  border-right: 1px solid #e3ddd0;
+}
+.amina-gov-scope .gr-kpi:last-child { border-right: none; }
+.amina-gov-scope .gr-kpi .k {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 7.5pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.amina-gov-scope .gr-kpi .v {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 16pt;
+  font-weight: 600;
+  color: #0a1535;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.amina-gov-scope .gr-kpi .sub {
+  font-size: 8.5pt;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* ── Data tables ─────────────────────────────────── */
+
+.amina-gov-scope .gr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  margin: 6px 0;
+  table-layout: auto;
+}
+.amina-gov-scope .gr-table thead th {
+  text-align: left;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 7.5pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #475569;
+  padding: 7px 9px;
+  background: #fbfaf6;
+  border-top: 1px solid #0a1535;
+  border-bottom: 1px solid #0a1535;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.amina-gov-scope .gr-table thead th.num { text-align: right; }
+.amina-gov-scope .gr-table tbody tr { border-bottom: 1px solid #e3ddd0; }
+.amina-gov-scope .gr-table tbody tr:last-child { border-bottom: 1.5px solid #0a1535; }
+.amina-gov-scope .gr-table td {
+  padding: 6px 9px;
+  color: #0a1535;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+.amina-gov-scope .gr-table td.num {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.amina-gov-scope .gr-table td .muted { color: #64748b; }
+
+/* Status pills */
+.amina-gov-scope .gr-status {
+  display: inline-block;
+  padding: 1px 6px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.amina-gov-scope .gr-status.ok    { color: #047857; background: #d1fae5; border-color: #a7f3d0; }
+.amina-gov-scope .gr-status.warn  { color: #b45309; background: #fef3c7; border-color: #fde68a; }
+.amina-gov-scope .gr-status.alert { color: #b91c1c; background: #fee2e2; border-color: #fecaca; }
+
+/* Inline coverage bar */
+.amina-gov-scope .gr-bar {
+  display: inline-block; width: 56px; height: 5px;
+  border-radius: 3px;
+  background: #eeeae0;
+  vertical-align: 1px;
+  margin-right: 8px;
+}
+.amina-gov-scope .gr-bar > span {
+  display: block; height: 100%; border-radius: 3px;
+  background: #1d4ed8;
+}
+
+/* ── Notes blocks ────────────────────────────────── */
+
+.amina-gov-scope .gr-note {
+  padding: 10px 14px;
+  background: #fbfaf6;
+  border-left: 3px solid #1e3a8a;
+  font-size: 9pt;
+  color: #334155;
+  line-height: 1.55;
+  margin: 10px 0;
+}
+.amina-gov-scope .gr-note strong { color: #0a1535; font-weight: 600; }
+.amina-gov-scope .gr-note code {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 8.5pt;
+  padding: 0 4px;
+  background: #fff;
+  border: 1px solid #e3ddd0;
+  border-radius: 2px;
+}
+
+/* ── Signature block ─────────────────────────────── */
+
+.amina-gov-scope .gr-sig-block { break-inside: avoid; margin-top: 10px; }
+.amina-gov-scope .gr-sig-intro {
+  font-size: 9.5pt;
+  color: #334155;
+  line-height: 1.6;
+  margin-bottom: 22px;
+}
+.amina-gov-scope .gr-sig-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 18px;
+}
+.amina-gov-scope .gr-sig {
+  padding-top: 2px;
+  position: relative;
+}
+.amina-gov-scope .gr-sig-role {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 7.5pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #475569;
+  font-weight: 700;
+  margin-bottom: 38px;
+}
+.amina-gov-scope .gr-sig-line {
+  border-bottom: 1.25px solid #0a1535;
+  padding-bottom: 2px;
+  margin-bottom: 6px;
+  min-height: 38px;
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+}
+.amina-gov-scope .gr-sig-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: #0a1535;
+  padding: 0;
+  width: 100%;
+}
+.amina-gov-scope .gr-sig-input::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+  font-style: italic;
+}
+.amina-gov-scope .gr-sig-input.title-input {
+  font-size: 8.5pt;
+  font-weight: 500;
+  color: #334155;
+}
+.amina-gov-scope .gr-sig-input.date-input {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 8.5pt;
+  font-weight: 500;
+  color: #334155;
+}
+.amina-gov-scope .gr-sig-caption {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  font-size: 8.5pt;
+  color: #475569;
+  line-height: 1.4;
+}
+.amina-gov-scope .gr-sig-caption .k {
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 7pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 600;
+}
+.amina-gov-scope .gr-sig-title-row,
+.amina-gov-scope .gr-sig-date-row {
+  border-bottom: 0.75px dotted #94a3b8;
+  padding-bottom: 2px;
+  margin-top: 4px;
+  min-height: 18px;
+}
+
+.amina-gov-scope .gr-stamp {
+  margin-top: 20px;
+  padding: 10px 14px;
+  border: 1.25px dashed #9f1239;
+  border-radius: 4px;
+  font-family: var(--a-font-mono, ui-monospace);
+  font-size: 8.5pt;
+  color: #9f1239;
+  letter-spacing: 0.06em;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(159, 18, 57, 0.02),
+    rgba(159, 18, 57, 0.02) 8px,
+    rgba(159, 18, 57, 0.00) 8px,
+    rgba(159, 18, 57, 0.00) 16px
+  );
+}
+.amina-gov-scope .gr-stamp strong {
+  font-weight: 700; letter-spacing: 0.16em;
+}
+
+/* ── Print media ─────────────────────────────────── */
+
+@media print {
+  /* Hide everything except the overlay */
+  body.gr-printing .amina-gov-scope > *:not(.gr-overlay) { display: none !important; }
+  body.gr-printing .amina-gov-scope .gr-toolbar          { display: none !important; }
+
+  body.gr-printing .amina-gov-scope {
+    position: static;
+    display: block;
+    overflow: visible;
+    inset: auto;
+    background: #fff;
+  }
+  body.gr-printing .amina-gov-scope .gr-overlay {
+    position: static;
+    background: #fff;
+    inset: auto;
+    overflow: visible;
+    display: block;
+  }
+  body.gr-printing .amina-gov-scope .gr-overlay-scroll {
+    padding: 0;
+    background: #fff;
+    overflow: visible;
+  }
+  body.gr-printing .amina-gov-scope .gr-sheet {
+    box-shadow: none;
+    width: auto;
+    max-width: none;
+    min-height: auto;
+    margin: 0;
+    page-break-after: always;
+    break-after: page;
+  }
+  body.gr-printing .amina-gov-scope .gr-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+}

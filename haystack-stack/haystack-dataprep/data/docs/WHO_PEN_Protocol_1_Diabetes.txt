@@ -1,0 +1,101 @@
+WHO PEN Protocol 1 — Prevention of Heart Attacks, Strokes, and Kidney Disease through Integrated Management of Diabetes and Hypertension
+
+PROTOCOL 1: DIABETES MANAGEMENT
+
+1. SCREENING AND DIAGNOSIS
+- Screen all adults aged 40+ for diabetes during any health facility visit
+- Screen earlier (age 30+) if: family history, obesity (BMI > 25), history of gestational diabetes
+- Diagnostic criteria:
+  * Fasting plasma glucose >= 126 mg/dL (7.0 mmol/L) on two separate days
+  * Random plasma glucose >= 200 mg/dL (11.1 mmol/L) with symptoms (polyuria, polydipsia, weight loss)
+  * HbA1c >= 6.5% (48 mmol/mol)
+- Pre-diabetes (impaired fasting glucose): 100-125 mg/dL (5.6-6.9 mmol/L) — lifestyle intervention
+
+2. TREATMENT TARGETS
+- Fasting blood glucose: 70-130 mg/dL (4.0-7.2 mmol/L)
+- Post-meal blood glucose (2 hours): < 180 mg/dL (10.0 mmol/L)
+- HbA1c target: < 7.0% (53 mmol/mol) for most patients
+- HbA1c target: < 8.0% for elderly, frail, or those with frequent hypoglycemia
+- Blood pressure target for diabetics: < 130/80 mmHg (stricter than general population)
+
+3. LIFESTYLE MANAGEMENT (FIRST-LINE FOR ALL PATIENTS)
+- Diet: reduce refined carbohydrates, increase vegetables, reduce salt to < 5g/day
+- Physical activity: at least 150 minutes per week of moderate-intensity activity (brisk walking)
+- Weight management: aim for BMI 18.5-24.9, or 5-10% weight loss if overweight
+- Tobacco cessation: essential — smoking increases cardiovascular risk 2-4x in diabetics
+- Alcohol: limit or avoid — increases hypoglycemia risk, especially with sulfonylureas
+
+4. PHARMACOLOGICAL TREATMENT STEPWISE APPROACH
+Step 1: Metformin 500mg once daily with food, increase to 500mg twice daily after 1-2 weeks
+Step 2: If fasting glucose not at target after 3 months, increase Metformin to 1000mg twice daily
+Step 3: If still not at target, add Gliclazide 40-80mg daily (sulfonylurea)
+Step 4: If still not at target after 3-6 months on dual therapy, REFER for insulin initiation
+
+IMPORTANT: Metformin is contraindicated in renal impairment (eGFR < 30), heart failure, liver disease
+IMPORTANT: Sulfonylureas cause hypoglycemia — patient education on symptoms is essential
+
+5. HYPOGLYCEMIA MANAGEMENT
+- Symptoms: sweating, trembling, confusion, hunger, weakness, palpitations, blurred vision
+- Blood glucose < 70 mg/dL = hypoglycemia
+- IMMEDIATE ACTION: eat 15-20g fast-acting sugar (3-4 sugar cubes, half glass of juice, 1 tablespoon honey)
+- Recheck blood glucose after 15 minutes — repeat if still < 70
+- If unconscious: do NOT give anything by mouth, place in recovery position, call emergency (199)
+- After recovery: eat a proper meal to prevent recurrence
+- Severe hypoglycemia (< 50 mg/dL): MEDICAL EMERGENCY — needs IV dextrose at health facility
+
+6. HYPERGLYCEMIA AND DKA WARNING SIGNS
+- Blood glucose > 300 mg/dL with: nausea, vomiting, abdominal pain, fruity breath, rapid breathing
+- This is Diabetic Ketoacidosis (DKA) — MEDICAL EMERGENCY
+- ACTION: Go to hospital IMMEDIATELY (EFSTH or nearest facility with IV fluids)
+- Do NOT wait. Do NOT try to manage at home.
+
+7. MONITORING SCHEDULE
+- Self-monitoring blood glucose: daily if on insulin, 2-3x/week if on oral medications
+- HbA1c: every 3-6 months at health facility
+- Blood pressure: every visit
+- Foot examination: every 6 months (check for sensation loss, ulcers, calluses)
+- Eye examination: annually (diabetic retinopathy screening)
+- Kidney function (urine protein, creatinine): annually
+- Lipid profile: annually
+
+8. FOOT CARE (CRITICAL FOR PREVENTION OF AMPUTATION)
+- Wash feet daily with warm (not hot) water
+- Dry thoroughly, especially between toes
+- Apply moisturizer to prevent cracking (NOT between toes)
+- Wear closed shoes that fit well — never walk barefoot
+- Cut toenails straight across, not curved
+- Check feet daily for cuts, blisters, redness, swelling
+- Any non-healing wound on foot → visit health facility within 24 hours
+- Loss of sensation in feet → higher risk of unnoticed injury
+
+9. DIABETES IN PREGNANCY
+- Pre-existing diabetes: tighten glucose control before conception
+- Gestational diabetes: screen all pregnant women at 24-28 weeks
+- Treatment: diet and exercise first, insulin if needed (NOT oral drugs in pregnancy)
+- After delivery: recheck glucose at 6-12 weeks postpartum
+
+10. RAMADAN FASTING WITH DIABETES
+- HIGH RISK (should NOT fast): Type 1 diabetes, poorly controlled Type 2, history of severe hypoglycemia, renal impairment, pregnancy
+- MODERATE RISK (fast with medical supervision): well-controlled Type 2 on metformin or diet alone
+- Adjustments: move Metformin dose to Iftar, reduce sulfonylurea dose, check glucose 2-3 times during fasting
+- BREAK FAST IMMEDIATELY if: glucose < 70 or > 300, symptoms of hypo/hyperglycemia
+- Consult doctor BEFORE Ramadan to adjust medication schedule
+
+11. REFERRAL CRITERIA (REFER TO HOSPITAL)
+- Newly diagnosed Type 1 diabetes (any age)
+- Blood glucose persistently > 300 mg/dL despite medication
+- Recurrent severe hypoglycemia
+- Suspected DKA (vomiting + high sugar + fruity breath)
+- Pregnancy with diabetes
+- Non-healing foot ulcer
+- Progressive kidney disease (rising creatinine)
+- Need for insulin initiation
+- HbA1c > 9% despite dual oral therapy
+
+GAMBIAN CONTEXT:
+- Essential medicines available at health centres: Metformin, Gliclazide, Insulin (some centres)
+- Blood glucose testing available at most health posts (glucometer)
+- HbA1c testing available at regional hospitals and EFSTH
+- CHW role: education, adherence support, foot checks, referral when needed
+- Cost barrier: insulin requires cold chain — may need referral to facility with refrigeration
+- Diet guidance: reduce white rice portions, add leafy vegetables (moringa, bitter leaf), reduce palm oil, use whole grains (millet/chere)

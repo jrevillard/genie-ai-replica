@@ -1,0 +1,71 @@
+# AMINA Care — Gap-Closers Override
+# ==================================
+# Layers the safety-consensus guard, ambient-scribe pipeline, and SMART-on-
+# FHIR authserver on top of the resilience stack.
+#
+# Chain:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.override.yml \
+#     -f docker-compose.meta-channels.yml \
+#     -f docker-compose.inbox.yml \
+#     -f docker-compose.resilience.yml \
+#     -f docker-compose.gap-closers.yml \
+#     up -d haystack-chatqna
+#
+# New bind mounts:
+#   src/services/safety_consensus.py
+#   src/services/scribe_service.py
+#   src/services/smart_service.py
+#   src/api/scribe_routes.py
+#   src/api/smart_routes.py
+#   src/main_with_gap_closers.py
+#
+# Persistent host dir for scribe audio:
+#   ./scribe_audio  -> /app/data/scribe
+#
+# Config:
+#   SAFETY_CONSENSUS_ENABLED       default "true"
+#   SAFETY_CONSENSUS_TIMEOUT_SECONDS default 8
+#   SCRIBE_DIR                     default /app/data/scribe
+#   SCRIBE_SESSION_TTL_SECONDS     default 7200
+#   SCRIBE_MAX_AUDIO_MB            default 60
+#   SMART_PUBLIC_BASE              URL where this service is externally reachable
+#   SMART_FHIR_BASE                URL prefix clients should use for FHIR
+#   SMART_CLIENTS                  JSON override for the client registry
+#   SMART_ACCESS_TOKEN_TTL_SECONDS default 3600
+
+services:
+  haystack-chatqna:
+    volumes:
+      - ./haystack-chatqna/src/services/safety_consensus.py:/app/src/services/safety_consensus.py:ro
+      - ./haystack-chatqna/src/services/scribe_service.py:/app/src/services/scribe_service.py:ro
+      - ./haystack-chatqna/src/services/smart_service.py:/app/src/services/smart_service.py:ro
+      - ./haystack-chatqna/src/api/scribe_routes.py:/app/src/api/scribe_routes.py:ro
+      - ./haystack-chatqna/src/api/smart_routes.py:/app/src/api/smart_routes.py:ro
+      - ./haystack-chatqna/src/main_with_gap_closers.py:/app/src/main_with_gap_closers.py:ro
+      # resilience_routes.py edited in place — already bind-mounted from the
+      # resilience override; no new mount needed.
+      - ./haystack-chatqna/src/api/resilience_routes.py:/app/src/api/resilience_routes.py:ro
+      - ./scribe_audio:/app/data/scribe
+    environment:
+      SAFETY_CONSENSUS_ENABLED:        ${SAFETY_CONSENSUS_ENABLED:-true}
+      SAFETY_CONSENSUS_TIMEOUT_SECONDS: ${SAFETY_CONSENSUS_TIMEOUT_SECONDS:-8}
+      SCRIBE_DIR:                      /app/data/scribe
+      SCRIBE_SESSION_TTL_SECONDS:      ${SCRIBE_SESSION_TTL_SECONDS:-7200}
+      SCRIBE_MAX_AUDIO_MB:             ${SCRIBE_MAX_AUDIO_MB:-60}
+      SMART_PUBLIC_BASE:               ${SMART_PUBLIC_BASE:-http://localhost:8000}
+      SMART_FHIR_BASE:                 ${SMART_FHIR_BASE:-http://localhost:8000/api/v1/fhir}
+      SMART_CLIENTS:                   ${SMART_CLIENTS:-}
+      SMART_ACCESS_TOKEN_TTL_SECONDS:  ${SMART_ACCESS_TOKEN_TTL_SECONDS:-3600}
+    command:
+      - uvicorn
+      - src.main_with_gap_closers:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --limit-concurrency
+      - "200"

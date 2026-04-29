@@ -1,0 +1,240 @@
+/* ============================================================
+   AMINA · Legacy fallback
+   A proper disclosure surface + archive frame for the legacy
+   AdminDashboard embeds. Replaces the bare ghost-button toggle.
+   Scoped to .amina-admin-scope.
+   ============================================================ */
+
+.amina-admin-scope .legacy-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* Pull above separator margin up */
+  margin-top: 8px;
+}
+
+/* ── Disclosure card (collapsed state) ─────────────────────── */
+
+.amina-admin-scope .legacy-disclosure {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 18px 14px 16px;
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.02),
+      rgba(255, 255, 255, 0.00)
+    ),
+    rgba(15, 23, 42, 0.35);
+  border: 1px solid var(--a-border-1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+  font-family: var(--a-font-ui);
+  color: var(--a-fg);
+  text-align: left;
+  width: 100%;
+}
+.amina-admin-scope .legacy-disclosure:hover {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.04),
+      rgba(255, 255, 255, 0.01)
+    ),
+    rgba(15, 23, 42, 0.45);
+  border-color: var(--a-border-2);
+}
+.amina-admin-scope .legacy-disclosure:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.45);
+}
+.amina-admin-scope .legacy-disclosure[aria-expanded="true"] {
+  border-radius: 12px 12px 0 0;
+  border-bottom-color: transparent;
+}
+
+/* Left: archive glyph inside a subtle chip */
+.amina-admin-scope .legacy-disclosure-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg,
+    rgba(251, 191, 36, 0.10),
+    rgba(251, 191, 36, 0.02));
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  color: rgba(251, 191, 36, 0.9);
+  flex-shrink: 0;
+}
+
+/* Middle: title + subtitle */
+.amina-admin-scope .legacy-disclosure-text {
+  min-width: 0;
+}
+.amina-admin-scope .legacy-disclosure-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--a-fg);
+  letter-spacing: 0.005em;
+}
+.amina-admin-scope .legacy-disclosure-kicker {
+  font-family: var(--a-font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(251, 191, 36, 0.85);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.amina-admin-scope .legacy-disclosure-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--a-fg-mute);
+  line-height: 1.5;
+  max-width: 620px;
+}
+
+/* Right: chevron pill */
+.amina-admin-scope .legacy-disclosure-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--a-fg-mute);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--a-border-1);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  font-family: inherit;
+}
+.amina-admin-scope .legacy-disclosure:hover .legacy-disclosure-cta {
+  color: var(--a-fg);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--a-border-2);
+}
+.amina-admin-scope .legacy-disclosure-cta svg {
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.amina-admin-scope .legacy-disclosure[aria-expanded="true"] .legacy-disclosure-cta svg {
+  transform: rotate(180deg);
+}
+
+/* ── Archive frame (expanded state) ─────────────────────── */
+
+.amina-admin-scope .legacy-archive {
+  border: 1px solid var(--a-border-1);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  background:
+    linear-gradient(180deg,
+      rgba(6, 9, 20, 0.90),
+      rgba(6, 9, 20, 0.98)
+    );
+  overflow: hidden;
+  animation: legacy-expand 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes legacy-expand {
+  from { opacity: 0; max-height: 0; }
+  to   { opacity: 1; max-height: 5000px; }
+}
+
+/* Ribbon at the top of the archive */
+.amina-admin-scope .legacy-archive-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background:
+    linear-gradient(90deg,
+      rgba(251, 191, 36, 0.06) 0%,
+      rgba(251, 191, 36, 0.02) 30%,
+      rgba(251, 191, 36, 0.00) 100%
+    );
+  border-bottom: 1px solid var(--a-border-1);
+  font-size: 11px;
+  color: var(--a-fg-mute);
+}
+.amina-admin-scope .legacy-archive-ribbon-label {
+  font-family: var(--a-font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(251, 191, 36, 0.85);
+  font-weight: 600;
+}
+.amina-admin-scope .legacy-archive-ribbon-note {
+  letter-spacing: 0.01em;
+  color: var(--a-fg-dim);
+}
+.amina-admin-scope .legacy-archive-ribbon-spacer {
+  flex: 1;
+}
+.amina-admin-scope .legacy-archive-ribbon-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--a-border-1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--a-fg-mute);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms ease, color 120ms ease;
+}
+.amina-admin-scope .legacy-archive-ribbon-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--a-fg);
+}
+
+/* Inner container that holds the embedded dark AdminDashboard */
+.amina-admin-scope .legacy-archive-inner {
+  padding: 14px 14px 18px;
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(129, 140, 248, 0.04) 0%,
+      transparent 60%
+    );
+}
+.amina-admin-scope .legacy-archive-surface {
+  border: 1px solid var(--a-border-1);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.35);
+  box-shadow:
+    0 2px 14px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+/* Corner labels — cassette-tape / archive-card tactile cue */
+.amina-admin-scope .legacy-archive-surface::before {
+  content: "v0 admin console";
+  display: block;
+  font-family: var(--a-font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--a-fg-dim);
+  padding: 8px 14px;
+  border-bottom: 1px dashed var(--a-border-1);
+  background: rgba(255, 255, 255, 0.015);
+}

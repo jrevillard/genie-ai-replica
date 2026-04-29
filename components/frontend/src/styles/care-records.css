@@ -1,0 +1,448 @@
+/* ============================================================
+   AMINA · Care Records workspace
+   Clinical dark workspace — scoped to .amina-admin-scope so tokens
+   resolve from admin-tokens.css. Reuses `.a-card`, `.a-btn`, etc.
+   ============================================================ */
+
+.amina-admin-scope .cr-workspace {
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+/* ── Page head ───────────────────────────────────────────────── */
+
+.amina-admin-scope .cr-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+.amina-admin-scope .cr-head-left {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.amina-admin-scope .cr-title {
+  font-family: var(--a-font-disp);
+  font-variation-settings: "opsz" 144;
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  color: var(--a-fg);
+  margin: 0;
+}
+.amina-admin-scope .cr-title em {
+  font-style: italic;
+  font-weight: 400;
+  color: #f472b6;
+  text-shadow: 0 0 24px rgba(244, 114, 182, 0.30);
+}
+.amina-admin-scope .cr-sub {
+  font-size: 12.5px;
+  color: var(--a-fg-mute);
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+.amina-admin-scope .cr-head-actions {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.amina-admin-scope .cr-date-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--a-border-1);
+  font-size: 11.5px; font-weight: 600;
+  color: var(--a-fg-mute);
+  letter-spacing: 0.02em;
+}
+
+/* ── Stat strip (4 cards) ──────────────────────────────────── */
+
+.amina-admin-scope .cr-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.amina-admin-scope .cr-stat {
+  position: relative;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--a-border-1);
+  overflow: hidden;
+  transition:
+    border-color 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform    220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.amina-admin-scope .cr-stat:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+.amina-admin-scope .cr-stat::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 20%; right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cr-accent, rgba(129, 140, 248, 0.6)), transparent);
+}
+.amina-admin-scope .cr-stat-label {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  color: var(--a-fg-dim);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.amina-admin-scope .cr-stat-label svg {
+  color: var(--cr-accent, var(--a-accent));
+}
+.amina-admin-scope .cr-stat-value {
+  font-family: var(--a-font-disp);
+  font-variation-settings: "opsz" 144;
+  font-weight: 500;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--a-fg);
+  font-variant-numeric: tabular-nums;
+}
+.amina-admin-scope .cr-stat-delta {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--a-fg-mute);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.amina-admin-scope .cr-stat-delta .up   { color: var(--a-success); }
+.amina-admin-scope .cr-stat-delta .down { color: var(--a-danger); }
+
+.amina-admin-scope .cr-spark-row {
+  margin-top: 10px;
+  display: flex; align-items: flex-end; gap: 3px;
+  height: 22px;
+}
+.amina-admin-scope .cr-spark-bar {
+  flex: 1;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--cr-accent, rgba(129, 140, 248, 0.85)), rgba(129, 140, 248, 0.08));
+  opacity: 0.82;
+}
+
+/* ── Section tabs ──────────────────────────────────────────── */
+
+.amina-admin-scope .cr-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--a-border-1);
+  margin-top: 4px;
+}
+.amina-admin-scope .cr-tab {
+  position: relative;
+  padding: 12px 4px;
+  margin-bottom: -1px;
+  margin-right: 18px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-fg-mute);
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: color 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 44px;
+}
+.amina-admin-scope .cr-tab:hover { color: var(--a-fg); }
+.amina-admin-scope .cr-tab[aria-selected="true"] { color: var(--a-fg); }
+.amina-admin-scope .cr-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #818cf8, #f472b6);
+  box-shadow: 0 0 8px rgba(129, 140, 248, 0.60);
+}
+.amina-admin-scope .cr-tab-count {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--a-border-1);
+  color: var(--a-fg-dim);
+}
+.amina-admin-scope .cr-tab[aria-selected="true"] .cr-tab-count {
+  background: rgba(129, 140, 248, 0.22);
+  border-color: rgba(129, 140, 248, 0.40);
+  color: var(--a-fg);
+}
+.amina-admin-scope .cr-tabs-right {
+  margin-left: auto;
+  display: inline-flex; gap: 8px; align-items: center;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────── */
+
+.amina-admin-scope .cr-toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.amina-admin-scope .cr-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--a-border-1);
+  color: var(--a-fg-mute);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 30px;
+}
+.amina-admin-scope .cr-chip:hover {
+  color: var(--a-fg);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.amina-admin-scope .cr-chip.on {
+  color: var(--a-fg);
+  background: rgba(129, 140, 248, 0.14);
+  border-color: rgba(129, 140, 248, 0.40);
+  box-shadow: 0 0 12px rgba(129, 140, 248, 0.15);
+}
+.amina-admin-scope .cr-chip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--cr-chip-dot, var(--a-accent));
+}
+.amina-admin-scope .cr-toolbar-search {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--a-border-1);
+  width: 260px;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.amina-admin-scope .cr-toolbar-search:focus-within {
+  border-color: rgba(129, 140, 248, 0.55);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.14);
+}
+.amina-admin-scope .cr-toolbar-search svg { color: var(--a-fg-dim); }
+.amina-admin-scope .cr-toolbar-search input {
+  flex: 1; width: 100%;
+  background: transparent; border: none; outline: none;
+  font-family: inherit; font-size: 12.5px;
+  color: var(--a-fg);
+}
+.amina-admin-scope .cr-toolbar-search input::placeholder { color: var(--a-fg-dim); }
+
+/* ── Data table ───────────────────────────────────────────── */
+
+.amina-admin-scope .cr-table-wrap {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--a-border-1);
+  overflow: hidden;
+  box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.45);
+}
+.amina-admin-scope .cr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.amina-admin-scope .cr-table thead th {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--a-fg-dim);
+  text-align: left;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--a-border-1);
+  white-space: nowrap;
+  user-select: none;
+}
+.amina-admin-scope .cr-table tbody tr {
+  border-bottom: 1px solid var(--a-border-1);
+  transition: background 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+.amina-admin-scope .cr-table tbody tr:last-child { border-bottom: none; }
+.amina-admin-scope .cr-table tbody tr:hover {
+  background: rgba(129, 140, 248, 0.07);
+}
+.amina-admin-scope .cr-table td {
+  padding: 14px 16px;
+  color: var(--a-fg);
+  font-weight: 500;
+  vertical-align: middle;
+}
+.amina-admin-scope .cr-cell-id {
+  font-family: var(--a-font-mono);
+  font-size: 11.5px;
+  color: var(--a-fg-dim);
+  letter-spacing: 0.04em;
+}
+.amina-admin-scope .cr-cell-patient {
+  display: flex; align-items: center; gap: 10px;
+}
+.amina-admin-scope .cr-patient-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.10),
+    0 0 0 1px rgba(0, 0, 0, 0.30);
+}
+.amina-admin-scope .cr-patient-name { font-weight: 600; font-size: 13px; line-height: 1.2; }
+.amina-admin-scope .cr-patient-meta {
+  font-size: 10.5px;
+  color: var(--a-fg-dim);
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  margin-top: 1px;
+}
+.amina-admin-scope .cr-date-day   { font-size: 13px; font-weight: 500; }
+.amina-admin-scope .cr-date-time  {
+  font-size: 10.5px; color: var(--a-fg-dim); font-weight: 500;
+  letter-spacing: 0.04em; margin-top: 2px;
+}
+
+/* Triage badge */
+.amina-admin-scope .cr-triage {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.amina-admin-scope .cr-triage .d { width: 6px; height: 6px; border-radius: 50%; }
+.amina-admin-scope .cr-triage.emergency {
+  background: rgba(248, 113, 113, 0.14);
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+.amina-admin-scope .cr-triage.emergency .d {
+  background: var(--a-danger); box-shadow: 0 0 8px var(--a-danger);
+}
+.amina-admin-scope .cr-triage.facility {
+  background: rgba(251, 191, 36, 0.14);
+  color: #ffd97a;
+  border: 1px solid rgba(251, 191, 36, 0.32);
+}
+.amina-admin-scope .cr-triage.facility .d {
+  background: var(--a-warn); box-shadow: 0 0 8px var(--a-warn);
+}
+.amina-admin-scope .cr-triage.chw_visit {
+  background: rgba(34, 211, 238, 0.12);
+  color: #8cebf9;
+  border: 1px solid rgba(34, 211, 238, 0.30);
+}
+.amina-admin-scope .cr-triage.chw_visit .d {
+  background: var(--a-info); box-shadow: 0 0 8px var(--a-info);
+}
+.amina-admin-scope .cr-triage.self_care {
+  background: rgba(52, 211, 153, 0.12);
+  color: #7ef1c4;
+  border: 1px solid rgba(52, 211, 153, 0.30);
+}
+.amina-admin-scope .cr-triage.self_care .d {
+  background: var(--a-success); box-shadow: 0 0 8px var(--a-success);
+}
+
+.amina-admin-scope .cr-summary {
+  max-width: 360px;
+  color: var(--a-fg-mute);
+  font-weight: 500;
+  font-size: 12.5px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.amina-admin-scope .cr-tool-pills {
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.amina-admin-scope .cr-tool-pill {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--a-border-1);
+  color: var(--a-fg-mute);
+  white-space: nowrap;
+}
+
+.amina-admin-scope .cr-row-actions {
+  display: flex; gap: 4px; justify-content: flex-end;
+}
+.amina-admin-scope .cr-row-action {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--a-fg-dim);
+  cursor: pointer;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.amina-admin-scope .cr-row-action:hover {
+  color: var(--a-fg);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.amina-admin-scope .cr-table-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.015);
+  border-top: 1px solid var(--a-border-1);
+  font-size: 11.5px;
+  color: var(--a-fg-dim);
+}
+
+.amina-admin-scope .cr-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--a-fg-dim);
+  font-size: 13px;
+}
+
+/* ── Row entrance ─────────────────────────────────────────── */
+
+.amina-admin-scope .cr-table tbody tr {
+  animation: cr-row-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--cr-d, 0ms);
+}
+@keyframes cr-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .amina-admin-scope .cr-table tbody tr { animation: none; }
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  .amina-admin-scope .cr-stats { grid-template-columns: repeat(2, 1fr); }
+  .amina-admin-scope .cr-summary { max-width: 220px; }
+}

@@ -1,0 +1,27 @@
+{
+  "total_patients": 1000,
+  "conditions_distribution": {
+    "respiratory": 41,
+    "hypertension": 298,
+    "diabetes": 73,
+    "kidney_disease": 27,
+    "heart_disease": 35
+  },
+  "avg_age": 46.1,
+  "gender_split": {
+    "male": 506,
+    "female": 494
+  },
+  "with_conditions": 377,
+  "on_medication": 377,
+  "smokers": 124,
+  "regions": {
+    "Kanifing": 289,
+    "West Coast": 234,
+    "Banjul": 87,
+    "North Bank": 119,
+    "Lower River": 93,
+    "Central River": 100,
+    "Upper River": 78
+  }
+}

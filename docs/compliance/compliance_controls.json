@@ -1,0 +1,676 @@
+{
+  "schema_version": "1.0",
+  "package_version": "phase-1-3-2026-04-29",
+  "domains": [
+    "privacy", "consent", "retention", "audit", "security",
+    "clinical_safety", "incident_response", "model_governance", "operations"
+  ],
+  "status_values": ["complete", "partial", "gap"],
+  "controls": [
+    {
+      "id": "PRIV-001", "domain": "privacy",
+      "requirement": "Plain-language privacy notice published",
+      "principle": "Gambia DPA: transparency / accountability; WHO: transparency",
+      "implementation_evidence": "docs/compliance/PRIVACY_NOTICE.md",
+      "test_evidence": "manual review",
+      "status": "complete",
+      "residual_gap": "pilot operator must fill placeholders"
+    },
+    {
+      "id": "PRIV-002", "domain": "privacy",
+      "requirement": "End-to-end data flow map maintained",
+      "principle": "Accountability",
+      "implementation_evidence": "docs/compliance/DATA_FLOW_MAP.md",
+      "test_evidence": "annual refresh",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "PRIV-003", "domain": "privacy",
+      "requirement": "PHI de-identification before LLM round-trip",
+      "principle": "Data minimisation",
+      "implementation_evidence": "haystack-stack/haystack-chatqna/src/services/phi_deid.py",
+      "test_evidence": "_agent_platform_phase3_safety_test.py PHI redaction sections",
+      "status": "complete",
+      "residual_gap": "extend Mandinka token coverage"
+    },
+    {
+      "id": "PRIV-004", "domain": "privacy",
+      "requirement": "PHI-redacted tracing on every agentic turn",
+      "principle": "Data minimisation / accountability",
+      "implementation_evidence": "haystack-stack/haystack-chatqna/src/agent_platform/tracing.py + models.py:to_safe_dict",
+      "test_evidence": "Phase 3 safety suite §2 + §19; Phase 4 live trace 0 leaks",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "PRIV-005", "domain": "privacy",
+      "requirement": "Backups encrypted at rest",
+      "principle": "Confidentiality / security",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "current dev compose does not enforce; pilot must add"
+    },
+    {
+      "id": "PRIV-006", "domain": "privacy",
+      "requirement": "Subprocessor inventory current",
+      "principle": "Transparency / accountability",
+      "implementation_evidence": "docs/compliance/DATA_FLOW_MAP.md §4",
+      "test_evidence": "quarterly review",
+      "status": "partial",
+      "residual_gap": "pilot operator quarterly refresh"
+    },
+    {
+      "id": "PRIV-007", "domain": "privacy",
+      "requirement": "TLS in front of all inbound channels in production",
+      "principle": "Confidentiality / security",
+      "implementation_evidence": "Cloudflare quick tunnel (dev only)",
+      "test_evidence": "manual",
+      "status": "partial",
+      "residual_gap": "production requires managed cert"
+    },
+    {
+      "id": "PRIV-008", "domain": "privacy",
+      "requirement": "Logs redacted at write time across all sites",
+      "principle": "Data minimisation",
+      "implementation_evidence": "phi_deid.py exists; not all log sites audited",
+      "test_evidence": "spot check",
+      "status": "partial",
+      "residual_gap": "add lint rule that flags raw PHI fields in log args"
+    },
+
+    {
+      "id": "CONSENT-001", "domain": "consent",
+      "requirement": "Four consent grants modelled (clinical / channel / caregiver / training)",
+      "principle": "Lawful basis / consent",
+      "implementation_evidence": "docs/compliance/CONSENT_MODEL.md + consent_service.py + training_consent.py",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "CONSENT-002", "domain": "consent",
+      "requirement": "Consent state transitions write an audit edge",
+      "principle": "Accountability",
+      "implementation_evidence": "ArcadeDB ConsentAuditVertex",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": "extend to caregiver-link withdrawal"
+    },
+    {
+      "id": "CONSENT-003", "domain": "consent",
+      "requirement": "Consent withdrawal endpoint exists",
+      "principle": "Data subject rights",
+      "implementation_evidence": "src/api/consent_routes.py POST /withdraw",
+      "test_evidence": "manual",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "CONSENT-004", "domain": "consent",
+      "requirement": "Withdrawal cascades to caregiver-link + training-export queue",
+      "principle": "Data subject rights",
+      "implementation_evidence": "partial (sweeper TBD)",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "Phase 4 sweeper"
+    },
+    {
+      "id": "CONSENT-005", "domain": "consent",
+      "requirement": "Consent prompt copy reviewed by clinical lead",
+      "principle": "Transparency",
+      "implementation_evidence": "engineering review only",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "clinical reviewer signoff"
+    },
+    {
+      "id": "CONSENT-006", "domain": "consent",
+      "requirement": "Consent prompt available in Mandinka",
+      "principle": "Inclusiveness / equity",
+      "implementation_evidence": "partial localisation",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "finish MA strings"
+    },
+    {
+      "id": "CONSENT-007", "domain": "consent",
+      "requirement": "Synthetic / demo session bypasses consent prompts safely",
+      "principle": "Purpose limitation",
+      "implementation_evidence": "session-id pattern match",
+      "test_evidence": "manual",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "CONSENT-008", "domain": "consent",
+      "requirement": "Training-consent default OFF",
+      "principle": "Lawful basis / consent",
+      "implementation_evidence": "training_consent.py default off",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+
+    {
+      "id": "RET-001", "domain": "retention",
+      "requirement": "Retention policy documented per data class",
+      "principle": "Storage limitation",
+      "implementation_evidence": "docs/compliance/RETENTION_POLICY.md",
+      "test_evidence": "ratification pending",
+      "status": "complete",
+      "residual_gap": "pilot operator must ratify defaults"
+    },
+    {
+      "id": "RET-002", "domain": "retention",
+      "requirement": "Redis session cache TTL <= 24h",
+      "principle": "Storage limitation",
+      "implementation_evidence": "service code (Redis EXPIRE)",
+      "test_evidence": "spot check",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "RET-003", "domain": "retention",
+      "requirement": "OTP TTL <= 10 minutes",
+      "principle": "Confidentiality",
+      "implementation_evidence": "src/services/otp.py",
+      "test_evidence": "code review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "RET-004", "domain": "retention",
+      "requirement": "Automated retention sweeper for ArcadeDB record classes",
+      "principle": "Storage limitation",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4 — sweeper job"
+    },
+    {
+      "id": "RET-005", "domain": "retention",
+      "requirement": "Automated purger for evidence_reports / caregiver_uploads / education_certs",
+      "principle": "Storage limitation",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4 — purger"
+    },
+    {
+      "id": "RET-006", "domain": "retention",
+      "requirement": "Backup deletion proof on data-rights deletion",
+      "principle": "Data subject rights / accountability",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4 — deletion-proof writer"
+    },
+    {
+      "id": "RET-007", "domain": "retention",
+      "requirement": "legal_hold flag on patient record schema",
+      "principle": "Lawful basis / accountability",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4 — schema field"
+    },
+    {
+      "id": "RET-008", "domain": "retention",
+      "requirement": "Central retention-config file (TTLs not scattered)",
+      "principle": "Accountability",
+      "implementation_evidence": "TTLs scattered across services",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4 — extract central retention.py"
+    },
+
+    {
+      "id": "AUDIT-001", "domain": "audit",
+      "requirement": "AGENT_TRACE emitted per agentic turn",
+      "principle": "Accountability",
+      "implementation_evidence": "agent_platform/tracing.py",
+      "test_evidence": "Phase 4 live trace evidence (Turn 1 + Turn 2)",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "AUDIT-002", "domain": "audit",
+      "requirement": "Consent state-change edge written",
+      "principle": "Accountability",
+      "implementation_evidence": "ArcadeDB ConsentAuditVertex",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "AUDIT-003", "domain": "audit",
+      "requirement": "DHIS2 push audit edge",
+      "principle": "Accountability",
+      "implementation_evidence": "ArcadeDB DHIS2AuditVertex",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "AUDIT-004", "domain": "audit",
+      "requirement": "Tracker push audit edge",
+      "principle": "Accountability",
+      "implementation_evidence": "ArcadeDB TrackerPushAuditVertex",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "AUDIT-005", "domain": "audit",
+      "requirement": "Append-only audit-event store (general purpose)",
+      "principle": "Accountability",
+      "implementation_evidence": "no dedicated audit logger; events scattered",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4 — see AUDIT_READINESS_CHECKLIST.md proposed schema"
+    },
+    {
+      "id": "AUDIT-006", "domain": "audit",
+      "requirement": "Admin-route access audit",
+      "principle": "Accountability",
+      "implementation_evidence": "src/api/observatory_admin.py staff create/suspend/unlock/reset/delete routes call log_audit_event; src/services/observatory_security.py persists ObservatoryAudit",
+      "test_evidence": "code review",
+      "status": "partial",
+      "residual_gap": "observatory staff-admin actions are audited, but generic /admin/* and patient-360 access still need shared audit middleware"
+    },
+    {
+      "id": "AUDIT-007", "domain": "audit",
+      "requirement": "Auth event audit (login / OTP success+failure)",
+      "principle": "Accountability",
+      "implementation_evidence": "src/api/observatory_auth.py + src/api/observatory_phone_auth.py + src/services/observatory_security.py ObservatoryAudit / phone audit events",
+      "test_evidence": "code review: login_attempt, otp_sent, otp_verified, observatory_login, phone OTP/PIN success+failure events",
+      "status": "complete",
+      "residual_gap": "extend the same normalized audit pattern to non-observatory patient/caregiver auth surfaces"
+    },
+    {
+      "id": "AUDIT-008", "domain": "audit",
+      "requirement": "Channel-webhook signature verification audit",
+      "principle": "Confidentiality / accountability",
+      "implementation_evidence": "src/api/meta_routes.py verifies X-Hub-Signature-256; src/api/twilio_whatsapp_routes.py supports Twilio signature validation and hashes sender IDs in logs",
+      "test_evidence": "code review",
+      "status": "partial",
+      "residual_gap": "signature failures are logged safely but not yet written to the append-only audit store"
+    },
+    {
+      "id": "AUDIT-009", "domain": "audit",
+      "requirement": "Trace export process",
+      "principle": "Accountability / data subject rights",
+      "implementation_evidence": "manual docker logs",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "Phase 4 OTel + dashboard"
+    },
+    {
+      "id": "AUDIT-010", "domain": "audit",
+      "requirement": "Audit-log failure detection + alarm",
+      "principle": "Accountability",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4"
+    },
+
+    {
+      "id": "SEC-001", "domain": "security",
+      "requirement": "Phone OTP auth with rate limiter",
+      "principle": "Confidentiality",
+      "implementation_evidence": "src/services/otp.py + rate_limiter.py",
+      "test_evidence": "code review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "SEC-002", "domain": "security",
+      "requirement": "Role-based admin gating",
+      "principle": "Accountability",
+      "implementation_evidence": "observatory_*.py + admin_routes.py",
+      "test_evidence": "code review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "SEC-003", "domain": "security",
+      "requirement": "Channel signature verification path available",
+      "principle": "Confidentiality",
+      "implementation_evidence": "*_VALIDATE_SIGNATURE env vars",
+      "test_evidence": "design review",
+      "status": "partial",
+      "residual_gap": "default off in dev; enable in pilot config"
+    },
+    {
+      "id": "SEC-004", "domain": "security",
+      "requirement": "Tokens / OTPs never logged",
+      "principle": "Confidentiality",
+      "implementation_evidence": "code review",
+      "test_evidence": "spot check",
+      "status": "complete",
+      "residual_gap": "add lint rule"
+    },
+    {
+      "id": "SEC-005", "domain": "security",
+      "requirement": "Containers run as non-root user where feasible",
+      "principle": "Security",
+      "implementation_evidence": "varies per service",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "document + enforce in production compose"
+    },
+    {
+      "id": "SEC-006", "domain": "security",
+      "requirement": "Bind-mount overrides use ro: where possible",
+      "principle": "Integrity",
+      "implementation_evidence": "docker-compose.override.yml",
+      "test_evidence": "manual",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "SEC-007", "domain": "security",
+      "requirement": "Secrets out of git",
+      "principle": "Confidentiality",
+      "implementation_evidence": ".env gitignored; Zone.Identifier filtered",
+      "test_evidence": "git status review",
+      "status": "complete",
+      "residual_gap": "rotate the embedded GitLab PAT in remote URL"
+    },
+    {
+      "id": "SEC-008", "domain": "security",
+      "requirement": "Pen test on staging before pilot",
+      "principle": "Security / accountability",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4"
+    },
+    {
+      "id": "SEC-009", "domain": "security",
+      "requirement": "Dependency vulnerability scan in CI",
+      "principle": "Security",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4"
+    },
+
+    {
+      "id": "SAFETY-001", "domain": "clinical_safety",
+      "requirement": "Clinical safety case documented",
+      "principle": "Safety / accountability",
+      "implementation_evidence": "docs/compliance/CLINICAL_SAFETY_CASE.md",
+      "test_evidence": "clinician signoff TBD",
+      "status": "complete",
+      "residual_gap": "clinician signoff"
+    },
+    {
+      "id": "SAFETY-002", "domain": "clinical_safety",
+      "requirement": "Risk register maintained",
+      "principle": "Safety / accountability",
+      "implementation_evidence": "CLINICAL_SAFETY_CASE.md §8",
+      "test_evidence": "quarterly review",
+      "status": "complete",
+      "residual_gap": "operator-specific extension"
+    },
+    {
+      "id": "SAFETY-003", "domain": "clinical_safety",
+      "requirement": "Emergency keyword bypass route",
+      "principle": "Safety / human escalation",
+      "implementation_evidence": "agent_platform/planner.py emergency_bypass + frontend SOS",
+      "test_evidence": "Phase 3 smoke harness emergency case",
+      "status": "complete",
+      "residual_gap": "extend MA dialect coverage"
+    },
+    {
+      "id": "SAFETY-004", "domain": "clinical_safety",
+      "requirement": "Multi-model safety consensus",
+      "principle": "Safety",
+      "implementation_evidence": "src/services/safety_consensus.py",
+      "test_evidence": "service log review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "SAFETY-005", "domain": "clinical_safety",
+      "requirement": "Post-generation safety contract",
+      "principle": "Safety",
+      "implementation_evidence": "src/services/safety_contract.py",
+      "test_evidence": "service log review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "SAFETY-006", "domain": "clinical_safety",
+      "requirement": "Refusal patterns for dose-change / diagnosis / crisis",
+      "principle": "Safety / human-in-the-loop",
+      "implementation_evidence": "safety stack",
+      "test_evidence": "service log review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "SAFETY-007", "domain": "clinical_safety",
+      "requirement": "Write / admin / external tools denied at execution in v1",
+      "principle": "Safety / least privilege",
+      "implementation_evidence": "agent_platform/tool_policy.py 13 deterministic checks",
+      "test_evidence": "Phase 3 safety suite §3 + §13",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "SAFETY-008", "domain": "clinical_safety",
+      "requirement": "Eval / red-team coverage",
+      "principle": "Safety / accountability",
+      "implementation_evidence": "v1 149 + v2 200 + Phase 3 157 + smoke 25 = 531/531",
+      "test_evidence": "scripts run",
+      "status": "complete",
+      "residual_gap": "extend clinical-content scenario eval to 300+"
+    },
+
+    {
+      "id": "IR-001", "domain": "incident_response",
+      "requirement": "Incident response plan documented",
+      "principle": "Breach / incident handling",
+      "implementation_evidence": "docs/compliance/INCIDENT_RESPONSE_PLAN.md",
+      "test_evidence": "tabletop drill TBD",
+      "status": "complete",
+      "residual_gap": "drill"
+    },
+    {
+      "id": "IR-002", "domain": "incident_response",
+      "requirement": "Severity ladder defined",
+      "principle": "Accountability",
+      "implementation_evidence": "INCIDENT_RESPONSE_PLAN.md §2",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "IR-003", "domain": "incident_response",
+      "requirement": "Notification template + channels documented",
+      "principle": "Breach / incident handling",
+      "implementation_evidence": "INCIDENT_RESPONSE_PLAN.md §5",
+      "test_evidence": "manual",
+      "status": "complete",
+      "residual_gap": "localise to MA"
+    },
+    {
+      "id": "IR-004", "domain": "incident_response",
+      "requirement": "Tabletop drill run",
+      "principle": "Accountability",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "quarterly cadence"
+    },
+    {
+      "id": "IR-005", "domain": "incident_response",
+      "requirement": "Live drill (synthetic-only) run",
+      "principle": "Accountability",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "annual cadence"
+    },
+    {
+      "id": "IR-006", "domain": "incident_response",
+      "requirement": "Evidence preservation path",
+      "principle": "Accountability",
+      "implementation_evidence": "_recovery/incidents/INC-<id>/ pattern",
+      "test_evidence": "convention",
+      "status": "complete",
+      "residual_gap": "confirm out-of-tree backup"
+    },
+
+    {
+      "id": "MODEL-001", "domain": "model_governance",
+      "requirement": "Model card maintained",
+      "principle": "Transparency",
+      "implementation_evidence": "docs/compliance/MODEL_CARD_AMINA.md",
+      "test_evidence": "design review",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "MODEL-002", "domain": "model_governance",
+      "requirement": "LLM cascade documented + monitored",
+      "principle": "Transparency / responsibility",
+      "implementation_evidence": "MODEL_CARD §2 + llm_provider_policy.py",
+      "test_evidence": "service log",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "MODEL-003", "domain": "model_governance",
+      "requirement": "Per-provider DPA inventory",
+      "principle": "Accountability",
+      "implementation_evidence": "DATA_FLOW_MAP.md §4 partial",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "pilot operator complete"
+    },
+    {
+      "id": "MODEL-004", "domain": "model_governance",
+      "requirement": "Local LoRA training records",
+      "principle": "Reproducibility / accountability",
+      "implementation_evidence": "training run logs (414 step run)",
+      "test_evidence": "trainer_state.json",
+      "status": "complete",
+      "residual_gap": "publish data sheet"
+    },
+    {
+      "id": "MODEL-005", "domain": "model_governance",
+      "requirement": "Tool registry versioned",
+      "principle": "Reproducibility",
+      "implementation_evidence": "implicit by file path",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "add explicit version constant"
+    },
+    {
+      "id": "MODEL-006", "domain": "model_governance",
+      "requirement": "Policy gate version stamped per trace",
+      "principle": "Accountability",
+      "implementation_evidence": "policy_gate_version=v1.13",
+      "test_evidence": "Phase 4 trace",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "MODEL-007", "domain": "model_governance",
+      "requirement": "Eval-on-CI gate",
+      "principle": "Reliability / accountability",
+      "implementation_evidence": "tests are manual",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4"
+    },
+    {
+      "id": "MODEL-008", "domain": "model_governance",
+      "requirement": "Bias / fairness evaluation",
+      "principle": "Inclusiveness / equity",
+      "implementation_evidence": "language coverage notes",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "structured Mandinka + region eval"
+    },
+
+    {
+      "id": "OPS-001", "domain": "operations",
+      "requirement": "Readiness CLI exists",
+      "principle": "Accountability",
+      "implementation_evidence": "scripts/agent_platform_readiness.py",
+      "test_evidence": "exit 0 with 1 INFO warning",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "OPS-002", "domain": "operations",
+      "requirement": "Smoke harness exists",
+      "principle": "Reliability",
+      "implementation_evidence": "scripts/agent_platform_phase3_smoke.py",
+      "test_evidence": "25/25",
+      "status": "complete",
+      "residual_gap": "extend channels"
+    },
+    {
+      "id": "OPS-003", "domain": "operations",
+      "requirement": "Compliance scorecard CLI",
+      "principle": "Accountability",
+      "implementation_evidence": "scripts/compliance_scorecard.py (this Phase)",
+      "test_evidence": "this run",
+      "status": "complete",
+      "residual_gap": "wire into CI"
+    },
+    {
+      "id": "OPS-004", "domain": "operations",
+      "requirement": "Trace dashboard",
+      "principle": "Accountability / monitoring",
+      "implementation_evidence": "docker logs only today",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4"
+    },
+    {
+      "id": "OPS-005", "domain": "operations",
+      "requirement": "Metrics endpoint (Prometheus or equivalent)",
+      "principle": "Monitoring",
+      "implementation_evidence": "partial per service",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "unify"
+    },
+    {
+      "id": "OPS-006", "domain": "operations",
+      "requirement": "Backup verification job",
+      "principle": "Reliability",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "Phase 4"
+    },
+    {
+      "id": "OPS-007", "domain": "operations",
+      "requirement": "Secret rotation cadence documented",
+      "principle": "Confidentiality",
+      "implementation_evidence": "",
+      "test_evidence": "",
+      "status": "gap",
+      "residual_gap": "ops"
+    },
+    {
+      "id": "OPS-008", "domain": "operations",
+      "requirement": "Disaster-recovery runbook",
+      "principle": "Reliability",
+      "implementation_evidence": "partial in AMINA_OPS_MANUAL.md",
+      "test_evidence": "",
+      "status": "partial",
+      "residual_gap": "Phase 4 — finish DR runbook"
+    }
+  ]
+}

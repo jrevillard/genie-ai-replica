@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/amina.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Amina — AI Health Assistant</title>
+
+    <!-- OAuth config — values injected at build/serve time via VITE_ env vars -->
+    <script>
+      window.__AMINA_GOOGLE_CLIENT_ID = "%VITE_GOOGLE_CLIENT_ID%";
+      window.__AMINA_FACEBOOK_APP_ID  = "%VITE_FACEBOOK_APP_ID%";
+      window.__AMINA_DHIS2_URL        = "%VITE_DHIS2_BASE_URL%";
+    </script>
+
+    <!-- Amina bot handles for the "Talk to us" widget (ChannelLinkFab).
+         Values injected from VITE_ env vars at build time; any handle
+         left blank renders the channel as "coming soon". -->
+    <script>
+      (function () {
+        var wa = "%VITE_AMINA_WHATSAPP_NUMBER%";
+        var mg = "%VITE_AMINA_MESSENGER_HANDLE%";
+        var tg = "%VITE_AMINA_TELEGRAM_HANDLE%";
+        window.AMINA_WHATSAPP_NUMBER  = (wa && wa.indexOf("%") === -1) ? wa : "";
+        window.AMINA_MESSENGER_HANDLE = (mg && mg.indexOf("%") === -1) ? mg : "";
+        window.AMINA_TELEGRAM_HANDLE  = (tg && tg.indexOf("%") === -1) ? tg : "amina_care_bot";
+      })();
+    </script>
+
+    <!-- Google Identity Services (loads silently, no error if offline) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Fonts: Fraunces (editorial display, variable opsz axis) + Geist (UI sans) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Geist:wght@300..800&family=Noto+Sans+NKo:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Facebook JS SDK -->
+    <script>
+      window.fbAsyncInit = function() {
+        var appId = window.__AMINA_FACEBOOK_APP_ID;
+        if (appId && appId !== "%VITE_FACEBOOK_APP_ID%") {
+          FB.init({ appId: appId, cookie: true, xfbml: false, version: "v19.0" });
+        }
+      };
+    </script>
+    <script src="https://connect.facebook.net/en_US/sdk.js" async defer></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

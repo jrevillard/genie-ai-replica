@@ -1,0 +1,59 @@
+# AMINA Care — Inbox + Signed-Files Override
+# ==========================================
+# Additive override that layers per-patient inbox, file-token storage, and
+# the new uvicorn entrypoint (main_with_inbox) on top of the existing
+# guard + training + literacy stack.
+#
+# Chain with the existing overrides:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.override.yml \
+#     -f docker-compose.meta-channels.yml \
+#     -f docker-compose.inbox.yml \
+#     up -d haystack-chatqna
+#
+# New files bind-mounted (read-only into container):
+#   src/services/inbox_service.py
+#   src/services/file_token_service.py
+#   src/api/inbox_routes.py
+#   src/main_with_inbox.py
+#
+# Persistent host dir:
+#   ./inbox_files → /app/data/inbox_files   (signed-URL-backed PDFs etc.)
+#
+# Entry:
+#   src.main_with_inbox:app   (replaces src.main_with_literacy:app)
+
+services:
+  haystack-chatqna:
+    volumes:
+      # ── Inbox + signed files ─────────────────────────────────────────
+      - ./haystack-chatqna/src/services/inbox_service.py:/app/src/services/inbox_service.py:ro
+      - ./haystack-chatqna/src/services/file_token_service.py:/app/src/services/file_token_service.py:ro
+      - ./haystack-chatqna/src/api/inbox_routes.py:/app/src/api/inbox_routes.py:ro
+      - ./haystack-chatqna/src/main_with_inbox.py:/app/src/main_with_inbox.py:ro
+      # ── Persistent host dir (never auto-deleted per no-deletion rule) ─
+      - ./inbox_files:/app/data/inbox_files
+    environment:
+      INBOX_FILES_DIR:           /app/data/inbox_files
+      INBOX_FILE_TTL_SECONDS:    ${INBOX_FILE_TTL_SECONDS:-86400}
+      INBOX_FILE_MAX_TTL_SECONDS: ${INBOX_FILE_MAX_TTL_SECONDS:-604800}
+      # Pin the Redis host explicitly — docker's network-alias `redis`
+      # round-robins between amina-redis + multichannel-redis when both
+      # are on the same network, which splits persistent state.
+      REDIS_URL:                 ${REDIS_URL:-redis://amina-redis:6379/0}
+      # Disable .pyc generation so bind-mounted source edits always take
+      # effect — without this, stale pycs from earlier builds can shadow
+      # fresh .py files and cause per-worker inconsistency.
+      PYTHONDONTWRITEBYTECODE:   "1"
+    command:
+      - uvicorn
+      - src.main_with_inbox:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --limit-concurrency
+      - "200"

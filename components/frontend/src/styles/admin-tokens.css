@@ -1,0 +1,150 @@
+/* ============================================================
+   AMINA · Admin + Gov design tokens
+   ============================================================ */
+
+/* Shared base (dark-by-default, mirrors the Bioluminescent Calm palette) */
+.amina-admin-scope,
+.amina-gov-scope {
+  /* Surfaces */
+  --a-bg:            #060814;
+  --a-bg-elev-1:     #0d1026;           /* card */
+  --a-bg-elev-2:     #141838;           /* hovered card / sheet */
+  --a-bg-inset:      rgba(255, 255, 255, 0.02);
+
+  /* Borders */
+  --a-border-1:      rgba(148, 163, 184, 0.12);
+  --a-border-2:      rgba(148, 163, 184, 0.20);
+  --a-border-active: rgba(129, 140, 248, 0.55);
+
+  /* Text */
+  --a-fg:       #e8edf5;
+  --a-fg-mute:  rgba(232, 237, 245, 0.65);
+  --a-fg-dim:   rgba(232, 237, 245, 0.42);
+  --a-fg-inv:   #0b0e1f;
+
+  /* Semantic */
+  --a-accent:   #818cf8;           /* indigo-400 */
+  --a-accent-2: #6366f1;           /* indigo-500 */
+  --a-success:  #34d399;           /* emerald */
+  --a-warn:     #fbbf24;           /* amber */
+  --a-danger:   #f87171;           /* rose */
+  --a-info:     #22d3ee;           /* cyan */
+
+  /* Typography scale */
+  --a-font-ui:    "Geist", "Manrope", ui-sans-serif, sans-serif;
+  --a-font-mono:  "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --a-font-disp:  "Fraunces", serif;
+
+  --a-text-10: 10px;
+  --a-text-11: 11px;
+  --a-text-12: 12px;
+  --a-text-13: 13px;
+  --a-text-14: 14px;
+  --a-text-16: 16px;
+  --a-text-18: 18px;
+  --a-text-22: 22px;
+  --a-text-28: 28px;
+  --a-text-36: 36px;
+  --a-text-48: 48px;
+
+  /* Spacing — 4px scale */
+  --a-s-1: 4px;
+  --a-s-2: 8px;
+  --a-s-3: 12px;
+  --a-s-4: 16px;
+  --a-s-5: 20px;
+  --a-s-6: 24px;
+  --a-s-7: 32px;
+  --a-s-8: 40px;
+  --a-s-9: 48px;
+  --a-s-10: 64px;
+
+  /* Radii */
+  --a-r-1: 6px;
+  --a-r-2: 8px;
+  --a-r-3: 10px;
+  --a-r-4: 12px;
+  --a-r-5: 14px;
+  --a-r-6: 18px;
+  --a-r-pill: 999px;
+
+  /* Elevation */
+  --a-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25),
+                 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  --a-shadow-2: 0 6px 18px rgba(0, 0, 0, 0.35),
+                 0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+                 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --a-shadow-3: 0 30px 60px -12px rgba(0, 0, 0, 0.55),
+                 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+
+  /* Motion */
+  --a-ease:      cubic-bezier(0.16, 1, 0.3, 1);
+  --a-ease-silk: cubic-bezier(0.65, 0, 0.35, 1);
+  --a-t-fast:    140ms;
+  --a-t-base:    240ms;
+  --a-t-slow:    420ms;
+
+  /* Z-index scale */
+  --a-z-sidebar: 10;
+  --a-z-topbar:  15;
+  --a-z-overlay: 90;
+  --a-z-sheet:   95;
+  --a-z-palette: 100;
+  --a-z-toast:   110;
+}
+
+/* ── Gov-specific theme nudge ─────────────────────────────────────
+   Gov feels more sober + public-sector clinical than admin. Slightly
+   cooler neutrals, smaller accent saturation. */
+.amina-gov-scope {
+  --a-bg:        #070a14;
+  --a-bg-elev-1: #0c1125;
+  --a-bg-elev-2: #111735;
+  --a-accent:    #60a5fa;    /* blue-400 instead of indigo */
+  --a-accent-2:  #3b82f6;    /* blue-500 */
+}
+
+/* ── Base resets inside either scope ────────────────────────── */
+
+.amina-admin-scope,
+.amina-gov-scope {
+  color: var(--a-fg);
+  font-family: var(--a-font-ui);
+  font-size: var(--a-text-13);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.amina-admin-scope *,
+.amina-admin-scope *::before,
+.amina-admin-scope *::after,
+.amina-gov-scope *,
+.amina-gov-scope *::before,
+.amina-gov-scope *::after {
+  box-sizing: border-box;
+}
+
+/* Custom scrollbar — matches tokens */
+.amina-admin-scope *::-webkit-scrollbar,
+.amina-gov-scope   *::-webkit-scrollbar {
+  width: 10px; height: 10px;
+}
+.amina-admin-scope *::-webkit-scrollbar-thumb,
+.amina-gov-scope   *::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+}
+.amina-admin-scope *::-webkit-scrollbar-thumb:hover,
+.amina-gov-scope   *::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.30);
+}
+
+/* ── Motion-safe defaults ───────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .amina-admin-scope *,
+  .amina-gov-scope   * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 100ms  !important;
+  }
+}

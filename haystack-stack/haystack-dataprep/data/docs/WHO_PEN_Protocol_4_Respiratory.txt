@@ -1,0 +1,159 @@
+WHO PEN Protocol 4 — Diagnosis and Management of Asthma and Chronic Obstructive Pulmonary Disease (COPD)
+
+PROTOCOL 4: RESPIRATORY DISEASE MANAGEMENT
+
+1. OVERVIEW
+- Asthma and COPD are the two most common chronic respiratory diseases
+- Asthma: reversible airway narrowing, often allergic, any age (often starts in childhood)
+- COPD: progressive, largely irreversible airway damage, usually age 40+, strongly linked to smoking
+- Both cause: cough, wheezing, shortness of breath, chest tightness
+- In The Gambia: indoor cooking smoke (wood/charcoal) is a major cause of COPD, especially in women
+
+2. DIFFERENTIATING ASTHMA FROM COPD
+
+ASTHMA features:
+- Usually starts before age 40 (often childhood)
+- Symptoms vary day to day, often worse at night or early morning
+- Triggers: dust, cold air, smoke, pollen, exercise, stress, infections
+- Family history of asthma/allergies common
+- Responds well to bronchodilators (symptoms fully reverse)
+- Between attacks, patient may be completely normal
+
+COPD features:
+- Usually age 40+ with significant smoking history OR long-term biomass fuel exposure
+- Symptoms are persistent and slowly progressive
+- Productive cough (with sputum) common
+- Shortness of breath on exertion that gradually worsens
+- Does NOT fully reverse with bronchodilators
+- History of frequent chest infections
+
+IMPORTANT: Some patients have BOTH asthma and COPD (Asthma-COPD Overlap)
+
+3. DIAGNOSIS
+- Clinical diagnosis based on symptoms + history + response to treatment
+- Peak flow meter (if available): measures maximum expiratory flow
+  * Asthma: variability > 20% between morning and evening readings
+  * COPD: persistently low readings
+- Spirometry (if available at hospital): confirms diagnosis
+  * COPD: FEV1/FVC ratio < 0.70 after bronchodilator
+  * Asthma: > 12% improvement after bronchodilator
+
+4. ASTHMA MANAGEMENT
+
+STEP 1 — Mild intermittent (symptoms < 2x/week):
+- Inhaled Salbutamol (short-acting beta-agonist) as needed only
+- 2 puffs when symptoms occur, can repeat after 20 minutes
+- If using Salbutamol > 2 times per week → step up
+
+STEP 2 — Mild persistent (symptoms > 2x/week but not daily):
+- Add low-dose inhaled Beclometasone (corticosteroid) 100-200 mcg twice daily
+- Continue Salbutamol as needed for rescue
+- Inhaler technique education is CRITICAL
+
+STEP 3 — Moderate persistent (daily symptoms):
+- Increase Beclometasone to 200-400 mcg twice daily
+- Continue Salbutamol as needed
+- Consider adding oral Theophylline (if inhaler therapy insufficient)
+
+STEP 4 — Severe (symptoms throughout the day):
+- High-dose inhaled corticosteroid
+- Add oral Prednisolone short course (5-7 days) for exacerbations
+- REFER to hospital for specialist care
+
+ASTHMA ACTION PLAN (teach every patient):
+GREEN ZONE (doing well): no symptoms, sleep well, can do normal activities
+- Continue regular preventive inhaler
+- Salbutamol before exercise if needed
+
+YELLOW ZONE (getting worse): cough, wheeze, chest tightness, waking at night
+- Double the Beclometasone dose
+- Use Salbutamol every 4-6 hours
+- If no improvement in 2 days → see health worker
+
+RED ZONE (medical alert): severe shortness of breath, cannot speak full sentences, lips or fingernails blue
+- Use Salbutamol 4-6 puffs immediately
+- Start oral Prednisolone if available
+- GO TO HEALTH FACILITY IMMEDIATELY or call 199
+- This is an EMERGENCY
+
+5. COPD MANAGEMENT
+
+STABLE COPD:
+Step 1: Inhaled Salbutamol as needed (2 puffs up to 4 times daily)
+Step 2: If still symptomatic, add oral Theophylline 200mg twice daily
+Step 3: If still symptomatic, REFER for specialist assessment
+
+IMPORTANT: Inhaled corticosteroids are NOT routinely recommended for COPD (unlike asthma)
+Exception: patients with frequent exacerbations (2+ per year) may benefit
+
+COPD EXACERBATION (flare-up):
+- Increased breathlessness, increased cough, change in sputum colour (yellow/green)
+- Treatment: increase Salbutamol, add Amoxicillin 500mg 3x daily for 5-7 days (if sputum is green/yellow), short course Prednisolone 30mg daily for 5 days
+- If severe (can't speak, oxygen saturation < 90%, confusion) → EMERGENCY referral
+
+6. INHALER TECHNIQUE (CRITICAL FOR BOTH CONDITIONS)
+- Poor inhaler technique is the #1 reason for treatment failure
+- Teach and check technique at EVERY visit
+
+METERED-DOSE INHALER (puffer) technique:
+1. Remove cap, shake inhaler well
+2. Breathe out fully
+3. Put mouthpiece between lips, seal tightly
+4. Start breathing in SLOWLY and deeply
+5. Press the canister ONCE while still breathing in
+6. Continue breathing in for 3-5 seconds
+7. Hold breath for 10 seconds (or as long as comfortable)
+8. Wait 30-60 seconds before second puff if needed
+9. Rinse mouth with water after using corticosteroid inhaler (prevents oral thrush)
+
+SPACER USE (recommended, especially for children and elderly):
+- Attach inhaler to spacer
+- Press canister once into spacer
+- Breathe in and out through spacer 4-6 times
+- Improves drug delivery to lungs by 50-60%
+- Homemade spacer: 500ml plastic bottle with hole for inhaler — teaches with what's available
+
+7. TRIGGERS AND PREVENTION
+
+ASTHMA TRIGGERS to avoid:
+- Tobacco smoke (active and passive)
+- Indoor cooking smoke (wood, charcoal, crop residues)
+- Dust and dust mites (wash bedding weekly in hot water)
+- Strong scents/perfumes
+- Cold air (cover nose/mouth in cold morning air)
+- Respiratory infections (wash hands frequently)
+- Exercise in cold/dusty conditions (use Salbutamol 15 min before)
+- Certain foods (in some patients)
+- Emotional stress (teach breathing exercises)
+
+COPD PREVENTION:
+- STOP SMOKING (most important intervention — reduces decline in lung function)
+- Reduce indoor air pollution: improved cookstoves, ventilation, cook outdoors when possible
+- Annual influenza vaccination (if available)
+- Early treatment of respiratory infections
+- Avoid occupational dust exposure (farming, construction — use masks)
+
+8. WHEN TO REFER
+- Diagnosis uncertain (asthma vs COPD vs other)
+- Poor response to initial treatment after 4-6 weeks
+- Frequent exacerbations (> 2 per year)
+- Any severe/life-threatening attack
+- Suspected occupational asthma
+- Need for spirometry confirmation
+- Child with persistent asthma (< 5 years)
+
+9. MONITORING
+- Asthma: review every 3 months when stable, 2-4 weeks after medication change
+- COPD: review every 3-6 months when stable
+- At every visit: check symptoms, inhaler technique, medication adherence, trigger avoidance
+- Peak flow diary: if available, record morning and evening readings
+
+GAMBIAN CONTEXT:
+- Indoor cooking smoke from traditional 3-stone fires is a MAJOR cause of COPD in women
+- Improved cookstoves (Jiko, rocket stoves) reduce indoor pollution by 50-70%
+- Salbutamol inhaler available at most health centres (essential medicine)
+- Beclometasone inhaler may need referral to regional hospital
+- Spacers often unavailable — teach homemade spacer technique (plastic bottle)
+- Dust during harmattan season (Dec-Feb) worsens both asthma and COPD
+- Theophylline available but needs careful dosing (narrow therapeutic window)
+- Traditional remedies for cough (honey, ginger, kinkeliba) — generally safe alongside prescribed medicine, but should not replace inhaler therapy

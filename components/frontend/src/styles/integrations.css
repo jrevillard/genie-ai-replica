@@ -1,0 +1,653 @@
+/* ============================================================
+   AMINA · Integrations (government / clinical ops canvas)
+   A light "operations canvas" island nested inside the dark admin
+   shell. Scoped to .amina-admin-scope so it doesn't leak.
+   ============================================================ */
+
+.amina-admin-scope .ops-root {
+  --ops-canvas:  #f6f4ee;
+  --ops-paper:   #ffffff;
+  --ops-paper-2: #fbfaf6;
+  --ops-ink:     #0f172a;
+  --ops-ink-2:   #334155;
+  --ops-ink-3:   #64748b;
+  --ops-ink-4:   #94a3b8;
+  --ops-rule:    #e6e1d5;
+  --ops-rule-2:  #edeadf;
+  --ops-rule-3:  #d9d2c0;
+
+  --ops-emerald:      #059669;
+  --ops-emerald-soft: #d1fae5;
+  --ops-amber:        #b45309;
+  --ops-amber-soft:   #fef3c7;
+  --ops-rose:         #be123c;
+  --ops-rose-soft:    #ffe4e6;
+  --ops-indigo:       #4338ca;
+  --ops-indigo-soft:  #e0e7ff;
+  --ops-violet:       #6d28d9;
+
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: auto 1fr;
+  background: var(--ops-canvas);
+  color: var(--ops-ink);
+  font-family: var(--a-font-ui);
+  border: 1px solid var(--ops-rule);
+  border-radius: 14px;
+  overflow: hidden;
+  min-height: 640px;
+}
+
+/* =============== page head (row 1) =============== */
+.amina-admin-scope .ops-page-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid var(--ops-rule);
+  background: var(--ops-paper-2);
+}
+.amina-admin-scope .ops-page-head h1 {
+  margin: 0;
+  font-family: var(--a-font-disp);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ops-ink);
+}
+.amina-admin-scope .ops-page-head h1 em {
+  font-style: italic;
+  color: var(--ops-violet);
+}
+.amina-admin-scope .ops-crumbs {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--ops-ink-3);
+  font-family: var(--a-font-mono);
+}
+.amina-admin-scope .ops-crumbs a { color: var(--ops-ink-3); text-decoration: none; cursor: pointer; }
+.amina-admin-scope .ops-crumbs a:hover { color: var(--ops-ink); }
+.amina-admin-scope .ops-crumbs span.sep { color: var(--ops-ink-4); }
+
+.amina-admin-scope .ops-head-actions {
+  display: flex; align-items: center; gap: 10px;
+}
+
+/* =============== left index rail =============== */
+.amina-admin-scope .ops-rail {
+  border-right: 1px solid var(--ops-rule);
+  background: var(--ops-paper-2);
+  overflow-y: auto;
+  padding: 14px 0;
+  min-height: 0;
+}
+.amina-admin-scope .ops-rail-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ops-ink-4);
+  padding: 8px 18px 10px;
+}
+.amina-admin-scope .ops-rail-item {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--ops-ink-2);
+  font-size: 13px;
+  transition: background 160ms ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+.amina-admin-scope .ops-rail-item:hover { background: var(--ops-rule-2); }
+.amina-admin-scope .ops-rail-item[aria-current="page"] {
+  background: #fff;
+  border-left-color: var(--ops-violet);
+  color: var(--ops-ink);
+  font-weight: 600;
+  box-shadow: inset -1px 0 0 var(--ops-rule);
+}
+.amina-admin-scope .ops-rail-icon { color: var(--ops-ink-3); display: flex; }
+.amina-admin-scope .ops-rail-item[aria-current="page"] .ops-rail-icon { color: var(--ops-violet); }
+.amina-admin-scope .ops-rail-status {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ops-ink-4);
+  box-shadow: 0 0 0 2px var(--ops-paper-2);
+  display: inline-block;
+}
+.amina-admin-scope .ops-rail-status.ok   { background: var(--ops-emerald); }
+.amina-admin-scope .ops-rail-status.warn { background: var(--ops-amber); }
+.amina-admin-scope .ops-rail-status.err  { background: var(--ops-rose); }
+.amina-admin-scope .ops-rail-status.idle { background: var(--ops-ink-4); }
+
+.amina-admin-scope .ops-rail-divider {
+  height: 1px; background: var(--ops-rule); margin: 14px 18px;
+}
+.amina-admin-scope .ops-rail-foot {
+  padding: 14px 18px;
+  font-size: 11px;
+  color: var(--ops-ink-3);
+  line-height: 1.6;
+}
+.amina-admin-scope .ops-rail-foot strong { color: var(--ops-ink); font-weight: 600; }
+
+/* =============== workspace =============== */
+.amina-admin-scope .ops-workspace {
+  overflow-y: auto;
+  padding: 22px 28px 140px;
+  min-height: 0;
+}
+
+/* Entity head */
+.amina-admin-scope .ops-entity-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--ops-rule);
+}
+.amina-admin-scope .ops-entity-kicker {
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.amina-admin-scope .ops-entity-title {
+  font-family: var(--a-font-disp);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--ops-ink);
+  margin: 0 0 8px;
+}
+.amina-admin-scope .ops-entity-desc {
+  font-size: 13px;
+  color: var(--ops-ink-2);
+  line-height: 1.55;
+  max-width: 640px;
+  margin: 0;
+}
+.amina-admin-scope .ops-entity-desc code {
+  font-family: var(--a-font-mono);
+  font-size: 12px;
+  padding: 1px 6px;
+  background: var(--ops-paper);
+  border: 1px solid var(--ops-rule);
+  border-radius: 4px;
+  color: var(--ops-ink);
+}
+.amina-admin-scope .ops-entity-actions {
+  display: flex; align-items: flex-start; gap: 8px;
+}
+
+/* =============== buttons =============== */
+.amina-admin-scope .ops-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 6px;
+  border: 1px solid var(--ops-rule-3);
+  background: var(--ops-paper);
+  color: var(--ops-ink);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  font-family: inherit;
+}
+.amina-admin-scope .ops-btn:hover { background: var(--ops-paper-2); border-color: var(--ops-ink-4); }
+.amina-admin-scope .ops-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.amina-admin-scope .ops-btn.primary {
+  background: var(--ops-ink);
+  color: #fff;
+  border-color: var(--ops-ink);
+}
+.amina-admin-scope .ops-btn.primary:hover { background: #1e293b; }
+.amina-admin-scope .ops-btn.danger {
+  color: var(--ops-rose);
+  border-color: var(--ops-rose-soft);
+  background: #fff;
+}
+.amina-admin-scope .ops-btn.danger:hover { background: var(--ops-rose-soft); }
+.amina-admin-scope .ops-btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ops-ink-2);
+}
+.amina-admin-scope .ops-btn.ghost:hover { background: var(--ops-rule-2); color: var(--ops-ink); }
+
+/* =============== status chips =============== */
+.amina-admin-scope .ops-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-family: var(--a-font-ui);
+}
+.amina-admin-scope .ops-chip .ops-chip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+}
+.amina-admin-scope .ops-chip.ok      { background: var(--ops-emerald-soft); color: var(--ops-emerald); border-color: rgba(5,150,105,0.18); }
+.amina-admin-scope .ops-chip.warn    { background: var(--ops-amber-soft);   color: var(--ops-amber);   border-color: rgba(180,83,9,0.20); }
+.amina-admin-scope .ops-chip.err     { background: var(--ops-rose-soft);    color: var(--ops-rose);    border-color: rgba(190,18,60,0.20); }
+.amina-admin-scope .ops-chip.info    { background: var(--ops-indigo-soft);  color: var(--ops-indigo);  border-color: rgba(67,56,202,0.18); }
+.amina-admin-scope .ops-chip.neutral { background: var(--ops-rule-2); color: var(--ops-ink-2); border-color: var(--ops-rule-3); }
+.amina-admin-scope .ops-chip.dim     { background: transparent; color: var(--ops-ink-3); border-color: var(--ops-rule); }
+
+/* =============== KPI strip =============== */
+.amina-admin-scope .ops-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin: 20px 0 24px;
+  border: 1px solid var(--ops-rule);
+  border-radius: 8px;
+  background: var(--ops-paper);
+  overflow: hidden;
+}
+.amina-admin-scope .ops-kpi {
+  padding: 14px 16px;
+  border-right: 1px solid var(--ops-rule);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.amina-admin-scope .ops-kpi:last-child { border-right: none; }
+.amina-admin-scope .ops-kpi-label {
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  display: flex; align-items: center; gap: 8px;
+}
+.amina-admin-scope .ops-kpi-value {
+  font-family: var(--a-font-mono);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ops-ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.amina-admin-scope .ops-kpi-value .unit {
+  font-size: 12px;
+  color: var(--ops-ink-3);
+  font-weight: 500;
+}
+.amina-admin-scope .ops-kpi-meta {
+  font-size: 11.5px;
+  color: var(--ops-ink-3);
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* =============== sections =============== */
+.amina-admin-scope .ops-section { margin-top: 26px; }
+.amina-admin-scope .ops-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.amina-admin-scope .ops-section-head h2 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ops-ink);
+  margin: 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.amina-admin-scope .ops-section-head h2 .count {
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  color: var(--ops-ink-3);
+  font-weight: 500;
+}
+.amina-admin-scope .ops-section-tools {
+  display: flex; gap: 6px; align-items: center;
+  font-size: 12px; color: var(--ops-ink-3);
+}
+
+.amina-admin-scope .ops-panel {
+  background: var(--ops-paper);
+  border: 1px solid var(--ops-rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.amina-admin-scope .ops-grid-3 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+/* =============== connection + config grid =============== */
+.amina-admin-scope .ops-connection {
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  border-bottom: 1px solid var(--ops-rule);
+  background: linear-gradient(180deg, #fff, var(--ops-paper-2));
+}
+.amina-admin-scope .ops-connection-url {
+  font-family: var(--a-font-mono);
+  font-size: 14.5px;
+  color: var(--ops-ink);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.amina-admin-scope .ops-connection-url .scheme { color: var(--ops-ink-3); }
+.amina-admin-scope .ops-connection-sub {
+  font-size: 11.5px;
+  color: var(--ops-ink-3);
+  font-family: var(--a-font-mono);
+  letter-spacing: 0.02em;
+  margin-top: 4px;
+}
+
+.amina-admin-scope .ops-config-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.amina-admin-scope .ops-config-cell {
+  padding: 12px 18px;
+  border-right: 1px solid var(--ops-rule);
+}
+.amina-admin-scope .ops-config-cell:last-child { border-right: none; }
+.amina-admin-scope .ops-config-cell .k {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  margin-bottom: 6px;
+}
+.amina-admin-scope .ops-config-cell .v {
+  font-family: var(--a-font-mono);
+  font-size: 12.5px;
+  color: var(--ops-ink);
+  word-break: break-all;
+}
+.amina-admin-scope .ops-config-cell .v.muted { color: var(--ops-ink-3); }
+
+/* =============== data element mapping table =============== */
+.amina-admin-scope .ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.amina-admin-scope .ops-table thead th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ops-rule);
+  background: var(--ops-paper-2);
+  white-space: nowrap;
+}
+.amina-admin-scope .ops-table thead th.num { text-align: right; }
+.amina-admin-scope .ops-table tbody tr { border-bottom: 1px solid var(--ops-rule-2); }
+.amina-admin-scope .ops-table tbody tr:last-child { border-bottom: none; }
+.amina-admin-scope .ops-table tbody tr:hover { background: var(--ops-paper-2); }
+.amina-admin-scope .ops-table td {
+  padding: 9px 14px;
+  color: var(--ops-ink);
+  vertical-align: middle;
+}
+.amina-admin-scope .ops-table td.mono {
+  font-family: var(--a-font-mono);
+  font-size: 12px;
+  color: var(--ops-ink-2);
+}
+.amina-admin-scope .ops-table td.num {
+  font-family: var(--a-font-mono);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.amina-admin-scope .ops-table td .dim { color: var(--ops-ink-3); }
+
+/* =============== sync history (bars) =============== */
+.amina-admin-scope .ops-sync-history { padding: 16px 18px; }
+.amina-admin-scope .ops-sync-bars {
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  gap: 4px;
+  align-items: end;
+  height: 56px;
+  margin-top: 12px;
+}
+.amina-admin-scope .ops-sync-bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: var(--ops-emerald);
+  opacity: 0.85;
+  display: block;
+}
+.amina-admin-scope .ops-sync-bar.warn { background: var(--ops-amber); }
+.amina-admin-scope .ops-sync-bar.err  { background: var(--ops-rose); }
+.amina-admin-scope .ops-sync-bar.idle { background: var(--ops-ink-4); opacity: 0.35; }
+.amina-admin-scope .ops-sync-axis {
+  display: flex; justify-content: space-between;
+  font-family: var(--a-font-mono);
+  font-size: 10px;
+  color: var(--ops-ink-4);
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+
+/* =============== last sync panel =============== */
+.amina-admin-scope .ops-last-sync { padding: 16px 18px; }
+.amina-admin-scope .ops-last-sync-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.amina-admin-scope .ops-last-sync-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+}
+.amina-admin-scope .ops-last-sync-grid .cell .k {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  margin-bottom: 4px;
+}
+.amina-admin-scope .ops-last-sync-grid .cell .v {
+  font-family: var(--a-font-mono);
+  font-size: 12.5px;
+  color: var(--ops-ink);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+/* =============== audit log =============== */
+.amina-admin-scope .ops-log {
+  font-family: var(--a-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 14px 18px;
+  max-height: 260px;
+  overflow-y: auto;
+  color: var(--ops-ink-2);
+  background: var(--ops-paper);
+}
+.amina-admin-scope .ops-log .row {
+  display: grid;
+  grid-template-columns: 150px 64px 1fr;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--ops-rule-2);
+}
+.amina-admin-scope .ops-log .row:last-child { border-bottom: none; }
+.amina-admin-scope .ops-log .ts   { color: var(--ops-ink-4); }
+.amina-admin-scope .ops-log .lvl  { font-weight: 600; letter-spacing: 0.1em; font-size: 10.5px; padding-top: 1px; }
+.amina-admin-scope .ops-log .lvl.ok   { color: var(--ops-emerald); }
+.amina-admin-scope .ops-log .lvl.info { color: var(--ops-indigo); }
+.amina-admin-scope .ops-log .lvl.warn { color: var(--ops-amber); }
+.amina-admin-scope .ops-log .lvl.err  { color: var(--ops-rose); }
+.amina-admin-scope .ops-log .msg     { color: var(--ops-ink); }
+.amina-admin-scope .ops-log .msg .kv { color: var(--ops-ink-3); }
+
+/* =============== sticky action bar =============== */
+.amina-admin-scope .ops-actionbar {
+  position: sticky;
+  bottom: 0;
+  margin: 26px -28px -140px;
+  padding: 12px 28px;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--ops-rule);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 5;
+}
+.amina-admin-scope .ops-actionbar .title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+}
+.amina-admin-scope .ops-actionbar .field {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+  color: var(--ops-ink-2);
+}
+.amina-admin-scope .ops-actionbar .field label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+}
+.amina-admin-scope .ops-actionbar input[type="text"],
+.amina-admin-scope .ops-actionbar input[type="date"],
+.amina-admin-scope .ops-actionbar select {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--ops-rule-3);
+  background: #fff;
+  color: var(--ops-ink);
+  font-family: var(--a-font-mono);
+  font-size: 12px;
+}
+.amina-admin-scope .ops-actionbar .spacer { flex: 1; }
+
+/* =============== tabs =============== */
+.amina-admin-scope .ops-tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--ops-rule);
+  margin-top: 16px;
+  overflow-x: auto;
+}
+.amina-admin-scope .ops-tab {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ops-ink-3);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  background: transparent;
+  border-top: none; border-left: none; border-right: none;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.amina-admin-scope .ops-tab:hover { color: var(--ops-ink); }
+.amina-admin-scope .ops-tab[aria-selected="true"] {
+  color: var(--ops-ink);
+  border-bottom-color: var(--ops-violet);
+  font-weight: 600;
+}
+.amina-admin-scope .ops-tab .tab-count {
+  font-family: var(--a-font-mono);
+  font-size: 11px;
+  color: var(--ops-ink-4);
+  background: var(--ops-rule-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.amina-admin-scope .ops-tab[aria-selected="true"] .tab-count {
+  color: var(--ops-violet);
+  background: var(--ops-indigo-soft);
+}
+
+/* =============== date chip =============== */
+.amina-admin-scope .ops-date {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  font-family: var(--a-font-mono);
+  font-size: 12px;
+  color: var(--ops-ink-2);
+  border: 1px solid var(--ops-rule);
+  border-radius: 6px;
+  background: var(--ops-paper);
+}
+
+/* env toggle */
+.amina-admin-scope .ops-env {
+  display: inline-flex;
+  border: 1px solid var(--ops-rule-3);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--ops-paper);
+}
+.amina-admin-scope .ops-env button {
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ops-ink-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.amina-admin-scope .ops-env button[aria-pressed="true"] {
+  background: var(--ops-ink);
+  color: #fff;
+}
+
+/* empty state */
+.amina-admin-scope .ops-empty {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--ops-ink-3);
+  font-size: 13px;
+}
+
+/* scrollbars */
+.amina-admin-scope .ops-workspace::-webkit-scrollbar,
+.amina-admin-scope .ops-log::-webkit-scrollbar,
+.amina-admin-scope .ops-rail::-webkit-scrollbar { width: 10px; }
+.amina-admin-scope .ops-workspace::-webkit-scrollbar-thumb,
+.amina-admin-scope .ops-log::-webkit-scrollbar-thumb,
+.amina-admin-scope .ops-rail::-webkit-scrollbar-thumb {
+  background: var(--ops-rule-3);
+  border-radius: 10px;
+  border: 2px solid var(--ops-canvas);
+}

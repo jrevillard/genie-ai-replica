@@ -1,0 +1,82 @@
+services:
+  # ============================
+  # Whisper.cpp (STT)
+  # ============================
+  voice-stt:
+    image: ghcr.io/ggml-org/whisper.cpp:main
+    container_name: voice-stt
+
+    entrypoint: []
+    command: ["/app/build/bin/whisper-server", "-m", "/models/ggml-base.en.bin", "--host", "0.0.0.0", "--port", "8080"]
+
+    volumes:
+      - ./infra/whispercpp/models:/models:ro
+
+    ports:
+      - "8087:8080"
+
+    restart: unless-stopped
+    networks:
+      - voice-net
+
+
+  # ============================
+  # Coqui TTS (DISABLED — replaced by Piper inside gateway)
+  # Uncomment to switch back to Coqui
+  # ============================
+  # voice-tts:
+  #   image: ghcr.io/coqui-ai/tts-cpu:latest
+  #   container_name: voice-tts
+  #
+  #   entrypoint: ["tts-server"]
+  #   command:
+  #     - --model_name
+  #     - tts_models/en/ljspeech/tacotron2-DDC
+  #     - --port
+  #     - "5002"
+  #     - --use_cuda
+  #     - "false"
+  #
+  #   ports:
+  #     - "5002:5002"
+  #
+  #   restart: unless-stopped
+  #   networks:
+  #     - voice-net
+
+
+  # ============================
+  # Voice Gateway (FastAPI)
+  # Piper TTS now runs INSIDE the gateway (no separate container)
+  # ============================
+  voice-gateway:
+    build:
+      context: .
+      dockerfile: docker/dockerfile
+    container_name: voice-gateway
+
+    env_file:
+      - .env
+
+    environment:
+      WHISPER_URL: http://voice-stt:8080
+      PIPER_MODEL_PATH: /models/piper/en_US-lessac-medium.onnx
+
+    volumes:
+      - ./infra/piper/models:/models/piper:ro
+
+    ports:
+      - "8010:8010"
+
+    depends_on:
+      - voice-stt
+      # - voice-tts  # No longer needed with Piper
+
+    restart: unless-stopped
+    networks:
+      - voice-net
+
+
+networks:
+  voice-net:
+    driver: bridge

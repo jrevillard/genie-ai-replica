@@ -1,0 +1,50 @@
+# AMINA Care — Model-Fallback / Resilience Override
+# ==================================================
+# Layers the automatic model-switching endpoint on top of the inbox stack.
+#
+# Chain with the other overrides:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.override.yml \
+#     -f docker-compose.meta-channels.yml \
+#     -f docker-compose.inbox.yml \
+#     -f docker-compose.resilience.yml \
+#     up -d haystack-chatqna
+#
+# New bind mounts:
+#   src/services/model_health.py
+#   src/services/model_fallback.py
+#   src/api/resilience_routes.py
+#   src/main_with_resilience.py
+#
+# Config:
+#   MODEL_FALLBACK_CHAIN      Comma list. Default "amina,base,gemini,groq,mistral".
+#   MODEL_COOLDOWN_BASE_SECONDS   Default 60. Exponentially doubled per consecutive fail.
+#   MODEL_COOLDOWN_MAX_SECONDS    Default 900 (15m cap).
+#   RESILIENCE_UPSTREAM_BASE       Default http://127.0.0.1:8000  (loopback to self)
+#   RESILIENCE_UPSTREAM_TIMEOUT    Default 90s
+
+services:
+  haystack-chatqna:
+    volumes:
+      - ./haystack-chatqna/src/services/model_health.py:/app/src/services/model_health.py:ro
+      - ./haystack-chatqna/src/services/model_fallback.py:/app/src/services/model_fallback.py:ro
+      - ./haystack-chatqna/src/api/resilience_routes.py:/app/src/api/resilience_routes.py:ro
+      - ./haystack-chatqna/src/main_with_resilience.py:/app/src/main_with_resilience.py:ro
+    environment:
+      MODEL_FALLBACK_CHAIN:           ${MODEL_FALLBACK_CHAIN:-amina,base,gemini,groq,mistral}
+      MODEL_COOLDOWN_BASE_SECONDS:    ${MODEL_COOLDOWN_BASE_SECONDS:-60}
+      MODEL_COOLDOWN_MAX_SECONDS:     ${MODEL_COOLDOWN_MAX_SECONDS:-900}
+      RESILIENCE_UPSTREAM_BASE:       ${RESILIENCE_UPSTREAM_BASE:-http://127.0.0.1:8000}
+      RESILIENCE_UPSTREAM_TIMEOUT:    ${RESILIENCE_UPSTREAM_TIMEOUT:-90}
+    command:
+      - uvicorn
+      - src.main_with_resilience:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --limit-concurrency
+      - "200"

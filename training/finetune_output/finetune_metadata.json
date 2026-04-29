@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-04-24T22:53:50.441266",
+  "total_examples": 599,
+  "categories": {
+    "single_turn": 414,
+    "multi_turn": 109,
+    "caregiver": 60,
+    "mandinka": 16
+  },
+  "estimated_tokens": 121808,
+  "cost_estimates": {
+    "openai_gpt4o_mini_training": "$1.10",
+    "openai_gpt4o_training": "$9.14",
+    "mistral_small_training": "$1.46"
+  },
+  "files": {
+    "openai": "finetune_output\\openai_finetune.jsonl",
+    "mistral": "finetune_output\\mistral_finetune.jsonl"
+  },
+  "format": "OpenAI-compatible messages JSONL (works for both OpenAI and Mistral)"
+}

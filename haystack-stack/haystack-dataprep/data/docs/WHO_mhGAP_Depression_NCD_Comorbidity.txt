@@ -1,0 +1,209 @@
+WHO mhGAP — Depression Assessment and Management in Primary Care
+Source: WHO Mental Health Gap Action Programme (mhGAP) Intervention Guide, Version 2.0
+Reference: https://www.who.int/publications/i/item/9789240084278
+Focus: Depression in patients with non-communicable diseases (diabetes, hypertension, CVD)
+
+1. ASSESSMENT — HOW TO IDENTIFY DEPRESSION
+
+Screening questions (ask ALL patients with chronic diseases):
+- "During the last 2 weeks, have you been feeling down, depressed, or hopeless?"
+- "During the last 2 weeks, have you had little interest or pleasure in doing things?"
+If YES to either → full assessment
+
+Diagnostic criteria (at least 2 weeks duration):
+- Persistent depressed mood (sadness, emptiness, hopelessness) — most of the day, nearly every day
+- Loss of interest or pleasure in activities previously enjoyed
+- Plus several of: fatigue, poor concentration, feelings of worthlessness or guilt, sleep disturbance (insomnia or oversleeping), appetite/weight change, psychomotor agitation or slowing, recurrent thoughts of death or suicide
+- Causes significant difficulty in daily functioning (work, household, relationships)
+
+Differentiate from:
+- Normal grief or sadness (time-limited, doesn't impair all areas of functioning)
+- Adjustment disorder (symptoms follow a specific stressor, resolve within 6 months)
+- Bipolar disorder (history of manic episodes — elevated mood, decreased sleep, increased energy, risky behavior)
+- Medical causes: hypothyroidism, anemia, medication side effects (some BP medications, steroids)
+
+2. SEVERITY CLASSIFICATION
+
+MILD depression:
+- Few symptoms beyond the minimum required
+- Mild functional impairment
+- Can still manage daily tasks with effort
+- Treatment: psychosocial interventions FIRST, no medication initially
+
+MODERATE depression:
+- Several symptoms present
+- Considerable difficulty in daily functioning
+- Treatment: psychosocial interventions + consider antidepressant medication
+
+SEVERE depression:
+- Most symptoms present, including some at marked intensity
+- Major functional impairment (cannot work, care for self, or maintain relationships)
+- May have psychotic features (hallucinations, delusions)
+- Treatment: antidepressant medication + psychosocial interventions + consider specialist referral
+
+3. PSYCHOSOCIAL INTERVENTIONS (FIRST-LINE FOR ALL SEVERITIES)
+
+Key psychoeducation messages:
+- Depression is a common illness — it does NOT mean weakness or laziness
+- Negative thoughts (worthlessness, hopelessness, guilt) are SYMPTOMS of the illness, not reality
+- Recovery IS possible with proper support and treatment
+- If having thoughts of suicide — tell someone immediately
+
+Practical interventions:
+- Identify and address social stressors (financial, relationship, health, loss)
+- Reactivate social connections: encourage patient to reconnect with family, friends, community
+- Resume previously pleasurable activities: even small ones (walking, visiting, cooking)
+- Maintain regular sleep/wake schedule: go to bed and wake at same time daily
+- Increase physical activity: 30 minutes walking daily improves mood significantly
+- Eat regularly despite appetite changes: even small meals on schedule
+- Engage with trusted people: family, CHW, Imam, Alkalo — social isolation worsens depression
+- Participate in community activities: Bantaba gatherings, prayer groups, women's kafos
+
+Problem-solving approach:
+1. Select ONE problem that is bothering the patient most
+2. List possible solutions together (even imperfect ones)
+3. Choose ONE solution to try this week
+4. Review next visit: did it help? Adjust if needed
+5. Move to next problem when ready
+
+4. PHARMACOLOGICAL TREATMENT
+
+WHEN TO START MEDICATION:
+- When psychosocial interventions alone are insufficient after 4-6 weeks
+- For moderate-severe depression from the start (alongside psychosocial)
+- When functional impairment is severe
+- When patient specifically requests medication
+
+FLUOXETINE (SSRI — first choice in primary care):
+- Starting dose: 10 mg daily for 1 week
+- Then increase to 20 mg daily
+- If no response after 6 weeks at 20 mg: increase to 40 mg daily
+- Maximum dose: 80 mg daily (adults), 40 mg (elderly and adolescents)
+- Elderly starting dose: 10 mg, titrate to 20 mg maximum 40 mg
+- Adolescents (12+): 10 mg, increase to 20 mg if no response in 6 weeks, max 40 mg
+- Take in the MORNING (can cause insomnia if taken at night)
+- Takes 2-4 weeks to start working — patient must understand this
+- Continue for AT LEAST 9-12 months after symptoms resolve
+- Common side effects: nausea, headache, insomnia, restlessness, sexual dysfunction
+- Serious: bleeding risk increased with aspirin/NSAIDs, hyponatremia in elderly
+- Available on WHO Essential Medicines List — should be available at health centres
+
+AMITRIPTYLINE (TCA — second choice, use with caution):
+- Starting dose: 25 mg at bedtime
+- Increase by 25-50 mg each week
+- Target dose: 75-150 mg daily (minimum effective 75 mg in adults)
+- Maximum: 300 mg daily (adults), 100 mg (elderly)
+- Take at BEDTIME (causes sedation — can help insomnia)
+- CONTRAINDICATED in: cardiac disease, seizure history, bipolar disorder, children/adolescents
+- DO NOT prescribe to patients with cardiovascular disease (arrhythmia risk)
+- DO NOT prescribe to suicidal patients (overdose can be FATAL)
+- Side effects: sedation, dry mouth, constipation, urinary difficulty, blurred vision, weight gain, orthostatic hypotension
+- Serious: ECG changes, cardiac arrhythmia, seizures
+- Avoid in elderly (falls risk from hypotension and sedation)
+
+IMPORTANT MEDICATION RULES:
+- Start with ONE medication at the LOWEST dose
+- Never combine two antidepressants (serotonin syndrome risk)
+- Never stop suddenly — taper gradually over 4 weeks when discontinuing
+- If mania develops (elevated mood, racing thoughts, decreased sleep): STOP antidepressant immediately — may indicate bipolar disorder
+- SSRIs may temporarily increase suicidal thoughts in adolescents/young adults — monitor weekly for first 4 weeks
+
+5. SUICIDE RISK ASSESSMENT (assess at EVERY visit)
+
+Ask directly:
+- "Are you having thoughts of ending your life?"
+- "Have you made any plans to harm yourself?"
+- "Have you ever attempted suicide before?"
+
+If YES to any:
+- Stay calm, listen without judgment
+- Do not leave the patient alone
+- Ask about means (pills, rope, pesticide) — remove access if possible
+- Involve a trusted family member or friend (with patient's permission)
+- If actively suicidal with a plan: refer to hospital IMMEDIATELY
+- Do NOT prescribe amitriptyline (lethal in overdose) — use fluoxetine
+- Provide limited supply (1 week at a time)
+- Schedule follow-up within 1 week
+
+Risk factors for suicide:
+- Previous suicide attempt (strongest predictor)
+- Current plan or access to means
+- Social isolation
+- Chronic pain or illness (diabetes, hypertension)
+- Substance use (alcohol, drugs)
+- Recent loss (bereavement, divorce, job loss)
+- Male gender + older age
+
+Protective factors:
+- Strong family and community connections
+- Religious faith and community (Imam, mosque, church)
+- Having dependent children
+- Access to mental health care
+- Willingness to seek help
+
+6. FOLLOW-UP SCHEDULE
+
+After starting treatment:
+- Week 1-2: brief contact (phone, CHW visit) — check adherence, side effects, suicidal thoughts
+- Week 4: full assessment — is mood improving? Adjust medication if needed
+- Week 6-8: review response — if no improvement on adequate dose, consider increasing or switching
+- Monthly thereafter until stable
+- After symptom resolution: continue medication for 9-12 months minimum
+- When stopping: taper over 4 weeks, not abrupt
+
+At each follow-up assess:
+- Current mood (better, same, worse?)
+- Sleep, appetite, energy, concentration
+- Medication adherence and side effects
+- Functional status (can they work, care for family?)
+- Suicidal thoughts
+- Social support and stressors
+- For NCD patients: disease management (are they taking BP/diabetes meds? Checking readings?)
+
+7. WHEN TO REFER TO SPECIALIST
+
+- Severe depression with psychotic features (hallucinations, delusions)
+- Active suicidal ideation with plan
+- No response to 2 adequate antidepressant trials (6-8 weeks each)
+- Suspected bipolar disorder (manic episodes)
+- Substance use disorder complicating treatment
+- Pregnancy or breastfeeding with moderate-severe depression
+- Child or adolescent with depression
+- Uncertainty about diagnosis
+
+8. DEPRESSION AND CHRONIC DISEASE (NCD COMORBIDITY)
+
+Depression is common in NCD patients:
+- Diabetes: 2-3x higher risk of depression. Depression worsens glucose control (HbA1c rises 0.5-1.0%)
+- Hypertension: depression associated with medication non-adherence and worse BP control
+- Heart disease: depression doubles risk of cardiac events post-MI
+- COPD: depression increases exacerbation frequency
+- Cancer: depression common at diagnosis and during treatment
+
+Bidirectional relationship:
+- Depression → poor medication adherence → worse NCD outcomes → more depression
+- Breaking this cycle requires treating BOTH the depression AND the NCD simultaneously
+
+Practical integration:
+- Screen all NCD patients for depression at every visit (2 screening questions above)
+- When depression is present, address it alongside NCD management — not separately
+- Medication interactions to watch:
+  * Fluoxetine: generally safe with diabetes and BP medications
+  * Amitriptyline: AVOID with cardiac disease, can worsen orthostatic hypotension (already common with BP meds)
+  * Both antidepressants may affect glucose levels — monitor more frequently
+- Exercise benefits BOTH depression and NCDs — emphasize physical activity
+- Social support (Bantaba, CHW visits, family) helps both conditions
+- Align medication schedules: take antidepressant at same time as other daily medications
+- CHW role: can monitor both mood and NCD readings during home visits
+
+GAMBIAN CONTEXT:
+- Depression often presents as physical complaints (headache, body pain, fatigue) rather than sadness
+- Stigma around mental illness is significant — use non-stigmatizing language
+- Say "feeling overwhelmed" or "the sickness of the mind" rather than clinical terms
+- Imam and prayer support can complement (not replace) medical treatment
+- Community support (Bantaba, kafos, family) is a major protective factor
+- Fluoxetine should be available at health centres (WHO Essential Medicines List)
+- Many Gambian patients attribute depression to spiritual causes — respect this while gently introducing the concept of treatable illness
+- CHWs can be trained in basic screening (2 questions) and follow-up
+- Suicide is taboo to discuss openly — requires gentle, private, non-judgmental approach
+- Seasonal pattern: rainy season isolation in rural areas may worsen depression

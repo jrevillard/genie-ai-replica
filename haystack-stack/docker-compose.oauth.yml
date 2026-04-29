@@ -1,0 +1,116 @@
+# AMINA Care — OAuth providers override
+# ======================================
+# Tells the backend which OAuth providers are configured. Controls the
+# `/api/v1/auth/providers` response the frontend uses to show/hide the
+# Google / Facebook / DHIS2 buttons.
+#
+# Chain:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.override.yml \
+#     -f docker-compose.meta-channels.yml \
+#     -f docker-compose.inbox.yml \
+#     -f docker-compose.resilience.yml \
+#     -f docker-compose.gap-closers.yml \
+#     -f docker-compose.dhis2-history.yml \
+#     -f docker-compose.oauth.yml \
+#     up -d --force-recreate haystack-chatqna
+#
+# ─── Values already wired ─────────────────────────────────────────────
+#   DHIS2_CLIENT_ID          "amina" — registered as an oAuth2Client on
+#                              play.im.dhis2.org/dev earlier in this
+#                              session (uid OYNe0bpasIr).
+#   DHIS2_CLIENT_SECRET      "amina-dev-secret" (matches the one we used
+#                              when POST /api/oAuth2Clients ran)
+#   DHIS2_BASE_URL           inherited from the dhis2-history override
+#
+# ─── Values that REQUIRE one-time setup in the provider console ───────
+#   GOOGLE_OAUTH_CLIENT_ID      Created at console.cloud.google.com
+#                                (OAuth 2.0 Client ID, Web app type,
+#                                authorized origin http://localhost:5173).
+#   GOOGLE_OAUTH_CLIENT_SECRET  Same console; only used for server-side
+#                                id_token verification.
+#   FACEBOOK_APP_ID             From developers.facebook.com → Your app
+#                                → Settings → Basic. You already have
+#                                "Amina Test 1.0" (App ID 1689965459027578)
+#                                and "Amina wsp" (App ID 1388627716614900)
+#                                from the WhatsApp setup; either works
+#                                once Facebook Login product is added.
+#   FACEBOOK_APP_SECRET         Same Settings → Basic page.
+#
+# Leave a var blank to keep that provider hidden / disabled. Safe default.
+
+services:
+  haystack-chatqna:
+    # Switch uvicorn to the supply-ledger entry point. It's a strict
+    # superset of main_with_dhis2_history (which the image baked in),
+    # so every previously-mounted route stays — we just gain the new
+    # /api/v1/care/supply_ledger/* endpoints on top.
+    command:
+      - uvicorn
+      - src.main_with_emergency:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --limit-concurrency
+      - "200"
+    volumes:
+      # Bind-mount care_routes.py so the role-gate split (supply vs.
+      # care-path) takes effect without rebuilding the image.
+      - ./haystack-chatqna/src/api/care_routes.py:/app/src/api/care_routes.py:ro
+      # community_routes.py — scout ownership moved to Alkalo (2026-04-19).
+      - ./haystack-chatqna/src/api/community_routes.py:/app/src/api/community_routes.py:ro
+      # community_admin.py — per-patient Bantaba circles + rename.
+      - ./haystack-chatqna/src/services/community_admin.py:/app/src/services/community_admin.py:ro
+      # Bind-mount auth.py so admin-patient JWT stamping + ADMIN_PATIENT_EMAILS
+      # allowlist land in the container without rebuilding.
+      - ./haystack-chatqna/src/services/auth.py:/app/src/services/auth.py:ro
+      # Supply-ledger router + its main entry-point. Additive — nothing
+      # above care_routes / auth changes.
+      - ./haystack-chatqna/src/api/supply_ledger_routes.py:/app/src/api/supply_ledger_routes.py:ro
+      - ./haystack-chatqna/src/main_with_supply_ledger.py:/app/src/main_with_supply_ledger.py:ro
+      # Dual-path-ledger router + its chained entry-point. Same pattern.
+      - ./haystack-chatqna/src/api/dualpath_ledger_routes.py:/app/src/api/dualpath_ledger_routes.py:ro
+      - ./haystack-chatqna/src/main_with_dualpath_ledger.py:/app/src/main_with_dualpath_ledger.py:ro
+      # Caregiver inbox + notification helpers + chained entry-point.
+      - ./haystack-chatqna/src/services/caregiver_notify.py:/app/src/services/caregiver_notify.py:ro
+      - ./haystack-chatqna/src/api/caregiver_inbox_routes.py:/app/src/api/caregiver_inbox_routes.py:ro
+      - ./haystack-chatqna/src/main_with_caregiver_notify.py:/app/src/main_with_caregiver_notify.py:ro
+      # direct_chat_routes.py — inbox push side-effect on every send so
+      # both sides of the chat see in-app notifications (2026-04-19).
+      - ./haystack-chatqna/src/api/direct_chat_routes.py:/app/src/api/direct_chat_routes.py:ro
+      # Emergency escalation — state machine + routes + chained entry point.
+      - ./haystack-chatqna/src/services/emergency_escalation.py:/app/src/services/emergency_escalation.py:ro
+      - ./haystack-chatqna/src/api/emergency_routes.py:/app/src/api/emergency_routes.py:ro
+      - ./haystack-chatqna/src/main_with_emergency.py:/app/src/main_with_emergency.py:ro
+    environment:
+      # Emergency escalation timers (minutes)
+      EMERGENCY_HOTLINE_PROMPT_MIN: ${EMERGENCY_HOTLINE_PROMPT_MIN:-10}
+      EMERGENCY_ADMIN_ESCALATE_MIN: ${EMERGENCY_ADMIN_ESCALATE_MIN:-60}
+      # Supply-ledger cap. 10 matches the UI design; clamped to [1, 50]
+      # by the router so a misconfigured env var can't disable the cap.
+      SUPPLY_LEDGER_CAP: ${SUPPLY_LEDGER_CAP:-10}
+      # Dual-path ledger cap (applied per type — traditional / modern /
+      # interaction / progress each get their own 10-entry allowance).
+      DUALPATH_LEDGER_CAP: ${DUALPATH_LEDGER_CAP:-10}
+      # --- DHIS2 (already wired, pointing at our registered client) ---
+      DHIS2_CLIENT_ID:     ${DHIS2_CLIENT_ID:-amina}
+      DHIS2_CLIENT_SECRET: ${DHIS2_CLIENT_SECRET:-amina-dev-secret}
+
+      # --- Google (blank until you set GOOGLE_OAUTH_CLIENT_ID shell env) ---
+      GOOGLE_OAUTH_CLIENT_ID:     ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+
+      # --- Facebook (blank until you set FACEBOOK_APP_ID shell env) ---
+      FACEBOOK_APP_ID:     ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+
+      # --- Admin-patient allowlist ---
+      # Comma-separated patient emails whose JWT carries role='admin' on
+      # email-login. They experience the normal patient UI but get the
+      # role-switcher + admin bypass on care writes. Extend the list to
+      # grant additional admin-patients.
+      ADMIN_PATIENT_EMAILS: ${ADMIN_PATIENT_EMAILS:-admin@demo.aminacare}

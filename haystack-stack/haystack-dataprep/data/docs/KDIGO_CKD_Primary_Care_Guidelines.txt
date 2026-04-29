@@ -1,0 +1,187 @@
+KDIGO 2024 — Chronic Kidney Disease Evaluation and Management in Primary Care
+Source: KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of CKD
+Reference: https://kdigo.org/guidelines/ckd-evaluation-and-management/
+Published: Kidney International, Volume 105, Issue 4S, April 2024
+
+1. WHY CKD MATTERS FOR NCD MANAGEMENT
+
+- CKD affects 10-15% of the global adult population
+- Leading causes: diabetes (40%) and hypertension (30%) — the same NCDs AMINA manages
+- CKD is largely SILENT until advanced stages — screening is essential
+- Untreated CKD → kidney failure → dialysis ($10,000/year in The Gambia) or death
+- Early detection and treatment can PREVENT progression to kidney failure
+- CKD increases cardiovascular risk (heart attack, stroke) by 2-4 times
+- In Sub-Saharan Africa: large gap between CKD burden and available healthcare
+
+2. WHO TO SCREEN FOR CKD
+
+Screen these patients at EVERY health facility visit:
+- All patients with diabetes mellitus (any type)
+- All patients with hypertension
+- All patients with cardiovascular disease (previous heart attack, stroke)
+- All patients aged 60 and above
+- Patients with family history of kidney disease
+- Patients with obesity (BMI > 30)
+- Patients with systemic diseases affecting kidneys (lupus, HIV)
+- Patients on long-term NSAIDs (ibuprofen, diclofenac) or other nephrotoxic drugs
+
+HOW TO SCREEN:
+1. Blood test: serum creatinine → calculate eGFR (estimated Glomerular Filtration Rate)
+2. Urine test: urine albumin-to-creatinine ratio (uACR) — spot urine sample, morning preferred
+3. Both tests needed — eGFR alone misses early kidney damage
+
+3. CKD STAGING — GFR CATEGORIES
+
+G1: eGFR ≥ 90 mL/min — Normal or high (kidney damage may be present if albuminuria positive)
+G2: eGFR 60-89 mL/min — Mildly decreased
+G3a: eGFR 45-59 mL/min — Mildly to moderately decreased
+G3b: eGFR 30-44 mL/min — Moderately to severely decreased
+G4: eGFR 15-29 mL/min — Severely decreased
+G5: eGFR < 15 mL/min — Kidney failure (may need dialysis or transplant)
+
+4. CKD STAGING — ALBUMINURIA CATEGORIES
+
+A1: ACR < 30 mg/g — Normal to mildly increased (normal)
+A2: ACR 30-300 mg/g — Moderately increased (microalbuminuria — early kidney damage)
+A3: ACR > 300 mg/g — Severely increased (macroalbuminuria — significant kidney damage)
+
+CKD is diagnosed when:
+- eGFR < 60 mL/min sustained for > 3 months, OR
+- Albuminuria (ACR ≥ 30 mg/g) sustained for > 3 months, OR
+- Other markers of kidney damage (structural abnormalities on imaging)
+
+Repeat testing is required for confirmation — single values cannot diagnose CKD.
+
+5. RISK ASSESSMENT — PROGNOSIS BY GFR + ALBUMINURIA
+
+COLOUR-CODED RISK MAP (GFR rows × Albuminuria columns):
+
+GREEN (low risk): G1-G2 + A1 — monitor annually
+YELLOW (moderate risk): G1-G2 + A2, or G3a + A1 — monitor every 6-12 months
+ORANGE (high risk): G1-G2 + A3, G3a + A2, G3b + A1 — monitor every 3-6 months, consider referral
+RED (very high risk): G3a + A3, G3b + A2-A3, G4-G5 any albuminuria — refer to nephrologist
+
+6. MANAGEMENT BY STAGE
+
+ALL STAGES — LIFESTYLE:
+- Blood pressure control (target < 130/80 for CKD patients)
+- Blood glucose control if diabetic (HbA1c < 7%)
+- Dietary sodium restriction (< 5g salt/day — half Maggi cube)
+- Maintain healthy weight (BMI 18.5-24.9)
+- Regular physical activity (150 minutes/week moderate intensity)
+- Stop smoking (accelerates kidney damage)
+- Adequate hydration (2-2.5 liters water daily)
+- Avoid NSAIDs (ibuprofen, diclofenac) — these worsen kidney function
+- Avoid nephrotoxic herbs and traditional remedies — tell your doctor what you take
+
+EARLY CKD (G1-G3a, ACR < 300):
+- Lifestyle interventions above
+- ACE inhibitor (Enalapril) or ARB (Losartan) if: albuminuria present + hypertension or diabetes
+  * These PROTECT the kidneys — continue even if eGFR dips initially (up to 30% dip is expected and acceptable)
+  * Monitor potassium and creatinine 1-2 weeks after starting
+- Statin for cardiovascular protection (Simvastatin 20-40mg or Atorvastatin 10-20mg)
+- SGLT2 inhibitor (if available): proven to slow CKD progression AND reduce cardiovascular events
+  * Dapagliflozin 10mg or Empagliflozin 10mg daily
+  * Can be used down to eGFR 20 mL/min
+  * Benefits: slows kidney decline, reduces heart failure risk, modest weight loss, BP reduction
+  * Side effects: genital infections (thrush), dehydration risk during Ramadan fasting
+
+MODERATE CKD (G3b-G4):
+- All above plus:
+- Anaemia screening: check haemoglobin every 6 months (CKD causes anaemia)
+  * If Hb < 10 g/dL: oral iron first, refer if not responding
+- Bone health: check calcium, phosphate if available
+  * CKD disrupts calcium-phosphate balance → bone weakening
+- Dietary protein: moderate restriction (0.8 g/kg/day) — do NOT over-restrict in malnourished patients
+- Potassium monitoring: CKD + ACEI/ARB can cause high potassium
+  * Avoid potassium-rich foods in excess: bananas, oranges, groundnuts, tomatoes
+  * If potassium > 5.5 mmol/L: reduce or stop ACEI/ARB, refer
+- Medication dose adjustments: many drugs need dose reduction in CKD
+  * Metformin: reduce dose if eGFR 30-45, STOP if eGFR < 30
+  * Glibenclamide: AVOID in CKD (hypoglycemia risk increases)
+  * Use Gliclazide instead (safer in CKD)
+
+ADVANCED CKD (G5 — eGFR < 15):
+- Refer to hospital (EFSTH) for kidney replacement therapy planning
+- Options: dialysis (hemodialysis or peritoneal dialysis) or kidney transplant
+- Conservative management may be appropriate for elderly/frail patients (focus on symptom control)
+- Advance care planning discussion with patient and family
+
+7. BLOOD PRESSURE TARGETS IN CKD
+
+- All CKD patients: target < 130/80 mmHg (stricter than general population)
+- First-line: ACEI (Enalapril 5-20mg) or ARB (Losartan 50-100mg) — especially if albuminuria present
+- Second-line: add CCB (Amlodipine 5-10mg) or Thiazide (if eGFR > 30)
+- For eGFR < 30: use loop diuretic (Furosemide) instead of Thiazide
+- Monitor potassium and creatinine 1-2 weeks after starting/changing ACEI/ARB
+- Expected initial eGFR dip of up to 30% is acceptable — do NOT stop medication for this
+
+8. DIABETES + CKD MANAGEMENT
+
+- Most important: blood glucose AND blood pressure control together
+- HbA1c target: < 7% (but < 8% acceptable if hypoglycemia risk high or eGFR < 30)
+- Metformin: safe if eGFR > 45, reduce dose if 30-45, STOP if < 30
+- Gliclazide: preferred sulfonylurea in CKD (safer than glibenclamide)
+- Insulin: may be needed earlier than usual (CKD affects drug clearance)
+- SGLT2 inhibitors: dual benefit — protect kidneys AND control glucose
+- ACEI/ARB: essential — protects kidneys from diabetic damage
+- Monitor glucose more frequently: CKD changes insulin clearance (hypo risk increases)
+
+9. MONITORING SCHEDULE
+
+Low risk (green): annually — eGFR + uACR
+Moderate risk (yellow): every 6-12 months — eGFR + uACR + BP + medication review
+High risk (orange): every 3-6 months — eGFR + uACR + BP + potassium + haemoglobin
+Very high risk (red): every 1-3 months — full panel + specialist involvement
+
+WHAT TO CHECK AT EACH VISIT:
+- Blood pressure
+- eGFR trend (stable? declining? how fast?)
+- Albuminuria trend
+- Medication adherence
+- New symptoms: fatigue, swelling (oedema), nausea, foamy urine, reduced urine output
+- Review all medications for kidney safety
+
+CONCERNING TRENDS (investigate or refer):
+- eGFR decline > 20% from baseline
+- Albuminuria doubling
+- New or worsening oedema
+- Potassium > 5.5 mmol/L
+- Haemoglobin < 10 g/dL
+
+10. REFERRAL CRITERIA — WHEN TO SEND TO HOSPITAL
+
+REFER to nephrologist/hospital if:
+- eGFR < 30 mL/min (CKD stage 4-5)
+- eGFR 30-60 with significant albuminuria (ACR > 300)
+- Rapid eGFR decline (> 5 mL/min/year or > 20% decline in 6 months)
+- Persistent proteinuria > 1 g/day
+- Uncontrolled hypertension despite 3 medications at adequate doses
+- Persistent potassium > 5.5 mmol/L
+- Anaemia not responding to iron therapy (Hb < 10)
+- Suspected glomerulonephritis (blood + protein in urine + declining eGFR)
+- CKD in pregnancy
+- CKD in children or young adults (< 30 years)
+- Uncertainty about cause of CKD
+
+11. PATIENT EDUCATION — KEY MESSAGES
+
+- "Your kidneys filter your blood like a water filter. When the filter gets damaged, waste builds up."
+- "Diabetes and high blood pressure are the two biggest enemies of your kidneys."
+- "Taking your BP medicine and diabetes medicine PROTECTS your kidneys — even when you feel fine."
+- "Kidney damage is SILENT for years. By the time you feel sick, much damage is already done."
+- "Reducing salt and controlling your blood pressure is the single most important thing you can do."
+- "Do NOT take ibuprofen or other painkillers without asking your health worker — they can hurt your kidneys."
+- "Tell your doctor about ALL medicines you take, including herbs from the marabout."
+- "Drink enough water — but not too much. 2-2.5 liters per day is right for most people."
+
+GAMBIAN CONTEXT:
+- Dialysis available only at EFSTH — extremely limited capacity and costs ~$10,000/year
+- Prevention is the ONLY sustainable strategy
+- Creatinine testing available at health centres and regional hospitals
+- Urine dipstick (for protein) available at most health posts — basic screening tool
+- ACEI (Enalapril) and ARB (Losartan) on essential medicines list
+- NSAIDs (ibuprofen, diclofenac) widely available OTC — patient education critical
+- Traditional remedies may contain nephrotoxic substances — patients must inform their doctor
+- CHW can monitor BP and check for oedema (swelling of feet/ankles) during home visits
+- Refer early — late referral to EFSTH means worse outcomes

@@ -1,0 +1,75 @@
+{
+  "primary": {
+    "Banjul": [
+      {"name": "Banjul Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "EFSTH Outpatient Clinic", "phone": null, "hours": "8am-6pm"}
+    ],
+    "Kanifing": [
+      {"name": "Serrekunda Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Faji Kunda Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Bakoteh Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Kotu Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Bundung Maternal & Child Health Hospital", "phone": null, "hours": "24h"}
+    ],
+    "West Coast": [
+      {"name": "Brikama Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Gunjur Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Sanyang Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Kartong Health Centre", "phone": null, "hours": "8am-2pm"},
+      {"name": "Sibanor Health Centre", "phone": null, "hours": "8am-4pm"}
+    ],
+    "North Bank": [
+      {"name": "Essau Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Kerewan Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Farafenni Health Centre", "phone": null, "hours": "8am-4pm"}
+    ],
+    "Lower River": [
+      {"name": "Soma Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Mansakonko Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Kwinella Health Centre", "phone": null, "hours": "8am-2pm"}
+    ],
+    "Central River": [
+      {"name": "Bansang Hospital", "phone": null, "hours": "24h"},
+      {"name": "Janjanbureh Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Kuntaur Health Centre", "phone": null, "hours": "8am-4pm"}
+    ],
+    "Upper River": [
+      {"name": "Basse Health Centre", "phone": null, "hours": "8am-4pm"},
+      {"name": "Fatoto Health Centre", "phone": null, "hours": "8am-2pm"},
+      {"name": "Sabi Health Centre", "phone": null, "hours": "8am-2pm"}
+    ]
+  },
+  "secondary": {
+    "Greater Banjul": [
+      {"name": "EFSTH (Edward Francis Small Teaching Hospital)", "phone": "199", "hours": "24h", "services": ["emergency", "diabetes", "cardiac", "renal", "maternity"]}
+    ],
+    "North Bank": [
+      {"name": "Farafenni Hospital", "phone": null, "hours": "24h", "services": ["emergency", "maternity", "surgery"]}
+    ],
+    "Central River": [
+      {"name": "Bansang Hospital", "phone": null, "hours": "24h", "services": ["emergency", "maternity", "surgery"]}
+    ],
+    "Upper River": [
+      {"name": "Basse Hospital", "phone": null, "hours": "24h", "services": ["emergency", "maternity"]}
+    ]
+  },
+  "specialist": {
+    "diabetes": {"name": "EFSTH Diabetes Clinic", "location": "Banjul", "hours": "Mon-Fri 8am-2pm"},
+    "eye": {"name": "Sheikh Zayed Regional Eye Care Centre", "location": "Kanifing", "hours": "Mon-Fri 8am-4pm"},
+    "cardiac": {"name": "EFSTH Cardiology Unit", "location": "Banjul", "hours": "Mon-Fri 8am-2pm"},
+    "renal": {"name": "EFSTH Renal Unit", "location": "Banjul", "hours": "Mon-Fri 8am-2pm"},
+    "mental_health": {"name": "Tanka Tanka Psychiatric Hospital", "location": "Kanifing", "hours": "24h"}
+  },
+  "emergency": {
+    "number": "199",
+    "main": "EFSTH Emergency Department",
+    "location": "Banjul",
+    "hours": "24 hours",
+    "notes": "Only full emergency department in The Gambia"
+  },
+  "community_health": {
+    "description": "Community Health Workers (CHWs) provide home visits in all regions",
+    "contact": "Through your local health centre",
+    "services": ["BP checks", "glucose monitoring", "medication reminders", "health education", "referrals"]
+  }
+}

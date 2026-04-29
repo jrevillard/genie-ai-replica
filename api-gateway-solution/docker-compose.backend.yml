@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  arcadedb:
+    image: arcadedata/arcadedb:latest
+    container_name: arcadedb
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Darcadedb.server.rootPassword=genieRoot123 -Darcadedb.server.defaultDatabases=genie[root]{import:https://github.com/ArcadeData/arcadedb-datasets/raw/main/orientdb/OpenBeer.gz}"
+    ports:
+      - "2480:2480"
+    volumes:
+      - arcadedb-data:/opt/arcadedb/databases
+    networks:
+      - genie-net
+
+  genie-graph-service:
+    build: ./genie-graph-service
+    container_name: genie-graph-service
+    restart: unless-stopped
+    ports:
+      - "8200:8200"
+    networks:
+      - genie-net
+    depends_on:
+      - arcadedb
+    environment:
+      ARCADEDB_HOST: arcadedb
+      ARCADEDB_PORT: 2480
+      ARCADEDB_DB: genie
+      ARCADEDB_USER: root
+      ARCADEDB_PASSWORD: genieRoot123
+
+networks:
+  genie-net:
+    external: true
+
+volumes:
+  arcadedb-data:

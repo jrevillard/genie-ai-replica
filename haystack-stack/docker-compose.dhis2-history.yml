@@ -1,0 +1,89 @@
+# AMINA Care — DHIS2 History + Live Mapping Override
+# ====================================================
+# Adds history + discovery endpoints on top of the gap-closers stack AND
+# re-maps the DHIS2 aggregate push to point at a real, live dataset on
+# play.im.dhis2.org/dev so pushes actually succeed with importCount > 0.
+#
+# Chain:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.override.yml \
+#     -f docker-compose.meta-channels.yml \
+#     -f docker-compose.inbox.yml \
+#     -f docker-compose.resilience.yml \
+#     -f docker-compose.gap-closers.yml \
+#     -f docker-compose.dhis2-history.yml \
+#     up -d --force-recreate haystack-chatqna
+#
+# Mapping strategy (for play.im.dhis2.org/dev)
+# --------------------------------------------
+# Dataset: xDcl9YtJghX  "2334146 COVID-19 Daily Reporting Dataset" (Daily)
+# Org unit assigned: voKCEIB50aI  (single facility — all AMINA regions
+# map to it for the demo; real deployment uses region→facility UIDs).
+#
+# AMINA metric            → DHIS2 data element UID (name on demo server)
+# ----------------------------------------------------------------------
+# AMINA_CONS_TOTAL        → ZuZKqdhc2yc   (Deaths)
+# AMINA_CONS_EMERGENCY    → qgr0JS73VYn   (ICU Admissions)
+# AMINA_CONS_URGENT       → uNmZ1i1Wotx   (Hospital Admissions)
+# AMINA_CONS_ROUTINE      → TwyylslxXl1   (Ventilator Patients)
+# AMINA_NCD_HTN           → JpBbGwfhCe9   (Confirmed Cases)
+# AMINA_NCD_DM            → runjDMKL3Rr   (Suspected Cases)
+# AMINA_NCD_ASTHMA        → mJcoa2fLOrD   (Vaccinations Administered)
+# AMINA_MCH               → TUZwN5Fw3jf   (Recovered Cases)
+# AMINA_MENTAL_HEALTH     → Svh6uVNSyDS   (Tests Conducted)
+# AMINA_CG_ALERTS         → to76SbJeTRM   (Positive Results)
+# (AMINA_SAFETY_BLOCKS    → intentionally unmapped — dataset has 10 slots
+#                            and we have 11 metrics; safety blocks dropped
+#                            for the demo because it's the least clinical.)
+#
+# Semantics are deliberately mismatched — this override is for wiring
+# proof on a public sandbox. For a real Ministry-of-Health deployment,
+# replace these IDs via env override with real NCD data element UIDs.
+
+services:
+  haystack-chatqna:
+    volumes:
+      - ./haystack-chatqna/src/services/dhis2_history.py:/app/src/services/dhis2_history.py:ro
+      - ./haystack-chatqna/src/services/dhis2_force_push.py:/app/src/services/dhis2_force_push.py:ro
+      - ./haystack-chatqna/src/api/dhis2_history_routes.py:/app/src/api/dhis2_history_routes.py:ro
+      - ./haystack-chatqna/src/main_with_dhis2_history.py:/app/src/main_with_dhis2_history.py:ro
+    environment:
+      # --- Dataset & auth (no :- fallback — base .env already provides these,
+      # but we need to OVERRIDE QDm3cKwrTU9 → xDcl9YtJghX because the former
+      # doesn't exist on play.im.dhis2.org/dev) ---
+      DHIS2_BASE_URL:   "https://play.im.dhis2.org/dev"
+      DHIS2_DATASET_ID: "xDcl9YtJghX"
+      DHIS2_USERNAME:   "admin"
+      DHIS2_PASSWORD:   "district"
+      # --- Mapping (JSON-encoded; dhis2_sync._load_data_element_map reads) ---
+      DHIS2_DATA_ELEMENT_MAP: |
+        {"AMINA_CONS_TOTAL":"ZuZKqdhc2yc","AMINA_CONS_EMERGENCY":"qgr0JS73VYn","AMINA_CONS_URGENT":"uNmZ1i1Wotx","AMINA_CONS_ROUTINE":"TwyylslxXl1","AMINA_NCD_HTN":"JpBbGwfhCe9","AMINA_NCD_DM":"runjDMKL3Rr","AMINA_NCD_ASTHMA":"mJcoa2fLOrD","AMINA_MCH":"TUZwN5Fw3jf","AMINA_MENTAL_HEALTH":"Svh6uVNSyDS","AMINA_CG_ALERTS":"to76SbJeTRM"}
+      # AMINA emits full region names ("west coast", "north bank", ...) not
+      # abbreviations. Map every variant to the same DHIS2 org unit because
+      # the COVID-19 dataset only has voKCEIB50aI assigned on this sandbox.
+      # The force-push patch dedupes the resulting duplicates before POST.
+      DHIS2_ORG_UNIT_MAP: |
+        {"kanifing":"voKCEIB50aI","banjul":"voKCEIB50aI","brikama":"voKCEIB50aI","west coast":"voKCEIB50aI","north bank":"voKCEIB50aI","lower river":"voKCEIB50aI","upper river":"voKCEIB50aI","central river":"voKCEIB50aI","wcr":"voKCEIB50aI","nbr":"voKCEIB50aI","lrr":"voKCEIB50aI","urr":"voKCEIB50aI","crr":"voKCEIB50aI","gambia":"voKCEIB50aI"}
+      # Rebase past-period pushes onto DHIS2's current day automatically.
+      # DHIS2's "Untimely data entry" check locks periods older than
+      # server-now; demos would otherwise fail on yesterday's rollups.
+      DHIS2_REBASE_PAST_PERIODS: "true"
+      # Pin REDIS_HOST to the haystack-stack Redis so dhis2_sync writes
+      # and /sync/status reads land on the SAME instance. Without this
+      # pin, the `redis` DNS alias round-robins between amina-redis and
+      # multichannel-redis, and the "Last Sync" panel reads stale/empty
+      # state from the wrong one.
+      REDIS_HOST: "amina-redis"
+      REDIS_PORT: "6379"
+    command:
+      - uvicorn
+      - src.main_with_dhis2_history:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --limit-concurrency
+      - "200"

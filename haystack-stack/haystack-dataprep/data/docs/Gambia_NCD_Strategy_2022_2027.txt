@@ -1,0 +1,200 @@
+The Gambia National NCD Strategy 2022-2027 — Key Protocols and Health System Context
+
+THE GAMBIA NCD BURDEN AND HEALTH SYSTEM
+
+1. NCD BURDEN IN THE GAMBIA
+- NCDs account for an estimated 34% of all deaths in The Gambia
+- Leading NCD causes of death: cardiovascular diseases (13%), cancers (5%), chronic respiratory diseases (3%), diabetes (2%)
+- 79% of rural NCD patients are estimated to be UNDIAGNOSED
+- Hypertension prevalence: estimated 30-40% in adults over 25
+- Diabetes prevalence: estimated 3-5% (rising rapidly with urbanization)
+- Tobacco use: approximately 15% of adult males, 1% of females
+- Physical inactivity increasing with urbanization
+- Diet transitioning from traditional (protective) to processed (harmful)
+- Obesity rising, especially in urban women
+
+2. THE GAMBIAN HEALTH SYSTEM STRUCTURE
+
+TIER 1 — Community Level:
+- Community Health Workers (CHWs/VHWs): village-based, trained for basic health education, screening, referral
+- Village Health Services: basic first aid, health education, growth monitoring
+- Community midwives: maternal and newborn care
+- Coverage: approximately 1 CHW per 500-1000 population
+- CHW capabilities for NCDs: BP measurement, blood glucose (glucometer), health education, medication adherence support, referral
+- Training: MRC Fajara and regional health directorates provide NCD training
+
+TIER 2 — Health Posts and Minor Health Centres:
+- Approximately 80+ health posts across the country
+- Staffed by Community Health Nurses (CHN)
+- Services: outpatient care, basic diagnostics, essential medicines
+- NCD services: BP screening, glucose testing, essential NCD medicines (Metformin, Amlodipine, HCTZ), health education
+- Limitations: no lab services, limited drug supply, one nurse may cover multiple posts
+
+TIER 3 — Health Centres and District Hospitals:
+- Major health centres: Brikama, Farafenni, Bansang, Basse
+- Services: outpatient and inpatient, laboratory, X-ray, minor surgery
+- NCD services: diagnosis, treatment initiation, HbA1c testing, cervical cancer screening (VIA), referral
+- Staffed by Clinical Officers, nurses, midwives, lab technicians
+
+TIER 4 — Regional and Teaching Hospitals:
+- Edward Francis Small Teaching Hospital (EFSTH) — Banjul: national referral hospital
+- Services: specialist care, surgery, ICU (limited), dialysis, chemotherapy
+- NCD services: cardiology, endocrinology, oncology, nephrology, ophthalmology
+- Also: Sheikh Zayed Regional Eye Centre (diabetic retinopathy screening)
+- Emergency services: 199 ambulance line
+
+3. ESSENTIAL MEDICINES FOR NCDs IN THE GAMBIA
+
+Diabetes:
+- Metformin 500mg tablets (first-line, widely available)
+- Gliclazide 80mg tablets (second-line, available at health centres)
+- Insulin (soluble and NPH): available at some health centres and hospitals, requires cold chain
+- Glucose testing strips and glucometers
+
+Hypertension:
+- Amlodipine 5mg and 10mg (CCB — first-line for Gambian/African populations)
+- Hydrochlorothiazide 25mg (thiazide diuretic)
+- Enalapril 5mg and 10mg (ACE inhibitor)
+- Losartan 50mg (ARB — available at some facilities)
+- Methyldopa 250mg (for hypertension in pregnancy)
+
+Cardiovascular:
+- Aspirin 75mg and 100mg (prevention and treatment)
+- Simvastatin 20mg (cholesterol — available at hospitals)
+- Atorvastatin 10mg (some facilities)
+
+Respiratory:
+- Salbutamol inhaler 100mcg (widely available)
+- Beclometasone inhaler 100mcg (available at health centres/hospitals)
+- Theophylline 200mg tablets
+- Prednisolone 5mg tablets (for exacerbations)
+- Amoxicillin 500mg (for respiratory infections)
+
+Pain:
+- Paracetamol 500mg
+- Ibuprofen 400mg
+- Codeine 30mg (limited availability)
+- Morphine oral solution (very limited, hospital-level)
+
+4. NATIONAL HEALTH INSURANCE SCHEME (NHIS)
+- Gambia is developing a national health insurance scheme
+- Aims to provide universal health coverage for essential health services
+- NCD medicines included in essential medicines list — should be available free or subsidized
+- Dialysis costs: approximately $10,000 per patient per year — prevention is cost-effective
+- Current out-of-pocket spending is a major barrier to NCD care
+- Transport costs: rural patients may spend 200-500 dalasi just to reach a health facility
+- AMINA (this AI) aims to be the "5-cent digital triage" that prevents unnecessary travel
+
+5. KEY HEALTH FACILITIES AND EMERGENCY CONTACTS
+
+Emergency:
+- Ambulance: 199 (national)
+- Fire: 118
+- Police: 117
+
+Major facilities by region:
+- Greater Banjul Area: EFSTH, MRC at Fajara, Serrekunda General Hospital
+- West Coast Region: Brikama District Hospital, Gunjur Health Centre
+- North Bank Region: Farafenni District Hospital, Kerewan Health Centre
+- Lower River Region: Soma Health Centre, Mansakonko Health Centre
+- Central River Region: Bansang Hospital, Janjanbureh Health Centre
+- Upper River Region: Basse District Hospital
+
+Specialized services:
+- EFSTH: only hospital with dialysis, basic chemotherapy, specialist cardiology
+- Sheikh Zayed: eye care and diabetic retinopathy screening
+- MRC Fajara: clinical research, some specialized care
+- SOS Children's Village Clinic: pediatric services
+
+6. COMMUNITY HEALTH STRUCTURES
+
+Village Development Committees (VDC):
+- Community governance structure
+- Can support health initiatives, organize screening days
+- Alkalo (village head) chairs the VDC
+
+Traditional Birth Attendants (TBAs):
+- Community trust, especially in rural areas
+- Can be trained in NCD risk factor screening during antenatal visits
+- Bridge between traditional and modern health care
+
+Women's Groups (Kafos):
+- Strong social networks for health education
+- Can organize group health activities (walking groups, cooking classes)
+- Influential in changing household diet practices
+
+Youth Health Scouts:
+- Young community members (12-24) trained in basic health monitoring
+- Can check BP on elders, remind medication, report emergencies
+- Bridge between healthcare system and hard-to-reach populations
+
+7. CULTURAL CONSIDERATIONS FOR NCD MANAGEMENT
+
+Traditional Medicine:
+- Approximately 80% of Gambians use traditional medicine alongside modern medicine
+- Common traditional remedies: kinkeliba tea (anti-malarial/general health), bitter leaf, neem, moringa
+- Marabout (traditional healer) consultations common, especially before/instead of hospital
+- WHO PEN approach: do not reject traditional medicine, integrate and bridge
+- Key message: "traditional and modern medicine can work together — tell your doctor what herbs you use"
+
+Religious Context:
+- Approximately 95% Muslim, with Christian and traditional belief minorities
+- Ramadan fasting: major consideration for diabetes and medication management
+- Prayer times: can be used to align medication schedules
+- Imam support: can legitimize health-seeking behavior in conservative communities
+- Friday (Jummah): community gathering opportunity for health education
+- Religious leaders are trusted — involve in health messaging
+
+Gender Dynamics:
+- Women often need husband's or elder's permission for health facility visits
+- Alkalo (village head) can grant permission and legitimize health-seeking
+- CHW home visits provide privacy for women
+- Women's kafos provide safe space for health discussions
+- Male engagement: important for changing household diet and supporting women's health
+
+Food Culture:
+- Communal eating from shared bowl (calabash): portion control is challenging
+- Benachin (jollof rice): national dish, eaten almost daily — reducing portion is key intervention
+- Domoda (groundnut stew): high calorie but nutritious — reduce groundnut paste, add vegetables
+- Supakanja (okra stew): healthy — encourage more frequently
+- Chere (millet porridge): healthier than white rice — encourage as breakfast and alternative
+- Attaya (green tea ceremony): social ritual, 3 rounds — reduce sugar, don't add condensed milk
+- Maggi cubes: ubiquitous seasoning — salt reduction is the single most impactful dietary change
+
+8. SEASONAL HEALTH CONSIDERATIONS
+
+Dry Season (November - May):
+- Harmattan (December-February): cold nights, dust — worsens asthma/COPD
+- Fresh fruit abundant: oranges, grapefruit, mango (late season)
+- Market garden vegetables available
+- Easier transport (roads not flooded)
+
+Rainy Season (June - October):
+- Malaria peak: co-morbidity with NCDs complicates management
+- Roads flooded: access to health facilities difficult
+- Fresh fruit peak: mango, watermelon, papaya
+- Farming work: high physical activity (counts as exercise)
+- Hunger season (July-August): food insecurity in some areas — medication on empty stomach problematic
+
+Ramadan (moves through calendar):
+- Fasting diabetics: high risk of hypoglycemia, especially with sulfonylureas
+- Fasting hypertensives: medication timing adjustment needed
+- Dehydration risk in hot-season Ramadan
+- IDF-DAR (Diabetes and Ramadan) guidelines: risk-stratify patients BEFORE Ramadan
+- Post-Ramadan period: often weight gain due to feast foods — monitor
+
+Lumo (Market Days):
+- Monday, Wednesday, Saturday: weekly markets in different towns
+- Opportunity to buy fresh vegetables and fruits
+- Opportunity for health education at busy gathering point
+- Health workers can set up screening stations at lumo
+
+9. MONITORING AND EVALUATION INDICATORS
+- Proportion of adults screened for hypertension and diabetes
+- Proportion of diagnosed patients on treatment
+- Proportion of treated patients achieving target BP/glucose
+- Emergency department visits for NCD complications
+- NCD-related mortality rate
+- Essential medicine availability at health facilities
+- Patient satisfaction with NCD services
+- CHW NCD training coverage

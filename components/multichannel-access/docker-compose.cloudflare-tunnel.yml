@@ -1,0 +1,73 @@
+# AMINA Care — multichannel-access optional Cloudflare named-tunnel sidecar.
+# ============================================================================
+# Strict-additive override. Layer this file ON TOP of docker-compose.yml when
+# you want a persistent public HTTPS URL fronting the Telegram webhook
+# (and any other channels exposed on :8020).
+#
+# Why opt-in?
+#   The base docker-compose.yml runs multichannel-access on localhost:8020
+#   only — sufficient for local development and for any setup where you
+#   already manage your own tunnel (ngrok in another terminal, an existing
+#   reverse-proxy, etc.). This override adds a cloudflared sidecar that
+#   uses your Cloudflare-managed named tunnel so you never have to copy
+#   a fresh ngrok URL into Telegram again.
+#
+# Setup (one-time, on your workstation, NOT in the repo):
+#   1. cloudflared login
+#   2. cloudflared tunnel create amina-telegram
+#   3. cloudflared tunnel token amina-telegram     # prints the token
+#   4. cloudflared tunnel route dns amina-telegram telegram.your-domain.com
+#
+# Usage:
+#   PowerShell:
+#     $env:CLOUDFLARED_TUNNEL_TOKEN = "<paste-token-here>"
+#     docker compose `
+#       -f components/multichannel-access/docker-compose.yml `
+#       -f components/multichannel-access/docker-compose.cloudflare-tunnel.yml `
+#       up -d
+#
+#   Bash / WSL:
+#     export CLOUDFLARED_TUNNEL_TOKEN="<paste-token-here>"
+#     docker compose \
+#       -f components/multichannel-access/docker-compose.yml \
+#       -f components/multichannel-access/docker-compose.cloudflare-tunnel.yml \
+#       up -d
+#
+# After the tunnel is up, register the public URL with Telegram:
+#   .\scripts\telegram_webhook_ops.ps1 -PublicUrl "https://telegram.your-domain.com" -SetWebhook -Verify
+#
+# Security:
+#   The token is read from the host shell environment via ${CLOUDFLARED_TUNNEL_TOKEN}.
+#   It is NEVER committed to the repository and is NOT echoed by docker compose.
+#   The cloudflared container's --no-autoupdate flag prevents an unattended
+#   silent upgrade of the tunnel daemon — change that if you prefer auto-update.
+#
+# Behaviour without the env var:
+#   If CLOUDFLARED_TUNNEL_TOKEN is unset or empty, docker compose will refuse
+#   to start the cloudflared container (cloudflared exits immediately when its
+#   token is missing). The base multichannel-access service still runs as
+#   normal — the override degrades gracefully to "tunnel disabled".
+
+services:
+
+  # Cloudflared named-tunnel sidecar. No ports exposed: it dials Cloudflare's
+  # edge outbound and routes inbound HTTPS traffic to multichannel-access:8020
+  # over the docker network.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: amina-cloudflared
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${CLOUDFLARED_TUNNEL_TOKEN}
+    depends_on:
+      multichannel-access:
+        condition: service_healthy
+    networks:
+      - chatqna_default
+    # cloudflared has no built-in HTTP healthcheck endpoint; we lean on its
+    # restart policy + depends_on. The sidecar exits non-zero when the token
+    # is missing or invalid, which docker will surface immediately.

@@ -1,0 +1,30 @@
+services:
+  bark-tts:
+    image: ghcr.io/coqui-ai/tts-cpu:latest
+    container_name: bark-tts-narrator
+
+    volumes:
+      - ./bark/voices:/voices
+
+    # DO NOT use tts-server
+    # DO NOT use tts
+    entrypoint: ["/usr/bin/python3"]
+
+    command:
+      - -m
+      - TTS.server.server
+      - --model_name
+      - tts_models/multilingual/multi-dataset/bark
+      - --voice_dir
+      - /voices
+      - --speaker_idx
+      - narrator
+      - --port
+      - "5002"
+      - --use_cuda
+      - "false"
+
+    ports:
+      - "5002:5002"
+
+    restart: unless-stopped

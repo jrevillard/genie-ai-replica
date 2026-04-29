@@ -1,0 +1,102 @@
+/* =============================================================================
+ * AMINA Care — i18n helpers
+ * =============================================================================
+ * CSS layer that complements the react-i18next string swap. Handles
+ *   - Typography: Arabic needs a font that reads well across OSes (Noto
+ *     Naskh Arabic is the safest universal pick; falls back to the system
+ *     Arabic face).
+ *   - Direction: when `html[dir="rtl"]`, flip inline-start/end logical
+ *     properties on the components WE added. Existing shells keep their
+ *     LTR layout.
+ *
+ * Why only `body[data-lang]` scoped selectors?
+ *   We intentionally DO NOT touch `html { direction: rtl; }` for the
+ *   entire body — BeginnerShell / BasicShell / App.jsx are full-bleed
+ *   layouts that were not written for RTL. A global flip would break
+ *   their sidebars. Our overlays are narrower and easier to flip safely.
+ * =============================================================================
+ */
+
+/* --- Arabic font stack ----------------------------------------------------- */
+html[lang="ar"],
+body[data-lang="ar"] {
+  font-family:
+    "Noto Naskh Arabic",
+    "Noto Sans Arabic",
+    "Amiri",
+    "Cairo",
+    "Segoe UI Arabic",
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Slightly boost Arabic line-height — vowel/diacritic marks need room */
+body[data-lang="ar"] button,
+body[data-lang="ar"] input,
+body[data-lang="ar"] textarea,
+body[data-lang="ar"] [role="dialog"],
+body[data-lang="ar"] [aria-label="Amina inbox"] {
+  line-height: 1.55;
+}
+
+/* --- RTL flips for OUR added overlays only -------------------------------- *
+ * Targets the bootstrap-mounted roots so existing shells don't flip.
+ */
+html[dir="rtl"] #amina-inbox-root [aria-label="Amina inbox"] {
+  /* InboxPanel was positioned `right: 0`; mirror it to the left in RTL */
+  right: auto !important;
+  left: 0 !important;
+  box-shadow: 12px 0 32px rgba(15, 23, 42, 0.18) !important;
+  animation-name: amina-inbox-slide-rtl !important;
+}
+
+@keyframes amina-inbox-slide-rtl {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+html[dir="rtl"] #amina-inbox-root button[aria-label^="Inbox"] {
+  /* Bell sits top-right in LTR — swap to top-left in RTL */
+  right: auto !important;
+  left: 20px !important;
+}
+
+html[dir="rtl"] #amina-scribe-root button[aria-label="Record visit"] {
+  /* ScribeFab now sits top-RIGHT at top:195; in RTL flip to top-LEFT. */
+  right: auto !important;
+  left:  20px !important;
+}
+html[dir="rtl"] #amina-language-picker-root button[aria-label^="Language"] {
+  /* LanguagePicker now sits top-RIGHT at top:136; flip to top-LEFT in RTL. */
+  right: auto !important;
+  left:  20px !important;
+}
+html[dir="rtl"] #amina-role-switcher-root button[aria-label^="Acting as"] {
+  /* RoleSwitcher sits top-RIGHT at top:78; flip to top-LEFT in RTL. */
+  right: auto !important;
+  left:  20px !important;
+}
+
+/* LanguagePicker is docked at bottom-left inside the shell sidebar footer
+ * (above the Sign Out button). Shell sidebars are hard-coded LTR on the
+ * left in every shell (Beginner / Basic / Admin), so the pill keeps its
+ * left: 20 position even in Arabic RTL mode. No RTL flip rule is needed
+ * for the picker itself. */
+
+/* ChannelLinkFab — existing project component, not ours, but its root is
+ * mounted by LiteracyBootstrap. We leave its LTR placement untouched so
+ * the visible stack stays predictable.
+ */
+
+/* ModelSwitchBanner stays centered; no flip needed */
+
+/* --- Arabic numerals stay Latin for clinical values ------------------------ */
+html[lang="ar"] .amina-numeric,
+body[data-lang="ar"] .amina-numeric {
+  /* Force Arabic-Indic → Latin numerals for any element tagged
+   * class="amina-numeric" (e.g. BP values, lab numbers). Keeps dosing and
+   * vitals readable across shared clinical notes.
+   */
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: embed;
+}

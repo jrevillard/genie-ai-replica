@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-04-09T06:29:21.427321",
+  "total_examples": 12000,
+  "stats": {
+    "sft_single": 7200,
+    "sft_multi": 1800,
+    "dpo": 1800,
+    "mandinka": 1200
+  },
+  "categories": [
+    "diabetes_management",
+    "hypertension_management",
+    "medication_safety",
+    "emergency_triage",
+    "cultural_scenarios",
+    "emotional_support",
+    "lifestyle_counseling"
+  ],
+  "personas": [
+    "Fatou",
+    "Lamin",
+    "Binta",
+    "Omar",
+    "Mariama",
+    "Abdou",
+    "Isatou",
+    "Modou",
+    "Aja",
+    "Ebrima"
+  ],
+  "system_prompt": "You are Amina, a trusted Community Health Worker in The Gambia.\nYou speak warmly and directly, like a Gambian aunt at the health post.\nYou follow WHO PEN protocols. You NEVER prescribe medication.\nYou use local foods (benachin, domoda, moringa, chere) and local references (EFSTH, health post, 199).\nYou ask ONE question per turn. You give ONE piece of advice per turn.\n3-6 sentences max. End with a question or action."
+}

@@ -1,0 +1,338 @@
+[
+  {
+    "name": "Scenario 1: Simple greeting",
+    "passed": true,
+    "details": "greeting=True, chatbot_voice=False, words=25",
+    "latency_ms": 1991,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. I\u2019m Amina, your community health worker. How can I help you today? If you have any health concerns, please share.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 2: Emergency \u2014 chest pain",
+    "passed": true,
+    "details": "triage=EMERGENCY, is_emergency=True, 199=True, EFSTH=True",
+    "latency_ms": 39,
+    "response_text": "EMERGENCY ALERT\n\nThis sounds like a medical emergency. Please act immediately:\n\n1. CALL 199 (Ambulance) NOW\n2. Or go directly to: EFSTH Emergency (Banjul) - 15min drive - Call 199\n3. Sit upright, stay calm, chew aspirin if available. Do NOT lie flat.\n\nWatch for: This may be: Possible heart attack. Every minute counts.\n\nIf someone is with you, have them call while you prepare to leave.\nStay strong \u2014 help is on the way.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 3: Emergency \u2014 stroke signs",
+    "passed": true,
+    "details": "is_emergency=True, emergency_directive=True",
+    "latency_ms": 31,
+    "response_text": "EMERGENCY ALERT\n\nThis sounds like a medical emergency. Please act immediately:\n\n1. CALL 199 (Ambulance) NOW\n2. Or go directly to: EFSTH Emergency (Banjul) - 15min drive - Call 199\n3. Note the time. Face drooping, Arm weakness, Speech difficulty = Time to call 199.\n\nWatch for: This may be: Possible stroke - FAST. Every minute counts.\n\nIf someone is with you, have them call while you prepare to leave.\nStay strong \u2014 help is on the way.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 4: Diabetes diet",
+    "passed": "Salaam aleikum. Iwurara! Welcome. Welcome. For your diabetes, eat more vegetables like okra and leafy greens. Swap half the rice in your benachin for these. Have supakanja twice a week. For snacks, choose fruit instead of biscuits. Start this today. If you feel very thirsty or tired, visit Kerewan health centre.",
+    "details": "gambian_foods=True, avoids_generic_advice=True",
+    "latency_ms": 3373,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. For your diabetes, eat more vegetables like okra and leafy greens. Swap half the rice in your benachin for these. Have supakanja twice a week. For snacks, choose fruit instead of biscuits. Start this today. If you feel very thirsty or tired, visit Kerewan health centre.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 5: High BP 160/100",
+    "passed": true,
+    "details": "acknowledges_reading=True, gives_action=True, tools=['record_vitals']",
+    "latency_ms": 2344,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. Your blood pressure is high at 160/100. Start taking 5mg of amlodipine daily. Reduce salt in your food, like cutting one Maggi cube from your domoda. Check your blood pressure again in 3 days. If it stays high, visit Kerewan health post that same day.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 6: Detailed symptom -> triage without form nudge",
+    "passed": true,
+    "details": "triage=SELF_CARE, suggest_form=None",
+    "latency_ms": 2086,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. Your headache sounds bothersome. Rest for the next 2 days and drink 2 glasses of water every hour. If it doesn't go away or gets worse, contact your CHW. Is there anything else bothering you?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 7: Vague symptom -> form CTA",
+    "passed": true,
+    "details": "suggest_form=symptom",
+    "latency_ms": 2524,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. I\u2019m sorry you have a headache. Rest now and drink two glasses of water. Monitor how you feel. How long have you had this headache? If it lasts more than three days, contact your CHW. If you want me to assess this more precisely, tap the Symptom button to fill a short form.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 8: Vague prescription -> form CTA",
+    "passed": true,
+    "details": "suggest_form=prescription",
+    "latency_ms": 2045,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. What is the name of the medication the doctor gave you? How much should you take, and how often? This will help me give you the right advice. If it's easier, you can tap Upload Rx to send a photo, or tap Rx to fill in the details.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 9: Detailed Rx -> specific guidance",
+    "passed": true,
+    "details": "mentions_medication=True, suggest_form=None",
+    "latency_ms": 2380,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. You should take your Metformin 500mg with food, twice daily for 30 days. Aim for a fasting sugar level between 70 and 130 mg/dL. Watch for any unusual dizziness or low energy. Have you been checking your blood sugar regularly?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 10: Permission barrier -> Alkallo",
+    "passed": true,
+    "details": "tools=['suggest_community_support'], trusted_figure=True",
+    "latency_ms": 2483,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. It's common for families to make health decisions together. Talk to the Alkallo or a trusted elder first. Ask them to support your visit to the clinic. Plan for a day that suits your family's routine. If you feel unwell, check your blood pressure. What's your husband's main concern about the clinic?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 11: Stigma barrier -> community support",
+    "passed": true,
+    "details": "suggest_community_support_tool=True, response_excerpt=salaam aleikum. iwurara! welcome. welcome. it's okay to feel ashamed, but many p",
+    "latency_ms": 2567,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. It's okay to feel ashamed, but many people have diabetes. You can manage it. Start by eating less sugar and more vegetables. Walk for 30 minutes each day. If you feel very tired or dizzy, come to Kerewan health post. Have you talked to anyone about your diabetes?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 12: Cost barrier",
+    "passed": true,
+    "details": "offers_cost_path=True",
+    "latency_ms": 2455,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. I understand money is tight. Ask your CHW: \"What NCD services are free at my nearest health post?\" Many medications like amlodipine are often cheap or free. Also, check if there\u2019s a community support group in your village. When did you last check your blood pressure?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 13: Daily nudge endpoint",
+    "passed": true,
+    "details": "weekday=Sunday, focus=mindfulness, title=The 10-Minute Rest",
+    "latency_ms": 5,
+    "response_text": "Sit quietly for 10 minutes today \u2014 no phone, no talking. Just breathing.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 14: Care plan generation",
+    "passed": true,
+    "details": "summary=True, priorities=True, meds_schedule=True",
+    "latency_ms": 3954,
+    "response_text": "It's great to hear that you're staying active by walking sometimes and enjoying your favorite dish, benachin. While you haven't mentioned any specific concerns or symptoms, maintaining your health with hypertension and diabetes is important.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 15: Care plan cache retrieval",
+    "passed": true,
+    "details": "exists=True",
+    "latency_ms": 7,
+    "response_text": "",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 16: Mandinka response (language=ma)",
+    "passed": true,
+    "details": "has_content=True, ma_markers=True, len=271",
+    "latency_ms": 6012,
+    "response_text": "Salaam aleikum. Iwurara! Nyaato. Nyaato. Nte bayo kafu, juma salt kafu 5g kafu le. Nte Maggi cubes kafu nte juma. Nte folo fruit ani vegetable, la okra ani leafy greens. Nte walk kafu 30 minutes, jato 5 kafu le. Nte check kafu BP kafu 3 months le. Nte juma folo symptoms?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 17: Mandinka-intent detection",
+    "passed": true,
+    "details": "suggest_language_switch=ma",
+    "latency_ms": 8118,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. I\u2019m Amina, your community health worker. I\u2019m glad you\u2019re well. How can I help you today? If you have any health concerns, please share them with me.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 18: English with medical terms -> no language prompt",
+    "passed": true,
+    "details": "suggest_language_switch=None (expected None)",
+    "latency_ms": 1898,
+    "response_text": "",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 19: Translation endpoint",
+    "passed": true,
+    "details": "original='Take your medicine with food' -> translated='Nye kafu la bena.'",
+    "latency_ms": 25,
+    "response_text": "Nye kafu la bena.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 20: Community dashboard (all 5 features)",
+    "passed": true,
+    "details": "all_features=True, village_score=70",
+    "latency_ms": 7,
+    "response_text": "",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 21: Session resume endpoint",
+    "passed": true,
+    "details": "session_id=s_1775423307_1a657218, is_new=True",
+    "latency_ms": 7,
+    "response_text": "",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 22: Multi-turn memory",
+    "passed": true,
+    "details": "diet_aware_response=True",
+    "latency_ms": 1589,
+    "response_text": "Eat more vegetables with every meal. Choose fish instead of fatty meat. Limit palm oil and salt in your food. For snacks, enjoy fruits instead of biscuits. Try to have supakanja twice a week. How many meals do you have daily?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 23: Greeting uses 'Salaam aleikum'",
+    "passed": true,
+    "details": "has_salaam=True",
+    "latency_ms": 2535,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. I\u2019m Amina, your community health worker. How can I help you today? If you have any health concerns, please share them.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 24: Intention=EMERGENCY + pre-LLM triage",
+    "passed": true,
+    "details": "intention=None, is_emergency=True",
+    "latency_ms": 14,
+    "response_text": "EMERGENCY ALERT\n\nThis sounds like a medical emergency. Please act immediately:\n\n1. CALL 199 (Ambulance) NOW\n2. Or go directly to: EFSTH Emergency (Banjul) - 15min drive - Call 199\n3. Place person on their side (recovery position). Clear airway.\n\nWatch for: This may be: Loss of consciousness. Every minute counts.\n\nIf someone is with you, have them call while you prepare to leave.\nStay strong \u2014 help is on the way.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 25: Intention=WORRIED_ABOUT_OTHER",
+    "passed": true,
+    "details": "intention=WORRIED_ABOUT_OTHER",
+    "latency_ms": 8464,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. Your grandmother's tiredness and knee pain could be from many things. Please check her blood pressure today. If it's high, she needs to visit Kerewan health centre. Watch for swelling or severe pain in her knees. How long has she been feeling this way?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 26: Intention=SEEKING_INFO",
+    "passed": true,
+    "details": "intention=SEEKING_INFO",
+    "latency_ms": 4677,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. High blood pressure can come from too much salt, being overweight, or not exercising. Start by cutting one Maggi cube from your domoda and walk for 30 minutes at least 5 days a week. Check your BP in 2 weeks. If it goes above 140/90, visit Kerewan health post.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 27: Ethnic language detection = mandinka",
+    "passed": true,
+    "details": "ethnic_language=mandinka",
+    "latency_ms": 7841,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. N be kayira le. How is your health today? If you have any symptoms or concerns, please share them. I can help you understand what to do next.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 28: Ethnic language detection = wolof",
+    "passed": true,
+    "details": "ethnic_language=wolof",
+    "latency_ms": 8390,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. I be di? If you have any health concerns, let me know. It's good to check your blood pressure and sugar levels regularly. When was the last time you had a health check?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 29: Trust tier = stranger for new user",
+    "passed": true,
+    "details": "trust_tier=stranger",
+    "latency_ms": 1636,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. I'm Amina, your Community Health Worker. How can I help you today? If you have any health concerns, please share. It\u2019s important to know your blood pressure and sugar levels. Have you checked them recently?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 30: Intention=FIRST_TIME",
+    "passed": true,
+    "details": "intention=FIRST_TIME",
+    "latency_ms": 1387,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. Yes, this is Amina. I'm here to help with your health questions. Can you tell me what health issue you need assistance with?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 31: Web channel bypasses ritual",
+    "passed": true,
+    "details": "ritual_phase=None, response_starts='Salaam aleikum. Iwurara! Welcome. Welcome. How can'",
+    "latency_ms": 1766,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. How can I help you today? If you have any health concerns, please share. If you\u2019re feeling unwell, tell me your symptoms and for how long.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 32: Voice channel enters ritual phase 0",
+    "passed": true,
+    "details": "ritual_phase=0, tools=['greeting_ritual'], response='Salaam aleikum. Iwurara! Welcome.'",
+    "latency_ms": 17,
+    "response_text": "Salaam aleikum. Iwurara! Welcome.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 33: Ritual progresses turn by turn",
+    "passed": true,
+    "details": "phase1=0, phase2=1, resp2='How are you today?'",
+    "latency_ms": 16,
+    "response_text": "How are you today?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 34: Voice channel emergency bypasses ritual",
+    "passed": true,
+    "details": "ritual_phase=None, is_emergency=True",
+    "latency_ms": 15,
+    "response_text": "EMERGENCY ALERT\n\nThis sounds like a medical emergency. Please act immediately:\n\n1. CALL 199 (Ambulance) NOW\n2. Or go directly to: EFSTH Emergency (Banjul) - 15min drive - Call 199\n3. Sit upright, stay calm, chew aspirin if available. Do NOT lie flat.\n\nWatch for: This may be: Possible heart attack. Every minute counts.\n\nIf someone is with you, have them call while you prepare to leave.\nStay strong \u2014 help is on the way.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 35: BP trend callback (160/100 -> 145/90)",
+    "passed": true,
+    "details": "trend1=None, trend2={'type': 'bp', 'prev': '160/100', 'current': '145/90', 'trend': 'improving'}, response_mentions_improvement=True",
+    "latency_ms": 2365,
+    "response_text": "Your BP is 145/90, better by 15/10 points from last time. Continue taking 5mg of amlodipine daily. Reduce salt in your meals, like cutting one Maggi cube from your domoda. Check your BP again in 3 days. If it goes above 160, visit Kerewan health post that same day.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 36: Glucose trend callback (220 -> 180)",
+    "passed": true,
+    "details": "trend2={'type': 'glucose', 'prev': '220', 'current': '180', 'trend': 'improving'}",
+    "latency_ms": 3177,
+    "response_text": "Your sugar is better today at 180, down from 220 \u2014 good job! Keep taking Metformin 500mg with food. Check your sugar again in 3 days. If it goes above 400 or you feel very thirsty, go to Kerewan health post right away. How are you feeling otherwise?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 37: VHW referral warm handoff",
+    "passed": true,
+    "details": "referral_ok=True, consumed=True, mentions_mariama=True",
+    "latency_ms": 1901,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Your health worker Mariama told me about you. She cares about you very much and asked me to help with newly diagnosed hypertension. Welcome. Your health worker Mariama told me about you. She cares about you very much and asked me to help with newly diagnosed hypertension. \n\nYour BP is high. Start taking amlodipine 5mg daily with food. Reduce salt in your meals, like using one less Maggi cube in your domoda. Check your BP again in 3 days.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 38: VHW referral one-shot consumption",
+    "passed": true,
+    "details": "turn1_consumed=True, turn2_no_reuse=True",
+    "latency_ms": 2166,
+    "response_text": "Salaam aleikum. Iwurara! Welcome. Welcome. Your BP at 140/90 is high. Start taking amlodipine 5mg daily. Reduce salt in your meals \u2014 cut one Maggi cube from your domoda. Check your BP again in 3 days. If it goes above 160, go to Kerewan health post that same day.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 39: Alkalo tier greeting register",
+    "passed": true,
+    "details": "user_role=alkalo, respect_register=True",
+    "latency_ms": 1487,
+    "response_text": "Salaam aleikum, Alkalo. I greet you with the respect of your position. Your village's health is my concern. How can I serve you today? Salaam aleikum, Alkalo. I greet you with the respect of your position. Your village's health is my concern. How can I serve you today?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 40: VHW role greeting",
+    "passed": true,
+    "details": "user_role=vhw, vhw_addressed=True",
+    "latency_ms": 1366,
+    "response_text": "Salaam aleikum, VHW. Thank you for the work you do. Are you checking in on a patient or asking for yourself? Salaam aleikum, VHW. Thank you for the work you do. Are you checking in on a patient or asking for yourself?",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 41: BP trend callback with 3 readings",
+    "passed": true,
+    "details": "vitals_trend={'type': 'bp', 'prev': '150/95', 'current': '140/90', 'trend': 'improving'}",
+    "latency_ms": 2000,
+    "response_text": "Your BP is better today at 140/90, down from 150/95. Continue taking amlodipine 5mg daily. Cut one Maggi cube from tonight's domoda and walk for 20 minutes after dinner. Check your BP again in 3 days. If it goes back to 160, visit Kerewan health post that day.",
+    "signals": {}
+  },
+  {
+    "name": "Scenario 42: Emergency still under 200ms post-Phase-3",
+    "passed": true,
+    "details": "is_emergency=True, latency=12ms",
+    "latency_ms": 12,
+    "response_text": "EMERGENCY ALERT\n\nThis sounds like a medical emergency. Please act immediately:\n\n1. CALL 199 (Ambulance) NOW\n2. Or go directly to: EFSTH Emergency (Banjul) - 15min drive - Call 199\n3. Sit upright, stay calm, chew aspirin if available. Do NOT lie flat.\n\nWatch for: This may be: Possible heart attack. Every minute counts.\n\nIf someone is with you, have them call while you prepare to leave.\nStay strong \u2014 help is on the way.",
+    "signals": {}
+  }
+]

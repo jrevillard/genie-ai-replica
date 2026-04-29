@@ -1,0 +1,241 @@
+services:
+  # ArcadeDB (knowledge graph + vector store)
+  arcadedb:
+    image: arcadedata/arcadedb:latest  # 26.x — supports VECTOR indexes
+    container_name: arcadedb
+    restart: unless-stopped
+    ports:
+      - "2480:2480"
+      - "2424:2424"
+      - "5433:5432" #Added for connection to apache superset
+    environment:
+      JAVA_OPTS: >-
+        -Darcadedb.server.rootPassword=${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+        -Darcadedb.server.defaultDatabases=${ARCADEDB_DB:-genie}[root]
+        -Darcadedb.server.plugins=Postgres:com.arcadedb.postgres.PostgresProtocolPlugin
+      rootPassword: ${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+    volumes:
+      # OLD (named volume — data lived in Docker Desktop VM on C:):
+      # - arcadedb_data:/home/arcadedb/databases
+      # NEW (bind mount to E: drive under project tree):
+      - ./data/arcadedb:/home/arcadedb/databases
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:2480/api/v1/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - chatqna_default
+  # Whisper.cpp (STT)
+  voice-stt:
+    image: ghcr.io/ggml-org/whisper.cpp:main
+    container_name: voice-stt
+    entrypoint: []
+    command: ["/app/build/bin/whisper-server", "-m", "/models/ggml-base.en.bin", "--host", "0.0.0.0", "--port", "8080"]
+    volumes:
+      - ../components/voice-gateway/infra/whispercpp/models:/models:ro
+    ports:
+      - "8087:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - chatqna_default
+  # Piper TTS (Text-to-Speech)
+  voice-tts:
+    build:
+      context: ./tts-service
+    container_name: voice-tts
+    restart: unless-stopped
+    environment:
+      PIPER_MODEL_PATH: /models/piper/en_US-lessac-medium.onnx
+    volumes:
+      - ../components/voice-gateway/infra/piper/models:/models/piper:ro
+    ports:
+      - "5500:5500"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5500/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - chatqna_default
+
+  # Mandinka TTS (MMS — facebook/mms-tts-mnk)
+  # Sibling to voice-tts/Piper above. Same HTTP contract (/v1/tts, /v1/tts/ogg)
+  # so the chatqna client is a line-for-line mirror of tts_piper.py.
+  # Model weights are baked into the image via the PREWARM build arg; the
+  # HuggingFace cache volume below keeps runtime downloads persistent if the
+  # pre-warm is disabled for a faster image build.
+  voice-tts-mnk:
+    build:
+      context: ./tts-mms-service
+    container_name: voice-tts-mnk
+    restart: unless-stopped
+    environment:
+      MMS_MODEL_ID:   facebook/mms-tts-mnk
+      MMS_DEVICE:     cpu
+      MMS_LANG_LABEL: mandinka
+      MMS_MAX_CHARS:  "2000"
+    volumes:
+      - ./data/huggingface-cache:/root/.cache/huggingface
+    ports:
+      - "5501:5500"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5500/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - chatqna_default
+
+  # Redis (working memory / session cache)
+  redis:
+    image: redis:7-alpine
+    container_name: amina-redis
+    # Port 6379 not exposed externally (multichannel-redis already uses it)
+    # Accessible internally on chatqna_default network as redis:6379
+    volumes:
+      # OLD (named volume — data lived in Docker Desktop VM on C:):
+      # - redis_data:/data
+      # NEW (bind mount to E: drive under project tree):
+      - ./data/redis:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chatqna_default
+
+  #Haystack DataPrep and Ingetion Pipeline
+  dataprep-worker:
+    build:
+      context: ./haystack-dataprep
+    container_name: dataprep-worker
+    restart: unless-stopped
+    ports:
+      - "${DATAPREP_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+
+      # ArcadeDB connection
+      ARCADEDB_HOST: arcadedb
+      ARCADEDB_PORT: 2480
+      ARCADEDB_DB: ${ARCADEDB_DB:-genie}
+      ARCADEDB_USER: root
+      ARCADEDB_PASSWORD: ${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+    depends_on:
+      - arcadedb
+    networks:
+      - chatqna_default
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+  # Haystack ChatQnA (RAG + LLM - the brain)
+  haystack-chatqna:
+    build:
+      context: ./haystack-chatqna
+    container_name: haystack-chatqna
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    env_file:
+      - .env
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      ARCADEDB_HOST: arcadedb
+      ARCADEDB_PORT: 2480
+      ARCADEDB_URL: http://arcadedb:2480
+      ARCADEDB_DB: ${ARCADEDB_DB:-genie}
+      ARCADEDB_USER: root
+      ARCADEDB_PASSWORD: ${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+      WHISPER_URL: http://voice-stt:8080
+      TTS_URL: http://voice-tts:5500
+      MMS_TTS_URL: http://voice-tts-mnk:5500
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    depends_on:
+      arcadedb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      voice-stt:
+        condition: service_started
+      voice-tts:
+        condition: service_started
+      voice-tts-mnk:
+        condition: service_started
+    networks:
+      - chatqna_default
+    
+  superset:
+    build:
+      context: ../components/apache-superset
+    container_name: amina-superset
+    ports:
+      - "8080:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY}
+      - SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD}
+      - ARCADEDB_ROOT_PASSWORD=${ARCADEDB_ROOT_PASSWORD}
+      - ARCADEDB_DB=${ARCADEDB_DB}
+    volumes:
+      # OLD (named volume — data lived in Docker Desktop VM on C:):
+      # - superset_data:/app/superset_home
+      # NEW (bind mount to E: drive under project tree):
+      - ./data/superset:/app/superset_home
+      - ../components/apache-superset/super-init.sh:/app/superset-init.sh
+    depends_on:
+      arcadedb:
+        condition: service_healthy
+    networks:
+      - chatqna_default
+    command: /bin/bash /app/superset-init.sh
+
+# OLD named-volume declarations (kept for reference — no longer used after switching to bind mounts on E:):
+# volumes:
+#   arcadedb_data:
+#   redis_data:
+#   superset_data:
+networks:
+  chatqna_default:
+    driver: bridge

@@ -1,0 +1,122 @@
+# syntax=docker/dockerfile:1.7
+# voice-stt: whisper.cpp HTTP server with GPU-first / CPU-fallback startup.
+#
+# Targets:
+#   cpu-runtime  -- DEFAULT. Small ubuntu image with the CPU whisper-server
+#                   binary only. Builds and runs on any host (no GPU needed).
+#   gpu-runtime  -- Opt-in. Includes BOTH the CPU and CUDA binaries on top of
+#                   nvidia/cuda runtime. Entrypoint picks at boot. Requires
+#                   nvidia-container-toolkit on the Docker host to actually
+#                   use the GPU; falls back to CPU otherwise.
+#
+# Build (default = CPU-only):
+#   docker build -t voice-stt:cpu -f dockerfile .
+#
+# Build (GPU-enabled, ~3 GB image, requires Docker BuildKit + NVIDIA toolkit):
+#   docker build --target gpu-runtime -t voice-stt:gpu -f dockerfile .
+#
+# Pinning whisper.cpp version (defaults to upstream master HEAD):
+#   docker build --build-arg WHISPER_REF=v1.7.4 ...
+
+# ════════════════════════════════════════════════════════════════════
+#  STAGE 1 -- CPU builder. Always built (lightweight ubuntu base).
+# ════════════════════════════════════════════════════════════════════
+FROM ubuntu:22.04 AS cpu-builder
+
+ARG WHISPER_REF=master
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential pkg-config ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone https://github.com/ggml-org/whisper.cpp.git \
+ && cd whisper.cpp \
+ && git checkout "${WHISPER_REF}"
+
+WORKDIR /opt/whisper.cpp
+
+# BUILD_SHARED_LIBS=OFF produces a self-contained `whisper-server` binary
+# that doesn't need libwhisper.so / libggml.so at runtime. Makes the
+# runtime images smaller and binary-portable across stages.
+RUN cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DGGML_NATIVE=ON \
+ && cmake --build build -j --target whisper-server
+
+
+# ════════════════════════════════════════════════════════════════════
+#  STAGE 2 -- CUDA builder. Skipped when --target=cpu-runtime (default).
+# ════════════════════════════════════════════════════════════════════
+FROM nvidia/cuda:12.6.0-devel-ubuntu22.04 AS cuda-builder
+
+ARG WHISPER_REF=master
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential pkg-config ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone https://github.com/ggml-org/whisper.cpp.git \
+ && cd whisper.cpp \
+ && git checkout "${WHISPER_REF}"
+
+WORKDIR /opt/whisper.cpp
+
+# Build whisper.cpp against CUDA. Note: CUDA whisper-server needs the
+# CUDA runtime libraries at execution time -- we provide them via the
+# nvidia/cuda:*-runtime base in gpu-runtime below.
+RUN cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DGGML_CUDA=ON \
+        -DGGML_NATIVE=ON \
+ && cmake --build build -j --target whisper-server
+
+
+# ════════════════════════════════════════════════════════════════════
+#  STAGE 3 -- GPU runtime. Carries BOTH binaries; entrypoint chooses.
+# ════════════════════════════════════════════════════════════════════
+FROM nvidia/cuda:12.6.0-runtime-ubuntu22.04 AS gpu-runtime
+
+# nvidia-container-toolkit injects libnvidia-* into the runtime, but we
+# still need a few generic C++ runtime helpers and curl for healthchecks.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# CPU binary is always shipped so entrypoint can fall back gracefully
+# if the runtime turns out not to have an actual GPU attached.
+COPY --from=cpu-builder  /opt/whisper.cpp/build/bin/whisper-server  /usr/local/bin/whisper-server-cpu
+COPY --from=cuda-builder /opt/whisper.cpp/build/bin/whisper-server  /usr/local/bin/whisper-server-cuda
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+ && chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+
+# ════════════════════════════════════════════════════════════════════
+#  STAGE 4 -- CPU-only runtime. THIS IS THE DEFAULT TARGET.
+#
+#  Listed last so plain `docker build .` (no --target) produces this
+#  small, portable image. `cuda-builder` is skipped by BuildKit when
+#  this is the resolved target -- so testers without CUDA tooling can
+#  still build and run.
+# ════════════════════════════════════════════════════════════════════
+FROM ubuntu:22.04 AS cpu-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=cpu-builder /opt/whisper.cpp/build/bin/whisper-server /usr/local/bin/whisper-server-cpu
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+ && chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

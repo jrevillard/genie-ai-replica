@@ -1,0 +1,8 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+transformers>=4.39.0
+soundfile>=0.12.1
+numpy>=1.24,<2.0
+# torch is installed in the Dockerfile from the CPU-only index to keep
+# the image size down — omitted here so that pip doesn't pull the full
+# CUDA-enabled wheel on a plain `pip install -r requirements.txt`.

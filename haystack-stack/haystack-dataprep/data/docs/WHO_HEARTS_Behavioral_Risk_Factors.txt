@@ -1,0 +1,96 @@
+WHO HEARTS Technical Package — Module on Healthy Lifestyle Counselling
+Behavioural Risk Factors for Cardiovascular Disease
+Source: WHO HEARTS Technical Package for Cardiovascular Disease Management in Primary Health Care
+Reference: https://www.who.int/publications/i/item/WHO-NMH-NVI-18.14
+
+Introduction The risk factors for CVD (cardiovascular disease) include behavioural factors, such as tobacco use, an unhealthy diet, harmful use of alcohol and inadequate physical activity, and physiological (metabolic) factors, including high blood pressure (hypertension), high blood cholesterol and high blood sugar or glucose. Both kinds of factor are linked to underlying social determinants and drivers
+
+Factors contributing to the development of cardiovascular disease and related complications Social determinants and drivers Globalization Urbanization Behavioural risk factors Unhealthy diet Tobacco use Physical inactivity Harmful use of alcohol Metabolic risk factors High blood pressure High blood sugar (diabetes) High blood cholesterol Cardiovascular disease Heart attacks Heart failure Kidney disease This module focuses on the behavioural risk factors and provides information on: tobacco use, unhealthy diet, insufficient physical activity and harmful use of alcohol as important contributors to CVDs behavioural change, brief interventions for counselling and key points for motivational interviewing the theory of the 5As for brief interventions, as well as sample brief interventions for each risk factor, using the 5As
+
+Target users of this module This module is intended for trainers of primary health care workers, including physicians, nurses, and other health workers. Primary care workers should be trained on the risk factors and counselling approaches, adapting to local customs, culture and context. NCD programme managers may also use it for planning purposes.
+
+1. THE FOUR MAIN BEHAVIOURAL RISK FACTORS FOR CVD
+
+UNHEALTHY DIET:
+The risk of CVD is increased by an unhealthy diet, characterized by a low intake of fruit and vegetables and high intakes of salt, fats and sugars. An unhealthy diet contributes to obesity and overweight, which are also risk factors for CVD. Unhealthy eating habits can also result in a range of other conditions, including cancer, diabetes and micronutrient deficiencies. What is a healthy diet? A healthy diet is important to address hypertension, diabetes and obesity and help prevent heart attack and stroke
+
+The composition of a healthy diet depends on individual needs (for example, age, sex, lifestyle, degree of physical activity), cultural context and locally available foods. However, the basic elements of a healthy adult diet remain constant: a) a variety of foods including a range of fruits, vegetables, legumes (for example, lentils, beans) and nuts, whole grains such as unprocessed maize, millet, oats, wheat and brown rice, and starchy tubers or roots such as potato, yam, taro or cassava, foods from animal sources (for example, meat, fish, eggs and milk)
+
+b) at least 400 g (five portions) of vegetables and fruits per day. One portion is equivalent, for example, to a single orange, apple, mango, banana, or 3 tablespoons of cooked vegetables. (Potatoes, sweet potatoes, cassava or other starchy tubers or roots do not count as one of these portions.)
+
+c) less than 5 g of salt per day (equivalent to approximately 1 level teaspoon) including salt added while cooking or eating, as well as salt contained in foods such as processed foods and bread
+
+d) a total daily energy intake from fats of less than 30%. Unsaturated fats are preferable to saturated fats. Less than 10% of total energy intake should be from saturated fats.
+
+Saturated fats are found mainly in animal products such as meat, milk, butter, cream, cheese, ghee and lard. They can also be found in palm and coconut oil. Many saturated fats are solid, such as the fat in meat. Consuming saturated fats in unhealthy amounts can lead to raised cholesterol levels and can increase the risk for heart attack and stroke
+
+Trans-fats (also called hydrogenated or partially hydrogenated vegetable oils) are liquid vegetable oils that have been processed to make them solid. This makes them unhealthy. Trans-fats are often found in processed food, fast food, snacks, fried food, frozen pizza, pies, cookies, margarines and spreads. Unsaturated fats/oils are generally found in plant foods such as seeds, grains, nuts, vegetables (for example, avocado) and fruit, and also in fish.
+
+Consuming unsaturated fats/oils instead of saturated fats can help to control cholesterol levels and reduce the risk of heart attack and stroke.
+
+Trans-fats are not part of a healthy diet and should be avoided. Total daily energy intake from free sugars of less than 10% equivalent to 50 g (or approximately 12 level teaspoons) for a person of healthy body weight. For additional health benefits, less than 5% of total energy intake from free sugars is ideal. Free sugars are those added to foods such as cakes, cookies and sweets or drinks (for example, soda, sweetened milk, fruit juices). Free sugars are also naturally present in honey, syrups, fruit juices and fruit juice concentrates.
+
+INSUFFICIENT PHYSICAL ACTIVITY:
+Insufficient physical activity is one of the leading risk factors for premature death worldwide. People who are insufficiently active are between 20% and 30% more likely to die prematurely than those who are sufficiently active. Insufficient physical activity is a key risk factor for CVD, cancer and diabetes.
+
+WHO defines physical activity as any movement produced by the skeletal muscles of the human body that uses energy. It covers a range of bodily movements and activities of daily life, such as playing, working, walking, household chores and recreational activities.
+
+Regular and adequate levels of physical activity help to reduce the risk of hypertension, heart attack, stroke, diabetes, various types of cancer (including breast and colon cancer) and depression. Physical activity also contributes to weight control, diabetes control, improved blood pressure and improved levels of cholesterol and other blood lipids.
+
+Adults should perform: at least 150 minutes of moderate physical activity (a mild increase in heart rate or breathing rate resulting from, for example, brisk walking, climbing stairs, dancing, gardening or doing household chores) spread throughout the week, or at least 75 minutes of vigorous physical activity (including vigorous gardening, running, fast cycling, fast swimming, or playing sport) spread throughout the week, or an equivalent combination of moderate and vigorous activity; muscle-strengthening activities involving major muscle groups on two or more days a week
+
+For additional health benefits, moderately intense physical activity should be increased to 300 minutes per week, or equivalent.
+
+TOBACCO USE:
+Tobacco kills nearly half of its users and causes 6 million deaths every year. Ten per cent of these deaths are the result of inhaling secondhand smoke in homes, restaurants, offices or other enclosed spaces.
+
+Tobacco can be smoked, sucked, chewed or sniffed. Tobacco products can generally be divided into two types: smoked tobacco (in cigarettes, cigars, pipes and water pipes) and smokeless tobacco (in chewing tobacco and snuff). All tobacco products contain the addictive substance nicotine that is absorbed into the bloodstream when a tobacco product is used.
+
+All tobacco products are harmful. Tobacco smoke contains at least 250 harmful chemicals, of which at least 69 are known to cause cancer. Tobacco use can damage every part of the body and is one of the main risk factors for CVD. It causes an estimated 10% of all CVD deaths.
+
+Benefits of quitting tobacco use: Within a few months of quitting smoking, coughing and shortness of breath decrease. After a year of quitting, the risk of heart attack and angina is about half that of a smoker. Fifteen years after quitting, the risk of heart attack and angina is the same as that of a non-smoker. Additionally, quitting smoking after a heart attack reduces the chances of having another heart attack by 50%
+
+Quitting tobacco use reduces the likelihood of problems such as impotence, difficulties in getting pregnant, premature births, low birth weight and miscarriage. It also reduces the risk of childhood diseases related to secondhand smoke, such as asthma and middle-ear disease.
+
+HARMFUL USE OF ALCOHOL:
+The harmful use of alcohol is a risk factor for CVD and has many negative health and social consequences. Harmful use of alcohol is a causal factor in more than 200 diseases and injuries.
+
+There is no definition for safe or non-harmful use of alcohol. However, individuals are generally considered to be at lower risk for negative consequences of alcohol use if they drink no more than two units of alcohol per day and do not drink on at least two days of the week.
+
+High levels of alcohol consumption and regular heavy episodic drinking are clearly associated with increased risk of CVD, since harmful use of alcohol damages the heart muscle, increases the risk of stroke and can cause cardiac arrhythmia.
+
+2. BEHAVIOUR CHANGE AND COUNSELLING
+
+Understanding behaviour change: Reducing health risks may require changes to be made in some behaviours. Behaviour change is a complex issue and is not a one-off event but rather a set of different stages through which a person moves. Behaviour change takes time, and different people go through the stages at various speeds.
+
+A relapse into an old behaviour can occur at any point and does not necessarily mean a failure to change. Many people who eventually adopt a new behaviour make several attempts before it is maintained over the long term.
+
+Counselling for behaviour change through brief interventions: A brief intervention is a short interaction of between three and 20 minutes between health worker and patient. It aims to identify a real or potential problem, provide information about it and then motivate and assist the patient to do something about it.
+
+Communication techniques OARS: Open-ended questions, Affirm, Reflective listening, Summarize
+
+Motivational interviewing key principles: Do not tell the person what to do. Listen and show empathy. Help the patient see the gap between where they are and where they want to be. Let the patient tell you they need to change. Help the patient to feel confident about changing. Roll with resistance.
+
+3. THE 5As BRIEF INTERVENTION FRAMEWORK
+
+ASK the patient about the relevant risk factor(s) at every visit. Ask in a friendly way, without being judgmental. Keep the questions simple. Record the information in the patient's medical record/notes.
+
+ADVISE: Provide information, key messages and advice in a clear, simple, and personalized manner. Link the advice to something that is relevant for the person. For example: a person with hypertension may be interested in the benefits of reducing salt intake. People with young children may be concerned about the effects of secondhand smoke.
+
+ASSESS the patient's readiness to start making a change by asking two questions: 1. Are you ready to make the change? 2. Do you think you will be able to make the change?
+
+ASSIST: Help the person to develop a plan that can increase the chance of success. Provide practical counselling that focuses on: provision of basic information about the risk factor, identification of situations that could trigger relapse, ways of coping with trigger situations. Provide social support including: providing encouragement, communicating interest and concern, encouraging the person to talk about the change process with family and friends
+
+ARRANGE a follow-up contact, by phone or in person. At follow-up for all patients: identify problems already experienced as well as new ones that could arise, remind them of the additional support that is available, schedule next follow-up visit. Refer to specialist services if needed and available. For those who have made the planned changes: congratulate them on their success. For those who have challenges: remind them to view this as a learning experience, review their circumstances and motivate them to re-commit, link to more intensive support, if available.
+
+5As BRIEF INTERVENTION FOR HEALTHY DIET (fruit and vegetables):
+How many portions of fruit and vegetables do you eat each day? 1 portion = 1 orange, apple, mango, banana, or 3 tablespoons of cooked vegetables. Eat at least 5 portions of fruit and vegetables per day. Eat a variety of fruits, vegetables, legumes (lentils, beans), nuts and whole grains (unprocessed maize, millet, oats, wheat, brown rice), starchy tubers or roots (potato, yam, taro or cassava) and foods from animal sources (meat, fish, eggs and milk).
+
+5As BRIEF INTERVENTION TO INCREASE PHYSICAL ACTIVITY:
+In the past week, on how many days have you been physically active for a total of 30 minutes or more? All adults should do at least 150 minutes of physical activity per week. This can be spread over short sessions throughout the day and week, starting from as little as 10 minutes per session. Being more active can start in small ways which are part of daily life.
+
+5As BRIEF INTERVENTION TO QUIT TOBACCO:
+Have you smoked or used any other tobacco product in the past 12 months? Quitting tobacco is the most important thing you can do to protect your health now and in the future. Help the patient to develop a quit plan using the STAR method: Set a quit date, ideally within 2 weeks. Tell family and friends about quitting and ask for support. Anticipate challenges in the quit attempt. Remove tobacco products from personal environment and make home smoke-free.
+
+5As BRIEF INTERVENTION TO SCREEN FOR HARMFUL USE OF ALCOHOL:
+Do you ever drink alcohol? How often do you have an alcoholic drink? How many alcoholic drinks do you have on a usual day when you are drinking? Use of alcohol can increase the risk of having a heart attack or stroke. Overall, the best way to avoid the health risks of alcohol use is to abstain. If you do drink alcohol, keep in mind that less is better. Avoid having more than two units on any single day and do not drink any alcohol on at least two days per week.

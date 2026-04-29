@@ -344,6 +344,7 @@ services:
       - "${DATA_DIR:-./data}/logs/backend:/app/logs"
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 10s
@@ -861,6 +862,8 @@ services:
       DATAPREP_CHUNK_SIZE_MD: ${DATAPREP_CHUNK_SIZE_MD:-500}
       LABEL_SELECTOR_SYSTEM_PROMPT: ${LABEL_SELECTOR_SYSTEM_PROMPT:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+      OPENAI_API_KEY: ${VLLM_API_KEY:-EMPTY}
+      OPENAI_BASE_URL: ${VLLM_ENDPOINT:-http://vllm:8000}/v1
     networks:
       - genieai_network
     healthcheck:

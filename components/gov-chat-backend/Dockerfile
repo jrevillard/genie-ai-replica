@@ -5,6 +5,7 @@ RUN apt-get update && \
         python3 \
         make \
         build-essential \
+        docker.io \
         && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

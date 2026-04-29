@@ -568,6 +568,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         # NOTE: lock_file is passed from the microservice and is already LOCKED.
         # We are responsible for releasing and closing it in the finally block.
+        logger.info(
+            f"[TRACE_TMP][dataprep-arango] ingest_file_with_guardrail:start fileId={input.file_id} filePath={input.file_path}"
+        )
         
         try:
             # --- START PROTECTED EXECUTION (Spec 5.1) ---
@@ -595,6 +598,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 
                 # 2. Extract and Chunk Content
                 chunks = await self._load_and_chunk(doc_path)
+                logger.info(
+                    f"[TRACE_TMP][dataprep-arango] ingest_file_with_guardrail:chunked fileId={input.file_id} chunks={len(chunks) if chunks else 0}"
+                )
                 if not chunks:
                     raise Exception("No valid content extracted from file.")
 
@@ -649,6 +655,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # 6. Final Status Update
                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
+                logger.info(
+                    f"[TRACE_TMP][dataprep-arango] ingest_file_with_guardrail:success fileId={input.file_id} chunks={len(chunks)}"
+                )
 
                 return {
                     "status": 200, 
@@ -672,6 +681,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._update_doc_status(input.file_id, "Killed")
                 
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed.")
+                logger.warning(f"[TRACE_TMP][dataprep-arango] ingest_file_with_guardrail:killed fileId={input.file_id}")
                 raise # Re-raise to ensure the task terminates properly
                 
             except Exception as e:
@@ -685,6 +695,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # Auto-retract created data
                 await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
+                logger.error(f"[TRACE_TMP][dataprep-arango] ingest_file_with_guardrail:failed fileId={input.file_id} error={e}")
                 
                 raise HTTPException(status_code=500, detail=error_msg)
 
@@ -694,6 +705,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             if lock_file:
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
+            logger.info(f"[TRACE_TMP][dataprep-arango] ingest_file_with_guardrail:finally fileId={input.file_id} lockReleased={bool(lock_file)}")
 
     async def retract_file(self, file_id: str, graph_name: str):
         """

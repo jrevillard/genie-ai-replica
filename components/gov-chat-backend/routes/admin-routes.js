@@ -4,6 +4,9 @@ const router = express.Router();
 const authMiddleware = require('../middleware/auth-middleware');
 const securityScanService = require('../services/security-scan-service');
 const { logger } = require('../shared-lib');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 
 /**
  * @swagger
@@ -12,6 +15,51 @@ const { logger } = require('../shared-lib');
  *     description: Admin dashboard API endpoints
  */
 module.exports = (adminService, logsService) => {
+  const runDockerCommand = async (args) => {
+    const { stdout } = await execFileAsync('docker', args, { timeout: 15000, maxBuffer: 10 * 1024 * 1024 });
+    return stdout || '';
+  };
+
+  const parseServiceLogLine = (line) => {
+    // Typical line format:
+    // genieai_service.1.xxx@node    | 2026-04-27 12:57:11 [INFO]: message...
+    const pipeIndex = line.indexOf('|');
+    const payload = pipeIndex >= 0 ? line.slice(pipeIndex + 1).trim() : line.trim();
+    const timestampMatch = payload.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([A-Z]+)\]:\s*(.*)$/);
+    if (!timestampMatch) {
+      return {
+        date: '',
+        time: '',
+        level: 'INFO',
+        service: 'Docker',
+        message: payload,
+      };
+    }
+    return {
+      date: timestampMatch[1],
+      time: timestampMatch[2],
+      level: timestampMatch[3],
+      service: 'Docker',
+      message: timestampMatch[4],
+    };
+  };
+
+  const sanitizeSince = (value) => {
+    if (!value) return '2m';
+    return /^[0-9]+[smhd]$/.test(value) ? value : '2m';
+  };
+
+  const sanitizeTail = (value) => {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return 200;
+    return Math.min(Math.max(parsed, 10), 1000);
+  };
+
+  const sanitizeServiceName = (value) => {
+    if (!value) return '';
+    return /^[a-zA-Z0-9_.-]+$/.test(value) ? value : '';
+  };
+
   // Debug: Log adminService initialization
   logger.info('[ADMIN-ROUTES] Initializing admin routes');
   if (!adminService || typeof adminService.getSystemHealth !== 'function') {
@@ -437,6 +485,69 @@ module.exports = (adminService, logsService) => {
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error searching logs: ${error.message}`, { stack: error.stack });
       next(error);
+    }
+  });
+
+  /**
+   * Live docker service logs: available services list
+   */
+  router.get('/live-logs/services', async (req, res) => {
+    try {
+      const stdout = await runDockerCommand(['service', 'ls', '--format', '{{.Name}}']);
+      const services = stdout
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+      res.json({
+        success: true,
+        data: { services },
+      });
+    } catch (error) {
+      logger.error(`[ADMIN-ROUTES] Error getting live log services: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ success: false, message: 'Failed to fetch Docker services', error: error.message });
+    }
+  });
+
+  /**
+   * Live docker service logs: fetch logs for one service
+   */
+  router.get('/live-logs', async (req, res) => {
+    try {
+      const service = sanitizeServiceName(req.query.service);
+      const since = sanitizeSince(req.query.since);
+      const tail = sanitizeTail(req.query.tail);
+      const search = (req.query.search || '').toString().trim().toLowerCase();
+
+      if (!service) {
+        return res.status(400).json({ success: false, message: 'service query parameter is required' });
+      }
+
+      const stdout = await runDockerCommand(['service', 'logs', '--since', since, '--tail', String(tail), service]);
+      let logs = stdout
+        .split('\n')
+        .map((line) => line.trimEnd())
+        .filter(Boolean)
+        .map(parseServiceLogLine);
+
+      if (search) {
+        logs = logs.filter((entry) => entry.message.toLowerCase().includes(search));
+      }
+
+      res.json({
+        success: true,
+        data: {
+          service,
+          logs,
+          count: logs.length,
+          since,
+          tail,
+          fetchedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      logger.error(`[ADMIN-ROUTES] Error getting live logs: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ success: false, message: 'Failed to fetch service logs', error: error.message });
     }
   });
 

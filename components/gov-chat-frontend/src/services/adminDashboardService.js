@@ -1,5 +1,5 @@
 // src/services/adminDashboardService.js
-import httpService from './httpService';
+import httpService from './httpService'
 
 /**
  * Service for managing admin dashboard data
@@ -12,15 +12,15 @@ const adminDashboardService = {
    */
   async getSystemHealth() {
     try {
-      console.log('[AdminDashboardService] Fetching system health');
-      const response = await httpService.get('/admin/system-health');
-      console.log('[AdminDashboardService] System health response:', JSON.stringify(response.data, null, 2));
+      console.log('[AdminDashboardService] Fetching system health')
+      const response = await httpService.get('/admin/system-health')
+      console.log('[AdminDashboardService] System health response:', JSON.stringify(response.data, null, 2))
       // The backend now provides all necessary metrics directly.
       // The faulty, redundant client-side logic has been removed to fix the error.
-      return response.data;
+      return response.data
     } catch (error) {
-      console.error('[AdminDashboardService] Error fetching system health:', error.message, error.stack);
-      throw error;
+      console.error('[AdminDashboardService] Error fetching system health:', error.message, error.stack)
+      throw error
     }
   },
 
@@ -34,10 +34,10 @@ const adminDashboardService = {
    */
   async getLogs(options = {}) {
     try {
-      return await httpService.get('admin/logs', { params: options });
+      return await httpService.get('admin/logs', { params: options })
     } catch (error) {
-      console.error('Error fetching logs:', error);
-      throw error;
+      console.error('Error fetching logs:', error)
+      throw error
     }
   },
 
@@ -48,22 +48,24 @@ const adminDashboardService = {
    */
   async getUserStats(options = {}) {
     try {
-      const response = await httpService.get('admin/user-stats', { params: options });
+      const response = await httpService.get('admin/user-stats', { params: options })
       console.log('User stats response:', {
         status: response.status,
         headers: response.headers,
-        data: response.data
-      });
-      return response.data;
+        data: response.data,
+      })
+      return response.data
     } catch (error) {
       console.error('Error fetching user stats:', error, {
         message: error.message,
-        response: error.response ? {
-          status: error.response.status,
-          data: error.response.data
-        } : null
-      });
-      throw error;
+        response: error.response
+          ? {
+              status: error.response.status,
+              data: error.response.data,
+            }
+          : null,
+      })
+      throw error
     }
   },
 
@@ -73,11 +75,11 @@ const adminDashboardService = {
    */
   async getSecurityMetrics() {
     try {
-      const response = await httpService.get('admin/security-metrics');
-      return response.data;
+      const response = await httpService.get('admin/security-metrics')
+      return response.data
     } catch (error) {
-      console.error('Error fetching security metrics:', error);
-      throw error;
+      console.error('Error fetching security metrics:', error)
+      throw error
     }
   },
 
@@ -86,20 +88,20 @@ const adminDashboardService = {
    * @returns {Promise} Security scan details
    */
   async getSecurityDetails() {
-    console.log('[AdminDashboardService] Fetching last security scan details');
+    console.log('[AdminDashboardService] Fetching last security scan details')
     try {
-      const response = await httpService.get('/admin/security/last-scan');
-      console.log('[AdminDashboardService] Security scan details response:', JSON.stringify(response.data, null, 2));
-      return response.data;
+      const response = await httpService.get('/admin/security/last-scan')
+      console.log('[AdminDashboardService] Security scan details response:', JSON.stringify(response.data, null, 2))
+      return response.data
     } catch (error) {
-      console.error('[AdminDashboardService] Error fetching security scan details:', error.message, error.stack);
+      console.error('[AdminDashboardService] Error fetching security scan details:', error.message, error.stack)
       return {
         lastScan: 'Never',
         vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
         vulnerabilityDetails: { critical: [], medium: [], low: [] },
         failedLoginDetails: [],
         suspiciousDetails: [],
-      };
+      }
     }
   },
 
@@ -109,10 +111,10 @@ const adminDashboardService = {
    */
   async rolloverLogs() {
     try {
-      return await httpService.post('admin/logs/rollover');
+      return await httpService.post('admin/logs/rollover')
     } catch (error) {
-      console.error('Error rolling over logs:', error);
-      throw error;
+      console.error('Error rolling over logs:', error)
+      throw error
     }
   },
 
@@ -123,12 +125,12 @@ const adminDashboardService = {
   async runDiagnostics() {
     try {
       // Get the full response
-      const response = await httpService.post('admin/diagnostics');
+      const response = await httpService.post('admin/diagnostics')
       // Return only the data payload, as expected by the component
-      return response.data;
+      return response.data
     } catch (error) {
-      console.error('Error running diagnostics:', error);
-      throw error;
+      console.error('Error running diagnostics:', error)
+      throw error
     }
   },
 
@@ -137,13 +139,13 @@ const adminDashboardService = {
    * @returns {Promise} Security scan results
    */
   async runSecurityScan() {
-    console.log('[AdminDashboardService] Running security scan');
+    console.log('[AdminDashboardService] Running security scan')
     try {
-      const response = await httpService.post('/admin/security-scan');
-      console.log('[AdminDashboardService] Security scan response:', JSON.stringify(response.data, null, 2));
-      return response.data;
+      const response = await httpService.post('/admin/security-scan')
+      console.log('[AdminDashboardService] Security scan response:', JSON.stringify(response.data, null, 2))
+      return response.data
     } catch (error) {
-      console.error('[AdminDashboardService] Error running security scan:', error.message, error.stack);
+      console.error('[AdminDashboardService] Error running security scan:', error.message, error.stack)
       return {
         success: false,
         data: {
@@ -151,7 +153,7 @@ const adminDashboardService = {
           status: 'failed',
           message: `Security scan failed: ${error.message}`,
         },
-      };
+      }
     }
   },
 
@@ -163,13 +165,13 @@ const adminDashboardService = {
    */
   async getLogsSummary(options = {}) {
     try {
-      console.log('[AdminDashboardService] Getting logs summary with options:', JSON.stringify(options));
-      const response = await httpService.get('/admin/logs/summary', { params: options });
-      console.log('[AdminDashboardService] Logs summary response:', JSON.stringify(response.data, null, 2));
-      return response.data;
+      console.log('[AdminDashboardService] Getting logs summary with options:', JSON.stringify(options))
+      const response = await httpService.get('/admin/logs/summary', { params: options })
+      console.log('[AdminDashboardService] Logs summary response:', JSON.stringify(response.data, null, 2))
+      return response.data
     } catch (error) {
-      console.error('[AdminDashboardService] Error fetching logs summary:', error.message, error.stack);
-      return { data: { errors: [], warnings: [], date: options.date || new Date().toISOString().split('T')[0] } };
+      console.error('[AdminDashboardService] Error fetching logs summary:', error.message, error.stack)
+      return { data: { errors: [], warnings: [], date: options.date || new Date().toISOString().split('T')[0] } }
     }
   },
 
@@ -186,21 +188,21 @@ const adminDashboardService = {
    */
   async searchLogs(options = {}) {
     try {
-      const dateParams = this.convertDateRangeToParams(options.dateRange, options.startDate, options.endDate);
+      const dateParams = this.convertDateRangeToParams(options.dateRange, options.startDate, options.endDate)
       const searchParams = {
         ...options,
         ...dateParams,
-        includeArchived: true
-      };
-      console.log('Search logs request params:', searchParams);
-      const response = await httpService.get('admin/logs/search', { params: searchParams });
-      console.log('Search logs response status:', response.status);
-      console.log('Search logs response headers:', response.headers);
-      console.log('Search logs raw response data:', response.data);
-      return response;
+        includeArchived: true,
+      }
+      console.log('Search logs request params:', searchParams)
+      const response = await httpService.get('admin/logs/search', { params: searchParams })
+      console.log('Search logs response status:', response.status)
+      console.log('Search logs response headers:', response.headers)
+      console.log('Search logs raw response data:', response.data)
+      return response
     } catch (error) {
-      console.error('Error searching logs:', error);
-      throw error;
+      console.error('Error searching logs:', error)
+      throw error
     }
   },
 
@@ -212,42 +214,45 @@ const adminDashboardService = {
    * @returns {Object} Object with startDate and endDate
    */
   convertDateRangeToParams(dateRange, customStartDate, customEndDate) {
-    const today = new Date();
-    let startDate, endDate;
+    const today = new Date()
+    let startDate, endDate
 
     switch (dateRange) {
       case 'today':
-        startDate = this.formatDate(today);
-        endDate = this.formatDate(today);
-        break;
-      case 'yesterday':
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        startDate = this.formatDate(yesterday);
-        endDate = this.formatDate(yesterday);
-        break;
-      case 'week':
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        startDate = this.formatDate(weekAgo);
-        endDate = this.formatDate(today);
-        break;
-      case 'month':
-        const monthAgo = new Date(today);
-        monthAgo.setDate(monthAgo.getDate() - 30);
-        startDate = this.formatDate(monthAgo);
-        endDate = this.formatDate(today);
-        break;
+        startDate = this.formatDate(today)
+        endDate = this.formatDate(today)
+        break
+      case 'yesterday': {
+        const yesterday = new Date(today)
+        yesterday.setDate(yesterday.getDate() - 1)
+        startDate = this.formatDate(yesterday)
+        endDate = this.formatDate(yesterday)
+        break
+      }
+      case 'week': {
+        const weekAgo = new Date(today)
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        startDate = this.formatDate(weekAgo)
+        endDate = this.formatDate(today)
+        break
+      }
+      case 'month': {
+        const monthAgo = new Date(today)
+        monthAgo.setDate(monthAgo.getDate() - 30)
+        startDate = this.formatDate(monthAgo)
+        endDate = this.formatDate(today)
+        break
+      }
       case 'custom':
-        startDate = customStartDate;
-        endDate = customEndDate;
-        break;
+        startDate = customStartDate
+        endDate = customEndDate
+        break
       default:
-        startDate = this.formatDate(today);
-        endDate = this.formatDate(today);
+        startDate = this.formatDate(today)
+        endDate = this.formatDate(today)
     }
 
-    return { startDate, endDate };
+    return { startDate, endDate }
   },
 
   /**
@@ -256,7 +261,7 @@ const adminDashboardService = {
    * @returns {string} Formatted date
    */
   formatDate(date) {
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split('T')[0]
   },
 
   /**
@@ -270,12 +275,41 @@ const adminDashboardService = {
    */
   async searchUsers(options = {}) {
     try {
-      return await httpService.get('admin/users/search', { params: options });
+      return await httpService.get('admin/users/search', { params: options })
     } catch (error) {
-      console.error('Error searching users:', error);
-      throw error;
+      console.error('Error searching users:', error)
+      throw error
     }
-  }
-};
+  },
 
-export default adminDashboardService;
+  /**
+   * Get available swarm services for live logs view.
+   * @returns {Promise}
+   */
+  async getLiveLogServices() {
+    try {
+      const response = await httpService.get('/admin/live-logs/services')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching live log services:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Get live docker service logs for one service.
+   * @param {Object} options
+   * @returns {Promise}
+   */
+  async getLiveServiceLogs(options = {}) {
+    try {
+      const response = await httpService.get('/admin/live-logs', { params: options })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching live service logs:', error)
+      throw error
+    }
+  },
+}
+
+export default adminDashboardService

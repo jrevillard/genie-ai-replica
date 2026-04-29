@@ -114,6 +114,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     """
     start = time.time()
     logger.info(f"[ ingest ] Request received for file_id: {payload.fileId}")
+    logger.info(
+        f"[TRACE_TMP][dataprep] ingest_file_from_repo:start fileId={payload.fileId} fileName={payload.fileName} fileType={payload.fileType} labels_count={len(payload.fileLabels or [])}"
+    )
 
     # --- SYNCHRONOUS LOCK CHECK ---
     # We acquire the lock HERE to ensure we can return 429 immediately if busy.
@@ -121,9 +124,11 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     try:
         # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)
         fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        logger.info(f"[TRACE_TMP][dataprep] ingest_file_from_repo:lockAcquired fileId={payload.fileId}")
     except IOError:
         lock_file.close()
         logger.warning(f"[ ingest ] Rejected file_id {payload.fileId}: System busy.")
+        logger.warning(f"[TRACE_TMP][dataprep] ingest_file_from_repo:lockBusy fileId={payload.fileId}")
         raise HTTPException(
             status_code=429, 
             detail="System is currently processing another document. Only one ingestion can run at a time."
@@ -144,6 +149,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     # Determine chunk size based on file extension
     CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
     CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
+    logger.info(
+        f"[TRACE_TMP][dataprep] ingest_file_from_repo:chunkConfig fileId={payload.fileId} chunkSize={CHUNK_SIZE} overlap={CHUNK_OVERLAP}"
+    )
 
     try:
         # Decode and temporarily save file
@@ -152,6 +160,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         with open(save_path, "wb") as f:
             f.write(file_bytes)
         logger.info(f"[ ingest ] File saved to: {save_path}")
+        logger.info(
+            f"[TRACE_TMP][dataprep] ingest_file_from_repo:fileSaved fileId={payload.fileId} savePath={save_path} bytes={len(file_bytes)}"
+        )
 
         # Construct Arango-specific dataprep request
         input_req = ArangoDBDataprepRequestFromDocRepo(
@@ -182,9 +193,13 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
         task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
         active_ingestion_tasks[payload.fileId] = task
+        logger.info(
+            f"[TRACE_TMP][dataprep] ingest_file_from_repo:taskCreated fileId={payload.fileId} activeTasks={len(active_ingestion_tasks)}"
+        )
         
         # Ensure the task is removed from the registry upon completion (success or failure)
         task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
+        logger.info(f"[TRACE_TMP][dataprep] ingest_file_from_repo:responseReturning fileId={payload.fileId}")
 
         statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
@@ -196,6 +211,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 
     except Exception as e:
         logger.error(f"Error initiating dataprep ingest: {e}")
+        logger.error(f"[TRACE_TMP][dataprep] ingest_file_from_repo:exception fileId={payload.fileId} error={e}")
         # Cleanup lock if we fail before task starts
         fcntl.flock(lock_file, fcntl.LOCK_UN)
         lock_file.close()

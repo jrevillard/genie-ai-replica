@@ -17,8 +17,10 @@ const config = {
 
   // Dataprep service configuration
   dataprep: {
-    host: process.env.DATAPREP_HOST || 'http://dataprep',
-    port: process.env.DATAPREP_PORT || '6007',
+    // Swarm service defaults: dataprep-arango-service:5000
+    // Keep env compatibility with DATAPREP_HOST/PORT and DATAPREP_SERVICE_IP/PORT.
+    host: process.env.DATAPREP_HOST || process.env.DATAPREP_SERVICE_IP || 'http://dataprep-arango-service',
+    port: process.env.DATAPREP_PORT || process.env.DATAPREP_SERVICE_PORT || '5000',
 
     // This needs to be changed as it cannot be deployed on Kubernetes like this; David F
     ingestPath: '/v1/dataprep/ingest_file',

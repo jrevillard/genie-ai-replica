@@ -992,11 +992,19 @@ class FileController {
   // --- Helper for ingesting a single file ---
 
   async _ingestFileById(fileId) {
+    logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:start fileId=${fileId}`);
     const { file, base64String } = await this._getFileBase64(fileId);
+    logger.info(
+      `[TRACE_TMP][doc-repo] _ingestFileById:fileLoaded fileId=${fileId} file_id=${file?.file_id} file_name=${file?.file_name} status=${file?.dataprep?.status}`
+    );
     if (file.dataprep && file.dataprep.status === 'ingested') {
+      logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:skipAlreadyIngested fileId=${fileId}`);
       return { success: false, error: 'File has already been ingested' };
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
+    logger.info(
+      `[TRACE_TMP][doc-repo] _ingestFileById:beforeDataprepPost fileId=${fileId} dataprepUrl=${dataprepUrl} base64Length=${base64String?.length || 0}`
+    );
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
     const response = await axios.post(dataprepUrl, {
       fileId: file.file_id,
@@ -1007,7 +1015,11 @@ class FileController {
       storagePath: file.storage_path,
       fileBase64: base64String,
     });
+    logger.info(
+      `[TRACE_TMP][doc-repo] _ingestFileById:afterDataprepPost fileId=${fileId} status=${response?.status} success=${response?.data?.success} message=${response?.data?.message || ''}`
+    );
     if (response.data.success) {
+      logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:updatingMetadata fileId=${fileId} nextStatus=Ingesting`);
       await metadataService.updateMetadata(fileId, {
         chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
         dataprep: {
@@ -1016,8 +1028,12 @@ class FileController {
           retract_date: file.dataprep.retract_date || null,
         }
       });
+      logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:success fileId=${fileId}`);
       return { success: true };
     } else {
+      logger.warn(
+        `[TRACE_TMP][doc-repo] _ingestFileById:dataprepReturnedFailure fileId=${fileId} payload=${JSON.stringify(response.data)}`
+      );
       return { success: false, error: response.data };
     }
   }
@@ -1051,22 +1067,32 @@ class FileController {
   // --- Multiple file ingest ---
   async ingestMultipleFiles(req, res) {
     try {
+      logger.info('[TRACE_TMP][doc-repo] ingestMultipleFiles:start');
       const { error, value } = batchFileIdsSchema.validate(req.body);
       if (error) {
+        logger.warn(`[TRACE_TMP][doc-repo] ingestMultipleFiles:validationError message=${error.details[0].message}`);
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
       const { fileIds } = value;
+      logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:validated fileCount=${fileIds.length} fileIds=${JSON.stringify(fileIds)}`);
       const results = [];
       for (const fileId of fileIds) {
+        logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:processing fileId=${fileId}`);
         try {
           const result = await this._ingestFileById(fileId);
+          logger.info(
+            `[TRACE_TMP][doc-repo] ingestMultipleFiles:result fileId=${fileId} success=${result?.success} error=${result?.error || ''}`
+          );
           results.push({ fileId, ...result });
         } catch (error) {
+          logger.error(`[TRACE_TMP][doc-repo] ingestMultipleFiles:exception fileId=${fileId} error=${error.message}`, { stack: error.stack });
           results.push({ fileId, success: false, error: error.message });
         }
       }
+      logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:complete results=${JSON.stringify(results)}`);
       res.json({ success: true, results });
     } catch (error) {
+      logger.error(`[TRACE_TMP][doc-repo] ingestMultipleFiles:fatal error=${error.message}`, { stack: error.stack });
       logger.error('Ingest multiple files error:', error);
       res.status(500).json({ success: false, error: error.message });
     }

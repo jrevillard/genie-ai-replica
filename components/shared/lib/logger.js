@@ -3,9 +3,26 @@ const DailyRotateFile = require('winston-daily-rotate-file');
 const fs = require('fs');
 const path = require('path');
 
+// Format additional metadata for readable console/file logs.
+const formatMeta = (meta) => {
+  if (!meta || (typeof meta === 'object' && Object.keys(meta).length === 0)) {
+    return '';
+  }
+
+  try {
+    return ` ${JSON.stringify(meta)}`;
+  } catch (error) {
+    return ` [meta_unserializable: ${error.message}]`;
+  }
+};
+
 // Default log format
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+const logFormat = format.printf(({ level, message, timestamp, stack, ...meta }) => {
+  const metaText = formatMeta(meta);
+  if (stack) {
+    return `${timestamp} [${level.toUpperCase()}]: ${message}\n${stack}${metaText}`;
+  }
+  return `${timestamp} [${level.toUpperCase()}]: ${message}${metaText}`;
 });
 
 // Default configuration for the logger
@@ -14,6 +31,7 @@ let loggerConfig = {
   format: format.combine(
     format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),
+    format.splat(),
     logFormat
   ),
   transports: [

@@ -1,4 +1,7 @@
-require('dotenv').config();
+// Root repo .env (pnpm/npm dev from gov-chat-backend cwd does not load ../../.env by default)
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
+require('dotenv').config(); // optional: components/gov-chat-backend/.env overrides
+
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128; // Increased from default 4 to support high concurrency
 const express = require('express');
 const cors = require('cors');

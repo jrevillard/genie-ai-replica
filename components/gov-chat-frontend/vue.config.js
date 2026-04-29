@@ -6,6 +6,14 @@ const cspConnectSrc = process.env.VUE_APP_CSP_CONNECT_SRC || "'self' http://loca
 const vueProxyHost = process.env.VUE_PROXY_HOST || "localhost:3000";
 
 module.exports = {
+  pages: {
+    index: {
+      entry: 'src/main.js',
+      template: 'public/index.html',
+      filename: 'index.html',
+      title: 'Innov8 AI',
+    },
+  },
   devServer: {
     hot: true,
     port: 8090,
@@ -14,8 +22,14 @@ module.exports = {
       'Content-Security-Policy': `default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${cspConnectSrc}; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data:;`
     },
     host: '0.0.0.0',
+    // Default HMR path is `/ws`, same as the backend proxy below — the browser then
+    // proxies the dev-server websocket to :3000, gets ECONNREFUSED, and reconnects forever.
+    webSocketServer: {
+      type: 'ws',
+      options: { path: '/webpack-dev-server-ws' },
+    },
     client: {
-      webSocketURL: 'auto://0.0.0.0:0/ws',
+      webSocketURL: 'auto://0.0.0.0:0/webpack-dev-server-ws',
       webSocketTransport: 'ws',
     },
     proxy: {

@@ -1,6 +1,7 @@
 # Copyright (C) 2024 Intel Corporation
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0 Developed by Intel. Adapted by ITU
+# Copyright (C) 2026 AgriConnect Lesotho — Ts'epo Thamae & Reitumetse Sehloho (IEEE/ITU GenAI for Good Challenge)
 import argparse
 import httpx
 import json

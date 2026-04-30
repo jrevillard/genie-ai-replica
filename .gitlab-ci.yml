@@ -12,6 +12,7 @@ include:
 
 stages:
   - test
+  - gate
   - secret-detection
 
 variables:
@@ -22,3 +23,60 @@ sast:
 
 secret_detection:
   stage: secret-detection
+
+# ────────────────────────────────────────────────────────────────
+# Phase 10 / Compliance v1.2 — gate stage
+# ────────────────────────────────────────────────────────────────
+# MR-1 of the ramp documented in
+# docs/compliance/CI_EVAL_GATE_PLAN.md §3:
+#
+#   - run the canonical privacy / audit / retention / agent-platform
+#     unit suites that don't need a running stack;
+#   - run the compliance scorecard and fail the pipeline if the
+#     overall score regresses below the configured floor.
+#
+# Heavy live-HTTP harnesses (`_phase7_live_gate_matrix.py`,
+# `_phase7_rollback_proof.py`) are NOT run here because they need
+# the full compose stack — they stay staging-only until a CI runner
+# with docker-in-docker lands. Same for the live audit-event-store
+# tests that hit ArcadeDB.
+#
+# `pip-audit` and `npm audit` are deliberately left for MR-4 / MR-5
+# of the ramp — keep the first MR small and fast.
+gate:
+  stage: gate
+  image: python:3.12-slim
+  before_script:
+    # The per-suite pieces this gate runs are all stdlib + pyjwt
+    # (already in the haystack-chatqna requirements). pyjwt is the
+    # only non-stdlib dependency exercised by the privacy / audit /
+    # retention suites; install just that to keep the gate fast.
+    - pip install --no-cache-dir 'pyjwt>=2.0,<3'
+  script:
+    # Privacy + audit + retention suites (the controls v1.2 advances).
+    - cd haystack-stack/haystack-chatqna
+    - PYTHONIOENCODING=utf-8 python _caregiver_privacy_consent_test.py
+    - PYTHONIOENCODING=utf-8 python _caregiver_privacy_warn_test.py
+    - PYTHONIOENCODING=utf-8 python _audit_event_store_test.py
+    - PYTHONIOENCODING=utf-8 python _retention_test.py
+    # Compliance scorecard — exit 0 always; the floor check below
+    # is what blocks a regressing MR.
+    - cd ../..
+    - python scripts/compliance_scorecard.py
+    # Floor check — fail the gate if overall_score_10 regresses
+    # below 7.50 (current is 7.73; v1.2 target is 8.0+).
+    - |
+      python <<'PY'
+      import json, subprocess, sys
+      out = subprocess.check_output(
+          ['python', 'scripts/compliance_scorecard.py', '--json'])
+      agg = json.loads(out)
+      score = agg['overall_score_10']
+      floor = 7.50
+      if score < floor:
+          print(f'FAIL: compliance overall score {score} below floor {floor}')
+          sys.exit(1)
+      print(f'OK: compliance overall score {score} >= floor {floor}')
+      PY
+  rules:
+    - if: $CI_COMMIT_BRANCH

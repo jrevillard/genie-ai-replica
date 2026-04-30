@@ -496,3 +496,55 @@ async def admin_list_caregivers(request: Request):
         return {"caregivers": _rows(r)}
     except Exception as e:
         return {"caregivers": [], "error": str(e)}
+
+
+# ── Phase 10 v1 — Caregiver privacy acceptance status ────────────────
+#
+# Read-only admin surface answering "which caregivers have accepted
+# the current privacy notice version, and which haven't?". The
+# heavy lifting is in src/services/caregiver_privacy_consent.py
+# `admin_acceptance_status(...)`; this route is a thin auth-gated
+# wrapper that also adapts the service's runner to the admin
+# `_sql` helper so it lands on the same ArcadeDB connection the
+# rest of admin_routes uses.
+#
+# Safe-fields-only contract verified by:
+#   _caregiver_privacy_consent_test.py test 14c
+@router.get("/caregivers/privacy-consent-status")
+async def admin_caregiver_privacy_consent_status(request: Request,
+                                                 notice_version: Optional[str] = None):
+    """
+    Returns aggregate counts + per-caregiver safe acceptance status.
+    NEVER returns raw signature, signature hash, phone, IP,
+    user-agent, token, or checkbox prose.
+    """
+    _verify_admin(request)
+    # Lazy import so the admin module stays importable even if the
+    # consent service is being reloaded during a hot edit.
+    from src.services import caregiver_privacy_consent as cpc
+
+    def _runner(sql: str):
+        return _sql(sql)
+
+    try:
+        return cpc.admin_acceptance_status(
+            notice_version=notice_version,
+            query_runner=_runner,
+        )
+    except Exception as e:
+        # Fail-soft: never bring down the admin console because the
+        # consent table briefly went away. Log locally; return an
+        # empty payload + an `error` summary string (never the
+        # response body or stack trace).
+        return {
+            "notice_version_required": notice_version
+                                       or cpc.CAREGIVER_PRIVACY_NOTICE_VERSION,
+            "required_flag":           False,
+            "total_caregivers":        0,
+            "accepted_current":        0,
+            "pending_or_stale":        0,
+            "acceptance_rate_pct":     0.0,
+            "last_checked_at":         "",
+            "caregivers":              [],
+            "error":                   f"failed_to_load: {repr(e)[:160]}",
+        }

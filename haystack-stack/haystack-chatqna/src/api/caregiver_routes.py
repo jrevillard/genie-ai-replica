@@ -53,16 +53,35 @@ _repo = CaregiverRepository()
 # ── JWT helpers ──────────────────────────────────────────────────────────────
 
 def _caregiver_jwt(caregiver_id: str, phone: str, name: str,
-                   patient_id: str, permissions: List[str]) -> str:
+                   patient_id: str, permissions: List[str],
+                   caregiver_role: str = "") -> str:
+    """
+    Mint a caregiver JWT.
+
+    Phase 6.5 added the optional `caregiver_role` claim alongside the
+    existing `role: "caregiver"` auth-class claim. The auth class
+    (`role`) gates endpoint access and is unchanged. The new
+    `caregiver_role` carries the caregiver's TYPE — for the legacy
+    family-invite flow this is the `relationship` value from
+    CaregiverVertex (e.g. "spouse", "child", "chw"). The privacy
+    consent route (`caregiver_privacy_routes.py:140`) reads this
+    claim to denormalise it onto each new CaregiverConsentRecord;
+    before this fix every record stored `role="unknown"`.
+
+    Existing callers that pass no caregiver_role get an empty string
+    (no claim leaked, just an absent value), preserving backward
+    compatibility for any code path we missed.
+    """
     payload = {
-        "sub":         caregiver_id,
-        "phone":       phone,
-        "name":        name,
-        "role":        "caregiver",
-        "patient_id":  patient_id,
-        "permissions": permissions,
-        "iat":         datetime.utcnow(),
-        "exp":         datetime.utcnow() + timedelta(hours=24),
+        "sub":             caregiver_id,
+        "phone":           phone,
+        "name":            name,
+        "role":            "caregiver",          # auth class — unchanged
+        "caregiver_role":  caregiver_role or "", # caregiver type (Phase 6.5)
+        "patient_id":      patient_id,
+        "permissions":     permissions,
+        "iat":             datetime.utcnow(),
+        "exp":             datetime.utcnow() + timedelta(hours=24),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
@@ -258,7 +277,18 @@ async def register_caregiver(body: CaregiverRegisterRequest):
     except Exception as e:
         logger.warning(f"Patient notification failed: {e}")
 
-    token = _caregiver_jwt(caregiver_id, body.phone, body.name, patient_id, permissions)
+    # Phase 6.5: pass the relationship value as caregiver_role so the
+    # privacy-consent route stops storing role="unknown" on new
+    # CaregiverConsentRecord rows. body.relationship is a Pydantic
+    # Enum here; .value gives the stable string ("spouse", "child", …).
+    cg_role = ""
+    try:
+        cg_role = body.relationship.value
+    except Exception:
+        cg_role = (cg.get("relationship") if isinstance(cg, dict) else "") or ""
+    token = _caregiver_jwt(caregiver_id, body.phone, body.name,
+                           patient_id, permissions,
+                           caregiver_role=cg_role)
     return {
         "token":        token,
         "caregiver_id": caregiver_id,
@@ -284,9 +314,12 @@ async def login_caregiver(body: CaregiverLoginRequest):
     permissions = primary.get("_permissions", [])
     limit = int(cg.get("patient_limit") or 10)
 
+    # Phase 6.5: include the caregiver's relationship as caregiver_role
+    # so the consent record's role denormalisation stops being "unknown".
     token = _caregiver_jwt(
         cg["caregiver_id"], body.phone, cg["name"],
         primary["id"], permissions,
+        caregiver_role=(cg.get("relationship") or ""),
     )
     return {
         "token":         token,
@@ -664,7 +697,10 @@ async def list_removal_requests(
 
 # ── Caregiver dashboard ──────────────────────────────────────────────────────
 
-@router.get("/dashboard")
+@router.get(
+    "/dashboard",
+    dependencies=[Depends(_require_caregiver_privacy_consent)],
+)
 async def caregiver_dashboard(
     pid: Optional[str] = None,
     caregiver: dict = Depends(_require_caregiver),
@@ -807,7 +843,10 @@ def _insights_cache_key(caregiver_id: str, patient_id: str) -> str:
     return f"cg_insights:{caregiver_id}:{patient_id}"
 
 
-@router.get("/insights")
+@router.get(
+    "/insights",
+    dependencies=[Depends(_require_caregiver_privacy_consent)],
+)
 async def caregiver_insights(
     pid: Optional[str] = None,
     caregiver: dict = Depends(_require_caregiver),
@@ -960,7 +999,10 @@ Respond ONLY with valid JSON, no extra text."""
     return result
 
 
-@router.get("/alerts")
+@router.get(
+    "/alerts",
+    dependencies=[Depends(_require_caregiver_privacy_consent)],
+)
 async def get_alerts(caregiver: dict = Depends(_require_caregiver)):
     """Alert history for the caregiver's patient (last 30)."""
     redis = _get_redis()
@@ -983,7 +1025,10 @@ class CaregiverChatRequest(BaseModel):
     model_preference: Optional[str] = None  # "base"|"gemini"|"groq"|"mistral"|"amina"
 
 
-@router.post("/chat")
+@router.post(
+    "/chat",
+    dependencies=[Depends(_require_caregiver_privacy_consent)],
+)
 async def caregiver_chat(
     body: CaregiverChatRequest,
     caregiver: dict = Depends(_require_caregiver),
@@ -1018,7 +1063,10 @@ async def caregiver_chat(
 
 # ── Voice chat endpoint ──────────────────────────────────────────────────────
 
-@router.post("/voice-chat")
+@router.post(
+    "/voice-chat",
+    dependencies=[Depends(_require_caregiver_privacy_consent)],
+)
 async def caregiver_voice_chat(
     file:       UploadFile = File(...),
     patient_id: str        = Form(default=""),
@@ -1284,7 +1332,10 @@ def _assert_patient_access(caregiver: dict, patient_id: str) -> None:
 # Tier 1 — Predictive Risk endpoints
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.get("/predictions/{patient_id}")
+@router.get(
+    "/predictions/{patient_id}",
+    dependencies=[Depends(_require_caregiver_privacy_consent)],
+)
 async def get_patient_predictions(
     patient_id: str,
     force_refresh: bool = False,
@@ -1414,7 +1465,10 @@ async def _build_panel_records(caregiver_id: str, caregiver: dict) -> list:
     return records
 
 
-@router.get("/panel")
+@router.get(
+    "/panel",
+    dependencies=[Depends(_require_caregiver_privacy_consent)],
+)
 async def get_patient_panel(
     caregiver: dict = Depends(_require_caregiver),
 ):

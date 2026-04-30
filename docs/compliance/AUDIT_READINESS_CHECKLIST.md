@@ -11,7 +11,7 @@ For each item: status · evidence · owner placeholder · next action.
 
 | Item | Status | Evidence | Owner | Next action |
 |---|---|---|---|---|
-| Plain-language privacy notice exists | ✅ | [PRIVACY_NOTICE.md](PRIVACY_NOTICE.md) | pilot op | fill placeholders |
+| Plain-language privacy notice exists for every user class | ✅ | [PRIVACY_NOTICE.md](PRIVACY_NOTICE.md) (patient/user); caregiver surfaces: `CaregiverPrivacyConsentStep.jsx`, `CaregiverPrivacyReconsentBootstrap.jsx`, CaregiverPortal Privacy section | pilot op | fill operator-name placeholders in PRIVACY_NOTICE.md |
 | Data flow map exists end-to-end | ✅ | [DATA_FLOW_MAP.md](DATA_FLOW_MAP.md) | engineering | annual refresh |
 | PHI de-identification before LLM call | ✅ | `src/services/phi_deid.py` | engineering | extend Mandinka token coverage |
 | PHI-redacted tracing | ✅ | `agent_platform/tracing.py` + Phase-3 tests §2/§19 | engineering | none |
@@ -31,6 +31,14 @@ For each item: status · evidence · owner placeholder · next action.
 | Consent prompt copy in plain language | 🟡 | reviewed by engineering only | clinical | clinical reviewer signoff |
 | Consent prompt available in Mandinka | 🟡 | partial localisation | engineering | finish MA strings |
 | Synthetic / demo mode bypasses consent prompts safely | ✅ | session-id pattern | engineering | none |
+| Caregiver consent capture (versioned, immutable) | ✅ | `CaregiverPrivacyConsentStep.jsx` → POST `/api/v1/caregiver/privacy/consent` → ArcadeDB `CaregiverConsentRecord`; structured checkboxes + sha256 signature hash; never stores raw signature, phone, IP, UA | engineering | none |
+| New `notice_version` produces a new immutable record (history preserved) | ✅ | `record_consent` writes a new vertex per `(caregiver_id, notice_version, signature_hash)`; covered by Phase 7 test 26 (`test_phase7_new_notice_version_creates_new_immutable_record`) | engineering | none |
+| Phase 5 warn-only stale-consent instrumentation | ✅ | `caregiver_privacy_warn.py` middleware emits `event_type=caregiver_privacy_consent_stale` log lines and `X-Caregiver-Privacy-Stale` response header (always on; flag-independent) | engineering | wire to ops dashboard |
+| Phase 6.7 hard-403 recovery wiring | ✅ | `caregiverConsent403Interceptor.js` + `CaregiverPrivacyReconsentBootstrap.jsx` listen for the canonical 403 and force the soft re-consent modal open without losing the user's session | engineering | none |
+| Phase 7 enforcement validated in dev/staging | ✅ | `_phase7_live_gate_matrix.py` 64/64; `_phase7_rollback_proof.py` 20/20; 8 patient-data routes wired with `Depends(require_caregiver_privacy_consent)`; one-command rollback proven | engineering | run production stale-population audit before flipping `AMINA_CAREGIVER_PRIVACY_REQUIRED=true` |
+| Production caregiver-privacy enforcement | 🟡 | Wired and validated; flag remains `false` in production. Gated on production stale-population audit per [CAREGIVER_PRIVACY_ENFORCEMENT_READINESS.md §5](CAREGIVER_PRIVACY_ENFORCEMENT_READINESS.md) | ops + engineering | run audit on prod ArcadeDB; if GREEN flip after 24 h banner; if YELLOW run 14-day soak; if RED do not flip |
+| Safe structured caregiver consent audit log | ✅ | `caregiver_privacy_consent.py::emit_audit_log` emits 7 safe keys only (`caregiver_id`, `consent_version`, `policy_version`, `role`, `accepted_at`, `method`, `required_flag`); covered by test 10 (`test_audit_log_safe_fields_only`) | engineering | promote into the proposed central audit-event store (§4) when AUDIT-005 lands |
+| Admin visibility into caregiver privacy acceptance (Phase 10 v1) | ✅ | `GET /api/v1/admin/caregivers/privacy-consent-status` exposes safe aggregate + per-caregiver acceptance status to admin-console users. Surfaced on the Governance tab via `CaregiverPrivacyAcceptanceCard.jsx`. Test 14c pins the safe-fields contract (no signatures, hashes, tokens, IPs, user agents, or patient data in the response) | engineering | none |
 
 ## 3. Retention
 
@@ -149,3 +157,31 @@ PHI minimisation: subject id is hashed; no raw message body; no phone in plainte
 ## 10. Status summary
 
 (Counts will be refreshed from [compliance_controls.json](compliance_controls.json) by `scripts/compliance_scorecard.py`.)
+
+## 11. Phase 8 audit-readiness notes
+
+- **Caregiver consent records are durable, versioned, immutable.** Each
+  acceptance writes a new `CaregiverConsentRecord` vertex; old rows
+  are preserved when a new `notice_version` is rolled out. Verified by
+  test 26.
+- **Caregiver consent audit lines are PHI-safe.** The structured log
+  emitted at acceptance time contains only the 7 safe keys listed in
+  §2 above; no signature, hash, phone, IP, UA, or checkbox prose
+  appears. Verified by test 10 (existing) and tests 24/30 (Phase 6.7
+  + Phase 7).
+- **AUDIT-005 (append-only general-purpose audit-event store) remains
+  ❌ a gap.** The caregiver-privacy structured log lines and the
+  existing per-domain audit edges (`ConsentAuditVertex`,
+  `DHIS2AuditVertex`, `TrackerPushAuditVertex`) are working stop-gaps
+  but do not constitute the central, query-friendly audit store
+  described in §4 of this document. Closing AUDIT-005 is independent
+  of caregiver privacy enforcement and remains scheduled for a later
+  phase.
+- **Production enforcement of caregiver privacy has not happened.**
+  Phase 7 promoted the flag in dev for the duration of the validation
+  run only and rolled it back. Production remains
+  `AMINA_CAREGIVER_PRIVACY_REQUIRED=false` and is gated on the
+  production stale-population audit.
+- **Retention sweepers / backup-deletion proof / OTel dashboard /
+  metrics unification** remain open per RET-004..008, OPS-004..007,
+  AUDIT-009/010. None of these were addressed by Phase 8.

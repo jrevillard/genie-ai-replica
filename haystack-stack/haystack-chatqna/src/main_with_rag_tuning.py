@@ -93,6 +93,17 @@ try:
 except Exception as e:
     _log.warning("Diet plan fix failed to load (non-fatal): %s", e)
 
+# Phase 5 — caregiver privacy WARN-ONLY middleware. Surfaces stale or
+# missing caregiver consent as `X-Caregiver-Privacy-Stale: true|false`
+# response header + a structured warning log; never blocks. Independent
+# of AMINA_CAREGIVER_PRIVACY_REQUIRED enforcement (which stays default
+# off). Toggle via AMINA_CAREGIVER_PRIVACY_WARN_ONLY=true|false.
+try:
+    from src.services import caregiver_privacy_warn as _cpw
+    _cpw.install(app)
+except Exception as e:
+    _log.warning("Caregiver privacy warn-only middleware failed to install (non-fatal): %s", e)
+
 try:
     from src.services import conversation_inbox_link  # noqa: F401
     _log.info("Conversation-to-inbox linker installed")

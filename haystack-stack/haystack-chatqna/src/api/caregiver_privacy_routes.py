@@ -35,6 +35,38 @@ from pydantic import BaseModel
 from src.config import settings
 from src.services import caregiver_privacy_consent as cpc
 
+# Phase 9 (AUDIT-005): central append-only audit-event store. Imported
+# defensively so a packaging hiccup or DB outage cannot break the route.
+# `_safe_audit_event(...)` below wraps every call in try/except so an
+# audit-write failure NEVER raises into the user's request.
+try:
+    from src.services import audit_event_store as _aes  # noqa: F401
+    _AUDIT_STORE_AVAILABLE = True
+except Exception:
+    _aes = None
+    _AUDIT_STORE_AVAILABLE = False
+
+
+def _safe_audit_event(**kwargs) -> None:
+    """Best-effort append to the central audit event store. Always
+    returns None. Never raises. Drops the event silently if the store
+    is unavailable. The store itself enforces PHI-redaction; this
+    wrapper just prevents an audit-side outage from leaking up."""
+    if not _AUDIT_STORE_AVAILABLE or _aes is None:
+        return
+    try:
+        _aes.append_event(**kwargs)
+    except Exception as exc:
+        # Defensive double-guard. The store itself is supposed to be
+        # fail-soft; if it isn't, we still don't propagate.
+        try:
+            logging.getLogger(__name__).debug(
+                "audit_event append failed (suppressed): %s", exc,
+            )
+        except Exception:
+            pass
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
@@ -116,12 +148,31 @@ class CaregiverConsentResponse(BaseModel):
 
 
 class CaregiverConsentStatus(BaseModel):
+    """
+    Safe consent receipt — never includes raw signature, signature
+    hash, guardian signature hash, phone, IP, user-agent, token, or
+    checkbox prose. Phase 6.5 extended this from 6 fields to 12 by
+    surfacing the wizard-emitted telemetry already stored on each
+    CaregiverConsentRecord row (Phase 2 schema). Required for the
+    Phase 6 frontend "Download My Consent Record" feature to be a
+    complete consent receipt.
+    """
     has_current_consent: bool
     notice_version:      str
-    accepted_at:         Optional[str] = None
-    record_id:           Optional[str] = None
-    role:                Optional[str] = None
+    accepted_at:         Optional[str]  = None
+    record_id:           Optional[str]  = None
+    role:                Optional[str]  = None
     required_flag:       bool
+
+    # Phase 6.5: safe stored fields — defaults are conservative
+    # (0/false/None) so the no-consent branch returns a structured
+    # response without exposing PHI.
+    checkbox_count:      Optional[int]  = 0
+    checkboxes_accepted: Optional[bool] = False
+    guardian_consent:    Optional[bool] = False
+    mandinka_viewed:     Optional[bool] = False
+    scroll_completed:    Optional[bool] = False
+    method:              Optional[str]  = None
 
 
 # ── Routes ───────────────────────────────────────────────────────────
@@ -137,12 +188,40 @@ async def submit_caregiver_privacy_consent(
     creates a new immutable row.
     """
     caregiver_id = caregiver.get("sub") or caregiver.get("caregiver_id") or ""
-    role = (caregiver.get("caregiver_role") or "").lower()
+
+    # Phase 10 v1 follow-up — the JWT's `caregiver_role` claim is
+    # denormalised metadata, not a hard validation gate. Some legacy
+    # caregivers carry their specialisation string (e.g. "Maternal &
+    # Child Health") in this slot rather than a canonical role
+    # (vhw / cbc / chn / tba / family / scout / alkalo). The validator
+    # rejects non-canonical role values with `role_unrecognised`,
+    # which would block real caregivers from accepting an updated
+    # privacy notice through no fault of their own. Normalise here:
+    # if the claim is canonical, pass it; otherwise pass None and let
+    # the record store role="unknown". The submission still succeeds.
+    raw_role = (caregiver.get("caregiver_role") or "").strip().lower()
+    _CANONICAL_ROLES = {"vhw", "cbc", "chn", "tba", "family", "scout", "alkalo"}
+    role = raw_role if raw_role in _CANONICAL_ROLES else ""
 
     payload = body.dict()
 
     errors = cpc.validate_consent_payload(payload, role=role or None)
     if errors:
+        _safe_audit_event(
+            event_type="caregiver_privacy.consent.rejected",
+            actor_type="caregiver",
+            actor_id=caregiver_id,
+            subject_type="caregiver",
+            subject_id=caregiver_id,
+            action="grant",
+            resource="/api/v1/caregiver/privacy/consent",
+            outcome="failure",
+            reason_code="consent_payload_invalid",
+            metadata={
+                "error_codes":    errors,
+                "notice_version": cpc.CAREGIVER_PRIVACY_NOTICE_VERSION,
+            },
+        )
         raise HTTPException(
             status_code=400,
             detail={
@@ -179,6 +258,26 @@ async def submit_caregiver_privacy_consent(
                 else "reaffirmed"),
     )
 
+    # Phase 9: also append to the central audit store. Fail-soft.
+    _safe_audit_event(
+        event_type="caregiver_privacy.consent.captured",
+        actor_type="caregiver",
+        actor_id=caregiver_id,
+        subject_type="caregiver",
+        subject_id=caregiver_id,
+        action="grant",
+        resource="/api/v1/caregiver/privacy/consent",
+        outcome="success",
+        reason_code=("accepted" if row.get("_status") == "accepted"
+                     else "already_accepted"),
+        metadata={
+            "notice_version": row.get("notice_version",
+                                      cpc.CAREGIVER_PRIVACY_NOTICE_VERSION),
+            "method":         row.get("method", "app"),
+            "role":           row.get("role", role or "unknown"),
+        },
+    )
+
     return CaregiverConsentResponse(
         status=row.get("_status", "accepted"),
         record_id=row.get("record_id", ""),
@@ -197,6 +296,27 @@ async def get_caregiver_privacy_consent_status(
 ) -> CaregiverConsentStatus:
     caregiver_id = caregiver.get("sub") or caregiver.get("caregiver_id") or ""
     row = cpc.find_current_consent(caregiver_id) or {}
+    _safe_audit_event(
+        event_type="caregiver_privacy.status.viewed",
+        actor_type="caregiver",
+        actor_id=caregiver_id,
+        subject_type="caregiver",
+        subject_id=caregiver_id,
+        action="read",
+        resource="/api/v1/caregiver/privacy/status",
+        outcome="success",
+        reason_code=("has_current_consent" if row else "no_current_consent"),
+        metadata={
+            "notice_version": cpc.CAREGIVER_PRIVACY_NOTICE_VERSION,
+            "required_flag":  bool(cpc.AMINA_CAREGIVER_PRIVACY_REQUIRED),
+        },
+    )
+    # Phase 6.5: surface the safe wizard-telemetry fields that are
+    # already persisted on the row by `record_consent`. These let the
+    # frontend (Phase 6 "Download My Consent Record") build a full
+    # consent receipt without a separate /record route. SAFE FIELDS
+    # ONLY — the row also contains digital_signature_hash and
+    # guardian_signature_hash; both are explicitly NOT surfaced here.
     return CaregiverConsentStatus(
         has_current_consent=bool(row),
         notice_version=cpc.CAREGIVER_PRIVACY_NOTICE_VERSION,
@@ -204,6 +324,12 @@ async def get_caregiver_privacy_consent_status(
         record_id=row.get("record_id"),
         role=row.get("role"),
         required_flag=cpc.AMINA_CAREGIVER_PRIVACY_REQUIRED,
+        checkbox_count=int(row.get("checkbox_count") or 0),
+        checkboxes_accepted=bool(row.get("checkboxes_accepted")),
+        guardian_consent=bool(row.get("guardian_consent")),
+        mandinka_viewed=bool(row.get("mandinka_viewed")),
+        scroll_completed=bool(row.get("scroll_completed")),
+        method=row.get("method"),
     )
 
 
@@ -237,14 +363,48 @@ def require_caregiver_privacy_consent(
     try:
         cpc.check_caregiver_consent_or_raise(caregiver_id)
     except cpc.ConsentRequiredError:
+        _safe_audit_event(
+            event_type="caregiver_privacy.enforcement.denied",
+            actor_type="caregiver",
+            actor_id=caregiver_id,
+            subject_type="caregiver",
+            subject_id=caregiver_id,
+            action="check",
+            resource="caregiver_privacy_gate",
+            outcome="denied",
+            reason_code="consent_required",
+            metadata={
+                "notice_version": cpc.CAREGIVER_PRIVACY_NOTICE_VERSION,
+                "required_flag":  True,
+            },
+        )
         raise HTTPException(
             status_code=403,
             detail={
                 "error":          "consent_required",
                 "code":           "caregiver_privacy_consent_required",
+                "message":        "Privacy notice consent required",
                 "notice_version": cpc.CAREGIVER_PRIVACY_NOTICE_VERSION,
                 "submit_url":     "/api/v1/caregiver/privacy/consent",
                 "status_url":     "/api/v1/caregiver/privacy/status",
+            },
+        )
+    # Allowed path — only emit when enforcement is on (so we don't
+    # spam the audit store with no-op events while flag=false).
+    if cpc.AMINA_CAREGIVER_PRIVACY_REQUIRED:
+        _safe_audit_event(
+            event_type="caregiver_privacy.enforcement.allowed",
+            actor_type="caregiver",
+            actor_id=caregiver_id,
+            subject_type="caregiver",
+            subject_id=caregiver_id,
+            action="check",
+            resource="caregiver_privacy_gate",
+            outcome="success",
+            reason_code="has_current_consent",
+            metadata={
+                "notice_version": cpc.CAREGIVER_PRIVACY_NOTICE_VERSION,
+                "required_flag":  True,
             },
         )
     return caregiver

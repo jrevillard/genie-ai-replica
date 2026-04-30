@@ -371,7 +371,63 @@ function PatientsTable({ rows, onRowClick }) {
 
 // ── Caregivers table ───────────────────────────────────────
 
-function CaregiversTable({ rows }) {
+// Phase 10 v1.3 — small inline pill rendered in the new Privacy
+// column. Three states:
+//   - Accepted : caregiver has the current notice version on file
+//   - Pending  : no acceptance record on file at all
+//   - Stale    : has a record but at an older notice version
+//                (only meaningful once we surface the version on
+//                the per-caregiver row; today the endpoint reports
+//                stale_or_pending=true for both pending + stale,
+//                so we render "Pending" for both — the foot below
+//                explains this nuance to the operator).
+// `priv` may be undefined if the privacy endpoint hasn't loaded yet,
+// or if a caregiver was added after the last 60s refresh tick.
+function PrivacyPill({ priv }) {
+  if (!priv) {
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        padding: "3px 9px", borderRadius: 999,
+        fontSize: 11, fontWeight: 600,
+        background: "rgba(148,163,184,0.10)",
+        color: "rgba(232,237,245,0.55)",
+        border: "1px solid rgba(148,163,184,0.20)",
+      }} title="Privacy-acceptance status unknown (still loading)">
+        —
+      </span>
+    );
+  }
+  const accepted = priv.has_current_consent === true;
+  return (
+    <span
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        padding: "3px 9px", borderRadius: 999,
+        fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
+        background: accepted
+          ? "rgba(47,125,91,0.18)"
+          : "rgba(199,123,44,0.18)",
+        color: accepted ? "#86efac" : "#fcd34d",
+        border: accepted
+          ? "1px solid rgba(47,125,91,0.40)"
+          : "1px solid rgba(199,123,44,0.40)",
+      }}
+      title={
+        accepted
+          ? `Accepted notice ${priv.notice_version || "v?"}`
+            + (priv.accepted_at
+                 ? ` · ${new Date(priv.accepted_at).toLocaleString()}`
+                 : "")
+          : "No current-version privacy acknowledgement on file"
+      }
+    >
+      {accepted ? "Accepted" : "Pending"}
+    </span>
+  );
+}
+
+function CaregiversTable({ rows, privacyByCgId, privacyNoticeRequired }) {
   if (rows.length === 0) {
     return (
       <div className="cr-table-wrap">
@@ -379,6 +435,17 @@ function CaregiversTable({ rows }) {
       </div>
     );
   }
+  // Counts for the table foot — accept-rate at a glance.
+  let acceptedCount = 0;
+  for (const c of rows) {
+    const cid = c.caregiver_id || c.id || "";
+    const p = privacyByCgId && privacyByCgId.get
+      ? privacyByCgId.get(cid)
+      : undefined;
+    if (p && p.has_current_consent === true) acceptedCount += 1;
+  }
+  const pendingCount = rows.length - acceptedCount;
+
   return (
     <div className="cr-table-wrap">
       <table className="cr-table" aria-label="Caregivers directory">
@@ -387,15 +454,19 @@ function CaregiversTable({ rows }) {
             <th style={{ width: 180 }}>ID</th>
             <th>Name</th>
             <th style={{ width: 180 }}>Specialization</th>
-            <th style={{ width: 160 }}>Region</th>
-            <th style={{ width: 160 }}>Phone</th>
-            <th style={{ width: 100, textAlign: "right" }}>Patients</th>
+            <th style={{ width: 140 }}>Region</th>
+            <th style={{ width: 130 }}>Phone</th>
+            <th style={{ width: 110 }}>Privacy</th>
+            <th style={{ width: 90, textAlign: "right" }}>Patients</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((c, i) => {
             const name = c.name || "—";
             const cid  = c.caregiver_id || c.id || "—";
+            const priv = privacyByCgId && privacyByCgId.get
+              ? privacyByCgId.get(cid)
+              : undefined;
             return (
               <tr key={cid} style={{ "--cr-d": `${i * 30}ms`, cursor: "default" }}>
                 <td className="cr-cell-id">{cid}</td>
@@ -420,6 +491,9 @@ function CaregiversTable({ rows }) {
                   {(c.region || "—").toString().replace(/_/g, " ")}
                 </td>
                 <td>{c.phone || "—"}</td>
+                <td>
+                  <PrivacyPill priv={priv} />
+                </td>
                 <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                   {c.patient_count ?? c.assigned_patients ?? 0}
                 </td>
@@ -429,7 +503,21 @@ function CaregiversTable({ rows }) {
         </tbody>
       </table>
       <div className="cr-table-foot">
-        <span>Showing {rows.length} caregiver{rows.length === 1 ? "" : "s"}</span>
+        <span>
+          Showing {rows.length} caregiver{rows.length === 1 ? "" : "s"} ·{" "}
+          <span style={{ color: "#86efac", fontWeight: 600 }}>
+            {acceptedCount} accepted
+          </span>
+          {" · "}
+          <span style={{ color: "#fcd34d", fontWeight: 600 }}>
+            {pendingCount} pending
+          </span>
+          {privacyNoticeRequired && (
+            <span style={{ opacity: 0.65 }}>
+              {" "}· current notice {privacyNoticeRequired}
+            </span>
+          )}
+        </span>
       </div>
     </div>
   );
@@ -1472,12 +1560,30 @@ export default function People() {
 
   const { data: pRes } = useAdminApi("/api/v1/admin/patients?limit=100",    { refreshMs: 60000 });
   const { data: cRes } = useAdminApi("/api/v1/admin/caregivers-directory", { refreshMs: 60000 });
+  // Phase 10 v1.3 — privacy-acceptance status keyed by caregiver_id.
+  // Same admin endpoint the Governance card consumes; safe-fields-only
+  // by contract (no signatures, hashes, tokens, IPs, UA, patient data).
+  const { data: privRes } = useAdminApi(
+    "/api/v1/admin/caregivers/privacy-consent-status",
+    { refreshMs: 60000 },
+  );
   const { data: lRes, refresh: refreshLiteracy } = useAdminApi("/api/v1/literacy/admin/queue?limit=200", { refreshMs: 30000 });
   const { data: tRes, refresh: refreshTransfers } = useAdminApi("/api/v1/admin/transfer-requests",    { refreshMs: 30000 });
   const { data: aRes, refresh: refreshApprovals } = useAdminApi("/api/v1/caregiver-v2/admin/applications", { refreshMs: 30000 });
 
   const patients   = pRes?.patients   || [];
   const caregivers = cRes?.caregivers || [];
+  // Build a lookup of caregiver_id → safe acceptance row so the
+  // CaregiversTable can render a Privacy column without making a
+  // per-row request.
+  const privacyByCgId = useMemo(() => {
+    const m = new Map();
+    for (const row of (privRes?.caregivers || [])) {
+      if (row && row.caregiver_id) m.set(row.caregiver_id, row);
+    }
+    return m;
+  }, [privRes]);
+  const privacyNoticeRequired = privRes?.notice_version_required || "";
   const litQueue   = lRes?.queue      || [];
   const transfers  = tRes?.requests   || [];
   const cgApps     = aRes?.applications || [];
@@ -1669,7 +1775,13 @@ export default function People() {
 
       {/* Body */}
       {tab === "patients"   && <PatientsTable   rows={filteredPatients}   onRowClick={setSelectedPatientId} />}
-      {tab === "caregivers" && <CaregiversTable rows={filteredCaregivers} />}
+      {tab === "caregivers" && (
+        <CaregiversTable
+          rows={filteredCaregivers}
+          privacyByCgId={privacyByCgId}
+          privacyNoticeRequired={privacyNoticeRequired}
+        />
+      )}
       {tab === "approvals"  && <ApprovalsTable  rows={filteredApprovals}  onRefresh={refreshApprovals} />}
       {tab === "literacy"   && <LiteracyTable   rows={filteredLiteracy}   onRowClick={setSelectedPatientId} onRefresh={refreshLiteracy} />}
       {tab === "transfers"  && <TransfersTable  rows={filteredTransfers}  onRowClick={setSelectedPatientId} caregivers={caregivers} onRefresh={refreshTransfers} />}

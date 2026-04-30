@@ -145,3 +145,90 @@ ls docs/compliance/*.md docs/compliance/*.json
 | No real PHI used | ✅ |
 | Additive + scoped | ✅ purely additive (15 markdown + 1 JSON + 1 Python file) |
 | Backend / frontend tests untouched | ✅ no source code changed in this Phase |
+
+---
+
+## 9. Phase 8 addendum (2026-04-30) — caregiver-consent control split
+
+Phase 8 is a **documentation-only** pass that reflects the completed
+caregiver-privacy work from Phases 1–7 in the compliance package.
+No backend, frontend, or compose files were touched.
+
+### What changed in `compliance_controls.json`
+
+- **`CONSENT-005`** (the previous "Consent prompt copy reviewed by
+  clinical lead" control, status `partial`) was **split** into two
+  separate controls so the patient and caregiver consent surfaces
+  are independently scoreable:
+  - **`CONSENT-005a`** — Patient/user consent model implemented and
+    documented. Anchored on `CONSENT_MODEL.md` (patient class) +
+    `consent_service.py` + `consent_routes.py`. Status: ✅ complete.
+  - **`CONSENT-005b`** — Caregiver consent model implemented and
+    documented. Anchored on `CONSENT_MODEL.md §10` (caregiver
+    section, new in Phase 8) + `CaregiverPrivacyConsentStep.jsx` +
+    `caregiver_privacy_consent.py` + `caregiver_privacy_routes.py` +
+    ArcadeDB `CaregiverConsentRecord` + Phase 5 re-consent modal +
+    Phase 6.7 hard-403 interceptor + Phase 7 dev/staging enforcement
+    validation. Status: ✅ complete. Residual: production rollout
+    remains gated on the production stale-population audit.
+- **`CONSENT-009`** added — "Privacy notice acknowledgment captured
+  at caregiver signup". Anchored on the signup-wizard privacy step,
+  the `privacy_consent` payload, the versioned/immutable
+  `CaregiverConsentRecord`, and the POST consent route. Status: ✅
+  complete with the same production-audit residual.
+- **`PRIV-001`** evidence updated — the privacy notice is now
+  surfaced for both user classes (patient via `PRIVACY_NOTICE.md`;
+  caregiver via the signup wizard, the re-consent modal, and the
+  Caregiver Portal Privacy section). Status remained ✅ complete
+  (it was not actually `partial` in the JSON pre-Phase-8 — the
+  edit only refreshed the evidence and residual gap text).
+
+The clinical-reviewer-signoff requirement that previously sat under
+`CONSENT-005` was retired by editorial decision per the Phase 8 spec;
+clinician signoff for the safety case is tracked separately under
+`SAFETY-001`.
+
+### Scorecard before / after
+
+| Metric | Before (phase-1-3-2026-04-29) | After (phase-8-2026-04-30) |
+|---|---|---|
+| Total controls | 73 | **75** |
+| Complete | 41 | **44** |
+| Partial | 16 | **15** |
+| Gap | 16 | **16** (unchanged) |
+| Overall score | **6.72 / 10** | **6.82 / 10** |
+| `consent` domain | 8.12 (C=5, P=3, G=0, N=8) | **9.00** (C=8, P=2, G=0, N=10) |
+
+The overall score moved up by 0.10. The consent domain moved up by
+0.88 — the largest single change. No domain regressed. The 16 gaps
+are unchanged from Phase 1–3 — Phase 8 did not close any pre-existing
+gap; it documented the caregiver-consent work that had already
+shipped.
+
+### What Phase 8 deliberately did **not** do
+
+- Did **not** flip `AMINA_CAREGIVER_PRIVACY_REQUIRED` in production.
+  The production stale-population audit remains the gate per
+  `CAREGIVER_PRIVACY_ENFORCEMENT_READINESS.md §5`.
+- Did **not** close `AUDIT-005` (append-only general-purpose audit-
+  event store). Caregiver-privacy audit log lines are PHI-safe but
+  live in plain log lines, not the central store.
+- Did **not** address retention sweepers (`RET-004..008`), backup
+  deletion proof (`RET-006`), OTel/dashboard work (`OPS-004..006`),
+  or secret rotation cadence (`OPS-007`).
+- Did **not** invent legal article numbers. Principles cite Gambia
+  DPA / WHO transparency guidance only where the underlying control
+  text already cited them.
+
+### Files changed in Phase 8
+
+| File | Change |
+|---|---|
+| `docs/compliance/compliance_controls.json` | `package_version` bumped; `PRIV-001` evidence refreshed; `CONSENT-005` split into `CONSENT-005a` + `CONSENT-005b`; `CONSENT-009` added |
+| `docs/compliance/COMPLIANCE_CONTROL_MATRIX.md` | header count updated to 75; `PRIV-001` row refreshed; old `CONSENT-005` row removed; `CONSENT-005a`, `CONSENT-005b`, `CONSENT-009` rows added |
+| `docs/compliance/CONSENT_MODEL.md` | new §10 (caregiver consent flow + `CaregiverConsentRecord` schema + production-enforcement gate) and §11 (linked controls) |
+| `docs/compliance/AUDIT_READINESS_CHECKLIST.md` | privacy-notice row updated; 7 caregiver-consent rows added under §2 (capture / new-version / Phase 5 warn-only / Phase 6.7 recovery / Phase 7 enforcement validation / production-gate / safe audit log); §11 Phase 8 notes |
+| `docs/compliance/PHASE_1_3_REPORT.md` | this addendum (§9) |
+
+**No source code changed. No docker compose files changed. No git
+commit / branch / push / stash / stage was performed.**

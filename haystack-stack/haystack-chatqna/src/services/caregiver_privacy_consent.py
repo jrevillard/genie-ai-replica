@@ -74,17 +74,32 @@ logger = logging.getLogger(__name__)
 #
 # TODO: Automate version sync check in CI (compare this constant with
 #       the frontend export at build time).
-CAREGIVER_PRIVACY_NOTICE_VERSION: str = "1.0"
+#
+# Phase 9 v4 — bumped 1.0 → 1.1 to record the addition of the
+# explicit "no sale / no unauthorised disclosure" obligation. Existing
+# v1.0 records remain in the immutable history; new acceptances at
+# v1.1 carry the 6th acknowledgement (`acknowledge_no_unauthorized_disclosure`).
+# Bumping the notice version means every existing caregiver becomes
+# stale relative to the current version — that is the EXPECTED
+# behaviour of a substantive policy change. Production enforcement
+# remains gated on the production stale-population audit per
+# CAREGIVER_PRIVACY_ENFORCEMENT_READINESS.md §5.
+# TODO: confirm the v1.1 effective date with MOH legal counsel before pilot.
+CAREGIVER_PRIVACY_NOTICE_VERSION: str = "1.1"
 
-# The 5 checkbox ids the wizard sends. Must match the frontend
-# `CAREGIVER_PRIVACY_NOTICE.consent_checkboxes` order. Validation
-# allows them in any order but requires all 5 to be present and true.
+# The 6 checkbox ids the wizard sends (Phase 9 v4 — was 5 in v1.0).
+# Must match the frontend `CAREGIVER_PRIVACY_NOTICE.consent_checkboxes`
+# order. Validation allows them in any order but requires all 6 to be
+# present and true. The 6th id (`acknowledge_no_unauthorized_disclosure`)
+# anchors the explicit no-sale / no-screenshot / no-export prohibition
+# added in v1.1 — see the matching ack text on the frontend.
 EXPECTED_CHECKBOX_IDS: Tuple[str, ...] = (
     "understand_confidential",
     "accept_responsibility",
     "understand_consequences",
     "agree_delete_on_removal",
     "acknowledge_audit",
+    "acknowledge_no_unauthorized_disclosure",
 )
 EXPECTED_CHECKBOX_COUNT: int = len(EXPECTED_CHECKBOX_IDS)
 
@@ -583,6 +598,172 @@ def check_caregiver_consent_or_raise(
     raise ConsentRequiredError(caregiver_id=caregiver_id)
 
 
+# ── Phase 10 v1 — Admin caregiver-privacy acceptance status ─────────
+#
+# Read-only aggregate + per-caregiver acceptance view for admins.
+# Returns SAFE FIELDS ONLY — never the digital_signature_hash,
+# guardian_signature_hash, raw signature, phone, IP, user-agent,
+# token, or checkbox prose. Caregiver name is included only because
+# the existing /admin/caregivers-directory route already exposes
+# names in the same admin context (operators searching for a
+# caregiver by name need to find them here too).
+#
+# `query_runner` is the same injectable parameter the audit script
+# uses, so unit tests can stub it without an ArcadeDB instance.
+def admin_acceptance_status(
+    *,
+    notice_version: Optional[str] = None,
+    query_runner: Optional[Callable[[str], Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Returns:
+        {
+          "notice_version_required": "1.1",
+          "required_flag":            bool,
+          "total_caregivers":         int,
+          "accepted_current":         int,
+          "pending_or_stale":         int,
+          "acceptance_rate_pct":      float (0.0–100.0),
+          "last_checked_at":          ISO-8601 UTC,
+          "caregivers": [
+            {
+              "caregiver_id":         str,    # opaque id from CaregiverVertex
+              "name":                 str|None,
+              "role":                 str|None,
+              "has_current_consent":  bool,
+              "notice_version":       str|None,    # the version they ACCEPTED, if any
+              "accepted_at":          str|None,    # ISO-8601 UTC, if accepted
+              "record_id":            str|None,    # opaque audit key
+              "method":               str|None,    # "app" / "sms" / "voice" / "operator"
+              "stale_or_pending":     bool,
+            },
+            ...
+          ],
+        }
+
+    SAFE FIELDS ONLY. Forbidden in this response (verified by tests):
+        digital_signature, digital_signature_hash, guardian_signature,
+        guardian_signature_hash, phone, ip, user_agent, token,
+        checkbox prose, patient data, free clinical text.
+
+    Always returns a dict; never raises into the caller. On a partial
+    DB failure, the affected counter falls back to 0 / empty list.
+    """
+    import datetime as _dt
+
+    # Lazy default-runner resolution — same pattern the audit script
+    # uses. Tests pass a stub; the route resolves a real ArcadeDB
+    # client via the imported _default_sql_runner.
+    if query_runner is None:
+        try:
+            from src.utils.arcade_client import command_sql as _cmd
+            def _default_runner(sql: str) -> Any:
+                return _cmd(sql)
+            query_runner = _default_runner
+        except Exception:
+            # If we can't get a runner, return a zero/empty payload —
+            # never raise into the route.
+            return _empty_admin_status_payload(notice_version)
+
+    nv = (notice_version or CAREGIVER_PRIVACY_NOTICE_VERSION).strip()
+
+    def _safe(sql: str) -> List[Dict[str, Any]]:
+        try:
+            r = query_runner(sql) or {}
+            rows = r.get("result") or []
+            return [x for x in rows if isinstance(x, dict)]
+        except Exception:
+            return []
+
+    # 1) all caregivers (safe columns only).
+    cg_rows = _safe(
+        "SELECT caregiver_id, name, relationship "
+        "FROM CaregiverVertex"
+    )
+    total = len(cg_rows)
+
+    # 2) all current-version consent rows for those caregivers (safe
+    # columns). One JOIN-friendly query because ArcadeDB SQL supports
+    # nested SELECTs but the simpler shape is a per-version filter.
+    consent_rows = _safe(
+        "SELECT caregiver_id, notice_version, accepted_at, "
+        "record_id, method, role "
+        f"FROM CaregiverConsentRecord WHERE notice_version = '{nv}'"
+    )
+
+    # Build a lookup keyed on caregiver_id of the LATEST current-version
+    # acceptance per caregiver (sort by accepted_at descending).
+    consent_rows.sort(key=lambda r: r.get("accepted_at") or "", reverse=True)
+    seen: set = set()
+    latest_by_cg: Dict[str, Dict[str, Any]] = {}
+    for row in consent_rows:
+        cid = (row.get("caregiver_id") or "").strip()
+        if not cid or cid in seen:
+            continue
+        seen.add(cid)
+        latest_by_cg[cid] = row
+
+    accepted_current = 0
+    out_caregivers: List[Dict[str, Any]] = []
+    for cg in cg_rows:
+        cid = (cg.get("caregiver_id") or "").strip()
+        if not cid:
+            continue
+        rec = latest_by_cg.get(cid)
+        has_current = rec is not None
+        if has_current:
+            accepted_current += 1
+        out_caregivers.append({
+            "caregiver_id":        cid,
+            "name":                (cg.get("name") or None),
+            "role":                ((rec or {}).get("role")
+                                    or (cg.get("relationship") or None)),
+            "has_current_consent": bool(has_current),
+            "notice_version":      ((rec or {}).get("notice_version")
+                                    if has_current else None),
+            "accepted_at":         ((rec or {}).get("accepted_at")
+                                    if has_current else None),
+            "record_id":           ((rec or {}).get("record_id")
+                                    if has_current else None),
+            "method":              ((rec or {}).get("method")
+                                    if has_current else None),
+            "stale_or_pending":    not has_current,
+        })
+
+    pending = max(total - accepted_current, 0)
+    rate = (accepted_current / total * 100.0) if total > 0 else 0.0
+
+    return {
+        "notice_version_required": nv,
+        "required_flag":           bool(AMINA_CAREGIVER_PRIVACY_REQUIRED),
+        "total_caregivers":        total,
+        "accepted_current":        accepted_current,
+        "pending_or_stale":        pending,
+        "acceptance_rate_pct":     round(rate, 2),
+        "last_checked_at":         _dt.datetime.utcnow().isoformat(
+            timespec="seconds"
+        ) + "Z",
+        "caregivers":              out_caregivers,
+    }
+
+
+def _empty_admin_status_payload(notice_version: Optional[str]) -> Dict[str, Any]:
+    import datetime as _dt
+    nv = (notice_version or CAREGIVER_PRIVACY_NOTICE_VERSION).strip()
+    return {
+        "notice_version_required": nv,
+        "required_flag":           bool(AMINA_CAREGIVER_PRIVACY_REQUIRED),
+        "total_caregivers":        0,
+        "accepted_current":        0,
+        "pending_or_stale":        0,
+        "acceptance_rate_pct":     0.0,
+        "last_checked_at":         _dt.datetime.utcnow().isoformat(
+            timespec="seconds"
+        ) + "Z",
+        "caregivers":              [],
+    }
+
+
 # ── Public surface ───────────────────────────────────────────────────
 __all__ = [
     "CAREGIVER_PRIVACY_NOTICE_VERSION",
@@ -602,4 +783,5 @@ __all__ = [
     "has_current_consent",
     "emit_audit_log",
     "check_caregiver_consent_or_raise",
+    "admin_acceptance_status",
 ]

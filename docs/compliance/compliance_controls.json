@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "package_version": "phase-1-3-2026-04-29",
+  "package_version": "compliance-v1.2-2026-05-01",
   "domains": [
     "privacy", "consent", "retention", "audit", "security",
     "clinical_safety", "incident_response", "model_governance", "operations"
@@ -9,12 +9,12 @@
   "controls": [
     {
       "id": "PRIV-001", "domain": "privacy",
-      "requirement": "Plain-language privacy notice published",
+      "requirement": "Plain-language privacy notice surfaced to every user class",
       "principle": "Gambia DPA: transparency / accountability; WHO: transparency",
-      "implementation_evidence": "docs/compliance/PRIVACY_NOTICE.md",
-      "test_evidence": "manual review",
+      "implementation_evidence": "docs/compliance/PRIVACY_NOTICE.md (patient/user); caregiver surfaces: components/frontend/src/CaregiverPrivacyConsentStep.jsx (signup), CaregiverPrivacyReconsentBootstrap.jsx (re-consent modal for existing caregivers), CaregiverPortal.jsx Privacy & Data Responsibility section (post-login portal)",
+      "test_evidence": "manual review; Phase 7 _phase7_live_gate_matrix.py verifies versioned notice surfaces are wired and reachable",
       "status": "complete",
-      "residual_gap": "pilot operator must fill placeholders"
+      "residual_gap": "pilot operator must fill operator-name placeholders in PRIVACY_NOTICE.md"
     },
     {
       "id": "PRIV-002", "domain": "privacy",
@@ -117,13 +117,22 @@
       "residual_gap": "Phase 4 sweeper"
     },
     {
-      "id": "CONSENT-005", "domain": "consent",
-      "requirement": "Consent prompt copy reviewed by clinical lead",
-      "principle": "Transparency",
-      "implementation_evidence": "engineering review only",
-      "test_evidence": "",
-      "status": "partial",
-      "residual_gap": "clinical reviewer signoff"
+      "id": "CONSENT-005a", "domain": "consent",
+      "requirement": "Patient/user consent model implemented and documented",
+      "principle": "Lawful basis / consent",
+      "implementation_evidence": "docs/compliance/CONSENT_MODEL.md (patient class); src/services/consent_service.py + src/api/consent_routes.py (clinical / channel / training grants)",
+      "test_evidence": "design review; existing patient consent regression coverage in repo",
+      "status": "complete",
+      "residual_gap": ""
+    },
+    {
+      "id": "CONSENT-005b", "domain": "consent",
+      "requirement": "Caregiver consent model implemented and documented",
+      "principle": "Lawful basis / consent",
+      "implementation_evidence": "docs/compliance/CONSENT_MODEL.md caregiver section; components/frontend/src/CaregiverPrivacyConsentStep.jsx (Phase 3 standalone wizard step + Phase 4 signup-flow integration); haystack-stack/haystack-chatqna/src/services/caregiver_privacy_consent.py; haystack-stack/haystack-chatqna/src/api/caregiver_privacy_routes.py; ArcadeDB CaregiverConsentRecord vertex; Phase 5 dismissible re-consent modal; Phase 6.7 hard-403 interceptor and recovery; Phase 7 dev/staging enforcement validation",
+      "test_evidence": "_caregiver_privacy_consent_test.py (155 PASS / 0 FAIL — 14 Phase 2 + 4 Phase 6.5 + 6 Phase 6.7 + 6 Phase 7 fixtures); _caregiver_privacy_warn_test.py (40 PASS); _phase7_live_gate_matrix.py (64/64 live HTTP); _phase7_rollback_proof.py (20/20)",
+      "status": "complete",
+      "residual_gap": "production enforcement gated on production stale-population audit per docs/compliance/CAREGIVER_PRIVACY_ENFORCEMENT_READINESS.md §5"
     },
     {
       "id": "CONSENT-006", "domain": "consent",
@@ -151,6 +160,15 @@
       "test_evidence": "design review",
       "status": "complete",
       "residual_gap": ""
+    },
+    {
+      "id": "CONSENT-009", "domain": "consent",
+      "requirement": "Privacy notice acknowledgment captured at caregiver signup",
+      "principle": "Transparency / accountability / consent",
+      "implementation_evidence": "components/frontend/src/CaregiverPrivacyConsentStep.jsx (signup wizard privacy step posting privacy_consent payload); haystack-stack/haystack-chatqna/src/api/caregiver_privacy_routes.py POST /api/v1/caregiver/privacy/consent; haystack-stack/haystack-chatqna/src/services/caregiver_privacy_consent.py validate_consent_payload + record_consent (versioned, immutable); ArcadeDB CaregiverConsentRecord stores notice_version, checkbox_count, checkboxes_accepted, accepted_at — never raw signature, phone, IP, UA, or checkbox prose",
+      "test_evidence": "_caregiver_privacy_consent_test.py tests 1-4 (validation), 6 (immutable insert + idempotency), 7 (new signature creates new row), 26 (new notice version preserves old immutable record), 8 (no PHI persisted), 27 (register payload has no inline consent fields — consent collected via the privacy route)",
+      "status": "complete",
+      "residual_gap": "production rollout still gated on production stale-population audit per CAREGIVER_PRIVACY_ENFORCEMENT_READINESS.md §5"
     },
 
     {
@@ -184,19 +202,19 @@
       "id": "RET-004", "domain": "retention",
       "requirement": "Automated retention sweeper for ArcadeDB record classes",
       "principle": "Storage limitation",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4 — sweeper job"
+      "implementation_evidence": "haystack-stack/haystack-chatqna/scripts/retention_sweeper.py — dry-run by default, JSON output, per-class scoping, --apply gated by --i-have-read-the-dryrun + --expected drift check, legal_hold guard on the DELETE",
+      "test_evidence": "_retention_test.py: preview emits no destructive SQL; apply refuses non-sweeper classes; apply aborts on >5% drift; DELETE includes legal_hold guard",
+      "status": "partial",
+      "residual_gap": "no scheduled cadence yet; operator decides cron schedule + --apply ramp"
     },
     {
       "id": "RET-005", "domain": "retention",
       "requirement": "Automated purger for evidence_reports / caregiver_uploads / education_certs",
       "principle": "Storage limitation",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4 — purger"
+      "implementation_evidence": "filesystem retention windows now centralised in retention_policy.py (evidence_layer_traces=90d, evidence_layer_reports=365d, caregiver_uploads=30d, training_export_samples=730d). retention_sweeper.py PREVIEWS filesystem classes but deliberately does NOT delete them in this build (filesystem deletion is too risky to ship without a known-good base path)",
+      "test_evidence": "_retention_test.py test 5 — filesystem classes return preview='skipped' with reason 'filesystem_class_not_acted_on_in_phase_9'; zero SQL/file ops issued",
+      "status": "partial",
+      "residual_gap": "filesystem deletion path not implemented; future phase must add explicit base-path allow-list + dry-run-by-default purger"
     },
     {
       "id": "RET-006", "domain": "retention",
@@ -211,19 +229,19 @@
       "id": "RET-007", "domain": "retention",
       "requirement": "legal_hold flag on patient record schema",
       "principle": "Lawful basis / accountability",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4 — schema field"
+      "implementation_evidence": "retention_policy.py classes_with_legal_hold() returns the canonical 7 record classes (patient_profile, vitals, care_plan, consultation, consent_audit, audit_event_store, caregiver_consent_record). retention_sweeper.py honours the flag — DELETE statement always includes 'AND (legal_hold IS NULL OR legal_hold = false)'",
+      "test_evidence": "_retention_test.py tests 2, 10 — legal_hold support pinned for clinical-record + audit classes; DELETE always carries the guard clause",
+      "status": "partial",
+      "residual_gap": "the ArcadeDB column itself is not yet declared on the patient/clinical vertex types; schema update is operator-side. Sweeper and policy are ready; the column add is the remaining work"
     },
     {
       "id": "RET-008", "domain": "retention",
       "requirement": "Central retention-config file (TTLs not scattered)",
       "principle": "Accountability",
-      "implementation_evidence": "TTLs scattered across services",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4 — extract central retention.py"
+      "implementation_evidence": "haystack-stack/haystack-chatqna/src/services/retention_policy.py — single immutable RETENTION_POLICY dict covering 17 data classes (Redis caches, OTP, dialogue, patient/vitals/care_plan/consultation, consent_audit, audit_event_store, caregiver_consent_record, evidence-layer JSONL/reports, caregiver_uploads, education_certs, training_export_samples, backups). Stable shape: data_class, store, vertex_type, retention_days, ttl_seconds, mechanism, sweeper_action, legal_hold_supported, field_created_at, notes",
+      "test_evidence": "_retention_test.py tests 1, 3 — every entry has the canonical 10 keys; classes_with_sweeper() returns only sweeper-mechanism keys",
+      "status": "complete",
+      "residual_gap": ""
     },
 
     {
@@ -266,10 +284,10 @@
       "id": "AUDIT-005", "domain": "audit",
       "requirement": "Append-only audit-event store (general purpose)",
       "principle": "Accountability",
-      "implementation_evidence": "no dedicated audit logger; events scattered",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4 — see AUDIT_READINESS_CHECKLIST.md proposed schema"
+      "implementation_evidence": "haystack-stack/haystack-chatqna/src/services/audit_event_store.py — append-only `append_event(...)` API (no update/delete). ArcadeDB AuditEventVertex with 15 fields (event_id/event_type/actor_type/actor_id_hash/subject_*/action/resource/outcome/reason_code/request_id/session_hash/trace_id/created_at/metadata_safe). Forbidden-key + forbidden-value-pattern PHI guard. Fail-soft: DB failure returns structured failure result, never raises. Wired today on caregiver_privacy.consent.captured / consent.rejected / status.viewed / enforcement.denied / enforcement.allowed / stale.warned",
+      "test_evidence": "_audit_event_store_test.py: 49 PASS / 0 FAIL across 10 tests — append succeeds; event_ids unique across 200 calls; no update/delete API exists; forbidden keys dropped + counted; forbidden value patterns redacted with placeholder; DB failure -> failed_db result + safe error log + counter increment; validation errors structured; stored row free of PHI/token shapes; health snapshot shape pinned; actor_id_hash pre-hashed pass-through",
+      "status": "partial",
+      "residual_gap": "module is implemented + tested in dev; production rollout requires (1) the file to be added to the haystack-chatqna image build (currently shipped to dev via docker cp + caregiver_privacy_routes.py bind-mount), (2) wider event wiring beyond the 6 caregiver-privacy events, and (3) an audit-export endpoint (proposed shape in AUDIT_READINESS_CHECKLIST.md §4)"
     },
     {
       "id": "AUDIT-006", "domain": "audit",
@@ -311,10 +329,10 @@
       "id": "AUDIT-010", "domain": "audit",
       "requirement": "Audit-log failure detection + alarm",
       "principle": "Accountability",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4"
+      "implementation_evidence": "audit_event_store.audit_health_snapshot() exposes 8 in-process counters (total_attempts, failed_db, failed_validation, redactions, last_failure_at, last_failure_reason, has_recent_db_failure, has_recent_validation_failure). haystack-stack/haystack-chatqna/scripts/audit_event_health.py is the read-only probe CLI (human + --json). docs/compliance/AUDIT_FAILURE_ALERTING.md is the runbook for wiring an external alert sink. Phase 10 v1.2: synthetic-DB-failure drill performed 2026-05-01 — pre-drill probe shows clean baseline; injecting a broken runner produced failed_db=1, has_recent_db_failure=true, last_failure_reason populated with a short safe string (no traceback / PHI). Caller flow never raised — fail-soft contract held. Logged in INCIDENT_DRILL_LOG.md §3",
+      "test_evidence": "_audit_event_store_test.py test 9 — health snapshot shape pinned; last_failure_reason free of traceback/path/PHI tokens; INCIDENT_DRILL_LOG.md §3 records a real synthetic-failure drill outcome",
+      "status": "partial",
+      "residual_gap": "external alert sink (log-pipeline alert / PagerDuty / OpsGenie) is operator-side; closes ✅ when ops wire audit_event_health.py --json into their existing alert pipeline AND the CARE-PRIV-LOCKOUT tabletop's #1 action item lands (a pre-flip 'what to watch' checklist citing this alert)"
     },
 
     {
@@ -393,10 +411,10 @@
       "id": "SEC-009", "domain": "security",
       "requirement": "Dependency vulnerability scan in CI",
       "principle": "Security",
-      "implementation_evidence": "",
+      "implementation_evidence": "docs/compliance/CI_EVAL_GATE_PLAN.md §2.3 — recipe for pip-audit + npm audit jobs (MR-4 / MR-5 of the ramp). MR-1 of the ramp landed in .gitlab-ci.yml at compliance-v1.2-2026-05-01 (gate stage running unit suites + scorecard) but explicitly does NOT include the dep-scan jobs; those come next",
       "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4"
+      "status": "partial",
+      "residual_gap": "MR-4 (pip-audit allow_failure) + MR-5 (npm audit allow_failure) + the 30-day clean-run promotion to blocking still queued"
     },
 
     {
@@ -503,19 +521,19 @@
       "id": "IR-004", "domain": "incident_response",
       "requirement": "Tabletop drill run",
       "principle": "Accountability",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "quarterly cadence"
+      "implementation_evidence": "docs/compliance/INCIDENT_DRILL_LOG.md §3 — first tabletop drill performed 2026-05-01: CARE-PRIV-LOCKOUT scenario walked through end-to-end, runbook gaps documented (alert-sink wiring + post-flip-watch checklist), action items tracked. Drill template + 5 AMINA-specific scenarios remain in §2.1 for the quarterly cadence",
+      "test_evidence": "drill walkthrough logged with timings, tools exercised, findings, action items, next-drill date",
+      "status": "complete",
+      "residual_gap": "next quarterly drill due 2026-Q3 (recommend AUDIT-STORE-DOWN scenario)"
     },
     {
       "id": "IR-005", "domain": "incident_response",
       "requirement": "Live drill (synthetic-only) run",
       "principle": "Accountability",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "annual cadence"
+      "implementation_evidence": "docs/compliance/INCIDENT_DRILL_LOG.md §3 — first live-synthetic drill performed 2026-05-01: STAGING-LOCKOUT-DRILL exercised the Phase 7 promote one-liner + _phase7_live_gate_matrix.py + audit-event-store query + rollback one-liner + _phase7_rollback_proof.py. T-mit measured 3 min 06 s. 64/64 gate-matrix checks PASS, 20/20 rollback-proof checks PASS, 1,275 audit rows captured (PHI-safe). Harness-version-drift bug (_phase7_live_gate_matrix.py hardcoding notice_version 1.0 instead of reading the constant) found and fixed inside the drill window",
+      "test_evidence": "drill artefacts preserved in INCIDENT_DRILL_LOG.md §3 with exact event counts and timings",
+      "status": "complete",
+      "residual_gap": "next annual drill due 2027-Q2 (recommend STAGING-AUDIT-FAILURE-DRILL); supplementary AUDIT-010 synthetic-failure drill also performed 2026-05-01 as a quarterly companion exercise"
     },
     {
       "id": "IR-006", "domain": "incident_response",
@@ -585,10 +603,10 @@
       "id": "MODEL-007", "domain": "model_governance",
       "requirement": "Eval-on-CI gate",
       "principle": "Reliability / accountability",
-      "implementation_evidence": "tests are manual",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4"
+      "implementation_evidence": ".gitlab-ci.yml gate stage (Phase 10 v1.2 — MR-1 of the ramp): runs _caregiver_privacy_consent_test.py + _caregiver_privacy_warn_test.py + _audit_event_store_test.py + _retention_test.py + the compliance scorecard. Floor check fails the pipeline if overall_score_10 regresses below 7.50. Plan + ramp documented in docs/compliance/CI_EVAL_GATE_PLAN.md",
+      "test_evidence": "gate config syntactically valid (yaml lints); first CI run pending operator merge",
+      "status": "partial",
+      "residual_gap": "config landed but CI run-evidence pending: closes ✅ when ops can show one green gate run on a feature branch + one red run on a deliberately-regressed score (synthetic). MR-2 (agent-platform suites) + MR-3 (scorecard floor ratchet) + MR-4/5 (pip-audit / npm audit) still queued per CI_EVAL_GATE_PLAN.md ramp"
     },
     {
       "id": "MODEL-008", "domain": "model_governance",
@@ -649,19 +667,19 @@
       "id": "OPS-006", "domain": "operations",
       "requirement": "Backup verification job",
       "principle": "Reliability",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "Phase 4"
+      "implementation_evidence": "haystack-stack/haystack-chatqna/scripts/backup_verifier.py — read-only backup-directory probe (presence / freshness / size / file-kind histogram). Honours $AMINA_BACKUP_DIR + $AMINA_BACKUP_MAX_AGE_HOURS. Emits human + --json. Verdict: fresh / stale / fail",
+      "test_evidence": "py_compile passes; manual run on dev backup dir confirms fresh verdict + correct freshness math",
+      "status": "partial",
+      "residual_gap": "freshness check ships; zip-integrity test + encryption-at-rest check (PRIV-005 dependency) are not implemented. Operator must wire the script into a periodic cron + alert sink"
     },
     {
       "id": "OPS-007", "domain": "operations",
       "requirement": "Secret rotation cadence documented",
       "principle": "Confidentiality",
-      "implementation_evidence": "",
-      "test_evidence": "",
-      "status": "gap",
-      "residual_gap": "ops"
+      "implementation_evidence": "docs/compliance/SECRET_ROTATION_CADENCE.md — 9-row inventory (JWT_SECRET, ARCADEDB_ROOT_PASSWORD, MISTRAL/AMINA_MISTRAL keys, Meta Page Access Token + App Secret, WhatsApp tokens, Twilio token, AMINA_AUDIT_HASH_SALT) with cadence (60d / 90d / 180d / per-policy / never-rotate). Rotation procedure + audit-event recording shape included",
+      "test_evidence": "manual document review",
+      "status": "partial",
+      "residual_gap": "cadence is documented; first audit-store row from a real rotation is the closure evidence (operator-side)"
     },
     {
       "id": "OPS-008", "domain": "operations",

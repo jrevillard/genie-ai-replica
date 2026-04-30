@@ -169,6 +169,19 @@ services:
       # maintenance. Set explicitly via .env once LoRA endpoint is back.
       TWILIO_AGENT_MODEL_PREFERENCE: ${TWILIO_AGENT_MODEL_PREFERENCE:-mistral}
       TWILIO_AGENT_CHANNEL:          ${TWILIO_AGENT_CHANNEL:-twilio_whatsapp}
+      # Caregiver-privacy enforcement flags (Phase 5/6.7/7).
+      # Default: REQUIRED=false (gate dependency runs but transparently
+      # passes), WARN_ONLY=true (Phase 5 middleware emits the
+      # `X-Caregiver-Privacy-Stale` header + structured warn log on
+      # stale, never blocks). Promote to REQUIRED=true for dev/staging
+      # validation via:
+      #   AMINA_CAREGIVER_PRIVACY_REQUIRED=true docker compose up -d \
+      #     --force-recreate --no-deps haystack-chatqna
+      # Rollback (canonical one-liner):
+      #   AMINA_CAREGIVER_PRIVACY_REQUIRED=false docker compose up -d \
+      #     --force-recreate --no-deps haystack-chatqna
+      AMINA_CAREGIVER_PRIVACY_REQUIRED: ${AMINA_CAREGIVER_PRIVACY_REQUIRED:-false}
+      AMINA_CAREGIVER_PRIVACY_WARN_ONLY: ${AMINA_CAREGIVER_PRIVACY_WARN_ONLY:-true}
     volumes:
       # ── Overflow guard ───────────────────────────────────────────────
       - ./haystack-chatqna/src/services/overflow_guard.py:/app/src/services/overflow_guard.py:ro
@@ -194,6 +207,13 @@ services:
       # ── DHIS2 routes (DHIS2_DEV_ADMIN_BYPASS) ────────────────────────
       - ./haystack-chatqna/src/api/dhis2_routes.py:/app/src/api/dhis2_routes.py:ro
       - ./haystack-chatqna/src/api/dhis2_history_routes.py:/app/src/api/dhis2_history_routes.py:ro
+      # ── Phase 5: caregiver privacy warn-only middleware (new file)
+      - ./haystack-chatqna/src/services/caregiver_privacy_warn.py:/app/src/services/caregiver_privacy_warn.py:ro
+      # ── Phase 6.5: enforcement readiness fixes
+      #   - caregiver_routes.py: JWT mint adds caregiver_role claim
+      #   - caregiver_privacy_routes.py: /privacy/status returns full safe receipt
+      - ./haystack-chatqna/src/api/caregiver_routes.py:/app/src/api/caregiver_routes.py:ro
+      - ./haystack-chatqna/src/api/caregiver_privacy_routes.py:/app/src/api/caregiver_privacy_routes.py:ro
       # ── Guest / free-tier chat gating + translator doc i18n ─────────
       - ./haystack-chatqna/src/api/agent_routes.py:/app/src/api/agent_routes.py:ro
       - ./haystack-chatqna/src/services/document_gen.py:/app/src/services/document_gen.py:ro

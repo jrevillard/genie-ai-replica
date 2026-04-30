@@ -47,7 +47,13 @@
 // Bumped whenever the substance of the notice changes. The wizard
 // stores this version in CaregiverConsentRecord; the portal gates
 // access on a match against this constant.
-export const CAREGIVER_PRIVACY_NOTICE_VERSION = "1.0";
+//
+// Phase 9 v4 — bumped 1.0 → 1.1 for the explicit no-sale /
+// no-unauthorized-disclosure clause + 6th acknowledgement. Existing
+// 1.0 records remain in immutable history; v1.1 acceptances carry
+// the 6th ack id `acknowledge_no_unauthorized_disclosure`.
+// TODO: confirm the v1.1 effective date with MOH legal counsel before pilot.
+export const CAREGIVER_PRIVACY_NOTICE_VERSION = "1.1";
 
 
 // ── Withdrawal text (verbatim per Phase 1 decisions) ─────────────────
@@ -235,6 +241,28 @@ You will NOT have access to:
 • Share your AMINA login credentials with anyone else`,
     },
     {
+      // Phase 9 v4 — explicit no-sale / no-unauthorized-disclosure
+      // section. Wording is the spec's verbatim text framed under
+      // "applicable Gambian law" (no specific Article numbers
+      // inlined — confirm with MOH legal counsel before pilot).
+      // The matching acknowledgement is in `consent_checkboxes` below
+      // under id `acknowledge_no_unauthorized_disclosure`.
+      id: "no_sale_no_unauthorized_disclosure",
+      title: "No Sale or Unauthorised Disclosure of Patient Information",
+      content: `Caregivers must not sell, trade, publish, screenshot,
+export, copy, retain, or share patient information from AMINA except
+for the patient's care and only when authorised.
+
+Unauthorised use or disclosure may result in:
+
+  • immediate removal from AMINA caregiver access;
+  • notification to the patient or their guardian;
+  • reporting to the relevant health authority or
+    data-protection authority; and
+  • disciplinary, civil, or criminal consequences under
+    applicable Gambian law.`,
+    },
+    {
       id: "consequences",
       title: "Consequences of Violation",
       content: `If you violate this agreement:
@@ -325,9 +353,9 @@ ${MINOR_HANDLING_POLICY.policy_summary}`,
     },
   ],
 
-  // Five required acknowledgments. ALL must be checked before the
-  // wizard's Next becomes active. Order matters — the wizard renders
-  // them in this order.
+  // Six required acknowledgments (Phase 9 v4 — was 5 in v1.0). ALL
+  // must be checked before the wizard's Next becomes active. Order
+  // matters — the wizard renders them in this order.
   consent_checkboxes: [
     {
       id: "understand_confidential",
@@ -367,6 +395,22 @@ ${MINOR_HANDLING_POLICY.policy_summary}`,
         "I understand that all my access to patient data is logged " +
         "and auditable, and that unusual access patterns will be " +
         "flagged for review.",
+      required: true,
+    },
+    {
+      // Phase 9 v4 — explicit no-sale / no-unauthorized-disclosure
+      // acknowledgement. Matches the body section
+      // `no_sale_no_unauthorized_disclosure` above + the backend
+      // EXPECTED_CHECKBOX_IDS entry of the same id. Wording is the
+      // spec's verbatim text; do NOT soften without legal review.
+      id: "acknowledge_no_unauthorized_disclosure",
+      text:
+        "I understand that I must not sell, trade, publish, " +
+        "screenshot, export, copy, retain, or share patient " +
+        "information for any unauthorised purpose, and that misuse " +
+        "may lead to removal of AMINA access, reporting to the " +
+        "relevant authority, and legal or disciplinary consequences " +
+        "under applicable Gambian law.",
       required: true,
     },
   ],

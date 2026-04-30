@@ -1,0 +1,1053 @@
+/*
+ * CaregiverPrivacyStepper — production stylesheet.
+ * ================================================
+ *
+ * Adapted from the design-spec privacy-ui.css. Production defaults:
+ *   theme   = dark (.theme-dark)
+ *   accent  = baobab green (default; .accent-* still available for
+ *                            per-region brand switches)
+ *   font    = Newsreader (display) + Inter Tight (body)
+ *   density = comfortable
+ *
+ * All selectors are namespaced under .amina-privacy-stepper so the
+ * styles cannot leak into the rest of the AMINA portal. The CSS
+ * variables are scoped to the same root selector, so the surrounding
+ * caregiver portal continues to use its existing tokens.
+ *
+ * The original design's tweak-panel knobs (theme switch, accent
+ * select, density toggle, font swap, progress toggle) are NOT
+ * shipped — production is locked. .theme-light is kept around as a
+ * safety net for an explicit future opt-in.
+ */
+
+/* ── Accent variants (default = baobab; pick one per region) ───── */
+.amina-privacy-stepper {
+  --accent: #3F6B43;
+  --accent-soft: #6E9572;
+  --accent-deep: #284830;
+  --accent-tint: rgba(63, 107, 67, 0.10);
+  --accent-tint-strong: rgba(63, 107, 67, 0.18);
+
+  /* Earth neutrals */
+  --sand-50:  #FAF7F2;
+  --sand-100: #F2EBE0;
+  --sand-200: #E5DAC7;
+  --sand-300: #C9B89C;
+  --clay-700: #4A3A2E;
+  --clay-800: #322620;
+  --clay-900: #1F1813;
+  --clay-950: #14100D;
+
+  /* Status (earthy) */
+  --warn:      #C77B2C;
+  --warn-tint: rgba(199, 123, 44, 0.12);
+  --warn-line: rgba(199, 123, 44, 0.45);
+
+  --pos:      #2F7D5B;
+  --pos-tint: rgba(47, 125, 91, 0.12);
+  --pos-line: rgba(47, 125, 91, 0.45);
+
+  --feat:      #6B4A82;
+  --feat-tint: rgba(107, 74, 130, 0.12);
+  --feat-line: rgba(107, 74, 130, 0.40);
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 22px;
+  --ease: cubic-bezier(.22,.61,.36,1);
+
+  --display-font: "Newsreader", "Source Serif Pro", Georgia, serif;
+
+  /* Layered modal posture */
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  background: rgba(2, 6, 23, 0.78);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 16px;
+  font-family: "Inter Tight", "Inter", -apple-system, BlinkMacSystemFont,
+               "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+/* Per-region accent switches */
+.amina-privacy-stepper.accent-terracotta {
+  --accent: #B85C3C;
+  --accent-soft: #DC8B6E;
+  --accent-deep: #8C3F22;
+  --accent-tint: rgba(184, 92, 60, 0.10);
+  --accent-tint-strong: rgba(184, 92, 60, 0.18);
+}
+.amina-privacy-stepper.accent-indigo {
+  --accent: #6E7CB6;
+  --accent-soft: #9BA6CF;
+  --accent-deep: #3F4E8C;
+  --accent-tint: rgba(110, 124, 182, 0.12);
+  --accent-tint-strong: rgba(110, 124, 182, 0.20);
+}
+.amina-privacy-stepper.accent-baobab {
+  --accent: #6E9572;
+  --accent-soft: #9BB89F;
+  --accent-deep: #3F6B43;
+  --accent-tint: rgba(110, 149, 114, 0.12);
+  --accent-tint-strong: rgba(110, 149, 114, 0.22);
+}
+.amina-privacy-stepper.accent-ochre {
+  --accent: #D4AF6B;
+  --accent-soft: #E5CB99;
+  --accent-deep: #B58732;
+  --accent-tint: rgba(212, 175, 107, 0.12);
+  --accent-tint-strong: rgba(212, 175, 107, 0.20);
+}
+
+/* ── Theme: dark (production default) ───────────────────────────── */
+.amina-privacy-stepper.theme-dark {
+  --bg: #110D0A;
+  --bg-2: #1A1410;
+  --surface: #1F1813;
+  --surface-2: #2A211B;
+  --surface-soft: #251D17;
+  --border: rgba(229, 218, 199, 0.10);
+  --border-strong: rgba(229, 218, 199, 0.18);
+  --text: #F2EBE0;
+  --text-soft: #C9B89C;
+  --text-muted: #8E7E6D;
+  --rail-bg: #1A1410;
+  --rail-line: rgba(229, 218, 199, 0.10);
+  --hero-bg: linear-gradient(180deg, #2A211B 0%, #1F1813 100%);
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow:    0 12px 28px -16px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.3);
+  --shadow-lg: 0 28px 60px -28px rgba(0,0,0,.7);
+
+  background: rgba(2, 6, 23, 0.78);
+  color: var(--text);
+}
+
+/* Theme: light (kept for opt-in only — production locked to dark) */
+.amina-privacy-stepper.theme-light {
+  --bg: var(--sand-50);
+  --bg-2: #ffffff;
+  --surface: #ffffff;
+  --surface-2: var(--sand-100);
+  --surface-soft: var(--sand-50);
+  --border: rgba(74, 58, 46, 0.14);
+  --border-strong: rgba(74, 58, 46, 0.24);
+  --text: var(--clay-900);
+  --text-soft: #6B5C4D;
+  --text-muted: #8E7E6D;
+  --rail-bg: var(--sand-100);
+  --rail-line: rgba(74, 58, 46, 0.16);
+  --hero-bg: linear-gradient(180deg, #FFF9F2 0%, #FAF3E8 100%);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.06), 0 1px 1px rgba(0,0,0,.04);
+  --shadow:    0 8px 24px -12px rgba(20,16,13,.30), 0 2px 6px rgba(20,16,13,.06);
+  --shadow-lg: 0 24px 60px -24px rgba(20,16,13,.40), 0 8px 20px -8px rgba(20,16,13,.10);
+  background: rgba(2, 6, 23, 0.40);
+  color: var(--text);
+}
+
+/* ── Page wrapper ────────────────────────────────────────────────── */
+.amina-privacy-stepper .aps-page {
+  width: min(1280px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  margin: 0 auto;
+  padding: 24px 28px 36px;
+  background: var(--bg);
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, var(--accent-tint), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, var(--accent-tint), transparent 50%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────── */
+.amina-privacy-stepper .aps-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 22px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.amina-privacy-stepper .aps-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.amina-privacy-stepper .aps-brand-mark {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 12px;
+  background: var(--accent-deep);
+  color: #FFF7EE;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.amina-privacy-stepper .aps-brand-text { line-height: 1.1; }
+.amina-privacy-stepper .aps-brand-name {
+  font-family: var(--display-font);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.amina-privacy-stepper .aps-brand-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.amina-privacy-stepper .aps-topbar-meta {
+  display: flex;
+  gap: 22px;
+  font-size: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.amina-privacy-stepper .aps-meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.amina-privacy-stepper .aps-meta-k {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.amina-privacy-stepper .aps-meta-v {
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.amina-privacy-stepper .aps-close-btn {
+  margin-left: 12px;
+}
+
+/* ── Progress strip ─────────────────────────────────────────────── */
+.amina-privacy-stepper .aps-progress-strip {
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.amina-privacy-stepper .aps-progress-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.amina-privacy-stepper .aps-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.amina-privacy-stepper .aps-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+  border-radius: 999px;
+  transition: width .5s var(--ease);
+}
+
+/* ── Layout ──────────────────────────────────────────────────────── */
+.amina-privacy-stepper .aps-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .amina-privacy-stepper .aps-layout { grid-template-columns: 1fr; gap: 16px; }
+  .amina-privacy-stepper .aps-page { padding: 16px; }
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.amina-privacy-stepper .aps-sidebar {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 18px 18px;
+}
+@media (max-width: 960px) {
+  .amina-privacy-stepper .aps-sidebar { position: static; }
+}
+
+.amina-privacy-stepper .aps-rail-head {
+  padding: 0 4px 16px;
+  border-bottom: 1px dashed var(--border);
+  margin-bottom: 16px;
+}
+.amina-privacy-stepper .aps-rail-eyebrow {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  font-weight: 600;
+}
+.amina-privacy-stepper .aps-rail-title {
+  font-family: var(--display-font);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.25;
+  margin: 8px 0 0;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.amina-privacy-stepper .aps-rail {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.amina-privacy-stepper .aps-rail-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .2s var(--ease);
+}
+.amina-privacy-stepper .aps-rail-item:hover { background: var(--surface-2); }
+.amina-privacy-stepper .aps-rail-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.amina-privacy-stepper .aps-rail-item.active {
+  background: var(--accent-tint-strong);
+}
+.amina-privacy-stepper .aps-rail-item.active .aps-rail-marker {
+  background: var(--accent);
+  color: #FFF7EE;
+  border-color: var(--accent);
+}
+.amina-privacy-stepper .aps-rail-item.active .aps-rail-label {
+  color: var(--text);
+  font-weight: 600;
+}
+.amina-privacy-stepper .aps-rail-item.done .aps-rail-marker {
+  background: var(--pos);
+  color: #fff;
+  border-color: var(--pos);
+}
+
+.amina-privacy-stepper .aps-rail-marker {
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  display: grid; place-items: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  z-index: 1;
+  margin-top: 2px;
+  transition: all .2s var(--ease);
+}
+.amina-privacy-stepper .aps-rail-marker-final { border-style: dashed; }
+.amina-privacy-stepper .aps-rail-final.active .aps-rail-marker-final {
+  background: var(--accent);
+  color: #FFF7EE;
+  border-color: var(--accent);
+  border-style: solid;
+}
+.amina-privacy-stepper .aps-rail-final.done .aps-rail-marker-final {
+  background: var(--pos);
+  color: #fff;
+  border-color: var(--pos);
+  border-style: solid;
+}
+
+.amina-privacy-stepper .aps-rail-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.amina-privacy-stepper .aps-rail-label {
+  font-size: 13.5px;
+  color: var(--text-soft);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.amina-privacy-stepper .aps-rail-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.amina-privacy-stepper .aps-rail-line {
+  position: absolute;
+  left: 21px;
+  top: 38px;
+  bottom: -10px;
+  width: 1px;
+  background: var(--rail-line);
+}
+.amina-privacy-stepper .aps-rail-item.done + .aps-rail-item .aps-rail-line,
+.amina-privacy-stepper .aps-rail-item.done .aps-rail-line {
+  background: var(--pos);
+  opacity: .4;
+}
+
+.amina-privacy-stepper .aps-rail-final {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  padding: 12px 8px;
+  margin-top: 14px;
+  border-top: 1px dashed var(--border);
+  padding-top: 16px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.amina-privacy-stepper .aps-rail-final:hover { background: var(--surface-2); }
+.amina-privacy-stepper .aps-rail-final.active { background: var(--accent-tint-strong); }
+.amina-privacy-stepper .aps-rail-final:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.amina-privacy-stepper .aps-rail-help {
+  margin-top: 18px;
+  padding: 14px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+.amina-privacy-stepper .aps-rail-help-title {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.amina-privacy-stepper .aps-rail-help p { margin: 0 0 8px; }
+.amina-privacy-stepper .aps-link-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-family: inherit;
+}
+.amina-privacy-stepper .aps-link-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── Main panel / Step ──────────────────────────────────────────── */
+.amina-privacy-stepper .aps-main { min-width: 0; }
+.amina-privacy-stepper .aps-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  animation: aps-stepIn .35s var(--ease);
+}
+@keyframes aps-stepIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.amina-privacy-stepper .aps-hero {
+  position: relative;
+  padding: 26px 32px 28px;
+  background: var(--hero-bg);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.amina-privacy-stepper .aps-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(600px 200px at 100% 0%, var(--accent-tint), transparent 70%);
+  pointer-events: none;
+}
+.amina-privacy-stepper .aps-hero-warning {
+  background: linear-gradient(180deg, rgba(199,123,44,.10) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--warn-line);
+}
+.amina-privacy-stepper .aps-hero-warning::after {
+  background: radial-gradient(600px 200px at 100% 0%, var(--warn-tint), transparent 70%);
+}
+.amina-privacy-stepper .aps-hero-positive {
+  background: linear-gradient(180deg, rgba(47,125,91,.10) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--pos-line);
+}
+.amina-privacy-stepper .aps-hero-positive::after {
+  background: radial-gradient(600px 200px at 100% 0%, var(--pos-tint), transparent 70%);
+}
+.amina-privacy-stepper .aps-hero-feature {
+  background: linear-gradient(180deg, rgba(107,74,130,.12) 0%, var(--surface) 100%);
+  border-bottom: 1px solid var(--feat-line);
+}
+.amina-privacy-stepper .aps-hero-feature::after {
+  background: radial-gradient(600px 200px at 100% 0%, var(--feat-tint), transparent 70%);
+}
+.amina-privacy-stepper .aps-hero-final {
+  background: linear-gradient(180deg, var(--accent-tint-strong) 0%, var(--surface) 100%);
+}
+.amina-privacy-stepper .aps-hero-final::after {
+  background: radial-gradient(600px 200px at 100% 0%, var(--accent-tint), transparent 70%);
+}
+
+.amina-privacy-stepper .aps-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  position: relative;
+  z-index: 1;
+}
+.amina-privacy-stepper .aps-step-counter {
+  font-family: var(--display-font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-soft);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.amina-privacy-stepper .aps-step-counter .aps-muted {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.amina-privacy-stepper .aps-muted { color: var(--text-muted); }
+
+.amina-privacy-stepper .aps-hero-required {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-tint-strong);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+}
+
+.amina-privacy-stepper .aps-lang-toggle {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 500;
+  transition: all .2s var(--ease);
+  font-family: inherit;
+}
+.amina-privacy-stepper .aps-lang-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.amina-privacy-stepper .aps-lang-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.amina-privacy-stepper .aps-hero-icon {
+  width: 56px; height: 56px;
+  display: grid; place-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  color: var(--accent);
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 1;
+  box-shadow: var(--shadow-sm);
+}
+.amina-privacy-stepper .aps-hero-warning .aps-hero-icon { color: var(--warn); border-color: var(--warn-line); }
+.amina-privacy-stepper .aps-hero-positive .aps-hero-icon { color: var(--pos); border-color: var(--pos-line); }
+.amina-privacy-stepper .aps-hero-feature .aps-hero-icon { color: var(--feat); border-color: var(--feat-line); }
+
+.amina-privacy-stepper .aps-step-title {
+  font-family: var(--display-font);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.15;
+  color: var(--text);
+  text-wrap: balance;
+  position: relative;
+  z-index: 1;
+}
+.amina-privacy-stepper .aps-step-tag {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-top: 8px;
+  position: relative;
+  z-index: 1;
+}
+.amina-privacy-stepper .aps-hero-sub {
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  font-size: 14.5px;
+  line-height: 1.5;
+  max-width: 56ch;
+  position: relative;
+  z-index: 1;
+}
+
+/* Step body (comfortable density baked in) */
+.amina-privacy-stepper .aps-step-body {
+  padding: 24px 32px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.amina-privacy-stepper .aps-blk {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-soft);
+  letter-spacing: -0.005em;
+}
+.amina-privacy-stepper .aps-blk-para { margin: 0; max-width: 72ch; }
+.amina-privacy-stepper .aps-blk-rule {
+  position: relative;
+  padding-left: 22px;
+  max-width: 72ch;
+}
+.amina-privacy-stepper .aps-blk-bullet {
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: rotate(45deg);
+}
+.amina-privacy-stepper .aps-blk-law {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  align-self: flex-start;
+  text-decoration: none;
+  max-width: 100%;
+}
+.amina-privacy-stepper .aps-blk-law svg { color: var(--accent); flex-shrink: 0; }
+.amina-privacy-stepper .aps-blk-law-text { flex: 1; min-width: 0; }
+
+/* Clickable variant — used when an operator-configured URL exists
+   for this law id. Hover and focus states keep the same earthy
+   palette so it does not look like a generic web link. */
+.amina-privacy-stepper .aps-blk-law-link {
+  cursor: pointer;
+  transition: all .15s var(--ease);
+}
+.amina-privacy-stepper .aps-blk-law-link:hover,
+.amina-privacy-stepper .aps-blk-law-link:focus-visible {
+  background: var(--accent-tint-strong);
+  border-color: var(--accent);
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  outline: none;
+}
+.amina-privacy-stepper .aps-blk-law-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Pending-source hint — only renders on the non-clickable variant
+   when the operator hasn't filled in LAW_SOURCE_URLS yet. Subtle so
+   the law citation itself stays the visual anchor. */
+.amina-privacy-stepper .aps-blk-law-pending {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.amina-privacy-stepper .aps-blk-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.5;
+  max-width: 72ch;
+}
+.amina-privacy-stepper .aps-blk-note svg {
+  color: var(--accent);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Step footer */
+.amina-privacy-stepper .aps-step-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 32px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-soft);
+  flex-wrap: wrap;
+}
+
+.amina-privacy-stepper .aps-dwell {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+}
+.amina-privacy-stepper .aps-dwell-ok {
+  color: var(--pos);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.amina-privacy-stepper .aps-dwell-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Buttons */
+.amina-privacy-stepper .aps-btn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  transition: all .18s var(--ease);
+}
+.amina-privacy-stepper .aps-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.amina-privacy-stepper .aps-btn-primary {
+  background: var(--accent);
+  color: #FFF7EE;
+  box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, var(--shadow-sm);
+}
+.amina-privacy-stepper .aps-btn-primary:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--accent-deep);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, var(--shadow);
+}
+.amina-privacy-stepper .aps-btn-primary:disabled,
+.amina-privacy-stepper .aps-btn-primary[aria-disabled="true"] {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.amina-privacy-stepper .aps-btn-ghost {
+  background: transparent;
+  color: var(--text-soft);
+  border: 1px solid var(--border-strong);
+}
+.amina-privacy-stepper .aps-btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.amina-privacy-stepper .aps-btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Acknowledgements step ─────────────────────────────────────── */
+.amina-privacy-stepper .aps-ack-step .aps-step-body { gap: 8px; }
+.amina-privacy-stepper .aps-ack-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.amina-privacy-stepper .aps-ack-item {
+  display: grid;
+  grid-template-columns: 28px 22px 1fr;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all .18s var(--ease);
+}
+.amina-privacy-stepper .aps-ack-item:hover { border-color: var(--border-strong); }
+.amina-privacy-stepper .aps-ack-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.amina-privacy-stepper .aps-ack-item.on {
+  background: var(--accent-tint-strong);
+  border-color: var(--accent);
+}
+.amina-privacy-stepper .aps-ack-num {
+  font-family: var(--display-font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.amina-privacy-stepper .aps-ack-box {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: #FFF7EE;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all .18s var(--ease);
+}
+.amina-privacy-stepper .aps-ack-item.on .aps-ack-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.amina-privacy-stepper .aps-ack-text {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.amina-privacy-stepper .aps-ack-item:not(.on) .aps-ack-text {
+  color: var(--text-soft);
+}
+
+.amina-privacy-stepper .aps-signature {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.amina-privacy-stepper .aps-sig-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.amina-privacy-stepper .aps-sig-input {
+  appearance: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: var(--display-font);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  font-style: italic;
+  transition: all .2s var(--ease);
+}
+.amina-privacy-stepper .aps-sig-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.amina-privacy-stepper .aps-sig-input::placeholder {
+  color: var(--text-muted);
+}
+.amina-privacy-stepper .aps-sig-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.amina-privacy-stepper .aps-sig-help {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.amina-privacy-stepper .aps-ack-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(199, 41, 41, 0.12);
+  border: 1px solid rgba(199, 41, 41, 0.45);
+  color: #fecaca;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ── Done state ────────────────────────────────────────────────── */
+.amina-privacy-stepper .aps-done-step {
+  text-align: center;
+  padding: 56px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.amina-privacy-stepper .aps-done-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--pos-tint);
+  color: var(--pos);
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--pos-line);
+}
+.amina-privacy-stepper .aps-done-title {
+  font-family: var(--display-font);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text);
+}
+.amina-privacy-stepper .aps-done-sub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+  max-width: 48ch;
+  line-height: 1.5;
+}
+.amina-privacy-stepper .aps-done-meta {
+  display: flex;
+  gap: 32px;
+  margin: 12px 0 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.amina-privacy-stepper .aps-dm {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+.amina-privacy-stepper .aps-dm-k {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.amina-privacy-stepper .aps-dm-v {
+  font-family: var(--display-font);
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Legal foot ────────────────────────────────────────────────── */
+.amina-privacy-stepper .aps-legal-foot {
+  margin-top: 24px;
+  padding: 14px 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Mobile ────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .amina-privacy-stepper .aps-topbar-meta {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .amina-privacy-stepper .aps-hero { padding: 22px 22px 26px; }
+  .amina-privacy-stepper .aps-step-body { padding: 22px 22px 20px; }
+  .amina-privacy-stepper .aps-step-foot {
+    padding: 14px 22px 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .amina-privacy-stepper .aps-step-foot .aps-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .amina-privacy-stepper .aps-dwell { order: -1; }
+  .amina-privacy-stepper .aps-step-title { font-size: 22px; }
+  .amina-privacy-stepper .aps-ack-item {
+    grid-template-columns: 22px 22px 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .amina-privacy-stepper .aps-ack-num { display: none; }
+  .amina-privacy-stepper .aps-progress-strip {
+    padding: 10px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .amina-privacy-stepper .aps-progress-bar { width: 100%; }
+}

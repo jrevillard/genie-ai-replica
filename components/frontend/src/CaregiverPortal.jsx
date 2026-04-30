@@ -6,6 +6,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toNko } from "./utils/nkoTransliterate";
 import { setLanguage as i18nSetLanguage } from "./i18n/index.js";
+// Phase 6 — Privacy & Data Responsibility section (read-only notice modal
+// reuses the Phase 3 consent component with disabled=true, exactly the
+// same pattern the wizard already uses for "View full notice again").
+// Phase 9 v3 — new guided 6-step privacy notice flow. Used today only
+// in read-only mode from the portal's "View Privacy Notice" entry.
+// The Phase 4 signup wizard and the Phase 5 re-consent modal continue
+// to use the older CaregiverPrivacyConsentStep (still imported by
+// CaregiverPrivacyReconsentBootstrap.jsx and the wizard) until they
+// are separately migrated to the stepper's signing mode.
+import CaregiverPrivacyStepper from "./CaregiverPrivacyStepper.jsx";
 
 const API = window.AMINA_API || "http://localhost:8000";
 
@@ -2494,6 +2504,27 @@ function Dashboard({ token, caregiverInfo, onLogout }) {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const profileDropdownRef = useRef(null);
 
+  // Phase 6 — Privacy & Data Responsibility section state.
+  //   showPrivacyNotice  — controls the read-only notice modal mounted
+  //                        alongside (above) the profile modal.
+  //   consentStatus      — { has_current_consent, notice_version,
+  //                          accepted_at, role, record_id, required_flag }
+  //                        from GET /api/v1/caregiver/privacy/status; null
+  //                        until first fetch; null again on fetch error
+  //                        (so the section falls back to a safe message
+  //                        and the rest of the portal stays usable).
+  //   consentStatusErr   — short user-facing error text on fetch failure.
+  const [showPrivacyNotice, setShowPrivacyNotice] = useState(false);
+  const [consentStatus,     setConsentStatus]     = useState(null);
+  const [consentStatusErr,  setConsentStatusErr]  = useState("");
+
+  // Phase 9 v2 — when the avatar dropdown's "Privacy & Data" item opens
+  // the profile modal, this flag tells the modal to scroll the existing
+  // Privacy section into view on mount. Reset to false after the scroll
+  // fires so re-opening the modal via "Edit Profile" returns to the
+  // default top-of-modal landing.
+  const [openProfileToPrivacy, setOpenProfileToPrivacy] = useState(false);
+
   // ── Data fetching ────────────────────────────────────────────────────────────
 
   const fetchPatients = useCallback(async () => {
@@ -2724,6 +2755,101 @@ function Dashboard({ token, caregiverInfo, onLogout }) {
         ...x, messages: x.messages.map(m => m.id === tmpId ? { ...m, status: "failed" } : m),
       }));
     } finally { setCgMsgSending(prev => ({ ...prev, [pid]: false })); }
+  };
+
+  // Phase 6 — fetch consent status when the profile modal opens. Fail
+  // open: on any error we surface a short message and keep the rest
+  // of the portal usable. We do NOT log the fetched object — it
+  // contains a record_id which is opaque but still flagged as
+  // PHI-adjacent in our threat model.
+  useEffect(() => {
+    if (!showCgProfile) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/v1/caregiver/privacy/status`, {
+          headers: authHeaders(token),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        if (cancelled) return;
+        setConsentStatus(j);
+        setConsentStatusErr("");
+      } catch (e) {
+        if (cancelled) return;
+        // Safe message — never echo the raw error / response body.
+        setConsentStatus(null);
+        setConsentStatusErr(`Could not load consent record (${e.message || "network"}).`);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showCgProfile, token]);
+
+  // Phase 9 v2 — if the modal was opened via the "Privacy & Data" item
+  // in the avatar dropdown, scroll the existing Phase 6 privacy section
+  // into view. We wait one tick for the modal to mount + its scroll
+  // container to settle, then call scrollIntoView on the section's
+  // stable id. The flag is reset so the next "Edit Profile" open
+  // returns to the default top-of-modal landing.
+  useEffect(() => {
+    if (!showCgProfile || !openProfileToPrivacy) return undefined;
+    const t = setTimeout(() => {
+      const el = document.getElementById("caregiver-privacy-section");
+      if (el && typeof el.scrollIntoView === "function") {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      setOpenProfileToPrivacy(false);
+    }, 80);
+    return () => clearTimeout(t);
+  }, [showCgProfile, openProfileToPrivacy]);
+
+  // Phase 6 — Download My Consent Record. Builds a JSON receipt from
+  // the /privacy/status response. SAFE FIELDS ONLY: notice_version,
+  // accepted_at, role, has_current_consent, record_id (opaque audit
+  // key), required_flag. NEVER includes raw signature, signature
+  // hash, phone, token, IP, user-agent, or caregiver name.
+  //
+  // Phase 5.5 review noted /status doesn't return checkbox_count,
+  // mandinka_viewed, scroll_completed, method, guardian_consent —
+  // those live on the consent record but aren't exposed by the
+  // current route. Phase 6 spec accepts "if available", so we
+  // include only what /status returns plus two transparent
+  // metadata markers (`_generated_at`, `_format_version`) so a
+  // future operator inspecting the file can reason about it.
+  const downloadConsentRecord = () => {
+    if (!consentStatus) return;
+    // Phase 6.5: /privacy/status now returns the full safe receipt
+    // (the wizard-emitted telemetry already stored on each consent
+    // record). Surface every field that is present; default to safe
+    // values when absent so the JSON shape stays stable.
+    // SAFE FIELDS ONLY — never include digital_signature, signature
+    // hashes, phone, token, IP, user-agent, or caregiver name.
+    const safe = {
+      notice_version:      consentStatus.notice_version      || null,
+      accepted_at:         consentStatus.accepted_at         || null,
+      role:                consentStatus.role                || null,
+      has_current_consent: !!consentStatus.has_current_consent,
+      record_id:           consentStatus.record_id           || null,
+      required_flag:       !!consentStatus.required_flag,
+      checkbox_count:      consentStatus.checkbox_count      ?? 0,
+      checkboxes_accepted: !!consentStatus.checkboxes_accepted,
+      guardian_consent:    !!consentStatus.guardian_consent,
+      mandinka_viewed:     !!consentStatus.mandinka_viewed,
+      scroll_completed:    !!consentStatus.scroll_completed,
+      method:              consentStatus.method              || null,
+      _generated_at:       new Date().toISOString(),
+      _format_version:     "1.1",
+    };
+    const blob = new Blob([JSON.stringify(safe, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement("a");
+    a.href     = url;
+    a.download = "amina-caregiver-consent-record.json";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
   };
 
   const saveProfile = async () => {
@@ -3065,8 +3191,302 @@ function Dashboard({ token, caregiverInfo, onLogout }) {
             {profileSaving ? "Saving…" : "Save Profile"}
           </Btn>
         </div>
+
+        {/* ── Phase 6: Privacy & Data Responsibility ─────────────────
+            New self-contained section at the bottom of the existing
+            profile modal. Caregiver can: view the privacy notice
+            (read-only), peek at their consent state, download a JSON
+            receipt of the consent record, see a placeholder for the
+            future access log, and reach the operator email about a
+            data concern. No portal navigation changes — discoverable
+            via the existing avatar → "Profile" entry-point.
+            TODO: Mandinka native-speaker review before pilot
+        ─────────────────────────────────────────────────────────── */}
+        <div style={{ height: 1, background: C.border, margin: "8px 0" }} />
+        <div id="caregiver-privacy-section" style={{
+          padding: "4px 0 0",
+          display: "flex", flexDirection: "column", gap: 12,
+          scrollMarginTop: 12,
+        }}>
+          <div>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+              textTransform: "uppercase", color: C.muted,
+            }}>
+              Privacy &amp; Data Responsibility
+            </div>
+            <div style={{
+              fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5,
+            }}>
+              Review the{" "}
+              {/* Phase 9 v2 follow-up — make the canonical phrase
+                  "AMINA caregiver privacy notice" an in-text hyperlink
+                  that opens the same read-only modal as the button
+                  below. Same source of truth (CaregiverPrivacyConsentStep
+                  with disabled=true), no duplicate copy. Kept as a
+                  <button> styled like a link so keyboard / screen-reader
+                  users get the right semantics; href="#" anchors are
+                  avoided because they push history state. */}
+              <button
+                type="button"
+                onClick={() => setShowPrivacyNotice(true)}
+                style={{
+                  display: "inline", padding: 0, margin: 0,
+                  background: "none", border: "none",
+                  color: C.accent, fontSize: "inherit", lineHeight: "inherit",
+                  fontFamily: "inherit", fontWeight: 600,
+                  textDecoration: "underline", cursor: "pointer",
+                }}
+                aria-label="Open AMINA caregiver privacy notice (read-only)"
+              >
+                AMINA caregiver privacy notice
+              </button>
+              , see your current consent record, and reach out about any
+              data concern.
+            </div>
+          </div>
+
+          {/* Consent status summary (one tiny info row, no PHI).
+              Phase 9 v2 follow-up — surface every safe field the
+              Phase 6.5 /privacy/status response carries, but only
+              when the field is actually present (so the row stays
+              compact when telemetry is missing). Neutral palette
+              when there is no current consent so the row reads as
+              "informational" not "success" — it must not alarm but
+              must also not look like a green check-mark. */}
+          {consentStatusErr ? (
+            <div style={{
+              fontSize: 12, color: C.muted,
+              background: "#f8fafc", border: `1px solid ${C.border}`,
+              borderRadius: 8, padding: "8px 12px",
+            }}>
+              {consentStatusErr}
+            </div>
+          ) : consentStatus ? (
+            <div style={{
+              fontSize: 12, color: C.text,
+              background: consentStatus.has_current_consent ? "#f0fdf4" : "#f8fafc",
+              border: `1px solid ${consentStatus.has_current_consent ? "#bbf7d0" : C.border}`,
+              borderRadius: 8, padding: "8px 12px",
+              display: "flex", flexDirection: "column", gap: 3,
+            }}>
+              <div>
+                <strong>Status:</strong>{" "}
+                {consentStatus.has_current_consent
+                  ? "Current — accepted on record"
+                  : "No current-version record on file"}
+              </div>
+              <div style={{ color: C.muted }}>
+                Notice version: {consentStatus.notice_version || "—"}
+                {consentStatus.accepted_at
+                  ? ` · accepted ${new Date(consentStatus.accepted_at).toLocaleString()}`
+                  : ""}
+              </div>
+              {/* Optional safe-fields row — render only those keys
+                  that came back from /privacy/status. Each value is
+                  rendered as plain text; we never echo signature
+                  hashes, phone, IP, UA, token, or checkbox prose. */}
+              {(() => {
+                const parts = [];
+                if (consentStatus.role) {
+                  parts.push(`Role: ${String(consentStatus.role)}`);
+                }
+                if (consentStatus.method) {
+                  parts.push(`Method: ${String(consentStatus.method)}`);
+                }
+                if (typeof consentStatus.checkbox_count === "number"
+                    && consentStatus.checkbox_count > 0) {
+                  parts.push(`Acknowledgements: ${consentStatus.checkbox_count}`);
+                }
+                if (consentStatus.mandinka_viewed === true) {
+                  parts.push("Mandinka summary viewed");
+                }
+                if (consentStatus.scroll_completed === true) {
+                  parts.push("Notice fully scrolled");
+                }
+                return parts.length > 0 ? (
+                  <div style={{ color: C.muted }}>
+                    {parts.join(" · ")}
+                  </div>
+                ) : null;
+              })()}
+              <div style={{ color: C.subtle, fontSize: 11 }}>
+                Enforcement:{" "}
+                {consentStatus.required_flag
+                  ? "required (production gate active)"
+                  : "warn-only (production gate not yet flipped)"}
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: C.subtle }}>
+              Loading consent state…
+            </div>
+          )}
+
+          {/* Phase 10 v1 — non-blocking warn-only banner.
+              Renders only when the caregiver has no current consent
+              AND enforcement is OFF (warn-only). Two CTAs:
+                (a) "Accept the privacy policy" — primary; dispatches
+                    `amina:caregiver-consent-required` so the Phase 9 v3
+                    bootstrap opens the SIGNING stepper. After successful
+                    POST the bootstrap returns to idle and `/privacy/status`
+                    refreshes via the profile-modal effect.
+                (b) "Review only (read-only)" — secondary; opens the
+                    read-only stepper, never POSTs.
+              The banner is informational, not alarming. Keeps the
+              portal usable in warn-only mode (no auto-block).
+          */}
+          {consentStatus
+           && consentStatus.has_current_consent === false
+           && consentStatus.required_flag === false && (
+            <div style={{
+              fontSize: 12, color: C.text,
+              background: "#fffbeb",
+              border: "1px solid #fcd34d",
+              borderRadius: 8, padding: "10px 12px",
+              display: "flex", flexDirection: "column", gap: 4,
+            }}>
+              <div style={{ fontWeight: 700, color: "#92400e" }}>
+                Your privacy acknowledgement is not current.
+              </div>
+              <div style={{ color: C.muted, lineHeight: 1.5 }}>
+                Please review the current notice and accept it.
+                Your account stays active in the meantime.
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Dispatch the canonical consent-required event so
+                    // CaregiverPrivacyReconsentBootstrap opens the
+                    // signing stepper (the same path the Phase 6.7
+                    // hard-403 interceptor uses).
+                    try {
+                      window.dispatchEvent(new CustomEvent("amina:caregiver-consent-required"));
+                    } catch { /* noop */ }
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    background: "#92400e",
+                    border: "1px solid #92400e",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Accept the privacy policy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacyNotice(true)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    background: "#fff",
+                    border: "1px solid #fcd34d",
+                    color: "#92400e",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Review only (read-only)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons — Phase 6 features 2, 3, 4.
+              Phase 9 v3 follow-up — the original "View Privacy Notice"
+              button was removed because the same destination is already
+              reachable via three other entry points: (a) the avatar
+              dropdown's "🔒 Privacy & Data" item, (b) the inline
+              "AMINA caregiver privacy notice" hyperlink in the
+              section description above, and (c) the warn-only banner's
+              "Review now (read-only)" button when consent is stale.
+              Keeping a fourth entry-point in the same panel was
+              visual noise without changing the user's mental model. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <Btn outline disabled
+                 style={{ width: "100%", textAlign: "left" }}>
+              View My Data Access Log
+              <span style={{
+                marginLeft: 8, fontSize: 11, fontWeight: 600,
+                color: C.subtle,
+              }}>
+                · coming with audit-event store (AUDIT-005)
+              </span>
+            </Btn>
+
+            <Btn outline
+                 onClick={downloadConsentRecord}
+                 disabled={!consentStatus || !consentStatus.has_current_consent}
+                 style={{ width: "100%", textAlign: "left" }}>
+              Download My Consent Record
+              {(!consentStatus || !consentStatus.has_current_consent) && (
+                <span style={{
+                  marginLeft: 8, fontSize: 11, fontWeight: 600,
+                  color: C.subtle,
+                }}>
+                  · no record yet — accept the privacy notice first
+                </span>
+              )}
+            </Btn>
+
+            {/* Operator email is a placeholder until the deploy env
+                wires real_operator_email. Keep the literal token
+                visible — the caregiver sees it's a placeholder and
+                operators searching the codebase can grep for it. */}
+            <a href={`mailto:${"__PILOT_OPERATOR_EMAIL__"}?subject=AMINA%20Caregiver%20Data%20Concern`}
+               style={{
+                 display: "block", textDecoration: "none",
+                 padding: "10px 20px", borderRadius: 8,
+                 fontWeight: 600, fontSize: 14,
+                 border: `1.5px solid ${C.border}`,
+                 background: "#fff", color: C.text,
+                 textAlign: "left",
+               }}>
+              Report a Data Concern
+              <span style={{
+                marginLeft: 8, fontSize: 11, fontWeight: 600,
+                color: C.subtle,
+              }}>
+                · sends to the configured pilot operator
+              </span>
+            </a>
+          </div>
+        </div>
       </div>
     </ModalShell>
+  );
+
+  // Phase 9 v3 — read-only privacy-notice viewer.
+  //
+  // Replaces the older inline modal that mounted CaregiverPrivacyConsentStep
+  // (Phase 3) inside a hand-rolled dark-slate frame. The new
+  // CaregiverPrivacyStepper ships:
+  //   - 5-step guided reading flow (scope / law / cross-border /
+  //     control / minors)
+  //   - per-step dwell timer that does NOT block keyboard advancement
+  //   - inline EN ↔ Mandinka toggle (placeholder MNK strings flagged)
+  //   - clinical scroll-affordance hero on every step
+  //   - earthy / Gambian-inspired palette (theme-dark · accent-baobab)
+  //
+  // In read-only mode the ack step + signature are not rendered; the
+  // last step's CTA is "Finish review" → onClose. The Phase 4 signup
+  // wizard and Phase 5 re-consent modal still run on
+  // CaregiverPrivacyConsentStep until they are separately migrated
+  // to CaregiverPrivacyStepper readOnly={false}.
+  const PrivacyNoticeReadOnlyModal = showPrivacyNotice && (
+    <CaregiverPrivacyStepper
+      readOnly={true}
+      onClose={() => setShowPrivacyNotice(false)}
+      caregiverName={profileForm.name || caregiverInfo?.name || ""}
+      authToken={token}
+      accent="baobab"
+    />
   );
 
   // ── Sorted patient list ───────────────────────────────────────────────────────
@@ -3153,6 +3573,7 @@ function Dashboard({ token, caregiverInfo, onLogout }) {
 
       {showUpgrade && <UpgradeModal currentLimit={capacity.limit} patientCount={capacity.count} onConfirm={handleUpgrade} onClose={() => setShowUpgrade(false)} />}
       {CgProfileModal}
+      {PrivacyNoticeReadOnlyModal}
 
       {/* ── Sidebar ── */}
       <div style={{
@@ -3557,6 +3978,32 @@ function Dashboard({ token, caregiverInfo, onLogout }) {
                     >
                       <span style={{ fontSize: 16 }}>✏️</span>
                       Edit Profile
+                    </button>
+
+                    {/* Phase 9 v2 — direct entry to the existing Phase 6
+                        Privacy & Data section. Opens the same profile
+                        modal but auto-scrolls to the privacy block so
+                        caregivers don't have to scroll the modal manually
+                        to find the notice / consent status / data-concern
+                        link. No new modal, no duplicate copy — the
+                        section itself is unchanged. */}
+                    <button onClick={() => {
+                      setOpenProfileToPrivacy(true);
+                      setShowCgProfile(true);
+                      setProfileDropdownOpen(false);
+                    }} style={{
+                      width: "100%", padding: "9px 12px", borderRadius: 8, border: "none",
+                      background: "transparent", cursor: "pointer", textAlign: "left",
+                      display: "flex", alignItems: "center", gap: 10,
+                      color: C.text, fontSize: 13, fontWeight: 500,
+                      transition: "background .12s",
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      aria-label="Open Privacy and Data Responsibility section"
+                    >
+                      <span style={{ fontSize: 16 }} aria-hidden="true">🔒</span>
+                      Privacy &amp; Data
                     </button>
                   </div>
 

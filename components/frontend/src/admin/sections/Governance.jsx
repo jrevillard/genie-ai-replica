@@ -9,12 +9,19 @@
 import GovernanceWorkspace from "./GovernanceWorkspace.jsx";
 import AdminDashboard from "../../AdminDashboard.jsx";
 import LegacyFallback from "./LegacyFallback.jsx";
+// Phase 10 v1 — caregiver privacy-policy acceptance status. Reads
+// the safe-fields-only admin endpoint that wraps
+// caregiver_privacy_consent.admin_acceptance_status. Rendered above
+// the legacy audit viewer so admins land on it on the Governance tab.
+import CaregiverPrivacyAcceptanceCard from "../CaregiverPrivacyAcceptanceCard.jsx";
 
 
 export default function Governance({ token }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
       <GovernanceWorkspace />
+
+      <CaregiverPrivacyAcceptanceCard token={token} />
 
       <LegacyFallback
         kicker="Archive"

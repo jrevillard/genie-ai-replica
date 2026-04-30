@@ -57,19 +57,47 @@ def _has_valid_auth(http_request: Request) -> bool:
             return True
     return False
 
+
+def _require_auth(http_request: Request) -> dict:
+    """Return decoded JWT claims, or raise 401.
+
+    BUG-008/009/010 fix — previously these admin/document/patients
+    endpoints were open. Mirrors `_has_valid_auth` (header + cookies)
+    but returns the claim dict so callers can do role/owner checks.
+    """
+    auth = (http_request.headers.get("Authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        tok = auth[7:].strip()
+        if tok:
+            payload = verify_jwt(tok)
+            if payload:
+                return payload
+    for ck in ("amina_jwt", "amina_cg_jwt", "amina_admin_jwt"):
+        tok = http_request.cookies.get(ck) or ""
+        if tok:
+            payload = verify_jwt(tok)
+            if payload:
+                return payload
+    raise HTTPException(status_code=401, detail="Authentication required")
+
+
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 # ── Context compactor admin/debug endpoints ─────────────────────────────────
 
 @router.get("/compactor/stats/{session_id}")
-async def compactor_stats(session_id: str):
-    """Return the current compact summary + version + in-flight state for a session."""
+async def compactor_stats(session_id: str, http_request: Request):
+    """Return the current compact summary + version + in-flight state for a session.
+
+    BUG-010 fix — was previously open; now requires any valid JWT.
+    """
+    _require_auth(http_request)
     return await context_compactor.get_compaction_stats(session_id)
 
 
 @router.post("/compactor/trigger/{session_id}")
-async def compactor_trigger(session_id: str):
+async def compactor_trigger(session_id: str, http_request: Request):
     """Manually compact a session.
 
     compact_session() now handles the full cycle: generate summary,
@@ -78,7 +106,10 @@ async def compactor_trigger(session_id: str):
 
     The background auto-compaction at 75% threshold does the same thing
     automatically — this endpoint exists for the manual Compact button.
+
+    BUG-010 fix — was previously open; now requires any valid JWT.
     """
+    _require_auth(http_request)
     agent = get_agent()
     session = await agent.memory_manager.get_session(session_id)
     if not session:
@@ -130,14 +161,17 @@ async def compactor_trigger(session_id: str):
 
 
 @router.post("/compactor/undo/{session_id}")
-async def compactor_undo(session_id: str):
+async def compactor_undo(session_id: str, http_request: Request):
     """Remove the pinned summary so the next turn uses raw history.
 
     NOTE: Messages trimmed from Redis by compaction cannot be restored
     from Redis alone. If the ConsultationRecord was saved to ArcadeDB
     before compaction, those messages still exist there. This endpoint
     clears the summary so the prompt assembly stops prepending it.
+
+    BUG-010 fix — was previously open; now requires any valid JWT.
     """
+    _require_auth(http_request)
     import redis as _redis
     from src.config import settings
 
@@ -448,9 +482,15 @@ async def clear_session(session_id: str):
 
 
 @router.get("/patients/list")
-async def list_test_patients():
-    """List available patient profiles for MVP testing.
-    In production this would be behind auth — for now it's an open selector."""
+async def list_test_patients(http_request: Request):
+    """List available patient profiles.
+
+    BUG-009 fix — previously open; now restricted to admin or caregiver
+    JWTs. A patient JWT cannot enumerate other patients via this route.
+    """
+    payload = _require_auth(http_request)
+    if payload.get("role") not in ("admin", "caregiver"):
+        raise HTTPException(status_code=403, detail="Admin or caregiver only")
     agent = get_agent()
     try:
         from src.utils.arcade_client import async_command_sql, extract_rows
@@ -1260,8 +1300,17 @@ async def export_chat_pdf(req: dict):
 
 
 @router.get("/document/{session_id}")
-async def get_cached_document(session_id: str, doc_type: str = "consultation_summary"):
-    """Retrieve a previously generated document from cache."""
+async def get_cached_document(
+    session_id: str,
+    http_request: Request,
+    doc_type: str = "consultation_summary",
+):
+    """Retrieve a previously generated document from cache.
+
+    BUG-008 fix — previously open; now requires a valid JWT. Documents
+    contain consultation transcripts and are PHI under DPA 2025.
+    """
+    _require_auth(http_request)
     agent = get_agent()
     try:
         raw = agent.memory_manager.redis.get(f"document:{session_id}:{doc_type}")
@@ -1276,6 +1325,7 @@ async def get_cached_document(session_id: str, doc_type: str = "consultation_sum
 async def download_document(
     session_id: str,
     fmt: str,
+    http_request: Request,
     doc_type: str = "consultation_summary",
     language: str = "en",
 ):
@@ -1284,7 +1334,11 @@ async def download_document(
     The cached document is always stored in English; translation + label
     localization happen on download so the same cache entry serves every
     language (backed by Translator's Redis cache for per-string hits).
+
+    BUG-008 fix — previously open; now requires a valid JWT. Documents
+    contain consultation transcripts and are PHI under DPA 2025.
     """
+    _require_auth(http_request)
     from src.services.document_gen import (
         render_pdf, render_docx,
         translate_doc_for_render, _translate_labels,

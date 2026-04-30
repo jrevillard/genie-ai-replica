@@ -1,9 +1,106 @@
 # src/config.py
+#
+# Phase-bug-fix 2026-05-01:
+#   - BUG-003: removed JWT_SECRET hardcoded default; in production
+#     (AMINA_ENV=production) the process refuses to boot without it.
+#   - BUG-004: removed ARCADEDB_PASSWORD hardcoded default; same
+#     production guard.
+#   - BUG-007: OTP_DEV_MODE now defaults to FALSE (was true). Setting
+#     it to true in production raises at import time.
+#   - BUG-006: CHATQNA_ADMIN_MV_OPEN, CARE_TRUST_BODY_ROLE,
+#     DHIS2_DEV_ADMIN_BYPASS now default FALSE; setting any to true
+#     in production also raises at import time.
+#
+# In development (default AMINA_ENV) the helpers fall back to clearly-
+# marked dev placeholders + a single warning line per startup, so
+# nobody is surprised by a fail-to-boot during local work.
 
 
+import logging
 import os
- 
- 
+import secrets as _secrets
+import sys
+
+
+_log = logging.getLogger(__name__)
+
+AMINA_ENV = os.getenv("AMINA_ENV", "development").strip().lower()
+_IS_PRODUCTION = AMINA_ENV == "production"
+
+
+def _required_env(
+    name: str,
+    *,
+    dev_default: str = "",
+    sensitive: bool = True,
+) -> str:
+    """Resolve an env var with environment-aware safety.
+
+    In production: missing/blank -> RuntimeError at import time.
+    In development: missing/blank -> dev_default. If `sensitive=True`
+    and dev_default is empty, a random hex is generated per process
+    start so dev never silently runs on a static, repo-known secret.
+
+    `sensitive=True` (default) suppresses the value from logs; only
+    its presence is reported.
+    """
+    raw = (os.getenv(name) or "").strip()
+    if raw:
+        return raw
+    if _IS_PRODUCTION:
+        sys.stderr.write(
+            f"[config] FATAL: required env var {name!r} is unset and "
+            f"AMINA_ENV=production. Refusing to boot — set it via the "
+            f"deployment env or the encrypted-secrets bundle.\n"
+        )
+        raise RuntimeError(
+            f"missing required env var {name!r} in production"
+        )
+    # dev fallback
+    if dev_default:
+        _log.warning(
+            "[config] %s unset; using DEV DEFAULT (not safe for prod)",
+            name,
+        )
+        return dev_default
+    fresh = _secrets.token_hex(32)
+    _log.warning(
+        "[config] %s unset; generated a per-process random value for "
+        "DEV ONLY. Sessions will reset on restart.",
+        name,
+    )
+    return fresh
+
+
+def _bool_env(
+    name: str,
+    *,
+    prod_must_be_false: bool = False,
+    default: bool = False,
+) -> bool:
+    """Parse a bool env var.
+
+    If `prod_must_be_false` is True, setting the var truthy in
+    production raises at import time. This is the production guard
+    used by BUG-006 / BUG-007 to refuse boot when a dev-bypass flag
+    is left on.
+    """
+    raw = (os.getenv(name) or "").strip().lower()
+    truthy = raw in ("1", "true", "yes", "on")
+    if not raw:
+        return default
+    if prod_must_be_false and _IS_PRODUCTION and truthy:
+        sys.stderr.write(
+            f"[config] FATAL: {name}=true is forbidden when "
+            f"AMINA_ENV=production. This is a development-only bypass; "
+            f"refusing to boot.\n"
+        )
+        raise RuntimeError(
+            f"{name}=true is forbidden in production"
+        )
+    return truthy
+
+
 class Config:
     # API 
     API_HOST = os.getenv("API_HOST", "0.0.0.0")
@@ -48,7 +145,13 @@ class Config:
     ARCADEDB_URL = os.getenv("ARCADEDB_URL", "http://arcadedb:2480")
     ARCADEDB_DB = os.getenv("ARCADEDB_DB", "genie")
     ARCADEDB_USER = os.getenv("ARCADEDB_USER", "root")
-    ARCADEDB_PASSWORD = os.getenv("ARCADEDB_PASSWORD", "genieRoot123")
+    # BUG-004: env-only in production; dev keeps the historical default
+    # so the bundled docker-compose dev container still works without
+    # extra setup.
+    ARCADEDB_PASSWORD = _required_env(
+        "ARCADEDB_PASSWORD",
+        dev_default="genieRoot123",
+    )
  
     # Whisper STT
     WHISPER_URL = os.getenv("WHISPER_URL", "http://voice-stt:8080")
@@ -64,14 +167,25 @@ class Config:
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
     # Auth
-    JWT_SECRET = os.getenv("JWT_SECRET", "amina-mvp-secret-change-in-prod-2026")
+    # BUG-003: env-only in production; in dev a random per-process
+    # secret is generated (sessions reset across restarts, but no
+    # static, repo-known string remains in source).
+    JWT_SECRET = _required_env("JWT_SECRET")
     JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", 168))  # 7 days
 
     # SMS OTP (Twilio)
     TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
     TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")  # e.g. +1234567890
-    OTP_DEV_MODE = os.getenv("OTP_DEV_MODE", "true").lower() == "true"  # Returns OTP in response for testing
+    # BUG-007: defaults FALSE (was true). When true the OTP comes back
+    # in the response body — fine for dev, catastrophic in prod.
+    # Setting OTP_DEV_MODE=true with AMINA_ENV=production now refuses
+    # to boot.
+    OTP_DEV_MODE = _bool_env(
+        "OTP_DEV_MODE",
+        prod_must_be_false=True,
+        default=False,
+    )
 
     # Africa's Talking SMS (Gambia +220 — primary for West Africa deployment)
     AT_USERNAME  = os.getenv("AT_USERNAME", "")   # Africa's Talking username
@@ -188,6 +302,30 @@ class Config:
     # ack-prefix stripping + 9-intent taxonomy + prompt-guided limits).
     # Requires USE_CONVERSATIONAL_PACER=true — the pacer delegates to the router.
     USE_INTENT_ROUTER = os.getenv("USE_INTENT_ROUTER", "false").lower() == "true"
+
+    # BUG-006 dev-bypass production guards. Each flag is a development
+    # escape hatch that must NEVER be on in production:
+    #
+    #   CHATQNA_ADMIN_MV_OPEN — opens admin materialised-view endpoints
+    #       to unauthenticated callers (admin_mv_routes.py).
+    #   CARE_TRUST_BODY_ROLE — lets the request body's `role` field
+    #       override the JWT's role claim (care_routes.py). With this on
+    #       a patient can self-promote to admin.
+    #   DHIS2_DEV_ADMIN_BYPASS — bypasses the admin gate on DHIS2 push
+    #       routes (dhis2_routes.py + dhis2_history_routes.py).
+    #
+    # Reading these here (even though the actual call sites also read
+    # os.getenv) means production boot is REFUSED if any are truthy —
+    # the call site never gets to evaluate its own check.
+    DEV_FLAG_CHATQNA_ADMIN_MV_OPEN = _bool_env(
+        "CHATQNA_ADMIN_MV_OPEN", prod_must_be_false=True, default=False,
+    )
+    DEV_FLAG_CARE_TRUST_BODY_ROLE = _bool_env(
+        "CARE_TRUST_BODY_ROLE", prod_must_be_false=True, default=False,
+    )
+    DEV_FLAG_DHIS2_DEV_ADMIN_BYPASS = _bool_env(
+        "DHIS2_DEV_ADMIN_BYPASS", prod_must_be_false=True, default=False,
+    )
 
 
 settings = Config()

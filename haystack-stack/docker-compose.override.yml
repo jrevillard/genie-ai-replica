@@ -216,6 +216,8 @@ services:
       - ./haystack-chatqna/src/api/caregiver_privacy_routes.py:/app/src/api/caregiver_privacy_routes.py:ro
       # ── Guest / free-tier chat gating + translator doc i18n ─────────
       - ./haystack-chatqna/src/api/agent_routes.py:/app/src/api/agent_routes.py:ro
+      # Production-aware secret/flag config (BUG-003/004/006/007 fixes)
+      - ./haystack-chatqna/src/config.py:/app/src/config.py:ro
       - ./haystack-chatqna/src/services/document_gen.py:/app/src/services/document_gen.py:ro
       - ./haystack-chatqna/src/services/translator.py:/app/src/services/translator.py:ro
       - ./haystack-chatqna/src/services/repetition_guard.py:/app/src/services/repetition_guard.py:ro

@@ -104,9 +104,14 @@ async def save_to_arcade(
     })
 
     try:
-        # Delete existing document with this doc_id (if any)
-        await _exec(f"DELETE FROM CommunityData WHERE doc_id = '{doc_id}'")
-        # Insert fresh
+        # BUG-005 fix — parameterised DELETE so doc_id can never break out
+        # of the SQL string. CONTENT-based INSERT does not interpolate
+        # user input (the JSON is a static literal here), so it stays
+        # injection-free as-is.
+        await _exec(
+            "DELETE FROM CommunityData WHERE doc_id = :doc_id",
+            params={"doc_id": doc_id},
+        )
         await _exec(f"INSERT INTO CommunityData CONTENT {content}")
     except Exception as e:
         logger.warning(f"ArcadeDB save failed for {doc_id}: {e}")

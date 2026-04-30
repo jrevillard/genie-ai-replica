@@ -1,24 +1,34 @@
 """
 Admin API — CRUD for patients, community data, knowledge base stats.
 Protected by admin credentials (JWT with admin role).
+
+Phase-bug-fix 2026-05-01 (BUG-002):
+  - Removed hardcoded ADMIN_USERNAME / ADMIN_PASSWORD / ADMIN_SECRET
+    constants. ADMIN_USERNAME and ADMIN_PASSWORD are now resolved
+    from env via _required_env (production fails to boot without
+    them; dev falls back to historical defaults with a warning so
+    local work still runs).
+  - ADMIN_SECRET was dead code (defined, never read). Removed.
+  - Login compare is now timing-safe via hmac.compare_digest.
 """
+
+import hmac
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, List
 import json
-import hashlib
-import hmac
 
-from src.config import settings
+from src.config import settings, _required_env
 from src.services.auth import verify_jwt
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-# Hardcoded admin credentials (change in production)
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "amina2026"
-ADMIN_SECRET = "amina-admin-secret"
+# BUG-002: env-only in production. In development the historical
+# defaults remain so local docker compose still works without extra
+# setup; a warning is logged on every dev boot.
+ADMIN_USERNAME = _required_env("ADMIN_USERNAME", dev_default="admin")
+ADMIN_PASSWORD = _required_env("ADMIN_PASSWORD", dev_default="amina2026")
 
 
 def _admin_token(username: str) -> str:
@@ -69,7 +79,18 @@ class AdminLoginRequest(BaseModel):
 
 @router.post("/login")
 async def admin_login(req: AdminLoginRequest):
-    if req.username == ADMIN_USERNAME and req.password == ADMIN_PASSWORD:
+    # Timing-safe compare on both fields. Encoding to bytes first
+    # because hmac.compare_digest's str path is not constant-time on
+    # all CPython versions.
+    user_ok = hmac.compare_digest(
+        (req.username or "").encode("utf-8"),
+        ADMIN_USERNAME.encode("utf-8"),
+    )
+    pass_ok = hmac.compare_digest(
+        (req.password or "").encode("utf-8"),
+        ADMIN_PASSWORD.encode("utf-8"),
+    )
+    if user_ok and pass_ok:
         return {"success": True, "token": _admin_token(req.username), "role": "admin"}
     return {"success": False, "error": "Invalid admin credentials"}
 

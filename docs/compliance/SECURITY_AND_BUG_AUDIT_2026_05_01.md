@@ -99,11 +99,11 @@ flagged with **⚠ verify** below.
 ### BUG-008 · Unauth document download
 - **Severity:** Critical
 - **Where:** `haystack-stack/haystack-chatqna/src/api/agent_routes.py:1262-1320`
-- **What:** `GET /agent/document/{session_id}/download/{fmt}` accepts `session_id` from the URL with no JWT check. Enumerate UUIDs → exfiltrate patient care plans, consultation notes, summaries as PDF / DOCX.
+- **What:** `GET /api/v1/agent/document/{session_id}/download/{fmt}` accepts `session_id` from the URL with no JWT check. Enumerate UUIDs → exfiltrate patient care plans, consultation notes, summaries as PDF / DOCX.
 - **Fix:** Add `Depends(_require_caregiver | _require_patient)` and verify the caller is the session owner (the agent platform already tracks session ownership via the conversation-inbox link).
 - **Status:** `open`
 
-### BUG-009 · Unauth `/agent/patients/list`
+### BUG-009 · Unauth `/api/v1/agent/patients/list`
 - **Severity:** Critical
 - **Where:** `haystack-stack/haystack-chatqna/src/api/agent_routes.py:450-480`
 - **What:** Returns all patient profiles (name, age, conditions, medications) with no auth. Code comment says "in production this would be behind auth — for now it's an open selector".
@@ -113,7 +113,7 @@ flagged with **⚠ verify** below.
 ### BUG-010 · Unauth compactor endpoints
 - **Severity:** Critical
 - **Where:** `haystack-stack/haystack-chatqna/src/api/agent_routes.py:65-75,132`
-- **What:** `/agent/compactor/stats/{session_id}` and `/agent/compactor/trigger/{session_id}` — anyone can read or modify any session's compaction state by guessing UUIDs.
+- **What:** `/api/v1/agent/compactor/stats/{session_id}` and `/api/v1/agent/compactor/trigger/{session_id}` — anyone can read or modify any session's compaction state by guessing UUIDs.
 - **Fix:** Gate with session-owner auth (same pattern as BUG-008).
 - **Status:** `open`
 
@@ -254,7 +254,7 @@ flagged with **⚠ verify** below.
 ### BUG-029 · Unauthenticated feedback stats / history
 - **Severity:** Medium
 - **Where:** `…/api/agent_routes.py:1010-1045`
-- **What:** `/agent/feedback/stats` and `/agent/feedback/session/{session_id}` return aggregated feedback + sentiment data with no auth. Session enumeration → patient-satisfaction map.
+- **What:** `/api/v1/agent/feedback/stats` and `/api/v1/agent/feedback/session/{session_id}` return aggregated feedback + sentiment data with no auth. Session enumeration → patient-satisfaction map.
 - **Fix:** Gate behind admin auth (same `_verify_admin` used elsewhere) or scope per-session to the session owner.
 - **Status:** `open`
 

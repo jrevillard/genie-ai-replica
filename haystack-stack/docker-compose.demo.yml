@@ -1,0 +1,79 @@
+# AMINA Demo Compose — UNICC evaluation overlay
+#
+# Usage (handled by start.ps1 / start.sh — testers do not run this
+# directly):
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+#
+# What this overlay does:
+#   1. Layers .env.defaults (committed, demo-safe) under any real .env.
+#      Values in .env still win because the start script ensures .env
+#      exists (copying .env.defaults if it does not) before invoking
+#      compose. The redundant `env_file` here is defense-in-depth.
+#   2. Stamps DEMO_MODE=true so backend code paths can branch on it.
+#   3. Tightens the haystack-chatqna start_period because the LLM
+#      cascade falls back fast in demo mode (no slow network retries
+#      to disabled providers).
+#
+# Hard rule: this file does NOT redefine any service's image, build,
+# command, ports, volumes, or networks. Those live exclusively in
+# docker-compose.yml so the team workflow is preserved.
+
+services:
+  haystack-chatqna:
+    env_file:
+      - .env.defaults
+      - path: .env
+        required: false
+    environment:
+      DEMO_MODE: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  dataprep-worker:
+    env_file:
+      - .env.defaults
+      - path: .env
+        required: false
+    environment:
+      DEMO_MODE: "true"
+
+  arcadedb:
+    env_file:
+      - .env.defaults
+      - path: .env
+        required: false
+    environment:
+      DEMO_MODE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:2480/api/v1/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  redis:
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  voice-stt:
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  voice-tts:
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5500/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s

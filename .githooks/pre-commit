@@ -1,0 +1,82 @@
+#!/bin/sh
+# AMINA pre-commit secret guard.
+#
+# Blocks accidental commits of plaintext .env files, key/PEM files,
+# and anything under secrets/. Allows .env.example, .env.defaults,
+# and .env.encrypted (the safe-to-commit templates).
+#
+# Wire it once with:
+#   git config core.hooksPath .githooks
+# Setup docs: docs/SETUP_GUIDE.md
+#
+# To bypass for a justified reason, pair --no-verify with an
+# explanation in the commit message. Anything bypassed gets reviewed.
+
+set -e
+BLOCKED=0
+
+# -- 1. Plaintext .env files (anywhere in the tree) -----------------
+ENV_FILES=$(git diff --cached --name-only --diff-filter=AM \
+    | grep -E '(^|/)\.env($|\.local$|\.production$|\.staging$|\.development$)' \
+    | grep -vE '\.(example|defaults|encrypted)$' || true)
+if [ -n "$ENV_FILES" ]; then
+    echo ""
+    echo "BLOCKED: plaintext .env file(s) staged for commit:"
+    echo "$ENV_FILES" | sed 's/^/  - /'
+    echo ""
+    echo "  Fix: git reset HEAD <file>"
+    echo "  If the file is meant to be a template, rename it"
+    echo "  to .env.example or .env.defaults."
+    echo ""
+    BLOCKED=1
+fi
+
+# -- 2. Key / PEM / certificate files -------------------------------
+KEY_FILES=$(git diff --cached --name-only --diff-filter=AM \
+    | grep -E '\.(key|pem|p12|pfx)$' || true)
+if [ -n "$KEY_FILES" ]; then
+    echo ""
+    echo "BLOCKED: key / certificate file(s) staged for commit:"
+    echo "$KEY_FILES" | sed 's/^/  - /'
+    echo ""
+    echo "  Fix: git reset HEAD <file>"
+    echo ""
+    BLOCKED=1
+fi
+
+# -- 3. Anything under secrets/ -------------------------------------
+SECRET_FILES=$(git diff --cached --name-only --diff-filter=AM \
+    | grep -E '(^|/)secrets/' || true)
+if [ -n "$SECRET_FILES" ]; then
+    echo ""
+    echo "BLOCKED: file(s) inside secrets/ staged for commit:"
+    echo "$SECRET_FILES" | sed 's/^/  - /'
+    echo ""
+    echo "  Fix: git reset HEAD <file>"
+    echo ""
+    BLOCKED=1
+fi
+
+# -- 4. Obvious provider-key shapes inside any staged content -------
+# Catches: OpenAI sk-..., Google AIza..., Twilio AC..., Anthropic
+# sk-ant-..., generic 40+ hex tokens. False positives are possible —
+# a commit can still proceed by removing the line or by --no-verify
+# with justification in the commit message.
+if git diff --cached -U0 \
+    | grep -E '^\+' \
+    | grep -vE '^\+\+\+ ' \
+    | grep -qE '(sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|AC[a-f0-9]{32}|EAA[A-Za-z0-9]{20,})'
+then
+    echo ""
+    echo "BLOCKED: a staged hunk looks like a provider API key."
+    echo "  Pattern matched: OpenAI / Anthropic / Google / Twilio / Meta token shape."
+    echo "  Fix: remove the secret. Replace with CHANGE_ME or load from env."
+    echo "  False positive? Run with --no-verify and explain in the commit message."
+    echo ""
+    BLOCKED=1
+fi
+
+if [ "$BLOCKED" -eq 1 ]; then
+    exit 1
+fi
+exit 0

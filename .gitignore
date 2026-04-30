@@ -61,9 +61,33 @@ haystack-stack/evidence_reports/traces/
 .vscode/*.local
 .idea/
 
-# ─── DO commit .env files. Per project decision 2026-04-30 the
-#     `.env` files (including haystack-stack/.env) are committed
-#     so the AminaCare branch is self-contained for downstream
-#     deployers. Rotate keys whenever this branch is shared. ─────
-!.env
-!.env.*
+# ─── Secrets — NEVER COMMIT (BUG-001 fix, supersedes the prior
+#     2026-04-30 decision that briefly allowed .env in-tree). The
+#     committed surface for environment is .env.defaults (demo-safe)
+#     and .env.example (template). Real .env files with provider
+#     keys must stay local. The pre-commit hook in .githooks/
+#     enforces this at commit time. ────────────────────────────────
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+haystack-stack/.env
+haystack-stack/.env.local
+components/multichannel-access/.env
+components/frontend/.env.local
+secrets/
+*.key
+*.pem
+*.decrypted
+*.plaintext
+
+# Explicitly allow the safe-to-commit env templates / demo defaults
+!.env.example
+!.env.defaults
+!.env.encrypted
+!haystack-stack/.env.example
+!haystack-stack/.env.defaults
+!haystack-stack/.env.encrypted
+!components/multichannel-access/.env.example
+!components/frontend/.env.example

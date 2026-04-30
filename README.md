@@ -1,5 +1,18 @@
 # GENIE.AI
 
+> **One-command quick start (UNICC evaluators):**
+> ```powershell
+> git clone <repo-url>
+> cd genie-ai
+> .\start.ps1            # PowerShell  (Linux/macOS: ./start.sh)
+> ```
+> Open <http://localhost:5174> when the script reports "AMINA is ready."
+> No `.env` to copy, no API keys to find — demo defaults boot the full
+> stack in a few minutes. See [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
+> for full instructions, troubleshooting, and the team-mode workflow.
+
+---
+
 [GENIE.AI](https://genie-ai.itu.int/) was initiated under the [Open Source Ecosystem Enabler OSEE](https://www.itu.int/en/ITU-D/ICT-Applications/Pages/Initiatives/OSEEPSI/home.aspx) programme as an exploratory capacity building instrument designed to help governments understand, experiment with and deploy open source generative AI in a sovereign and responsible manner. What started as a practical learning and experimentation environment progressively evolved into an off the shelf open source reference implementation dedicated to the public sector, facilitating the development of Digital Public Infrastructure (DPI) and Digital Public Goods (DPG).
 
 [GENIE.AI](https://genie-ai.itu.int/) is fully compliant with the [OSI Open Source AI Definition](https://opensource.org/ai/open-source-ai-definition) and aligned with the [Digital Public Goods Standard from DPGA](https://www.digitalpublicgoods.net/standard). It is free, truly open source, transparently governed and designed to be reused, audited, adapted and deployed without licensing barriers, vendor lock in or hidden dependencies.

@@ -6,4 +6,7 @@ node_modules/
 logs
 *.log.gz
 dist/
-build/
+build/data/models*
+*.bak
+api-gateway-solution/nginx/certs/server.crt
+api-gateway-solution/nginx/certs/server.key

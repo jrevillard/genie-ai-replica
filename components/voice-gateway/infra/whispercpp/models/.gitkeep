@@ -1,0 +1,4 @@
+# Bind-mount target for voice-stt container (haystack-stack/docker-compose.yml).
+# Whisper model files (ggml-*.bin) are gitignored and downloaded on first
+# run by scripts/bootstrap_models.ps1 / .sh. This .gitkeep ensures the
+# directory exists in fresh clones so the docker volume mount can resolve.

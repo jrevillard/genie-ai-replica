@@ -8,8 +8,10 @@
 > ```
 > Open <http://localhost:5174> when the script reports "AMINA is ready."
 > No `.env` to copy, no API keys to find — demo defaults boot the full
-> stack in a few minutes. See [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
-> for full instructions, troubleshooting, and the team-mode workflow.
+> stack in a few minutes. First run also downloads ~210 MB of voice
+> model weights (Whisper STT + Piper TTS); subsequent runs skip it.
+> See [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md) for full instructions,
+> troubleshooting, and the team-mode workflow.
 
 ---
 

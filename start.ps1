@@ -95,13 +95,32 @@ if (-not $dockerOk) {
 }
 Write-Host "       Docker is running." -ForegroundColor Green
 
-# ── 2. Environment resolution ──────────────────────────────────────
+# ── 2. AI model bootstrap ──────────────────────────────────────────
+# Whisper + Piper model files are gitignored (too large for git) but
+# the voice-stt and voice-tts containers fail to start without them.
+# bootstrap_models.ps1 downloads on first run and skips on subsequent
+# runs. A failure here is non-fatal: text chat still works, the
+# script just warns and proceeds.
+Write-Host "[2/7] Checking AI model files..." -ForegroundColor Yellow
+$prevPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+& "$PSScriptRoot\scripts\bootstrap_models.ps1"
+$bootstrapExit = $LASTEXITCODE
+$ErrorActionPreference = $prevPref
+
+if ($bootstrapExit -ne 0) {
+    Write-Host "[WARN] Model bootstrap returned $bootstrapExit." -ForegroundColor Yellow
+    Write-Host "       Voice STT/TTS will be unhealthy. Text chat is unaffected." -ForegroundColor Yellow
+    Write-Host "       Retry: .\scripts\bootstrap_models.ps1" -ForegroundColor DarkGray
+}
+
+# ── 3. Environment resolution ──────────────────────────────────────
 # Strategy: the base haystack-stack/docker-compose.yml hard-codes
 #   env_file: - .env
 # for two services. If a real .env is missing, compose fails. We
 # bridge that gap by copying .env.defaults -> .env on first run.
 # .env is gitignored, so this never gets committed accidentally.
-Write-Host "[2/6] Resolving environment..." -ForegroundColor Yellow
+Write-Host "[3/7] Resolving environment..." -ForegroundColor Yellow
 
 $EnvFile     = Join-Path $RepoRoot "haystack-stack\.env"
 $EnvDefaults = Join-Path $RepoRoot "haystack-stack\.env.defaults"
@@ -126,7 +145,7 @@ if (Test-Path $EnvFile) {
 }
 
 # ── 3. Backend services up ─────────────────────────────────────────
-Write-Host "[3/6] Starting backend services..." -ForegroundColor Yellow
+Write-Host "[4/7] Starting backend services..." -ForegroundColor Yellow
 
 $composeFiles = @("-f", "docker-compose.yml")
 
@@ -171,7 +190,7 @@ try {
 Write-Host "       Backend containers launched." -ForegroundColor Green
 
 # ── 4. Wait for backend health ─────────────────────────────────────
-Write-Host "[4/6] Waiting for backend to report healthy..." -ForegroundColor Yellow
+Write-Host "[5/7] Waiting for backend to report healthy..." -ForegroundColor Yellow
 $maxWait = 180
 $waited  = 0
 $healthy = $false
@@ -205,9 +224,9 @@ if ($healthy) {
 # ── 5. Frontend ────────────────────────────────────────────────────
 $frontendPort = "5174"
 if ($SkipFrontend) {
-    Write-Host "[5/6] Frontend skipped (--SkipFrontend)." -ForegroundColor DarkGray
+    Write-Host "[6/7] Frontend skipped (--SkipFrontend)." -ForegroundColor DarkGray
 } else {
-    Write-Host "[5/6] Starting frontend..." -ForegroundColor Yellow
+    Write-Host "[6/7] Starting frontend..." -ForegroundColor Yellow
 
     $frontendPath = Join-Path $RepoRoot "components\frontend"
     if (-not (Test-Path $frontendPath)) {
@@ -236,7 +255,7 @@ if ($SkipFrontend) {
 
 # ── 6. Summary ─────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "[6/6] AMINA is ready." -ForegroundColor Green
+Write-Host "[7/7] AMINA is ready." -ForegroundColor Green
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  AMINA Services"                        -ForegroundColor Cyan
@@ -246,6 +265,20 @@ Write-Host "  Chat UI:        http://localhost:$frontendPort" -ForegroundColor W
 Write-Host "  Backend API:    http://localhost:8000"          -ForegroundColor White
 Write-Host "  Health check:   http://localhost:8000/health"   -ForegroundColor White
 Write-Host "  ArcadeDB:       http://localhost:2480"          -ForegroundColor White
+
+# Voice service health (best-effort; non-fatal if down)
+$sttCode = ""
+$ttsCode = ""
+try { $sttCode = curl.exe -s -o NUL -w "%{http_code}" --max-time 2 http://localhost:8087/ 2>$null } catch {}
+try { $ttsCode = curl.exe -s -o NUL -w "%{http_code}" --max-time 2 http://localhost:5500/health 2>$null } catch {}
+$sttOk = ($sttCode -eq "200" -or $sttCode -eq "404")  # whisper-server returns 404 on / but is alive
+$ttsOk = ($ttsCode -eq "200")
+$sttTag = if ($sttOk) { "[OK]" } else { "[NOT READY — model may still be downloading]" }
+$ttsTag = if ($ttsOk) { "[OK]" } else { "[NOT READY — model may still be downloading]" }
+$sttColor = if ($sttOk) { "Green" } else { "Yellow" }
+$ttsColor = if ($ttsOk) { "Green" } else { "Yellow" }
+Write-Host "  Voice STT:      http://localhost:8087  $sttTag" -ForegroundColor $sttColor
+Write-Host "  Voice TTS:      http://localhost:5500  $ttsTag" -ForegroundColor $ttsColor
 Write-Host ""
 
 if ($DemoMode) {

@@ -37,6 +37,9 @@ Thumbs.db
 **/whispercpp/models/*.bin
 **/piper/models/*.onnx
 **/data/huggingface-cache/
+# .onnx.json sidecars (Piper voice configs) ARE small and tracked.
+!*.onnx.json
+!**/piper/models/*.onnx.json
 
 # ─── Local recovery / backup workspaces ──────────────────────────
 _local_backup/

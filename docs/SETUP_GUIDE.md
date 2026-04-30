@@ -31,15 +31,55 @@ cd genie-ai
 That's it. The script:
 
 1. Confirms Docker is up.
-2. If `haystack-stack/.env` is missing, copies the committed
+2. **Downloads AI model weights on first run** (`scripts/bootstrap_models.ps1` /
+   `.sh`): Whisper STT base.en (~148 MB) and Piper TTS lessac voice
+   (~63 MB). Total ~210 MB; takes 1–3 min on a typical connection.
+   Subsequent runs skip the download. Failures are non-fatal — text
+   chat still works without voice.
+3. If `haystack-stack/.env` is missing, copies the committed
    `haystack-stack/.env.defaults` into place (demo mode).
-3. Brings up the backend stack via `docker compose` with the demo overlay.
-4. Polls `/health` until the backend is ready (~1–3 min on first run).
-5. Installs frontend node_modules on first run, then launches the dev
+4. Brings up the backend stack via `docker compose` with the demo overlay
+   (only when bootstrapping demo defaults).
+5. Polls `/health` until the backend is ready (~1–3 min on first run).
+6. Installs frontend node_modules on first run, then launches the dev
    server in a separate terminal.
 
 When the script prints `AMINA is ready.`, open
 <http://localhost:5174> in a browser.
+
+### AI model downloads — what happens, what to do if it fails
+
+`scripts/bootstrap_models.ps1` (called by `start.ps1` automatically) reads
+the file paths straight from `haystack-stack/docker-compose.yml`:
+
+| Model file | Used by | Source |
+|---|---|---|
+| `components/voice-gateway/infra/whispercpp/models/ggml-base.en.bin` | `voice-stt` (Whisper.cpp server) | `huggingface.co/ggerganov/whisper.cpp` |
+| `components/voice-gateway/infra/piper/models/en_US-lessac-medium.onnx` | `voice-tts` (Piper) | `huggingface.co/rhasspy/piper-voices` |
+| `components/voice-gateway/infra/piper/models/en_US-lessac-medium.onnx.json` | `voice-tts` (Piper config) | same as above |
+
+The script downloads to a `.partial` file then atomically renames on
+success, so an interrupted run leaves no half-files in place.
+
+Re-run manually (e.g. after a network blip):
+
+```powershell
+.\scripts\bootstrap_models.ps1            # only download what's missing
+.\scripts\bootstrap_models.ps1 -Force     # re-download everything
+
+# Linux / macOS:
+./scripts/bootstrap_models.sh
+./scripts/bootstrap_models.sh --force
+```
+
+If the auto-download is blocked by a corporate firewall or proxy,
+download the three URLs above through your browser and drop the files
+into the matching paths. Voice-stt and voice-tts will pick them up on
+the next `docker compose up`.
+
+The `voice-tts-mnk` (Mandinka TTS) container does not need this
+bootstrap — it pulls `facebook/mms-tts-mnk` from the HuggingFace cache
+that is pre-warmed at image build time.
 
 To shut everything down:
 

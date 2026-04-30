@@ -73,8 +73,22 @@ if ! docker info >/dev/null 2>&1; then
 fi
 echo "       Docker is running."
 
-# ── 2. Environment resolution ──────────────────────────────────────
-echo "[2/6] Resolving environment..."
+# ── 2. AI model bootstrap ──────────────────────────────────────────
+# Whisper + Piper model files are gitignored; download on first run
+# so voice-stt / voice-tts can boot. Idempotent on re-runs.
+echo "[2/7] Checking AI model files..."
+set +e
+"$REPO_ROOT/scripts/bootstrap_models.sh"
+BOOTSTRAP_RC=$?
+set -e
+if [ "$BOOTSTRAP_RC" -ne 0 ]; then
+    echo "[WARN] Model bootstrap returned $BOOTSTRAP_RC."
+    echo "       Voice STT/TTS will be unhealthy. Text chat is unaffected."
+    echo "       Retry: ./scripts/bootstrap_models.sh"
+fi
+
+# ── 3. Environment resolution ──────────────────────────────────────
+echo "[3/7] Resolving environment..."
 ENV_FILE="$REPO_ROOT/haystack-stack/.env"
 ENV_DEFAULTS="$REPO_ROOT/haystack-stack/.env.defaults"
 
@@ -96,7 +110,7 @@ else
 fi
 
 # ── 3. Backend services up ─────────────────────────────────────────
-echo "[3/6] Starting backend services..."
+echo "[4/7] Starting backend services..."
 cd "$REPO_ROOT/haystack-stack"
 # Demo overlay is layered ONLY when we just bootstrapped from
 # .env.defaults. A team developer with a real .env keeps DEMO_MODE
@@ -120,7 +134,7 @@ cd "$REPO_ROOT"
 echo "       Backend containers launched."
 
 # ── 4. Wait for backend health ─────────────────────────────────────
-echo "[4/6] Waiting for backend to report healthy..."
+echo "[5/7] Waiting for backend to report healthy..."
 MAX_WAIT=180
 WAITED=0
 HEALTHY=0
@@ -146,9 +160,9 @@ fi
 # ── 5. Frontend ────────────────────────────────────────────────────
 FRONTEND_PORT=5174
 if [ "$SKIP_FRONTEND" -eq 1 ]; then
-    echo "[5/6] Frontend skipped (--skip-frontend)."
+    echo "[6/7] Frontend skipped (--skip-frontend)."
 else
-    echo "[5/6] Starting frontend..."
+    echo "[6/7] Starting frontend..."
     if [ ! -d components/frontend ]; then
         echo "       components/frontend not found - skipping frontend."
     else
@@ -165,7 +179,7 @@ fi
 
 # ── 6. Summary ─────────────────────────────────────────────────────
 echo ""
-echo "[6/6] AMINA is ready."
+echo "[7/7] AMINA is ready."
 echo ""
 echo "========================================"
 echo "  AMINA Services"
@@ -175,6 +189,20 @@ echo "  Chat UI:        http://localhost:$FRONTEND_PORT"
 echo "  Backend API:    http://localhost:8000"
 echo "  Health check:   http://localhost:8000/health"
 echo "  ArcadeDB:       http://localhost:2480"
+
+# Voice service health (best-effort; non-fatal)
+STT_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:8087/ 2>/dev/null || echo "")
+TTS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:5500/health 2>/dev/null || echo "")
+if [ "$STT_CODE" = "200" ] || [ "$STT_CODE" = "404" ]; then
+    echo "  Voice STT:      http://localhost:8087  [OK]"
+else
+    echo "  Voice STT:      http://localhost:8087  [NOT READY — model may still be downloading]"
+fi
+if [ "$TTS_CODE" = "200" ]; then
+    echo "  Voice TTS:      http://localhost:5500  [OK]"
+else
+    echo "  Voice TTS:      http://localhost:5500  [NOT READY — model may still be downloading]"
+fi
 echo ""
 if [ "$DEMO_MODE" -eq 1 ]; then
     echo "  MODE: Demo (using .env.defaults values)"

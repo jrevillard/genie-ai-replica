@@ -1,5 +1,13 @@
+# ============================================
+# WARNING: SEED / FIXUP DATA -- NOT FOR PRODUCTION
+# This script resets directory-caregiver PINs to per-caregiver
+# random values (BUG-011 fix) and prints them once. The
+# operator must record the printed PINs immediately and hand
+# them to the matching caregiver out-of-band.
+# Do NOT run this against a production database.
+# ============================================
 """
-AMINA Care — Directory Caregiver Auth Fix
+AMINA Care -- Directory Caregiver Auth Fix
 =============================================
 The 8 directory caregivers seeded by `seed_caregivers.py` all share the same
 default PIN `1234`, but (a) the shared hash could drift if the script was run
@@ -28,6 +36,12 @@ from __future__ import annotations
 
 import hmac
 import json
+import secrets
+
+
+def generate_seed_pin() -> str:
+    """Per-caregiver random 6-digit PIN. BUG-011 fix."""
+    return str(secrets.randbelow(900_000) + 100_000)
 import os
 import sys
 import uuid
@@ -48,7 +62,9 @@ AUTH       = (os.getenv("ARCADE_USER", "root"),
               os.getenv("ARCADE_PASS", "genieRoot123"))
 API        = os.getenv("API",        "http://localhost:8000")
 
-DEFAULT_PIN = "1234"
+# BUG-011 fix: PIN is now per-caregiver random; the script prints
+# the assigned PIN once at the end so the operator can hand it out.
+SARAH_TEST_PIN = "4242"  # Sarah Care is the always-known login control
 PATIENTS_PER_CAREGIVER = 2
 
 
@@ -178,10 +194,13 @@ def main() -> int:
     for c in cgs:
         print(f"    - {c.get('name'):<18} {c.get('phone'):<14} id={c.get('caregiver_id')}")
 
-    # Step 1 + 2 — PIN reset
-    print(f"\n── PIN reset to {DEFAULT_PIN!r} ──")
+    # Step 1 + 2 -- PIN reset (per-caregiver random, BUG-011 fix)
+    print("\n── PIN reset (per-caregiver random) ──")
+    pins_by_id: Dict[str, str] = {}
     for c in cgs:
-        preview = reset_pin(c["caregiver_id"], DEFAULT_PIN)
+        pin = generate_seed_pin()
+        pins_by_id[c["caregiver_id"]] = pin
+        preview = reset_pin(c["caregiver_id"], pin)
         print(f"  {c['name']:<18}  hash_preview={preview}…")
 
     # Step 3 — patient linking
@@ -216,25 +235,24 @@ def main() -> int:
              "caregiver_id": "CG_C4A19716"}
     all_caregivers = cgs + [SARAH]
 
-    results: List[Tuple[str, str, int, str]] = []
+    results: List[Tuple[str, str, str, int, str]] = []
     for c in all_caregivers:
-        pin = DEFAULT_PIN if c["caregiver_id"].startswith("cg_") else "4242"
+        pin = pins_by_id.get(c["caregiver_id"], SARAH_TEST_PIN)
         code, detail = try_login(c["phone"], pin)
-        results.append((c["name"], c["phone"], code, detail))
+        results.append((c["name"], c["phone"], pin, code, detail))
 
-    # Credentials table
-    print("\n" + "=" * 66)
-    print("  READY-TO-USE CAREGIVER CREDENTIALS")
-    print("=" * 66)
-    print(f"\n  {'Name':<20} {'Phone':<16} {'PIN':<6} {'HTTP':<6} {'Status'}")
-    print(f"  {'-'*20} {'-'*16} {'-'*6} {'-'*6} {'-'*30}")
-    for name, phone, code, detail in results:
-        pin = DEFAULT_PIN if name != "Sarah Care" else "4242"
+    # Credentials table (record once, then discard)
+    print("\n" + "=" * 70)
+    print("  READY-TO-USE CAREGIVER CREDENTIALS  --  RECORD ONCE THEN DISCARD")
+    print("=" * 70)
+    print(f"\n  {'Name':<20} {'Phone':<16} {'PIN':<8} {'HTTP':<6} {'Status'}")
+    print(f"  {'-'*20} {'-'*16} {'-'*8} {'-'*6} {'-'*30}")
+    for name, phone, pin, code, detail in results:
         ok_tag = "OK" if code == 200 else detail
-        print(f"  {name:<20} {phone:<16} {pin:<6} {code:<6} {ok_tag[:30]}")
+        print(f"  {name:<20} {phone:<16} {pin:<8} {code:<6} {ok_tag[:30]}")
 
     # Exit code reflects login outcome for directory caregivers
-    fails = [n for n, _, code, _ in results if code != 200 and n != "Sarah Care"]
+    fails = [n for n, _, _, code, _ in results if code != 200 and n != "Sarah Care"]
     if fails:
         print(f"\n  [fail] {len(fails)} caregivers still not login-ready: {fails}")
         return 1

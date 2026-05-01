@@ -15,14 +15,22 @@ Usage:
 """
 
 import argparse
+import secrets
 import sys
 import requests
 
-# ── Dev caregiver credentials ────────────────────────────────────────────────
+
+def _generate_seed_pin() -> str:
+    """Per-run random 4-digit PIN. BUG-011 family fix."""
+    return f"{secrets.randbelow(9000) + 1000:04d}"
+
+
+# ── Dev caregiver credentials (PIN is per-run random, BUG-011 fix) ──────────
+# WARNING: dev / seed data only -- not for production use.
 CAREGIVER = {
     "name":         "Sarah Care",
     "phone":        "+220 9000001",     # Gambia number, easy to remember
-    "pin":          "1234",
+    "pin":          _generate_seed_pin(),
     "relationship": "chw",
 }
 

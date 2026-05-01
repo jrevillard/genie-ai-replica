@@ -46,7 +46,28 @@ class ToolExecutor:
         if not approved_pairs:
             return []
         tasks = [self._run_one(request, c, d) for (c, d) in approved_pairs]
-        return await asyncio.gather(*tasks, return_exceptions=False)
+        # BUG-014 fix: return_exceptions=True so one tool's unexpected
+        # failure does not nuke the whole batch. _run_one already
+        # converts known failure modes (timeout, adapter error) to a
+        # ToolResult; this catches anything that escapes that try/except.
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        results: List[ToolResult] = []
+        for (call, _decision), r in zip(approved_pairs, raw_results):
+            if isinstance(r, BaseException):
+                logger.exception(
+                    "[executor] tool=%s escaped _run_one: %s",
+                    call.tool_name, r,
+                )
+                results.append(ToolResult(
+                    call_id=call.call_id,
+                    tool_name=call.tool_name,
+                    ok=False,
+                    error_code="tool_exception",
+                    safe_summary="tool execution failed",
+                ))
+            else:
+                results.append(r)
+        return results
 
     async def _run_one(
         self,

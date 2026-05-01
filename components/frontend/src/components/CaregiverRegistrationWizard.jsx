@@ -624,7 +624,7 @@ function NoticeReviewModal({ caregiverName, role, onClose }) {
 
 function StepReview({
   data, role, uploads, pin, setPin, confirmed, setConfirmed,
-  onSubmit, onBack, busy, error, privacyConsent, onViewNotice,
+  onSubmit, onBack, busy, error, uploadErrors, privacyConsent, onViewNotice,
 }) {
   const roleLabel = ROLES.find((r) => r.id === role)?.label || role;
   return (
@@ -690,10 +690,35 @@ function StepReview({
 
       <Err>{error}</Err>
 
+      {/* BUG-021 fix: surface per-document upload failures so the
+          caregiver can retry instead of seeing a fake success screen. */}
+      {uploadErrors && uploadErrors.length > 0 && (
+        <div style={{
+          background: "#2a1a1a", border: "1px solid #d85a30",
+          borderRadius: 8, padding: 14, margin: "12px 0",
+        }}>
+          <div style={{ color: "#d85a30", fontWeight: 700, marginBottom: 6, fontSize: 13 }}>
+            Some documents did not upload:
+          </div>
+          {uploadErrors.map((err, i) => (
+            <div key={i} style={{ color: "#ff9999", margin: "3px 0", fontSize: 12 }}>
+              • {err.field}{err.fileName ? ` (${err.fileName})` : ""}: {err.error}
+            </div>
+          ))}
+          <div style={{ color: "#999", fontSize: 11, marginTop: 6 }}>
+            Tap "Register" again to retry the failed uploads.
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 10 }}>
-        <button style={BTN_GHOST} onClick={onBack}>Back</button>
+        <button style={BTN_GHOST} onClick={onBack} disabled={busy}>Back</button>
         <button
-          style={{ ...BTN, opacity: pin.length === 4 && confirmed && !busy ? 1 : 0.5 }}
+          style={{
+            ...BTN,
+            opacity: pin.length === 4 && confirmed && !busy ? 1 : 0.5,
+            cursor: busy ? "not-allowed" : "pointer",
+          }}
           disabled={pin.length !== 4 || !confirmed || busy}
           onClick={onSubmit}>
           {busy ? "Submitting…" : `Register as ${roleLabel}`}
@@ -776,14 +801,21 @@ export default function CaregiverRegistrationWizard({ onDone }) {
   const [busy, setBusy]                 = useState(false);
   const [error, setError]               = useState("");
   const [regId, setRegId]               = useState("");
+  const [uploadErrors, setUploadErrors] = useState([]);   // BUG-021
   const [privacyConsent, setPrivacyConsent] = useState(null);
   const [showNoticeModal, setShowNoticeModal] = useState(false);
+
+  // BUG-022 fix: synchronous double-submit lock. React state updates
+  // are batched, so a second click landing in the same microtask sees
+  // busy=false. A ref update is synchronous and closes that window.
+  const submitLockRef = useRef(false);
 
   const phone = `${data._cc || "+220"}${data._phone_local || ""}`;
 
   async function handleSubmit() {
-    if (busy) return;
-    setBusy(true); setError("");
+    if (submitLockRef.current || busy) return;
+    submitLockRef.current = true;
+    setBusy(true); setError(""); setUploadErrors([]);
     try {
       // Adapter (Phase 4): forward the captured consent payload in the
       // shape the Phase 3 step emits, plus a server-side timestamp.
@@ -831,30 +863,64 @@ export default function CaregiverRegistrationWizard({ onDone }) {
       if (!r.ok) {
         const errs = result.detail?.errors || [result.detail || "Registration failed"];
         setError(Array.isArray(errs) ? errs.join("; ") : String(errs));
-        setBusy(false);
-        return;
+        return;  // finally{} resets busy + lock
       }
 
       const rid = result.registration_id;
       setRegId(rid);
 
-      // Upload documents
+      // BUG-021 fix: previously every upload error was swallowed via
+      // `.catch(() => {})`, so a CHW could see "registration successful"
+      // while their identity / training docs never made it to the
+      // server. Surface failures into uploadErrors and DO NOT advance
+      // to the success screen if any uploads failed.
+      const failures = [];
       for (const [docKey, file] of Object.entries(uploads)) {
         if (!file) continue;
         const fd = new FormData();
         fd.append("doc_key", docKey);
         fd.append("file", file);
-        await fetch(`${API}/api/v1/caregiver-v2/upload-doc/${rid}`, {
-          method: "POST",
-          body: fd,
-        }).catch(() => {});
+        try {
+          const upR = await fetch(`${API}/api/v1/caregiver-v2/upload-doc/${rid}`, {
+            method: "POST",
+            body: fd,
+          });
+          if (!upR.ok) {
+            let detail = `${upR.status} ${upR.statusText}`;
+            try {
+              const j = await upR.json();
+              if (j && j.detail) detail = String(j.detail).slice(0, 200);
+            } catch (_) { /* non-JSON body */ }
+            failures.push({ field: docKey, fileName: file.name, error: detail });
+          }
+        } catch (upErr) {
+          failures.push({
+            field: docKey,
+            fileName: file.name,
+            error: "Upload failed -- check your internet connection and try again.",
+          });
+          // eslint-disable-next-line no-console
+          console.error(`[UPLOAD] ${docKey} failed:`, upErr.message || upErr);
+        }
+      }
+
+      if (failures.length > 0) {
+        setUploadErrors(failures);
+        setError(
+          `Registration saved but ${failures.length} document upload` +
+          `${failures.length === 1 ? "" : "s"} failed. Please retry the uploads.`
+        );
+        // Stay on the current step; do NOT show the success screen.
+        return;
       }
 
       setStep(5);
     } catch (e) {
       setError(e.message || "Network error");
+    } finally {
+      submitLockRef.current = false;
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   return (
@@ -888,7 +954,7 @@ export default function CaregiverRegistrationWizard({ onDone }) {
           pin={pin} setPin={setPin}
           confirmed={confirmed} setConfirmed={setConfirmed}
           onSubmit={handleSubmit} onBack={() => setStep(3)}
-          busy={busy} error={error}
+          busy={busy} error={error} uploadErrors={uploadErrors}
           privacyConsent={privacyConsent}
           onViewNotice={() => setShowNoticeModal(true)} />
       )}

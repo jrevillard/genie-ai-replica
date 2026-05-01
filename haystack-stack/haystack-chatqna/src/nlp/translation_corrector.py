@@ -537,6 +537,53 @@ class TranslationCorrector:
         patient_context: Optional[Dict[str, Any]] = None,
         response_type: str = "general",
     ) -> Dict[str, Any]:
+        # BUG-019 fix: empty / whitespace input must not enter the
+        # correction pipeline. Without this guard, the layer-3 greeting
+        # synthesizer would build a self-introduction out of thin air
+        # ("Sila Salaam aleekum, ..." with no patient utterance), which
+        # broke chat continuity and confused the safety auditor.
+        if not mandinka_text or not str(mandinka_text).strip():
+            logger.debug("[CORRECTOR] empty / whitespace input -- skipping pipeline")
+            return {
+                "corrected_text": "",
+                "original_text": mandinka_text or "",
+                "english_source": english_source or "",
+                "overall_score": 0.0,
+                "recommendation": "BLOCK_USE_ENGLISH",
+                "block_reason": "empty_input",
+                "corrections_applied": [],
+                "hard_blockers_fired": ["empty_input"],
+                "processing_time_ms": 0,
+                "english_leaks": {"found": 0, "replaced": 0, "blocked": 0},
+                "medical_corrections": 0,
+                "food_corrections": 0,
+                "cultural_issues": [],
+                "repetitions_fixed": 0,
+                "tense_issues": 0,
+                "greeting_added": False,
+                "truncated": False,
+                "hallucinations_detected": 0,
+                "completeness_ratio": 0.0,
+            }
+
+        if not english_source or not str(english_source).strip():
+            # We have Mandinka but no English to validate against. Pass
+            # the Mandinka through (no leak detection possible) and let
+            # the caller decide; the recommendation says "ok but no
+            # validation happened".
+            logger.debug("[CORRECTOR] empty english_source -- limited validation only")
+            return {
+                "corrected_text": mandinka_text,
+                "original_text": mandinka_text,
+                "english_source": "",
+                "overall_score": 0.3,
+                "recommendation": "SERVE_CORRECTED",
+                "block_reason": "no_english_source",
+                "corrections_applied": [],
+                "hard_blockers_fired": [],
+                "processing_time_ms": 0,
+            }
+
         t0 = time.perf_counter()
         ctx = patient_context or {}
         patient_name = ctx.get("patient_name", "")

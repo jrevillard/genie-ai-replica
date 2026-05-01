@@ -32,7 +32,7 @@ class AuthService {
           await this.refreshToken();
           console.log('Token refreshed proactively');
         } catch (error) {
-          console.error('Proactive token refresh failed:', error);
+          console.error('[AUTH] Proactive token refresh failed:', error?.message || 'Unknown error');
           if (error.response?.status === 401 || error.response?.status === 403) {
             this.clearUserData();
             console.log('Cleared user data due to refresh failure');
@@ -82,7 +82,11 @@ class AuthService {
       }
       return response.data;
     } catch (error) {
-      console.error('Login error:', error);
+      // BUG-023 fix: never log the full error object. Axios attaches
+      // request.config (with the hashed password we just sent) and the
+      // full response object to the error -- logging it dumps that to
+      // the browser console. Only log the message.
+      console.error('[AUTH] Login failed:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -116,7 +120,7 @@ class AuthService {
         }
         return response.data;
       } catch (error) {
-        console.error('Refresh token error:', error);
+        console.error('[AUTH] Refresh token error:', error?.message || 'Unknown error');
         if (error.response?.status === 401 || error.response?.status === 403) {
           this.clearUserData();
         }
@@ -155,7 +159,7 @@ class AuthService {
       );
       return response.data;
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('[AUTH] Registration error:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -172,7 +176,7 @@ class AuthService {
       this.clearUserData();
       return response.data;
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('[AUTH] Logout error:', error?.message || 'Unknown error');
       this.clearUserData();
       throw error;
     }
@@ -200,7 +204,7 @@ class AuthService {
           throw refreshError;
         }
       }
-      console.error('Fetch current user error:', error);
+      console.error('[AUTH] Fetch current user error:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -272,7 +276,7 @@ class AuthService {
       );
       return response.data;
     } catch (error) {
-      console.error('Password reset initiation error:', error);
+      console.error('[AUTH] Password reset initiation error:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -289,7 +293,7 @@ class AuthService {
       );
       return response.data;
     } catch (error) {
-      console.error('Token validation error:', error);
+      console.error('[AUTH] Token validation error:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -311,7 +315,7 @@ class AuthService {
       );
       return response.data;
     } catch (error) {
-      console.error('Password reset error:', error);
+      console.error('[AUTH] Password reset error:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -334,7 +338,7 @@ class AuthService {
       );
       return response.data;
     } catch (error) {
-      console.error('Password change error:', error);
+      console.error('[AUTH] Password change error:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -360,7 +364,7 @@ class AuthService {
       return response.data;
     } catch (error) {
       this.pendingRequests.delete(`verify_${token}`);
-      console.error('Email verification error:', error);
+      console.error('[AUTH] Email verification error:', error?.message || 'Unknown error');
       throw error;
     }
   }
@@ -377,7 +381,7 @@ class AuthService {
       );
       return response.data;
     } catch (error) {
-      console.error('Resend verification error:', error);
+      console.error('[AUTH] Resend verification error:', error?.message || 'Unknown error');
       throw error;
     }
   }

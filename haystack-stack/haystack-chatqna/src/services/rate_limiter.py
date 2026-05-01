@@ -155,6 +155,11 @@ class RateLimiterASGI:
     def __init__(self, app, limits: Optional[Dict[str, Dict[str, int]]] = None):
         self.app = app
         self.limits = limits or _resolve_limits()
+        # BUG-016 fail-closed fallback: when Redis is down, every
+        # (path, ip, minute) gets counted in this dict instead. Keys
+        # outside the current minute are pruned each call so the dict
+        # never grows past the active window.
+        self._memory_counters: Dict[Tuple[str, str, int], int] = {}
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
@@ -197,16 +202,20 @@ class RateLimiterASGI:
         cfg: Dict[str, int],
     ) -> Optional[Tuple[int, str, int]]:
         """Returns None if request is allowed, else (limit, scope, retry_after_seconds)."""
+        now = int(time.time())
+        window = now // 60
+        window_left = 60 - (now % 60)
+
         r = _get_redis()
         if not r:
-            # Fail-open if redis is down
-            return None
+            # BUG-016 fix: was fail-open (return None). Now use an
+            # in-memory fixed-window counter with a CONSERVATIVE limit
+            # (half the Redis per-IP limit, floor 5/min). This is best-
+            # effort -- per-process, not cluster-wide -- but it shuts
+            # down trivial DoS while Redis is recovering.
+            return self._check_in_memory(path, ip, cfg, window, window_left)
 
         try:
-            now = int(time.time())
-            window = now // 60
-            window_left = 60 - (now % 60)
-
             # Per-IP key
             ip_key = f"ratelimit:{path}:{ip}:{window}"
             global_key = f"ratelimit:{path}:_global:{window}"
@@ -227,9 +236,44 @@ class RateLimiterASGI:
             if global_count > cfg["global"]:
                 return cfg["global"], "global", window_left
         except Exception as e:
-            logger.debug("rate_limiter: redis check failed (fail-open): %s", e)
-            return None
+            # BUG-016 fix: was fail-open here too. Same in-memory fallback.
+            logger.warning("rate_limiter: redis check failed (%s) -- in-memory fallback", e)
+            return self._check_in_memory(path, ip, cfg, window, window_left)
 
+        return None
+
+    def _check_in_memory(
+        self,
+        path: str,
+        ip: str,
+        cfg: Dict[str, int],
+        window: int,
+        window_left: int,
+    ) -> Optional[Tuple[int, str, int]]:
+        """In-memory fail-closed fallback for _check_and_increment.
+
+        Conservative: per-IP limit is min(cfg.per_ip // 2, cfg.per_ip),
+        floor 5/min, so even a misconfigured very-low-cost endpoint gets
+        protection while Redis is unreachable. Per-process only (does
+        not aggregate across workers / containers).
+        """
+        # Prune any counters that are not in the current window.
+        # Bounded work: only entries whose window != current survive.
+        stale = [k for k in self._memory_counters if k[2] != window]
+        for k in stale:
+            self._memory_counters.pop(k, None)
+
+        per_ip_limit = max(5, min(cfg.get("per_ip", 5), cfg.get("per_ip", 5) // 2 or 5))
+
+        key = (path, ip, window)
+        n = self._memory_counters.get(key, 0) + 1
+        self._memory_counters[key] = n
+        if n > per_ip_limit:
+            logger.warning(
+                "rate_limiter: in-memory limit exceeded path=%s ip=%s n=%d limit=%d",
+                path, ip, n, per_ip_limit,
+            )
+            return per_ip_limit, "per-ip-degraded", window_left
         return None
 
     async def _send_429(

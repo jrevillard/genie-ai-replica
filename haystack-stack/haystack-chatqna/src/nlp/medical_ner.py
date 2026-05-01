@@ -76,6 +76,70 @@ _BODY_PARTS: Dict[str, str] = {
     "daa":      "mouth",
 }
 
+# BUG-020 fix: ambiguous medical terms.
+# Some English organ-names double as common food words ("I ate liver
+# for dinner", "kidney beans for lunch"). Any caller that extracts
+# these words as symptoms / body-parts MUST gate the match through
+# is_medical_context() so a culinary mention does not trip clinical
+# escalation. The current _BODY_PARTS dict is Mandinka-only and is
+# not affected today; this helper is exported for sibling modules
+# (notification_intent.py, code_switch_detector.py) and as a safety
+# net for any future English organ-name additions.
+_GENERAL_SYMPTOM_WORDS = ["hurt", "hurts", "hurting", "ache", "aches", "aching",
+                          "sore", "tender", "throb", "throbbing"]
+AMBIGUOUS_MEDICAL_TERMS: Dict[str, Dict[str, List[str]]] = {
+    "liver":  {
+        "medical_contexts": ["pain", "disease", "failure", "damage", "function",
+                              "problem", "test", "enzyme", "cirrhosis", "hepatitis",
+                              "swollen", "enlarged"] + _GENERAL_SYMPTOM_WORDS,
+        "food_contexts":    ["eat", "ate", "cook", "cooked", "dinner", "lunch",
+                              "breakfast", "fry", "fried", "grill", "grilled",
+                              "recipe", "benachin", "domoda", "stew", "soup",
+                              "delicious", "tasty", "buy", "market", "lumo"],
+    },
+    "kidney": {
+        "medical_contexts": ["pain", "disease", "failure", "stone", "function",
+                              "infection", "dialysis", "transplant"] + _GENERAL_SYMPTOM_WORDS,
+        "food_contexts":    ["eat", "ate", "cook", "cooked", "stew", "beans",
+                              "dinner", "lunch", "breakfast"],
+    },
+    "heart":  {
+        "medical_contexts": ["attack", "failure", "disease", "rate", "beat",
+                              "palpitation", "pain", "murmur", "valve"] + _GENERAL_SYMPTOM_WORDS,
+        "food_contexts":    ["eat", "ate", "cook", "chicken", "stew"],
+    },
+    "blood":  {
+        "medical_contexts": ["pressure", "sugar", "test", "loss", "clot",
+                              "transfusion", "count", "cell", "vessel"],
+        "food_contexts":    ["sausage", "pudding"],
+    },
+}
+
+
+def is_medical_context(word: str, surrounding_text: str) -> bool:
+    """BUG-020 helper. True if `word` looks medical given the text it
+    appears in. For non-ambiguous terms this is always True (the term
+    has no food sense). For terms in AMBIGUOUS_MEDICAL_TERMS we count
+    nearby medical-context words vs food-context words: when food wins
+    we return False so the caller skips the match. When neither side
+    wins we default to NOT medical -- the cost of a missed clinical
+    detection is recoverable (re-prompt, follow-up question), but the
+    cost of escalating "liver for dinner" damages user trust.
+    """
+    word_lower = (word or "").lower()
+    if word_lower not in AMBIGUOUS_MEDICAL_TERMS:
+        return True
+    entry = AMBIGUOUS_MEDICAL_TERMS[word_lower]
+    text_lower = (surrounding_text or "").lower()
+    med_hits  = sum(1 for ctx in entry["medical_contexts"] if ctx in text_lower)
+    food_hits = sum(1 for ctx in entry["food_contexts"]    if ctx in text_lower)
+    if food_hits > med_hits:
+        return False
+    if med_hits > 0:
+        return True
+    return False
+
+
 # Medications -- canonical lowercase names
 _MEDICATIONS: List[str] = [
     "hydrochlorothiazide",
@@ -536,6 +600,16 @@ class MedicalNERExtractor:
         seen: set = set()
         for pattern, english in self._body_parts:
             if pattern in text_lower and pattern not in seen:
+                # BUG-020 guard: if the body part name (or its English
+                # translation) is in AMBIGUOUS_MEDICAL_TERMS and the
+                # surrounding text reads as food context, skip the match.
+                ambig_word = None
+                if pattern in AMBIGUOUS_MEDICAL_TERMS:
+                    ambig_word = pattern
+                elif english in AMBIGUOUS_MEDICAL_TERMS:
+                    ambig_word = english
+                if ambig_word and not is_medical_context(ambig_word, text_lower):
+                    continue
                 results.append({
                     "mandinka": pattern,
                     "english":  english,

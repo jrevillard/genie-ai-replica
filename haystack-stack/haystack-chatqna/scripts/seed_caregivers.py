@@ -11,14 +11,29 @@ Or locally with the right env vars:
   python scripts/seed_caregivers.py
 """
 
+# ============================================
+# WARNING: SEED DATA ONLY -- NOT FOR PRODUCTION
+# These records are synthetic test data.
+# PINs are randomly generated per run and printed
+# once to stdout so the operator can hand them out
+# to the corresponding caregivers.
+# Do NOT promote seed data to production.
+# ============================================
+
 import hashlib
 import hmac
 import os
+import secrets
 import sys
 import uuid
 from datetime import datetime
 
 import requests
+
+
+def generate_seed_pin() -> str:
+    """Per-caregiver random 6-digit PIN. BUG-011 fix."""
+    return str(secrets.randbelow(900_000) + 100_000)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 URL  = os.getenv("ARCADEDB_URL",      "http://arcadedb:2480")
@@ -29,7 +44,9 @@ PASS = os.getenv("ARCADEDB_PASSWORD", "arcadedb")
 AUTH = (USER, PASS)
 API  = f"{URL}/api/v1/command/{DB}"
 
-DEFAULT_PIN = "1234"   # caregivers will be asked to change this on first login
+# BUG-011 fix: PINs are now per-caregiver random; see generate_seed_pin().
+# Tracked here only for the printout at the end of seed().
+_GENERATED_PINS: dict = {}
 
 
 def _sql(stmt: str, params: dict = None):
@@ -211,7 +228,9 @@ def seed():
             continue
 
         salt     = uuid.uuid4().hex[:16]
-        pin_hash = _hash_pin(DEFAULT_PIN, salt)
+        seed_pin = generate_seed_pin()
+        _GENERATED_PINS[cg["name"]] = seed_pin
+        pin_hash = _hash_pin(seed_pin, salt)
         tags_json   = str(cg["specialty_tags"]).replace("'", '"')
         langs_json  = str(cg["languages"]).replace("'", '"')
 
@@ -251,8 +270,12 @@ def seed():
         except Exception as e:
             print(f"  ERROR {cg['name']}: {e}")
 
-    print(f"\nDone — {created} created, {skipped} skipped.")
-    print(f"Default PIN for all seeded caregivers: {DEFAULT_PIN!r}\n")
+    print(f"\nDone -- {created} created, {skipped} skipped.")
+    if _GENERATED_PINS:
+        print("Per-caregiver random seed PINs (record once, then discard):")
+        for name, pin in _GENERATED_PINS.items():
+            print(f"  {name:<35}  PIN: {pin}")
+        print("Each caregiver MUST change their PIN on first login.\n")
 
 
 if __name__ == "__main__":

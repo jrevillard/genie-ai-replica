@@ -62,19 +62,43 @@ def _decode_amina_jwt(token: str) -> Optional[Dict[str, Any]]:
 
 def _try_read_current_user(request: Request, amina_token_query: Optional[str]) -> Optional[Dict[str, Any]]:
     """
-    The user may have a session via:
-      - Cookie  "AMINA_TOKEN" (if the frontend set one)
-      - Query   ?amina_token=... (demo / QA convenience)
-      - Header  Authorization: Bearer <token>
-    For MVP we accept any of these. Production deployments should move to
-    a cookie-only flow behind a proper login wall.
+    Resolve the current AMINA user from one of three sources, in order
+    of preference:
+      1. Header  Authorization: Bearer <token>      (preferred)
+      2. Header  X-AMINA-Token: <token>             (preferred alt)
+      3. Cookie  "AMINA_TOKEN"                      (preferred for browsers)
+      4. Query   ?amina_token=...                   (DEPRECATED -- BUG-012)
+
+    BUG-012 fix: query-string tokens leak into browser history, server
+    access logs, and Referer headers. We still accept them so existing
+    demo/QA flows do not break, but every successful resolution via the
+    query string emits a deprecation warning naming the client IP so
+    the operator can chase down the caller.
     """
-    cookie = request.cookies.get("AMINA_TOKEN")
     header = request.headers.get("Authorization") or ""
     bearer = header.split(" ", 1)[1] if header.lower().startswith("bearer ") else ""
-    for t in (cookie, amina_token_query, bearer):
-        payload = _decode_amina_jwt(t)
+    x_amina = (request.headers.get("X-AMINA-Token") or "").strip()
+    cookie = request.cookies.get("AMINA_TOKEN")
+
+    for tok in (bearer, x_amina, cookie):
+        payload = _decode_amina_jwt(tok)
         if payload and payload.get("sub"):
+            return payload
+
+    # Last resort: query-string token. Log loudly.
+    if amina_token_query:
+        payload = _decode_amina_jwt(amina_token_query)
+        if payload and payload.get("sub"):
+            client_ip = request.client.host if request.client else "unknown"
+            logger.warning(
+                "[SECURITY] BUG-012: AMINA token received via ?amina_token= "
+                "query string. This is deprecated and will be removed. "
+                "Switch the caller to Authorization: Bearer <token>. "
+                "ip=%s ua=%r path=%s",
+                client_ip,
+                request.headers.get("user-agent", "")[:120],
+                request.url.path,
+            )
             return payload
     return None
 

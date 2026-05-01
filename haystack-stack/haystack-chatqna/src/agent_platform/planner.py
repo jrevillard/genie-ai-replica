@@ -192,11 +192,34 @@ async def _llm_plan(
         logger.warning("[planner] LLM planner failed: %s", e.__class__.__name__)
         return None
 
+    # BUG-013 fix: guard against empty/missing choices before indexing.
+    # An LLM provider returning HTTP 200 with choices=[] would otherwise
+    # raise IndexError and crash the prepass instead of falling through
+    # to the heuristic.
+    if not resp or not getattr(resp, "choices", None):
+        logger.warning("[planner] LLM returned empty choices list")
+        return AgenticPlan(
+            intent="llm_empty_response",
+            confidence=0.0,
+            route="normal",
+            tool_calls=[],
+            reason="llm_empty_response",
+        )
+
     try:
         text = (resp.choices[0].message.content or "").strip()
         # Strip markdown code-fence if present
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
+        if not text:
+            logger.warning("[planner] LLM returned empty content")
+            return AgenticPlan(
+                intent="llm_empty_content",
+                confidence=0.0,
+                route="normal",
+                tool_calls=[],
+                reason="llm_empty_content",
+            )
         data = json.loads(text)
     except Exception:
         logger.warning("[planner] LLM returned invalid JSON")

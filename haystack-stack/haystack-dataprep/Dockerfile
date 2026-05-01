@@ -12,8 +12,14 @@ RUN pip install --no-cache-dir -r requirements.txt
  
 COPY src/ ./src/
 COPY data/ ./data/
- 
+
+# BUG-025 fix: drop root. Takes effect on next rebuild.
+RUN groupadd --system amina \
+ && useradd  --system --gid amina --home-dir /app --shell /sbin/nologin amina \
+ && mkdir -p /app/logs /app/tmp \
+ && chown -R amina:amina /app
+USER amina
+
 EXPOSE 8000
- 
+
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
- 

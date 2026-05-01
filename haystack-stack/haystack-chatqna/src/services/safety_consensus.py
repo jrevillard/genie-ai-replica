@@ -387,10 +387,32 @@ async def guard_reply(
             auth_header=auth_header,
         )
     except Exception as e:
-        logger.warning(f"safety_consensus: second_opinion raised {type(e).__name__}: {e}")
-        return {"action": "pass", "final_reply": primary_reply,
-                "safety_note": "",
-                "trace": {"skipped": "second_opinion_exception", "error": str(e)[:200]}}
+        # BUG-015 fix: fail closed. The fingerprint already says this
+        # reply is safety-critical (triggered=True). Serving the
+        # unaudited primary reply when the auditor is unreachable would
+        # silently bypass the safety contract -- treat any auditor
+        # failure as a flag-for-review with a canned safe template.
+        logger.error(
+            "[SAFETY_CONSENSUS] auditor failed (%s: %s) -- failing closed",
+            type(e).__name__, e,
+        )
+        safe_template = (
+            "I want to help, but I need a health worker to confirm this answer "
+            "before I share it. Please contact your nearest health centre, or "
+            "call 1025 (The Gambia health hotline) if this is urgent."
+        )
+        return {
+            "action": "flag_for_review",
+            "final_reply": safe_template,
+            "safety_note": "Auditor unavailable; safe template served.",
+            "auditor_error": True,
+            "trace": {
+                "skipped": "second_opinion_exception",
+                "error_class": type(e).__name__,
+                "error": str(e)[:200],
+                "fail_mode": "closed",
+            },
+        }
 
     return reconcile(
         primary_reply=primary_reply,

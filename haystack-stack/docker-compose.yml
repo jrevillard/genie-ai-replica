@@ -19,12 +19,20 @@ services:
       # - arcadedb_data:/home/arcadedb/databases
       # NEW (bind mount to E: drive under project tree):
       - ./data/arcadedb:/home/arcadedb/databases
+    # BUG-024 fix: was just `wget /api/v1/ready` which only proves the
+    # HTTP server is bound. A wedged DB (locked, OOM, schema corrupt)
+    # would still respond OK and dependents (haystack-chatqna,
+    # dataprep-worker) would proceed thinking the database is fine.
+    # The new test asks ArcadeDB to LIST its databases via the
+    # authenticated /api/v1/databases endpoint -- this requires the
+    # query engine to be alive. If the engine is wedged, this fails.
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:2480/api/v1/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL",
+             "wget -qO- --header='Authorization: Basic $$(printf '%s' \"root:${ARCADEDB_ROOT_PASSWORD:-genieRoot123}\" | base64 -w0)' http://127.0.0.1:2480/api/v1/databases | grep -q '\"result\"' || exit 1"]
+      interval: 15s
+      timeout: 10s
       retries: 10
-      start_period: 20s
+      start_period: 30s
     networks:
       - chatqna_default
   # Whisper.cpp (STT)

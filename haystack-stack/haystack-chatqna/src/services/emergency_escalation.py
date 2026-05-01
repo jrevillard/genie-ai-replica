@@ -204,12 +204,40 @@ class EmergencyEscalationService:
         patient-side watcher to know whether to surface the 199 prompt."""
         pool: List[Dict[str, Any]] = self.list_active()
         if not active_only:
+            # BUG-017 fix: parse errors used to silently drop a resolved
+            # alert -- which meant get_latest_for_patient could return
+            # None even with an active emergency on record. Preserve the
+            # raw blob in self._unparsed_alerts (in-memory ring) so the
+            # operator can recover it from logs / audit if needed.
             try:
                 raw = self.redis.hgetall(RESOLVED_KEY) or {}
-                for _, v in raw.items():
-                    try: pool.append(json.loads(v))
-                    except Exception: pass
-            except Exception: pass
+            except Exception as e:
+                logger.error(
+                    "[EMERGENCY] could not read resolved alerts (%s: %s)",
+                    type(e).__name__, e,
+                )
+                raw = {}
+            for _, v in raw.items():
+                try:
+                    pool.append(json.loads(v))
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        "[EMERGENCY] failed to parse resolved alert JSON: %s. "
+                        "Raw preserved (truncated): %r", e, v[:200] if isinstance(v, str) else str(v)[:200],
+                    )
+                    if not hasattr(self, "_unparsed_alerts"):
+                        self._unparsed_alerts: List[Dict[str, Any]] = []
+                    if len(self._unparsed_alerts) < 50:  # bounded ring
+                        self._unparsed_alerts.append({
+                            "raw": (v[:500] if isinstance(v, str) else str(v)[:500]),
+                            "error": str(e),
+                            "timestamp": datetime.utcnow().isoformat(),
+                        })
+                except Exception as e:
+                    logger.error(
+                        "[EMERGENCY] unexpected error reading alert (%s: %s)",
+                        type(e).__name__, e,
+                    )
         pool = [r for r in pool if r.get("patient_id") == patient_id]
         if not pool:
             return None

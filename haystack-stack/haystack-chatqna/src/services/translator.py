@@ -117,11 +117,24 @@ class Translator:
             self._redis = get_memory_manager().redis
         return self._redis
 
+    # BUG-018 fix: cache TTL was 30 days. A bad translation that slipped
+    # past the repetition guard would then serve to every user for a
+    # month. Cap default TTL at 7 days. The repetition guard already
+    # catches loops; a shorter TTL bounds the blast radius for anything
+    # else (cultural mistranslation, hallucinated diagnosis word, etc.)
+    # that isn't loop-shaped.
+    _CACHE_TTL_S = 7 * 86400
+
     def _cache_key(self, text: str, source: str, target: str) -> str:
-        h = hashlib.sha1(f"{source}|{target}|{text}".encode("utf-8")).hexdigest()[:16]
+        # BUG-018 fix: full SHA-256 (no truncation) and explicit lang
+        # ordering. SHA-1 truncated to 16 hex chars gave 64-bit collision
+        # space -- still huge in practice, but birthday-bound collisions
+        # would let a malicious or unlucky text serve the wrong cached
+        # translation. Full SHA-256 with explicit lang+backend prefix
+        # makes cross-language collision impossible by construction.
+        h = hashlib.sha256(f"{source}|{target}|{text}".encode("utf-8")).hexdigest()
         # Namespace the cache by backend so switching flags doesn't return
-        # stale cross-backend results. Both caches coexist: flipping back
-        # from gemma → openai is a cheap switch if the openai cache is warm.
+        # stale cross-backend results.
         return f"translate:{self.backend}:{source}:{target}:{h}"
 
     async def translate(
@@ -183,9 +196,9 @@ class Translator:
         except Exception as e:
             logger.warning(f"Repetition guard failed (non-fatal): {e}")
 
-        # Cache for 30 days
+        # BUG-018 fix: cache for 7 days (was 30). See _CACHE_TTL_S.
         try:
-            self.redis.setex(self._cache_key(text, source, target), 30 * 86400, translated)
+            self.redis.setex(self._cache_key(text, source, target), self._CACHE_TTL_S, translated)
         except Exception as e:
             logger.warning(f"Translation cache write failed: {e}")
 
@@ -267,11 +280,11 @@ TRANSLATIONS:"""
         for i, key in enumerate(keys):
             translated = parsed.get(i + 1, misses[key])
             out[key] = translated
-            # Cache
+            # BUG-018 fix: 7-day TTL (was 30). See _CACHE_TTL_S.
             try:
                 self.redis.setex(
                     self._cache_key(misses[key], source, target),
-                    30 * 86400,
+                    self._CACHE_TTL_S,
                     translated,
                 )
             except Exception:

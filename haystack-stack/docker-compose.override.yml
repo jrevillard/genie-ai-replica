@@ -220,6 +220,10 @@ services:
       - ./haystack-chatqna/src/api/agent_routes.py:/app/src/api/agent_routes.py:ro
       # Production-aware secret/flag config (BUG-003/004/006/007 fixes)
       - ./haystack-chatqna/src/config.py:/app/src/config.py:ro
+      # Translation v3.5 / v4.2 -- whole directory mounted as one
+      # read-only volume so the [6/8] verify block + canary + baseline
+      # script all see the same source tree the host has.
+      - ./haystack-chatqna/src/translation_v4:/app/src/translation_v4:ro
       # admin_routes.py: BUG-002 hmac.compare_digest, BUG-009 admin auth
       # gate, plus a9d74b19's cleanup-tracking + JSON-parse logging fixes.
       - ./haystack-chatqna/src/api/admin_routes.py:/app/src/api/admin_routes.py:ro

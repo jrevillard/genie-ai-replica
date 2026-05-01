@@ -145,6 +145,165 @@ git config core.hooksPath .githooks
 | Whisper (STT)       | <http://localhost:8087>            | Speech-to-text (internal)        |
 | Piper (TTS)         | <http://localhost:5500>            | English TTS (internal)           |
 | MMS-MNK (TTS)       | <http://localhost:5501>            | Mandinka TTS (internal)          |
+| NLLB Translate      | <http://localhost:7860>            | English↔Bambara MT (Translation v4.2 sidecar) |
+
+---
+
+## Translation pipeline (v3.5 / v4.2)
+
+`AMINA_TRANSLATION_V4_ENABLED=true` is the default in `.env.defaults`,
+so a fresh-clone tester runs the v4.2 pipeline out of the box.
+
+### What the start script handles automatically
+
+`start.ps1` / `start.sh` step **`[6/8] Verifying Translation v4.2`**:
+
+1. **Pulls and starts the NLLB-200 sidecar** (`ghcr.io/winstxnhdw/nllb-api:main`).
+   First boot pulls a ~7.6 GB Docker image (CTranslate2 runtime +
+   600M model weights + Python dependencies) — the script auto-detects
+   whether the image is already cached and waits up to 15 minutes on
+   first run, 3 minutes on subsequent runs, for `/api/v4/health` (or
+   `/health` on the prebuilt image) to return 200.
+2. **Verifies the endpoint contract** by calling
+   `GET /api/v4/translator?text=hello&source=eng_Latn&target=bam_Latn`
+   and checking the response shape. Catches an upstream image change
+   before users hit a confusing translation failure.
+3. **Eager-bootstraps the ArcadeDB `TranslationMetric` schema** via
+   `docker exec`. Idempotent — subsequent process starts hit the
+   in-process latch and skip. If ArcadeDB isn't reachable the lazy
+   bootstrap on the first telemetry call still runs.
+4. **Runs a canary translation** of `"How are you?"` through the live
+   pipeline inside `haystack-chatqna`. Reports the chosen engine,
+   back-translation method, and latency in the summary block so the
+   operator sees a green light (or a yellow "v4 active in v3.5 fallback").
+5. **Surfaces `Pending: native-speaker review of the 80 golden pairs`**
+   in the summary block — the one item the script cannot automate.
+
+### Graceful degradation paths
+
+| Failure | Behaviour |
+|---|---|
+| NLLB sidecar slow to load | Pipeline stays active; phrasebank + LLM serve while NLLB warms |
+| NLLB sidecar fails entirely | Pipeline runs as v3.5 (phrasebank + LLM, temp-shift back-translation) |
+| ArcadeDB down | Telemetry persistence skipped; structured JSON log still emitted |
+| `AMINA_TRANSLATION_V4_ENABLED=false` | `pipeline.translate()` returns `None`; v1 path runs unchanged |
+| Any stage raises | Caught and logged; pipeline returns `None` → v1 fallback |
+
+### Forcing the v1 (legacy) path
+
+Set `AMINA_TRANSLATION_V4_ENABLED=false` in `haystack-stack/.env` and
+re-run `start.ps1`. The script will skip the v4 verify block entirely
+and the translator falls back to the pre-v3.5 behaviour.
+
+### Faster restarts: `-SkipVerify`
+
+`[6/8]` waits up to 15 minutes on first NLLB start (Docker image
+pull + model load) and up to 3 minutes on subsequent runs (model
+load only). For fast restarts that skip the verify block entirely:
+
+```powershell
+.\start.ps1 -SkipVerify       # PowerShell
+./start.sh --skip-verify      # bash
+```
+
+## First-run model downloads
+
+On first start, AMINA pulls AI models automatically. Sizes and
+expected times on a typical 50–100 Mbit/s connection:
+
+| Component         | Size    | Time         | Purpose                                            |
+|-------------------|---------|--------------|----------------------------------------------------|
+| Whisper STT       | ~148 MB | ~30 s        | English speech-to-text                             |
+| Piper TTS         | ~63 MB  | ~15 s        | English text-to-speech                             |
+| NLLB Translation  | ~7.6 GB | 5–10 min     | Mandinka translation engine (Docker image)         |
+
+**To avoid waiting during a UNICC demo**, pre-pull the NLLB image
+the night before:
+
+```powershell
+docker compose -f haystack-stack/docker-compose.nllb.yml pull nllb-translate
+```
+
+After the image is cached, subsequent starts take ~2 minutes (model
+load only, no download). The start script auto-detects the cached
+image and shortens its NLLB wait budget from 15 minutes to 3.
+
+**If the NLLB pull fails** (firewall, proxy, slow connection), AMINA
+still works — translation falls back to phrasebank + LLM with
+reduced quality. Text chat is fully functional. The script never
+blocks the user on NLLB readiness; the summary block flags it as
+`[LOADING]` with a recovery hint.
+
+The summary block prints `Verify : skipped (--SkipVerify)` so the
+operator never thinks it ran silently.
+
+### Native-speaker review of the 80 golden pairs
+
+The `[6/8]` summary line `Review : X/80 golden pairs validated by
+native speaker` reads directly from
+`src/translation_v4/eval/golden_translations.json`. To capture
+validation, run the interactive CLI:
+
+```bash
+REVIEWER_NAME="Alkalo Bah" python scripts/review_translations.py
+# filter by category or single pair:
+python scripts/review_translations.py --category negation_critical
+python scripts/review_translations.py --id med_001
+# stats only, no prompts:
+python scripts/review_translations.py --summary-only
+```
+
+For each pair the reviewer can `[a]ccept`, `[e]dit & accept`, `[r]eject`,
+`[s]kip`, or `[q]uit`. State persists to the same JSON file after every
+decision so an interrupt never loses work. Each reviewed pair gains
+`reviewed_at` (UTC ISO-8601) and `reviewed_by` (`$REVIEWER_NAME`).
+Edited entries preserve the original under `original_mandinka`.
+
+### Real-world baseline run (locks in the v4.2 quality numbers)
+
+Once NLLB is up and the LLM keys are real, run the baseline once to
+populate `docs/compliance/translation_v4_baseline_<date>.json` and the
+ArcadeDB `TranslationMetric` vertex. Costs LLM credits per pair; do
+not run on every CI build.
+
+Two ways to trigger:
+
+```powershell
+# After start.ps1 finishes -- runs in-line, before the summary
+.\start.ps1 -Baseline
+
+# Or as a standalone command (existing stack stays up)
+python scripts/translation_baseline.py
+
+# Diff against a previous baseline
+python scripts/translation_baseline.py \
+    --compare docs/compliance/translation_v4_baseline_2026-05-01.json
+
+# Only run pairs the native speaker has already validated
+python scripts/translation_baseline.py --validated-only
+```
+
+The script writes a structured artefact:
+
+```json
+{
+  "schema":  "translation_v4_baseline.v1",
+  "timestamp": "2026-05-01T20:30:00Z",
+  "config_snapshot": { ... },
+  "summary": {
+    "negation_preservation_rate":  1.000,
+    "number_preservation_rate":    1.000,
+    "score_overall":  { "mean": 0.81, "p50": 0.85, "p95": 0.92 },
+    "engine_distribution":         { "phrasebank": 5, "nllb": 60, "llm": 15 },
+    "back_translation_methods":    { "nllb_cross_model": 60, ... },
+    "by_category":                 { ... }
+  },
+  "results": [ { ...one row per pair... } ]
+}
+```
+
+The next baseline run with `--compare <previous>` shows deltas on
+every metric so a regression is one diff away.
 
 ---
 

@@ -10,6 +10,13 @@
 #   .\scripts\bootstrap_models.ps1
 #   .\scripts\bootstrap_models.ps1 -Force   # re-download even if present
 #
+# NOTE: Translation v4.2 ships NLLB-200 inside its own sidecar
+# container (haystack-stack/docker-compose.nllb.yml). Docker handles
+# the ~7.6 GB NLLB image pull on first sidecar start (model + runtime
+# + dependencies) -- no host action needed and no entry in this
+# script's models list. Whisper + Piper stay here because they
+# bind-mount from the host.
+#
 # Paths below match haystack-stack/docker-compose.yml exactly:
 #   voice-stt:    ../components/voice-gateway/infra/whispercpp/models:/models:ro
 #                 command: ... -m /models/ggml-base.en.bin

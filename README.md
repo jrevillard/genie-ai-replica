@@ -8,9 +8,15 @@
 > ```
 > Open <http://localhost:5174> when the script reports "AMINA is ready."
 > No `.env` to copy, no API keys to find — demo defaults boot the full
-> stack in a few minutes. First run also downloads ~210 MB of voice
-> model weights (Whisper STT + Piper TTS); subsequent runs skip it.
-> See [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md) for full instructions,
+> stack out of the box.
+>
+> ⏱ **First run: 5–10 minutes** (downloads ~210 MB of voice models +
+> a ~7.6 GB NLLB translation image). **Subsequent runs: ~2 minutes.**
+> To skip the NLLB pull during a live demo, pre-pull the night before:
+> `docker compose -f haystack-stack/docker-compose.nllb.yml pull nllb-translate`.
+>
+> See [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md) and the
+> [UNICC quickstart](docs/UNICC_QUICKSTART.md) for full instructions,
 > troubleshooting, and the team-mode workflow.
 
 ---

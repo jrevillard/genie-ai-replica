@@ -1,0 +1,51 @@
+# Translation v4.2 -- NLLB-200 sidecar.
+#
+# Deploys a CTranslate2-optimised NLLB API as a separate container so
+# the haystack-chatqna image stays lean. The container exposes:
+#   GET /api/v4/translator?text=...&source=eng_Latn&target=bam_Latn
+#   GET /api/v4/health
+#
+# When this overlay is NOT included in the compose file list, the v4.2
+# pipeline detects the missing endpoint at first call and falls back
+# to v3.5 behaviour (LLM engine + temp-shift back-translation). No
+# functional regression -- just a quality cap until NLLB comes online.
+#
+# Usage (handled by start.ps1 / start.sh -- testers do not run this directly):
+#   docker compose -f docker-compose.yml -f docker-compose.nllb.yml up -d nllb-translate
+#
+# First start downloads ~2.5 GB of model files inside the container's
+# layer cache; subsequent starts are <30 s. Healthcheck has start_period
+# 120 s to cover that download.
+
+services:
+  nllb-translate:
+    image: ghcr.io/winstxnhdw/nllb-api:main
+    container_name: nllb-translate
+    ports:
+      - "7860:7860"
+    environment:
+      SERVER_PORT:        "7860"
+      OMP_NUM_THREADS:    "4"
+      TRANSLATOR_THREADS: "2"
+      WORKER_COUNT:       "1"
+    deploy:
+      resources:
+        limits:
+          cpus:   "4.0"
+          memory: 6G
+        reservations:
+          memory: 3G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7860/api/v4/health || curl -sf http://localhost:7860/health || exit 1"]
+      interval:     15s
+      timeout:      10s
+      retries:      20
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - chatqna_default
+
+networks:
+  chatqna_default:
+    external: true
+    name: haystack-stack_chatqna_default

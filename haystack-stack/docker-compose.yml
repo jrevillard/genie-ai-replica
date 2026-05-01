@@ -28,9 +28,19 @@ services:
     # The new test asks ArcadeDB to LIST its databases via the
     # authenticated /api/v1/databases endpoint -- this requires the
     # query engine to be alive. If the engine is wedged, this fails.
+    #
+    # 2026-05-01 fix: the outer single quotes around the --header value
+    # silently broke the $(printf ... | base64) substitution. /bin/sh
+    # does not expand $(...) inside single quotes, so wget sent the
+    # literal string "Basic $(printf '%s' \"root:...\" | base64 -w0)"
+    # as the header and ArcadeDB returned 403 Forbidden on every probe.
+    # Switching to double quotes lets the substitution run; the inner
+    # printf args are now single-quoted literals so they pass cleanly
+    # through the outer double-quoting layer. Verified locally with
+    # ``curl -u root:$ARCADEDB_ROOT_PASSWORD`` -> HTTP 200.
     healthcheck:
       test: ["CMD-SHELL",
-             "wget -qO- --header='Authorization: Basic $$(printf '%s' \"root:${ARCADEDB_ROOT_PASSWORD:-genieRoot123}\" | base64 -w0)' http://127.0.0.1:2480/api/v1/databases | grep -q '\"result\"' || exit 1"]
+             "wget -qO- --header=\"Authorization: Basic $$(printf '%s' 'root:${ARCADEDB_ROOT_PASSWORD:-genieRoot123}' | base64 -w0)\" http://127.0.0.1:2480/api/v1/databases | grep -q '\"result\"' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -200,6 +210,16 @@ services:
       MMS_TTS_URL: http://voice-tts-mnk:5500
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Translation v4.2 / v4.2.1 -- compose-level defaults so a team
+      # .env that pre-dates v4 still gets the new pipeline. Demo mode
+      # already has these in .env.defaults; this guarantees parity.
+      AMINA_TRANSLATION_V4_ENABLED: ${AMINA_TRANSLATION_V4_ENABLED:-true}
+      NLLB_ENABLED: ${NLLB_ENABLED:-true}
+      NLLB_API_URL: ${NLLB_API_URL:-http://nllb-translate:7860}
+      NLLB_TIMEOUT_MS: ${NLLB_TIMEOUT_MS:-10000}
+      BAMBARA_ADAPTER_ENABLED: ${BAMBARA_ADAPTER_ENABLED:-true}
+      V4_BACK_TRANSLATION_ENABLED: ${V4_BACK_TRANSLATION_ENABLED:-true}
+      V4_BACK_TRANSLATION_PREFER_NLLB: ${V4_BACK_TRANSLATION_PREFER_NLLB:-true}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
       interval: 15s
@@ -227,8 +247,13 @@ services:
     ports:
       - "8080:8088"
     environment:
-      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY}
-      - SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD}
+      # Defaults match haystack-stack/.env.defaults so a fresh team
+      # checkout (no .env or partial .env without superset entries)
+      # does not emit the "variable not set, defaulting to blank string"
+      # warning that confused UNICC testers. Override via .env when
+      # deploying anywhere that isn't a local demo.
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-amina_demo_superset_secret}
+      - SUPERSET_ADMIN_PASSWORD=${SUPERSET_ADMIN_PASSWORD:-admin}
       - ARCADEDB_ROOT_PASSWORD=${ARCADEDB_ROOT_PASSWORD}
       - ARCADEDB_DB=${ARCADEDB_DB}
     volumes:

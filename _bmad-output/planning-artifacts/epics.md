@@ -299,6 +299,11 @@ As a **system architect**, I want the Tool Executor to invoke tools through a st
 **Then** a `rate_limited` status is returned with HTTP 429 and `Retry-After` header
 **And** the rate limit event is logged (NFR7)
 
+**Given** the tool definition model from Story 1.1 (JSON Schema with execution config, parameters, security settings)
+**When** the Tool Executor loads tool definitions at startup
+**Then** each tool's execution config (backend URL, timeout, retry policy, enabled state) is resolved from the validated definition
+**And** the executor rejects tools with missing or invalid execution configs with a descriptive error
+
 **Given** the ToolExecutor ABC defined in `genieai_tool_executor_plugins/base.py`
 **When** a new tool plugin implements `execute()` and `validate_params()`
 **Then** the plugin is discovered and registered at startup
@@ -326,6 +331,12 @@ As a **compliance officer**, I want every tool invocation to be audit-logged in 
 **Given** an admin API query to `/v1/tools/audit`
 **When** filtered by tool_id, date range, or user_sub
 **Then** matching audit records are returned from ArangoDB (NFR8)
+
+**Given** the Sprint 23 observability platform (#601) may define a standard event consumption interface
+**When** the audit event schema is finalized
+**Then** the event structure (tool_id, user_sub, timestamp, input_params, result_metadata, pii_redacted, status) is documented as a standalone specification
+**And** if #601 is merged before this story, the event schema is verified compatible with the observability consumer expectations
+**And** if #601 is not yet merged, the documented schema serves as the alignment contract for future integration
 
 ### Story 1.6: Multi-Platform Deployment Configuration
 
@@ -361,6 +372,13 @@ As a **DevOps engineer**, I want to deploy all tool services via Docker Compose 
 **When** deployed to any target platform
 **Then** service-level config (ports, log levels, URLs, rate limits, circuit breaker thresholds) is set via environment variables with sensible defaults
 **And** tool/feed definitions are loaded from mounted `configs/tools/` volume
+
+**Given** Sprint 23 infrastructure work — K8s/Helm patterns (#600) and Nginx multi-deploy (#602)
+**When** the deployment configuration is finalized
+**Then** Docker Compose and Ansible deployment are complete and functional regardless of #600/#602 merge status
+**And** Helm charts are created as a documented stub with placeholder structure — finalized to match #600 conventions after #600 merges
+**And** nginx routing rules for tool services are compatible with the existing gateway configuration and adaptable to #602 multi-deploy changes
+**And** a reconciliation checklist is documented listing the alignment points to verify once #600 and #602 are merged
 
 ## Epic 2: Web Search & Result Fusion
 
@@ -470,9 +488,17 @@ As a **system architect**, I want the tool executor integrated into the existing
 **Then** the response includes `citations` array and optional `degradation` object
 **And** existing non-tool-augmented queries are unaffected (backward compatible)
 
-**Given** the ChatQnA #604 modular refactoring is in progress
-**When** the integration point moves from monolith to modular structure
-**Then** the ToolExecutor HTTP contract remains unchanged — only the call site moves
+**Given** the ChatQnA #604 modular refactoring is in progress or planned
+**When** the ToolExecutor integration is implemented
+**Then** the integration targets the HTTP contract defined in Story 1.4 (`POST /v1/tools/execute/{tool_id}`) — not ChatQnA internal APIs
+**And** a contract validation test suite verifies the HTTP interface independently of ChatQnA's internal structure
+**And** the integration is implemented against the current ChatQnA monolith (retrieval stage, before LLM prompt construction)
+**And** a documented migration guide specifies the exact call-site change required when #604 splits the monolith into modules — the HTTP contract does not change, only the internal call site moves
+
+**Given** Story 2.5 is the last story in Epic 2 and blocks the Sprint 24 LangGraph gate
+**When** #604 refactoring begins before Story 2.5 is complete
+**Then** Story 2.5 is prioritized ahead of #604 — the integration must be validated against the current monolith before refactoring begins
+**And** if #604 completes first, Story 2.5 targets the refactored modular structure directly using the same HTTP contract
 
 ## Epic 3: Stream Ingestion & Data Lifecycle
 
@@ -539,10 +565,11 @@ As a **system architect**, I want ingested content routed through the existing T
 
 **Acceptance Criteria:**
 
-**Given** extracted feed content from RSS, JSON API, or webhook sources
+**Given** extracted feed content from any ingestion source (RSS/Atom from Story 3.1, JSON API from Story 3.2, or webhook from Story 3.3)
 **When** the Stream Ingestor processes the content
 **Then** each content item is sent to the TEI embedding service via HTTP for vector embedding
 **And** the embedded chunk is stored in the shared `chunks` collection with `source_type: "feed"`, `source_url`, `feed_id`, and `expires_at` fields
+**And** the embedding pipeline is source-agnostic — it processes a standardized content model regardless of ingestion origin
 
 **Given** the existing `retract_file` method in the dataprep pipeline
 **When** feed chunks are stored alongside file-sourced chunks

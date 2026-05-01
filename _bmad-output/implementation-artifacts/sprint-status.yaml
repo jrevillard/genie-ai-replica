@@ -1,5 +1,5 @@
 # generated: 2026-05-01
-# last_updated: 2026-05-01
+# last_updated: 2026-05-02
 # project: genie-ai
 # project_key: NOKEY
 # tracking_system: file-system
@@ -62,13 +62,52 @@
 #
 # PREREQUISITES (hard blockers):
 #   1. Sprint 22 test framework (#599) — merged ✓
-#   2. Sprint 23 K8s/Helm (#600) — in progress
-#   3. Sprint 23 Observability (#601) — in progress
-#   4. ChatQnA #604 modular refactoring — NOT started, but contract-first approach mitigates
+#   2. Sprint 23 K8s/Helm (#600) — in progress (soft dep: Story 1.6 Helm stub)
+#   3. Sprint 23 Observability (#601) — in progress (soft dep: Story 1.5 event schema)
+#   4. Sprint 23 Nginx multi-deploy (#602) — in progress (soft dep: Story 1.6 routing)
+#   5. Sprint 24 ChatQnA #604 — NOT started (hard risk: Story 2.5 — see RISK MITIGATIONS)
 #
 # CRITICAL PATH:
 #   Epic 1 (Foundation) → Epic 2 (Web Search) → Sprint 24 gate
 #   Epic 3 (Ingestion) and Epic 4 (UI) can run in parallel after Epic 1
+#
+# CROSS-SPRINT DEPENDENCY MAP
+# =============================
+# Sprint 22 (#599) ──✓ merged──→ All integration testing (no action needed)
+#
+# Sprint 23 (#600) ──soft──→ Story 1.6 Helm charts
+#   Impact: Story 1.6 creates Helm chart stub; finalizes after #600 establishes patterns
+#   Mitigation: Docker Compose + Ansible are complete regardless; Helm deferred
+#
+# Sprint 23 (#601) ──soft──→ Story 1.5 audit event schema
+#   Impact: Event schema must be compatible with observability consumer
+#   Mitigation: Schema documented as standalone spec; verified if #601 merges first
+#
+# Sprint 23 (#602) ──soft──→ Story 1.6 nginx routing
+#   Impact: Tool service routing must align with multi-deploy config
+#   Mitigation: Routes use existing gateway patterns; reconciliation checklist documented
+#
+# Sprint 24 (#603) ──HARD──→ Epic 1 + Epic 2 (must merge before #603 starts)
+#   Impact: LangGraph ToolNode consumes ToolExecutor HTTP interface from Story 1.4
+#   Mitigation: Interface is contract-first HTTP; validated by integration test suite
+#
+# Sprint 24 (#604) ──HARD RISK──→ Story 2.5 (ChatQnA integration)
+#   Impact: ChatQnA refactoring changes the integration call site
+#   Mitigation: Story 2.5 uses HTTP contract, not internal APIs; includes contract
+#              validation test suite; migration guide for #604 modular structure
+#   Timing rule: Story 2.5 MUST complete before #604 begins active refactoring
+#
+# Sprint 25 (#606) ──soft──→ Epic 3 + Epic 4 (should complete before #606 starts)
+#   Impact: Each GovStack BB API registers as a tool via the registry
+#   Mitigation: Registry is stable after Epic 1; Epic 3 provides the ingestion patterns
+#
+# RISK MITIGATIONS (built into story acceptance criteria)
+# ======================================================
+# 1. Story 1.4: Explicit AC for tool definition model dependency from Story 1.1
+# 2. Story 1.5: Event schema documented as standalone spec; verified against #601 if available
+# 3. Story 1.6: Helm chart as stub; Docker Compose + Ansible complete; reconciliation checklist
+# 4. Story 2.5: Contract-first integration; validation test suite; migration guide for #604
+# 5. Story 3.4: Source-agnostic embedding pipeline (no false dependency on Story 3.3)
 
 # WORKTREE STRATEGY
 # ==================
@@ -83,14 +122,17 @@
 #   Round 1 (parallel — no file overlap):
 #     wt-tools-schema:    1-1  Schema + YAML config (configs/tools/, schema only)
 #     wt-tools-registry:  1-2  Registry service (genie-ai-overlay/tool-registry/)
-#     wt-tools-deploy:    1-6  Multi-platform deployment (docker-compose, ansible, charts/)
+#     wt-tools-deploy:    1-6  Multi-platform deployment (docker-compose, ansible, Helm stub)
+#                         NOTE: Helm chart is a stub; finalized after Sprint 23 #600 merges
 #
-#   Round 2 (parallel — different services):
+#   Round 2 (parallel — different services, 1-4 depends on 1-1 tool definition model):
 #     wt-tools-redactor:  1-3  PII redaction (genie-ai-overlay/tool-executor/redactor/)
 #     wt-tools-executor:  1-4  Executor + circuit breaker (genie-ai-overlay/tool-executor/)
+#                         DEPENDS ON: 1-1 (tool definition model for execution config resolution)
 #
 #   Round 3 (depends on 1-2 + 1-4 for stream/event integration):
 #     wt-tools-events:    1-5  Redis Streams + audit (genie-ai-overlay/tool-registry/, tool-executor/)
+#                         NOTE: Event schema verified against #601 if merged; documented as spec otherwise
 #
 # ─── Epic 2 (2 parallel worktrees, after Epic 1 merged) ───
 #
@@ -102,8 +144,11 @@
 #     wt-tools-fusion:    2-3  Result fusion (genie-ai-overlay/chatqna/)
 #                         2-4  Citations + degradation (genie-ai-overlay/chatqna/)
 #
-#   Round 3 (depends on 2-4 — final integration):
+#   Round 3 (depends on 2-4 — final integration, CRITICAL #604 timing):
 #     wt-tools-chatqna:   2-5  ChatQnA pipeline integration (genie-ai-overlay/chatqna/)
+#                         TIMING RULE: Must complete before Sprint 24 #604 refactoring begins
+#                         Contract-first: HTTP interface, not ChatQnA internals
+#                         Includes: Contract validation test suite + migration guide for #604
 #
 # ─── Epic 3 (2 parallel worktrees, after Epic 1 merged, parallel with Epic 2) ───
 #
@@ -111,9 +156,10 @@
 #     wt-tools-rss:       3-1  RSS/Atom polling (genie-ai-overlay/stream-ingestor/)
 #     wt-tools-jsonapi:   3-2  JSON API polling (genie-ai-overlay/stream-ingestor/)
 #
-#   Round 2 (sequential — same worktree):
+#   Round 2 (sequential — same worktree, 3-4 is source-agnostic):
 #     wt-tools-ingestor:  3-3  Webhook endpoint (genie-ai-overlay/stream-ingestor/)
 #                         3-4  TEI embedding + chunks storage (genie-ai-overlay/stream-ingestor/, dataprep)
+#                         NOTE: 3-4 processes content from ALL sources (3-1, 3-2, 3-3), not just 3-3
 #
 #   Round 3:
 #     wt-tools-health:    3-5  Health monitoring + DLQ (genie-ai-overlay/stream-ingestor/)
@@ -131,7 +177,7 @@
 #                         4-6  Analytics dashboard (components/gov-chat-frontend/)
 
 generated: 2026-05-01
-last_updated: 2026-05-01
+last_updated: 2026-05-02
 project: genie-ai
 project_key: NOKEY
 tracking_system: file-system
@@ -146,9 +192,9 @@ development_status:
   1-1-tool-definition-schema-yaml-configuration: backlog # Round 1 | worktree: wt-tools-schema
   1-2-tool-registry-service-admin-api: backlog # Round 1 | worktree: wt-tools-registry
   1-3-pii-redaction-pluggable-interface-regex-implementation: backlog # Round 2 | worktree: wt-tools-redactor
-  1-4-tool-executor-service-circuit-breaker-rate-limiting: backlog # Round 2 | worktree: wt-tools-executor
-  1-5-redis-streams-event-backbone-audit-logging: backlog # Round 3 | worktree: wt-tools-events (needs 1-2, 1-4)
-  1-6-multi-platform-deployment-configuration: backlog # Round 1 | worktree: wt-tools-deploy
+  1-4-tool-executor-service-circuit-breaker-rate-limiting: backlog # Round 2 | worktree: wt-tools-executor (needs 1-1)
+  1-5-redis-streams-event-backbone-audit-logging: backlog # Round 3 | worktree: wt-tools-events (needs 1-2, 1-4; verify #601)
+  1-6-multi-platform-deployment-configuration: backlog # Round 1 | worktree: wt-tools-deploy (Helm stub; finalize after #600)
   epic-1-retrospective: optional
 
   # Epic 2: Web Search & Result Fusion
@@ -160,7 +206,7 @@ development_status:
   2-2-rule-based-tool-trigger-logic: backlog # Round 1 | worktree: wt-tools-trigger
   2-3-result-fusion-context-window-budget: backlog # Round 2 | worktree: wt-tools-fusion (needs 2-1, 2-2)
   2-4-source-citations-graceful-degradation: backlog # Round 2 | worktree: wt-tools-fusion (after 2-3)
-  2-5-chatqna-pipeline-integration: backlog # Round 3 | worktree: wt-tools-chatqna (needs 2-4, #604 aware)
+  2-5-chatqna-pipeline-integration: backlog # Round 3 | worktree: wt-tools-chatqna (needs 2-4; MUST complete before #604 starts)
   epic-2-retrospective: optional
 
   # Epic 3: Stream Ingestion & Data Lifecycle
@@ -170,7 +216,7 @@ development_status:
   3-1-rss-atom-feed-polling-content-extraction: backlog # Round 1 | worktree: wt-tools-rss
   3-2-json-api-polling-field-mapping: backlog # Round 1 | worktree: wt-tools-jsonapi
   3-3-webhook-endpoint-push-based-ingestion: backlog # Round 2 | worktree: wt-tools-ingestor
-  3-4-tei-embedding-pipeline-shared-chunks-storage: backlog # Round 2 | worktree: wt-tools-ingestor (after 3-3)
+  3-4-tei-embedding-pipeline-shared-chunks-storage: backlog # Round 2 | worktree: wt-tools-ingestor (source-agnostic: processes 3-1, 3-2, 3-3 output)
   3-5-feed-health-monitoring-dead-letter-queue-reprocessing: backlog # Round 3 | worktree: wt-tools-health
   epic-3-retrospective: optional
 

@@ -49,11 +49,20 @@ services:
   voice-tts-mnk:
     volumes:
       - ./tts-mms-service/server.py:/app/server.py:ro
+    # 2026-05-02: CPU bumped 1 -> 4 and torch thread count pinned to
+    # match. Previously torch auto-detected 8 threads inside a 1-CPU
+    # cgroup, so 8 threads fought over one core -- ~110 s for a
+    # 1300-char Mandinka reply. With 4 dedicated cores AND thread
+    # count matching, per-chunk synth time drops roughly 3x.
+    environment:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+      TORCH_NUM_THREADS: "4"
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 1G
+          cpus: "4.0"
+          memory: 2G
   dataprep-worker:
     # PDF/docling ingestion can spike CPU on large documents.
     deploy:

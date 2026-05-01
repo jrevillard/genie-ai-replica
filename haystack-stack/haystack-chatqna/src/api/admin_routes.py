@@ -13,6 +13,7 @@ Phase-bug-fix 2026-05-01 (BUG-002):
 """
 
 import hmac
+import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -21,6 +22,8 @@ import json
 
 from src.config import settings, _required_env
 from src.services.auth import verify_jwt
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -184,16 +187,46 @@ async def admin_update_patient(patient_id: str, req: PatientUpdateRequest, reque
 @router.delete("/patients/{patient_id}")
 async def admin_delete_patient(patient_id: str, request: Request):
     _verify_admin(request)
-    # Delete consultations
-    try: _sql("DELETE FROM ConsultationRecord WHERE patient_id = :pid", {"pid": patient_id})
-    except: pass
-    # Delete memories
-    try: _sql("DELETE FROM MemoryVertex WHERE patient_id = :pid", {"pid": patient_id})
-    except: pass
-    # Delete patient
+    # Cascade-delete consultations + memories before the patient row.
+    # Was previously `except: pass` on each, which silently left orphan
+    # rows in ArcadeDB if either delete failed -- the patient
+    # disappeared from the admin UI but the related records stayed
+    # behind, undetectable except via direct DB inspection.
+    # New behavior: try each cascade step, log specific failures, and
+    # surface the cleanup status in the response so the operator
+    # knows whether a manual sweep is needed.
+    cleanup_failures: List[str] = []
+    try:
+        _sql("DELETE FROM ConsultationRecord WHERE patient_id = :pid", {"pid": patient_id})
+    except Exception as e:
+        logger.warning(
+            "admin_delete_patient: consultation cleanup failed for %s: %s: %s",
+            patient_id, type(e).__name__, e,
+        )
+        cleanup_failures.append(f"consultations:{type(e).__name__}")
+    try:
+        _sql("DELETE FROM MemoryVertex WHERE patient_id = :pid", {"pid": patient_id})
+    except Exception as e:
+        logger.warning(
+            "admin_delete_patient: memory cleanup failed for %s: %s: %s",
+            patient_id, type(e).__name__, e,
+        )
+        cleanup_failures.append(f"memories:{type(e).__name__}")
+
+    # Delete patient row regardless. The admin clicked delete; we make
+    # the patient disappear from the UI either way. Cleanup failures
+    # are reported back so the admin can run a manual sweep.
     r = _sql("DELETE FROM PatientVertex WHERE id = :pid", {"pid": patient_id})
     count = _rows(r)[0].get("count", 0) if _rows(r) else 0
-    return {"deleted": count > 0, "patient_id": patient_id}
+    response: dict = {"deleted": count > 0, "patient_id": patient_id}
+    if cleanup_failures:
+        response["cleanup_incomplete"] = True
+        response["cleanup_failures"] = cleanup_failures
+        response["operator_action_required"] = (
+            "Patient row deleted but related records may remain. "
+            "Run a manual cascade or retry the delete."
+        )
+    return response
 
 
 # ── Community Data CRUD ──
@@ -207,8 +240,18 @@ async def admin_list_community(request: Request):
         for f in ("data",):
             v = row.get(f, "{}")
             if isinstance(v, str):
-                try: row[f] = json.loads(v)
-                except: pass
+                try:
+                    row[f] = json.loads(v)
+                except json.JSONDecodeError as e:
+                    # Was a silent `except: pass`. Frontend already
+                    # falls back to rendering the raw string when the
+                    # field isn't a dict, so we keep that behaviour --
+                    # but log enough to find the offending row when
+                    # admins ask why a cell looks weird.
+                    logger.warning(
+                        "admin_list_community: failed to parse JSON field '%s' on rid=%s: %s; preview=%r",
+                        f, row.get("@rid", "?"), e, v[:120],
+                    )
         records.append(row)
     return {"records": records, "count": len(records)}
 
@@ -237,8 +280,16 @@ async def admin_list_consultations(request: Request, patient_id: str = "", limit
         for f in ("messages", "symptoms_reported", "tools_used", "recommendations"):
             v = row.get(f, "[]")
             if isinstance(v, str):
-                try: row[f] = json.loads(v)
-                except: pass
+                try:
+                    row[f] = json.loads(v)
+                except json.JSONDecodeError as e:
+                    # Was a silent `except: pass`. String fallback
+                    # behaviour preserved; we just log enough for the
+                    # operator to locate the offending consultation.
+                    logger.warning(
+                        "admin_list_consultations: failed to parse JSON field '%s' on consultation %s: %s; preview=%r",
+                        f, row.get("consultation_id") or row.get("@rid", "?"), e, v[:120],
+                    )
         consultations.append(row)
     return {"consultations": consultations, "count": len(consultations)}
 

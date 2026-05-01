@@ -18,9 +18,11 @@
 import io
 import logging
 import os
+import re
 import subprocess
 import tempfile
-from typing import Optional
+import time
+from typing import List, Optional
 
 import numpy as np
 import soundfile as sf
@@ -35,7 +37,18 @@ from transformers import AutoTokenizer, VitsModel
 MODEL_ID        = os.environ.get("MMS_MODEL_ID", "facebook/mms-tts-mnk")
 DEVICE          = os.environ.get("MMS_DEVICE", "cpu")  # "cpu" or "cuda"
 LANG_LABEL      = os.environ.get("MMS_LANG_LABEL", "mandinka")
-MAX_CHARS       = int(os.environ.get("MMS_MAX_CHARS", "2000"))
+# 2026-05-02: bumped from 2000 to 5000 because long-form clinical
+# replies (multi-day meal plans, care instructions) routinely run
+# 1500-3000 chars. The internal chunker (CHUNK_MAX_CHARS) bounds the
+# per-tensor synthesis cost, so MAX_CHARS is now just an outer safety
+# net against absurd inputs rather than the architectural limit.
+MAX_CHARS       = int(os.environ.get("MMS_MAX_CHARS", "5000"))
+# Per-chunk cap fed to the VITS forward pass. The model's compute
+# scales super-linearly with input length: 250 chars takes ~5 s on
+# CPU, 1300 chars takes ~140 s. Splitting on sentence boundaries at
+# this cap keeps each forward pass well under 30 s and the total
+# wall-clock at roughly len(text)/250 * 5 s.
+CHUNK_MAX_CHARS = int(os.environ.get("MMS_CHUNK_MAX_CHARS", "250"))
 PITCH_SEMITONES = float(os.environ.get("MMS_PITCH_SEMITONES", "3.5"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -70,13 +83,14 @@ class TTSRequest(BaseModel):
 def health():
     ready = _MODEL is not None and _TOKENIZER is not None
     return {
-        "status":        "ok" if ready else "loading",
-        "service":       "tts-mms",
-        "model":         MODEL_ID,
-        "language":      LANG_LABEL,
-        "sample_rate":   _SR if ready else None,
-        "device":        DEVICE,
-        "max_chars":     MAX_CHARS,
+        "status":           "ok" if ready else "loading",
+        "service":          "tts-mms",
+        "model":            MODEL_ID,
+        "language":         LANG_LABEL,
+        "sample_rate":      _SR if ready else None,
+        "device":           DEVICE,
+        "max_chars":        MAX_CHARS,
+        "chunk_max_chars":  CHUNK_MAX_CHARS,
     }
 
 
@@ -128,9 +142,98 @@ def _feminize_wav(wav_bytes: bytes) -> bytes:
                 pass
 
 
+# ── Chunking ─────────────────────────────────────────────────────────
+# Sentence terminators we split on first. Mandinka uses Latin
+# punctuation, so the same set as English works. We also split on
+# newlines for bullet-style replies (meal plans, care plan steps).
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+|\n+|(?<=:)\s+(?=-)")
+
+
+def _split_into_chunks(text: str, max_chars: int = CHUNK_MAX_CHARS) -> List[str]:
+    """Split ``text`` into chunks <= ``max_chars`` on sentence boundaries.
+
+    Pass 1: split on sentence terminators (``.!?``) + newlines + ``: -``
+    bullet markers. Pass 2: any segment still longer than ``max_chars``
+    is force-wrapped on word boundaries (whitespace) so the VITS
+    forward pass never sees an oversized input. Single tokens longer
+    than ``max_chars`` are passed through as-is rather than mid-word
+    cut, since splitting a Mandinka word would garble the phoneme.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= max_chars:
+        return [text]
+
+    # Pass 1: sentence-level segments.
+    raw_segments = [s.strip() for s in _SENTENCE_BOUNDARY.split(text) if s and s.strip()]
+    if not raw_segments:
+        raw_segments = [text]
+
+    # Pass 2: pack segments into chunks, splitting any oversize segment
+    # on word boundaries.
+    chunks: List[str] = []
+    current = ""
+    for seg in raw_segments:
+        if len(seg) > max_chars:
+            # Flush current and word-split the big segment.
+            if current:
+                chunks.append(current)
+                current = ""
+            words = seg.split()
+            buf = ""
+            for w in words:
+                candidate = (buf + " " + w).strip() if buf else w
+                if len(candidate) > max_chars and buf:
+                    chunks.append(buf)
+                    buf = w
+                else:
+                    buf = candidate
+            if buf:
+                # Don't append yet -- let the outer loop's packing
+                # logic absorb buf as the next "current" base so a
+                # short trailing remnant pairs with the next segment.
+                current = buf
+            continue
+
+        # Normal-size segment: pack into current chunk if it fits.
+        candidate = (current + " " + seg).strip() if current else seg
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = seg
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 # ── Core synthesis ───────────────────────────────────────────────────
+def _synthesize_chunk(text: str) -> np.ndarray:
+    """Run VITS once on a single chunk and return the float32 waveform."""
+    inputs = _TOKENIZER(text, return_tensors="pt").to(DEVICE)
+    with torch.no_grad():
+        output = _MODEL(**inputs).waveform
+    waveform = output.squeeze(0).detach().cpu().numpy().astype(np.float32)
+    # Safe clamp -- MMS output occasionally goes slightly outside [-1, 1].
+    return np.clip(waveform, -1.0, 1.0)
+
+
 def _synthesize_wav(text: str) -> bytes:
-    """Run the VITS model on `text` and return 16-bit PCM WAV bytes."""
+    """Synthesize ``text`` to 16-bit PCM WAV bytes.
+
+    Long inputs are split into sentence-level chunks of <= CHUNK_MAX_CHARS
+    and synthesized one at a time. The resulting waveforms are joined
+    with a short silence between chunks (~120 ms) so the audio doesn't
+    feel like one breathless run-on. Pitch shift runs once on the
+    concatenated WAV at the end.
+
+    Without chunking, a 1300-char input takes ~140 s on CPU and
+    routinely trips client timeouts (httpx default 30 s in tts_mms.py).
+    With chunking, the same input completes in ~50-70 s as ~5 small
+    forward passes of <15 s each.
+    """
     if _MODEL is None or _TOKENIZER is None:
         raise HTTPException(503, "TTS model not yet loaded")
 
@@ -141,19 +244,41 @@ def _synthesize_wav(text: str) -> bytes:
         raise HTTPException(413, f"Text exceeds {MAX_CHARS} characters")
 
     try:
-        inputs = _TOKENIZER(text, return_tensors="pt").to(DEVICE)
-        with torch.no_grad():
-            output = _MODEL(**inputs).waveform
-        # [1, audio_len] → [audio_len]
-        waveform = output.squeeze(0).detach().cpu().numpy().astype(np.float32)
-        # Safe clamp — MMS output occasionally goes slightly outside [-1, 1]
-        waveform = np.clip(waveform, -1.0, 1.0)
+        chunks = _split_into_chunks(text, CHUNK_MAX_CHARS)
+        log.info("mms_tts_synth chars=%d chunks=%d", len(text), len(chunks))
+
+        if not chunks:
+            raise HTTPException(400, "Text produced no synthesizable chunks")
+
+        # Inter-chunk silence. 120 ms at the model's native sample rate.
+        silence = np.zeros(int(_SR * 0.12), dtype=np.float32)
+
+        waveforms: List[np.ndarray] = []
+        t_start = time.perf_counter()
+        for i, ch in enumerate(chunks):
+            t_ch = time.perf_counter()
+            w = _synthesize_chunk(ch)
+            log.info(
+                "mms_tts_chunk idx=%d/%d chars=%d audio_s=%.2f synth_s=%.2f",
+                i + 1, len(chunks), len(ch), len(w) / _SR, time.perf_counter() - t_ch,
+            )
+            waveforms.append(w)
+            if i < len(chunks) - 1:
+                waveforms.append(silence)
+
+        full = np.concatenate(waveforms) if len(waveforms) > 1 else waveforms[0]
+        log.info(
+            "mms_tts_done chunks=%d total_audio_s=%.2f total_synth_s=%.2f",
+            len(chunks), len(full) / _SR, time.perf_counter() - t_start,
+        )
 
         buf = io.BytesIO()
-        sf.write(buf, waveform, _SR, format="WAV", subtype="PCM_16")
+        sf.write(buf, full, _SR, format="WAV", subtype="PCM_16")
         wav_bytes = buf.getvalue()
 
-        # Feminize the voice via pitch shift
+        # Feminize the voice via pitch shift -- ONCE, on the concatenated
+        # WAV. Doing this per-chunk would amplify ffmpeg startup cost N
+        # times and risk small per-chunk artifacts at boundaries.
         wav_bytes = _feminize_wav(wav_bytes)
 
         return wav_bytes

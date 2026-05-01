@@ -224,6 +224,10 @@ services:
       # read-only volume so the [6/8] verify block + canary + baseline
       # script all see the same source tree the host has.
       - ./haystack-chatqna/src/translation_v4:/app/src/translation_v4:ro
+      # MMS TTS client -- adaptive timeout (scales with text length)
+      # so long-form Mandinka clinical responses don't trip the old
+      # fixed 30 s ceiling. See tts_mms.py:_adaptive_timeout.
+      - ./haystack-chatqna/src/services/tts_mms.py:/app/src/services/tts_mms.py:ro
       # admin_routes.py: BUG-002 hmac.compare_digest, BUG-009 admin auth
       # gate, plus a9d74b19's cleanup-tracking + JSON-parse logging fixes.
       - ./haystack-chatqna/src/api/admin_routes.py:/app/src/api/admin_routes.py:ro

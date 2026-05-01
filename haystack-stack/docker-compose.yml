@@ -102,7 +102,11 @@ services:
       MMS_MODEL_ID:   facebook/mms-tts-mnk
       MMS_DEVICE:     cpu
       MMS_LANG_LABEL: mandinka
-      MMS_MAX_CHARS:  "2000"
+      # Was 2000 -- bumped on 2026-05-02 because the server-side
+      # chunker (CHUNK_MAX_CHARS=250) handles long inputs by splitting
+      # into sentence chunks. The outer cap is now just an abuse
+      # bound; a typical multi-day clinical reply is ~1500-2500 chars.
+      MMS_MAX_CHARS:  "8000"
     volumes:
       # BUG-039: HF cache is writable by design (model downloads).
       - ./data/huggingface-cache:/root/.cache/huggingface:rw

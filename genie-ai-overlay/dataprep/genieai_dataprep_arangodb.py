@@ -295,17 +295,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 separators=get_separators(),
             )
 
-        if isinstance(content, list): 
+        if isinstance(content, list):
             raw_chunks = []
             for item in content:
                 item_str = str(item)
                 if len(item_str) > doc_path.chunk_size:
-                    raw_chunks.extend(text_splitter.split_text(item_str))
+                    result = text_splitter.split_text(item_str)
+                    if result and hasattr(result[0], 'page_content'):
+                        raw_chunks.extend(r.page_content for r in result)
+                    else:
+                        raw_chunks.extend(result)
                 else:
                     raw_chunks.append(item_str)
             plain_chunks = raw_chunks
         else:
-            docs = text_splitter.create_documents([content])
+            if path.endswith(".html"):
+                docs = text_splitter.split_text(content)
+            else:
+                docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]
 
         valid_chunks = [c for c in plain_chunks if is_valid_content(c)]

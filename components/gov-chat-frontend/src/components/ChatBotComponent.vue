@@ -160,7 +160,7 @@
       <!-- Quick Help Overlay -->
       <div
         class="quick-help-overlay"
-        v-if="showQuickHelp && chatMessages.length <= 1"
+        v-if="showQuickHelp && chatMessages.length <= 1 && quickHelpButtons.length > 0"
       >
         <div class="quick-help-content">
           <h2 class="quick-help-heading">

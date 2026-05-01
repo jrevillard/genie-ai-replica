@@ -1204,7 +1204,7 @@ docker compose up -d dataprep     # after LABELING_* or CONTENT_EXTRACTION_* cha
 
 
 ````markdown
-# How Chunking Works
+# How Chunking Works MORE EXPLANATION
 
 Yes, it's LangChain's `RecursiveCharacterTextSplitter` — but with some important nuances.
 

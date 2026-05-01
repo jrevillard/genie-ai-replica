@@ -10,6 +10,20 @@ import { submitPrescription } from "./formsApi.js";
 const ACCEPTED = "application/pdf,image/jpeg,image/png,image/heic";
 const MAX_BYTES = 20 * 1024 * 1024;
 
+// BUG-044: enforce file type client-side. The `accept` attribute is a
+// UI hint that browsers honour for the file-picker but DO NOT enforce
+// for drag-drop or direct programmatic uploads. We validate the
+// File.type (MIME) against the same allow-list, with an extension
+// fallback for HEIC files served without a recognised MIME.
+const _ACCEPTED_MIMES = new Set(ACCEPTED.split(",").map(s => s.trim()));
+const _ACCEPTED_EXTS = [".pdf", ".jpg", ".jpeg", ".png", ".heic"];
+function _isAcceptedFile(f) {
+  if (!f) return false;
+  if (f.type && _ACCEPTED_MIMES.has(f.type)) return true;
+  const name = (f.name || "").toLowerCase();
+  return _ACCEPTED_EXTS.some(ext => name.endsWith(ext));
+}
+
 export default function PrescriptionUploadForm({ open, mode = "basic", prefill = {}, onClose, onSubmitted }) {
   const { t } = useTranslation();
   const [file,      setFile]      = useState(null);
@@ -32,6 +46,16 @@ export default function PrescriptionUploadForm({ open, mode = "basic", prefill =
 
   const pickFile = (f) => {
     if (!f) return;
+    if (!_isAcceptedFile(f)) {
+      // BUG-044: reject .exe / unknown types at the client so the user
+      // gets immediate feedback instead of a confusing backend rejection.
+      // i18n key may not exist yet -- fall back to the literal English string.
+      setError(
+        t("forms.prescription.error.badType") ||
+        "Only PDF or image files (JPG / PNG / HEIC) are allowed."
+      );
+      return;
+    }
     if (f.size > MAX_BYTES) { setError(t("forms.prescription.error.tooLarge")); return; }
     setError(""); setFile(f);
   };

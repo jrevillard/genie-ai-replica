@@ -195,6 +195,49 @@ def _save_last_intent(session_id: str, intent: str) -> None:
         pass
 
 
+# BUG-032: per-session advisory lock primitives.
+# The read-then-save pattern at line ~489+ is a classic
+# read-modify-write race: two concurrent requests on the same session
+# both read the same prev_intent then both write conflicting values.
+# In practice the window is tiny (sub-millisecond) and same-session
+# parallelism is rare for a chat UI, but the primitives below let any
+# future read-modify-write site serialise via Redis SET NX PX. Existing
+# callers are intentionally NOT wrapped here -- that is a separate
+# refactor with its own behaviour-change risk. New code touching
+# intent state should use these.
+import uuid as _uuid_for_lock
+
+_INTENT_LOCK_TTL_MS = 1000
+
+
+def _try_acquire_intent_lock(session_id: str, ttl_ms: int = _INTENT_LOCK_TTL_MS) -> Optional[str]:
+    """Try to acquire a per-session intent lock. Returns a token to use
+    with ``_release_intent_lock``, or None on contention / Redis error.
+    Callers SHOULD treat None as "skip the read-modify-write and let
+    the other request win" rather than blocking, to avoid deadlocks."""
+    try:
+        r = _get_redis()
+        token = _uuid_for_lock.uuid4().hex
+        ok = r.set(f"intent_lock:{session_id}", token, nx=True, px=ttl_ms)
+        return token if ok else None
+    except Exception:
+        return None
+
+
+def _release_intent_lock(session_id: str, token: str) -> None:
+    """Release the lock only if we still hold it (avoid releasing
+    another caller's lock if our process slept past the TTL)."""
+    if not token:
+        return
+    try:
+        r = _get_redis()
+        cur = r.get(f"intent_lock:{session_id}")
+        if cur == token:
+            r.delete(f"intent_lock:{session_id}")
+    except Exception:
+        pass
+
+
 # ═══════════════════════════════════════════════════════════════════
 # ACK PREFIX STRIPPING — the core innovation
 # ═══════════════════════════════════════════════════════════════════

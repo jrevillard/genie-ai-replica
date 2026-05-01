@@ -1,6 +1,11 @@
+import logging
+import uuid
+
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from src.api.routes import router
 from src.api.agent_routes import router as agent_router
 from src.api.patient_routes import router as patient_router
@@ -19,7 +24,46 @@ from src.api.consent_routes import router as consent_router
 from src.api.meta_routes import router as meta_router
 from src.config import settings
 
+_main_logger = logging.getLogger("amina.main")
+
 app = FastAPI(title="Genie AI - Haystack Service")
+
+
+# BUG-027 fix: any UNCAUGHT exception that escapes a route handler
+# used to surface as a Starlette 500 with the raw exception text in
+# the body, leaking stack-frame paths / SQL / module internals to
+# the caller. This handler logs the full trace server-side under a
+# request_id and returns only the id + a generic error string.
+# Explicit `raise HTTPException(500, detail=...)` raises in route
+# code are NOT touched by this handler -- those are the developer's
+# choice and are intentionally informative; they are sanitised at
+# their own call sites.
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    request_id = uuid.uuid4().hex[:12]
+    _main_logger.error(
+        "[unhandled] request_id=%s method=%s path=%s exc=%s: %s",
+        request_id, request.method, request.url.path,
+        type(exc).__name__, exc,
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"error": "internal_error", "request_id": request_id},
+        headers={"X-Request-Id": request_id},
+    )
+
+
+# Preserve normal HTTPException semantics so 401/403/404 still flow
+# through with their intended detail body.
+@app.exception_handler(StarletteHTTPException)
+async def _http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=exc.headers or None,
+    )
+
 
 # CORS middleware - allows frontend to call backend
 # NOTE: allow_credentials=True REQUIRES explicit origins (cannot use "*").

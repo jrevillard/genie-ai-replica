@@ -170,6 +170,10 @@ export default function CaregiverChat({ token, patientName, onClose }) {
 
   // ── Poll messages ─────────────────────────────────────────────────────────
 
+  // BUG-040 verified-safe: `token` IS in this useCallback's deps
+  // array (below) and in the polling useEffect's deps (further down).
+  // Token rotations correctly invalidate both the memo and the
+  // interval. Do NOT remove `token` from these deps.
   const fetchMessages = useCallback(async (cgId) => {
     if (!cgId) return;
     try {

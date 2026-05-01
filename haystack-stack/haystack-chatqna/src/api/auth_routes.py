@@ -394,9 +394,15 @@ async def auth_oauth_callback(req: OAuthCallbackRequest):
                     return AuthResponse(success=False, error="Google token verification failed")
 
         elif provider == "facebook":
+            # BUG-028 fix: pass the FB access token via Authorization
+            # header instead of the URL query string. The Graph API
+            # accepts `Authorization: OAuth <token>`; this keeps the
+            # token out of intermediate proxy logs, browser history,
+            # and Referer headers.
             async with httpx.AsyncClient() as client:
                 r = await client.get(
-                    f"https://graph.facebook.com/me?fields=id,name,email&access_token={req.access_token}",
+                    "https://graph.facebook.com/me?fields=id,name,email",
+                    headers={"Authorization": f"OAuth {req.access_token}"},
                 )
                 if r.status_code == 200:
                     data = r.json()

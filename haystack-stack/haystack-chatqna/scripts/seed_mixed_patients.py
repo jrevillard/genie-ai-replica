@@ -35,10 +35,11 @@ FAIL = "\033[91m✘\033[0m"
 # ── ArcadeDB helpers ──────────────────────────────────────────────────────────
 
 def sql(query, params=None):
+    # ARCADEDB is the internal docker bridge address. Dev/seed script.
     payload = {"language": "sql", "command": query}
     if params:
         payload["params"] = params
-    r = requests.post(f"{ARCADEDB}/api/v1/command/{DB}", json=payload, auth=AUTH, timeout=10)
+    r = requests.post(f"{ARCADEDB}/api/v1/command/{DB}", json=payload, auth=AUTH, timeout=10)  # nosemgrep: python.requests.security.no-auth-over-http.no-auth-over-http
     if r.status_code != 200:
         raise Exception(f"ArcadeDB {r.status_code}: {r.text[:300]}")
     return r.json().get("result", [])

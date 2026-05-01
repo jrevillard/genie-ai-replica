@@ -124,6 +124,10 @@ class Translator:
     # else (cultural mistranslation, hallucinated diagnosis word, etc.)
     # that isn't loop-shaped.
     _CACHE_TTL_S = 7 * 86400
+    # Short TTL for translations that look low-confidence per the
+    # length-ratio heuristic in translate(). 1 hour caps the blast
+    # radius if the heuristic missed something.
+    _CACHE_TTL_FALLBACK_S = 3600
 
     def _cache_key(self, text: str, source: str, target: str) -> str:
         # BUG-018 fix: full SHA-256 (no truncation) and explicit lang
@@ -188,19 +192,59 @@ class Translator:
             logger.error(f"Translation failed: {e}")
             return text
 
-        # Post-translation repetition guard — catch and truncate LLM
+        # Post-translation repetition guard -- catch and truncate LLM
         # loops that slip through even with frequency/presence penalties.
+        repetition_clean = True
         try:
-            from src.services.repetition_guard import guard_translation
-            translated = guard_translation(translated)
+            from src.services.repetition_guard import guard_translation, has_repetition
+            translated_guarded = guard_translation(translated)
+            # Detect whether the guard had to step in. has_repetition()
+            # returns True iff loops are still present after guarding;
+            # we use that as our cache-quality signal.
+            repetition_clean = not has_repetition(translated_guarded)
+            translated = translated_guarded
         except Exception as e:
             logger.warning(f"Repetition guard failed (non-fatal): {e}")
 
-        # BUG-018 fix: cache for 7 days (was 30). See _CACHE_TTL_S.
-        try:
-            self.redis.setex(self._cache_key(text, source, target), self._CACHE_TTL_S, translated)
-        except Exception as e:
-            logger.warning(f"Translation cache write failed: {e}")
+        # BUG-018 fix: pre-cache quality gate.
+        # We do not have a numeric quality_score here (the corrector
+        # produces one, but the corrector runs on the caller side --
+        # not in translate()). To approximate the spec's "only cache
+        # high-quality translations", refuse to cache when:
+        #  (a) the repetition guard had to truncate / still detected
+        #      a loop after guarding, or
+        #  (b) the output is suspiciously short relative to the input
+        #      (likely a refusal / "I cannot translate this" reply).
+        # When in doubt, cache for the short fallback TTL only.
+        ttl = self._CACHE_TTL_S
+        cache_decision = "ok_full_ttl"
+        in_len = len(text.strip()) if text else 0
+        out_len = len(translated.strip()) if translated else 0
+        length_ratio = (out_len / in_len) if in_len > 0 else 0.0
+
+        if not repetition_clean:
+            cache_decision = "skip_repetition"
+        elif out_len < 4:
+            # An empty / one-word translation is almost certainly a
+            # failure -- never cache it.
+            cache_decision = "skip_too_short"
+        elif in_len >= 30 and length_ratio < 0.30:
+            # Long source -> tiny target: probably a refusal blurb.
+            ttl = self._CACHE_TTL_FALLBACK_S
+            cache_decision = "fallback_ttl_low_ratio"
+        elif length_ratio > 5.0:
+            # Tiny source -> huge target: probably an LLM rant.
+            ttl = self._CACHE_TTL_FALLBACK_S
+            cache_decision = "fallback_ttl_high_ratio"
+
+        if cache_decision.startswith("skip_"):
+            logger.debug("translator: skipping cache write (%s)", cache_decision)
+        else:
+            try:
+                self.redis.setex(self._cache_key(text, source, target), ttl, translated)
+                logger.debug("translator: cached (%s, ttl=%ds)", cache_decision, ttl)
+            except Exception as e:
+                logger.warning(f"Translation cache write failed: {e}")
 
         return translated
 

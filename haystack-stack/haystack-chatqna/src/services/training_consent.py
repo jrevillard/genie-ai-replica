@@ -83,7 +83,16 @@ def _load(actor_role: str, actor_id: str) -> Dict:
             "WHERE actor_role = :r AND actor_id = :i LIMIT 1",
             {"r": actor_role, "i": actor_id},
         )
+        # BUG-035: ArcadeDB can return ``{"result": None}`` on certain
+        # failure shapes. ``(resp or {}).get("result", [])`` returns
+        # ``None`` in that case (the default applies only when the key
+        # is missing, not when its value is None). The ``isinstance``
+        # check below normalises any non-list shape to ``[]`` so the
+        # ``if not rows`` guard reliably trips and we never index a
+        # non-list with ``rows[0]``.
         rows = (resp or {}).get("result", [])
+        if not isinstance(rows, list):
+            rows = []
         if not rows:
             return {"value": False, "version": 0, "decided": False, "exists": False, "updated_at": ""}
         row = rows[0]

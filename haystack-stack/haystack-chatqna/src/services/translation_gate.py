@@ -61,9 +61,23 @@ class TranslationQualityGate:
         self._audit_log: List[Dict[str, Any]] = []
 
     def verify_translation(
-        self, english_text: str, mandinka_text: str,
+        self,
+        english_text: str,
+        mandinka_text: str,
+        response_type: str = "symptom",
     ) -> Dict[str, Any]:
         """Score a Mandinka translation and decide how to serve it.
+
+        BUG-041: thresholds are now per-response-type. Risky dosing
+        advice should not serve bilingual at the same score as a
+        general greeting. Recognised types:
+
+          - ``"medication"`` / ``"dosage"`` -> SERVE_MANDINKA needs >= 0.85
+          - ``"symptom"`` (default)         -> SERVE_MANDINKA needs >= 0.70
+          - ``"general"``                   -> SERVE_MANDINKA needs >= 0.50
+
+        Default is ``"symptom"`` so existing callers (which do not pass
+        the parameter) keep the prior 0.7 behaviour exactly.
 
         Returns:
             {
@@ -71,6 +85,8 @@ class TranslationQualityGate:
                 "decision": "SERVE_MANDINKA" | "SERVE_BILINGUAL" | "SERVE_ENGLISH_ONLY",
                 "flags": list of issue strings,
                 "details": dict of per-axis scores,
+                "response_type": str,
+                "threshold_serve_mandinka": float,
             }
         """
         flags: List[str] = []
@@ -153,9 +169,22 @@ class TranslationQualityGate:
         )
         score = max(0.0, min(1.0, 1.0 - total_penalty))
 
-        if score >= 0.7:
+        # BUG-041: per-response-type thresholds. The decision boundaries
+        # tighten for medication/dosage advice (>=0.85 for SERVE_MANDINKA)
+        # and loosen for general chit-chat (>=0.50). Default behaviour
+        # for callers that omit response_type is unchanged ("symptom" =>
+        # 0.70 / 0.40, identical to the prior hard-coded values).
+        rtype = (response_type or "symptom").lower()
+        if rtype in ("medication", "dosage", "medication_instruction"):
+            t_mandinka, t_bilingual = 0.85, 0.55
+        elif rtype == "general":
+            t_mandinka, t_bilingual = 0.50, 0.30
+        else:
+            t_mandinka, t_bilingual = 0.70, 0.40
+
+        if score >= t_mandinka:
             decision = "SERVE_MANDINKA"
-        elif score >= 0.4:
+        elif score >= t_bilingual:
             decision = "SERVE_BILINGUAL"
         else:
             decision = "SERVE_ENGLISH_ONLY"
@@ -172,6 +201,9 @@ class TranslationQualityGate:
                 "coverage_penalty": round(coverage_penalty, 3),
                 "length_ratio": round(ratio, 2),
             },
+            "response_type": rtype,
+            "threshold_serve_mandinka": t_mandinka,
+            "threshold_serve_bilingual": t_bilingual,
         }
 
         self._audit(english_text, mandinka_text, result)

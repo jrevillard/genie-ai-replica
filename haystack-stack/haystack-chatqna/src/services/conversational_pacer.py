@@ -182,8 +182,23 @@ def _load_queue(session_id: str) -> List[Dict[str, Any]]:
     return []
 
 
+# BUG-033: hard cap on pacer queue length. The previous code relied
+# on per-call slicing at one push site (queue = sorted(...)[:10]) but
+# a sibling save path could grow the queue without bound. Bounding
+# inside _save_queue ensures EVERY persist is capped, no matter the
+# caller. 200 is generous (~20x the typical conversation depth) so
+# normal flows are untouched; runaway pushes are clipped.
+_QUEUE_MAX_LEN = 200
+
+
 def _save_queue(session_id: str, queue: List[Dict[str, Any]]) -> None:
     try:
+        if len(queue) > _QUEUE_MAX_LEN:
+            logger.warning(
+                "pacer: queue length %d exceeds cap %d (sid=%s); truncating",
+                len(queue), _QUEUE_MAX_LEN, session_id,
+            )
+            queue = queue[-_QUEUE_MAX_LEN:]  # keep newest entries
         r = _get_redis()
         r.set(
             _QUEUE_KEY.format(sid=session_id),

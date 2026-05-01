@@ -32,7 +32,12 @@ Solution: A three-stage pipeline inspired by how ChatGPT handles
     rather than serving a bad translation.
 
 This file generates the code but does NOT ingest or deploy.
-To activate, set USE_V3_TRANSLATOR=true and restart.
+
+BUG-030 status: NOT WIRED. The original docstring claimed
+"set USE_V3_TRANSLATOR=true and restart" would activate v3, but no
+runtime path reads that variable -- callers always use the v2
+backend via translator.py / translation_v2.py. Treat translator_v3
+as a WIP scaffold; do not assume any env-var flips it on.
 
 Reference: Peace Corps Mandinka Language Manual (The Gambia),
            Mandinka-English Dictionary (Creissels & Sambou),

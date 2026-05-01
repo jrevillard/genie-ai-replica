@@ -73,11 +73,20 @@ def login(api: str, email: str, password: str) -> dict:
 
 
 def decode_token_role(tok: str) -> str:
+    """Print-only utility: peek at the role claim of a JWT we just
+    received from our own login endpoint, purely so the operator can
+    visually confirm the seed produced the expected role. The result
+    is shown in a banner for human eyeballs and never used to gate
+    any security decision -- the server already validated the
+    signature when it minted the token. Skipping verification here
+    avoids needing the JWT_SECRET inside this dev/seed script.
+    """
     if not tok:
         return "(empty)"
     try:
         import jwt as pyjwt
-        payload = pyjwt.decode(tok, options={"verify_signature": False})
+        # Dev-script print-only peek (see docstring above); result not used for auth.
+        payload = pyjwt.decode(tok, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         return payload.get("role") or "(no role claim)"
     except Exception as e:
         return f"(decode failed: {e})"

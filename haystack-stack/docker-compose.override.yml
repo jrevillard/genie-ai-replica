@@ -28,15 +28,17 @@ services:
     # Compression-bomb attacks are blocked upstream by stt_upload_guard
     # (8 MB) + stt_duration_guard (6 min) + rate_limiter (30/min/IP),
     # so the larger CPU surface area cannot be weaponized.
-    command: ["/app/build/bin/whisper-server", "-m", "/models/ggml-base.en.bin", "--host", "0.0.0.0", "--port", "8080", "--threads", "4"]
-    # ── Phase 1 (revised): cap voice-stt at 4 CPUs / 3 GB. Still
-    #    bounded so it cannot swamp the 16-core host, but big enough
-    #    that whisper-small.en runs at usable speed on real audio.
+    command: ["/app/build/bin/whisper-server", "-m", "/models/ggml-base.en.bin", "--host", "0.0.0.0", "--port", "8080", "--threads", "6"]
+    # BUG-038 fix: cap raised from 4 to 6 CPUs (and threads to match).
+    # Whisper base.en spikes to 6+ CPUs on long audio; the previous
+    # 4-CPU cap caused concurrent voice + PDF ingest to OOM-kill.
+    # 6 CPUs leaves 10 CPUs on a 16-core host for the rest of the
+    # stack -- still bounded, just less likely to be the bottleneck.
     deploy:
       resources:
         limits:
-          cpus: "4.0"
-          memory: 3G
+          cpus: "6.0"
+          memory: 4G
   voice-tts:
     # Cap TTS at 1 CPU/1GB — long synthesis spikes shouldn't starve others.
     deploy:
@@ -218,6 +220,9 @@ services:
       - ./haystack-chatqna/src/api/agent_routes.py:/app/src/api/agent_routes.py:ro
       # Production-aware secret/flag config (BUG-003/004/006/007 fixes)
       - ./haystack-chatqna/src/config.py:/app/src/config.py:ro
+      # admin_routes.py: BUG-002 hmac.compare_digest, BUG-009 admin auth
+      # gate, plus a9d74b19's cleanup-tracking + JSON-parse logging fixes.
+      - ./haystack-chatqna/src/api/admin_routes.py:/app/src/api/admin_routes.py:ro
       - ./haystack-chatqna/src/services/document_gen.py:/app/src/services/document_gen.py:ro
       - ./haystack-chatqna/src/services/translator.py:/app/src/services/translator.py:ro
       - ./haystack-chatqna/src/services/repetition_guard.py:/app/src/services/repetition_guard.py:ro

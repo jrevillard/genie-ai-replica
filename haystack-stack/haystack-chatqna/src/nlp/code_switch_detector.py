@@ -6,8 +6,11 @@ Target latency: < 3ms per message via pure dictionary lookup.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 MANDINKA_MARKERS: frozenset[str] = frozenset({
@@ -328,6 +331,24 @@ class CodeSwitchDetector:
 
         is_code_switched = len(lang_set) > 1
 
+        # BUG-042: when the dominant language cannot be confidently
+        # identified (RTL markers, zero-width spaces, mixed-script
+        # paste, single-char input, etc.), surface a structured warning
+        # so downstream callers can fall back to English-only instead
+        # of silently treating the text as some default.
+        warnings: list[str] = []
+        if dominant == "unknown":
+            warnings.append("DOMINANT_LANGUAGE_UNKNOWN")
+            try:
+                _logger.warning(
+                    "code_switch_detector: dominant_language=unknown "
+                    "(text_len=%d, token_count=%d, lang_set=%s) -- caller "
+                    "should fall back to English-only response.",
+                    len(text), len(tokens), sorted(lang_set),
+                )
+            except Exception:
+                pass
+
         return {
             "dominant_language": dominant,
             "mandinka_ratio": mandinka_ratio,
@@ -338,6 +359,8 @@ class CodeSwitchDetector:
                 "mandinka": found_mandinka_medical,
                 "english": found_english_medical,
             },
+            "warnings": warnings,
+            "fallback_to_english": (dominant == "unknown"),
         }
 
     def _build_segments(
@@ -376,6 +399,9 @@ class CodeSwitchDetector:
 
     @staticmethod
     def _empty_result() -> dict[str, Any]:
+        # BUG-042: include the warning + fallback flag so callers can
+        # branch on a single shape regardless of which branch produced
+        # the result.
         return {
             "dominant_language": "unknown",
             "mandinka_ratio": 0.0,
@@ -383,4 +409,6 @@ class CodeSwitchDetector:
             "is_code_switched": False,
             "code_switch_count": 0,
             "medical_terms": {"mandinka": [], "english": []},
+            "warnings": ["EMPTY_OR_WHITESPACE_INPUT"],
+            "fallback_to_english": True,
         }

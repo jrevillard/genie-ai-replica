@@ -126,7 +126,10 @@ def select_response_shape(
     if is_closing:
         return "CLOSING"
 
-    # Emotional distress — empathy before anything else
+    # Emotional distress -- empathy before anything else.
+    # BUG-034 verified-safe: the `if emotional_state` guard already
+    # short-circuits None/{}; the `or .get(..., "calm")` chain handles
+    # truthy-but-missing-key. Keeping the guard; do NOT remove it.
     if emotional_state:
         register = emotional_state.get("register") or emotional_state.get("current_register", "calm")
         if register in ("scared", "frustrated", "resigned"):

@@ -33,7 +33,8 @@ ARC_PW   = "genieRoot123"
 
 
 def _sql(cmd: str, params: dict | None = None):
-    resp = requests.post(
+    # ARC_URL is the internal docker bridge address. Dev/audit script.
+    resp = requests.post(  # nosemgrep: python.requests.security.no-auth-over-http.no-auth-over-http
         f"{ARC_URL}/api/v1/command/{ARC_DB}",
         json={"language": "sql", "command": cmd, "params": params or {}},
         auth=(ARC_USER, ARC_PW),

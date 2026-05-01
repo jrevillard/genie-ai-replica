@@ -18,7 +18,9 @@ services:
       # OLD (named volume — data lived in Docker Desktop VM on C:):
       # - arcadedb_data:/home/arcadedb/databases
       # NEW (bind mount to E: drive under project tree):
-      - ./data/arcadedb:/home/arcadedb/databases
+      # BUG-039: explicit :rw so the intent is documented; prevents an
+      # accidental read-only override from breaking schema migrations.
+      - ./data/arcadedb:/home/arcadedb/databases:rw
     # BUG-024 fix: was just `wget /api/v1/ready` which only proves the
     # HTTP server is bound. A wedged DB (locked, OOM, schema corrupt)
     # would still respond OK and dependents (haystack-chatqna,
@@ -92,7 +94,8 @@ services:
       MMS_LANG_LABEL: mandinka
       MMS_MAX_CHARS:  "2000"
     volumes:
-      - ./data/huggingface-cache:/root/.cache/huggingface
+      # BUG-039: HF cache is writable by design (model downloads).
+      - ./data/huggingface-cache:/root/.cache/huggingface:rw
     ports:
       - "5501:5500"
     healthcheck:
@@ -114,7 +117,9 @@ services:
       # OLD (named volume — data lived in Docker Desktop VM on C:):
       # - redis_data:/data
       # NEW (bind mount to E: drive under project tree):
-      - ./data/redis:/data
+      # BUG-039: AOF persistence requires :rw; explicit so a future
+      # override cannot accidentally make Redis read-only.
+      - ./data/redis:/data:rw
     command: redis-server --appendonly yes
     restart: unless-stopped
     healthcheck:
@@ -230,8 +235,10 @@ services:
       # OLD (named volume — data lived in Docker Desktop VM on C:):
       # - superset_data:/app/superset_home
       # NEW (bind mount to E: drive under project tree):
-      - ./data/superset:/app/superset_home
-      - ../components/apache-superset/super-init.sh:/app/superset-init.sh
+      # BUG-039: superset writes its sqlite metadata DB into this dir.
+      - ./data/superset:/app/superset_home:rw
+      # init script is read-only -- container should not modify the host file
+      - ../components/apache-superset/super-init.sh:/app/superset-init.sh:ro
     depends_on:
       arcadedb:
         condition: service_healthy

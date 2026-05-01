@@ -20,6 +20,11 @@ build/
 *.log.gz
 logs/
 
+# ─── Local security-scan artifacts (never committed) ────────────
+semgrep_*.json
+gitleaks_*.json
+changed_files_session.txt
+
 # ─── OS ──────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

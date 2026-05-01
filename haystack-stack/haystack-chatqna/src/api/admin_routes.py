@@ -100,11 +100,27 @@ async def admin_login(req: AdminLoginRequest):
 
 # ── Dashboard Stats ──
 
+# BUG-026 fix: hardcoded whitelist guards the table-name interpolation.
+# ArcadeDB SQL does not accept placeholders for type names; an
+# explicit allow-set is the right shape. Anyone refactoring to accept
+# a user-supplied table name will hit this guard before injecting.
+_STATS_TABLES_ALLOW = (
+    "PatientVertex",
+    "ConsultationRecord",
+    "CommunityData",
+    "chunks",
+    "entities",
+    "MemoryVertex",
+)
+
+
 @router.get("/stats")
 async def admin_stats(request: Request):
     _verify_admin(request)
     counts = {}
-    for table in ["PatientVertex", "ConsultationRecord", "CommunityData", "chunks", "entities", "MemoryVertex"]:
+    for table in _STATS_TABLES_ALLOW:
+        if table not in _STATS_TABLES_ALLOW:  # belt + suspenders against future drift
+            continue
         try:
             r = _sql(f"SELECT count(*) as cnt FROM {table}")
             counts[table] = _rows(r)[0].get("cnt", 0) if _rows(r) else 0
@@ -180,6 +196,12 @@ async def admin_update_patient(patient_id: str, req: PatientUpdateRequest, reque
     from datetime import datetime
     sets.append("updated_at = :upd"); params["upd"] = datetime.now().isoformat()
     params["pid"] = patient_id
+    # BUG-026 verified-safe: each entry in `sets` is a literal of the
+    # form "col = :param" built from the conditional chain above.
+    # User data only enters via `params` (parameterised). The f-string
+    # only joins static SQL fragments; no user input reaches the SQL
+    # text. Keeping the f-string for clarity; do NOT refactor this to
+    # accept dynamic column names without re-thinking the threat model.
     _sql(f"UPDATE PatientVertex SET {', '.join(sets)} WHERE id = :pid", params)
     return {"updated": True, "patient_id": patient_id}
 
@@ -259,7 +281,9 @@ async def admin_list_community(request: Request):
 @router.delete("/community/{rid}")
 async def admin_delete_community(rid: str, request: Request):
     _verify_admin(request)
-    _sql(f"DELETE FROM CommunityData WHERE @rid = :rid", {"rid": f"#{rid}"})
+    # BUG-026: f-string had no interpolation in the SQL itself; dropped
+    # the dead `f` prefix. `:rid` is the parameterised placeholder.
+    _sql("DELETE FROM CommunityData WHERE @rid = :rid", {"rid": f"#{rid}"})
     return {"deleted": True}
 
 

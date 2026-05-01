@@ -62,6 +62,38 @@ FALLBACK_CHAIN: List[str] = [
 if not FALLBACK_CHAIN:
     FALLBACK_CHAIN = ["groq", "gemini", "base"]
 
+
+# BUG-045: deterministic local-only fallback. The chain today ends in
+# "base" (which resolves to OpenAI -- the same provider that already
+# failed if the key expired). When every LLM provider in the chain
+# returns an error, callers SHOULD serve this canned safe-template
+# advisory instead of bubbling a 500 to the user. The integration of
+# this into the patched ``_orig_process_message`` flow is intentionally
+# left as a follow-up because that surface is clinical-safety
+# critical and deserves its own review; this constant + helper are
+# the foundation. Use ``safe_template_response()`` from new code.
+SAFE_TEMPLATE_PROVIDER = "safe_template"
+
+_SAFE_TEMPLATE_TEXT = (
+    "I want to help, but I am not able to answer this safely right now. "
+    "Please contact your nearest health centre, your community health "
+    "worker, or call 1025 (The Gambia health hotline) if this is urgent."
+)
+
+
+def safe_template_response() -> Dict[str, Any]:
+    """Return the canned local-only fallback when every LLM provider
+    in the chain has failed. Shape mirrors the agent's normal
+    response so the caller can swap it in without restructuring."""
+    return {
+        "response": _SAFE_TEMPLATE_TEXT,
+        "provider": SAFE_TEMPLATE_PROVIDER,
+        "is_safe_template": True,
+        "tools_used": [],
+        "triage_level": "unknown",
+        "is_emergency": False,
+    }
+
 if MODE not in ("graceful", "warn", "strict"):
     logger.warning("[llm_policy] unknown LLM_FALLBACK_MODE=%r, defaulting to warn", MODE)
     MODE = "warn"

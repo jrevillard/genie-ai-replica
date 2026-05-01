@@ -401,7 +401,9 @@ async def agent_chat(
             english_original=_english_original,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # BUG-027: log full trace server-side; never leak it in the response body.
+        logger.exception("agent_routes: unhandled %s: %s", type(e).__name__, e)
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.get("/session/resume")
@@ -599,7 +601,9 @@ async def get_patient_history(patient_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # BUG-027: log full trace server-side; never leak it in the response body.
+        logger.exception("agent_routes: unhandled %s: %s", type(e).__name__, e)
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.get("/consultations/{consultation_id}")
@@ -638,7 +642,9 @@ async def get_consultation(consultation_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # BUG-027: log full trace server-side; never leak it in the response body.
+        logger.exception("agent_routes: unhandled %s: %s", type(e).__name__, e)
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.delete("/patients/{patient_id}/history")
@@ -729,7 +735,9 @@ async def clear_patient_history(patient_id: str, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # BUG-027: log full trace server-side; never leak it in the response body.
+        logger.exception("agent_routes: unhandled %s: %s", type(e).__name__, e)
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.post("/patients/{patient_id}/start-session")
@@ -1054,8 +1062,15 @@ async def list_feedback_reasons():
 
 
 @router.get("/feedback/stats")
-async def feedback_stats():
-    """Aggregate feedback counts + recent entries. Used by CHW review dashboard."""
+async def feedback_stats(http_request: Request):
+    """Aggregate feedback counts + recent entries. Used by CHW review dashboard.
+
+    BUG-029 fix: was previously open. Aggregated patient-satisfaction
+    data is now restricted to admin or caregiver JWTs.
+    """
+    payload = _require_auth(http_request)
+    if payload.get("role") not in ("admin", "caregiver"):
+        raise HTTPException(status_code=403, detail="Admin or caregiver only")
     try:
         agent = get_agent()
         r = agent.memory_manager.redis
@@ -1081,12 +1096,22 @@ async def feedback_stats():
             "recent": recent,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # BUG-027: log full trace server-side; never leak it in the response body.
+        logger.exception("agent_routes: unhandled %s: %s", type(e).__name__, e)
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.get("/feedback/session/{session_id}")
-async def session_feedback(session_id: str):
-    """Return all feedback entries for a given session."""
+async def session_feedback(session_id: str, http_request: Request):
+    """Return all feedback entries for a given session.
+
+    BUG-029 fix: was previously open. Restricted to admin or caregiver
+    JWTs. Patients querying their own session's feedback is a
+    follow-up (needs a session_owner map that does not exist yet).
+    """
+    payload = _require_auth(http_request)
+    if payload.get("role") not in ("admin", "caregiver"):
+        raise HTTPException(status_code=403, detail="Admin or caregiver only")
     try:
         agent = get_agent()
         r = agent.memory_manager.redis
@@ -1098,7 +1123,9 @@ async def session_feedback(session_id: str):
                 entries.append(json.loads(raw))
         return {"session_id": session_id, "entries": entries, "count": len(entries)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # BUG-027: log full trace server-side; never leak it in the response body.
+        logger.exception("agent_routes: unhandled %s: %s", type(e).__name__, e)
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 # Document generation

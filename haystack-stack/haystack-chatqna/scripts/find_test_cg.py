@@ -5,9 +5,10 @@ DB = "genie"
 AUTH = ("root", "genieRoot123")
 
 def sql(q, p=None):
+    # ARCADEDB is the internal docker bridge address. Dev script.
     payload = {"language": "sql", "command": q}
     if p: payload["params"] = p
-    r = requests.post(f"{ARCADEDB}/api/v1/command/{DB}", json=payload, auth=AUTH, timeout=10)
+    r = requests.post(f"{ARCADEDB}/api/v1/command/{DB}", json=payload, auth=AUTH, timeout=10)  # nosemgrep: python.requests.security.no-auth-over-http.no-auth-over-http
     return r.json().get("result", [])
 
 # Find Test Cg

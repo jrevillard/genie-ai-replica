@@ -182,6 +182,12 @@ export function LLMProviderBadgeHost() {
     return () => window.removeEventListener("amina:llm-provider:snapshot", onSnapshot);
   }, [pinned]);
 
+  // BUG-037 verified-safe: this is the valid shorthand for
+  //   useEffect(() => { return () => { ...cleanup... }; }, []);
+  // The outer arrow is the effect (no setup); the inner arrow is the
+  // cleanup React stores and runs on unmount. The audit misread it as
+  // "cleanup runs on mount" -- it does not. Do NOT restructure into
+  // a setup-with-cleanup form: there is no setup work to do here.
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   if (!visible || !snapshot) return null;

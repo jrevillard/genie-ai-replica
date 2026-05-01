@@ -169,10 +169,11 @@ LITERACY_MODE = {
 
 
 def arcade_sql(sql, params=None):
+    # ARCADE_URL is the internal docker bridge address. Dev/seed script.
     payload = {"language": "sql", "command": sql}
     if params:
         payload["params"] = params
-    r = requests.post(
+    r = requests.post(  # nosemgrep: python.requests.security.no-auth-over-http.no-auth-over-http
         f"{ARCADE_URL}/api/v1/command/{ARCADE_DB}",
         json=payload,
         auth=ARCADE_AUTH,

@@ -201,9 +201,9 @@ async def _llm_plan(
         return AgenticPlan(
             intent="llm_empty_response",
             confidence=0.0,
-            route="normal",
+            route="heuristic_fallback",
             tool_calls=[],
-            reason="llm_empty_response",
+            reason="LLM returned no choices",
         )
 
     try:
@@ -216,9 +216,9 @@ async def _llm_plan(
             return AgenticPlan(
                 intent="llm_empty_content",
                 confidence=0.0,
-                route="normal",
+                route="heuristic_fallback",
                 tool_calls=[],
-                reason="llm_empty_content",
+                reason="LLM returned empty content",
             )
         data = json.loads(text)
     except Exception:

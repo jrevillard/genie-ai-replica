@@ -73,6 +73,10 @@ function AdminReviewToastHost() {
   const [visible, setVisible] = useState(() => Boolean(adminToken()));
   const [toast,   setToast]   = useState(null);  // {ok, title, sub}
 
+  // BUG-043 verified-safe: this file has exactly ONE "storage"
+  // listener (here) and ONE "amina:admin-review:done" listener (below).
+  // The audit reported "two duplicate storage listeners" -- they are
+  // distinct event names, so there is no duplication to remove.
   useEffect(() => {
     const tick = () => setVisible(Boolean(adminToken()));
     const onStorage = () => tick();

@@ -63,7 +63,7 @@ class ToolExecutor:
                     tool_name=call.tool_name,
                     ok=False,
                     error_code="tool_exception",
-                    safe_summary="tool execution failed",
+                    safe_summary=f"Tool {call.tool_name} encountered an error and was skipped.",
                 ))
             else:
                 results.append(r)

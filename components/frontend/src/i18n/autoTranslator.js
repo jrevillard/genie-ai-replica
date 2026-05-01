@@ -192,8 +192,15 @@ function applyOrQueueAttr(el, attr) {
   const orig = el.getAttribute(attr);
   if (!shouldTranslateText(orig)) return;
 
+  // BUG-036 fix: the inner cache check used to be
+  //   (dataset.aminaTrAttrOrig + "|" + attr) in state.cache
+  // -- which always missed, because cache keys are stored under just
+  // the original text (no "|attr" suffix). That meant every attribute
+  // re-render re-translated the same string. Now the check uses the
+  // same key shape as state.cache. Parens are explicit so future
+  // precedence shifts can't quietly break it again.
   const origKey = el.dataset.aminaTrAttrOrig
-    ? (el.dataset.aminaTrAttrOrig + "|" + attr in state.cache ? el.dataset.aminaTrAttrOrig : orig)
+    ? ((el.dataset.aminaTrAttrOrig in state.cache) ? el.dataset.aminaTrAttrOrig : orig)
     : orig;
   el.dataset.aminaTrAttrOrig = origKey;
 

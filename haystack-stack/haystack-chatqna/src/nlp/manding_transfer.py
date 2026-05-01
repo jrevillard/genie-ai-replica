@@ -1,5 +1,17 @@
 """
-Manding Transfer Bridge — Bambara-mediated English-to-Mandinka translation.
+BUG-031 status: NOT WIRED.
+
+This module is imported by ``src/nlp/__init__.py`` for re-export but
+no runtime path instantiates ``MandingTransferBridge`` or calls into
+it today. The two sibling modules originally flagged by BUG-031
+-- ``mandinka_temporal`` and ``notification_intent`` -- ARE wired
+(temporal: TranslationCorrector Layer 2.5; notification: installed
+via ``nlp_pipeline_integration._install_notif_patch``).
+
+Do NOT remove this file without updating ``src/nlp/__init__.py``
+to match.
+
+Manding Transfer Bridge -- Bambara-mediated English-to-Mandinka translation.
 
 Bambara and Mandinka are mutually intelligible Manding languages. Bambara has
 far better NLP tooling (NLLB-200 includes bam_Latn). This module uses Bambara

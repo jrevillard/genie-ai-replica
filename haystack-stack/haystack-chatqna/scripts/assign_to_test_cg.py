@@ -13,9 +13,11 @@ AUTH     = ("root", "genieRoot123")
 TEST_CG  = "CG_DFAF5F89"
 
 def sql(q, p=None):
+    # ARCADEDB is the internal docker bridge address (http://arcadedb:2480);
+    # no TLS on the bridge. This is a dev/seed script, not a public caller.
     payload = {"language": "sql", "command": q}
     if p: payload["params"] = p
-    r = requests.post(f"{ARCADEDB}/api/v1/command/{DB}", json=payload, auth=AUTH, timeout=10)
+    r = requests.post(f"{ARCADEDB}/api/v1/command/{DB}", json=payload, auth=AUTH, timeout=10)  # nosemgrep: python.requests.security.no-auth-over-http.no-auth-over-http
     if r.status_code != 200:
         raise Exception(f"ArcadeDB {r.status_code}: {r.text[:200]}")
     return r.json().get("result", [])

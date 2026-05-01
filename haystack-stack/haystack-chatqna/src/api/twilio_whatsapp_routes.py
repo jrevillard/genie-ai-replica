@@ -50,7 +50,12 @@ import hmac
 import logging
 import os
 from typing import Optional
-from xml.sax.saxutils import escape as xml_escape
+# False positive: xml.sax.saxutils.escape is a string-output sanitizer
+# (escapes <, >, & for safe XML output). It does NOT parse XML, so it
+# is not vulnerable to the billion-laughs / external-entity attacks
+# defusedxml exists to mitigate. defusedxml does not provide a
+# replacement for escape().
+from xml.sax.saxutils import escape as xml_escape  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
 
 from fastapi import APIRouter, BackgroundTasks, Form, Header, HTTPException, Request
 from fastapi.responses import Response

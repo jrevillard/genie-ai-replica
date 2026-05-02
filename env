@@ -536,3 +536,44 @@ KC_DATAPREP_CLIENT_SECRET=
 # GPU-specific overrides work the same as Docker:
 #   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
+
+# =============================================================================
+# SECTION 14: WHATSAPP AI AGENT (OPTIONAL)
+# =============================================================================
+# Configuration for the WhatsApp AI Agent microservice (genie-ai-overlay/whatsapp).
+# The service receives Meta WhatsApp Cloud API webhooks and forwards user messages
+# to the OPEA ChatQnA pipeline. Conversation history is kept in Redis for 24h.
+#
+# Setup:
+#   1. Create a Meta App at https://developers.facebook.com/ (Business type)
+#   2. Add the WhatsApp product, verify a phone number, copy the Phone Number ID
+#   3. Choose any secret string for META_VERIFY_TOKEN (also enter it in the
+#      Meta dashboard webhook config so verification can succeed)
+#   4. Set META_ACCESS_TOKEN to the temporary token shown in API Setup, then
+#      replace it with a permanent System User token before going live
+#   5. Register webhook URL in Meta:
+#         https://<NGINX_PUBLIC_DOMAIN>/webhook/whatsapp
+#      and subscribe to the "messages" field
+#
+# Documentation: https://developers.facebook.com/docs/whatsapp/cloud-api/get-started
+
+# Required — secret string you choose; must match the value in Meta dashboard
+META_VERIFY_TOKEN=change_this_verify_token
+
+# Required — Meta access token (permanent system user token for production)
+META_ACCESS_TOKEN=
+
+# Required — Phone Number ID from Meta API Setup page (NOT the phone number itself)
+META_PHONE_NUMBER_ID=
+
+# Optional — Meta Graph API version (default: v21.0)
+# META_GRAPH_API_VERSION=v21.0
+
+# Optional — conversation history TTL in seconds (default: 86400 = 24h)
+# WHATSAPP_REDIS_TTL=86400
+
+# Optional — max messages kept per user (default: 20)
+# WHATSAPP_REDIS_MAX_MESSAGES=20
+
+# Optional — max characters per outbound WhatsApp message (default: 4000, hard cap 4096)
+# WHATSAPP_MESSAGE_MAX_LENGTH=4000

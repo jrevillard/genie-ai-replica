@@ -104,3 +104,7 @@ english_g2.zip
 
 # Roo local state
 .roo/
+
+# Local-only docker-compose overrides (never commit)
+docker-compose.override.yaml
+docker-compose.override.yml

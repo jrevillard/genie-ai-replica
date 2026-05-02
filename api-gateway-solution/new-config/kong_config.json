@@ -54,6 +54,24 @@
       "tls_verify_depth": null,
       "ca_certificates": null,
       "tags": ["new"]
+    },
+    {
+      "name": "whatsapp-service",
+      "id": "c3d4e5f6-a7b8-4012-9def-123456789012",
+      "protocol": "http",
+      "host": "whatsapp-service",
+      "port": 8000,
+      "path": null,
+      "connect_timeout": 10000,
+      "read_timeout": 10000,
+      "write_timeout": 10000,
+      "retries": 0,
+      "enabled": true,
+      "client_certificate": null,
+      "tls_verify": null,
+      "tls_verify_depth": null,
+      "ca_certificates": null,
+      "tags": ["whatsapp"]
     }
   ],
   "routes": [
@@ -627,6 +645,27 @@
       "sources": null,
       "destinations": null,
       "tags": ["new"]
+    },
+    {
+      "name": "whatsapp-webhook-route",
+      "id": "d4e5f6a7-b8c9-4123-9efa-234567890123",
+      "service": {"name": "whatsapp-service"},
+      "paths": ["/webhook/whatsapp"],
+      "strip_path": false,
+      "preserve_host": false,
+      "regex_priority": 0,
+      "path_handling": "v0",
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "protocols": ["http", "https"],
+      "methods": ["GET", "POST"],
+      "hosts": null,
+      "headers": null,
+      "snis": null,
+      "sources": null,
+      "destinations": null,
+      "tags": ["whatsapp"]
     }
   ],
   "plugins": [

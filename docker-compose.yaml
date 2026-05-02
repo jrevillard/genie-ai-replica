@@ -14,8 +14,9 @@
 #      Placement constraints require node labels (see below).
 #
 # Dual-mode notes:
-#   - deploy sections (replicas, placement, restart_policy) are Swarm-only;
-#     docker compose up ignores them entirely
+#   - deploy.placement / replicas: Swarm-focused; compose may ignore or partially apply
+#   - deploy.restart_policy with condition:any must not use max_attempts (Docker Engine
+#     rejects max_retry unless restart is on-failure); Swarm still honors condition+delay
 #   - depends_on is for compose up ordering; Swarm ignores it
 #   - restart: is for compose up; Swarm uses deploy.restart_policy
 #   - profiles: [opea] controls OPEA services in compose up; Swarm ignores profiles
@@ -86,7 +87,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
@@ -187,7 +187,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   nginx:
     depends_on:
@@ -232,7 +231,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   # ===========================================================================
   # Let's Encrypt Certificate Management (optional)
@@ -267,7 +265,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 5
   # ===========================================================================
 
   frontend:
@@ -298,7 +295,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   redis-cache:
     restart: unless-stopped
@@ -326,7 +322,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   backend:
     depends_on:
@@ -385,7 +380,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   document-repository:
     depends_on:
@@ -423,7 +417,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   clamav:
     restart: unless-stopped
@@ -447,7 +440,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   arango-vector-db:
     restart: unless-stopped
@@ -478,7 +470,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   http-service:
     depends_on:
@@ -513,7 +504,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 10
 
   # ===========================================================================
   # OPEA/GPU Stack (node.labels.gpu == true)
@@ -557,7 +547,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   textgen:
     profiles: [opea]
@@ -587,7 +576,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   vllm-translation-guardrail:
     profiles: [opea]
@@ -628,7 +616,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   translation:
     profiles: [opea]
@@ -658,7 +645,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   guardrail:
     profiles: [opea]
@@ -690,7 +676,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   tei:
     profiles: [opea]
@@ -721,7 +706,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   embedding:
     profiles: [opea]
@@ -752,7 +736,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   tei_reranker:
     profiles: [opea]
@@ -783,7 +766,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   reranker:
     profiles: [opea]
@@ -819,7 +801,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   dataprep-arango-service:
     profiles: [opea]
@@ -878,7 +859,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   retriever-arango-service:
     profiles: [opea]
@@ -939,7 +919,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   chatqna-xeon-backend-server:
     profiles: [opea]
@@ -991,7 +970,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   # OPEA UI/Nginx - disabled by default via profiles: [opea] (compose up) / replicas: 0 (Swarm).
   # Activate for OPEA debugging: compose up --profile opea / Swarm: change replicas to 1.
@@ -1020,7 +998,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
   chatqna-xeon-nginx-server:
     profiles: [opea]
@@ -1053,7 +1030,6 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 30
 
 networks:
   genieai_network:

@@ -7,30 +7,73 @@
     @apply h-full;
   }
   body {
-    @apply bg-slate-50 text-slate-900;
+    @apply bg-slate-100 text-slate-900;
   }
 }
 
 @layer components {
-  .input-base {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100;
+  /* Pill-style input matching the rounded inputs in the Figma. */
+  .input-pill {
+    @apply w-full rounded-full border border-slate-200 bg-white px-5 py-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-ieee-600 focus:outline-none focus:ring-2 focus:ring-ieee-100;
   }
-  .input-base[aria-invalid='true'] {
+  .input-pill[aria-invalid='true'] {
     @apply border-red-400 focus:border-red-500 focus:ring-red-100;
   }
   .btn-primary {
-    @apply inline-flex w-full items-center justify-center rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 disabled:cursor-not-allowed disabled:bg-brand-600/60;
+    @apply inline-flex w-full items-center justify-center rounded-full bg-ieee-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-ieee-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700 disabled:cursor-not-allowed disabled:bg-ieee-600/60;
   }
-  .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50;
+  .btn-soft {
+    @apply inline-flex w-full items-center justify-center rounded-full bg-ieee-50 px-6 py-3 text-sm font-semibold text-ieee-700 transition hover:bg-ieee-100 disabled:cursor-not-allowed disabled:opacity-70;
   }
   .form-label {
     @apply mb-1.5 block text-sm font-medium text-slate-700;
   }
   .form-error {
-    @apply mt-1 text-xs text-red-600;
+    @apply mt-1 pl-4 text-xs text-red-600;
   }
-  .auth-card {
-    @apply grid w-full max-w-5xl grid-cols-1 overflow-hidden rounded-2xl bg-white shadow-xl md:grid-cols-2;
+  /* Split layout: edge-to-edge white form on the left, rounded floating
+     dark brand card on the right with margin top/right/bottom. */
+  .auth-shell {
+    @apply flex min-h-screen w-full bg-white;
+  }
+  .auth-form-pane {
+    @apply flex w-full flex-col bg-white p-6 sm:p-10 md:w-1/2 md:p-12 lg:p-16;
+  }
+  .auth-brand-pane {
+    @apply hidden p-4 md:block md:w-1/2 md:pl-0;
+  }
+  /* Inner rounded card that the BrandPanel content lives in. */
+  .auth-brand-card {
+    @apply relative h-full overflow-hidden rounded-3xl bg-ieee-950 text-white;
+  }
+
+  /* ===== Dashboard shell ===== */
+  /* The whole app sits inside a dark navy frame with two rounded white panes
+     (sidebar + main) and a small gap between them — matches the Figma. */
+  .dash-shell {
+    @apply flex min-h-screen w-full gap-3 bg-ieee-950 p-3 sm:gap-4 sm:p-4;
+  }
+  .dash-sidebar {
+    @apply hidden w-64 shrink-0 flex-col rounded-2xl bg-white shadow-sm md:flex;
+  }
+  .dash-sidebar--collapsed {
+    @apply md:w-20;
+  }
+  .dash-main {
+    @apply flex flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-sm;
+  }
+  .dash-nav-item {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900;
+  }
+  .dash-nav-item--active {
+    @apply bg-ieee-600 text-white shadow-sm hover:bg-ieee-700 hover:text-white;
+  }
+
+  /* ===== Misc reusable utility ===== */
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-ieee-50 px-2.5 py-1 text-xs font-medium text-ieee-700;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
   }
 }

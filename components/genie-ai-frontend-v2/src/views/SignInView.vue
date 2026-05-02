@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppButton from '../components/AppButton.vue';
 import AppInput from '../components/AppInput.vue';
+import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
 import { useAuthStore } from '../stores/auth';
 
@@ -33,19 +34,22 @@ async function onSubmit() {
 </script>
 
 <template>
-  <main class="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-8">
-    <div class="auth-card">
-      <section class="px-8 py-10 sm:px-12 sm:py-14">
-        <div class="mx-auto w-full max-w-sm">
-          <h1 class="text-2xl font-semibold text-slate-900">Welcome back!</h1>
-          <p class="mt-1 text-sm text-slate-500">Log in to your account.</p>
+  <main class="auth-shell">
+    <section class="auth-form-pane">
+      <AuthHeader :align="'left'" />
+
+      <div class="flex flex-1 flex-col justify-center">
+        <div class="mx-auto w-full max-w-md">
+          <h1 class="text-3xl font-semibold text-slate-900">Welcome back!</h1>
+          <p class="mt-1 text-sm text-slate-500">Login to access all your data</p>
 
           <form class="mt-8 space-y-4" novalidate @submit.prevent="onSubmit">
             <AppInput
               id="loginName"
               v-model="form.loginName"
               type="text"
-              label="Email address"
+              label="Email Address"
+              placeholder="Enter your email address"
               autocomplete="username"
               required
             />
@@ -55,33 +59,42 @@ async function onSubmit() {
               v-model="form.password"
               type="password"
               label="Password"
+              placeholder="Enter your password"
               autocomplete="current-password"
               required
             />
 
-            <div class="flex items-center justify-between text-sm">
-              <label class="flex items-center gap-2 text-slate-600">
-                <input v-model="form.remember" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
-                Remember me
-              </label>
-              <a href="#" class="font-medium text-brand-700 hover:underline">Forgot password?</a>
-            </div>
+            <label class="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                v-model="form.remember"
+                type="checkbox"
+                class="h-4 w-4 rounded border-slate-300 text-ieee-600 focus:ring-ieee-600"
+              />
+              Remember me
+            </label>
 
-            <p v-if="submitError" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p v-if="submitError" class="rounded-2xl bg-red-50 px-4 py-2 text-sm text-red-700">
               {{ submitError }}
             </p>
 
             <AppButton type="submit" :loading="auth.loading">Login</AppButton>
 
-            <p class="text-center text-sm text-slate-500">
-              New here?
-              <RouterLink to="/signup" class="font-medium text-brand-700 hover:underline">Create an account</RouterLink>
+            <p class="pt-1 text-center text-sm text-slate-500">
+              Don't have an account?
+              <RouterLink to="/signup" class="font-semibold text-ieee-700 hover:underline">Register</RouterLink>
             </p>
           </form>
         </div>
-      </section>
+      </div>
 
-      <BrandPanel />
-    </div>
+      <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
+        By signing up, you agree to our
+        <a href="#" class="text-ieee-600 hover:underline">terms of service</a>
+        and
+        <a href="#" class="text-ieee-600 hover:underline">privacy policy</a>.
+      </p>
+    </section>
+
+    <BrandPanel />
   </main>
 </template>

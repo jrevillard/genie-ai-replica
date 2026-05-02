@@ -1,41 +1,43 @@
 <script setup lang="ts">
 defineProps<{
-  title?: string;
-  body?: string;
-  tagline?: string;
+  /** Optional override of the dark backdrop image. */
+  backgroundUrl?: string;
 }>();
 </script>
 
 <template>
-  <aside
-    class="relative hidden flex-col justify-between bg-brand-950 p-10 text-white md:flex"
-    aria-hidden="true"
-  >
-    <div class="flex items-center gap-2">
-      <div class="rounded-md bg-white/10 px-3 py-1.5 text-sm font-bold tracking-wider">IEEE</div>
-    </div>
+  <aside class="auth-brand-pane" aria-hidden="true">
+    <div class="auth-brand-card">
+      <!-- Backdrop image (auth.png) fills the rounded card; absolutely positioned
+           so the content lays cleanly on top with its own padding. -->
+      <img
+        :src="backgroundUrl ?? '/images/auth.png'"
+        alt=""
+        class="absolute inset-0 h-full w-full object-cover"
+      />
+      <div
+        class="absolute inset-0 bg-gradient-to-b from-ieee-950/70 via-ieee-950/40 to-ieee-950/85"
+      />
 
-    <div class="space-y-4">
-      <h2 class="text-2xl font-semibold leading-tight">
-        {{ title ?? 'Welcome to IEEE' }}
-      </h2>
-      <p class="text-sm leading-relaxed text-white/70">
-        {{
-          body ??
-          'Build and chat with your AI Twin. A sovereign generative-AI platform tailored for the public sector.'
-        }}
-      </p>
-    </div>
+      <div class="relative flex h-full flex-col justify-between p-10">
+        <header class="space-y-2">
+          <p class="text-xs font-bold uppercase tracking-[0.3em] text-white/70">IEEE</p>
+          <h2 class="text-3xl font-semibold leading-tight">Welcome to IEEE</h2>
+          <p class="max-w-xs text-sm leading-relaxed text-white/80">
+            IEEE helps you create and manage AI Twins, giving you full control over your data while
+            seamlessly tracking all your chat and call history.
+          </p>
+        </header>
 
-    <div class="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-wider text-white/60">
-      {{ tagline ?? 'NCDs in Gambia' }}
+        <div class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-md">
+          <h3 class="text-xl font-semibold text-white">NCDs in Gambia</h3>
+          <p class="mt-2 text-sm leading-relaxed text-white/80">
+            To empower individuals and communities in The Gambia with accessible, personalized, and
+            reliable health information through an AI-driven chatbot that supports the prevention,
+            early detection, and management of non-communicable diseases.
+          </p>
+        </div>
+      </div>
     </div>
-
-    <div
-      class="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-brand-600/30 blur-3xl"
-    />
-    <div
-      class="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-brand-700/20 blur-3xl"
-    />
   </aside>
 </template>

@@ -26,7 +26,7 @@ defineEmits<{
       :autocomplete="autocomplete"
       :required="required"
       :aria-invalid="!!error"
-      class="input-base"
+      class="input-pill"
       @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
     />
     <p v-if="error" class="form-error">{{ error }}</p>

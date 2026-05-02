@@ -79,3 +79,15 @@
     scrollbar-width: thin;
   }
 }
+
+/*
+ * vue-sileo: brand toast surface (#003e62 = ieee-800 / main navy).
+ * Load vue-sileo before this file (see main.ts) so these override library defaults.
+ */
+[data-sileo-viewport][data-theme='light'],
+[data-sileo-viewport][data-theme='dark'] {
+  --sileo-fill: #003e62;
+  --sileo-text: #ffffff;
+  --sileo-description: rgba(255, 255, 255, 0.85);
+  --sileo-shadow: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.22));
+}

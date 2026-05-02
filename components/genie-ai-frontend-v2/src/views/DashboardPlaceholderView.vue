@@ -21,9 +21,7 @@ async function onSignOut() {
           <span class="text-sm font-medium text-slate-600">GENIE.AI</span>
         </div>
         <div class="flex items-center gap-4">
-          <span class="text-sm text-slate-600">
-            {{ auth.user?.fullName || auth.user?.loginName || auth.user?.email || 'Signed in' }}
-          </span>
+          <span class="text-sm text-slate-600">{{ auth.displayName }}</span>
           <button class="text-sm font-medium text-slate-600 hover:text-slate-900" @click="onSignOut">
             Sign out
           </button>

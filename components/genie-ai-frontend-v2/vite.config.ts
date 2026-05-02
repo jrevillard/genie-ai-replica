@@ -11,8 +11,13 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: 'https://genie.innov8ai.com',
         changeOrigin: true,
+        secure: true,
+        headers: {
+          Origin: 'https://genie.innov8ai.com',
+          Referer: 'https://genie.innov8ai.com/',
+        },
       },
     },
   },

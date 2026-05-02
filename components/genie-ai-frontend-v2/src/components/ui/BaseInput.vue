@@ -33,7 +33,8 @@ const wrapperClass = computed(() =>
     props.rounded === 'full' ? 'rounded-full' : props.rounded === 'md' ? 'rounded-md' : 'rounded-xl',
     props.size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2.5 text-sm',
     props.error && 'ring-red-300 focus-within:ring-red-400',
-    props.disabled && 'opacity-60'
+    props.disabled &&
+      'cursor-not-allowed bg-slate-50 text-slate-600 ring-neutral-200 focus-within:ring-1 focus-within:ring-neutral-200'
   )
 );
 </script>
@@ -54,7 +55,7 @@ const wrapperClass = computed(() =>
         :required="required"
         :disabled="disabled"
         :aria-invalid="!!error"
-        class="w-full bg-transparent placeholder-slate-400 outline-none"
+        class="w-full bg-transparent placeholder-slate-400 outline-none disabled:cursor-not-allowed"
         @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       />
       <span v-if="hasTrailing" class="ml-2 text-slate-400">

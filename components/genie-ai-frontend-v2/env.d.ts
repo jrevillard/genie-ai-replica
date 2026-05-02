@@ -6,6 +6,8 @@ declare module '*.vue' {
   export default component;
 }
 
+declare module 'vue-sileo/styles.css';
+
 interface AppConfig {
   apiUrl: string;
   proxyHost?: string;

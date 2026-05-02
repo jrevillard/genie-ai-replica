@@ -106,7 +106,7 @@ function selectTwin(twin: Twin) {
           </div>
 
           <div class="mb-5 flex items-center justify-between gap-3">
-            <BaseCheckbox v-model="allDocumentsSelected" size="md" class="min-w-0">
+            <BaseCheckbox v-model="allDocumentsSelected" size="sm" class="min-w-0">
               <span class="truncate text-base font-bold text-slate-800">Select Files To Add Them For The Twins</span>
             </BaseCheckbox>
             <ShadButton variant="secondary" class="hidden shrink-0 sm:inline-flex">
@@ -119,11 +119,11 @@ function selectTwin(twin: Twin) {
               <article
                 v-for="document in documents"
                 :key="document.id"
-                class="grid grid-cols-[32px_minmax(0,1fr)] gap-4"
+                class="grid grid-cols-[24px_minmax(0,1fr)] gap-3"
               >
                 <BaseCheckbox
                   :model-value="document.selected"
-                  size="md"
+                  size="sm"
                   class="mt-8 justify-center"
                   @update:model-value="setDocumentSelected(document, $event)"
                 />

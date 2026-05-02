@@ -20,6 +20,13 @@ export const useAuthStore = defineStore('auth', {
       const session = readSession();
       return !!state.user || !!session?.accessToken;
     },
+    displayName: (state): string =>
+      state.user?.personalIdentification?.fullName ||
+      state.user?.loginName ||
+      state.user?.email ||
+      'User',
+    email: (state): string => state.user?.email ?? '',
+    role: (state): string => state.user?.role ?? '',
   },
   actions: {
     // Called once at boot. If we have a stored token, validate it via /auth/me.
@@ -27,12 +34,7 @@ export const useAuthStore = defineStore('auth', {
     async hydrate(): Promise<void> {
       const session = readSession();
       if (!session?.accessToken) return;
-      try {
-        const me = await authApi.fetchMe();
-        this.user = me;
-      } catch {
-        this.user = null;
-      }
+      await this.fetchCurrentUser();
     },
 
     async signUp(payload: authApi.RegisterPayload): Promise<{ message: string }> {
@@ -53,19 +55,26 @@ export const useAuthStore = defineStore('auth', {
       this.loading = true;
       this.error = null;
       try {
-        const res = await authApi.login(payload);
-        // login() already wrote the session; mirror selected fields into the store
-        // for reactive access.
-        this.user = {
-          loginName: res.loginName,
-          email: res.email,
-          emailVerified: res.emailVerified,
-        };
+        await authApi.login(payload);
+        // Pull the full profile (role, fullName, etc.) from /auth/me — login()
+        // does not return personalIdentification.
+        await this.fetchCurrentUser();
       } catch (err) {
         this.error = extractError(err, 'Login failed');
         throw err;
       } finally {
         this.loading = false;
+      }
+    },
+
+    async fetchCurrentUser(): Promise<User | null> {
+      try {
+        const me = await authApi.fetchMe();
+        this.user = me;
+        return me;
+      } catch {
+        this.user = null;
+        return null;
       }
     },
 

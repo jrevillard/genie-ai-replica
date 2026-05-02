@@ -16,13 +16,23 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface PersonalIdentification {
+  fullName?: string;
+  dob?: string;
+  gender?: string;
+  nationality?: string;
+  maritalStatus?: string;
+}
+
 export interface User {
   _key?: string;
+  _id?: string;
   loginName?: string;
   email?: string;
   emailVerified?: boolean;
-  fullName?: string;
-  [k: string]: unknown;
+  role?: string;
+  avatar?: string;
+  personalIdentification?: PersonalIdentification;
 }
 
 export interface LoginResponse extends User {

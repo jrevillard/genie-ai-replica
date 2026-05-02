@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
+import { ArrowLeft01Icon, Cancel01Icon, Edit02Icon } from '@hugeicons/core-free-icons';
+import { storeToRefs } from 'pinia';
+import { sileo } from '../lib/notify';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseDialog from '../components/ui/BaseDialog.vue';
@@ -16,15 +18,24 @@ import PersonalityTab from '../components/twin-tabs/PersonalityTab.vue';
 import KnowledgeSetTab from '../components/twin-tabs/KnowledgeSetTab.vue';
 import SystemPromptTab from '../components/twin-tabs/SystemPromptTab.vue';
 import InstructionsTab from '../components/twin-tabs/InstructionsTab.vue';
-import { mockTwins } from '../lib/mockTwins';
+import { useAiTwinsStore } from '../stores/aiTwins';
+
+interface EditableTab {
+  save?: () => Promise<boolean> | boolean;
+  discard?: () => void;
+}
 
 const route = useRoute();
 const router = useRouter();
+const store = useAiTwinsStore();
+const { current: twin, loading, saving } = storeToRefs(store);
 
-const twin = computed(() => mockTwins.find((t) => t.id === route.params.id));
 const active = ref(true);
 const tab = ref<string>('general');
 const deleteDialog = ref(false);
+const deleting = ref(false);
+const editing = ref(false);
+const activeTab = ref<EditableTab | null>(null);
 
 const tabs: TabItem[] = [
   { value: 'general', label: 'General' },
@@ -35,13 +46,58 @@ const tabs: TabItem[] = [
   { value: 'instructions', label: 'Instructions' },
 ];
 
+const twinId = computed(() => String(route.params.id ?? ''));
+
+async function loadTwin() {
+  if (!twinId.value) return;
+  try {
+    await store.fetchOne(twinId.value);
+  } catch {
+    // store.error is already set; the empty state below will render.
+  }
+}
+
+onMounted(loadTwin);
+watch(twinId, loadTwin);
+
+watch(tab, () => {
+  if (editing.value) {
+    activeTab.value?.discard?.();
+    editing.value = false;
+  }
+});
+
 function goBack() {
   router.back();
 }
 
-function confirmDelete() {
-  deleteDialog.value = false;
-  router.push({ name: 'ai-twins' });
+function startEditing() {
+  editing.value = true;
+}
+
+function cancelEditing() {
+  activeTab.value?.discard?.();
+  editing.value = false;
+}
+
+async function saveChanges() {
+  const ok = await Promise.resolve(activeTab.value?.save?.() ?? true);
+  if (ok) editing.value = false;
+}
+
+async function confirmDelete() {
+  if (!twin.value) return;
+  deleting.value = true;
+  try {
+    await store.remove(twin.value._key);
+    deleteDialog.value = false;
+    sileo.success({ title: 'AI Twin deleted' });
+    router.push({ name: 'ai-twins' });
+  } catch {
+    sileo.error({ title: store.error ?? 'Failed to delete AI Twin' });
+  } finally {
+    deleting.value = false;
+  }
 }
 </script>
 
@@ -59,26 +115,79 @@ function confirmDelete() {
       <template v-if="twin">
         <header class="flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <BaseAvatar :src="twin.avatar" :name="twin.name" size="lg" />
-            <span class="chip">IEEE Page</span>
+            <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="lg" />
+            <span class="chip">{{ twin.name }}</span>
             <BaseToggle v-model="active" :label="active ? 'Active' : 'Inactive'" />
           </div>
-          <BaseButton variant="danger" size="md" @click="deleteDialog = true">
+          <BaseButton variant="danger" size="md" :loading="deleting" @click="deleteDialog = true">
             Delete AI Twin
           </BaseButton>
         </header>
 
-        <BaseTabs v-model="tab" :tabs="tabs" />
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <BaseTabs v-model="tab" :tabs="tabs" />
 
-        <div class="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <GeneralTab v-if="tab === 'general'" :twin="twin" />
-          <VoiceTab v-else-if="tab === 'voice'" />
-          <PersonalityTab v-else-if="tab === 'personality'" />
-          <KnowledgeSetTab v-else-if="tab === 'knowledge'" />
-          <SystemPromptTab v-else-if="tab === 'system-prompt'" />
-          <InstructionsTab v-else-if="tab === 'instructions'" />
+          <Transition name="edit-actions" mode="out-in">
+            <div v-if="!editing" key="view" class="flex items-center gap-2">
+              <BaseButton variant="outline" size="md" rounded="full" @click="startEditing">
+                <Icon :icon="Edit02Icon" :size="16" />
+                Update
+              </BaseButton>
+            </div>
+            <div v-else key="edit" class="flex items-center gap-2">
+              <span
+                class="hidden items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200 sm:inline-flex"
+              >
+                <span class="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Editing
+              </span>
+              <BaseButton
+                variant="ghost"
+                size="md"
+                rounded="full"
+                :disabled="saving"
+                @click="cancelEditing"
+              >
+                Cancel
+              </BaseButton>
+              <BaseButton
+                variant="primary"
+                size="md"
+                rounded="full"
+                :loading="saving"
+                @click="saveChanges"
+              >
+                Save Changes
+              </BaseButton>
+            </div>
+          </Transition>
+        </div>
+
+        <div
+          :class="[
+            'rounded-2xl border bg-white p-6 shadow-sm transition-colors',
+            editing ? 'border-ieee-200 ring-1 ring-ieee-100' : 'border-neutral-200',
+          ]"
+        >
+          <GeneralTab
+            v-if="tab === 'general'"
+            ref="activeTab"
+            :twin="twin"
+            :editing="editing"
+          />
+          <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" />
+          <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
+          <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" />
+          <SystemPromptTab v-else-if="tab === 'system-prompt'" ref="activeTab" />
+          <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
         </div>
       </template>
+
+      <div v-else-if="loading" class="space-y-4">
+        <div class="h-16 animate-pulse rounded-2xl bg-neutral-100" />
+        <div class="h-12 animate-pulse rounded-2xl bg-neutral-100" />
+        <div class="h-64 animate-pulse rounded-2xl bg-neutral-100" />
+      </div>
 
       <EmptyState
         v-else
@@ -100,9 +209,21 @@ function confirmDelete() {
           </p>
         </div>
         <div class="mt-7 flex justify-end">
-          <BaseButton variant="danger" @click="confirmDelete">Yes, delete</BaseButton>
+          <BaseButton variant="danger" :loading="deleting" @click="confirmDelete">Yes, delete</BaseButton>
         </div>
       </BaseDialog>
     </section>
   </DashboardLayout>
 </template>
+
+<style scoped>
+.edit-actions-enter-active,
+.edit-actions-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.edit-actions-enter-from,
+.edit-actions-leave-to {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+</style>

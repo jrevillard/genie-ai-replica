@@ -1,35 +1,46 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
+import { Eye, EyeOff } from 'lucide-vue-next';
 import { useRoute, useRouter } from 'vue-router';
+import { sileo } from '../lib/notify';
 import AppButton from '../components/AppButton.vue';
 import AppInput from '../components/AppInput.vue';
 import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
 import BaseCheckbox from '../components/ui/BaseCheckbox.vue';
 import { useAuthStore } from '../stores/auth';
+import { useZodForm } from '../composables/useZodForm';
+import { signInSchema, type SignInInput } from '../lib/validation/schemas';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
-const form = reactive({
+const form = reactive<SignInInput>({
   loginName: '',
   password: '',
   remember: false,
 });
 
-const submitError = ref<string | null>(
-  route.query.error === 'session_expired' ? 'Your session expired. Please sign in again.' : null
-);
+const { errors, validate } = useZodForm(signInSchema, ['loginName', 'password']);
+
+const passwordVisible = ref(false);
+
+onMounted(() => {
+  if (route.query.error === 'session_expired') {
+    sileo.warning({ title: 'Your session expired. Please sign in again.' });
+  }
+});
 
 async function onSubmit() {
-  submitError.value = null;
+  if (!validate(form)) return;
   try {
-    await auth.signIn({ loginName: form.loginName, password: form.password });
+    await auth.signIn({ loginName: form.loginName.trim(), password: form.password });
+    sileo.success({ title: 'Welcome back!' });
     const redirect = (route.query.redirect as string) || '/dashboard';
     router.push(redirect);
   } catch {
-    submitError.value = auth.error ?? 'Sign-in failed';
+    sileo.error({ title: auth.error ?? 'Sign-in failed' });
   }
 }
 </script>
@@ -49,27 +60,37 @@ async function onSubmit() {
               id="loginName"
               v-model="form.loginName"
               type="text"
-              label="Email Address"
-              placeholder="Enter your email address"
+              label="Username or email"
+              placeholder="Enter your username or email"
               autocomplete="username"
               required
+              :error="errors.loginName"
             />
 
             <AppInput
               id="password"
               v-model="form.password"
-              type="password"
+              :type="passwordVisible ? 'text' : 'password'"
               label="Password"
               placeholder="Enter your password"
               autocomplete="current-password"
               required
-            />
+              :error="errors.password"
+            >
+              <template #trailing>
+                <button
+                  type="button"
+                  class="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-neutral-100 hover:text-ieee-700"
+                  :aria-label="passwordVisible ? 'Hide password' : 'Show password'"
+                  @click="passwordVisible = !passwordVisible"
+                >
+                  <EyeOff v-if="passwordVisible" class="h-4 w-4" />
+                  <Eye v-else class="h-4 w-4" />
+                </button>
+              </template>
+            </AppInput>
 
             <BaseCheckbox v-model="form.remember" label="Remember me" size="sm" />
-
-            <p v-if="submitError" class="rounded-2xl bg-red-50 px-4 py-2 text-sm text-red-700">
-              {{ submitError }}
-            </p>
 
             <AppButton type="submit" :loading="auth.loading">Login</AppButton>
 

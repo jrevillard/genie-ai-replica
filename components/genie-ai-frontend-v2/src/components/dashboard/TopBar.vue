@@ -21,10 +21,6 @@ const router = useRouter();
 const search = ref('');
 const commandOpen = ref(false);
 
-const displayName = computed(
-  () => auth.user?.fullName || auth.user?.loginName || auth.user?.email || 'User name'
-);
-
 const items = [
   { group: 'Pages', label: 'AI Twins', description: 'Create and manage AI Twins', to: '/ai-twins', icon: AiBrain01Icon },
   { group: 'Pages', label: 'Chat/Call History', description: 'Review chats, calls, transcripts, and summaries', to: '/chat-history', icon: MessageMultiple01Icon },
@@ -79,11 +75,17 @@ function navigate(to: string) {
 
     <div class="flex-1" />
 
-    <div class="flex items-center gap-2 rounded-full border border-neutral-300 bg-neutral-50 px-2 py-1 shadow-sm">
-      <BaseAvatar size="sm" :src="(auth.user?.avatar as string) || 'https://i.pravatar.cc/40?img=12'" :name="displayName" />
+    <div class="flex items-center gap-2 rounded-full border border-neutral-300 bg-neutral-50 px-3 py-1 shadow-sm">
+      <BaseAvatar size="sm" :src="auth.user?.avatar || 'https://i.pravatar.cc/40?img=12'" :name="auth.displayName" />
       <span class="hidden flex-col items-start leading-tight md:flex">
-        <span class="text-sm font-medium text-slate-900">{{ displayName }}</span>
-        <span class="text-[11px] text-slate-500">Company Admin</span>
+        <span class="text-sm font-medium text-slate-900">{{ auth.displayName }}</span>
+        <span v-if="auth.email" class="text-[11px] text-slate-500">{{ auth.email }}</span>
+      </span>
+      <span
+        v-if="auth.role"
+        class="hidden rounded-full bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold text-ieee-700 md:inline"
+      >
+        {{ auth.role }}
       </span>
     </div>
 
@@ -97,7 +99,7 @@ function navigate(to: string) {
     </button>
 
     <Teleport to="body">
-      <div v-if="commandOpen" class="fixed inset-0 z-50 flex items-start justify-center bg-neutral-950/25 px-4 pt-20" @click.self="closeCommand">
+      <div v-if="commandOpen" class="fixed inset-0 z-50 flex items-start justify-center bg-neutral-950/25 px-4 pt-20 backdrop-blur-sm" @click.self="closeCommand">
         <section class="w-full max-w-2xl overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-2xl">
           <div class="border-b border-neutral-100 p-3">
             <label class="flex h-12 items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4">

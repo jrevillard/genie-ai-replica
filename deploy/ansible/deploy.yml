@@ -486,8 +486,8 @@
       ansible.builtin.set_fact:
         genieai_images:
           - name: frontend
-            dockerfile: components/gov-chat-frontend/Dockerfile
-            context: components/gov-chat-frontend/
+            dockerfile: components/genie-ai-frontend-v2/Dockerfile
+            context: components/genie-ai-frontend-v2/
             source_tag: genieai_mvp_frontend:latest
             registry_tag: genie-ai-frontend:latest
             opea: false

@@ -272,7 +272,7 @@ services:
 
   frontend:
     restart: unless-stopped
-    build: components/gov-chat-frontend/
+    build: components/genie-ai-frontend-v2/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-frontend:latest
     environment:
       - PORT=8090

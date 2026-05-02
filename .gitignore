@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 
+# Local Docker Compose overrides (dev-only, never deployed)
+docker-compose.override.yml
+docker-compose.override.yaml
+
 # SSL certificates and keys (secrets - never commit)
 # The secrets/ directory contains actual certificates - keep structure but not files
 secrets/*.crt

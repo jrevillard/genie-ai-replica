@@ -1036,7 +1036,7 @@ class ChatQnAService:
         for message in reversed(history):
             if logflag:
                 logger.debug(f'Examining message: {message}')
-            message_chars = len(message["content"])
+            message_chars = len(message["content"] if isinstance(message, dict) else str(message))
             if current_chars + message_chars > max_translation_chars:
                 break
             messages_to_process.append(message)
@@ -1046,8 +1046,8 @@ class ChatQnAService:
         
         flattened_history_parts = []
         for message in messages_to_process:
-            role = message.get("role", "unknown").upper()
-            content = message.get("content", "")
+            role = message.get("role", "unknown").upper() if isinstance(message, dict) else "USER"
+            content = message.get("content", "") if isinstance(message, dict) else str(message)
             flattened_history_parts.append(f"{role}: {content}")
         
         flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
@@ -1237,27 +1237,24 @@ class ChatQnAService:
                     logger.info(f"Last user content for detection (first 100 chars): {last_user_content[:100] if last_user_content else 'None'}")
 
                 # ── AgriConnect hard topic guardrail ──────────────────────────────
-                _always_blocked = ['poem', 'poetry', 'write me a poem', 'write a poem',
-                    'song lyrics', 'write me a song', 'tell me a joke', 'joke',
-                    'who is the king', 'king of lesotho', 'king letsie', 'who is king',
-                    'capital of france', 'capital of', 'president of', 'prime minister of',
-                    'who won the', 'football match', 'soccer', 'movie', 'film review',
-                    'recipe for', 'how to cook', 'what can i eat', 'what to eat',
-                    'what do you eat', 'cook with', 'eat with', 'eat beans with',
-                    'eat maize with', 'population of', 'how to make', 'ingredients for']
-                _soft_blocked = ['story about', 'who won', 'football', 'actor', 'music video',
-                    'sport', 'lyrics', 'write me a']
                 _agri = ['farm', 'crop', 'plant', 'soil', 'fertilis', 'fertiliz', 'seed',
                     'pest', 'disease', 'harvest', 'maize', 'bean', 'livestock', 'cattle',
                     'sheep', 'goat', 'rain', 'drought', 'variety', 'yield',
                     'field', 'grain', 'market price', 'extension', 'planting',
                     'spray', 'weed', 'insect', 'fungal', 'rot', 'blight', 'armyworm',
                     'fertiliser', 'compost', 'irrigation', 'agro', 'tractor', 'land prep',
-                    'conservation agriculture', 'soil test', 'cover crop']
+                    'conservation agriculture', 'soil test', 'cover crop', 'poultry',
+                    'chicken', 'pig', 'vegetable', 'potato', 'sorghum', 'wheat',
+                    'subsidy', 'ministry of agriculture', 'extension worker', 'fao',
+                    'weather', 'flood', 'frost', 'highland', 'lowland', 'district',
+                    'leribe', 'maseru', 'berea', 'mafeteng', 'quthing', 'butha',
+                    'mokhotlong', 'thaba', 'harvest', 'store', 'silo', 'grain bag',
+                    'pan 3m', 'pan 12', 'pan 4m', 'kranskop', 'pinto', 'advice',
+                    'advise', 'recommend', 'help', 'farmer', 'hectare', 'acre',
+                    'visit', 'field day', 'training', 'workshop', 'demo plot']
                 _ql = last_user_content.lower() if last_user_content else ''
                 _is_agri = any(kw in _ql for kw in _agri)
-                _blocked = (any(kw in _ql for kw in _always_blocked) or
-                           (any(kw in _ql for kw in _soft_blocked) and not _is_agri))
+                _blocked = not _is_agri
                 if _blocked:
                     from fastapi.responses import JSONResponse as _JR
                     return _JR(content={"response": "I am Keletso, your agricultural advisor for Lesotho. I can only assist with farming and agriculture questions. Please ask me about crops, pests, weather or farming programs.", "metadata": {"source_documents": [], "confidence_score": 0.0}})
@@ -1297,7 +1294,7 @@ class ChatQnAService:
             translated_history_string = await self._get_translated_history_string(full_chat_history, "English")
         else:
             # If already English, flatten without translation
-            parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
+            parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" if isinstance(msg, dict) else str(msg) for msg in full_chat_history]
             translated_history_string = " |<-MSG->| ".join(parts)
 
         if logflag:
@@ -1386,6 +1383,17 @@ class ChatQnAService:
                 return response
         
         llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get("text", "Sorry, I could not generate a response.")
+        # ── AgriConnect post-processing filter ──────────────────────────────
+        # Remove SC variety mentions from LLM response (IBM Granite training data leak)
+        sc_pattern = r'SC\d{3}\s*\([TM]{1,2}\)[,\s]*'
+        llm_response = re.sub(sc_pattern, '', llm_response)
+        # Remove "Monot'sa" references
+        llm_response = re.sub(r"Monot'sa[^.]*\.", '', llm_response)
+        # Clean up any double spaces or orphaned punctuation left by removal
+        llm_response = re.sub(r'\s{2,}', ' ', llm_response).strip()
+        llm_response = re.sub(r',\s*\.', '.', llm_response)
+        llm_response = re.sub(r'are\s*\.\s*', 'are listed in the knowledge base. ', llm_response)
+        # ── End post-processing filter ───────────────────────────────────────
         
         if original_language and original_language.strip() != "EN":
             if logflag:

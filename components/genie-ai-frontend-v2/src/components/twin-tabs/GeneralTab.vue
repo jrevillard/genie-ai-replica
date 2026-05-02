@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { PlusSignIcon } from '@hugeicons/core-free-icons';
 import BaseButton from '../ui/BaseButton.vue';
+import BaseDialog from '../ui/BaseDialog.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import BaseTextarea from '../ui/BaseTextarea.vue';
 import Icon from '../ui/Icon.vue';
@@ -17,6 +18,21 @@ const form = reactive({
   chatGreeting: '',
 });
 const numbers = reactive<string[]>([]);
+const numberDialogOpen = ref(false);
+const newNumber = ref('');
+
+function openNumberDialog() {
+  newNumber.value = '';
+  numberDialogOpen.value = true;
+}
+
+function addNumber() {
+  const value = newNumber.value.trim();
+  if (!value) return;
+  numbers.push(value);
+  numberDialogOpen.value = false;
+  newNumber.value = '';
+}
 </script>
 
 <template>
@@ -32,7 +48,7 @@ const numbers = reactive<string[]>([]);
     <section>
       <header class="flex items-center justify-between">
         <h2 class="text-base font-semibold text-slate-900">AI Twin Number</h2>
-        <BaseButton variant="primary" size="sm" rounded="full" @click="numbers.push('')">
+        <BaseButton variant="primary" size="sm" rounded="full" @click="openNumberDialog">
           <Icon :icon="PlusSignIcon" :size="14" /> Add Number
         </BaseButton>
       </header>
@@ -45,7 +61,7 @@ const numbers = reactive<string[]>([]);
           placeholder="+1 234 567 8900"
         />
       </div>
-      <p v-else class="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
+      <p v-else class="mt-3 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 p-4 text-center text-xs text-slate-500">
         No phone numbers added yet. Click "Add Number" to attach one.
       </p>
     </section>
@@ -66,7 +82,34 @@ const numbers = reactive<string[]>([]);
 
     <div class="flex justify-end gap-2">
       <BaseButton variant="outline">Discard</BaseButton>
-      <BaseButton variant="primary">Save Changes</BaseButton>
+      <BaseButton variant="primary" rounded="full">Save Changes</BaseButton>
     </div>
+
+    <BaseDialog v-model:open="numberDialogOpen" size="sm">
+      <div class="pr-10">
+        <h2 class="text-lg font-semibold text-slate-950">Add Number</h2>
+        <p class="mt-2 text-sm leading-6 text-slate-500">
+          Attach a phone number to this AI Twin.
+        </p>
+      </div>
+
+      <div class="mt-6">
+        <BaseInput
+          v-model="newNumber"
+          label="Phone Number"
+          placeholder="+1 234 567 8900"
+          type="tel"
+          rounded="full"
+          @keydown.enter.prevent="addNumber"
+        />
+      </div>
+
+      <div class="mt-7 flex justify-end">
+        <BaseButton variant="primary" @click="addNumber">
+          <Icon :icon="PlusSignIcon" :size="16" />
+          Add Number
+        </BaseButton>
+      </div>
+    </BaseDialog>
   </div>
 </template>

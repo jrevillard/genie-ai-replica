@@ -6,28 +6,28 @@ import DashboardLayout from '../layouts/DashboardLayout.vue';
 
 <template>
   <DashboardLayout>
-    <section class="space-y-6 p-6">
+    <section class="space-y-6 bg-white p-6">
       <header>
         <h1 class="text-xl font-semibold text-slate-900">Statistics</h1>
         <p class="mt-1 text-sm text-slate-500">Usage, engagement, and performance across your AI Twins.</p>
       </header>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <div class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Total Chats</p>
           <p class="mt-2 text-2xl font-semibold text-slate-900">—</p>
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <div class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Total Calls</p>
           <p class="mt-2 text-2xl font-semibold text-slate-900">—</p>
         </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <div class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Avg. Duration</p>
           <p class="mt-2 text-2xl font-semibold text-slate-900">—</p>
         </div>
       </div>
 
-      <div class="rounded-2xl border border-slate-200 bg-white">
+      <div class="rounded-2xl border border-neutral-200 bg-white shadow-sm">
         <EmptyState
           :icon="ChartHistogramIcon"
           title="No data yet"

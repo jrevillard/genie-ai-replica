@@ -66,9 +66,9 @@ function formatBytes(bytes: number): string {
       <li
         v-for="f in files"
         :key="f.id"
-        class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"
+        class="flex items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm"
       >
-        <div class="rounded-lg bg-ieee-50 p-2 text-ieee-600">
+        <div class="rounded-full bg-ieee-50 p-2 text-ieee-700">
           <Icon :icon="File02Icon" :size="18" />
         </div>
         <div class="min-w-0 flex-1">
@@ -113,7 +113,6 @@ function formatBytes(bytes: number): string {
       </div>
 
       <template #footer>
-        <BaseButton variant="outline" @click="dialogOpen = false">Cancel</BaseButton>
         <BaseButton variant="primary" @click="dialogOpen = false">Add Knowledge</BaseButton>
       </template>
     </BaseDialog>

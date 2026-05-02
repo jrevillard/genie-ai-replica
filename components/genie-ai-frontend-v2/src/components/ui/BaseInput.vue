@@ -29,7 +29,7 @@ const hasTrailing = computed(() => !!slots.trailing);
 
 const wrapperClass = computed(() =>
   cn(
-    'relative flex items-center bg-white text-slate-900 ring-1 ring-inset ring-slate-200 transition focus-within:ring-2 focus-within:ring-ieee-300',
+    'relative flex items-center bg-white text-neutral-950 ring-1 ring-inset ring-neutral-200 transition focus-within:ring-2 focus-within:ring-ieee-700',
     props.rounded === 'full' ? 'rounded-full' : props.rounded === 'md' ? 'rounded-md' : 'rounded-xl',
     props.size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2.5 text-sm',
     props.error && 'ring-red-300 focus-within:ring-red-400',

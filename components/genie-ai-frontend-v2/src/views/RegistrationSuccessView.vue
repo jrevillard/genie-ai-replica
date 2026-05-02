@@ -1,35 +1,68 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useRoute } from 'vue-router';
-import AppButton from '../components/AppButton.vue';
+import AuthHeader from '../components/AuthHeader.vue';
+import BrandPanel from '../components/BrandPanel.vue';
 
 const route = useRoute();
-const email = (route.query.email as string) ?? '';
+
+const verifyQuery = computed(() => {
+  const email = typeof route.query.email === 'string' ? route.query.email : '';
+  return email ? ({ email } as Record<string, string>) : {};
+});
 </script>
 
 <template>
-  <main class="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-8">
-    <section class="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl sm:p-10">
-      <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-8 w-8 text-green-600" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-        </svg>
+  <main class="auth-shell">
+    <section class="auth-form-pane">
+      <AuthHeader :align="'left'" />
+
+      <div class="flex flex-1 flex-col justify-center">
+        <div class="mx-auto w-full max-w-md text-center">
+          <div
+            class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-ieee-50 text-ieee-700"
+            aria-hidden="true"
+          >
+            <svg class="h-9 w-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+
+          <h1 class="text-3xl font-semibold text-slate-900">You're almost there</h1>
+          <p class="mt-2 text-sm text-slate-500">
+            Your account has been created. Check your inbox to verify your email, then sign in.
+          </p>
+
+          <div class="mt-10 flex flex-col gap-3">
+            <RouterLink
+              :to="{ name: 'verify-email', query: verifyQuery }"
+              class="btn-primary text-center no-underline"
+            >
+              Enter verification code
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'signin' }"
+              class="btn-soft text-center no-underline"
+            >
+              Back to sign in
+            </RouterLink>
+          </div>
+        </div>
       </div>
 
-      <h1 class="text-2xl font-semibold text-slate-900">Account created</h1>
-      <p class="mt-2 text-sm text-slate-500">
-        We sent a verification message to
-        <span v-if="email" class="font-medium text-slate-700">{{ email }}</span>
-        <span v-else>your email</span>. Click the link inside, or enter the code on the next screen.
+      <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
+        By signing up, you agree to our
+        <a href="#" class="text-ieee-700 hover:underline">terms of service</a>
+        and
+        <a href="#" class="text-ieee-700 hover:underline">privacy policy</a>.
       </p>
-
-      <div class="mt-8 space-y-3">
-        <RouterLink :to="{ name: 'verify-email', query: { email } }" class="block">
-          <AppButton>Enter verification code</AppButton>
-        </RouterLink>
-        <RouterLink to="/signin" class="block text-sm text-brand-700 hover:underline">
-          Back to sign in
-        </RouterLink>
-      </div>
     </section>
+
+    <BrandPanel />
   </main>
 </template>

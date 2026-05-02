@@ -9,7 +9,7 @@ withDefaults(
 
 <template>
   <div
-    class="rounded-2xl border border-slate-200 bg-white shadow-sm"
+    class="rounded-xl border border-neutral-200 bg-white shadow-sm"
     :class="{
       'p-0': padding === 'none',
       'p-3': padding === 'sm',

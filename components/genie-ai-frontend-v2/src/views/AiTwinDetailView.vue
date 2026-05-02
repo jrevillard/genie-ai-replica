@@ -47,7 +47,7 @@ function confirmDelete() {
 
 <template>
   <DashboardLayout>
-    <section class="space-y-6 p-6">
+    <section class="space-y-6 bg-white p-6">
       <button
         type="button"
         class="inline-flex items-center gap-1 rounded-full bg-slate-50 p-2 text-slate-600 transition hover:bg-slate-100"
@@ -70,7 +70,7 @@ function confirmDelete() {
 
         <BaseTabs v-model="tab" :tabs="tabs" />
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-6">
+        <div class="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <GeneralTab v-if="tab === 'general'" :twin="twin" />
           <VoiceTab v-else-if="tab === 'voice'" />
           <PersonalityTab v-else-if="tab === 'personality'" />
@@ -91,14 +91,17 @@ function confirmDelete() {
 
       <BaseDialog
         v-model:open="deleteDialog"
-        title="Delete AI Twin"
-        description="This action can't be undone. All chats and call history attached to this twin will be removed."
         size="sm"
       >
-        <template #footer>
-          <BaseButton variant="outline" @click="deleteDialog = false">Cancel</BaseButton>
+        <div class="pr-10">
+          <h2 class="text-lg font-semibold text-slate-950">Delete AI Twin</h2>
+          <p class="mt-2 text-sm leading-6 text-slate-500">
+            This action can't be undone. All chats and call history attached to this twin will be removed.
+          </p>
+        </div>
+        <div class="mt-7 flex justify-end">
           <BaseButton variant="danger" @click="confirmDelete">Yes, delete</BaseButton>
-        </template>
+        </div>
       </BaseDialog>
     </section>
   </DashboardLayout>

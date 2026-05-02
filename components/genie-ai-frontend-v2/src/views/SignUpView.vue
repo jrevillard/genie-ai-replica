@@ -133,9 +133,9 @@ async function onSubmit() {
 
       <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
         By signing up, you agree to our
-        <a href="#" class="text-ieee-600 hover:underline">terms of service</a>
+        <a href="#" class="text-ieee-700 hover:underline">terms of service</a>
         and
-        <a href="#" class="text-ieee-600 hover:underline">privacy policy</a>.
+        <a href="#" class="text-ieee-700 hover:underline">privacy policy</a>.
       </p>
     </section>
 

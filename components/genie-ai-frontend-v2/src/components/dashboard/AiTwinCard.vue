@@ -17,7 +17,7 @@ function open() {
 
 <template>
   <article
-    class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-ieee-200 hover:shadow-sm"
+    class="flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:border-ieee-200 hover:shadow-md"
   >
     <!-- Header: avatar + name -->
     <header class="flex items-center gap-3">
@@ -32,7 +32,7 @@ function open() {
     </div>
 
     <!-- Stats panel — its own bordered/rounded subcard -->
-    <dl class="grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-slate-200 px-4 py-3 text-xs">
+    <dl class="grid grid-cols-2 gap-x-6 gap-y-3 rounded-2xl bg-neutral-50 px-4 py-3 text-xs">
       <div class="flex items-center justify-between gap-3">
         <dt class="text-slate-500">Voice Library</dt>
         <dd class="font-medium text-slate-800">{{ twin.voiceLibrary }}</dd>
@@ -53,7 +53,7 @@ function open() {
 
     <!-- Action: View AI Twin (soft IEEE blue, bottom-right) -->
     <div class="flex justify-end">
-      <BaseButton variant="soft" size="sm" rounded="lg" @click="open">View AI Twin</BaseButton>
+      <BaseButton variant="soft" size="md" rounded="full" @click="open">View AI Twin</BaseButton>
     </div>
   </article>
 </template>

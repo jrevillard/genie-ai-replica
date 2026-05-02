@@ -19,14 +19,14 @@ const props = withDefaults(
     type: 'button',
     variant: 'primary',
     size: 'md',
-    rounded: 'lg',
+    rounded: 'full',
   }
 );
 
 const variantClass: Record<Variant, string> = {
-  primary: 'bg-ieee-600 text-white shadow-sm hover:bg-ieee-700 focus-visible:outline-ieee-700',
-  secondary: 'bg-slate-900 text-white hover:bg-slate-800 focus-visible:outline-slate-900',
-  soft: 'bg-ieee-50 text-ieee-700 hover:bg-ieee-100 focus-visible:outline-ieee-200',
+  primary: 'bg-ieee-700 text-white shadow-sm hover:bg-ieee-800 focus-visible:outline-ieee-700',
+  secondary: 'bg-ieee-700 text-white hover:bg-ieee-800 focus-visible:outline-ieee-800',
+  soft: 'bg-ieee-50 text-ieee-800 hover:bg-ieee-100 focus-visible:outline-ieee-200',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:outline-red-700',
   ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-slate-200',
   outline:
@@ -34,9 +34,9 @@ const variantClass: Record<Variant, string> = {
 };
 
 const sizeClass: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-xs',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-6 py-3 text-sm',
+  sm: 'h-10 px-5 text-sm',
+  md: 'h-10 px-5 text-sm',
+  lg: 'h-10 px-5 text-sm',
 };
 
 const roundedClass = {

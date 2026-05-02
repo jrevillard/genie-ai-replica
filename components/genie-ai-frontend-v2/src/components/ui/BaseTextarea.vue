@@ -21,7 +21,7 @@ defineEmits<{
 
 const cls = computed(() =>
   cn(
-    'block w-full rounded-xl border-0 bg-white px-4 py-3 text-sm text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 transition focus:outline-none focus:ring-2 focus:ring-ieee-300',
+    'block w-full rounded-2xl border-0 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-neutral-200 placeholder:text-slate-400 transition focus:outline-none focus:ring-2 focus:ring-ieee-700',
     props.error && 'ring-red-300 focus:ring-red-400'
   )
 );

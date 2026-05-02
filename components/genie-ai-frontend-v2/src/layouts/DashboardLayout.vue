@@ -11,9 +11,10 @@ const collapsed = ref(false);
     <Sidebar :collapsed="collapsed" @toggle="collapsed = !collapsed" />
     <main class="dash-main">
       <TopBar />
-      <div class="flex-1 overflow-y-auto">
-        <slot />
-      </div>
+      <!-- Inset margin shows gray behind; only the inner card scrolls (sticky chrome). -->
+        <div class="dash-main__card scrollbar-thin">
+          <slot />
+        </div>
     </main>
   </div>
 </template>

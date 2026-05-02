@@ -35,7 +35,7 @@ function add() {
       <p class="text-xs text-slate-500">Add specific dos and don'ts for your AI Twin to follow.</p>
     </header>
 
-    <div class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
       <BaseInput v-model="draftTitle" placeholder="Title (e.g. Tone of voice)" />
       <BaseInput v-model="draftBody" placeholder="Detail the instruction…" />
       <div class="flex justify-end">
@@ -46,7 +46,7 @@ function add() {
     </div>
 
     <ul v-if="items.length" class="space-y-2">
-      <li v-for="i in items" :key="i.id" class="rounded-xl border border-slate-200 bg-white p-4">
+      <li v-for="i in items" :key="i.id" class="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
         <p class="text-sm font-semibold text-slate-900">{{ i.title }}</p>
         <p v-if="i.body" class="mt-1 text-xs text-slate-600">{{ i.body }}</p>
       </li>

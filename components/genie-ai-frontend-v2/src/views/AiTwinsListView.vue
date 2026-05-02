@@ -38,22 +38,22 @@ function onCreated(payload: { name: string; description: string; avatar: string 
 
 <template>
   <DashboardLayout>
-    <section class="space-y-6 p-6">
+    <section class="space-y-6 bg-white p-6">
       <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div class="flex items-center gap-3">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <h1 class="text-xl font-semibold text-slate-900">AI Twins</h1>
-          <div class="w-64">
+          <div class="w-full sm:w-[360px]">
             <BaseInput
               v-model="search"
               placeholder="Search"
-              size="sm"
+              size="md"
               rounded="full"
             >
-              <template #leading><Icon :icon="Search01Icon" :size="16" /></template>
+              <template #leading><Icon :icon="Search01Icon" :size="18" /></template>
             </BaseInput>
           </div>
         </div>
-        <BaseButton variant="primary" size="md" rounded="lg" @click="dialogOpen = true">
+        <BaseButton variant="primary" size="md" rounded="full" @click="dialogOpen = true">
           <Icon :icon="PlusSignIcon" :size="16" />
           Create AI Twin
         </BaseButton>

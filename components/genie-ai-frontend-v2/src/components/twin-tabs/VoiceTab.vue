@@ -56,7 +56,7 @@ const groupedDefaults = (): Record<string, Voice[]> => {
           type="button"
           :class="[
             'pb-3 text-sm font-medium transition',
-            subTab === 'cloned' ? 'border-b-2 border-ieee-600 text-ieee-700' : 'text-slate-500 hover:text-slate-800',
+            subTab === 'cloned' ? 'border-b-2 border-ieee-700 text-ieee-700' : 'text-slate-500 hover:text-slate-800',
           ]"
           @click="subTab = 'cloned'"
         >
@@ -66,7 +66,7 @@ const groupedDefaults = (): Record<string, Voice[]> => {
           type="button"
           :class="[
             'pb-3 text-sm font-medium transition',
-            subTab === 'default' ? 'border-b-2 border-ieee-600 text-ieee-700' : 'text-slate-500 hover:text-slate-800',
+            subTab === 'default' ? 'border-b-2 border-ieee-700 text-ieee-700' : 'text-slate-500 hover:text-slate-800',
           ]"
           @click="subTab = 'default'"
         >
@@ -81,11 +81,11 @@ const groupedDefaults = (): Record<string, Voice[]> => {
           v-for="v in cloned"
           :key="v.id"
           :class="[
-            'flex items-center gap-3 rounded-xl border p-3 transition',
-            selectedVoice === v.id ? 'border-ieee-300 bg-ieee-50/40' : 'border-slate-200',
+            'flex items-center gap-3 rounded-2xl border p-3 shadow-sm transition',
+            selectedVoice === v.id ? 'border-ieee-700 bg-ieee-50/40' : 'border-neutral-200',
           ]"
         >
-          <button class="rounded-full bg-ieee-50 p-2 text-ieee-600 transition hover:bg-ieee-100" aria-label="Play">
+          <button class="rounded-full bg-ieee-50 p-2 text-ieee-700 transition hover:bg-ieee-100" aria-label="Play">
             <Icon :icon="PlayIcon" :size="14" />
           </button>
           <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
@@ -97,7 +97,7 @@ const groupedDefaults = (): Record<string, Voice[]> => {
             type="radio"
             :value="v.id"
             :checked="selectedVoice === v.id"
-            class="h-4 w-4 text-ieee-600 focus:ring-ieee-300"
+            class="h-4 w-4 text-ieee-700 focus:ring-ieee-700"
             @change="selectedVoice = v.id"
           />
         </li>
@@ -120,11 +120,11 @@ const groupedDefaults = (): Record<string, Voice[]> => {
             v-for="v in items"
             :key="v.id"
             :class="[
-              'flex items-center gap-3 rounded-xl border p-3 transition',
-              selectedVoice === v.id ? 'border-ieee-300 bg-ieee-50/40' : 'border-slate-200',
+              'flex items-center gap-3 rounded-2xl border p-3 shadow-sm transition',
+              selectedVoice === v.id ? 'border-ieee-700 bg-ieee-50/40' : 'border-neutral-200',
             ]"
           >
-            <button class="rounded-full bg-ieee-50 p-2 text-ieee-600 transition hover:bg-ieee-100" aria-label="Play">
+            <button class="rounded-full bg-ieee-50 p-2 text-ieee-700 transition hover:bg-ieee-100" aria-label="Play">
               <Icon :icon="PlayIcon" :size="14" />
             </button>
             <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
@@ -136,7 +136,7 @@ const groupedDefaults = (): Record<string, Voice[]> => {
               type="radio"
               :value="v.id"
               :checked="selectedVoice === v.id"
-              class="h-4 w-4 text-ieee-600 focus:ring-ieee-300"
+              class="h-4 w-4 text-ieee-700 focus:ring-ieee-700"
               @change="selectedVoice = v.id"
             />
           </li>

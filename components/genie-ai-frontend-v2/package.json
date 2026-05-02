@@ -12,13 +12,17 @@
   "dependencies": {
     "@hugeicons/core-free-icons": "^1.0.27",
     "@hugeicons/vue": "^1.0.4",
+    "@vueuse/core": "^14.3.0",
     "axios": "^1.7.7",
     "clsx": "^2.1.1",
+    "lucide-vue-next": "^1.0.0",
     "pinia": "^2.2.6",
+    "reka-ui": "^2.9.6",
     "vue": "^3.5.13",
     "vue-router": "^4.4.5"
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",

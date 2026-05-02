@@ -5,6 +5,7 @@ import AppButton from '../components/AppButton.vue';
 import AppInput from '../components/AppInput.vue';
 import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
+import BaseCheckbox from '../components/ui/BaseCheckbox.vue';
 import { useAuthStore } from '../stores/auth';
 
 const route = useRoute();
@@ -64,14 +65,7 @@ async function onSubmit() {
               required
             />
 
-            <label class="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                v-model="form.remember"
-                type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-ieee-600 focus:ring-ieee-600"
-              />
-              Remember me
-            </label>
+            <BaseCheckbox v-model="form.remember" label="Remember me" size="sm" />
 
             <p v-if="submitError" class="rounded-2xl bg-red-50 px-4 py-2 text-sm text-red-700">
               {{ submitError }}
@@ -89,9 +83,9 @@ async function onSubmit() {
 
       <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
         By signing up, you agree to our
-        <a href="#" class="text-ieee-600 hover:underline">terms of service</a>
+        <a href="#" class="text-ieee-700 hover:underline">terms of service</a>
         and
-        <a href="#" class="text-ieee-600 hover:underline">privacy policy</a>.
+        <a href="#" class="text-ieee-700 hover:underline">privacy policy</a>.
       </p>
     </section>
 

@@ -48,7 +48,7 @@ const initials = computed(() => {
     <span
       v-if="badge"
       class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white"
-      :class="badge === 'online' ? 'bg-emerald-500' : 'bg-slate-400'"
+      :class="badge === 'online' ? 'bg-ieee-700' : 'bg-slate-400'"
     />
   </span>
 </template>

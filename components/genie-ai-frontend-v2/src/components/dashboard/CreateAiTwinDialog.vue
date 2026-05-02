@@ -60,7 +60,7 @@ watch(
 </script>
 
 <template>
-  <BaseDialog :open="open" size="md" @update:open="close">
+  <BaseDialog :open="open" size="lg" @update:open="close">
     <template #default>
       <div class="space-y-5">
         <header>
@@ -75,7 +75,7 @@ watch(
             <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileChange" />
             <button
               type="button"
-              class="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+              class="mt-2 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-neutral-50"
               @click="pickFile"
             >
               <Icon :icon="Upload01Icon" :size="14" /> Upload
@@ -94,14 +94,13 @@ watch(
           id="twin-desc"
           v-model="form.description"
           label="Twin Description"
-          :rows="6"
+          :rows="8"
           placeholder="Describe what this AI Twin should do…"
         />
       </div>
     </template>
 
     <template #footer>
-      <BaseButton variant="outline" size="md" @click="close">Cancel</BaseButton>
       <BaseButton variant="primary" size="md" :disabled="!form.name.trim()" @click="onSubmit">
         Create Twin
       </BaseButton>

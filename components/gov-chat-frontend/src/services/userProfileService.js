@@ -6,13 +6,12 @@ import httpService from './httpService';
  */
 class UserProfileService {
   /**
-   * Get user profile by ID
-   * @param {String} userId - User ID
+   * Get current user profile
    * @returns {Promise} User profile data
    */
-  async getProfile(userId) {
+  async getProfile() {
     try {
-      const response = await httpService.get(`users/${userId}`);
+      const response = await httpService.get('me');
       return response.data;
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -21,37 +20,13 @@ class UserProfileService {
   }
 
   /**
-   * Create a new user profile
-   * @param {Object} profileData - Profile data from the form
-   * @returns {Promise} Created user profile
+   * Update current user profile
+   * @param {Object} profileData - Updated profile data
+   * @returns {Promise} Updated user profile
    */
-  async createProfile(profileData) {
+  async updateProfile(profileData) {
     try {
-      // Handle file uploads and form data
-      const formData = this.prepareFormData(profileData);
-      
-      const response = await httpService.post('users', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      throw error;
-    }
-  }
-
- /**
- * Update an existing user profile
- * @param {String} userId - User ID
- * @param {Object} profileData - Updated profile data
- * @returns {Promise} Updated user profile
- */
-  async updateProfile(userId, profileData) {
-    try {
-      console.log(`Updating user profile for ID: ${userId}`);
+      console.log('Updating user profile');
       console.log('Profile data:', profileData);
 
       // Check if there are any File objects in the profile data
@@ -62,14 +37,14 @@ class UserProfileService {
         // Handle file uploads and form data
         const formData = this.prepareFormData(profileData);
 
-        response = await httpService.put(`users/${userId}`, formData, {
+        response = await httpService.put('me', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
       } else {
         // No files, send as JSON
-        response = await httpService.put(`users/${userId}`, profileData);
+        response = await httpService.put('me', profileData);
       }
 
       return response.data;
@@ -80,10 +55,10 @@ class UserProfileService {
   }
 
   /**
- * Check if the profile data contains any File objects
- * @param {Object} profileData - Profile data to check
- * @returns {Boolean} True if files are present
- */
+   * Check if the profile data contains any File objects
+   * @param {Object} profileData - Profile data to check
+   * @returns {Boolean} True if files are present
+   */
   checkForFiles(profileData) {
     // Check for File objects in any section
     for (const section in profileData) {
@@ -105,10 +80,10 @@ class UserProfileService {
    */
   prepareFormData(profileData) {
     const formData = new FormData();
-    
+
     // Clone the profile data to avoid modifying the original
     const dataToSend = JSON.parse(JSON.stringify(profileData));
-    
+
     // Process each section that might have file uploads
     const sectionsWithFiles = [
       'personalIdentification',
@@ -121,14 +96,14 @@ class UserProfileService {
       'criminalLegal',
       'transportation'
     ];
-    
+
     // Extract files and append them to form data
-    sectionsWithFiles.forEach(section => {
+    sectionsWithFiles.forEach((section) => {
       if (!dataToSend[section]) return;
-      
-      Object.keys(dataToSend[section]).forEach(field => {
+
+      Object.keys(dataToSend[section]).forEach((field) => {
         const value = dataToSend[section][field];
-        
+
         // Check if it's a File object
         if (value instanceof File) {
           formData.append(`${section}-${field}`, value);
@@ -137,15 +112,12 @@ class UserProfileService {
         }
       });
     });
-    
+
     // Append the non-file data as JSON
     formData.append('data', JSON.stringify(dataToSend));
-    
+
     return formData;
   }
-
 }
-
-
 
 export default new UserProfileService();

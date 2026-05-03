@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart'; 
+import 'package:crypto/crypto.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 
 class UserService {
@@ -12,8 +12,8 @@ class UserService {
   // --- AUTHENTICATION & HASHING ---
 
   String hashPassword(String password) {
-    var bytes = utf8.encode(password); 
-    return sha256.convert(bytes).toString(); 
+    var bytes = utf8.encode(password);
+    return sha256.convert(bytes).toString();
   }
 
   Future<Map<String, dynamic>> login(String loginName, String password) async {
@@ -21,7 +21,7 @@ class UserService {
       'loginName': loginName,
       'encPassword': hashPassword(password),
     });
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data['accessToken'] != null) {
@@ -66,13 +66,20 @@ class UserService {
 
   // --- ACCOUNT MANAGEMENT ---
 
-  Future<Map<String, dynamic>> updateAccountSettings(String userId, Map<String, dynamic> settings) async {
-  // Use the specific userId to avoid greedy router collisions on the backend
-  final response = await _api.put('$userEndpoint/$userId', settings);
-  return jsonDecode(response.body);
-}
+  Future<Map<String, dynamic>> updateAccountSettings(
+    String userId,
+    Map<String, dynamic> settings,
+  ) async {
+    // Use the specific userId to avoid greedy router collisions on the backend
+    final response = await _api.put('$userEndpoint/$userId', settings);
+    return jsonDecode(response.body);
+  }
 
-  Future<Map<String, dynamic>> updateEmail(String email, String password, String userId) async {
+  Future<Map<String, dynamic>> updateEmail(
+    String email,
+    String password,
+    String userId,
+  ) async {
     final response = await _api.put('$userEndpoint/email', {
       'email': email,
       'password': hashPassword(password),
@@ -86,7 +93,10 @@ class UserService {
     return jsonDecode(response.body);
   }
 
-  Future<Map<String, dynamic>> deactivateAccount(String reason, String password) async {
+  Future<Map<String, dynamic>> deactivateAccount(
+    String reason,
+    String password,
+  ) async {
     final response = await _api.post('$userEndpoint/deactivate', {
       'reason': reason,
       'password': hashPassword(password),
@@ -95,7 +105,10 @@ class UserService {
   }
 
   // FIXED: Optional reason to resolve positional argument error
-  Future<Map<String, dynamic>> deleteAccount(String password, {String reason = ''}) async {
+  Future<Map<String, dynamic>> deleteAccount(
+    String password, {
+    String reason = '',
+  }) async {
     final response = await _api.post('$userEndpoint/delete', {
       'password': hashPassword(password),
       'reason': reason,
@@ -111,16 +124,24 @@ class UserService {
       payload['encPassword'] = hashPassword(payload['password']);
       payload.remove('password');
     }
-    return jsonDecode((await _api.post('$authEndpoint/register', payload)).body);
+    return jsonDecode(
+      (await _api.post('$authEndpoint/register', payload)).body,
+    );
   }
 
   Future<bool> checkUsernameAvailability(String username) async {
-    final response = await _api.get('$userEndpoint/check-username', params: {'username': username});
+    final response = await _api.get(
+      '$userEndpoint/check-username',
+      params: {'username': username},
+    );
     return jsonDecode(response.body)['available'] ?? false;
   }
 
   Future<bool> checkEmailAvailability(String email) async {
-    final response = await _api.get('$userEndpoint/check-email', params: {'email': email});
+    final response = await _api.get(
+      '$userEndpoint/check-email',
+      params: {'email': email},
+    );
     return jsonDecode(response.body)['available'] ?? false;
   }
 }

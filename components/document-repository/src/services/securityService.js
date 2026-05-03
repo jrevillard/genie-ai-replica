@@ -1,11 +1,9 @@
-const jwt = require('jsonwebtoken');
 const NodeClam = require('clamscan');
 const { Readable } = require('stream');
 
-const appConfig= require('../config/appConfig');
+const appConfig = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
-
 
 class SecurityService {
   constructor() {
@@ -23,7 +21,7 @@ class SecurityService {
       },
       preference: 'clamdscan'
     };
-    
+
     this.clamscan = null;
     this.isInitialized = false;
     this.maxBufferSize = 50 * 1024 * 1024; // 50MB — must match MAX_FILE_SIZE
@@ -61,7 +59,7 @@ class SecurityService {
         this.clamscan = await new NodeClam().init(this.clamAVOptions);
       }
     } catch (error) {
-      throw new Error(`Failed to initialize ClamAV: ${error.message}`);
+      throw new Error(`Failed to initialize ClamAV: ${error.message}`, { cause: error });
     }
 
     this.isInitialized = true;
@@ -106,44 +104,8 @@ class SecurityService {
 
       // Scan the buffer using stream scanning
       return await this.clamscan.scanStream(this._convertToStream(buffer));
-
     } catch (error) {
-      throw new Error(`Buffer scan failed: ${error.message}`);
-    }
-  }
-
-  async verifyToken(token) {
-    await this.ensureInitialized();
-    try {
-      logger.info(`[SECURITY SERVICE] Verifying Token with value ${token.substring(0, 10)}...`);
-      const decoded = jwt.verify(token, appConfig.security.jwtSecret);
-      
-      // return toke
-      logger.debug(`[SECURITY SERVICE] ✅ Token successfully decoded ${JSON.stringify(decoded)}`)      
-      return decoded;
-    } catch (error) {
-      logger.error(`[SECURITY SERVICE] ❌ Token verification error: ${error.message}`, { stack: error.stack });
-      return null;
-    }
-  }
-
-  async getUserById(userId) {
-    await this.ensureInitialized();
-    try {
-      logger.info(`[SECURITY SERVICE] Getting user info for userId ${userId} ...`);
-      const db = await this.getDb();
-      const user = await db.collection('users').document(userId);
-      if (!user) {
-        logger.warn(`[SECURITY SERVICE] ⚠️ User not found: ${userId}`);
-        return null;
-      }
-
-      // return user
-      logger.info(`[SECURITY SERVICE] ✅ User found: ${userId}`);
-      return user;
-    } catch (error) {
-      logger.error(`[SECURITY SERVICE] ❌ Error getting user by ID: ${error.message}`, { stack: error.stack });
-      return null;
+      throw new Error(`Buffer scan failed: ${error.message}`, { cause: error });
     }
   }
 }

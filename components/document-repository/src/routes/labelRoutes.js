@@ -1,12 +1,11 @@
 const labelController = require('../controllers/labelController');
 const express = require('express');
-const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
+const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
 const router = express.Router();
 
-// apply authentication to all endpoints 
+// apply authentication to all endpoints
 router.use(authenticateToken);
-
 
 /**
  * @route GET /api/labels/:labelId
@@ -16,7 +15,6 @@ router.use(authenticateToken);
  */
 router.get('/:labelId', authorizeRole(['Admin']), labelController.getLabelById);
 
-
 /**
  * @route GET /api/labels
  * @desc Get all labels or filter by level/status
@@ -25,7 +23,6 @@ router.get('/:labelId', authorizeRole(['Admin']), labelController.getLabelById);
  * @query {string} status - Filter by label status (pending/active)
  */
 router.get('/', authorizeRole(['Admin']), labelController.getLabels);
-
 
 /**
  * @route POST /api/labels

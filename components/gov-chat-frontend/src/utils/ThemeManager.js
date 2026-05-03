@@ -6,46 +6,46 @@ class ThemeManager {
   constructor() {
     // Enforce singleton pattern
     if (ThemeManager.instance) {
-      return ThemeManager.instance
+      return ThemeManager.instance;
     }
 
     // Initialize with default theme (light)
-    this.currentTheme = 'light'
-    this.isDarkMode = false
-    this.userPreference = 'light'
+    this.currentTheme = 'light';
+    this.isDarkMode = false;
+    this.userPreference = 'light';
 
     // Bind methods to ensure correct context
-    this.getDialogTheme = this.getDialogTheme.bind(this)
-    this.applyDialogTheme = this.applyDialogTheme.bind(this)
-    this.detectInitialTheme = this.detectInitialTheme.bind(this)
-    this.forceApplyTheme = this.forceApplyTheme.bind(this)
+    this.getDialogTheme = this.getDialogTheme.bind(this);
+    this.applyDialogTheme = this.applyDialogTheme.bind(this);
+    this.detectInitialTheme = this.detectInitialTheme.bind(this);
+    this.forceApplyTheme = this.forceApplyTheme.bind(this);
 
     // Detect and apply theme immediately
-    this.detectInitialTheme()
+    this.detectInitialTheme();
 
     // Set up system theme change listener
-    this.setupSystemThemeListener()
+    this.setupSystemThemeListener();
 
     // Make this instance the singleton
-    ThemeManager.instance = this
+    ThemeManager.instance = this;
 
     // Reapply theme after a small delay to ensure it propagates
-    setTimeout(() => this.forceApplyTheme(), 50)
+    setTimeout(() => this.forceApplyTheme(), 50);
   }
 
   detectInitialTheme() {
-    const htmlElement = document.documentElement
-    const bodyElement = document.body
+    const htmlElement = document.documentElement;
+    const bodyElement = document.body;
 
     // 1. Check localStorage for saved user preference (highest priority)
     try {
-      const savedTheme = localStorage.getItem('theme')
+      const savedTheme = localStorage.getItem('theme');
       if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
-        this.setTheme(savedTheme)
-        console.log(`[ThemeManager] Theme from localStorage: ${savedTheme}`)
-        return
+        this.setTheme(savedTheme);
+        console.log(`[ThemeManager] Theme from localStorage: ${savedTheme}`);
+        return;
       }
-    } catch (e) {
+    } catch {
       // localStorage not available
     }
 
@@ -54,35 +54,35 @@ class ThemeManager {
       htmlElement.classList.contains('dark-theme') ||
       htmlElement.classList.contains('dark-mode') ||
       bodyElement.classList.contains('dark-theme') ||
-      bodyElement.classList.contains('dark-mode')
+      bodyElement.classList.contains('dark-mode');
 
     const hasDarkDataTheme =
-      htmlElement.getAttribute('data-theme') === 'dark' || bodyElement.getAttribute('data-theme') === 'dark'
+      htmlElement.getAttribute('data-theme') === 'dark' || bodyElement.getAttribute('data-theme') === 'dark';
 
     // 3. Check for light mode indicators on DOM
     const hasLightClass =
       htmlElement.classList.contains('light-theme') ||
       htmlElement.classList.contains('light-mode') ||
       bodyElement.classList.contains('light-theme') ||
-      bodyElement.classList.contains('light-mode')
+      bodyElement.classList.contains('light-mode');
 
     const hasLightDataTheme =
-      htmlElement.getAttribute('data-theme') === 'light' || bodyElement.getAttribute('data-theme') === 'light'
+      htmlElement.getAttribute('data-theme') === 'light' || bodyElement.getAttribute('data-theme') === 'light';
 
     // 4. Fall back to system preference
-    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
     if (hasDarkClass || hasDarkDataTheme) {
-      this.setTheme('dark')
+      this.setTheme('dark');
     } else if (hasLightClass || hasLightDataTheme) {
-      this.setTheme('light')
+      this.setTheme('light');
     } else if (prefersDarkMode) {
-      this.setTheme('dark')
+      this.setTheme('dark');
     } else {
-      this.setTheme('light')
+      this.setTheme('light');
     }
 
-    console.log(`[ThemeManager] Initial theme detected: ${this.currentTheme}`)
+    console.log(`[ThemeManager] Initial theme detected: ${this.currentTheme}`);
   }
 
   /**
@@ -90,16 +90,16 @@ class ThemeManager {
    */
   forceApplyTheme() {
     // Force apply the theme to the DOM
-    document.documentElement.setAttribute('data-theme', this.currentTheme)
-    document.body.setAttribute('data-theme', this.currentTheme)
+    document.documentElement.setAttribute('data-theme', this.currentTheme);
+    document.body.setAttribute('data-theme', this.currentTheme);
 
     // Add/remove dark mode classes for compatibility
     if (this.isDarkMode) {
-      document.documentElement.classList.add('dark-mode')
-      document.body.classList.add('dark-mode')
+      document.documentElement.classList.add('dark-mode');
+      document.body.classList.add('dark-mode');
     } else {
-      document.documentElement.classList.remove('dark-mode')
-      document.body.classList.remove('dark-mode')
+      document.documentElement.classList.remove('dark-mode');
+      document.body.classList.remove('dark-mode');
     }
 
     // Dispatch theme change event
@@ -108,17 +108,17 @@ class ThemeManager {
         detail: {
           theme: this.currentTheme,
           isDarkMode: this.isDarkMode,
-          userPreference: this.userPreference,
-        },
+          userPreference: this.userPreference
+        }
       })
-    )
+    );
   }
 
   /**
    * Set up listener for system theme changes
    */
   setupSystemThemeListener() {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const handleThemeChange = (e) => {
       if (
@@ -127,16 +127,16 @@ class ThemeManager {
         !document.documentElement.classList.contains('dark-mode')
       ) {
         // Only update if no explicit theme is set on the DOM
-        this.setTheme(e.matches ? 'dark' : 'light')
-        console.log(`[ThemeManager] System theme changed to: ${this.currentTheme}`)
+        this.setTheme(e.matches ? 'dark' : 'light');
+        console.log(`[ThemeManager] System theme changed to: ${this.currentTheme}`);
       }
-    }
+    };
 
     // Add listener with compatibility for older browsers
     if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleThemeChange)
+      mediaQuery.addEventListener('change', handleThemeChange);
     } else {
-      mediaQuery.addListener(handleThemeChange)
+      mediaQuery.addListener(handleThemeChange);
     }
   }
 
@@ -148,33 +148,33 @@ class ThemeManager {
    */
   setTheme(theme) {
     // Store the user's preference
-    this.userPreference = theme
+    this.userPreference = theme;
 
     if (theme === 'system') {
       // For system preference, check the media query
-      const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches
-      this.currentTheme = prefersDarkMode ? 'dark' : 'light'
-      this.isDarkMode = prefersDarkMode
+      const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      this.currentTheme = prefersDarkMode ? 'dark' : 'light';
+      this.isDarkMode = prefersDarkMode;
     } else if (theme === 'light' || theme === 'dark') {
       // For explicit light/dark choices
-      this.currentTheme = theme
-      this.isDarkMode = theme === 'dark'
+      this.currentTheme = theme;
+      this.isDarkMode = theme === 'dark';
     } else {
-      console.error(`[ThemeManager] Invalid theme: ${theme}. Must be 'light', 'dark', or 'system'.`)
-      return
+      console.error(`[ThemeManager] Invalid theme: ${theme}. Must be 'light', 'dark', or 'system'.`);
+      return;
     }
 
     // Apply the theme to the DOM
-    document.documentElement.setAttribute('data-theme', this.currentTheme)
-    document.body.setAttribute('data-theme', this.currentTheme)
+    document.documentElement.setAttribute('data-theme', this.currentTheme);
+    document.body.setAttribute('data-theme', this.currentTheme);
 
     // Add/remove dark mode classes for compatibility
     if (this.isDarkMode) {
-      document.documentElement.classList.add('dark-mode')
-      document.body.classList.add('dark-mode')
+      document.documentElement.classList.add('dark-mode');
+      document.body.classList.add('dark-mode');
     } else {
-      document.documentElement.classList.remove('dark-mode')
-      document.body.classList.remove('dark-mode')
+      document.documentElement.classList.remove('dark-mode');
+      document.body.classList.remove('dark-mode');
     }
 
     // Dispatch theme change event
@@ -183,19 +183,19 @@ class ThemeManager {
         detail: {
           theme: this.currentTheme,
           isDarkMode: this.isDarkMode,
-          userPreference: this.userPreference,
-        },
+          userPreference: this.userPreference
+        }
       })
-    )
+    );
 
-    console.log(`[ThemeManager] Theme set to: ${this.currentTheme} (user preference: ${this.userPreference})`)
+    console.log(`[ThemeManager] Theme set to: ${this.currentTheme} (user preference: ${this.userPreference})`);
   }
 
   /**
    * Toggle between light and dark themes
    */
   toggleTheme() {
-    this.setTheme(this.currentTheme === 'light' ? 'dark' : 'light')
+    this.setTheme(this.currentTheme === 'light' ? 'dark' : 'light');
   }
 
   /**
@@ -205,8 +205,8 @@ class ThemeManager {
    * @returns {string} The computed CSS variable value
    */
   _getCssVar(property, fallback = '') {
-    const prop = property.startsWith('--') ? property : `--${property}`
-    return getComputedStyle(document.documentElement).getPropertyValue(prop).trim() || fallback
+    const prop = property.startsWith('--') ? property : `--${property}`;
+    return getComputedStyle(document.documentElement).getPropertyValue(prop).trim() || fallback;
   }
 
   /**
@@ -234,8 +234,8 @@ class ThemeManager {
       accentColor: this._getCssVar('--accent-color', '#4E97D1'),
 
       // Standard chart colors that work in both themes
-      chartColors: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4'],
-    }
+      chartColors: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4']
+    };
   }
 
   /**
@@ -249,37 +249,37 @@ class ThemeManager {
         textColor: this._getCssVar('--text-secondary', this.isDarkMode ? '#b3b3b3' : '#666666'),
         background: this._getCssVar('--bg-dialog', this.isDarkMode ? '#2a2a2a' : '#ffffff'),
         borderColor: this._getCssVar('--border-color', this.isDarkMode ? '#3a3a3a' : '#dcdfe4'),
-        boxShadow: this.isDarkMode ? '0 4px 12px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.15)',
+        boxShadow: this.isDarkMode ? '0 4px 12px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.15)'
       },
       overlay: {
-        background: this.isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)',
+        background: this.isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)'
       },
       buttons: {
         primary: {
           background: this._getCssVar('--accent-color', '#4E97D1'),
           textColor: '#ffffff',
-          hoverBackground: this._getCssVar('--accent-hover', '#3a7da0'),
+          hoverBackground: this._getCssVar('--accent-hover', '#3a7da0')
         },
         secondary: {
           background: this._getCssVar('--bg-button-secondary', this.isDarkMode ? '#3a3a3a' : '#cccccc'),
           textColor: this._getCssVar('--text-button-secondary', this.isDarkMode ? '#e0e0e0' : '#333333'),
-          hoverBackground: this._getCssVar('--bg-button-secondary-hover', this.isDarkMode ? '#4a4a4a' : '#bbbbbb'),
-        },
+          hoverBackground: this._getCssVar('--bg-button-secondary-hover', this.isDarkMode ? '#4a4a4a' : '#bbbbbb')
+        }
       },
       input: {
         background: this._getCssVar('--bg-input', this.isDarkMode ? '#333333' : '#ffffff'),
         textColor: this._getCssVar('--text-primary', this.isDarkMode ? '#f0f0f0' : '#333333'),
         borderColor: this._getCssVar('--border-input', this.isDarkMode ? '#3a3a3a' : '#ddd'),
-        placeholderColor: this._getCssVar('--text-tertiary', this.isDarkMode ? '#8c8c8c' : '#767676'),
+        placeholderColor: this._getCssVar('--text-tertiary', this.isDarkMode ? '#8c8c8c' : '#767676')
       },
       tabs: {
         background: this._getCssVar('--bg-tertiary', this.isDarkMode ? '#252525' : '#f0f2f5'),
         activeBackground: this._getCssVar('--bg-dialog', this.isDarkMode ? '#2a2a2a' : '#ffffff'),
         textColor: this._getCssVar('--text-primary', this.isDarkMode ? '#f0f0f0' : '#333333'),
         activeTextColor: this._getCssVar('--text-primary', this.isDarkMode ? '#f0f0f0' : '#000000'),
-        borderColor: this._getCssVar('--border-color', this.isDarkMode ? '#3a3a3a' : '#cccccc'),
-      },
-    }
+        borderColor: this._getCssVar('--border-color', this.isDarkMode ? '#3a3a3a' : '#cccccc')
+      }
+    };
   }
 
   /**
@@ -288,25 +288,25 @@ class ThemeManager {
    * @param {string} [themeType='modal'] - Type of theme to apply
    */
   applyDialogTheme(element, themeType = 'modal') {
-    if (!element) return
+    if (!element) return;
 
-    const theme = this.getDialogTheme()
-    const themeStyles = theme[themeType] || theme.modal
+    const theme = this.getDialogTheme();
+    const themeStyles = theme[themeType] || theme.modal;
 
     Object.entries(themeStyles).forEach(([key, value]) => {
-      if (typeof value === 'object') return // Skip nested objects
-      element.style.setProperty(`--dialog-${key}`, value)
-    })
+      if (typeof value === 'object') return; // Skip nested objects
+      element.style.setProperty(`--dialog-${key}`, value);
+    });
   }
 }
 
 // Ensure singleton export
-export const themeManager = new ThemeManager()
+export const themeManager = new ThemeManager();
 // Export methods to ensure they can be imported correctly
-export const getDialogTheme = themeManager.getDialogTheme
-export const applyDialogTheme = themeManager.applyDialogTheme
+export const getDialogTheme = themeManager.getDialogTheme;
+export const applyDialogTheme = themeManager.applyDialogTheme;
 // Export convenience methods
-export const getThemeInfo = () => themeManager.getThemeInfo()
-export const setTheme = (theme) => themeManager.setTheme(theme)
-export const toggleTheme = () => themeManager.toggleTheme()
-export default themeManager
+export const getThemeInfo = () => themeManager.getThemeInfo();
+export const setTheme = (theme) => themeManager.setTheme(theme);
+export const toggleTheme = () => themeManager.toggleTheme();
+export default themeManager;

@@ -2,7 +2,7 @@
 # This stage is identical and will be cached by Docker
 ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
 ARG OPEA_VERSION="v1.3"
-FROM alpine/git:latest AS opea_base
+FROM alpine/git:v2.52.0 AS opea_base
 
 ARG OPEA_REPO_URL
 ARG OPEA_VERSION
@@ -55,6 +55,10 @@ COPY genie-ai-overlay/retriever/genieai_retriever_microservice.py /app/comps/ret
 # This path remains correct as it's relative to /app/comps/
 COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
-# Step F: Run the new GENIE-AI entry point from its new location
-# The extensive PYTHONPATH should handle all import resolution
+# Step F: Create non-root user and set permissions
+RUN useradd -ms /bin/bash user && \
+    chown -R user:user /app /home/user
+
+# Step G: Run the new GENIE-AI entry point from its new location
+USER user
 CMD ["python", "comps/retrievers/src/genieai_retriever_microservice.py"]

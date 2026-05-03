@@ -1,7 +1,7 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
 const { uploadSingle, uploadMultiple, validateFiles } = require('../middlewares/fileUpload');
-const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
+const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
 const router = express.Router();
 
@@ -848,6 +848,6 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.ge
  *       '401':
  *         description: Unauthorized
  */
-router.patch('/:fileId/status', authorizeRole(['Admin']), fileController.updateFileStatus);
+router.patch('/:fileId/status', authorizeRole(['Admin', 'dataprep-service']), fileController.updateFileStatus);
 
 module.exports = router;

@@ -1,8 +1,5 @@
 const path = require('path');
-const {
-  generateUniqueFileId,
-  getMetadataFilePath,
-} = require('../../../utils/fileUtils');
+const { generateUniqueFileId, getMetadataFilePath } = require('../../../utils/fileUtils');
 
 describe('fileUtils', () => {
   describe('generateUniqueFileId', () => {

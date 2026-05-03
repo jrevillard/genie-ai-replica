@@ -1,0 +1,3 @@
+module,skill,display-name,menu-code,description,action,args,phase,after,before,required,output-location,outputs
+Issue Tracking,bmad-bmm-issue-sync,Bmm Issue Sync,BIS,"Sync sprint-status.yaml entries to GitLab/GitHub Issues. Use when the user says ""sync issues"" or wants to push sprint status to the issue tracker.",activate,,anytime,,,false,,
+Issue Tracking,bmad-issue-tracking-setup,Issue Tracking Setup,ITS,One-time setup for issue tracking integration. Use after installing the module to deploy TOML overrides and shared tasks.,activate,,anytime,,,false,,

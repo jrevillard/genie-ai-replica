@@ -1,11 +1,9 @@
-const path = require('path');
-
 jest.mock('../../../services/fileService', () => ({}));
 jest.mock('../../../services/metadataService', () => ({}));
 jest.mock('archiver', () => ({ create: jest.fn() }));
 jest.mock('axios', () => ({ default: { post: jest.fn() }, post: jest.fn() }));
 jest.mock('fs', () => ({
-  promises: { access: jest.fn(), readFile: jest.fn() },
+  promises: { access: jest.fn(), readFile: jest.fn() }
 }));
 
 const fileController = require('../../../controllers/fileController');
@@ -31,8 +29,8 @@ describe('fileController', () => {
         dataprep: {
           status: 'Ingested',
           ingest_date: '2025-01-01T00:00:00Z',
-          retract_date: '',
-        },
+          retract_date: ''
+        }
       };
 
       const result = fileController._formatFileRecord(input);
@@ -74,7 +72,7 @@ describe('fileController', () => {
         dataprep: { status: 'Pending', ingest_date: '', retract_date: '' },
         _key: 'secret-key',
         _rev: 'secret-rev',
-        extraField: 'should not appear',
+        extraField: 'should not appear'
       };
 
       const result = fileController._formatFileRecord(input);
@@ -155,7 +153,7 @@ describe('fileController', () => {
       const metadata = {
         file_id: '123',
         file_name: '../../../etc/passwd',
-        storage_path: '../../../etc/passwd',
+        storage_path: '../../../etc/passwd'
       };
       metadataService.getMetadataById = jest.fn().mockResolvedValue(metadata);
 
@@ -168,7 +166,7 @@ describe('fileController', () => {
       const metadata = {
         file_id: '123',
         file_name: 'test.pdf',
-        storage_path: './uploads/test.pdf',
+        storage_path: './uploads/test.pdf'
       };
       metadataService.getMetadataById = jest.fn().mockResolvedValue(metadata);
 
@@ -184,7 +182,7 @@ describe('fileController', () => {
       const metadata = {
         file_id: '123',
         file_name: 'test.pdf',
-        storage_path: './uploads/test.pdf',
+        storage_path: './uploads/test.pdf'
       };
       metadataService.getMetadataById = jest.fn().mockResolvedValue(metadata);
 

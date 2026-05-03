@@ -1,15 +1,11 @@
-const jwt = require('jsonwebtoken');
-
 // Mock clamscan — require('clamscan') returns the constructor directly
 jest.mock('clamscan', () =>
   jest.fn().mockImplementation(() => ({
-    init: jest.fn().mockResolvedValue({ scanStream: jest.fn().mockResolvedValue({ isInfected: false }) }),
+    init: jest.fn().mockResolvedValue({ scanStream: jest.fn().mockResolvedValue({ isInfected: false }) })
   }))
 );
 
 const securityService = require('../../../services/securityService');
-
-const TEST_JWT_SECRET = 'test-secret-key-for-unit-tests';
 
 describe('securityService', () => {
   describe('initialize', () => {
@@ -70,31 +66,6 @@ describe('securityService', () => {
 
       const result = await securityService.scanBuffer(Buffer.from('test content'));
       expect(result).toEqual({ isInfected: false });
-    });
-  });
-
-  describe('verifyToken', () => {
-    it('should return decoded token for valid JWT', async () => {
-      const originalConfig = require('../../../config/appConfig');
-      originalConfig.security.jwtSecret = TEST_JWT_SECRET;
-
-      const token = jwt.sign({ userId: 'test-user', role: 'Admin' }, TEST_JWT_SECRET, { expiresIn: '1h' });
-      const decoded = await securityService.verifyToken(token);
-
-      expect(decoded).toEqual(expect.objectContaining({ userId: 'test-user', role: 'Admin' }));
-
-      // Restore
-      originalConfig.security.jwtSecret = 'default-jwt-secret';
-    });
-
-    it('should return null for invalid token', async () => {
-      const originalConfig = require('../../../config/appConfig');
-      originalConfig.security.jwtSecret = TEST_JWT_SECRET;
-
-      const result = await securityService.verifyToken('invalid.token.here');
-      expect(result).toBeNull();
-
-      originalConfig.security.jwtSecret = 'default-jwt-secret';
     });
   });
 });

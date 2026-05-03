@@ -77,7 +77,8 @@ class _SidebarComponentState extends State<SidebarComponent>
           Tab(
             icon: const Icon(Icons.category_outlined, size: 20),
             text: tr(
-                "sidebar.governmentServices"), // "Wissensbereiche" / "Services"
+              "sidebar.governmentServices",
+            ), // "Wissensbereiche" / "Services"
             iconMargin: const EdgeInsets.only(bottom: 4),
           ),
           Tab(
@@ -97,22 +98,22 @@ class _SidebarComponentState extends State<SidebarComponent>
       {
         'key': 'all',
         'label': tr('sidebar.tab.all'),
-        'icon': Icons.chat_bubble_outline
+        'icon': Icons.chat_bubble_outline,
       },
       {
         'key': 'folders',
         'label': tr('sidebar.tab.folders'),
-        'icon': Icons.folder_outlined
+        'icon': Icons.folder_outlined,
       },
       {
         'key': 'starred',
         'label': tr('sidebar.tab.starred'),
-        'icon': Icons.star_outline
+        'icon': Icons.star_outline,
       },
       {
         'key': 'archived',
         'label': tr('sidebar.tab.archived'),
-        'icon': Icons.archive_outlined
+        'icon': Icons.archive_outlined,
       },
     ];
 
@@ -207,7 +208,8 @@ class _SidebarComponentState extends State<SidebarComponent>
                       ServiceTreePanel(
                         onSelectionChange: (selection) {
                           debugPrint(
-                              "[SIDEBAR] Service selection changed: $selection");
+                            "[SIDEBAR] Service selection changed: $selection",
+                          );
                           widget.onServiceSelected?.call(selection);
                         },
                       ),
@@ -322,9 +324,7 @@ class _SidebarComponentState extends State<SidebarComponent>
                 ),
               ),
               // The actual sidebar content
-              Expanded(
-                child: _buildSidebarContent(context, theme),
-              ),
+              Expanded(child: _buildSidebarContent(context, theme)),
             ],
           ),
         ),

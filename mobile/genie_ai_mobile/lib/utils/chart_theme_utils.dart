@@ -5,7 +5,11 @@ class ChartThemeUtils {
   /// Replicates the luminance calculation from getThemeColors()
   static bool detectDarkModeFromLuminance(Color bgColor) {
     // formula: 0.2126*R + 0.7152*G + 0.0722*B
-    double luminance = (0.2126 * bgColor.red + 0.7152 * bgColor.green + 0.0722 * bgColor.blue) / 255;
+    double luminance =
+        (0.2126 * bgColor.red +
+            0.7152 * bgColor.green +
+            0.0722 * bgColor.blue) /
+        255;
     return luminance < 0.5; //
   }
 
@@ -32,7 +36,9 @@ class ChartThemeUtils {
     bool isDark = ThemeManager().isDarkMode;
     return {
       'text': isDark ? Colors.white : const Color(0xFF333333), //
-      'grid': isDark ? Colors.white.withOpacity(0.15) : const Color(0xFFE0E0E0), //
+      'grid': isDark
+          ? Colors.white.withOpacity(0.15)
+          : const Color(0xFFE0E0E0), //
       'tooltipBg': const Color(0xB3000000), // rgba(0,0,0,0.7)
       'tooltipText': Colors.white, //
     };

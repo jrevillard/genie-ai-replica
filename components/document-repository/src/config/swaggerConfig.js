@@ -6,33 +6,30 @@ const swaggerOptions = {
     info: {
       title: 'Document Repository API',
       version: '1.0.0',
-      description: 'API documentation for the Document Repository service',
+      description: 'API documentation for the Document Repository service'
     },
     servers: [
       {
         url: 'http://localhost:3001',
-        description: 'Development server',
-      },
+        description: 'Development server'
+      }
     ],
     components: {
       securitySchemes: {
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
-          bearerFormat: 'JWT',
-        },
-      },
+          bearerFormat: 'JWT'
+        }
+      }
     },
     security: [
       {
-        bearerAuth: [],
-      },
-    ],
+        bearerAuth: []
+      }
+    ]
   },
-  apis: [
-    path.join(__dirname, '../routes/fileRoutes.js'),
-    path.join(__dirname, '../routes/labelRoutes.js'),
-  ],
+  apis: [path.join(__dirname, '../routes/fileRoutes.js'), path.join(__dirname, '../routes/labelRoutes.js')]
 };
 
 module.exports = swaggerOptions;

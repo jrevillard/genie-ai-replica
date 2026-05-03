@@ -21,24 +21,24 @@ export default {
     }
   },
 
-    /**
+  /**
    * For the ADMIN dashboard ONLY.
    * Fetches all categories with a detailed array of service objects ({_key, name}).
    * @param {String} locale - Locale code (e.g., 'en')
    * @returns {Promise} Categories with detailed service objects.
    */
-    async getAdminCategories(locale = 'en') {
-      try {
-        // This points to the ADMIN endpoint that returns detailed data
-        const response = await httpService.get('service-categories/categories/detailed', {
-          params: { locale }
-        });
-        return response.data || [];
-      } catch (error) {
-        console.error('Error fetching admin service categories:', error);
-        throw error;
-      }
-    },
+  async getAdminCategories(locale = 'en') {
+    try {
+      // This points to the ADMIN endpoint that returns detailed data
+      const response = await httpService.get('service-categories/categories/detailed', {
+        params: { locale }
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching admin service categories:', error);
+      throw error;
+    }
+  },
 
   /**
    * Transform backend categories to tree panel format
@@ -46,10 +46,10 @@ export default {
    * @param {String} locale - Locale code
    * @returns {Array} Transformed nodes for tree panel
    */
-  transformCategoriesToTreeNodes(categories, locale) {
-    return categories.map(category => ({
+  transformCategoriesToTreeNodes(categories) {
+    return categories.map((category) => ({
       catKey: category.catKey,
-      name: category.name,  // Preserve the name property!
+      name: category.name, // Preserve the name property!
       expanded: false,
       children: category.children || []
     }));
@@ -94,44 +94,10 @@ export default {
   },
 
   /**
-   * Save selected services to user preferences
-   * @param {String} userId - User ID
-   * @param {Array} selectedServices - Selected services
-   * @returns {Promise} Save result
+   * Get all translations for a specific category
+   * @param {String} categoryId - The ID of the category
+   * @returns {Promise<Array>} A list of translation objects [{lang, text}]
    */
-  async saveSelectedServices(userId, selectedServices) {
-    try {
-      const response = await httpService.post(`users/${userId}/preferences/services`, {
-        selectedServices
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Error saving selected services:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get user's selected services
-   * @param {String} userId - User ID
-   * @returns {Promise} User's selected services
-   */
-  async getUserSelectedServices(userId) {
-    try {
-      const response = await httpService.get(`users/${userId}/preferences/services`);
-      return response.data.selectedServices || [];
-    } catch (error) {
-      console.error('Error getting user selected services:', error);
-      return [];
-    }
-  },
-
-  /**
-  * Get all translations for a specific category
-  * @param {String} categoryId - The ID of the category
-  * @returns {Promise<Array>} A list of translation objects [{lang, text}]
-  */
   async getCategoryTranslations(categoryId) {
     try {
       // This endpoint matches the one created in service-category-routes.js
@@ -161,10 +127,10 @@ export default {
   },
 
   /**
- * Creates a new category.
- * @param {Object} payload - The category data { nameEN, translations }.
- * @returns {Promise<Object>} The newly created category.
- */
+   * Creates a new category.
+   * @param {Object} payload - The category data { nameEN, translations }.
+   * @returns {Promise<Object>} The newly created category.
+   */
   async createCategory(payload) {
     try {
       // Send the payload directly to our new single-item creation endpoint
@@ -175,7 +141,7 @@ export default {
       throw error;
     }
   },
-  
+
   /**
    * Updates an existing category.
    * @param {String} categoryId - The ID of the category to update.
@@ -228,10 +194,10 @@ export default {
   },
 
   /**
-* Deletes a category.
-* @param {String} categoryId - The ID of the category to delete.
-* @returns {Promise<Object>} The response from the server.
-*/
+   * Deletes a category.
+   * @param {String} categoryId - The ID of the category to delete.
+   * @returns {Promise<Object>} The response from the server.
+   */
   async deleteCategory(categoryId) {
     try {
       // This endpoint matches the DELETE /:categoryId route in service-category-routes.js
@@ -257,5 +223,5 @@ export default {
       console.error(`Error deleting service ${serviceId}:`, error);
       throw error;
     }
-  },
+  }
 };

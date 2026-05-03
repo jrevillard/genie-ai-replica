@@ -57,7 +57,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   void initState() {
     super.initState();
     debugPrint("[SERVICE_TREE] Component initialized. Loading categories...");
-    // Initial load happens via the check in build() or here. 
+    // Initial load happens via the check in build() or here.
     // We let build() handle it to ensure consistency with I18nService.
   }
 
@@ -74,7 +74,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
 
   Future<void> _loadCategories() async {
     final currentLocale = I18nService().currentLocale.languageCode;
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -82,10 +82,14 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     });
 
     try {
-      debugPrint("[SERVICE_TREE] Fetching categories for locale: $currentLocale");
-      
+      debugPrint(
+        "[SERVICE_TREE] Fetching categories for locale: $currentLocale",
+      );
+
       // Fetch categories using the correct proxy method with LOCALE
-      final categories = await _serviceTreeProxy.getAllCategories(locale: currentLocale);
+      final categories = await _serviceTreeProxy.getAllCategories(
+        locale: currentLocale,
+      );
 
       if (mounted) {
         setState(() {
@@ -93,7 +97,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
           _isLoading = false;
         });
         debugPrint(
-            "[SERVICE_TREE] Successfully loaded ${_nodes.length} categories.");
+          "[SERVICE_TREE] Successfully loaded ${_nodes.length} categories.",
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -121,11 +126,15 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   // ===========================================================================
 
   // FIX: Added catKey parameter to ensure visual state matches logic state
-  void _toggleChildSelection(Map<String, dynamic> category, dynamic serviceItem,
-      int index, String catKey) {
+  void _toggleChildSelection(
+    Map<String, dynamic> category,
+    dynamic serviceItem,
+    int index,
+    String catKey,
+  ) {
     // 1. Safe Key Extraction for Category (Backup if catKey fails)
-    final String categoryId =
-        (category['id'] ?? category['key'] ?? "").toString();
+    final String categoryId = (category['id'] ?? category['key'] ?? "")
+        .toString();
 
     // 2. Normalize Service Data (Handling the String vs Map crash)
     String serviceId;
@@ -142,9 +151,11 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
 
     // 3. Update Selection State
     // Check if this specific item is already selected by ID/Name
-    final existingIndex = _orderedSelection.indexWhere((item) =>
-        (item['id'] == serviceId && serviceId.isNotEmpty) ||
-        item['name'] == serviceName);
+    final existingIndex = _orderedSelection.indexWhere(
+      (item) =>
+          (item['id'] == serviceId && serviceId.isNotEmpty) ||
+          item['name'] == serviceName,
+    );
 
     setState(() {
       if (existingIndex >= 0) {
@@ -162,8 +173,11 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
       } else {
         // --- SELECT (ADD) ---
         // Add to ordered list to preserve "First Selected" priority
-        _orderedSelection.add(
-            {'id': serviceId, 'name': serviceName, 'category_id': categoryId});
+        _orderedSelection.add({
+          'id': serviceId,
+          'name': serviceName,
+          'category_id': categoryId,
+        });
 
         // Update visual highlights
         if (!_selectedNodes.containsKey(catKey)) {
@@ -187,18 +201,20 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     }
 
     // Case B: Selection Active
-    final String contextString =
-        _orderedSelection.map((item) => item['name']).join(', ');
+    final String contextString = _orderedSelection
+        .map((item) => item['name'])
+        .join(', ');
 
     final String primaryCatId = _orderedSelection.first['category_id'];
 
-    final String combinedIds =
-        _orderedSelection.map((item) => item['id']).join(',');
+    final String combinedIds = _orderedSelection
+        .map((item) => item['id'])
+        .join(',');
 
     final payload = {
       'id': combinedIds,
       'name': contextString,
-      'category_id': primaryCatId
+      'category_id': primaryCatId,
     };
 
     debugPrint("[SERVICE_TREE] Emitting Multi-Selection: $payload");
@@ -226,11 +242,14 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircularProgressIndicator(
-                color: ThemeManager().getColors()['primary']),
+              color: ThemeManager().getColors()['primary'],
+            ),
             const SizedBox(height: 16),
             // REMOVED defaultValue
-            Text(tr("common.loading"),
-                style: const TextStyle(color: Colors.grey)),
+            Text(
+              tr("common.loading"),
+              style: const TextStyle(color: Colors.grey),
+            ),
           ],
         ),
       );
@@ -243,8 +262,11 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: Colors.redAccent),
+              const Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Colors.redAccent,
+              ),
               const SizedBox(height: 16),
               Text(
                 _errorMessage!,
@@ -257,7 +279,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
                 icon: const Icon(Icons.refresh),
                 // REMOVED defaultValue
                 label: Text(tr("settings.retry")),
-              )
+              ),
             ],
           ),
         ),
@@ -287,10 +309,13 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         decoration: InputDecoration(
           // REMOVED defaultValue
           hintText: tr("sidebar.searchPlaceholder"),
-          hintStyle:
-              TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
-          prefixIcon: Icon(Icons.search,
-              color: isDark ? Colors.grey[500] : Colors.grey),
+          hintStyle: TextStyle(
+            color: isDark ? Colors.grey[500] : Colors.grey[600],
+          ),
+          prefixIcon: Icon(
+            Icons.search,
+            color: isDark ? Colors.grey[500] : Colors.grey,
+          ),
           filled: true,
           // Adapts to Light/Dark mode input backgrounds
           fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[200],
@@ -298,8 +323,10 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none,
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 0,
+            horizontal: 16,
+          ),
           isDense: true,
         ),
         onChanged: _onSearchChanged,
@@ -327,8 +354,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     // Safe Property Access
     final String catLabel =
         category['label'] ?? category['name'] ?? "Unknown Category";
-    final String catKey =
-        (category['key'] ?? category['id'] ?? index).toString();
+    final String catKey = (category['key'] ?? category['id'] ?? index)
+        .toString();
     final List children = category['children'] ?? [];
 
     // Filter Children based on Search Query
@@ -351,7 +378,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     }
 
     // Determine if category should be expanded
-    final bool hasSelection = _selectedNodes.containsKey(catKey) &&
+    final bool hasSelection =
+        _selectedNodes.containsKey(catKey) &&
         _selectedNodes[catKey]!.isNotEmpty;
     final bool shouldExpand = _searchQuery.isNotEmpty || hasSelection;
 
@@ -372,11 +400,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
             color: colors['text'],
           ),
         ),
-        leading: Icon(
-          Icons.folder_open,
-          color: colors['primary'],
-          size: 20,
-        ),
+        leading: Icon(Icons.folder_open, color: colors['primary'], size: 20),
         childrenPadding: EdgeInsets.zero,
 
         // Children Generation
@@ -390,8 +414,12 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     );
   }
 
-  Widget _buildServiceItem(Map<String, dynamic> category, dynamic serviceItem,
-      int index, String catKey) {
+  Widget _buildServiceItem(
+    Map<String, dynamic> category,
+    dynamic serviceItem,
+    int index,
+    String catKey,
+  ) {
     // Normalize Data (String vs Map)
     String serviceName;
     if (serviceItem is Map) {
@@ -440,10 +468,13 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         // Subtitle for Search Matches
         subtitle: isSearchMatch
             // REMOVED defaultValue
-            ? Text(tr("sidebar.matchFound"),
+            ? Text(
+                tr("sidebar.matchFound"),
                 style: TextStyle(
-                    fontSize: 10,
-                    color: isSelected ? Colors.white70 : Colors.grey))
+                  fontSize: 10,
+                  color: isSelected ? Colors.white70 : Colors.grey,
+                ),
+              )
             : null,
 
         // Checkmark (White on selected)

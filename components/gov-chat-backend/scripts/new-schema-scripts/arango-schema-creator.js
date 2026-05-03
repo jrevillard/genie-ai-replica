@@ -5,7 +5,7 @@ const fs = require('fs').promises;
 const readline = require('readline');
 
 // Redirect all console output to both console and log file
-let logBuffer = [];
+const logBuffer = [];
 
 function logToFile(message) {
   logBuffer.push(`${new Date().toISOString()}: ${message}`);
@@ -171,7 +171,7 @@ class ArangoSchemaCreator {
         await collection.create(options);
         console.log(`Created collection: ${collectionSchema.name}`);
       } catch (error) {
-        if (error.code === 1207) { // Collection already exists
+        if (error.code === 1207 || error.errorNum === 1207) { // Collection already exists
           console.log(`Collection already exists: ${collectionSchema.name}`);
         } else {
           console.error(`Error creating collection ${collectionSchema.name}: ${error.message}`);

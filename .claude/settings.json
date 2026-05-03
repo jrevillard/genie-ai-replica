@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // .tool_response.filePath') && DIR=$(dirname \"$FILE\") && while [ \"$DIR\" != \"/\" ] && [ ! -f \"$DIR/eslint.config.js\" ]; do DIR=$(dirname \"$DIR\"); done && if [ -f \"$DIR/eslint.config.js\" ]; then cd \"$DIR\" && npx eslint --no-warn-ignored \"$FILE\" 2>&1 || true; fi",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // .tool_response.filePath') && if echo \"$FILE\" | grep -qE '\\.py$'; then ruff check \"$FILE\" 2>&1 || true; fi",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r '.tool_input.file_path // .tool_response.filePath') && if echo \"$FILE\" | grep -qE '\\.dart$'; then cd mobile/genie_ai_mobile && dart analyze \"$FILE\" 2>&1 || true; fi",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

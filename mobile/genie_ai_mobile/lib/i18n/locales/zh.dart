@@ -196,7 +196,7 @@ const Map<String, dynamic> zhLocale = {
     "VN": "越南",
     "YE": "也门",
     "ZM": "赞比亚",
-    "ZW": "津巴布韦"
+    "ZW": "津巴布韦",
   },
   "verification": {
     "verifying": "正在验证您的电子邮件...",
@@ -207,7 +207,7 @@ const Map<String, dynamic> zhLocale = {
     "missingToken": "验证令牌丢失。",
     "generalError": "验证过程中发生错误。请稍后再试。",
     "proceedToLogin": "前往登录",
-    "backToLogin": "返回登录"
+    "backToLogin": "返回登录",
   },
   "passwordResetConfirm": {
     "appTitle": "Genie AI",
@@ -239,15 +239,15 @@ const Map<String, dynamic> zhLocale = {
       "weak": "弱",
       "fair": "一般",
       "good": "好",
-      "strong": "强"
+      "strong": "强",
     },
     "passwordSuggestions": {
       "atLeast8Chars": "至少使用8个字符",
       "addUppercase": "添加大写字母",
       "addLowercase": "添加小写字母",
       "addNumbers": "添加数字",
-      "addSpecialChars": "添加特殊字符"
-    }
+      "addSpecialChars": "添加特殊字符",
+    },
   },
   "passwordReset": {
     "appTitle": "Genie AI",
@@ -262,7 +262,7 @@ const Map<String, dynamic> zhLocale = {
     "invalidEmail": "请输入有效的电子邮件地址",
     "resetRequestSuccess": "密码重置链接已发送到您的电子邮件",
     "resetRequestFailed": "无法发送密码重置链接。请重试。",
-    "checkEmail": "请检查您的电子邮件以获取进一步说明。"
+    "checkEmail": "请检查您的电子邮件以获取进一步说明。",
   },
   "register": {
     "appTitle": "Genie AI",
@@ -299,7 +299,7 @@ const Map<String, dynamic> zhLocale = {
     "verificationResent": "验证邮件已重新发送",
     "verificationResendFailed": "重新发送验证邮件失败。请重试。",
     "usernameInvalidChars": "用户名只能包含字母、数字、下划线、点和连字符",
-    "networkError": "网络错误。请检查您的连接并重试。"
+    "networkError": "网络错误。请检查您的连接并重试。",
   },
   "login": {
     "appTitle": "Genie AI",
@@ -324,7 +324,7 @@ const Map<String, dynamic> zhLocale = {
     "tooManyAttempts": "登录尝试次数过多。请稍后再试。",
     "loginFailed": "登录失败。请重试。",
     "oauthNotImplemented": "社交登录尚未实现",
-    "savedLoginNotImplemented": "已保存账户登录尚未实现"
+    "savedLoginNotImplemented": "已保存账户登录尚未实现",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -343,8 +343,8 @@ const Map<String, dynamic> zhLocale = {
       "swahili": "斯瓦希里语",
       "german": "德语",
       "spanish": "西班牙语",
-      "arabic": "阿拉伯语"
-    }
+      "arabic": "阿拉伯语",
+    },
   },
   "systemStatus": {
     "title": "服务状态",
@@ -358,20 +358,20 @@ const Map<String, dynamic> zhLocale = {
     "checking": "正在检查...",
     "nextDeadline": "下一个截止日期",
     "days": "天",
-    "viewDetails": "查看详情"
+    "viewDetails": "查看详情",
   },
   "services": {
     "eCitizen": "eCitizen 门户",
     "taxFiling": "税务申报系统",
     "idApplication": "身份证申请",
     "businessReg": "商业登记",
-    "drivingLicense": "驾驶执照"
+    "drivingLicense": "驾驶执照",
   },
   "deadlines": {
     "taxFiling": "报税截止日期",
     "businessRenewal": "营业执照续期",
     "idRenewal": "身份证续期",
-    "vehicleRegistration": "车辆登记截止日期"
+    "vehicleRegistration": "车辆登记截止日期",
   },
   "sidebar": {
     "governmentServices": "知识领域",
@@ -408,7 +408,7 @@ const Map<String, dynamic> zhLocale = {
       "rain": "雨",
       "shower": "阵雨",
       "thunderstorm": "雷暴",
-      "snow": "雪"
+      "snow": "雪",
     },
     "folders": "文件夹",
     "emptyFolder": "此文件夹为空。从聊天菜单将对话移动到此处。",
@@ -421,7 +421,7 @@ const Map<String, dynamic> zhLocale = {
       "all": "所有聊天",
       "folders": "文件夹",
       "starred": "已加星标",
-      "archived": "已归档"
+      "archived": "已归档",
     },
     "savedChats": "已保存的聊天",
     "chats": "聊天",
@@ -477,57 +477,57 @@ const Map<String, dynamic> zhLocale = {
     "noConversations": "未找到对话",
     "noStarred": "没有加星标的对话",
     "noArchived": "没有归档的对话",
-    "folderEmptyState": "文件夹为空"
+    "folderEmptyState": "文件夹为空",
   },
   "leftPanel": {
     "cat1": {
       "name": "1. 身份与民事登记",
-      "children": ["出生证明", "国民身份证", "护照", "结婚证和死亡证明", "选民登记"]
+      "children": ["出生证明", "国民身份证", "护照", "结婚证和死亡证明", "选民登记"],
     },
     "cat2": {
       "name": "2. 医疗保健与社会服务",
-      "children": ["公共医疗保健服务", "疫苗接种计划", "健康保险", "残疾福利", "福利和食品援助"]
+      "children": ["公共医疗保健服务", "疫苗接种计划", "健康保险", "残疾福利", "福利和食品援助"],
     },
     "cat3": {
       "name": "3. 教育与学习",
-      "children": ["公立学校和大学", "奖学金和学生贷款", "成人教育计划", "在线学习资源"]
+      "children": ["公立学校和大学", "奖学金和学生贷款", "成人教育计划", "在线学习资源"],
     },
     "cat4": {
       "name": "4. 就业与劳工服务",
-      "children": ["求职和失业救济金", "工人保护和劳工权利", "工作场所安全法规", "技能培训和学徒制"]
+      "children": ["求职和失业救济金", "工人保护和劳工权利", "工作场所安全法规", "技能培训和学徒制"],
     },
     "cat5": {
       "name": "5. 税务与收入",
-      "children": ["所得税申报和退税", "财产税支付", "商业税务合规", "海关和进口关税"]
+      "children": ["所得税申报和退税", "财产税支付", "商业税务合规", "海关和进口关税"],
     },
     "cat6": {
       "name": "6. 公共安全与司法",
-      "children": ["警察和紧急服务", "法院和法律援助服务", "犯罪举报", "消费者保护法"]
+      "children": ["警察和紧急服务", "法院和法律援助服务", "犯罪举报", "消费者保护法"],
     },
     "cat7": {
       "name": "7. 交通与出行",
-      "children": ["驾驶执照和车辆登记", "公共交通和基础设施", "交通违规和罚款", "道路安全计划"]
+      "children": ["驾驶执照和车辆登记", "公共交通和基础设施", "交通违规和罚款", "道路安全计划"],
     },
     "cat8": {
       "name": "8. 住房与城市发展",
-      "children": ["公共住房援助", "财产登记和土地记录", "住房贷款和补贴", "分区和建筑许可"]
+      "children": ["公共住房援助", "财产登记和土地记录", "住房贷款和补贴", "分区和建筑许可"],
     },
     "cat9": {
       "name": "9. 公用事业与环境",
-      "children": ["水和电力服务", "废物管理和回收", "环境法规", "可再生能源计划"]
+      "children": ["水和电力服务", "废物管理和回收", "环境法规", "可再生能源计划"],
     },
     "cat10": {
       "name": "10. 商业与贸易",
-      "children": ["商业登记和许可", "贸易法规和许可证", "小企业补助金和激励措施", "电子商务和数字业务支持"]
+      "children": ["商业登记和许可", "贸易法规和许可证", "小企业补助金和激励措施", "电子商务和数字业务支持"],
     },
     "cat11": {
       "name": "11. 社会保障与养老金",
-      "children": ["退休福利", "养老基金管理", "遗属福利", "残疾养老金"]
+      "children": ["退休福利", "养老基金管理", "遗属福利", "残疾养老金"],
     },
     "cat12": {
       "name": "12. 社区与公民参与",
-      "children": ["投票和选举", "公众反馈和公民投诉", "志愿服务和社区计划", "地方政府参与"]
-    }
+      "children": ["投票和选举", "公众反馈和公民投诉", "志愿服务和社区计划", "地方政府参与"],
+    },
   },
   "settings": {
     "title": "设置",
@@ -567,14 +567,14 @@ const Map<String, dynamic> zhLocale = {
       "title": "账户",
       "resetDescription": "这将清除您的所有个人资料数据和聊天记录。",
       "confirmReset": "您确定要重置所有数据吗？此操作无法撤销。",
-      "resetComplete": "您的数据已重置。"
+      "resetComplete": "您的数据已重置。",
     },
     "language": {"title": "语言", "selectLabel": "显示语言"},
     "appearance": {
       "title": "外观",
       "lightTheme": "浅色",
       "darkTheme": "深色",
-      "systemTheme": "系统"
+      "systemTheme": "系统",
     },
     "confirmDeleteAccount": "您确定要删除您的账户吗？此操作无法撤销。",
     "confirmAccountDeletion": "确认删除账户",
@@ -610,7 +610,7 @@ const Map<String, dynamic> zhLocale = {
     "resetUserDataTitle": "重置用户数据",
     "confirmResetUserData": "您确定要重置所有个人资料数据吗？这将清除所有个人资料信息和聊天记录，但保留您的账户凭据。",
     "reset": "重置",
-    "deleteAccountTitle": "删除账户"
+    "deleteAccountTitle": "删除账户",
   },
   "userProfile": {
     "title": "用户个人资料",
@@ -652,7 +652,7 @@ const Map<String, dynamic> zhLocale = {
       "tab9": "社会保障与福利",
       "tab10": "犯罪与法律记录",
       "tab11": "交通与出行",
-      "tab12": "公民与政治参与"
+      "tab12": "公民与政治参与",
     },
     "tabsShort": {
       "personal": "个人",
@@ -666,14 +666,14 @@ const Map<String, dynamic> zhLocale = {
       "social": "社会",
       "criminal": "犯罪",
       "transport": "交通",
-      "civic": "公民"
+      "civic": "公民",
     },
     "actions": {
       "cancel": "取消",
       "save": "保存个人资料",
       "previous": "上一步",
       "next": "下一步",
-      "saving": "正在保存..."
+      "saving": "正在保存...",
     },
     "fields": {
       "fullName": "全名（包括别名）",
@@ -747,7 +747,7 @@ const Map<String, dynamic> zhLocale = {
       "electionHistory": "选举参与历史",
       "partyMembership": "政党成员资格",
       "militaryStatus": "服役或征兵状态",
-      "publicServiceRoles": "公共服务角色"
+      "publicServiceRoles": "公共服务角色",
     },
     "placeholders": {
       "fullName": "输入您的法定全名",
@@ -757,7 +757,7 @@ const Map<String, dynamic> zhLocale = {
       "searchDisciplines": "搜索学科...",
       "selectDiscipline": "选择学科",
       "searchDegrees": "搜索学位...",
-      "selectDegree": "选择学位"
+      "selectDegree": "选择学位",
     },
     "validation": {
       "nameRequired": "全名是必填项",
@@ -768,7 +768,7 @@ const Map<String, dynamic> zhLocale = {
       "futureDate": "日期不能是未来日期",
       "invalidSelection": "请进行有效选择",
       "passwordLength": "密码必须至少包含8个字符",
-      "matchError": "字段不匹配"
+      "matchError": "字段不匹配",
     },
     "errors": {
       "savingFailed": "保存个人资料失败",
@@ -777,7 +777,7 @@ const Map<String, dynamic> zhLocale = {
       "invalidFileType": "文件类型无效",
       "fileTooLarge": "文件过大",
       "countryLoadError": "加载国家出错",
-      "countryUpdateError": "更新国家出错"
+      "countryUpdateError": "更新国家出错",
     },
     "notifications": {
       "saveSuccess": "个人资料保存成功",
@@ -790,7 +790,7 @@ const Map<String, dynamic> zhLocale = {
       "formChanged": "您有未保存的更改",
       "sessionExpired": "您的会话已过期，请重新登录",
       "profileUpdated": "您的个人资料已更新",
-      "profileIncomplete": "您的个人资料不完整"
+      "profileIncomplete": "您的个人资料不完整",
     },
     "instructions": {
       "fullNameHelp": "输入您在官方文件上显示的法定全名",
@@ -803,7 +803,7 @@ const Map<String, dynamic> zhLocale = {
       "nextTab": "继续下一部分",
       "previousTab": "返回上一部分",
       "saveInstructions": "点击保存以存储您的信息",
-      "cancelInstructions": "点击取消以放弃更改"
+      "cancelInstructions": "点击取消以放弃更改",
     },
     "completionStatus": {
       "notStarted": "未开始",
@@ -811,7 +811,7 @@ const Map<String, dynamic> zhLocale = {
       "complete": "已完成",
       "percentComplete": "已完成 {percent}%",
       "tabsCompleted": "已完成 {completed} / {total} 个部分",
-      "tabComplete": "选项卡已完成！"
+      "tabComplete": "选项卡已完成！",
     },
     "gender": {"male": "男", "female": "女", "other": "其他", "preferNot": "不愿透露"},
     "maritalStatus": {
@@ -819,13 +819,13 @@ const Map<String, dynamic> zhLocale = {
       "married": "已婚",
       "divorced": "离异",
       "widowed": "丧偶",
-      "other": "其他"
+      "other": "其他",
     },
     "residencyStatuses": {
       "citizen": "公民",
       "permanentResident": "永久居民",
       "temporaryResident": "临时居民",
-      "other": "其他"
+      "other": "其他",
     },
     "employmentStatuses": {
       "employed": "受雇",
@@ -834,7 +834,7 @@ const Map<String, dynamic> zhLocale = {
       "student": "学生",
       "retired": "退休",
       "homemaker": "家庭主妇/主夫",
-      "other": "其他"
+      "other": "其他",
     },
     "educationLevels": {
       "primary": "小学教育",
@@ -846,14 +846,14 @@ const Map<String, dynamic> zhLocale = {
       "master": "硕士学位",
       "doctoral": "博士学位",
       "professional": "专业学位",
-      "other": "其他"
+      "other": "其他",
     },
     "proficiencyLevels": {
       "native": "母语",
       "fluent": "流利",
       "advanced": "高级",
       "intermediate": "中级",
-      "basic": "基础"
+      "basic": "基础",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -864,7 +864,7 @@ const Map<String, dynamic> zhLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "未知"
+      "unknown": "未知",
     },
     "languages": {
       "english": "英语",
@@ -879,7 +879,7 @@ const Map<String, dynamic> zhLocale = {
       "russian": "俄语",
       "hindi": "印地语",
       "urdu": "乌尔都语",
-      "other": "其他"
+      "other": "其他",
     },
     "yesNo": {"yes": "是", "no": "否"},
     "select": "请选择",
@@ -986,7 +986,7 @@ const Map<String, dynamic> zhLocale = {
       "兽医学",
       "Web开发",
       "野生动物生物学",
-      "动物学"
+      "动物学",
     ],
     "degreeOptions": [
       "副学士学位",
@@ -1016,7 +1016,7 @@ const Map<String, dynamic> zhLocale = {
       "职业证书",
       "研究生证书",
       "研究生文凭",
-      "博士后"
+      "博士后",
     ],
     "aria": {
       "tabList": "个人资料表单部分",
@@ -1025,8 +1025,8 @@ const Map<String, dynamic> zhLocale = {
       "closeButton": "关闭个人资料表单",
       "saveButton": "保存个人资料数据",
       "requiredField": "必填字段",
-      "dropdownSelect": "选择一个选项"
-    }
+      "dropdownSelect": "选择一个选项",
+    },
   },
   "chatbot": {
     "placeholder": "在此处输入您的问题...",
@@ -1087,10 +1087,10 @@ const Map<String, dynamic> zhLocale = {
         "discardAndNew": "放弃并新建",
         "discardAndLoad": "放弃并加载",
         "saveFirst": "先保存",
-        "export": "导出"
-      }
+        "export": "导出",
+      },
     },
-    "shareWhatsApp": "分享到 WhatsApp"
+    "shareWhatsApp": "分享到 WhatsApp",
   },
   "quickhelp": {
     "applyForID": "申请身份证",
@@ -1128,7 +1128,7 @@ const Map<String, dynamic> zhLocale = {
     "transportLicensesUserPrompt": "我想咨询关于肯尼亚驾驶执照和 NTSA 服务的问题。",
     "housingProgramsUserPrompt": "我想了解肯尼亚的经济适用房计划 (Boma Yangu)。",
     "findJobsUserPrompt": "我想咨询关于肯尼亚政府工作机会和 PSC 申请的问题。",
-    "justChatUserPrompt": "我想随便聊聊肯尼亚的生活。"
+    "justChatUserPrompt": "我想随便聊聊肯尼亚的生活。",
   },
   "common": {
     "cancel": "取消",
@@ -1144,7 +1144,7 @@ const Map<String, dynamic> zhLocale = {
     "open": "打开",
     "done": "完成",
     "confirm": "确认",
-    "edit": "编辑"
+    "edit": "编辑",
   },
   "feedback": {
     "title": "反馈",
@@ -1158,7 +1158,7 @@ const Map<String, dynamic> zhLocale = {
     "thankYouMessage": "感谢您的反馈！",
     "submitting": "正在提交...",
     "error": "出了点问题。请重试。",
-    "success": "感谢您的反馈！"
+    "success": "感谢您的反馈！",
   },
   "responseRating": {
     "title": "帮助我们改进",
@@ -1169,11 +1169,11 @@ const Map<String, dynamic> zhLocale = {
       "2": "略有帮助",
       "3": "一般",
       "4": "很有帮助",
-      "5": "改变生活"
+      "5": "改变生活",
     },
     "additionalComments": "其他意见...",
     "submit": "提交",
-    "cancel": "取消"
+    "cancel": "取消",
   },
   "upload": {"alt": "上传"},
   "uploadDialog": {
@@ -1189,14 +1189,14 @@ const Map<String, dynamic> zhLocale = {
       "shortcutUnsupported": "不支持快捷方式文件 (.url)。请拖动实际文件。",
       "duplicate": "文件 \"{fileName}\" 已添加。",
       "uploadSuccess": "成功上传 {fileName}",
-      "uploadFailed": "上传 {fileName} 失败。"
-    }
+      "uploadFailed": "上传 {fileName} 失败。",
+    },
   },
   "about": {
     "title": "关于",
     "version": "版本",
     "description": "Genie AI 是您浏览政府服务和信息的智能助手。",
     "techStack": "技术栈",
-    "copyright": "版权所有。"
-  }
+    "copyright": "版权所有。",
+  },
 };

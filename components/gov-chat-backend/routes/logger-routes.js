@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { reconfigureLogger, triggerLogRollover } = require('../shared-lib');
 
 module.exports = () => {
@@ -12,7 +12,7 @@ module.exports = () => {
    *     description: Updates the application's logging configuration with new settings.
    *     tags: [Logger]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -94,7 +94,7 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/configure', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  router.post('/configure', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
     try {
       const { level, errorMaxSize, combinedMaxSize, errorMaxFiles, combinedMaxFiles, zippedArchive } = req.body;
 
@@ -132,7 +132,7 @@ module.exports = () => {
       });
 
       res.json({ success: true, message: 'Logger configuration updated successfully' });
-    } catch (error) {
+    } catch {
       res.status(500).json({ success: false, message: 'Failed to update logger configuration' });
     }
   });
@@ -145,7 +145,7 @@ module.exports = () => {
    *     description: Forces an immediate log rotation regardless of current file sizes
    *     tags: [Logger]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Log rollover triggered successfully
@@ -180,11 +180,11 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/rollover', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  router.post('/rollover', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
     try {
       triggerLogRollover();
       res.json({ success: true, message: 'Log rollover triggered successfully' });
-    } catch (error) {
+    } catch {
       res.status(500).json({ success: false, message: 'Failed to trigger log rollover' });
     }
   });

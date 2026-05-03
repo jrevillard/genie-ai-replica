@@ -1,6 +1,6 @@
 require('dotenv').config();
-const { Database, aql } = require('arangojs');
-const { logger, dbService, ensureCollection } = require('../shared-lib');
+const { aql } = require('arangojs');
+const { logger, dbService } = require('../shared-lib');
 const { NotFoundError, ValidationError } = require('../middleware/errors');
 
 class ServiceCategoryService {
@@ -22,11 +22,6 @@ class ServiceCategoryService {
     }
     try {
       this.db = await dbService.getConnection('default');
-      await ensureCollection(this.db, 'serviceCategories');
-      await ensureCollection(this.db, 'services');
-      await ensureCollection(this.db, 'categoryServices', { type: 3 });
-      await ensureCollection(this.db, 'serviceCategoryTranslations');
-      await ensureCollection(this.db, 'serviceTranslations');
       this.serviceCategories = this.db.collection('serviceCategories');
       this.services = this.db.collection('services');
       this.categoryServices = this.db.collection('categoryServices');
@@ -865,7 +860,6 @@ class ServiceCategoryService {
 
       // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)
       // For now, we'll assume the main document has no fields that change here.
-      const category = await this.serviceCategories.document(categoryKey);
 
       // 2. Update/create the English translation (upsert)
       const englishTranslationDoc = {

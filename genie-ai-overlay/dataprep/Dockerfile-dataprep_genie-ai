@@ -2,7 +2,7 @@
 # This stage clones the external OPEA repository at a specific version.
 ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
 ARG OPEA_VERSION="v1.3" # This tag can be changed to upgrade OPEA
-FROM alpine/git:latest AS opea_base
+FROM alpine/git:v2.52.0 AS opea_base
 
 ARG OPEA_REPO_URL
 ARG OPEA_VERSION
@@ -50,7 +50,7 @@ RUN apt-get update -y && \
 
 # Add /app (for 'comps'), the dataprep 'src' (for entrypoint),
 # and 'proto' (for api_protocol) to PYTHONPATH
-ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/cores/proto"
+ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/dataprep/src/integrations:/app/comps/cores/proto"
 
 # Step B: Copy the entire OPEA 'comps' directory from the clone
 COPY --from=opea_base /src/comps/ /app/comps/
@@ -78,18 +78,18 @@ RUN pip install --no-cache-dir -r ${REQ_PATH}
 
 # Step F: Install overlay-specific dependencies
 # **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
-RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet
+RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless hf_xet "python-jose[cryptography]"
 
 # Step G: Pre-install EasyOCR models (auto-download during build)
 # This prevents the service from hanging on its one-time model download at runtime.
-RUN mkdir -p /tmp/easyocr /root/.EasyOCR/model /root/.EasyOCR/config && \
+RUN mkdir -p /tmp/easyocr /home/user/.EasyOCR/model /home/user/.EasyOCR/config && \
 # 1. Download the 'en' (English) recognition model
     wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
 # 2. Download the text detection model
     wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
 # 3. Unzip the models
-    unzip -o /tmp/easyocr/english_g2.zip -d /root/.EasyOCR/model && \
-    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /root/.EasyOCR/model && \
+    unzip -o /tmp/easyocr/english_g2.zip -d /home/user/.EasyOCR/model && \
+    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /home/user/.EasyOCR/model && \
 # 4. Cleanup
     rm -rf /tmp/easyocr
 
@@ -105,6 +105,7 @@ RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.p
 # These paths are relative to the build context (our repo root)
 # 1. Copy our new subclass (Section 2.1) and the loader
 COPY genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py /app/comps/dataprep/src/integrations/genieai_dataprep_arangodb.py
+COPY genie-ai-overlay/dataprep/keycloak_service_account.py /app/comps/dataprep/src/integrations/keycloak_service_account.py
 
 COPY genie-ai-overlay/dataprep/genieai_dataprep_loader.py /app/comps/dataprep/src/genieai_dataprep_loader.py
 
@@ -121,5 +122,10 @@ RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/sr
     sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
     sed -i 's/openai\.error\.AuthenticationError/openai.AuthenticationError/g' /app/comps/dataprep/src/integrations/arangodb.py
 
-# Step K: Run the new GENIE-AI entry point from its new location
+# Step K: Create non-root user and set permissions
+RUN useradd -ms /bin/bash user && \
+    chown -R user:user /app /home/user
+
+# Step L: Run the new GENIE-AI entry point from its new location
+USER user
 CMD ["python", "comps/dataprep/src/genieai_dataprep_microservice.py"]

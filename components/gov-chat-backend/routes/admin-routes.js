@@ -1,7 +1,7 @@
 // src/routes/admin-routes.js
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const securityScanService = require('../services/security-scan-service');
 const { logger } = require('../shared-lib');
 const { execFile } = require('child_process');
@@ -86,8 +86,8 @@ module.exports = (adminService, logsService) => {
     next();
   });
 
-  router.use(authMiddleware.authenticate);
-  router.use(authMiddleware.isAdmin);
+  router.use(keycloakAuthMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.requireAdmin);
 
   /**
    * @swagger
@@ -96,7 +96,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get system health metrics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: System health metrics retrieved successfully
@@ -109,7 +109,7 @@ module.exports = (adminService, logsService) => {
    */
   router.get('/system-health', async (req, res, next) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/system-health route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       const result = await adminService.getSystemHealth();
@@ -128,7 +128,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get database statistics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database statistics retrieved successfully
@@ -156,7 +156,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get system logs
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: limit
@@ -201,7 +201,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Trigger log rollover
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Logs rolled over successfully
@@ -229,7 +229,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get user statistics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: User statistics retrieved successfully
@@ -258,7 +258,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get security metrics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Security metrics retrieved successfully
@@ -269,7 +269,7 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/security-metrics', async (req, res, next) => {
+  router.get('/security-metrics', async (req, res) => {
     try {
       logger.info(`[ADMIN-ROUTES] Fetching security metrics for user: ${req.user?.email || 'unknown'}`);
       const lastScan = await securityScanService.getLastScanDetails();
@@ -299,7 +299,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Run security scan
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Security scan completed successfully
@@ -310,9 +310,9 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/security-scan', async (req, res, next) => {
+  router.post('/security-scan', async (req, res) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security-scan route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       logger.info(`[ADMIN-ROUTES] Initiating security scan by user: ${req.user?.email || 'unknown'}`);
@@ -333,7 +333,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Retrieve the last security scan details
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Last security scan details retrieved successfully
@@ -344,9 +344,9 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/security/last-scan', async (req, res, next) => {
+  router.get('/security/last-scan', async (req, res) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security/last-scan route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       logger.info(`[ADMIN-ROUTES] Fetching last security scan details for user: ${req.user?.email || 'unknown'}`);
@@ -366,7 +366,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Run system diagnostics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Diagnostics completed successfully
@@ -394,7 +394,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Get logs summary by type and service
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: date
@@ -434,7 +434,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Search logs with filtering
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: term
@@ -558,7 +558,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Debug logs for yesterday to diagnose issues
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Debug information retrieved successfully
@@ -581,40 +581,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database-operations/reindex:
-   *   post:
-   *     summary: Reindex database
-   *     tags: [Admin]
-   *     security:
-   *       - bearerAuth: []
-   *     responses:
-   *       200:
-   *         description: Database reindexed successfully
-   *       401:
-   *         description: Unauthorized - authentication required
-   *       403:
-   *         description: Forbidden - admin access required
-   *       500:
-   *         description: Server error
-   */
-  router.post('/database-operations/reindex', async (req, res, next) => {
-    try {
-      const result = await adminService.reindexDatabase();
-      res.json(result);
-    } catch (error) {
-      logger.error(`[ADMIN-ROUTES] Error reindexing database: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
    * /admin/database-operations/backup:
    *   post:
    *     summary: Backup database
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database backed up successfully
@@ -642,7 +614,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Optimize database
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database optimized successfully
@@ -670,7 +642,7 @@ module.exports = (adminService, logsService) => {
    *     summary: Search users with filtering
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: term

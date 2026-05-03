@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 /**
@@ -18,7 +18,7 @@ module.exports = (translationService) => {
   logger.debug('[TRANSLATION-ROUTES] translation-routes initialized with translationService');
 
   // Secure all translation routes with authentication middleware
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger
@@ -28,7 +28,7 @@ module.exports = (translationService) => {
    *     description: Translates an array of text strings from a specified source language to a specified target language.
    *     tags: [Translation]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -97,7 +97,7 @@ module.exports = (translationService) => {
    *     description: Translates the text content within a markdown string from a specified source language to a specified target language, preserving the markdown structure.
    *     tags: [Translation]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:

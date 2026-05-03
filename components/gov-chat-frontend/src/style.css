@@ -180,23 +180,23 @@ h1 {
 }
 
 /* Action buttons and menus */
-[class*="action"],
-[class*="icon"],
-[class*="menu"],
-[class*="dropdown"],
-[class*="btn"],
-img[src*="edit"],
-img[src*="move"],
-img[src*="delete"],
+[class*='action'],
+[class*='icon'],
+[class*='menu'],
+[class*='dropdown'],
+[class*='btn'],
+img[src*='edit'],
+img[src*='move'],
+img[src*='delete'],
 svg {
   z-index: 99999 !important;
   position: relative !important;
 }
 
 /* Edit icon on the right */
-.chat-list-item>div:last-child,
-.chat-entry>div:last-child,
-.chat-item>div:last-child {
+.chat-list-item > div:last-child,
+.chat-entry > div:last-child,
+.chat-item > div:last-child {
   z-index: 99999 !important;
   position: relative !important;
 }
@@ -205,15 +205,15 @@ svg {
 .chatbot-container,
 .chat-panel,
 .chat-window,
-main>div:first-child {
+main > div:first-child {
   overflow: visible !important;
   z-index: 1 !important;
 }
 
 /* ChatBotComponent */
-[class*="ChatBot"],
-[class*="chat-bot"],
-[data-component="ChatBot"] {
+[class*='ChatBot'],
+[class*='chat-bot'],
+[data-component='ChatBot'] {
   z-index: 1 !important;
   overflow: visible !important;
 }
@@ -231,16 +231,16 @@ main>div:first-child {
   z-index: 100000 !important;
 }
 
-.menu-container>*,
-.dropdown-container>*,
-.context-menu-container>* {
+.menu-container > *,
+.dropdown-container > *,
+.context-menu-container > * {
   pointer-events: auto;
 }
 
 /* Move divs after chat items forward */
-.chat-item~div,
-.chat-entry~div,
-.chat-list-item~div {
+.chat-item ~ div,
+.chat-entry ~ div,
+.chat-list-item ~ div {
   z-index: 99999 !important;
   position: relative !important;
 }
@@ -321,25 +321,25 @@ text.value {
 }
 
 /* Dark mode overrides for analytics and charts */
-[data-theme="dark"] .analytics-dashboard h2,
-[data-theme="dark"] .analytics-dashboard h3,
-[data-theme="dark"] .period-selector,
-[data-theme="dark"] .period-selector label,
-[data-theme="dark"] .metric-card h3,
-[data-theme="dark"] .metric-value,
-[data-theme="dark"] .chart-container h3,
-[data-theme="dark"] .no-data,
-[data-theme="dark"] .error-message,
-[data-theme="dark"] .loading-container p,
-[data-theme="dark"] .x-axis text,
-[data-theme="dark"] .y-axis-left text,
-[data-theme="dark"] .y-axis-right text,
-[data-theme="dark"] svg text,
-[data-theme="dark"] .top-queries-table,
-[data-theme="dark"] .top-queries-table th,
-[data-theme="dark"] .top-queries-table td,
-[data-theme="dark"] .chart-legend text,
-[data-theme="dark"] .trend {
+[data-theme='dark'] .analytics-dashboard h2,
+[data-theme='dark'] .analytics-dashboard h3,
+[data-theme='dark'] .period-selector,
+[data-theme='dark'] .period-selector label,
+[data-theme='dark'] .metric-card h3,
+[data-theme='dark'] .metric-value,
+[data-theme='dark'] .chart-container h3,
+[data-theme='dark'] .no-data,
+[data-theme='dark'] .error-message,
+[data-theme='dark'] .loading-container p,
+[data-theme='dark'] .x-axis text,
+[data-theme='dark'] .y-axis-left text,
+[data-theme='dark'] .y-axis-right text,
+[data-theme='dark'] svg text,
+[data-theme='dark'] .top-queries-table,
+[data-theme='dark'] .top-queries-table th,
+[data-theme='dark'] .top-queries-table td,
+[data-theme='dark'] .chart-legend text,
+[data-theme='dark'] .trend {
   background-color: var(--bg-card, #414141) !important;
   /* Original dark mode color */
   color: var(--text-primary, #ffffff) !important;
@@ -353,7 +353,7 @@ text.value {
   background: var(--bg-dialog, #ffffff) !important;
 }
 
-[data-theme="dark"] .analytics-content {
+[data-theme='dark'] .analytics-content {
   background: var(--bg-dialog, #414141) !important;
 }
 
@@ -471,5 +471,5 @@ html.android-device.keyboard-open .tree-list-container {
 
 .search-box:focus {
   box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.3) !important;
-  border-color: #4E97D1 !important;
+  border-color: #4e97d1 !important;
 }

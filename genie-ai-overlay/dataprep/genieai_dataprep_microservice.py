@@ -8,24 +8,13 @@ Extends the base OPEA Dataprep microservice with additional endpoints for
 document repository ingestion and retraction, using ArangoDB as the backend.
 """
 
+import asyncio
 import base64
+import fcntl
 import os
 import time
-import fcntl
-import asyncio
-from typing import List, Optional, Union
 
-from pydantic import BaseModel
-from fastapi import Body, BackgroundTasks, HTTPException
-
-# --- CRITICAL FIX: Import Custom Component FIRST to register it ---
-from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
-
-# --- Import the entire base dataprep microservice safely ---
 import opea_dataprep_microservice as base
-from genieai_dataprep_loader import GenieDataprepLoader
-
-# --- Use same shared OPEA components ---
 from comps import (
     CustomLogger,
     ServiceType,
@@ -33,13 +22,17 @@ from comps import (
     register_statistics,
     statistics_dict,
 )
-
-# --- Import custom Pydantic model from our overlay protocol ---
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
+from fastapi import HTTPException
+from pydantic import BaseModel
+
+# Side-effect: registers GenieArangoDataprep with OpeaComponentRegistry (must precede GenieDataprepLoader)
+from integrations.genieai_dataprep_arangodb import GenieArangoDataprep  # noqa: F401  # isort: skip
+from genieai_dataprep_loader import GenieDataprepLoader
 
 logger = CustomLogger("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
-upload_folder = "./uploaded_files/" 
+upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 
 dataprep_component_name = "GENIE_DATAPREP_ARANGODB"
@@ -51,6 +44,7 @@ loader = GenieDataprepLoader(
 
 # Global registry for running ingestion tasks to support specific "Kill" functionality
 active_ingestion_tasks = {}
+
 
 # ------------------------------------------------------------------------------
 # Configuration Helpers
@@ -67,18 +61,19 @@ def get_chunk_size_for_file(filename: str) -> int:
     # Mapping of extensions to specific environment variable overrides
     # If the specific env var is not set, it defaults to the global_default
     config_map = {
-        ".pdf":  int(os.getenv("DATAPREP_CHUNK_SIZE_PDF", global_default)),
+        ".pdf": int(os.getenv("DATAPREP_CHUNK_SIZE_PDF", global_default)),
         ".docx": int(os.getenv("DATAPREP_CHUNK_SIZE_DOCX", global_default)),
         ".xlsx": int(os.getenv("DATAPREP_CHUNK_SIZE_XLSX", global_default)),
         ".pptx": int(os.getenv("DATAPREP_CHUNK_SIZE_PPTX", global_default)),
         ".html": int(os.getenv("DATAPREP_CHUNK_SIZE_HTML", global_default)),
-        ".txt":  int(os.getenv("DATAPREP_CHUNK_SIZE_TXT", global_default)),
-        ".md":   int(os.getenv("DATAPREP_CHUNK_SIZE_MD", global_default)),
+        ".txt": int(os.getenv("DATAPREP_CHUNK_SIZE_TXT", global_default)),
+        ".md": int(os.getenv("DATAPREP_CHUNK_SIZE_MD", global_default)),
     }
 
     size = config_map.get(ext, global_default)
     logger.info(f"[ config ] Resolved chunk size for '{filename}' ({ext}): {size}")
     return size
+
 
 # ------------------------------------------------------------------------------
 # Custom request payload models
@@ -89,8 +84,8 @@ class DocRepoIngestPayload(BaseModel):
     fileBase64: str
     fileType: str
     uploadDate: str
-    fileLabels: Optional[List[str]] = None
-    storagePath: Optional[str] = None
+    fileLabels: list[str] | None = None
+    storagePath: str | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
@@ -120,19 +115,19 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 
     # --- SYNCHRONOUS LOCK CHECK ---
     # We acquire the lock HERE to ensure we can return 429 immediately if busy.
-    lock_file = open(LOCK_FILE_PATH, 'w')
+    lock_file = open(LOCK_FILE_PATH, "w")  # noqa: SIM115
     try:
         # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)
         fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         logger.info(f"[TRACE_TMP][dataprep] ingest_file_from_repo:lockAcquired fileId={payload.fileId}")
-    except IOError:
+    except OSError:
         lock_file.close()
         logger.warning(f"[ ingest ] Rejected file_id {payload.fileId}: System busy.")
         logger.warning(f"[TRACE_TMP][dataprep] ingest_file_from_repo:lockBusy fileId={payload.fileId}")
         raise HTTPException(
-            status_code=429, 
-            detail="System is currently processing another document. Only one ingestion can run at a time."
-        )
+            status_code=429,
+            detail="System is currently processing another document. Only one ingestion can run at a time.",
+        ) from None
 
     # --- Environment-specific Arango config ---
     ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
@@ -144,7 +139,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "description").split(",")
     TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
     INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
-    
+
     # --- FIX: Dynamic Chunking Configuration ---
     # Determine chunk size based on file extension
     CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
@@ -186,7 +181,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             include_chunks=INCLUDE_CHUNKS,
             # --- FIX: Pass Dynamic Chunking Configuration ---
             chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP
+            chunk_overlap=CHUNK_OVERLAP,
         )
 
         # --- Trigger Tracked Background Task ---
@@ -196,18 +191,15 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         logger.info(
             f"[TRACE_TMP][dataprep] ingest_file_from_repo:taskCreated fileId={payload.fileId} activeTasks={len(active_ingestion_tasks)}"
         )
-        
+
+
         # Ensure the task is removed from the registry upon completion (success or failure)
         task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
         logger.info(f"[TRACE_TMP][dataprep] ingest_file_from_repo:responseReturning fileId={payload.fileId}")
 
         statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
-        return {
-            "success": True, 
-            "status": 200, 
-            "message": "Ingestion started in background."
-        }
+        return {"success": True, "status": 200, "message": "Ingestion started in background."}
 
     except Exception as e:
         logger.error(f"Error initiating dataprep ingest: {e}")
@@ -215,7 +207,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         # Cleanup lock if we fail before task starts
         fcntl.flock(lock_file, fcntl.LOCK_UN)
         lock_file.close()
-        
+
         if os.path.exists(save_path):
             os.remove(save_path)
         raise
@@ -233,7 +225,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
 )
 async def kill_ingest_task(payload: DocRepoRetractPayload):
     """
-    Cancels a specific running ingestion task. 
+    Cancels a specific running ingestion task.
     The task cancellation will trigger the rollback logic in the component.
     """
     file_id = payload.fileId
@@ -242,18 +234,10 @@ async def kill_ingest_task(payload: DocRepoRetractPayload):
     if file_id in active_ingestion_tasks:
         task = active_ingestion_tasks[file_id]
         task.cancel()
-        return {
-            "success": True, 
-            "status": 200, 
-            "message": f"Kill signal sent to ingestion task for {file_id}."
-        }
-    
+        return {"success": True, "status": 200, "message": f"Kill signal sent to ingestion task for {file_id}."}
+
     logger.warning(f"[ kill ] No active ingestion task found for file_id: {file_id}")
-    return {
-        "success": False, 
-        "status": 404, 
-        "message": "No active ingestion task found for this file."
-    }
+    return {"success": False, "status": 404, "message": "No active ingestion task found for this file."}
 
 
 # ------------------------------------------------------------------------------

@@ -1,16 +1,20 @@
 /* src/assets/global-theme.css */
 
-body, html {
+body,
+html {
   background: url('@/assets/chat-bg.jpg') no-repeat center center;
   background-size: cover;
   margin: 0;
   padding: 0;
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: #F2F6F9; /* overall page background */
+  background: #f2f6f9; /* overall page background */
   color: #333;
 }
 
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
   margin: 0;
   font-weight: 600;
 }
@@ -36,4 +40,3 @@ button {
   background: url('~@/assets/chat-bg.png');
   background-size: cover;
 }
-

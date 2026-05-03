@@ -77,196 +77,212 @@ class _ChatResponseFeedbackDialogState
       insetPadding: const EdgeInsets.all(16),
       child: SafeArea(
         child: Container(
-        width: 700, // Max width from CSS
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Text(
-                widget.translate("responseRating.title", "Rate Response"),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: colors['text'],
+          width: 700, // Max width from CSS
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Text(
+                  widget.translate("responseRating.title", "Rate Response"),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: colors['text'],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.translate("responseRating.note",
-                    "Your feedback helps improve our responses."),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colors['text'].withOpacity(0.7),
+                const SizedBox(height: 8),
+                Text(
+                  widget.translate(
+                    "responseRating.note",
+                    "Your feedback helps improve our responses.",
+                  ),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colors['text'].withOpacity(0.7),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Layout
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return Column(
-                    children: [
-                      // --- MESSAGE PREVIEW ---
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 20),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border(
-                            left: BorderSide(
-                              color: colors['border'],
-                              width: 3,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.translate("responseRating.chatbotResponse",
-                                  "Chatbot Response"),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: colors['text'],
+                // Layout
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Column(
+                      children: [
+                        // --- MESSAGE PREVIEW ---
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withOpacity(0.05)
+                                : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border(
+                              left: BorderSide(
+                                color: colors['border'],
+                                width: 3,
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.message['content'] ?? '',
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colors['text'].withOpacity(0.8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.translate(
+                                  "responseRating.chatbotResponse",
+                                  "Chatbot Response",
+                                ),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: colors['text'],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                widget.message['content'] ?? '',
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: colors['text'].withOpacity(0.8),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // --- THUMBS & SKIN TONE ---
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildThumbButton(
+                                type: 'up',
+                                label: widget.translate(
+                                  "feedback.positive",
+                                  "Helpful",
+                                ),
+                                isActive: _thumbFeedback == 'up',
+                                colors: colors,
+                                isDark: isDark,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildThumbButton(
+                                type: 'down',
+                                label: widget.translate(
+                                  "feedback.negative",
+                                  "Not Helpful",
+                                ),
+                                isActive: _thumbFeedback == 'down',
+                                colors: colors,
+                                isDark: isDark,
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 16),
+                        _buildSkinToneSelector(colors),
+                        const SizedBox(height: 24),
 
-                      // --- THUMBS & SKIN TONE ---
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildThumbButton(
-                              type: 'up',
-                              label: widget.translate(
-                                  "feedback.positive", "Helpful"),
-                              isActive: _thumbFeedback == 'up',
-                              colors: colors,
-                              isDark: isDark,
+                        // --- RATING 1-5 ---
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            widget.translate(
+                              "feedback.promptText",
+                              "How would you rate this?",
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildThumbButton(
-                              type: 'down',
-                              label: widget.translate(
-                                  "feedback.negative", "Not Helpful"),
-                              isActive: _thumbFeedback == 'down',
-                              colors: colors,
-                              isDark: isDark,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: colors['text'].withOpacity(0.7),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSkinToneSelector(colors),
-                      const SizedBox(height: 24),
-
-                      // --- RATING 1-5 ---
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          widget.translate("feedback.promptText",
-                              "How would you rate this?"),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: colors['text'].withOpacity(0.7),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildRatingSelector(colors, isDark),
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 10),
+                        _buildRatingSelector(colors, isDark),
+                        const SizedBox(height: 20),
 
-                      // --- TEXT INPUT ---
-                      TextField(
-                        onChanged: (v) => _feedbackText = v,
-                        maxLines: 3,
-                        style: TextStyle(color: colors['text'], fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: widget.translate(
+                        // --- TEXT INPUT ---
+                        TextField(
+                          onChanged: (v) => _feedbackText = v,
+                          maxLines: 3,
+                          style: TextStyle(color: colors['text'], fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: widget.translate(
                               "responseRating.additionalComments",
-                              "Additional comments..."),
-                          hintStyle:
-                              TextStyle(color: colors['text'].withOpacity(0.5)),
-                          filled: true,
-                          fillColor: isDark
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: colors['border']),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: colors['border']),
+                              "Additional comments...",
+                            ),
+                            hintStyle: TextStyle(
+                              color: colors['text'].withOpacity(0.5),
+                            ),
+                            filled: true,
+                            fillColor: isDark
+                                ? Colors.white.withOpacity(0.05)
+                                : Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: colors['border']),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: colors['border']),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+                      ],
+                    );
+                  },
+                ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      widget.translate("responseRating.cancel", "Cancel"),
-                      style: TextStyle(color: colors['text']),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colors['primary'],
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                // Actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        widget.translate("responseRating.cancel", "Cancel"),
+                        style: TextStyle(color: colors['text']),
                       ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
                     ),
-                    onPressed:
-                        (_selectedRating != null || _thumbFeedback != null)
-                            ? _submit
-                            : null,
-                    child: Text(
-                      widget.translate("responseRating.submit", "Submit"),
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colors['primary'],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                      onPressed:
+                          (_selectedRating != null || _thumbFeedback != null)
+                          ? _submit
+                          : null,
+                      child: Text(
+                        widget.translate("responseRating.submit", "Submit"),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -347,8 +363,9 @@ class _ChatResponseFeedbackDialogState
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                          color: colors['primary'].withOpacity(0.3),
-                          spreadRadius: 2)
+                        color: colors['primary'].withOpacity(0.3),
+                        spreadRadius: 2,
+                      ),
                     ]
                   : null,
             ),
@@ -391,8 +408,8 @@ class _ChatResponseFeedbackDialogState
                       color: isSelected
                           ? colors['primary']
                           : (isDark
-                              ? Colors.white.withOpacity(0.1)
-                              : Colors.grey[200]),
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.grey[200]),
                     ),
                     child: Text(
                       "$rating",

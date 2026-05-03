@@ -4,13 +4,9 @@
     <div class="dialog-container">
       <div class="dialog-header">
         <h2 class="dialog-title">
-          {{ translate("admin.documents.addLink", "Add from Link") }}
+          {{ translate('admin.documents.addLink', 'Add from Link') }}
         </h2>
-        <button
-          class="dialog-close-btn"
-          @click="$emit('close')"
-          :aria-label="translate('common.close', 'Close')"
-        >
+        <button class="dialog-close-btn" :aria-label="translate('common.close', 'Close')" @click="$emit('close')">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -30,153 +26,113 @@
 
       <div class="dialog-body">
         <div class="form-group">
-          <label for="url-input">{{
-            translate("link.label", "Website URL")
-          }}</label>
+          <label for="url-input">{{ translate('link.label', 'Website URL') }}</label>
           <input
             id="url-input"
+            v-model="url"
             type="text"
             class="form-input"
-            v-model="url"
-            :placeholder="
-              translate('link.placeholder', 'https://example.com/article')
-            "
+            :placeholder="translate('link.placeholder', 'https://example.com/article')"
             @keyup.enter="handleSubmit"
           />
-          <p class="form-hint" v-if="crawlMode === 'single_page'">
-            {{
-              translate(
-                "link.hint",
-                "The content of the webpage will be crawled and saved as an HTML file."
-              )
-            }}
+          <p v-if="crawlMode === 'single_page'" class="form-hint">
+            {{ translate('link.hint', 'The content of the webpage will be crawled and saved as an HTML file.') }}
           </p>
-          <p class="form-hint" v-else>
+          <p v-else class="form-hint">
             {{
               translate(
-                "link.hintAsync",
-                "The full site will be crawled in the background and saved as a Markdown file."
+                'link.hintAsync',
+                'The full site will be crawled in the background and saved as a Markdown file.'
               )
             }}
           </p>
         </div>
 
         <div class="form-group">
-          <label>{{ translate("link.crawlMode", "Crawl Mode") }}</label>
+          <label>{{ translate('link.crawlMode', 'Crawl Mode') }}</label>
           <div class="radio-group">
             <label class="radio-label">
-              <input type="radio" v-model="crawlMode" value="single_page" />
-              {{ translate("link.mode.single", "Single Page") }}
+              <input v-model="crawlMode" type="radio" value="single_page" />
+              {{ translate('link.mode.single', 'Single Page') }}
             </label>
             <label class="radio-label">
-              <input type="radio" v-model="crawlMode" value="full_site" />
-              {{ translate("link.mode.fullSite", "Full Site (Async)") }}
+              <input v-model="crawlMode" type="radio" value="full_site" />
+              {{ translate('link.mode.fullSite', 'Full Site (Async)') }}
             </label>
           </div>
         </div>
 
         <template v-if="crawlMode === 'full_site'">
           <div class="form-group">
-            <label for="depth-input">{{
-              translate("link.crawlDepth", "Crawl Depth")
-            }}</label>
-            <input
-              id="depth-input"
-              type="number"
-              class="form-input"
-              v-model.number="crawlDepth"
-              min="1"
-              max="20"
-            />
+            <label for="depth-input">{{ translate('link.crawlDepth', 'Crawl Depth') }}</label>
+            <input id="depth-input" v-model.number="crawlDepth" type="number" class="form-input" min="1" max="20" />
             <p class="form-hint">
-              {{
-                translate("link.depthHint", "Depth of links to follow (1-20).")
-              }}
+              {{ translate('link.depthHint', 'Depth of links to follow (1-20).') }}
             </p>
           </div>
 
           <div class="advanced-toggle">
             <button class="btn-link" @click="showAdvanced = !showAdvanced">
-              {{ showAdvanced ? "Hide" : "Show" }}
-              {{ translate("link.advancedOptions", "Advanced Configuration") }}
-              <span class="toggle-icon">{{ showAdvanced ? "▲" : "▼" }}</span>
+              {{ showAdvanced ? 'Hide' : 'Show' }}
+              {{ translate('link.advancedOptions', 'Advanced Configuration') }}
+              <span class="toggle-icon">{{ showAdvanced ? '▲' : '▼' }}</span>
             </button>
-            <span v-if="detectedPreset" class="preset-badge">
-              Matched Preset: {{ detectedPreset }}
-            </span>
+            <span v-if="detectedPreset" class="preset-badge"> Matched Preset: {{ detectedPreset }} </span>
           </div>
 
           <div v-if="showAdvanced" class="advanced-panel">
             <div class="form-group checkbox-group">
-              <input
-                type="checkbox"
-                id="ext-links"
-                v-model="config.followExternalLinks"
-              />
-              <label for="ext-links">{{
-                translate("link.config.followExternal", "Follow External Links")
-              }}</label>
+              <input id="ext-links" v-model="config.followExternalLinks" type="checkbox" />
+              <label for="ext-links">{{ translate('link.config.followExternal', 'Follow External Links') }}</label>
             </div>
-            <p class="form-hint small-hint" v-if="config.followExternalLinks">
-              Useful for "Awesome Lists". Will crawl pages linked to from this
-              domain.
+            <p v-if="config.followExternalLinks" class="form-hint small-hint">
+              Useful for "Awesome Lists". Will crawl pages linked to from this domain.
             </p>
 
-            <div class="form-group" v-if="config.followExternalLinks">
-              <label for="ext-depth">{{
-                translate("link.config.extDepth", "Max External Depth")
-              }}</label>
+            <div v-if="config.followExternalLinks" class="form-group">
+              <label for="ext-depth">{{ translate('link.config.extDepth', 'Max External Depth') }}</label>
               <input
                 id="ext-depth"
+                v-model.number="config.maxExternalDepth"
                 type="number"
                 class="form-input"
-                v-model.number="config.maxExternalDepth"
                 min="0"
                 max="5"
               />
               <p class="form-hint small-hint">
-                0 = Save specific external page only. 1-5 = Depth of links to
-                follow on external domains.
+                0 = Save specific external page only. 1-5 = Depth of links to follow on external domains.
               </p>
             </div>
 
             <div class="form-group">
               <div class="label-with-tooltip">
-                <label for="content-selector">{{
-                  translate("link.config.selector", "Content CSS Selector")
-                }}</label>
+                <label for="content-selector">{{ translate('link.config.selector', 'Content CSS Selector') }}</label>
                 <div class="tooltip-container">
                   <span class="help-icon">?</span>
                   <div class="tooltip-text">
-                    Tells the crawler which HTML element contains the main text
-                    (e.g. 'main', 'article', '.content'). Leave empty to let the
-                    system auto-detect the best content area.
+                    Tells the crawler which HTML element contains the main text (e.g. 'main', 'article', '.content').
+                    Leave empty to let the system auto-detect the best content area.
                   </div>
                 </div>
               </div>
               <input
                 id="content-selector"
+                v-model="config.contentSelector"
                 type="text"
                 class="form-input"
-                v-model="config.contentSelector"
                 placeholder="Default: Auto-detect (main, article, body)"
               />
-              <p class="form-hint small-hint">
-                Specific container to extract content from (reduces noise).
-              </p>
+              <p class="form-hint small-hint">Specific container to extract content from (reduces noise).</p>
             </div>
 
             <div class="form-group">
               <label for="exclude-patterns">{{
-                translate(
-                  "link.config.exclude",
-                  "Exclude Patterns (comma separated)"
-                )
+                translate('link.config.exclude', 'Exclude Patterns (comma separated)')
               }}</label>
               <textarea
                 id="exclude-patterns"
-                class="form-input"
                 v-model="excludePatternsInput"
+                class="form-input"
                 rows="3"
                 placeholder="/commits/, /issues/, /login"
               ></textarea>
@@ -189,22 +145,18 @@
 
       <div class="dialog-footer">
         <button class="btn btn-outline" @click="$emit('close')">
-          {{ translate("common.cancel", "Cancel") }}
+          {{ translate('common.cancel', 'Cancel') }}
         </button>
-        <button
-          class="btn btn-primary"
-          @click="handleSubmit"
-          :disabled="!isValidUrl || isLoading"
-        >
+        <button class="btn btn-primary" :disabled="!isValidUrl || isLoading" @click="handleSubmit">
           <span v-if="isLoading">{{
-            crawlMode === "full_site"
-              ? translate("link.scheduling", "Scheduling...")
-              : translate("link.crawling", "Crawling...")
+            crawlMode === 'full_site'
+              ? translate('link.scheduling', 'Scheduling...')
+              : translate('link.crawling', 'Crawling...')
           }}</span>
           <span v-else>{{
-            crawlMode === "full_site"
-              ? translate("link.submitAsync", "Start Crawl")
-              : translate("link.submit", "Crawl & Save")
+            crawlMode === 'full_site'
+              ? translate('link.submitAsync', 'Start Crawl')
+              : translate('link.submit', 'Crawl & Save')
           }}</span>
         </button>
       </div>
@@ -213,171 +165,170 @@
 </template>
 
 <script>
-import documentFileService from "../services/documentFileService.js";
-import { eventBus } from "../eventBus.js";
+import documentFileService from '../services/documentFileService.js';
+import { eventBus } from '../eventBus.js';
 
 // --- TOP 20 SITE PRESETS ---
 const SITE_PRESETS = {
-  "github.com": {
-    name: "GitHub",
-    selector: ".markdown-body",
+  'github.com': {
+    name: 'GitHub',
+    selector: '.markdown-body',
     exclude:
-      "/commits/, /issues, /pulls, /actions, /projects, /security, /pulse, /find, /search, /stargazers, /watchers, /network, /branches, /tags, /blob/, /tree/, /releases",
-    followExternal: true,
+      '/commits/, /issues, /pulls, /actions, /projects, /security, /pulse, /find, /search, /stargazers, /watchers, /network, /branches, /tags, /blob/, /tree/, /releases',
+    followExternal: true
   },
-  "gitlab.com": {
-    name: "GitLab",
-    selector: ".file-content, .wiki-content, .md",
+  'gitlab.com': {
+    name: 'GitLab',
+    selector: '.file-content, .wiki-content, .md',
     exclude:
-      "/-/commits, /-/tree, /-/blob, /-/blame, /-/issues, /-/merge_requests, /-/pipelines, /-/jobs, /-/tags, /-/network",
-    followExternal: true,
+      '/-/commits, /-/tree, /-/blob, /-/blame, /-/issues, /-/merge_requests, /-/pipelines, /-/jobs, /-/tags, /-/network',
+    followExternal: true
   },
-  "wikipedia.org": {
-    name: "Wikipedia",
-    selector: "#bodyContent",
+  'wikipedia.org': {
+    name: 'Wikipedia',
+    selector: '#bodyContent',
     exclude:
-      "Talk:, User:, User_talk:, Wikipedia:, File:, MediaWiki:, Template:, Help:, Category:, Portal:, Special:, /w/index.php",
-    followExternal: false,
+      'Talk:, User:, User_talk:, Wikipedia:, File:, MediaWiki:, Template:, Help:, Category:, Portal:, Special:, /w/index.php',
+    followExternal: false
   },
-  "medium.com": {
-    name: "Medium",
-    selector: "article, section",
-    exclude: "/signin, /m/signin, /search, /tag/, /@",
-    followExternal: false,
+  'medium.com': {
+    name: 'Medium',
+    selector: 'article, section',
+    exclude: '/signin, /m/signin, /search, /tag/, /@',
+    followExternal: false
   },
-  "stackoverflow.com": {
-    name: "Stack Overflow",
-    selector: "#mainbar, .post-text",
-    exclude: "/users/, /posts/, /revisions, /search, /feeds, /timeline, /admin",
-    followExternal: false,
+  'stackoverflow.com': {
+    name: 'Stack Overflow',
+    selector: '#mainbar, .post-text',
+    exclude: '/users/, /posts/, /revisions, /search, /feeds, /timeline, /admin',
+    followExternal: false
   },
-  "reddit.com": {
-    name: "Reddit",
+  'reddit.com': {
+    name: 'Reddit',
     // Targets new UI shadow-dom content (shreddit-post) and old/mobile content
-    selector: "shreddit-post, .Post, .post-content, .entry",
-    exclude: "/user/, /u/, /search, /message/compose, /submit",
-    followExternal: false,
+    selector: 'shreddit-post, .Post, .post-content, .entry',
+    exclude: '/user/, /u/, /search, /message/compose, /submit',
+    followExternal: false
   },
-  "atlassian.net": {
+  'atlassian.net': {
     // Confluence Cloud
-    name: "Confluence",
-    selector: "#main-content, .wiki-content, #content",
-    exclude: "/display/, /pages/viewpage.action, /history, /diffpages",
-    followExternal: false,
+    name: 'Confluence',
+    selector: '#main-content, .wiki-content, #content',
+    exclude: '/display/, /pages/viewpage.action, /history, /diffpages',
+    followExternal: false
   },
-  "notion.site": {
+  'notion.site': {
     // Notion Public
-    name: "Notion",
-    selector: ".notion-page-content",
-    exclude: "login, pricing, /signup",
-    followExternal: false,
+    name: 'Notion',
+    selector: '.notion-page-content',
+    exclude: 'login, pricing, /signup',
+    followExternal: false
   },
-  "readthedocs.io": {
-    name: "Read the Docs",
+  'readthedocs.io': {
+    name: 'Read the Docs',
     selector: '.rst-content, div[role="main"]',
-    exclude: "_static, _images, genindex, search.html, py-modindex.html",
-    followExternal: false,
+    exclude: '_static, _images, genindex, search.html, py-modindex.html',
+    followExternal: false
   },
-  "gitbook.io": {
-    name: "GitBook",
-    selector: "main, .gitbook-root",
-    exclude: "/s/, /search",
-    followExternal: false,
+  'gitbook.io': {
+    name: 'GitBook',
+    selector: 'main, .gitbook-root',
+    exclude: '/s/, /search',
+    followExternal: false
   },
   docusaurus: {
     // Generic check for docusaurus sites often works by meta tag, but by domain is hard. We'll add common ones.
-    name: "Docusaurus Site",
-    selector: "article, .theme-doc-markdown, .markdown",
-    exclude: "/blog/tags, /search",
-    followExternal: false,
+    name: 'Docusaurus Site',
+    selector: 'article, .theme-doc-markdown, .markdown',
+    exclude: '/blog/tags, /search',
+    followExternal: false
   },
-  "wordpress.com": {
-    name: "WordPress",
-    selector: ".entry-content, .post-content, article",
-    exclude:
-      "/wp-admin/, /wp-includes/, /feed/, /comments/, /page/, /xmlrpc.php",
-    followExternal: false,
+  'wordpress.com': {
+    name: 'WordPress',
+    selector: '.entry-content, .post-content, article',
+    exclude: '/wp-admin/, /wp-includes/, /feed/, /comments/, /page/, /xmlrpc.php',
+    followExternal: false
   },
-  "substack.com": {
-    name: "Substack",
-    selector: ".available-content, .post",
-    exclude: "/sign-in, /subscribe, /people/, /archive",
-    followExternal: false,
+  'substack.com': {
+    name: 'Substack',
+    selector: '.available-content, .post',
+    exclude: '/sign-in, /subscribe, /people/, /archive',
+    followExternal: false
   },
-  "dev.to": {
-    name: "Dev.to",
-    selector: "#article-body, .crayons-article__body",
-    exclude: "/search, /tag/, /top/, /latest, /videos",
-    followExternal: false,
+  'dev.to': {
+    name: 'Dev.to',
+    selector: '#article-body, .crayons-article__body',
+    exclude: '/search, /tag/, /top/, /latest, /videos',
+    followExternal: false
   },
-  "arxiv.org": {
-    name: "ArXiv",
-    selector: "blockquote.abstract, .abstract",
-    exclude: "/pdf/, /ps/, /format/, /list/, /find/",
-    followExternal: false,
+  'arxiv.org': {
+    name: 'ArXiv',
+    selector: 'blockquote.abstract, .abstract',
+    exclude: '/pdf/, /ps/, /format/, /list/, /find/',
+    followExternal: false
   },
-  "huggingface.co": {
-    name: "Hugging Face",
-    selector: "section#readme, .readme",
-    exclude: "/tree/, /blob/, /resolve/, /discussions, /settings",
-    followExternal: true,
+  'huggingface.co': {
+    name: 'Hugging Face',
+    selector: 'section#readme, .readme',
+    exclude: '/tree/, /blob/, /resolve/, /discussions, /settings',
+    followExternal: true
   },
-  "developer.mozilla.org": {
-    name: "MDN Web Docs",
-    selector: "article.main-page-content",
-    exclude: "/history, /edit, /users/, /docs/Web/HTML/Global_attributes", // common massive lists
-    followExternal: false,
+  'developer.mozilla.org': {
+    name: 'MDN Web Docs',
+    selector: 'article.main-page-content',
+    exclude: '/history, /edit, /users/, /docs/Web/HTML/Global_attributes', // common massive lists
+    followExternal: false
   },
-  "youtube.com": {
-    name: "YouTube",
-    selector: "#description, ytd-video-secondary-info-renderer",
-    exclude: "/watch, /channel/, /results, /feed/",
-    followExternal: false,
+  'youtube.com': {
+    name: 'YouTube',
+    selector: '#description, ytd-video-secondary-info-renderer',
+    exclude: '/watch, /channel/, /results, /feed/',
+    followExternal: false
   },
-  "quora.com": {
-    name: "Quora",
-    selector: ".q-box, .q-text",
-    exclude: "/profile/, /topic/, /log_in, /unanswered",
-    followExternal: false,
+  'quora.com': {
+    name: 'Quora',
+    selector: '.q-box, .q-text',
+    exclude: '/profile/, /topic/, /log_in, /unanswered',
+    followExternal: false
   },
-  "linkedin.com": {
-    name: "LinkedIn Article",
-    selector: ".article-main, .pulse-main-content",
-    exclude: "/feed, /mynetwork, /jobs, /messaging",
-    followExternal: false,
-  },
+  'linkedin.com': {
+    name: 'LinkedIn Article',
+    selector: '.article-main, .pulse-main-content',
+    exclude: '/feed, /mynetwork, /jobs, /messaging',
+    followExternal: false
+  }
 };
 
 export default {
-  name: "AddFromLinkDialog",
-  emits: ["close", "link-submitted"],
+  name: 'AddFromLinkDialog',
+  emits: ['close', 'link-submitted'],
   data() {
     return {
-      url: "",
-      crawlMode: "single_page",
+      url: '',
+      crawlMode: 'single_page',
       crawlDepth: 5,
       isLoading: false,
-      errorMessage: "",
+      errorMessage: '',
       // Advanced Config State
       showAdvanced: false,
-      excludePatternsInput: "",
+      excludePatternsInput: '',
       detectedPreset: null,
       config: {
         followExternalLinks: false,
         maxExternalDepth: 0,
-        contentSelector: "",
-      },
+        contentSelector: ''
+      }
     };
   },
   computed: {
     isValidUrl() {
       try {
         const newUrl = new URL(this.url);
-        return newUrl.protocol === "http:" || newUrl.protocol === "https:";
-      } catch (_) {
+        return newUrl.protocol === 'http:' || newUrl.protocol === 'https:';
+      } catch {
         return false;
       }
-    },
+    }
   },
   watch: {
     // Automatically apply presets when URL changes
@@ -387,14 +338,10 @@ export default {
         return;
       }
       try {
-        const hostname = new URL(newUrl).hostname
-          .replace("www.", "")
-          .toLowerCase();
+        const hostname = new URL(newUrl).hostname.replace('www.', '').toLowerCase();
 
         // Find matching preset (checking for partial matches like 'github.com' inside 'github.com/user/repo')
-        const presetKey = Object.keys(SITE_PRESETS).find((key) =>
-          hostname.includes(key)
-        );
+        const presetKey = Object.keys(SITE_PRESETS).find((key) => hostname.includes(key));
 
         if (presetKey) {
           const preset = SITE_PRESETS[presetKey];
@@ -408,20 +355,17 @@ export default {
             this.excludePatternsInput = preset.exclude;
           }
           // For repos/wikis/hub sites, we often want to follow links, but respect user choice if they toggled it
-          if (
-            this.config.followExternalLinks === false &&
-            preset.followExternal
-          ) {
+          if (this.config.followExternalLinks === false && preset.followExternal) {
             this.config.followExternalLinks = true;
           }
         } else {
           this.detectedPreset = null;
         }
-      } catch (e) {
+      } catch {
         // Ignore invalid URLs while typing
         this.detectedPreset = null;
       }
-    },
+    }
   },
   methods: {
     translate(key, fallback) {
@@ -437,49 +381,40 @@ export default {
     async handleSubmit() {
       if (!this.isValidUrl) {
         this.errorMessage = this.translate(
-          "link.validation.invalidUrl",
-          "Please enter a valid URL, including http:// or https://"
+          'link.validation.invalidUrl',
+          'Please enter a valid URL, including http:// or https://'
         );
         return;
       }
 
-      if (
-        this.crawlMode === "full_site" &&
-        (this.crawlDepth < 1 || this.crawlDepth > 20)
-      ) {
-        this.errorMessage = this.translate(
-          "link.validation.invalidDepth",
-          "Depth must be between 1 and 20."
-        );
+      if (this.crawlMode === 'full_site' && (this.crawlDepth < 1 || this.crawlDepth > 20)) {
+        this.errorMessage = this.translate('link.validation.invalidDepth', 'Depth must be between 1 and 20.');
         return;
       }
 
       this.isLoading = true;
-      this.errorMessage = "";
+      this.errorMessage = '';
 
       try {
         let response;
 
-        if (this.crawlMode === "single_page") {
+        if (this.crawlMode === 'single_page') {
           response = await documentFileService.uploadLink(this.url);
         } else {
           // --- FIX START: Construct Clean Configuration Object ---
           const cleanConfig = {
             followExternalLinks: this.config.followExternalLinks,
-            maxExternalDepth: this.config.maxExternalDepth,
+            maxExternalDepth: this.config.maxExternalDepth
           };
 
           // Only attach selector if valid string exists
-          if (
-            this.config.contentSelector &&
-            this.config.contentSelector.trim() !== ""
-          ) {
+          if (this.config.contentSelector && this.config.contentSelector.trim() !== '') {
             cleanConfig.contentSelector = this.config.contentSelector.trim();
           }
 
           // Only attach patterns if array has items
           const excludeArray = this.excludePatternsInput
-            .split(",")
+            .split(',')
             .map((s) => s.trim())
             .filter((s) => s.length > 0);
 
@@ -491,49 +426,44 @@ export default {
           response = await documentFileService.scheduleSiteCrawl({
             url: this.url,
             depth: this.crawlDepth,
-            config: cleanConfig,
+            config: cleanConfig
           });
           // --- FIX END ---
         }
 
-        const fileName = response.data?.file_name || "the file";
+        const fileName = response.data?.file_name || 'the file';
 
         const successMsg =
-          this.crawlMode === "single_page"
+          this.crawlMode === 'single_page'
             ? this.translate(
-                "admin.documents.linkSubmitSuccess",
+                'admin.documents.linkSubmitSuccess',
                 'Successfully crawled and saved "{fileName}".'
-              ).replace("{fileName}", fileName)
+              ).replace('{fileName}', fileName)
             : this.translate(
-                "admin.documents.crawlScheduled",
+                'admin.documents.crawlScheduled',
                 'Site crawl scheduled for "{fileName}". Check status in dashboard.'
-              ).replace("{fileName}", fileName);
+              ).replace('{fileName}', fileName);
 
-        this.showNotification(successMsg, "success");
-        this.$emit("link-submitted", response.data);
-        this.$emit("close");
+        this.showNotification(successMsg, 'success');
+        this.$emit('link-submitted', response.data);
+        this.$emit('close');
       } catch (error) {
         const backendMessage =
           error.response?.data?.message ||
-          (typeof error.response?.data === "string"
-            ? error.response.data
-            : null) ||
+          (typeof error.response?.data === 'string' ? error.response.data : null) ||
           error.message ||
-          this.translate(
-            "link.errors.generic",
-            "Failed to crawl the URL. Please check the link and try again."
-          );
+          this.translate('link.errors.generic', 'Failed to crawl the URL. Please check the link and try again.');
 
         this.errorMessage = backendMessage;
-        this.showNotification(backendMessage, "error");
+        this.showNotification(backendMessage, 'error');
       } finally {
         this.isLoading = false;
       }
     },
-    showNotification(message, type = "success") {
-      eventBus.$emit("notification:show", { message, type });
-    },
-  },
+    showNotification(message, type = 'success') {
+      eventBus.$emit('notification:show', { message, type });
+    }
+  }
 };
 </script>
 
@@ -664,7 +594,7 @@ export default {
   color: var(--text-primary, #333);
   user-select: none;
 }
-.radio-label input[type="radio"] {
+.radio-label input[type='radio'] {
   cursor: pointer;
   width: 1.1rem;
   height: 1.1rem;
@@ -779,7 +709,7 @@ export default {
 }
 
 .tooltip-text::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 100%;
   left: 50%;

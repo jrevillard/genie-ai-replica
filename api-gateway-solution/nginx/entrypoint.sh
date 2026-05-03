@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Cloud-native nginx entrypoint
 # Manages SSL certificates from volume mounts or generates self-signed certs for development
 

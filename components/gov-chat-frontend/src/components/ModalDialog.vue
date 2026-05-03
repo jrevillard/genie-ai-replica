@@ -5,9 +5,7 @@
         <slot name="header">
           <h3>{{ translateIfKey(title) }}</h3>
         </slot>
-        <button class="close-button" @click="$emit('close')" aria-label="Close">
-          ×
-        </button>
+        <button class="close-button" aria-label="Close" @click="$emit('close')">×</button>
       </div>
 
       <div class="modal-body">
@@ -18,10 +16,10 @@
 
       <div class="modal-footer">
         <slot name="footer">
-          <button @click="$emit('close')" class="cancel-btn">
+          <button class="cancel-btn" @click="$emit('close')">
             {{ translateIfKey(cancelText) }}
           </button>
-          <button @click="$emit('confirm')" class="primary-btn">
+          <button class="primary-btn" @click="$emit('confirm')">
             {{ translateIfKey(confirmText) }}
           </button>
         </slot>
@@ -32,29 +30,47 @@
 
 <script>
 export default {
-  name: "ModalDialog",
+  name: 'ModalDialog',
 
   props: {
     title: {
       type: String,
-      default: "Dialog",
+      default: 'Dialog'
     },
     message: {
       type: String,
-      default: "",
+      default: ''
     },
     cancelText: {
       type: String,
-      default: "Cancel",
+      default: 'Cancel'
     },
     confirmText: {
       type: String,
-      default: "Confirm",
+      default: 'Confirm'
     },
     useTranslation: {
       type: Boolean,
-      default: false,
-    },
+      default: false
+    }
+  },
+  emits: ['close', 'confirm'],
+
+  mounted() {
+    document.body.classList.add('modal-open');
+
+    // Allow ESC key to close the modal
+    this.handleEscKey = (e) => {
+      if (e.key === 'Escape') {
+        this.$emit('close');
+      }
+    };
+    document.addEventListener('keydown', this.handleEscKey);
+  },
+
+  beforeUnmount() {
+    document.body.classList.remove('modal-open');
+    document.removeEventListener('keydown', this.handleEscKey);
   },
 
   methods: {
@@ -63,25 +79,8 @@ export default {
         return this.$t(key);
       }
       return key;
-    },
-  },
-
-  mounted() {
-    document.body.classList.add("modal-open");
-
-    // Allow ESC key to close the modal
-    this.handleEscKey = (e) => {
-      if (e.key === "Escape") {
-        this.$emit("close");
-      }
-    };
-    document.addEventListener("keydown", this.handleEscKey);
-  },
-
-  beforeUnmount() {
-    document.body.classList.remove("modal-open");
-    document.removeEventListener("keydown", this.handleEscKey);
-  },
+    }
+  }
 };
 </script>
 
@@ -99,8 +98,8 @@ export default {
   z-index: 1050;
 }
 
-[data-theme="dark"] .modal-backdrop,
-html[data-theme="dark"] .modal-backdrop {
+[data-theme='dark'] .modal-backdrop,
+html[data-theme='dark'] .modal-backdrop {
   background-color: rgba(0, 0, 0, 0.7);
 }
 
@@ -117,8 +116,8 @@ html[data-theme="dark"] .modal-backdrop {
   color: #333;
 }
 
-[data-theme="dark"] .modal-content,
-html[data-theme="dark"] .modal-content {
+[data-theme='dark'] .modal-content,
+html[data-theme='dark'] .modal-content {
   background-color: #333;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   color: #ffffff;
@@ -132,8 +131,8 @@ html[data-theme="dark"] .modal-content {
   border-bottom: 1px solid #eee;
 }
 
-[data-theme="dark"] .modal-header,
-html[data-theme="dark"] .modal-header {
+[data-theme='dark'] .modal-header,
+html[data-theme='dark'] .modal-header {
   border-bottom: 1px solid #444;
 }
 
@@ -145,10 +144,10 @@ html[data-theme="dark"] .modal-header {
   color: #333;
 }
 
-[data-theme="dark"] .modal-header h3,
-[data-theme="dark"] .modal-header ::v-slotted(h3),
-html[data-theme="dark"] .modal-header h3,
-html[data-theme="dark"] .modal-header ::v-slotted(h3) {
+[data-theme='dark'] .modal-header h3,
+[data-theme='dark'] .modal-header ::v-slotted(h3),
+html[data-theme='dark'] .modal-header h3,
+html[data-theme='dark'] .modal-header ::v-slotted(h3) {
   color: #ffffff !important; /* Ensure title text is white */
 }
 
@@ -161,8 +160,8 @@ html[data-theme="dark"] .modal-header ::v-slotted(h3) {
   line-height: 1;
 }
 
-[data-theme="dark"] .close-button,
-html[data-theme="dark"] .close-button {
+[data-theme='dark'] .close-button,
+html[data-theme='dark'] .close-button {
   color: #ccc;
 }
 
@@ -170,8 +169,8 @@ html[data-theme="dark"] .close-button {
   color: #333;
 }
 
-[data-theme="dark"] .close-button:hover,
-html[data-theme="dark"] .close-button:hover {
+[data-theme='dark'] .close-button:hover,
+html[data-theme='dark'] .close-button:hover {
   color: #ffffff;
 }
 
@@ -186,10 +185,10 @@ html[data-theme="dark"] .close-button:hover {
   margin: 8px 0;
 }
 
-[data-theme="dark"] .modal-body p,
-[data-theme="dark"] .modal-body ::v-slotted(p),
-html[data-theme="dark"] .modal-body p,
-html[data-theme="dark"] .modal-body ::v-slotted(p) {
+[data-theme='dark'] .modal-body p,
+[data-theme='dark'] .modal-body ::v-slotted(p),
+html[data-theme='dark'] .modal-body p,
+html[data-theme='dark'] .modal-body ::v-slotted(p) {
   color: #ffffff !important; /* Ensure message text is white */
 }
 
@@ -201,8 +200,8 @@ html[data-theme="dark"] .modal-body ::v-slotted(p) {
   gap: 12px;
 }
 
-[data-theme="dark"] .modal-footer,
-html[data-theme="dark"] .modal-footer {
+[data-theme='dark'] .modal-footer,
+html[data-theme='dark'] .modal-footer {
   border-top: 1px solid #444;
 }
 
@@ -242,8 +241,8 @@ html[data-theme="dark"] .modal-footer {
   cursor: not-allowed;
 }
 
-[data-theme="dark"] .primary-btn:disabled,
-html[data-theme="dark"] .primary-btn:disabled {
+[data-theme='dark'] .primary-btn:disabled,
+html[data-theme='dark'] .primary-btn:disabled {
   background-color: #555;
   color: rgba(255, 255, 255, 0.5);
 }
@@ -254,8 +253,8 @@ html[data-theme="dark"] .primary-btn:disabled {
   color: white;
 }
 
-[data-theme="dark"] .danger-btn,
-html[data-theme="dark"] .danger-btn {
+[data-theme='dark'] .danger-btn,
+html[data-theme='dark'] .danger-btn {
   background-color: #e53935;
   color: #ffffff;
 }
@@ -264,8 +263,8 @@ html[data-theme="dark"] .danger-btn {
   background-color: #c62828;
 }
 
-[data-theme="dark"] .danger-btn:hover,
-html[data-theme="dark"] .danger-btn:hover {
+[data-theme='dark'] .danger-btn:hover,
+html[data-theme='dark'] .danger-btn:hover {
   background-color: #c62828;
 }
 
@@ -280,8 +279,8 @@ html[data-theme="dark"] .danger-btn:hover {
   display: block;
 }
 
-[data-theme="dark"] .form-group label,
-html[data-theme="dark"] .form-group label {
+[data-theme='dark'] .form-group label,
+html[data-theme='dark'] .form-group label {
   color: #ffffff;
 }
 
@@ -296,10 +295,10 @@ html[data-theme="dark"] .form-group label {
   font-size: 1rem;
 }
 
-[data-theme="dark"] .form-group input,
-[data-theme="dark"] .form-group select,
-html[data-theme="dark"] .form-group input,
-html[data-theme="dark"] .form-group select {
+[data-theme='dark'] .form-group input,
+[data-theme='dark'] .form-group select,
+html[data-theme='dark'] .form-group input,
+html[data-theme='dark'] .form-group select {
   background-color: #444;
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.2);

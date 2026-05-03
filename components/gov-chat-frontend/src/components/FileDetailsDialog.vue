@@ -79,7 +79,7 @@
                   class="form-input"
                   :disabled="!isMetadataEditable"
                   :class="{
-                    'is-invalid': !editableFile.file_name.trim() && isMetadataEditable,
+                    'is-invalid': !editableFile.file_name.trim() && isMetadataEditable
                   }"
                 />
               </div>
@@ -92,7 +92,7 @@
                   class="form-input"
                   :disabled="!isMetadataEditable"
                   :class="{
-                    'is-invalid': !editableFile.author.trim() && isMetadataEditable,
+                    'is-invalid': !editableFile.author.trim() && isMetadataEditable
                   }"
                 />
               </div>
@@ -404,9 +404,9 @@
         :visible="confirmDialog.visible"
         :title="confirmDialog.title"
         :message="confirmDialog.message"
-        :confirmText="confirmDialog.confirmText"
-        :cancelText="confirmDialog.cancelText"
-        :secondaryText="confirmDialog.secondaryText"
+        :confirm-text="confirmDialog.confirmText"
+        :cancel-text="confirmDialog.cancelText"
+        :secondary-text="confirmDialog.secondaryText"
         @confirm="confirmDialog.onConfirm"
         @cancel="confirmDialog.onCancel"
         @secondary="confirmDialog.onSecondary"
@@ -416,22 +416,22 @@
 </template>
 
 <script>
-import documentFileService from '../services/documentFileService.js'
-import serviceTreeService from '../services/serviceTreeService.js'
-import { eventBus } from '../eventBus.js'
-import ConfirmDialog from './ConfirmDialog.vue'
-import { formatFileSize } from '../utils/fileUtils.js'
+import documentFileService from '../services/documentFileService.js';
+import serviceTreeService from '../services/serviceTreeService.js';
+import { eventBus } from '../eventBus.js';
+import ConfirmDialog from './ConfirmDialog.vue';
+import { formatFileSize } from '../utils/fileUtils.js';
 
 export default {
   name: 'FileDetailsDialog',
   components: {
-    ConfirmDialog,
+    ConfirmDialog
   },
   props: {
     fileId: {
       type: String,
-      required: true,
-    },
+      required: true
+    }
   },
   emits: ['close', 'file-updated', 'action-triggered'],
   data() {
@@ -466,13 +466,13 @@ export default {
         maxDepth: 0,
         linksInternal: 0,
         linksExternal: 0,
-        totalCrawled: 0,
+        totalCrawled: 0
       },
 
       editableFile: {
         file_name: '',
         author: '',
-        labels: [],
+        labels: []
       },
       knowledgeHierarchy: [],
       englishKnowledgeHierarchy: [],
@@ -490,79 +490,79 @@ export default {
         secondaryText: '',
         onConfirm: () => {},
         onCancel: () => {},
-        onSecondary: () => {},
-      },
-    }
+        onSecondary: () => {}
+      }
+    };
   },
   computed: {
     // --- UPDATED COMPUTED PROPERTY ---
     areAllLabelsSelected: {
       get() {
         // If there are no labels to select, we aren't "all selected"
-        if (this.allLabelNames.length === 0) return false
+        if (this.allLabelNames.length === 0) return false;
 
         // Check if length matches AND every available label is in the selected list
         return (
           this.editableFile.labels.length === this.allLabelNames.length &&
           this.allLabelNames.every((label) => this.editableFile.labels.includes(label))
-        )
+        );
       },
       set(value) {
         if (this.isMetadataEditable) {
           // Only update the labels if the USER interacts with the select-all box.
           // Because this is a setter, it is only called when v-model writes to it.
-          this.editableFile.labels = value ? [...this.allLabelNames] : []
+          this.editableFile.labels = value ? [...this.allLabelNames] : [];
         }
-      },
+      }
     },
     // ---------------------------------
 
     dashboardProgressPercent() {
-      if (!this.crawlStats.limit) return 0
-      return (this.crawlStats.processed / this.crawlStats.limit) * 100
+      if (!this.crawlStats.limit) return 0;
+      return (this.crawlStats.processed / this.crawlStats.limit) * 100;
     },
     isSaveDisabled() {
-      if (!this.isMetadataEditable) return true
-      if (!this.editableFile.file_name || !this.editableFile.file_name.trim()) return true
-      if (!this.editableFile.author || !this.editableFile.author.trim()) return true
-      if (this.isHierarchyLoading || this.englishKnowledgeHierarchy.length === 0) return true
-      return false
+      if (!this.isMetadataEditable) return true;
+      if (!this.editableFile.file_name || !this.editableFile.file_name.trim()) return true;
+      if (!this.editableFile.author || !this.editableFile.author.trim()) return true;
+      if (this.isHierarchyLoading || this.englishKnowledgeHierarchy.length === 0) return true;
+      return false;
     },
     isMetadataEditable() {
-      return this.file && this.file.dataprep.status?.toLowerCase() !== 'ingested'
+      return this.file && this.file.dataprep.status?.toLowerCase() !== 'ingested';
     },
     // Determine what status text to show
     displayStatus() {
       if (this.crawlJob) {
-        if (this.crawlJob.status === 'Crawling') return 'Crawling'
-        if (this.crawlJob.status === 'Failed' || this.crawlJob.status === 'Killed') return 'Crawl Failed'
+        if (this.crawlJob.status === 'Crawling') return 'Crawling';
+        if (this.crawlJob.status === 'Failed' || this.crawlJob.status === 'Killed') return 'Crawl Failed';
         // If succeeded, fallback to dataprep status
       }
-      return this.file?.dataprep.status || ''
+      return this.file?.dataprep.status || '';
     },
     // Determine if the internal file link should be shown
     canViewInternalFile() {
-      if (!this.file) return false
+      if (!this.file) return false;
       // If it's a crawl job, only show if succeeded (or warning)
       if (this.crawlJob) {
-        return this.crawlJob.status === 'Succeeded' || this.crawlJob.status === 'Crawl Warning'
+        return this.crawlJob.status === 'Succeeded' || this.crawlJob.status === 'Crawl Warning';
       }
       // Regular file: show if not purely external (or if viewUrl logic handles it)
-      return true
+      return true;
     },
     // Helper to get normalized status
     currentStatus() {
-      return this.file && this.file.dataprep.status ? this.file.dataprep.status.toLowerCase() : ''
+      return this.file && this.file.dataprep.status ? this.file.dataprep.status.toLowerCase() : '';
     },
     // FIX: Lock delete/edit actions if file is ingested OR currently ingesting
     isFileLocked() {
-      const s = this.currentStatus
-      return s === 'ingested' || s === 'ingested with warnings' || s === 'ingesting'
+      const s = this.currentStatus;
+      return s === 'ingested' || s === 'ingested with warnings' || s === 'ingesting';
     },
     mainAction() {
-      if (!this.file) return {}
-      const status = this.currentStatus
-      const hasLabels = this.editableFile.labels.length > 0
+      if (!this.file) return {};
+      const status = this.currentStatus;
+      const hasLabels = this.editableFile.labels.length > 0;
 
       // Retract logic (Only if Ingested)
       if (status === 'ingested' || status === 'ingested with warnings') {
@@ -570,44 +570,44 @@ export default {
           text: this.translate('details.buttons.retract', 'Retract'),
           class: 'btn btn-warning',
           disabled: false,
-          handler: this.handleRetract,
-        }
+          handler: this.handleRetract
+        };
       }
 
       // Ingest logic
       // Spec 4.4: Disable if crawlJob exists AND status is NOT Succeeded
-      let isCrawlPending = false
+      let isCrawlPending = false;
       if (this.crawlJob && this.crawlJob.status !== 'Succeeded') {
-        isCrawlPending = true
+        isCrawlPending = true;
       }
 
       // FIX: Disable Ingest button if status is 'ingesting'
-      const isIngesting = status === 'ingesting'
+      const isIngesting = status === 'ingesting';
 
       return {
         text: this.translate('details.buttons.ingest', 'Ingest'),
         class: 'btn btn-success',
         // Disable if: Save disabled OR No labels OR Crawl not finished OR Ingesting
         disabled: this.isSaveDisabled || !hasLabels || isCrawlPending || isIngesting,
-        handler: this.handleIngest,
-      }
+        handler: this.handleIngest
+      };
     },
     allLabelNames() {
       if (!this.knowledgeHierarchy) {
-        return []
+        return [];
       }
       return this.knowledgeHierarchy.flatMap((category) =>
         category.children ? category.children.map((service) => service.name) : []
-      )
+      );
     },
     // URL for the internal file endpoint
     fileViewUrl() {
-      if (!this.file) return null
+      if (!this.file) return null;
       if (this.file.file_id) {
-        return `/api/files/${this.file.file_id}/viewbrowser`
+        return `/api/files/${this.file.file_id}/viewbrowser`;
       }
-      return null
-    },
+      return null;
+    }
   },
   watch: {
     // --- Removed areAllLabelsSelected watcher ---
@@ -617,87 +617,87 @@ export default {
       immediate: true,
       handler(newId) {
         if (newId) {
-          this.fetchData(newId)
+          this.fetchData(newId);
         }
-      },
+      }
     },
     activeTab(newTab) {
       if (newTab === 'dashboard') {
-        this.startDashboardTimer()
+        this.startDashboardTimer();
       } else {
-        this.stopDashboardTimer()
+        this.stopDashboardTimer();
       }
     },
     isAutoRefreshEnabled(enabled) {
       if (enabled && this.activeTab === 'dashboard') {
-        this.startDashboardTimer()
+        this.startDashboardTimer();
       } else {
-        this.stopDashboardTimer()
+        this.stopDashboardTimer();
       }
     },
     dashboardRefreshInterval() {
       // Restart timer if interval changes and it's running
       if (this.isAutoRefreshEnabled && this.activeTab === 'dashboard') {
-        this.stopDashboardTimer()
-        this.startDashboardTimer()
+        this.stopDashboardTimer();
+        this.startDashboardTimer();
       }
     },
     '$i18n.locale'(newLocale) {
       if (newLocale && newLocale !== this.currentLocale) {
-        this.currentLocale = newLocale
-        this.fetchData(this.fileId)
+        this.currentLocale = newLocale;
+        this.fetchData(this.fileId);
       }
-    },
+    }
   },
   beforeUnmount() {
-    this.stopDashboardTimer()
+    this.stopDashboardTimer();
   },
   methods: {
     formatFileSize,
     translate(key, fallback) {
       if (this.$i18n && this.$i18n.t) {
-        const translation = this.$i18n.t(key, this.currentLocale)
+        const translation = this.$i18n.t(key, this.currentLocale);
         if (translation === key) {
-          return fallback || key
+          return fallback || key;
         }
-        return translation
+        return translation;
       }
-      return fallback || key
+      return fallback || key;
     },
 
     // --- DASHBOARD TIMER METHODS ---
     startDashboardTimer() {
-      this.stopDashboardTimer() // Clear any existing
-      if (!this.isAutoRefreshEnabled) return
+      this.stopDashboardTimer(); // Clear any existing
+      if (!this.isAutoRefreshEnabled) return;
 
-      const interval = Math.max(1, this.dashboardRefreshInterval) * 1000
+      const interval = Math.max(1, this.dashboardRefreshInterval) * 1000;
       this.dashboardTimer = setInterval(() => {
-        this.refreshDashboardData()
-      }, interval)
+        this.refreshDashboardData();
+      }, interval);
 
       // Trigger immediate refresh
-      this.refreshDashboardData()
+      this.refreshDashboardData();
     },
     stopDashboardTimer() {
       if (this.dashboardTimer) {
-        clearInterval(this.dashboardTimer)
-        this.dashboardTimer = null
+        clearInterval(this.dashboardTimer);
+        this.dashboardTimer = null;
       }
     },
     async refreshDashboardData() {
-      if (this.isRefreshingDashboard) return
-      this.isRefreshingDashboard = true
+      if (this.isRefreshingDashboard) return;
+      this.isRefreshingDashboard = true;
       try {
         // 1. Refresh real file metadata
-        const crawlJobResponse = await documentFileService.getCrawlJob(this.fileId)
+        const crawlJobResponse = await documentFileService.getCrawlJob(this.fileId);
         if (crawlJobResponse && crawlJobResponse.data) {
-          this.crawlJob = crawlJobResponse.data
+          this.crawlJob = crawlJobResponse.data;
         }
 
         // 2. Fetch Live Metrics from Backend (REAL IMPLEMENTATION)
-        const metricsResponse = await documentFileService.getCrawlMetrics(this.fileId)
+        const metricsResponse = await documentFileService.getCrawlMetrics(this.fileId);
         if (metricsResponse && metricsResponse.data) {
-          const m = metricsResponse.data
+          const m = metricsResponse.data;
           this.crawlStats = {
             crawlRate: m.crawl_rate || 0,
             queueSize: m.queue_size || 0,
@@ -709,109 +709,109 @@ export default {
             maxDepth: m.max_depth || 0,
             linksInternal: m.links_internal || 0,
             linksExternal: m.links_external || 0,
-            totalCrawled: m.total_crawled || 0,
-          }
+            totalCrawled: m.total_crawled || 0
+          };
         }
       } catch (e) {
-        console.error('Dashboard refresh failed', e)
+        console.error('Dashboard refresh failed', e);
       } finally {
-        this.isRefreshingDashboard = false
+        this.isRefreshingDashboard = false;
       }
     },
 
     isExternalUrl(url) {
-      if (!url) return false
-      const isHttp = url.startsWith('http://') || url.startsWith('https://')
-      const isPlaceholder = url.includes('<HOST>') || url.includes('<PORT>')
-      return isHttp && !isPlaceholder
+      if (!url) return false;
+      const isHttp = url.startsWith('http://') || url.startsWith('https://');
+      const isPlaceholder = url.includes('<HOST>') || url.includes('<PORT>');
+      return isHttp && !isPlaceholder;
     },
     async fetchData(id) {
-      this.isFetchingData = true
-      this.isLoading = true
-      this.isHierarchyLoading = true
-      this.crawlJob = null // Reset crawl job state
+      this.isFetchingData = true;
+      this.isLoading = true;
+      this.isHierarchyLoading = true;
+      this.crawlJob = null; // Reset crawl job state
 
       try {
         // Fetch File Metadata, Hierarchy (current + en), and Crawl Job concurrently
         const [fileResponse, hierarchyResponse, englishHierarchyResponse] = await Promise.all([
           documentFileService.getFileMetadata(id),
           serviceTreeService.getAdminCategories(this.currentLocale),
-          serviceTreeService.getAdminCategories('en'),
-        ])
+          serviceTreeService.getAdminCategories('en')
+        ]);
 
-        this.file = fileResponse
+        this.file = fileResponse;
 
         // Try to fetch crawl job status
         try {
-          const crawlResponse = await documentFileService.getCrawlJob(id)
+          const crawlResponse = await documentFileService.getCrawlJob(id);
           if (crawlResponse && crawlResponse.data) {
-            this.crawlJob = crawlResponse.data
+            this.crawlJob = crawlResponse.data;
           }
-        } catch (e) {
+        } catch {
           // Not a crawl job or not found, ignore
-          this.crawlJob = null
+          this.crawlJob = null;
         }
 
         const initialLabelsInCurrentLocale = this.mapEnglishToLocale(
           fileResponse.labels || [],
           hierarchyResponse,
           englishHierarchyResponse
-        )
+        );
         this.editableFile = {
           file_name: this.file.file_name,
           author: this.file.author || '',
-          labels: initialLabelsInCurrentLocale,
-        }
+          labels: initialLabelsInCurrentLocale
+        };
 
-        this.knowledgeHierarchy = hierarchyResponse
-        this.englishKnowledgeHierarchy = englishHierarchyResponse
+        this.knowledgeHierarchy = hierarchyResponse;
+        this.englishKnowledgeHierarchy = englishHierarchyResponse;
 
         // If file status is not pending, fetch ingestion logs
         if (this.file.dataprep.status?.toLowerCase() !== 'pending') {
-          this.fetchIngestionLogs()
+          this.fetchIngestionLogs();
         }
       } catch (error) {
-        console.error('Error fetching data for FileDetailsDialog:', error)
+        console.error('Error fetching data for FileDetailsDialog:', error);
         this.showNotification(
           this.translate('details.notifications.loadError', 'Failed to load file details.'),
           'error'
-        )
-        this.$emit('close')
+        );
+        this.$emit('close');
       } finally {
-        this.isLoading = false
-        this.isHierarchyLoading = false
-        this.isFetchingData = false
+        this.isLoading = false;
+        this.isHierarchyLoading = false;
+        this.isFetchingData = false;
       }
     },
     // ... existing mapEnglishToLocale ...
     mapEnglishToLocale(englishLabels, localeHierarchy, englishHierarchy) {
       if (!englishLabels || englishLabels.length === 0 || !localeHierarchy || !englishHierarchy) {
-        return []
+        return [];
       }
-      const localeLabels = []
-      const englishServiceMap = new Map()
+      const localeLabels = [];
+      const englishServiceMap = new Map();
       englishHierarchy.forEach((engCategory, catIndex) => {
         if (engCategory.children && localeHierarchy[catIndex] && localeHierarchy[catIndex].children) {
           engCategory.children.forEach((engService, servIndex) => {
-            const localeService = localeHierarchy[catIndex].children[servIndex]
+            const localeService = localeHierarchy[catIndex].children[servIndex];
             if (localeService) {
-              const keyToMatch = engService._key || `idx_${catIndex}_${servIndex}`
-              const localeKey = localeService._key || `idx_${catIndex}_${servIndex}`
+              const keyToMatch = engService._key || `idx_${catIndex}_${servIndex}`;
+              const localeKey = localeService._key || `idx_${catIndex}_${servIndex}`;
               if (keyToMatch === localeKey) {
-                englishServiceMap.set(engService.name, localeService.name)
+                englishServiceMap.set(engService.name, localeService.name);
               }
             }
-          })
+          });
         }
-      })
+      });
       englishLabels.forEach((engLabel) => {
         if (englishServiceMap.has(engLabel)) {
-          localeLabels.push(englishServiceMap.get(engLabel))
+          localeLabels.push(englishServiceMap.get(engLabel));
         } else {
-          localeLabels.push(engLabel)
+          localeLabels.push(engLabel);
         }
-      })
-      return localeLabels
+      });
+      return localeLabels;
     },
     // ... existing getEnglishLabelNames ...
     getEnglishLabelNames(selectedLocaleLabels) {
@@ -821,10 +821,10 @@ export default {
         this.englishKnowledgeHierarchy.length === 0 ||
         this.knowledgeHierarchy.length === 0
       ) {
-        return []
+        return [];
       }
-      const englishLabels = []
-      const localeServiceMap = new Map()
+      const englishLabels = [];
+      const localeServiceMap = new Map();
       this.knowledgeHierarchy.forEach((localeCategory) => {
         if (localeCategory.children) {
           localeCategory.children.forEach((localeService) => {
@@ -832,26 +832,26 @@ export default {
               this.englishKnowledgeHierarchy,
               localeService._key,
               localeService.name
-            )
+            );
             if (englishService) {
-              localeServiceMap.set(localeService.name, englishService.name)
+              localeServiceMap.set(localeService.name, englishService.name);
             }
-          })
+          });
         }
-      })
+      });
       selectedLocaleLabels.forEach((localeLabel) => {
         if (localeServiceMap.has(localeLabel)) {
-          englishLabels.push(localeServiceMap.get(localeLabel))
+          englishLabels.push(localeServiceMap.get(localeLabel));
         } else {
-          const directMatch = this.findServiceInHierarchy(this.englishKnowledgeHierarchy, null, localeLabel)
+          const directMatch = this.findServiceInHierarchy(this.englishKnowledgeHierarchy, null, localeLabel);
           if (directMatch) {
-            englishLabels.push(directMatch.name)
+            englishLabels.push(directMatch.name);
           } else {
-            englishLabels.push(localeLabel)
+            englishLabels.push(localeLabel);
           }
         }
-      })
-      return [...new Set(englishLabels)]
+      });
+      return [...new Set(englishLabels)];
     },
     // ... existing findServiceInHierarchy ...
     findServiceInHierarchy(hierarchy, serviceKey, serviceName) {
@@ -859,15 +859,15 @@ export default {
         if (category.children) {
           for (const service of category.children) {
             if (serviceKey && service._key && service._key === serviceKey) {
-              return service
+              return service;
             }
             if (!serviceKey && service.name === serviceName) {
-              return service
+              return service;
             }
           }
         }
       }
-      return null
+      return null;
     },
     async handleSave() {
       if (this.isSaveDisabled) {
@@ -877,56 +877,56 @@ export default {
             'File Name and Author are required, or labels are still loading.'
           ),
           'error'
-        )
-        return false
+        );
+        return false;
       }
 
-      const englishLabelsToSave = this.getEnglishLabelNames(this.editableFile.labels)
+      const englishLabelsToSave = this.getEnglishLabelNames(this.editableFile.labels);
 
       const updates = {
         file_name: this.editableFile.file_name.trim(),
         author: this.editableFile.author.trim(),
-        labels: englishLabelsToSave,
-      }
+        labels: englishLabelsToSave
+      };
       try {
-        await documentFileService.updateFile(this.fileId, updates)
+        await documentFileService.updateFile(this.fileId, updates);
         this.showNotification(
           this.translate('details.notifications.saveSuccess', 'Metadata updated successfully.'),
           'success'
-        )
-        this.$emit('file-updated', { fileId: this.fileId, ...updates })
-        return true
-      } catch (error) {
-        this.showNotification(this.translate('details.notifications.saveError', 'Failed to save metadata.'), 'error')
-        return false
+        );
+        this.$emit('file-updated', { fileId: this.fileId, ...updates });
+        return true;
+      } catch {
+        this.showNotification(this.translate('details.notifications.saveError', 'Failed to save metadata.'), 'error');
+        return false;
       }
     },
 
     // NEW: Open/Download the internal file (Generic for all types)
     async handleViewInternalFile() {
-      const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024 // 20MB
-      const isLargeFile = this.file.file_size > LARGE_FILE_THRESHOLD
+      const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20MB
+      const isLargeFile = this.file.file_size > LARGE_FILE_THRESHOLD;
 
       // --- 1. SMART ROUTING ---
-      const mime = (this.file.file_type || '').toLowerCase()
+      const mime = (this.file.file_type || '').toLowerCase();
       // Explicitly detect Markdown
-      const isMarkdown = mime.includes('markdown') || (this.file.file_name || '').endsWith('.md')
+      const isMarkdown = mime.includes('markdown') || (this.file.file_name || '').endsWith('.md');
 
       const isViewable =
         mime.startsWith('image/') ||
         mime.startsWith('text/') ||
         mime === 'application/pdf' ||
         mime === 'application/json' ||
-        isMarkdown
+        isMarkdown;
 
       // Only open tab if Small AND Viewable
-      const useNewTab = !isLargeFile && isViewable
+      const useNewTab = !isLargeFile && isViewable;
 
-      let newWindow = null
+      let newWindow = null;
 
       // --- SCENARIO A: PREPARE TAB ---
       if (useNewTab) {
-        newWindow = window.open('', '_blank')
+        newWindow = window.open('', '_blank');
         if (newWindow) {
           newWindow.document.write(`
             <html>
@@ -939,100 +939,99 @@ export default {
                 <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
               </body>
             </html>
-          `)
+          `);
         } else {
-          this.showNotification('Popup blocked. Please allow popups for this site.', 'error')
-          return
+          this.showNotification('Popup blocked. Please allow popups for this site.', 'error');
+          return;
         }
       }
 
       // --- SCENARIO B: DOWNLOAD OVERLAY ---
       if (!useNewTab) {
-        this.isDownloading = true
-        this.downloadProgress = 0
-        this.downloadMessage = 'Starting...'
+        this.isDownloading = true;
+        this.downloadProgress = 0;
+        this.downloadMessage = 'Starting...';
       }
 
       try {
-        const userDataString = localStorage.getItem('user')
-        const token = userDataString ? JSON.parse(userDataString)?.accessToken : null
+        const token = this.$store.getters.accessToken;
 
-        if (!token) throw new Error('Authentication token not found.')
-        if (!this.fileViewUrl) throw new Error('Could not determine file view URL.')
+        if (!token) throw new Error('Authentication token not found.');
+        if (!this.fileViewUrl) throw new Error('Could not determine file view URL.');
 
         if (!useNewTab) {
           // --- XHR DOWNLOAD (Progress Bar) ---
           await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest()
-            xhr.open('GET', this.fileViewUrl)
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-            xhr.responseType = 'blob'
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', this.fileViewUrl);
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.responseType = 'blob';
 
             xhr.onprogress = (event) => {
-              const loadedMB = (event.loaded / (1024 * 1024)).toFixed(1)
-              const totalSize = event.lengthComputable ? event.total : this.file.file_size
+              const loadedMB = (event.loaded / (1024 * 1024)).toFixed(1);
+              const totalSize = event.lengthComputable ? event.total : this.file.file_size;
 
               if (totalSize > 0) {
-                const percent = Math.floor((event.loaded / totalSize) * 100)
-                this.downloadProgress = Math.min(percent, 100)
-                this.downloadMessage = `${this.downloadProgress}% (${loadedMB} MB)`
+                const percent = Math.floor((event.loaded / totalSize) * 100);
+                this.downloadProgress = Math.min(percent, 100);
+                this.downloadMessage = `${this.downloadProgress}% (${loadedMB} MB)`;
               } else {
-                this.downloadProgress = 100
-                this.downloadMessage = `${loadedMB} MB downloaded...`
+                this.downloadProgress = 100;
+                this.downloadMessage = `${loadedMB} MB downloaded...`;
               }
-            }
+            };
 
             xhr.onload = () => {
               if (xhr.status >= 200 && xhr.status < 300) {
-                const blob = xhr.response
-                const fileType = this.file.file_type || blob.type || 'application/octet-stream'
-                const downloadBlob = new Blob([blob], { type: fileType })
-                const url = URL.createObjectURL(downloadBlob)
+                const blob = xhr.response;
+                const fileType = this.file.file_type || blob.type || 'application/octet-stream';
+                const downloadBlob = new Blob([blob], { type: fileType });
+                const url = URL.createObjectURL(downloadBlob);
 
-                const link = document.createElement('a')
-                link.href = url
-                link.download = this.file.file_name || 'download'
-                document.body.appendChild(link)
-                link.click()
-                document.body.removeChild(link)
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = this.file.file_name || 'download';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
 
-                setTimeout(() => URL.revokeObjectURL(url), 100)
-                resolve()
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+                resolve();
               } else {
-                reject(new Error(`HTTP ${xhr.status}`))
+                reject(new Error(`HTTP ${xhr.status}`));
               }
-            }
+            };
 
-            xhr.onerror = () => reject(new Error('Network Error'))
-            xhr.send()
-          })
+            xhr.onerror = () => reject(new Error('Network Error'));
+            xhr.send();
+          });
 
-          this.showNotification('Download complete.', 'success')
+          this.showNotification('Download complete.', 'success');
         } else {
           // --- FETCH VIEW (Tab Navigation) ---
           const response = await fetch(this.fileViewUrl, {
             headers: { Authorization: `Bearer ${token}` },
-            cache: 'no-store',
-          })
+            cache: 'no-store'
+          });
 
-          if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`)
+          if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`);
 
-          const rawBlob = await response.blob()
-          const fileType = this.file.file_type || rawBlob.type || 'application/octet-stream'
-          const blob = new Blob([rawBlob], { type: fileType })
+          const rawBlob = await response.blob();
+          const fileType = this.file.file_type || rawBlob.type || 'application/octet-stream';
+          const blob = new Blob([rawBlob], { type: fileType });
 
           // HASH HACK: We append the filename.
           // 1. Extensions see ".md" and render it.
           // 2. Browsers see "text/markdown" MIME type and render text.
-          const fileURL = URL.createObjectURL(blob) + '#' + (this.file.file_name || 'file.md')
+          const fileURL = URL.createObjectURL(blob) + '#' + (this.file.file_name || 'file.md');
 
           if (newWindow) {
             // This replaces the "Loading..." spinner with the actual file/blob
-            newWindow.location.href = fileURL
+            newWindow.location.href = fileURL;
           }
         }
       } catch (error) {
-        console.error('View/Download error:', error)
+        console.error('View/Download error:', error);
 
         if (newWindow && useNewTab) {
           newWindow.document.body.innerHTML = `
@@ -1041,37 +1040,37 @@ export default {
               <p>${error.message}</p>
               <button onclick="window.close()" style="padding:0.5rem 1rem;cursor:pointer;">Close</button>
             </div>
-          `
+          `;
         }
-        this.showNotification('Could not load file. ' + error.message, 'error')
+        this.showNotification('Could not load file. ' + error.message, 'error');
       } finally {
-        this.isDownloading = false
-        this.downloadProgress = 0
-        this.downloadMessage = ''
+        this.isDownloading = false;
+        this.downloadProgress = 0;
+        this.downloadMessage = '';
       }
     },
 
     // --- Crawl Log Methods ---
     switchToCrawlLogTab() {
-      this.activeTab = 'crawlLog'
+      this.activeTab = 'crawlLog';
       if (this.crawlLogs.length === 0) {
-        this.fetchCrawlLogs()
+        this.fetchCrawlLogs();
       }
     },
     async fetchCrawlLogs() {
-      this.isCrawlLogLoading = true
+      this.isCrawlLogLoading = true;
       try {
-        const response = await documentFileService.getCrawlLogs(this.fileId)
+        const response = await documentFileService.getCrawlLogs(this.fileId);
         // Controller returns { success, data: [], count }
-        this.crawlLogs = response.data || []
+        this.crawlLogs = response.data || [];
       } catch (error) {
-        console.error('Error fetching crawl logs:', error)
+        console.error('Error fetching crawl logs:', error);
         this.showNotification(
           this.translate('details.notifications.crawlLogError', 'Failed to fetch crawl logs.'),
           'error'
-        )
+        );
       } finally {
-        this.isCrawlLogLoading = false
+        this.isCrawlLogLoading = false;
       }
     },
     handleKillCrawl() {
@@ -1085,24 +1084,24 @@ export default {
         confirmText: this.translate('details.log.killCrawl', 'Kill Task'),
         cancelText: this.translate('common.cancel', 'Cancel'),
         onConfirm: this.confirmKillCrawl,
-        onCancel: this.closeConfirm,
-      }
+        onCancel: this.closeConfirm
+      };
     },
     async confirmKillCrawl() {
-      this.closeConfirm()
-      this.isCrawlLogLoading = true
+      this.closeConfirm();
+      this.isCrawlLogLoading = true;
       try {
-        await documentFileService.killCrawl(this.fileId)
-        this.showNotification(this.translate('details.notifications.killCrawlSuccess', 'Kill signal sent.'), 'success')
+        await documentFileService.killCrawl(this.fileId);
+        this.showNotification(this.translate('details.notifications.killCrawlSuccess', 'Kill signal sent.'), 'success');
         // Refresh info to see status change
-        this.fetchData(this.fileId)
-      } catch (error) {
+        this.fetchData(this.fileId);
+      } catch {
         this.showNotification(
           this.translate('details.notifications.killCrawlError', 'Failed to send kill signal.'),
           'error'
-        )
+        );
       } finally {
-        this.isCrawlLogLoading = false
+        this.isCrawlLogLoading = false;
       }
     },
 
@@ -1115,15 +1114,15 @@ export default {
             'Please select at least one label before ingesting.'
           ),
           'error'
-        )
-        return
+        );
+        return;
       }
 
       this.showNotification(
         this.translate('details.notifications.ingestSaving', 'Saving metadata before ingestion...'),
         'info'
-      )
-      const saveSuccess = await this.handleSave()
+      );
+      const saveSuccess = await this.handleSave();
 
       if (saveSuccess) {
         this.confirmDialog = {
@@ -1136,37 +1135,37 @@ export default {
           confirmText: this.translate('common.ingest', 'Ingest'),
           cancelText: this.translate('common.cancel', 'Cancel'),
           onConfirm: this.confirmIngest,
-          onCancel: this.closeConfirm,
-        }
+          onCancel: this.closeConfirm
+        };
       } else {
         this.showNotification(
           this.translate('details.notifications.ingestSaveFailed', 'Failed to save metadata. Ingestion cancelled.'),
           'error'
-        )
+        );
       }
     },
     async confirmIngest() {
-      this.closeConfirm()
-      this.isLoading = true
+      this.closeConfirm();
+      this.isLoading = true;
       try {
-        await documentFileService.ingestFile(this.fileId)
+        await documentFileService.ingestFile(this.fileId);
         this.showNotification(
           this.translate('details.notifications.ingestSuccess', 'File has been successfully queued for ingestion.'),
           'success'
-        )
+        );
         this.$emit('action-triggered', {
           action: 'ingest',
-          fileId: this.fileId,
-        })
-        this.$emit('close')
+          fileId: this.fileId
+        });
+        this.$emit('close');
       } catch (error) {
         this.showNotification(
           this.translate('details.notifications.ingestError', 'Failed to start ingestion process.') +
             ` Error: ${error.message}`,
           'error'
-        )
+        );
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
@@ -1178,30 +1177,30 @@ export default {
         confirmText: this.translate('common.retract', 'Retract'),
         cancelText: this.translate('common.cancel', 'Cancel'),
         onConfirm: this.confirmRetract,
-        onCancel: this.closeConfirm,
-      }
+        onCancel: this.closeConfirm
+      };
     },
     async confirmRetract() {
-      this.closeConfirm()
-      this.isLoading = true
+      this.closeConfirm();
+      this.isLoading = true;
       try {
-        await documentFileService.retractMultipleFiles([this.file.file_id])
+        await documentFileService.retractMultipleFiles([this.file.file_id]);
         this.showNotification(
           this.translate('details.notifications.retractSuccess', 'File has been retracted.'),
           'success'
-        )
+        );
         this.$emit('action-triggered', {
           action: 'retract',
-          fileId: this.file.file_id,
-        })
-        this.$emit('close')
+          fileId: this.file.file_id
+        });
+        this.$emit('close');
       } catch (error) {
         this.showNotification(
           this.translate('details.notifications.retractError', 'Failed to retract file.') + ` Error: ${error.message}`,
           'error'
-        )
+        );
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
@@ -1216,30 +1215,30 @@ export default {
         confirmText: this.translate('common.delete', 'Delete'),
         cancelText: this.translate('common.cancel', 'Cancel'),
         onConfirm: this.confirmDelete,
-        onCancel: this.closeConfirm,
-      }
+        onCancel: this.closeConfirm
+      };
     },
     async confirmDelete() {
-      this.closeConfirm()
-      this.isLoading = true
+      this.closeConfirm();
+      this.isLoading = true;
       try {
-        await documentFileService.deleteFile(this.file.file_id)
+        await documentFileService.deleteFile(this.file.file_id);
         this.showNotification(
           this.translate('details.notifications.deleteSuccess', 'File deleted successfully.'),
           'success'
-        )
+        );
         this.$emit('action-triggered', {
           action: 'delete',
-          fileId: this.file.file_id,
-        })
-        this.$emit('close')
+          fileId: this.file.file_id
+        });
+        this.$emit('close');
       } catch (error) {
         this.showNotification(
           this.translate('details.notifications.deleteError', 'Failed to delete file.') + ` Error: ${error.message}`,
           'error'
-        )
+        );
       } finally {
-        this.isLoading = false
+        this.isLoading = false;
       }
     },
 
@@ -1255,87 +1254,87 @@ export default {
         confirmText: this.translate('details.log.killDocument', 'Kill This Document'),
         cancelText: this.translate('common.cancel', 'Cancel'),
         onConfirm: this.confirmKillDocument,
-        onCancel: this.closeConfirm,
-      }
+        onCancel: this.closeConfirm
+      };
     },
 
     async confirmKillDocument() {
-      this.closeConfirm()
-      this.isLogLoading = true
+      this.closeConfirm();
+      this.isLogLoading = true;
       try {
         // Call the new service method
-        await documentFileService.killIngestion(this.fileId)
+        await documentFileService.killIngestion(this.fileId);
 
         this.showNotification(
           this.translate('details.notifications.killDocSent', 'Kill request sent. Rolling back changes...'),
           'info'
-        )
+        );
 
         // Refresh logs to see the rollback progress
-        setTimeout(() => this.fetchIngestionLogs(), 2000)
+        setTimeout(() => this.fetchIngestionLogs(), 2000);
       } catch (error) {
-        this.showNotification('Failed to kill ingestion: ' + error.message, 'error')
+        this.showNotification('Failed to kill ingestion: ' + error.message, 'error');
       } finally {
-        this.isLogLoading = false
+        this.isLogLoading = false;
       }
     },
 
     // --- Log Tab Methods ---
     switchToLogTab() {
-      this.activeTab = 'ingestionLog'
+      this.activeTab = 'ingestionLog';
       // Fetch logs when switching to the tab for the first time
       if (this.ingestionLogs.length === 0) {
-        this.fetchIngestionLogs()
+        this.fetchIngestionLogs();
       }
     },
 
     async fetchIngestionLogs() {
-      this.isLogLoading = true
+      this.isLogLoading = true;
       try {
-        const response = await documentFileService.getIngestionLogs(this.fileId)
-        this.ingestionLogs = response.data || []
+        const response = await documentFileService.getIngestionLogs(this.fileId);
+        this.ingestionLogs = response.data || [];
       } catch (error) {
-        console.error('Error fetching ingestion logs:', error)
+        console.error('Error fetching ingestion logs:', error);
         this.showNotification(
           this.translate('details.notifications.logError', 'Failed to fetch ingestion logs.'),
           'error'
-        )
-        this.ingestionLogs = [] // Clear logs on error
+        );
+        this.ingestionLogs = []; // Clear logs on error
       } finally {
-        this.isLogLoading = false
+        this.isLogLoading = false;
       }
     },
 
     closeConfirm() {
-      this.confirmDialog.visible = false
+      this.confirmDialog.visible = false;
     },
 
     getLogLevelClass(level) {
-      if (level === 'ERROR') return 'log-level-error'
-      if (level === 'WARN') return 'log-level-warn'
-      return 'log-level-info'
+      if (level === 'ERROR') return 'log-level-error';
+      if (level === 'WARN') return 'log-level-warn';
+      return 'log-level-info';
     },
 
     // --- Util Methods ---
     getStatusClass(status) {
-      const lowerStatus = status ? status.toLowerCase() : ''
-      if (lowerStatus === 'ingested') return 'status-ingested'
-      if (lowerStatus === 'pending') return 'status-pending'
-      if (lowerStatus === 'retracted') return 'status-retracted'
-      if (lowerStatus === 'ingesting') return 'status-ingesting'
-      if (lowerStatus === 'ingestion error') return 'status-error'
-      if (lowerStatus === 'ingested with warnings') return 'status-warn'
-      if (lowerStatus === 'crawling') return 'status-ingesting' // Re-use ingesting color (blue)
-      if (lowerStatus === 'crawl failed') return 'status-error'
-      if (lowerStatus === 'killed') return 'status-error'
-      return 'status-pending'
+      const lowerStatus = status ? status.toLowerCase() : '';
+      if (lowerStatus === 'ingested') return 'status-ingested';
+      if (lowerStatus === 'pending') return 'status-pending';
+      if (lowerStatus === 'retracted') return 'status-retracted';
+      if (lowerStatus === 'ingesting') return 'status-ingesting';
+      if (lowerStatus === 'ingestion error') return 'status-error';
+      if (lowerStatus === 'ingested with warnings') return 'status-warn';
+      if (lowerStatus === 'crawling') return 'status-ingesting'; // Re-use ingesting color (blue)
+      if (lowerStatus === 'crawl failed') return 'status-error';
+      if (lowerStatus === 'killed') return 'status-error';
+      return 'status-pending';
     },
 
     showNotification(message, type = 'success') {
-      eventBus.$emit('notification:show', { message, type })
-    },
-  },
-}
+      eventBus.$emit('notification:show', { message, type });
+    }
+  }
+};
 </script>
 
 <style scoped>

@@ -26,11 +26,15 @@ const fileFilter = async (req, file, cb) => {
     // Fallback: if MIME type is unrecognized, check if the extension is valid
     // Browsers sometimes misreport MIME types (e.g., .docx as application/octet-stream)
     if (config.upload.allowedExtensions.includes(ext)) {
-      logger.debug(`MIME type ${file.mimetype} not recognized, but extension ${ext} is allowed. Accepting file (magic-byte validation will confirm).`);
+      logger.debug(
+        `MIME type ${file.mimetype} not recognized, but extension ${ext} is allowed. Accepting file (magic-byte validation will confirm).`
+      );
       return cb(null, true);
     }
 
-    logger.warn(`File type ${file.mimetype} and extension ${ext} are not allowed for file: ${file.originalname}. Rejecting file.`);
+    logger.warn(
+      `File type ${file.mimetype} and extension ${ext} are not allowed for file: ${file.originalname}. Rejecting file.`
+    );
     return cb(new Error(`File type ${file.mimetype} is not allowed`), false);
   } catch (error) {
     logger.error(`Error in fileFilter for file: ${file.originalname}`, error);
@@ -70,7 +74,7 @@ const validateFiles = async (req, res, next) => {
 
     const files = req.files || [req.file];
     logger.debug(`validateFiles: Found ${files.length} file(s) to validate.`);
-    
+
     // Validate each file
     for (const file of files) {
       logger.debug(`validateFiles: Validating file: ${file.originalname}`);
@@ -100,7 +104,7 @@ const validateFiles = async (req, res, next) => {
 // Error handling middleware for multer
 const handleMulterError = (error, req, res, next) => {
   logger.debug('Entering handleMulterError middleware...');
-  
+
   if (error instanceof multer.MulterError) {
     logger.warn('Handling MulterError:', { code: error.code, message: error.message, field: error.field });
     switch (error.code) {
@@ -130,7 +134,7 @@ const handleMulterError = (error, req, res, next) => {
         });
     }
   }
-  
+
   // Handle other file-related errors (e.g., from fileFilter)
   if (error.message.includes('File type') || error.message.includes('not allowed')) {
     logger.warn(`Handling custom file filter error: ${error.message}`);
@@ -139,7 +143,7 @@ const handleMulterError = (error, req, res, next) => {
       error: error.message
     });
   }
-  
+
   logger.error('handleMulterError: Unhandled error. Passing to next error handler.', error);
   next(error);
 };

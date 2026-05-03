@@ -15,38 +15,38 @@
 </template>
 
 <script>
-import * as d3 from 'd3'
-import analyticsService from '../../services/analyticsService'
-import { useChartTheme } from '../../composables/useChartTheme'
+import * as d3 from 'd3';
+import analyticsService from '../../services/analyticsService';
+import { useChartTheme } from '../../composables/useChartTheme';
 
 export default {
   name: 'UsageTrendChart',
   props: {
     data: {
       type: Array,
-      default: () => [],
+      default: () => []
     },
     externalData: {
       type: Boolean,
-      default: true,
+      default: true
     },
     period: {
       type: String,
-      default: 'daily',
+      default: 'daily'
     },
     selectedDate: {
       type: String,
-      default: () => new Date().toISOString().split('T')[0],
+      default: () => new Date().toISOString().split('T')[0]
     },
     // Added to force re-render when language changes
     renderKey: {
       type: String,
-      default: null,
-    },
+      default: null
+    }
   },
   setup() {
-    const { theme, getTheme } = useChartTheme()
-    return { theme, getTheme }
+    const { theme, getTheme } = useChartTheme();
+    return { theme, getTheme };
   },
   data() {
     return {
@@ -55,88 +55,88 @@ export default {
       error: null,
       width: 0,
       height: 0,
-      debouncedResize: null, // Placeholder for the debounced function
-    }
+      debouncedResize: null // Placeholder for the debounced function
+    };
   },
   watch: {
     data: {
       handler(newData) {
         if (this.externalData && newData && newData.length > 0) {
-          this.chartData = newData
-          this.renderChart()
+          this.chartData = newData;
+          this.renderChart();
         }
       },
-      deep: true,
+      deep: true
     },
     period: {
       handler() {
         if (!this.externalData) {
-          this.fetchData()
+          this.fetchData();
         }
-      },
+      }
     },
     selectedDate: {
       handler() {
         if (!this.externalData) {
-          this.fetchData()
+          this.fetchData();
         }
-      },
+      }
     },
     // Watch for renderKey (locale) changes to force complete re-render
     renderKey: {
       handler() {
         // Clear existing tooltips to prevent duplicates
-        d3.selectAll('.d3-tooltip').remove()
+        d3.selectAll('.d3-tooltip').remove();
 
         // Re-render chart with new translations
         this.$nextTick(() => {
           if (this.chartData && this.chartData.length > 0) {
             // Force complete recreation
             if (this.$refs.chartContainer) {
-              d3.select(this.$refs.chartContainer).selectAll('*').remove()
-              this.renderChart()
+              d3.select(this.$refs.chartContainer).selectAll('*').remove();
+              this.renderChart();
             }
           }
-        })
-      },
+        });
+      }
     },
     // Watch for theme changes from the composable's MutationObserver
     theme: {
       handler() {
-        this.injectGlobalStyleForTheme()
-        this.renderChart()
-      },
-    },
+        this.injectGlobalStyleForTheme();
+        this.renderChart();
+      }
+    }
   },
   mounted() {
-    this.initChartDimensions()
+    this.initChartDimensions();
 
     // Inject global stylesheet for theme
-    this.injectGlobalStyleForTheme()
+    this.injectGlobalStyleForTheme();
 
     if (this.externalData && this.data.length > 0) {
-      this.chartData = this.data
-      this.renderChart()
+      this.chartData = this.data;
+      this.renderChart();
     } else if (!this.externalData) {
-      this.fetchData()
+      this.fetchData();
     }
 
     // NEW: Initialize and use debounced resize handler
-    this.debouncedResize = this.debounce(this.processResize, 200)
-    window.addEventListener('resize', this.debouncedResize)
+    this.debouncedResize = this.debounce(this.processResize, 200);
+    window.addEventListener('resize', this.debouncedResize);
   },
   beforeUnmount() {
     // NEW: Remove the debounced listener
     if (this.debouncedResize) {
-      window.removeEventListener('resize', this.debouncedResize)
+      window.removeEventListener('resize', this.debouncedResize);
     }
 
-    d3.selectAll('.d3-tooltip').remove()
+    d3.selectAll('.d3-tooltip').remove();
 
     // Remove the injected style if it exists
-    const injectedStyle = document.getElementById('usage-trend-chart-theme-style')
+    const injectedStyle = document.getElementById('usage-trend-chart-theme-style');
     if (injectedStyle) {
-      document.head.removeChild(injectedStyle)
+      document.head.removeChild(injectedStyle);
     }
   },
   methods: {
@@ -144,12 +144,12 @@ export default {
      * Simple debounce utility
      */
     debounce(func, delay) {
-      let timeout
+      let timeout;
       return function (...args) {
-        const context = this
-        clearTimeout(timeout)
-        timeout = setTimeout(() => func.apply(context, args), delay)
-      }
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), delay);
+      };
     },
 
     /**
@@ -159,13 +159,13 @@ export default {
     injectGlobalStyleForTheme() {
       // Check if the style already exists
       if (document.getElementById('usage-trend-chart-theme-style')) {
-        return
+        return;
       }
 
       // Create style element
-      const styleEl = document.createElement('style')
-      styleEl.id = 'usage-trend-chart-theme-style'
-      const theme = this.getTheme()
+      const styleEl = document.createElement('style');
+      styleEl.id = 'usage-trend-chart-theme-style';
+      const theme = this.getTheme();
       if (theme.isDarkMode) {
         styleEl.textContent = `
             /* Force chart text to be white in dark mode */
@@ -176,8 +176,8 @@ export default {
             [data-theme="dark"] .legend text {
               fill: #FFFFFF !important;
             }
-          `
-        console.log('[UsageTrendChart] Injected dark mode style')
+          `;
+        console.log('[UsageTrendChart] Injected dark mode style');
       } else {
         styleEl.textContent = `
             /* Force chart text to be dark in light mode */
@@ -188,152 +188,152 @@ export default {
             [data-theme="light"] .legend text {
               fill: #333333 !important;
             }
-          `
-        console.log('[UsageTrendChart] Injected light mode style')
+          `;
+        console.log('[UsageTrendChart] Injected light mode style');
       }
 
       // Append to document head
-      document.head.appendChild(styleEl)
-      console.log('[DEBUG] Injected theme style:', theme.isDarkMode ? 'dark' : 'light')
+      document.head.appendChild(styleEl);
+      console.log('[DEBUG] Injected theme style:', theme.isDarkMode ? 'dark' : 'light');
     },
 
     async fetchData() {
-      if (this.externalData) return
+      if (this.externalData) return;
 
-      this.loading = true
-      this.error = null
+      this.loading = true;
+      this.error = null;
 
       try {
-        const params = analyticsService.calculateTimeSeriesParams(this.period, this.selectedDate)
+        const params = analyticsService.calculateTimeSeriesParams(this.period, this.selectedDate);
 
-        const url = `/api/analytics/timeseries/queries`
+        const url = `/api/analytics/timeseries/queries`;
 
-        console.log(`Fetching time series data from ${url} with params:`, params)
+        console.log(`Fetching time series data from ${url} with params:`, params);
 
         const response = await fetch(
           `${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`
-        )
+        );
 
         if (!response.ok) {
-          throw new Error(`API request failed with status ${response.status}`)
+          throw new Error(`API request failed with status ${response.status}`);
         }
 
-        const data = await response.json()
+        const data = await response.json();
 
         if (Array.isArray(data) && data.length > 0) {
-          console.log('Time series data loaded successfully:', data)
+          console.log('Time series data loaded successfully:', data);
 
           this.chartData = data.map((item) => ({
             timestamp: item.timestamp || '',
             dateLabel: this.formatDate(item.timestamp),
             value: typeof item.value === 'number' ? item.value : 0,
-            userCount: typeof item.userCount === 'number' ? item.userCount : 0,
-          }))
+            userCount: typeof item.userCount === 'number' ? item.userCount : 0
+          }));
         } else {
-          console.warn('Empty or invalid time series data received:', data)
-          this.chartData = []
+          console.warn('Empty or invalid time series data received:', data);
+          this.chartData = [];
         }
 
-        this.renderChart()
+        this.renderChart();
       } catch (error) {
-        console.error('Error loading time series data:', error)
-        this.error = this.$t('analytics.status.error')
-        this.chartData = []
-        this.renderChart()
+        console.error('Error loading time series data:', error);
+        this.error = this.$t('analytics.status.error');
+        this.chartData = [];
+        this.renderChart();
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
 
     formatDate(dateString) {
-      if (!dateString) return ''
+      if (!dateString) return '';
 
       try {
-        const date = new Date(dateString)
-        return date.toLocaleDateString(this.$i18n.locale)
-      } catch (e) {
-        return dateString
+        const date = new Date(dateString);
+        return date.toLocaleDateString(this.$i18n.locale);
+      } catch {
+        return dateString;
       }
     },
 
     initChartDimensions() {
-      if (!this.$refs.chartContainer) return
+      if (!this.$refs.chartContainer) return;
 
-      const container = this.$refs.chartContainer
-      this.width = container.offsetWidth
-      this.height = 300
+      const container = this.$refs.chartContainer;
+      this.width = container.offsetWidth;
+      this.height = 300;
     },
 
     // NEW: Core resize logic, now called by the debounced function
     processResize() {
       this.$nextTick(() => {
-        this.initChartDimensions()
-        this.renderChart()
-      })
+        this.initChartDimensions();
+        this.renderChart();
+      });
     },
 
     /**
      * Force text elements to use appropriate color based on theme
      */
     forceAxisTextColor() {
-      const theme = this.getTheme()
-      const textColor = theme.textColor
+      const theme = this.getTheme();
+      const textColor = theme.textColor;
 
-      const chartContainer = this.$refs.chartContainer
-      if (!chartContainer) return
+      const chartContainer = this.$refs.chartContainer;
+      if (!chartContainer) return;
 
       setTimeout(() => {
-        const xAxisText = chartContainer.querySelectorAll('.x-axis text')
-        xAxisText.forEach((el) => el.setAttribute('fill', textColor))
+        const xAxisText = chartContainer.querySelectorAll('.x-axis text');
+        xAxisText.forEach((el) => el.setAttribute('fill', textColor));
 
-        const yAxisLeftText = chartContainer.querySelectorAll('.y-axis-left text')
-        yAxisLeftText.forEach((el) => el.setAttribute('fill', textColor))
+        const yAxisLeftText = chartContainer.querySelectorAll('.y-axis-left text');
+        yAxisLeftText.forEach((el) => el.setAttribute('fill', textColor));
 
-        const yAxisRightText = chartContainer.querySelectorAll('.y-axis-right text')
-        yAxisRightText.forEach((el) => el.setAttribute('fill', textColor))
+        const yAxisRightText = chartContainer.querySelectorAll('.y-axis-right text');
+        yAxisRightText.forEach((el) => el.setAttribute('fill', textColor));
 
-        const chartTitle = chartContainer.querySelectorAll('text[font-size="14px"]')
-        chartTitle.forEach((el) => el.setAttribute('fill', textColor))
+        const chartTitle = chartContainer.querySelectorAll('text[font-size="14px"]');
+        chartTitle.forEach((el) => el.setAttribute('fill', textColor));
 
-        const legendText = chartContainer.querySelectorAll('.legend text')
-        legendText.forEach((el) => el.setAttribute('fill', textColor))
+        const legendText = chartContainer.querySelectorAll('.legend text');
+        legendText.forEach((el) => el.setAttribute('fill', textColor));
 
-        console.log(`[DEBUG] Forcing axis text color to: ${textColor}`)
-      }, 100)
+        console.log(`[DEBUG] Forcing axis text color to: ${textColor}`);
+      }, 100);
     },
 
     renderChart() {
-      if (!this.$refs.chartContainer) return
+      if (!this.$refs.chartContainer) return;
 
-      const container = this.$refs.chartContainer
+      const container = this.$refs.chartContainer;
 
       // 1. IMMEDIATELY KILL ANY EXISTING CHART — THIS IS NON-NEGOTIABLE
-      d3.select(container).selectAll('*').remove()
+      d3.select(container).selectAll('*').remove();
 
       // 2. Measure width AFTER clearing (browser can report negative during layout collapse)
-      const rawWidth = container.offsetWidth
-      const containerWidth = Math.max(0, rawWidth) // ← THE FIX THAT ENDS THIS NIGHTMARE
+      const rawWidth = container.offsetWidth;
+      const containerWidth = Math.max(0, rawWidth); // ← THE FIX THAT ENDS THIS NIGHTMARE
 
-      const margin = { top: 40, right: 60, bottom: 50, left: 60 }
-      const width = containerWidth - margin.left - margin.right
-      const height = this.height - margin.top - margin.bottom
+      const margin = { top: 40, right: 60, bottom: 50, left: 60 };
+      const width = containerWidth - margin.left - margin.right;
+      const height = this.height - margin.top - margin.bottom;
 
       // 3. Bail out cleanly if container is collapsed or unusable
       if (!this.chartData || this.chartData.length === 0 || width < 50 || height <= 0) {
-        return
+        return;
       }
 
       // ──────────────────────────────────────────────────────────────
       // YOUR ORIGINAL CHART — 100% UNTOUCHED FROM HERE ON
       // ──────────────────────────────────────────────────────────────
-      const theme = this.getTheme()
-      const { textColor, borderColor, gridColor, isDarkMode } = theme
+      const theme = this.getTheme();
+      const { textColor, borderColor, gridColor, isDarkMode } = theme;
 
-      const svg = d3.select(container).append('svg').attr('width', containerWidth).attr('height', this.height)
+      const svg = d3.select(container).append('svg').attr('width', containerWidth).attr('height', this.height);
 
-      const mainGroup = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`)
+      const mainGroup = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
-      const defs = mainGroup.append('defs')
+      const defs = mainGroup.append('defs');
 
       defs
         .append('filter')
@@ -343,7 +343,7 @@ export default {
         .attr('dx', 0)
         .attr('dy', 3)
         .attr('stdDeviation', 3)
-        .attr('flood-color', 'rgba(0,0,0,0.3)')
+        .attr('flood-color', 'rgba(0,0,0,0.3)');
 
       const barGradient = defs
         .append('linearGradient')
@@ -351,9 +351,9 @@ export default {
         .attr('x1', '0%')
         .attr('y1', '0%')
         .attr('x2', '0%')
-        .attr('y2', '100%')
-      barGradient.append('stop').attr('offset', '0%').attr('stop-color', '#62d9a6')
-      barGradient.append('stop').attr('offset', '100%').attr('stop-color', '#2da676')
+        .attr('y2', '100%');
+      barGradient.append('stop').attr('offset', '0%').attr('stop-color', '#62d9a6');
+      barGradient.append('stop').attr('offset', '100%').attr('stop-color', '#2da676');
 
       const areaGradient = defs
         .append('linearGradient')
@@ -361,9 +361,9 @@ export default {
         .attr('x1', '0%')
         .attr('y1', '0%')
         .attr('x2', '0%')
-        .attr('y2', '100%')
-      areaGradient.append('stop').attr('offset', '0%').attr('stop-color', '#4682B4').attr('stop-opacity', 0.7)
-      areaGradient.append('stop').attr('offset', '100%').attr('stop-color', '#4682B4').attr('stop-opacity', 0.1)
+        .attr('y2', '100%');
+      areaGradient.append('stop').attr('offset', '0%').attr('stop-color', '#4682B4').attr('stop-opacity', 0.7);
+      areaGradient.append('stop').attr('offset', '100%').attr('stop-color', '#4682B4').attr('stop-opacity', 0.1);
 
       const lineGradient = defs
         .append('linearGradient')
@@ -371,41 +371,41 @@ export default {
         .attr('x1', '0%')
         .attr('y1', '0%')
         .attr('x2', '100%')
-        .attr('y2', '0%')
-      lineGradient.append('stop').attr('offset', '0%').attr('stop-color', '#5b9bd5')
-      lineGradient.append('stop').attr('offset', '100%').attr('stop-color', '#3a6da0')
+        .attr('y2', '0%');
+      lineGradient.append('stop').attr('offset', '0%').attr('stop-color', '#5b9bd5');
+      lineGradient.append('stop').attr('offset', '100%').attr('stop-color', '#3a6da0');
 
       const data = this.chartData
         .map((d) => ({
           timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
           dateLabel: d.dateLabel || '',
           value: d.value,
-          userCount: d.userCount,
+          userCount: d.userCount
         }))
-        .sort((a, b) => a.timestamp - b.timestamp)
+        .sort((a, b) => a.timestamp - b.timestamp);
 
       const xBand = d3
         .scaleBand()
         .domain(data.map((d) => d.timestamp))
         .range([0, width])
-        .padding(0.1)
+        .padding(0.1);
 
       const xTime = d3
         .scaleTime()
         .range([0, width])
-        .domain(d3.extent(data, (d) => d.timestamp))
+        .domain(d3.extent(data, (d) => d.timestamp));
 
       const yLeft = d3
         .scaleLinear()
         .range([height, 0])
         .domain([0, d3.max(data, (d) => d.value) * 1.1])
-        .nice()
+        .nice();
 
       const yRight = d3
         .scaleLinear()
         .range([height, 0])
         .domain([0, d3.max(data, (d) => d.userCount) * 1.2])
-        .nice()
+        .nice();
 
       mainGroup
         .append('g')
@@ -414,7 +414,7 @@ export default {
         .call(d3.axisBottom(xTime).tickSize(-height).tickFormat(''))
         .selectAll('line')
         .attr('stroke', gridColor)
-        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none')
+        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none');
 
       mainGroup
         .append('g')
@@ -422,11 +422,11 @@ export default {
         .call(d3.axisLeft(yLeft).tickSize(-width).tickFormat(''))
         .selectAll('line')
         .attr('stroke', gridColor)
-        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none')
+        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none');
 
-      mainGroup.selectAll('.grid .domain').attr('stroke', 'none')
+      mainGroup.selectAll('.grid .domain').attr('stroke', 'none');
 
-      const barWidth = Math.max(1, xBand.bandwidth())
+      const barWidth = Math.max(1, xBand.bandwidth());
 
       const bars = mainGroup
         .selectAll('.bar-group')
@@ -434,7 +434,7 @@ export default {
         .enter()
         .append('g')
         .attr('class', 'bar-group')
-        .attr('transform', (d) => `translate(${xBand(d.timestamp)},0)`)
+        .attr('transform', (d) => `translate(${xBand(d.timestamp)},0)`);
 
       bars
         .append('rect')
@@ -446,7 +446,7 @@ export default {
         .attr('rx', 1)
         .attr('ry', 1)
         .style('filter', 'url(#drop-shadow)')
-        .style('opacity', 0.85)
+        .style('opacity', 0.85);
 
       bars
         .append('rect')
@@ -455,14 +455,14 @@ export default {
         .attr('y', (d) => yLeft(d.value))
         .attr('fill', '#ffffff')
         .attr('opacity', 0.5)
-        .attr('rx', 1)
+        .attr('rx', 1);
 
       const area = d3
         .area()
         .x((d) => xTime(d.timestamp))
         .y0(height)
         .y1((d) => yRight(d.userCount))
-        .curve(d3.curveCardinal.tension(0.5))
+        .curve(d3.curveCardinal.tension(0.5));
 
       mainGroup
         .append('path')
@@ -470,13 +470,13 @@ export default {
         .attr('class', 'area')
         .attr('fill', 'url(#area-gradient)')
         .attr('d', area)
-        .attr('opacity', 0.4)
+        .attr('opacity', 0.4);
 
       const line = d3
         .line()
         .x((d) => xTime(d.timestamp))
         .y((d) => yRight(d.userCount))
-        .curve(d3.curveCardinal.tension(0.5))
+        .curve(d3.curveCardinal.tension(0.5));
 
       mainGroup
         .append('path')
@@ -487,7 +487,7 @@ export default {
         .attr('stroke-width', 1.5)
         .attr('stroke-opacity', 0.2)
         .attr('d', line)
-        .attr('transform', 'translate(1,1)')
+        .attr('transform', 'translate(1,1)');
 
       mainGroup
         .append('path')
@@ -496,7 +496,7 @@ export default {
         .attr('fill', 'none')
         .attr('stroke', 'url(#line-gradient)')
         .attr('stroke-width', 1.5)
-        .attr('d', line)
+        .attr('d', line);
 
       mainGroup
         .selectAll('.dot-shadow')
@@ -507,7 +507,7 @@ export default {
         .attr('cx', (d) => xTime(d.timestamp) + 1)
         .attr('cy', (d) => yRight(d.userCount) + 1)
         .attr('r', 3)
-        .attr('fill', 'rgba(0,0,0,0.2)')
+        .attr('fill', 'rgba(0,0,0,0.2)');
 
       mainGroup
         .selectAll('.dot')
@@ -520,22 +520,22 @@ export default {
         .attr('r', 2.5)
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#ffffff')
-        .attr('stroke-width', 1)
+        .attr('stroke-width', 1);
 
       const xAxis = d3
         .axisBottom(xTime)
         .ticks(d3.timeDay.every(Math.ceil(data.length / 12)))
         .tickFormat((d) => {
-          const month = d.toLocaleString(this.$i18n.locale, { month: 'short' })
-          const day = d.getDate()
-          return `${month} ${day}`
-        })
+          const month = d.toLocaleString(this.$i18n.locale, { month: 'short' });
+          const day = d.getDate();
+          return `${month} ${day}`;
+        });
 
       const xAxisGroup = mainGroup
         .append('g')
         .attr('class', 'x-axis')
         .attr('transform', `translate(0,${height})`)
-        .call(xAxis)
+        .call(xAxis);
 
       xAxisGroup
         .selectAll('text')
@@ -545,28 +545,32 @@ export default {
         .style('fill', textColor)
         .attr('dx', '-.8em')
         .attr('dy', '.15em')
-        .attr('transform', 'rotate(-45)')
+        .attr('transform', 'rotate(-45)');
 
-      xAxisGroup.selectAll('path').attr('stroke', borderColor)
-      xAxisGroup.selectAll('line').attr('stroke', borderColor)
+      xAxisGroup.selectAll('path').attr('stroke', borderColor);
+      xAxisGroup.selectAll('line').attr('stroke', borderColor);
 
-      const yAxisLeftGroup = mainGroup.append('g').attr('class', 'y-axis-left').call(d3.axisLeft(yLeft).ticks(5))
+      const yAxisLeftGroup = mainGroup.append('g').attr('class', 'y-axis-left').call(d3.axisLeft(yLeft).ticks(5));
 
-      yAxisLeftGroup.selectAll('text').style('font-weight', 'bold').style('font-size', '11px').style('fill', textColor)
+      yAxisLeftGroup.selectAll('text').style('font-weight', 'bold').style('font-size', '11px').style('fill', textColor);
 
-      yAxisLeftGroup.selectAll('path').attr('stroke', borderColor)
-      yAxisLeftGroup.selectAll('line').attr('stroke', borderColor)
+      yAxisLeftGroup.selectAll('path').attr('stroke', borderColor);
+      yAxisLeftGroup.selectAll('line').attr('stroke', borderColor);
 
       const yAxisRightGroup = mainGroup
         .append('g')
         .attr('class', 'y-axis-right')
         .attr('transform', `translate(${width},0)`)
-        .call(d3.axisRight(yRight).ticks(5))
+        .call(d3.axisRight(yRight).ticks(5));
 
-      yAxisRightGroup.selectAll('text').style('font-weight', 'bold').style('font-size', '11px').style('fill', textColor)
+      yAxisRightGroup
+        .selectAll('text')
+        .style('font-weight', 'bold')
+        .style('font-size', '11px')
+        .style('fill', textColor);
 
-      yAxisRightGroup.selectAll('path').attr('stroke', borderColor)
-      yAxisRightGroup.selectAll('line').attr('stroke', borderColor)
+      yAxisRightGroup.selectAll('path').attr('stroke', borderColor);
+      yAxisRightGroup.selectAll('line').attr('stroke', borderColor);
 
       mainGroup
         .append('text')
@@ -576,14 +580,14 @@ export default {
         .attr('font-size', '14px')
         .attr('font-weight', 'bold')
         .attr('fill', textColor)
-        .text(this.$t('charts.usageTrend'))
+        .text(this.$t('charts.usageTrend'));
 
       const legendBox = mainGroup
         .append('g')
         .attr('class', 'legend-box')
-        .attr('transform', `translate(${width / 2 - 170}, -15)`)
+        .attr('transform', `translate(${width / 2 - 170}, -15)`);
 
-      const legend = legendBox.append('g').attr('class', 'legend')
+      const legend = legendBox.append('g').attr('class', 'legend');
 
       legend
         .append('rect')
@@ -593,7 +597,7 @@ export default {
         .attr('height', 10)
         .attr('fill', 'url(#bar-gradient)')
         .attr('rx', 1)
-        .attr('ry', 1)
+        .attr('ry', 1);
 
       legend
         .append('text')
@@ -603,7 +607,7 @@ export default {
         .style('font-size', '12px')
         .style('font-weight', 'bold')
         .attr('fill', textColor)
-        .text(this.$t('charts.tooltip.totalQueries'))
+        .text(this.$t('charts.tooltip.totalQueries'));
 
       legend
         .append('line')
@@ -612,7 +616,7 @@ export default {
         .attr('x2', 200)
         .attr('y2', 0)
         .attr('stroke', '#5b9bd5')
-        .attr('stroke-width', 1.5)
+        .attr('stroke-width', 1.5);
 
       legend
         .append('circle')
@@ -621,7 +625,7 @@ export default {
         .attr('r', 2.5)
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#fff')
-        .attr('stroke-width', 1)
+        .attr('stroke-width', 1);
 
       legend
         .append('text')
@@ -631,7 +635,7 @@ export default {
         .style('font-size', '12px')
         .style('font-weight', 'bold')
         .attr('fill', textColor)
-        .text(this.$t('charts.tooltip.uniqueUsers'))
+        .text(this.$t('charts.tooltip.uniqueUsers'));
 
       if (d3.select('body').select('.d3-tooltip').empty()) {
         d3.select('body')
@@ -646,7 +650,7 @@ export default {
           .style('box-shadow', '0 3px 14px rgba(0,0,0,0.4)')
           .style('pointer-events', 'none')
           .style('opacity', 0)
-          .style('z-index', 1000)
+          .style('z-index', 1000);
       }
 
       const verticalLine = mainGroup
@@ -657,7 +661,7 @@ export default {
         .attr('stroke', borderColor)
         .attr('stroke-width', 1)
         .attr('stroke-dasharray', '3,3')
-        .style('opacity', 0)
+        .style('opacity', 0);
 
       const hoverDotLeft = mainGroup
         .append('circle')
@@ -666,7 +670,7 @@ export default {
         .attr('fill', 'url(#bar-gradient)')
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
-        .style('opacity', 0)
+        .style('opacity', 0);
 
       const hoverDotRight = mainGroup
         .append('circle')
@@ -675,7 +679,7 @@ export default {
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#fff')
         .attr('stroke-width', 1)
-        .style('opacity', 0)
+        .style('opacity', 0);
 
       mainGroup
         .append('rect')
@@ -684,34 +688,34 @@ export default {
         .style('fill', 'none')
         .style('pointer-events', 'all')
         .on('mouseover', () => {
-          d3.select('.d3-tooltip').style('opacity', 0.9)
-          verticalLine.style('opacity', 1)
-          hoverDotLeft.style('opacity', 1)
-          hoverDotRight.style('opacity', 1)
+          d3.select('.d3-tooltip').style('opacity', 0.9);
+          verticalLine.style('opacity', 1);
+          hoverDotLeft.style('opacity', 1);
+          hoverDotRight.style('opacity', 1);
         })
         .on('mouseout', () => {
-          d3.select('.d3-tooltip').style('opacity', 0)
-          verticalLine.style('opacity', 0)
-          hoverDotLeft.style('opacity', 0)
-          hoverDotRight.style('opacity', 0)
+          d3.select('.d3-tooltip').style('opacity', 0);
+          verticalLine.style('opacity', 0);
+          hoverDotLeft.style('opacity', 0);
+          hoverDotRight.style('opacity', 0);
         })
         .on('mousemove', (event) => {
-          const mouseX = d3.pointer(event)[0]
-          const bisect = d3.bisector((d) => d.timestamp).left
-          const x0 = xTime.invert(mouseX)
-          const i = bisect(data, x0, 1)
-          if (i === 0 || i >= data.length) return
+          const mouseX = d3.pointer(event)[0];
+          const bisect = d3.bisector((d) => d.timestamp).left;
+          const x0 = xTime.invert(mouseX);
+          const i = bisect(data, x0, 1);
+          if (i === 0 || i >= data.length) return;
 
-          const d0 = data[i - 1]
-          const d1 = data[i]
-          const d = x0 - d0.timestamp > d1.timestamp - x0 ? d1 : d0
+          const d0 = data[i - 1];
+          const d1 = data[i];
+          const d = x0 - d0.timestamp > d1.timestamp - x0 ? d1 : d0;
 
-          verticalLine.attr('x1', xTime(d.timestamp)).attr('x2', xTime(d.timestamp))
-          hoverDotLeft.attr('cx', xBand(d.timestamp) + barWidth / 2).attr('cy', yLeft(d.value))
-          hoverDotRight.attr('cx', xTime(d.timestamp)).attr('cy', yRight(d.userCount))
+          verticalLine.attr('x1', xTime(d.timestamp)).attr('x2', xTime(d.timestamp));
+          hoverDotLeft.attr('cx', xBand(d.timestamp) + barWidth / 2).attr('cy', yLeft(d.value));
+          hoverDotRight.attr('cx', xTime(d.timestamp)).attr('cy', yRight(d.userCount));
 
-          const totalQueriesLabel = this.$t('charts.tooltip.totalQueries')
-          const uniqueUsersLabel = this.$t('charts.tooltip.uniqueUsers')
+          const totalQueriesLabel = this.$t('charts.tooltip.totalQueries');
+          const uniqueUsersLabel = this.$t('charts.tooltip.uniqueUsers');
 
           const tooltipContent = `
         <div style="margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">
@@ -725,18 +729,18 @@ export default {
           <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: #5b9bd5; border-radius: 50%; vertical-align: middle;"></span>
           ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(this.$i18n.locale)}</strong>
         </div>
-      `
+      `;
 
           d3.select('.d3-tooltip')
             .html(tooltipContent)
             .style('left', event.pageX + 15 + 'px')
-            .style('top', event.pageY - 60 + 'px')
-        })
+            .style('top', event.pageY - 60 + 'px');
+        });
 
-      this.forceAxisTextColor()
-    },
-  },
-}
+      this.forceAxisTextColor();
+    }
+  }
+};
 </script>
 
 <style scoped>

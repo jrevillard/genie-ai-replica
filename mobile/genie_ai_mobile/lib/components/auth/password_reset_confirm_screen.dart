@@ -23,8 +23,9 @@ class _PasswordResetConfirmScreenState
 
   Future<void> _handleReset() async {
     if (_password.text != _confirm.text) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('passwordResetConfirm.passwordsDoNotMatch'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr('passwordResetConfirm.passwordsDoNotMatch'))),
+      );
       return;
     }
     setState(() => _isLoading = true);
@@ -35,8 +36,11 @@ class _PasswordResetConfirmScreenState
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("${tr('passwordResetConfirm.resetFailed')}: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("${tr('passwordResetConfirm.resetFailed')}: $e"),
+        ),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
@@ -58,7 +62,8 @@ class _PasswordResetConfirmScreenState
     return FutureBuilder(
       future: GenieAiConfig.load(),
       builder: (context, snapshot) {
-        if (!GenieAiConfig.isLoaded && snapshot.connectionState != ConnectionState.done) {
+        if (!GenieAiConfig.isLoaded &&
+            snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
             backgroundColor: colors['background'],
             body: const Center(child: CircularProgressIndicator()),
@@ -71,60 +76,83 @@ class _PasswordResetConfirmScreenState
           backgroundColor: colors['background'],
           appBar: AppBar(
             // [MODIFIED] Use Dynamic Title
-            title: Text("${tr('passwordResetConfirm.resetPassword')} - ${GenieAiConfig.title}"),
+            title: Text(
+              "${tr('passwordResetConfirm.resetPassword')} - ${GenieAiConfig.title}",
+            ),
             backgroundColor: colors['background'],
             elevation: 0,
             iconTheme: IconThemeData(color: colors['text']),
             titleTextStyle: TextStyle(
-                color: colors['text'], fontSize: 20, fontWeight: FontWeight.bold),
+              color: colors['text'],
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           body: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(children: [
-              // [ADDED] Dynamic Icon Display
-              SizedBox(
-                height: 60,
-                child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-                    ? SvgPicture.asset(GenieAiConfig.iconPath, fit: BoxFit.contain)
-                    : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
-              ),
-              const SizedBox(height: 24),
-              
-              _buildTextField(_password,
-                  tr('passwordResetConfirm.newPasswordLabel'), colors, isDark),
-              const SizedBox(height: 16),
-              _buildTextField(
+            child: Column(
+              children: [
+                // [ADDED] Dynamic Icon Display
+                SizedBox(
+                  height: 60,
+                  child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
+                      ? SvgPicture.asset(
+                          GenieAiConfig.iconPath,
+                          fit: BoxFit.contain,
+                        )
+                      : Image.asset(
+                          GenieAiConfig.iconPath,
+                          fit: BoxFit.contain,
+                        ),
+                ),
+                const SizedBox(height: 24),
+
+                _buildTextField(
+                  _password,
+                  tr('passwordResetConfirm.newPasswordLabel'),
+                  colors,
+                  isDark,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
                   _confirm,
                   tr('passwordResetConfirm.confirmNewPasswordLabel'),
                   colors,
-                  isDark),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colors['primary'],
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 45),
+                  isDark,
                 ),
-                onPressed: _isLoading ? null : _handleReset,
-                child: Text(tr('passwordResetConfirm.resetButton')),
-              ),
-            ]),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colors['primary'],
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 45),
+                  ),
+                  onPressed: _isLoading ? null : _handleReset,
+                  child: Text(tr('passwordResetConfirm.resetButton')),
+                ),
+              ],
+            ),
           ),
         );
-      }
+      },
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String label,
-      Map<String, dynamic> colors, bool isDark) {
+  Widget _buildTextField(
+    TextEditingController ctrl,
+    String label,
+    Map<String, dynamic> colors,
+    bool isDark,
+  ) {
     return TextField(
       controller: ctrl,
       obscureText: true,
       style: TextStyle(color: colors['text']),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle:
-            TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+        labelStyle: TextStyle(
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
+        ),
         filled: true,
         fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -136,18 +164,26 @@ class _PasswordResetConfirmScreenState
     return Scaffold(
       backgroundColor: colors['background'],
       body: Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.check_circle, size: 80, color: Colors.green),
-          const SizedBox(height: 16),
-          Text(tr('passwordResetConfirm.resetSuccess'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle, size: 80, color: Colors.green),
+            const SizedBox(height: 16),
+            Text(
+              tr('passwordResetConfirm.resetSuccess'),
               style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: colors['text'])),
-          const SizedBox(height: 8),
-          Text(tr('passwordResetConfirm.redirecting'),
-              style: TextStyle(color: colors['text'])),
-        ]),
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: colors['text'],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr('passwordResetConfirm.redirecting'),
+              style: TextStyle(color: colors['text']),
+            ),
+          ],
+        ),
       ),
     );
   }

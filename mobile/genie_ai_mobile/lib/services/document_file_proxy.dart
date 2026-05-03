@@ -15,7 +15,8 @@ class DocumentFileProxy {
   }
 
   Future<Map<String, dynamic>> scheduleSiteCrawl(
-      Map<String, dynamic> options) async {
+    Map<String, dynamic> options,
+  ) async {
     final res = await _api.post('files/crawl/schedule', options);
     return jsonDecode(res.body);
   }

@@ -159,11 +159,13 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
       setState(() {
         _userData = {
-          "name": userMap['fullName'] ??
+          "name":
+              userMap['fullName'] ??
               userMap['name'] ??
               translate("settings.userName", "User"),
           "email": userMap['email'] ?? "",
-          "accountType": userMap['accountType'] ??
+          "accountType":
+              userMap['accountType'] ??
               userMap['role'] ??
               translate("settings.standardAccount", "Standard Account"),
           "userId": (userMap['id'] ?? userMap['_key'] ?? "").toString(),
@@ -183,13 +185,16 @@ class _SettingsComponentState extends State<SettingsComponent> {
         _isLoading = false;
       });
       debugPrint(
-          "[SETTINGS] State update complete. Current email: ${_emailController.text}");
+        "[SETTINGS] State update complete. Current email: ${_emailController.text}",
+      );
     } catch (e) {
       debugPrint("[SETTINGS] API Error in fetchUserData: $e");
       if (mounted) {
         setState(() {
           _errorMessage = translate(
-              "settings.unableToLoadUser", "Unable to load user information");
+            "settings.unableToLoadUser",
+            "Unable to load user information",
+          );
           _isLoading = false;
         });
       }
@@ -225,12 +230,21 @@ class _SettingsComponentState extends State<SettingsComponent> {
       if (!mounted) return;
       Navigator.pop(context);
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isOnline
-              ? translate(
-                  "settings.settingsSaved", "Settings saved successfully!")
-              : translate("settings.settingsSavedOffline",
-                  "Settings saved locally (Offline Mode)"))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isOnline
+                ? translate(
+                    "settings.settingsSaved",
+                    "Settings saved successfully!",
+                  )
+                : translate(
+                    "settings.settingsSavedOffline",
+                    "Settings saved locally (Offline Mode)",
+                  ),
+          ),
+        ),
+      );
     } catch (e) {
       debugPrint("[SETTINGS] Save operation failed: $e");
       if (mounted) setState(() => _isLoading = false);
@@ -259,8 +273,12 @@ class _SettingsComponentState extends State<SettingsComponent> {
     final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
     if (!emailRegex.hasMatch(_emailController.text)) {
       debugPrint("[SETTINGS] Email validation failed for format.");
-      setState(() => _emailError = translate("settings.enterValidEmail",
-          "Enter valid email")); // USING _emailError
+      setState(
+        () => _emailError = translate(
+          "settings.enterValidEmail",
+          "Enter valid email",
+        ),
+      ); // USING _emailError
       return;
     }
 
@@ -270,7 +288,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
     }
 
     setState(
-        () => _showEmailConfirmModal = true); // USING _showEmailConfirmModal
+      () => _showEmailConfirmModal = true,
+    ); // USING _showEmailConfirmModal
     _renderEmailConfirmModalUI();
   }
 
@@ -281,23 +300,29 @@ class _SettingsComponentState extends State<SettingsComponent> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(
-            translate("settings.confirmEmailChange", "Confirm Email Change")),
+          translate("settings.confirmEmailChange", "Confirm Email Change"),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_emailChangeError != null) // USING _emailChangeError
-              Text(_emailChangeError!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12)),
+              Text(
+                _emailChangeError!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
             Text(
-                "${translate("settings.changingEmailTo", "Changing email to")} ${_emailController.text} will log you out."),
+              "${translate("settings.changingEmailTo", "Changing email to")} ${_emailController.text} will log you out.",
+            ),
             const SizedBox(height: 20),
             TextField(
               controller: _emailChangePasswordController,
               obscureText: true,
               decoration: InputDecoration(
-                labelText: translate("settings.enterPasswordConfirm",
-                    "Enter password to confirm"),
+                labelText: translate(
+                  "settings.enterPasswordConfirm",
+                  "Enter password to confirm",
+                ),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -305,15 +330,16 @@ class _SettingsComponentState extends State<SettingsComponent> {
         ),
         actions: [
           TextButton(
-              onPressed: () {
-                setState(() => _showEmailConfirmModal = false);
-                Navigator.pop(ctx);
-              },
-              child: Text(translate("settings.cancel", "Cancel"))),
+            onPressed: () {
+              setState(() => _showEmailConfirmModal = false);
+              Navigator.pop(ctx);
+            },
+            child: Text(translate("settings.cancel", "Cancel")),
+          ),
           ElevatedButton(
-              onPressed: () => _finalizeEmailChange(ctx),
-              child:
-                  Text(translate("settings.confirmChange", "Confirm Change"))),
+            onPressed: () => _finalizeEmailChange(ctx),
+            child: Text(translate("settings.confirmChange", "Confirm Change")),
+          ),
         ],
       ),
     );
@@ -322,8 +348,11 @@ class _SettingsComponentState extends State<SettingsComponent> {
   Future<void> _finalizeEmailChange(BuildContext dialogCtx) async {
     setState(() => _isEmailUpdating = true); // USING _isEmailUpdating
     try {
-      await _userService.updateEmail(_emailController.text,
-          _emailChangePasswordController.text, _currentUserId);
+      await _userService.updateEmail(
+        _emailController.text,
+        _emailChangePasswordController.text,
+        _currentUserId,
+      );
       await _userService.logout();
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
@@ -332,8 +361,10 @@ class _SettingsComponentState extends State<SettingsComponent> {
       if (mounted) {
         setState(() {
           _isEmailUpdating = false;
-          _emailChangeError = translate("settings.updateFailed",
-              "Update failed. Please verify your password.");
+          _emailChangeError = translate(
+            "settings.updateFailed",
+            "Update failed. Please verify your password.",
+          );
         });
       }
     }
@@ -344,24 +375,31 @@ class _SettingsComponentState extends State<SettingsComponent> {
   // ===========================================================================
 
   void _initiateAccountDeletionFlow() {
-    setState(() =>
-        _showDeleteAccountConfirm = true); // USING _showDeleteAccountConfirm
+    setState(
+      () => _showDeleteAccountConfirm = true,
+    ); // USING _showDeleteAccountConfirm
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(translate("settings.deleteAccountTitle", "Delete Account")),
-        content: Text(translate("settings.deleteAccountConfirmation",
-            "Are you sure you want to delete your account? This action is permanent.")),
+        content: Text(
+          translate(
+            "settings.deleteAccountConfirmation",
+            "Are you sure you want to delete your account? This action is permanent.",
+          ),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(translate("settings.cancel", "Cancel"))),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(translate("settings.cancel", "Cancel")),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _showDeleteAccountModal =
-                  true); // USING _showDeleteAccountModal
+              setState(
+                () => _showDeleteAccountModal = true,
+              ); // USING _showDeleteAccountModal
               _renderDeletionPasswordUI();
             },
             child: Text(translate("common.continue", "Continue")),
@@ -376,60 +414,84 @@ class _SettingsComponentState extends State<SettingsComponent> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(translate(
-            "settings.confirmAccountDeletion", "Final Security Check")),
+        title: Text(
+          translate("settings.confirmAccountDeletion", "Final Security Check"),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_deleteAccountError != null) // USING _deleteAccountError
-              Text(_deleteAccountError!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12)),
-            Text(translate("settings.accountDeletionWarning",
-                "Warning: All data will be wiped permanently.")),
+              Text(
+                _deleteAccountError!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            Text(
+              translate(
+                "settings.accountDeletionWarning",
+                "Warning: All data will be wiped permanently.",
+              ),
+            ),
             const SizedBox(height: 16),
             TextField(
-                controller: _deleteAccountReasonController,
-                decoration: InputDecoration(
-                    labelText: translate(
-                        "settings.deletionReason", "Reason (optional)"))),
+              controller: _deleteAccountReasonController,
+              decoration: InputDecoration(
+                labelText: translate(
+                  "settings.deletionReason",
+                  "Reason (optional)",
+                ),
+              ),
+            ),
             const SizedBox(height: 12),
             TextField(
-                controller: _deleteAccountPasswordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                    labelText: translate("settings.enterPasswordConfirm",
-                        "Enter Password to Confirm"))),
+              controller: _deleteAccountPasswordController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: translate(
+                  "settings.enterPasswordConfirm",
+                  "Enter Password to Confirm",
+                ),
+              ),
+            ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () {
-                setState(() => _showDeleteAccountModal = false);
-                Navigator.pop(ctx);
-              },
-              child: Text(translate("settings.cancel", "Cancel"))),
+            onPressed: () {
+              setState(() => _showDeleteAccountModal = false);
+              Navigator.pop(ctx);
+            },
+            child: Text(translate("settings.cancel", "Cancel")),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               setState(
-                  () => _isDeletingAccount = true); // USING _isDeletingAccount
+                () => _isDeletingAccount = true,
+              ); // USING _isDeletingAccount
               try {
                 await _userService.deleteAccount(
-                    _deleteAccountPasswordController.text,
-                    reason: _deleteAccountReasonController.text);
+                  _deleteAccountPasswordController.text,
+                  reason: _deleteAccountReasonController.text,
+                );
                 if (mounted)
                   Navigator.pushNamedAndRemoveUntil(
-                      context, '/login', (r) => false);
+                    context,
+                    '/login',
+                    (r) => false,
+                  );
               } catch (e) {
                 setState(() {
                   _isDeletingAccount = false;
-                  _deleteAccountError = translate("settings.deletionFailed",
-                      "Deletion failed. Incorrect password.");
+                  _deleteAccountError = translate(
+                    "settings.deletionFailed",
+                    "Deletion failed. Incorrect password.",
+                  );
                 });
               }
             },
-            child: Text(translate(
-                "settings.permanentlyDeleteAccount", "Delete Account")),
+            child: Text(
+              translate("settings.permanentlyDeleteAccount", "Delete Account"),
+            ),
           ),
         ],
       ),
@@ -441,14 +503,20 @@ class _SettingsComponentState extends State<SettingsComponent> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title:
-            Text(translate("settings.resetUserDataTitle", "Reset User Data")),
-        content: Text(translate("settings.confirmResetUserData",
-            "This will clear all profile information and chat history. Continue?")),
+        title: Text(
+          translate("settings.resetUserDataTitle", "Reset User Data"),
+        ),
+        content: Text(
+          translate(
+            "settings.confirmResetUserData",
+            "This will clear all profile information and chat history. Continue?",
+          ),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(translate("settings.cancel", "Cancel"))),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(translate("settings.cancel", "Cancel")),
+          ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -476,8 +544,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
     final bool previewIsDark = _selectedTheme == 'dark';
 
     // Retrieve theme data corresponding to the SELECTION (Preview), not the current app state
-    final ThemeData previewTheme =
-        previewIsDark ? ThemeManager().darkTheme : ThemeManager().lightTheme;
+    final ThemeData previewTheme = previewIsDark
+        ? ThemeManager().darkTheme
+        : ThemeManager().lightTheme;
 
     // Config-driven colors
     final Color bgColor = previewTheme.scaffoldBackgroundColor;
@@ -492,8 +561,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
     if (_isLoading) {
       return Container(
-          color: bgColor,
-          child: Center(child: CircularProgressIndicator(color: primaryColor)));
+        color: bgColor,
+        child: Center(child: CircularProgressIndicator(color: primaryColor)),
+      );
     }
 
     if (_errorMessage != null) {
@@ -507,52 +577,64 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
     // REFRESH: Using StreamBuilder to make Settings reactive to Connectivity
     return StreamBuilder<bool>(
-        stream: ConnectivityService().isOnlineStream,
-        initialData: ConnectivityService().isOnline,
-        builder: (context, snapshot) {
-          final bool isOnline = snapshot.data ?? true;
+      stream: ConnectivityService().isOnlineStream,
+      initialData: ConnectivityService().isOnline,
+      builder: (context, snapshot) {
+        final bool isOnline = snapshot.data ?? true;
 
-          // FIX: Wrapped in MediaQuery with TextScaler to enable real-time font scaling preview
-          return MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(_fontSize / 50.0)),
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(16))),
-                child: Column(
-                  children: [
-                    _buildStickyHeader(primaryColor, titleColor, previewIsDark),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        // UPDATED: Reduced padding for handset screens
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            _buildIdentitySection(primaryColor, titleColor),
-                            const SizedBox(height: 16),
-                            // FIX: Using vertical stack prevents RenderFlex overflows and enables Language Selector visibility
-                            _buildVerticalConfigurationStack(primaryColor,
-                                titleColor, boxBg, previewTheme.cardColor,
-                                isOnline: isOnline),
-                            const SizedBox(height: 16),
-                            _buildAccountManagement(
-                                primaryColor, titleColor, previewIsDark, boxBg,
-                                isOnline: isOnline),
-                            const SizedBox(height: 60),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+        // FIX: Wrapped in MediaQuery with TextScaler to enable real-time font scaling preview
+        return MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(_fontSize / 50.0)),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
                 ),
               ),
+              child: Column(
+                children: [
+                  _buildStickyHeader(primaryColor, titleColor, previewIsDark),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      // UPDATED: Reduced padding for handset screens
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          _buildIdentitySection(primaryColor, titleColor),
+                          const SizedBox(height: 16),
+                          // FIX: Using vertical stack prevents RenderFlex overflows and enables Language Selector visibility
+                          _buildVerticalConfigurationStack(
+                            primaryColor,
+                            titleColor,
+                            boxBg,
+                            previewTheme.cardColor,
+                            isOnline: isOnline,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildAccountManagement(
+                            primaryColor,
+                            titleColor,
+                            previewIsDark,
+                            boxBg,
+                            isOnline: isOnline,
+                          ),
+                          const SizedBox(height: 60),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          );
-        });
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildStickyHeader(Color accent, Color titleColor, bool isDark) {
@@ -560,20 +642,24 @@ class _SettingsComponentState extends State<SettingsComponent> {
       // UPDATED: Reduced padding for handset screens
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-          border: Border(
-              bottom:
-                  BorderSide(color: isDark ? Colors.white10 : Colors.black12))),
+        border: Border(
+          bottom: BorderSide(color: isDark ? Colors.white10 : Colors.black12),
+        ),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // UPDATED: Wrapped title in Flexible to prevent overflow on long translations
           Flexible(
-            child: Text(translate("settings.title", "Settings"),
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor)),
+            child: Text(
+              translate("settings.title", "Settings"),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: titleColor,
+              ),
+            ),
           ),
           // FIXED: Wrapped buttons Row in Flexible to prevent overflow
           Flexible(
@@ -593,23 +679,27 @@ class _SettingsComponentState extends State<SettingsComponent> {
                 // FIXED: Wrapped TextButton in Flexible to handle long translations
                 Flexible(
                   child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(
-                        translate("settings.close", "Close"),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      )),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      translate("settings.close", "Close"),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 4),
                 // FIXED: Wrapped ElevatedButton in Flexible to handle long translations
                 Flexible(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: accent,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        minimumSize: const Size(60, 36)),
+                      backgroundColor: accent,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      minimumSize: const Size(60, 36),
+                    ),
                     onPressed: _handleSave,
                     child: Text(
                       translate("settings.saveSettings", "Save"),
@@ -630,8 +720,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
   Widget _buildIdentitySection(Color accent, Color titleColor) {
     final String rawName =
         _userData['name'] ?? translate("settings.userName", "User");
-    final String name =
-        rawName.isEmpty ? translate("settings.userName", "User") : rawName;
+    final String name = rawName.isEmpty
+        ? translate("settings.userName", "User")
+        : rawName;
 
     // FIX: Robust type-safe initials logic to resolve dynamic mapping TypeError on Web
     String initials = "?";
@@ -640,7 +731,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
       if (parts.isNotEmpty && parts[0].isNotEmpty) {
         initials = parts.length > 1
             ? (parts[0].substring(0, 1) + parts.last.substring(0, 1))
-                .toUpperCase()
+                  .toUpperCase()
             : parts[0].substring(0, 1).toUpperCase();
       }
     }
@@ -648,32 +739,44 @@ class _SettingsComponentState extends State<SettingsComponent> {
     return Row(
       children: [
         CircleAvatar(
-            radius: 34,
-            backgroundColor: accent,
-            child: Text(initials,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold))),
+          radius: 34,
+          backgroundColor: accent,
+          child: Text(
+            initials,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name,
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: titleColor)),
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: titleColor,
+                ),
+              ),
               // BUG FIX: Rendering hydrated email state
-              Text(_userData['email'],
-                  style: const TextStyle(color: Colors.grey, fontSize: 14)),
+              Text(
+                _userData['email'],
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
+              ),
               const SizedBox(height: 4),
-              Text(_userData['accountType'],
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: accent)),
+              Text(
+                _userData['accountType'],
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: accent,
+                ),
+              ),
             ],
           ),
         ),
@@ -683,114 +786,159 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
   // FIX: Stacking configuration elements vertically gives the Language Selector full width
   Widget _buildVerticalConfigurationStack(
-      Color accent, Color titleColor, Color boxBg, Color dropdownBg,
-      {required bool isOnline}) {
+    Color accent,
+    Color titleColor,
+    Color boxBg,
+    Color dropdownBg, {
+    required bool isOnline,
+  }) {
     return Column(
       children: [
         _buildThemedGroupBox(
-            translate("settings.display", "Display"), boxBg, titleColor, [
-          _buildItemLabel(
-              translate("settings.displayLanguage", "Display Language")),
-          // UPDATED: Passing titleColor ensures text is visible.
-          // UPDATED: Passing dropdownBg ensures menu background matches dialog theme.
-          LanguageSelector(textColor: titleColor, dropdownColor: dropdownBg),
-          const SizedBox(height: 20),
-          _buildItemLabel(translate("settings.theme", "Theme")),
-          _buildThemeButtonRow(accent),
-          const SizedBox(height: 20),
-          _buildItemLabel(translate("settings.fontSize", "Font Size")),
-          _buildFontSizeSliderControl(accent, titleColor),
-        ]),
+          translate("settings.display", "Display"),
+          boxBg,
+          titleColor,
+          [
+            _buildItemLabel(
+              translate("settings.displayLanguage", "Display Language"),
+            ),
+            // UPDATED: Passing titleColor ensures text is visible.
+            // UPDATED: Passing dropdownBg ensures menu background matches dialog theme.
+            LanguageSelector(textColor: titleColor, dropdownColor: dropdownBg),
+            const SizedBox(height: 20),
+            _buildItemLabel(translate("settings.theme", "Theme")),
+            _buildThemeButtonRow(accent),
+            const SizedBox(height: 20),
+            _buildItemLabel(translate("settings.fontSize", "Font Size")),
+            _buildFontSizeSliderControl(accent, titleColor),
+          ],
+        ),
         const SizedBox(height: 16),
         _buildThemedGroupBox(
-            translate("settings.notifications", "Notifications"),
-            boxBg,
-            titleColor, [
-          // FIX: Passing accent color for switch
-          // UPDATED: Disabled if OFFLINE
-          _buildToggleRow(
+          translate("settings.notifications", "Notifications"),
+          boxBg,
+          titleColor,
+          [
+            // FIX: Passing accent color for switch
+            // UPDATED: Disabled if OFFLINE
+            _buildToggleRow(
               translate("settings.emailUpdates", "Email Updates"),
               _emailUpdates,
               isOnline ? (v) => setState(() => _emailUpdates = v) : null,
-              accent),
-          const SizedBox(height: 16),
-          // FIX: Passing accent color for switch
-          _buildToggleRow(
+              accent,
+            ),
+            const SizedBox(height: 16),
+            // FIX: Passing accent color for switch
+            _buildToggleRow(
               translate("settings.soundNotifications", "Sound Notifications"),
               _soundNotifications,
               (v) => setState(() => _soundNotifications = v),
-              accent),
-        ]),
+              accent,
+            ),
+          ],
+        ),
       ],
     );
   }
 
   Widget _buildAccountManagement(
-      Color accent, Color titleColor, bool isDark, Color boxBg,
-      {required bool isOnline}) {
+    Color accent,
+    Color titleColor,
+    bool isDark,
+    Color boxBg, {
+    required bool isOnline,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(translate("settings.accountManagement", "Account Management"),
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold, color: titleColor)),
+        Text(
+          translate("settings.accountManagement", "Account Management"),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: titleColor,
+          ),
+        ),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-              color: boxBg, borderRadius: BorderRadius.circular(10)),
+            color: boxBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
           // UPDATED: Changed Row to Column to stack Email and Password sections vertically on handset
           child: Column(
             children: [
               // 1. Email Section
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(translate("settings.emailAddress", "Email Address"),
-                    style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                if (_emailError != null) // USING _emailError
-                  Text(_emailError!,
-                      style: const TextStyle(color: Colors.red, fontSize: 11)),
-                const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(
-                      child: TextField(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    translate("settings.emailAddress", "Email Address"),
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  if (_emailError != null) // USING _emailError
+                    Text(
+                      _emailError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 11),
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
                           controller: _emailController,
-                          enabled: _isEditingEmail &&
+                          enabled:
+                              _isEditingEmail &&
                               isOnline, // Wired to toggle state & ONLINE
                           style: TextStyle(
-                              color: titleColor), // Dynamic text color
+                            color: titleColor,
+                          ), // Dynamic text color
                           decoration: InputDecoration(
-                              filled: true,
-                              // FIX: Logic to blend background when not editing
-                              fillColor: _isEditingEmail
-                                  ? (isDark
+                            filled: true,
+                            // FIX: Logic to blend background when not editing
+                            fillColor: _isEditingEmail
+                                ? (isDark
                                       ? Colors.white.withOpacity(0.1)
                                       : Colors.white)
-                                  : Colors.transparent,
-                              border: const OutlineInputBorder(
-                                  borderSide: BorderSide.none)))),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accent, // Primary Color
-                        foregroundColor: Colors.white, // White Text
-                        // DISABLED VISUALLY IF OFFLINE
-                        disabledBackgroundColor: Colors.grey.withOpacity(0.3),
+                                : Colors.transparent,
+                            border: const OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
                       ),
-                      // UPDATED: Disable edit button if offline
-                      onPressed: isOnline ? _handleEmailToggle : null,
-                      child: Text(_isEditingEmail
-                          ? translate("common.save", "Save")
-                          : translate("common.edit", "Edit"))),
-                ]),
-              ]),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accent, // Primary Color
+                          foregroundColor: Colors.white, // White Text
+                          // DISABLED VISUALLY IF OFFLINE
+                          disabledBackgroundColor: Colors.grey.withOpacity(0.3),
+                        ),
+                        // UPDATED: Disable edit button if offline
+                        onPressed: isOnline ? _handleEmailToggle : null,
+                        child: Text(
+                          _isEditingEmail
+                              ? translate("common.save", "Save")
+                              : translate("common.edit", "Edit"),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
               const SizedBox(height: 24), // Vertical spacing between sections
-
               // 2. Password Section
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(translate("settings.password", "Password"),
-                    style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                const SizedBox(height: 8),
-                ElevatedButton(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    translate("settings.password", "Password"),
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       backgroundColor: accent, // Primary Color
@@ -800,33 +948,44 @@ class _SettingsComponentState extends State<SettingsComponent> {
                     ),
                     // UPDATED: Disable password change if offline
                     onPressed: isOnline ? _renderPasswordResetOverlay : null,
-                    child: Text(translate(
-                        "settings.changePassword", "Change Password"))),
-              ]),
+                    child: Text(
+                      translate("settings.changePassword", "Change Password"),
+                    ),
+                  ),
+                ],
+              ),
 
               const SizedBox(height: 32),
 
               // 3. Danger Zone (Stacked Vertically for Mobile Safety)
-              Column(children: [
-                _buildActionBtnCard(
+              Column(
+                children: [
+                  _buildActionBtnCard(
                     translate("settings.resetUserData", "Reset User Data"),
                     translate(
-                        "settings.resetUserDataDesc", "Wipe chat history."),
+                      "settings.resetUserDataDesc",
+                      "Wipe chat history.",
+                    ),
                     // UPDATED: Disable if offline
                     isOnline ? _showResetDataWorkflow : null,
                     isDark,
                     // Custom Override: Darker red than delete button
-                    overrideColor: Colors.red[800]),
-                const SizedBox(height: 12),
-                _buildActionBtnCard(
+                    overrideColor: Colors.red[800],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildActionBtnCard(
                     translate("settings.deleteAccount", "Delete Account"),
                     translate(
-                        "settings.deleteAccountDesc", "Permanent deletion."),
+                      "settings.deleteAccountDesc",
+                      "Permanent deletion.",
+                    ),
                     // UPDATED: Disable if offline
                     isOnline ? _initiateAccountDeletionFlow : null,
                     isDark,
-                    isDanger: true),
-              ]),
+                    isDanger: true,
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -840,7 +999,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
   void _renderPasswordResetOverlay() {
     debugPrint(
-        "[SETTINGS] initiatePasswordChange() logic triggered. Constructing Modal...");
+      "[SETTINGS] initiatePasswordChange() logic triggered. Constructing Modal...",
+    );
     setState(() => _showPasswordReset = true); // USING _showPasswordReset
     showDialog(
       context: context,
@@ -869,102 +1029,155 @@ class _SettingsComponentState extends State<SettingsComponent> {
   // ===========================================================================
 
   Widget _buildThemedGroupBox(
-      String title, Color bg, Color titleColor, List<Widget> children) {
+    String title,
+    Color bg,
+    Color titleColor,
+    List<Widget> children,
+  ) {
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
             style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold, color: titleColor)),
-        const SizedBox(height: 18),
-        ...children,
-      ]),
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: titleColor,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...children,
+        ],
+      ),
     );
   }
 
   Widget _buildThemeButtonRow(Color accent) {
-    return Row(children: [
-      Expanded(
+    return Row(
+      children: [
+        Expanded(
           child: _buildThemeToggleBtn(
-              translate("settings.themeLight", "Light"),
-              _selectedTheme == 'light',
-              accent,
-              () => setState(() => _selectedTheme = 'light'))),
-      const SizedBox(width: 10),
-      Expanded(
+            translate("settings.themeLight", "Light"),
+            _selectedTheme == 'light',
+            accent,
+            () => setState(() => _selectedTheme = 'light'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
           child: _buildThemeToggleBtn(
-              translate("settings.themeDark", "Dark"),
-              _selectedTheme == 'dark',
-              accent,
-              () => setState(() => _selectedTheme = 'dark'))),
-    ]);
+            translate("settings.themeDark", "Dark"),
+            _selectedTheme == 'dark',
+            accent,
+            () => setState(() => _selectedTheme = 'dark'),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildThemeToggleBtn(
-      String label, bool active, Color accent, VoidCallback onTap) {
+    String label,
+    bool active,
+    Color accent,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-            color: active ? accent : Colors.grey.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(6)),
-        child: Text(label,
-            style: TextStyle(
-                color: active ? Colors.white : Colors.grey,
-                fontWeight: FontWeight.bold)),
+          color: active ? accent : Colors.grey.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? Colors.white : Colors.grey,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildFontSizeSliderControl(Color accent, Color titleColor) {
-    return Row(children: [
-      Expanded(
+    return Row(
+      children: [
+        Expanded(
           child: Slider(
-              value: _fontSize,
-              min: 30,
-              max: 100,
-              activeColor: accent,
-              onChanged: (v) => setState(() => _fontSize = v))),
-      // FIX: Real-time visual feedback mirrored from Vue rem scaling logic
-      Text("${_fontSize.toInt()}%",
+            value: _fontSize,
+            min: 30,
+            max: 100,
+            activeColor: accent,
+            onChanged: (v) => setState(() => _fontSize = v),
+          ),
+        ),
+        // FIX: Real-time visual feedback mirrored from Vue rem scaling logic
+        Text(
+          "${_fontSize.toInt()}%",
           style: TextStyle(
-              color: titleColor, fontWeight: FontWeight.bold, fontSize: 14)),
-    ]);
+            color: titleColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildToggleRow(
-      String label, bool value, Function(bool)? onChanged, Color activeColor) {
-    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      // UPDATED: Wrapped text in Expanded to prevent overflow on long translations
-      Expanded(child: Text(label, style: const TextStyle(fontSize: 14.5))),
-      Switch(
+    String label,
+    bool value,
+    Function(bool)? onChanged,
+    Color activeColor,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // UPDATED: Wrapped text in Expanded to prevent overflow on long translations
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 14.5))),
+        Switch(
           value: value,
           onChanged: onChanged,
           // FIX: Using dynamic active color instead of hardcoded hex
-          activeColor: activeColor)
-    ]);
+          activeColor: activeColor,
+        ),
+      ],
+    );
   }
 
   Widget _buildActionBtnCard(
-      String title, String desc, VoidCallback? onTap, bool isDark,
-      {bool isDanger = false, Color? overrideColor}) {
+    String title,
+    String desc,
+    VoidCallback? onTap,
+    bool isDark, {
+    bool isDanger = false,
+    Color? overrideColor,
+  }) {
     // Determine the effective background color
     // FIX: Added '!' to Colors.grey[200] to handle nullability strictness
-    final Color bgColor = overrideColor ??
+    final Color bgColor =
+        overrideColor ??
         (isDanger ? Colors.red : (isDark ? Colors.white10 : Colors.grey[200]!));
 
     // Determine the effective text color
     // If it's a "danger" button OR has an override (which implies a colored button like Dark Red), use White.
     // Otherwise use black87 (standard buttons)
-    final Color txtColor =
-        (isDanger || overrideColor != null) ? Colors.white : Colors.black87;
+    final Color txtColor = (isDanger || overrideColor != null)
+        ? Colors.white
+        : Colors.black87;
 
-    return Column(children: [
-      ElevatedButton(
+    return Column(
+      children: [
+        ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: bgColor,
             minimumSize: const Size(double.infinity, 50),
@@ -973,35 +1186,48 @@ class _SettingsComponentState extends State<SettingsComponent> {
             disabledForegroundColor: txtColor.withOpacity(0.5),
           ),
           onPressed: onTap,
-          child: Text(title,
-              textAlign: TextAlign
-                  .center, // UPDATED: Ensure center alignment if wrapping occurs
-              style: TextStyle(color: txtColor, fontWeight: FontWeight.bold))),
-      const SizedBox(height: 6),
-      Text(desc,
+          child: Text(
+            title,
+            textAlign: TextAlign
+                .center, // UPDATED: Ensure center alignment if wrapping occurs
+            style: TextStyle(color: txtColor, fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          desc,
           style: const TextStyle(fontSize: 11.5, color: Colors.grey),
-          textAlign: TextAlign.center),
-    ]);
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
   }
 
   Widget _buildItemLabel(String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child:
-          Text(text, style: const TextStyle(fontSize: 14, color: Colors.grey)));
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+  );
 
   // RESTORED: unused but kept for original parity
-  Widget _buildBulletPoint(String text) =>
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text(" • "),
-        Expanded(child: Text(text, style: const TextStyle(fontSize: 13.5)))
-      ]);
+  Widget _buildBulletPoint(String text) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(" • "),
+      Expanded(child: Text(text, style: const TextStyle(fontSize: 13.5))),
+    ],
+  );
 
   Widget _buildErrorState(Color accent) => Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
         Text(_errorMessage!),
         const SizedBox(height: 16),
         ElevatedButton(
-            onPressed: _fetchUserData,
-            child: Text(translate("common.retry", "Retry Connection")))
-      ]));
+          onPressed: _fetchUserData,
+          child: Text(translate("common.retry", "Retry Connection")),
+        ),
+      ],
+    ),
+  );
 }

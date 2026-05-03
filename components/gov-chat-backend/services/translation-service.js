@@ -1,5 +1,5 @@
 const { logger } = require('../shared-lib');
-const crypto = require('crypto'); // For generating cache key
+const nodeCrypto = require('crypto'); // For generating cache key
 const Redis = require('ioredis');  // For Redis cache
 
 // Import backend modules
@@ -220,22 +220,20 @@ class TranslationService {
       return translatedTexts;
 
     } catch (error) {
-      // If backend is GPU and in auto mode, try falling back to CPU
+      // If backend is GPU and in auto mode, try falling back to CPU for this request only
       if (this.backendType === 'gpu' && translationBackend === 'auto') {
-        logger.warn(`[TRANSLATION-SERVICE] GPU backend failed, falling back to CPU: ${error.message}`);
+        logger.warn(`[TRANSLATION-SERVICE] GPU backend failed for this request, falling back to CPU: ${error.message}`);
         try {
-          this.backend = new CpuTranslateBackend();
-          await this.backend.init();
-          this.backendType = 'cpu';
+          const cpuBackend = new CpuTranslateBackend();
+          await cpuBackend.init();
           logger.info('[TRANSLATION-SERVICE] CPU backend initialized as fallback');
 
-          // Retry translation with CPU backend
-          const sourceCode = this.backend.getLanguageCode(sourceLang);
-          const targetCode = this.backend.getLanguageCode(targetLang);
-          return await this.backend.translate(texts, sourceCode, targetCode);
+          const sourceCode = cpuBackend.getLanguageCode(sourceLang);
+          const targetCode = cpuBackend.getLanguageCode(targetLang);
+          return await cpuBackend.translate(texts, sourceCode, targetCode);
         } catch (cpuError) {
           logger.error(`[TRANSLATION-SERVICE] CPU fallback also failed: ${cpuError.message}`);
-          throw new Error(`Translation failed on both GPU and CPU backends`);
+          throw new Error(`Translation failed on both GPU and CPU backends`, { cause: cpuError });
         }
       }
 
@@ -266,7 +264,7 @@ class TranslationService {
 
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
-    const docName = crypto.createHash('md5').update(markdownContent).digest('hex');
+    const docName = nodeCrypto.createHash('md5').update(markdownContent).digest('hex');
     // Create the cache key in the format <prefix>:<name>:<locale>
     const cacheKey = `translation:${docName}:${targetLang}`;
     // Key for in-flight tracking (combines doc hash and target language)

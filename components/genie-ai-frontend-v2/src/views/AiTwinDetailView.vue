@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft01Icon, Cancel01Icon, Edit02Icon } from '@hugeicons/core-free-icons';
+import {
+  ArrowLeft01Icon,
+  BubbleChatIcon,
+  Camera01Icon,
+  Cancel01Icon,
+  Edit02Icon,
+} from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
 import { notify } from '../lib/notify';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
@@ -38,6 +44,8 @@ const deleteDialog = ref(false);
 const deleting = ref(false);
 const editing = ref(false);
 const activeTab = ref<EditableTab | null>(null);
+const imageInput = ref<HTMLInputElement | null>(null);
+const uploadingImage = ref(false);
 
 const tabs: TabItem[] = [
   { value: 'general', label: 'General' },
@@ -73,6 +81,11 @@ function goBack() {
   router.back();
 }
 
+function chatWithTwin() {
+  if (!twin.value) return;
+  notify.info(`Chat with ${twin.value.name} — coming soon`);
+}
+
 function startEditing() {
   editing.value = true;
 }
@@ -85,6 +98,46 @@ function cancelEditing() {
 async function saveChanges() {
   const ok = await Promise.resolve(activeTab.value?.save?.() ?? true);
   if (ok) editing.value = false;
+}
+
+function pickImage() {
+  if (uploadingImage.value) return;
+  imageInput.value?.click();
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onImageChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file || !twin.value) {
+    input.value = '';
+    return;
+  }
+  if (!file.type.startsWith('image/')) {
+    notify.error('Please select an image file');
+    input.value = '';
+    return;
+  }
+
+  uploadingImage.value = true;
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    await store.update(twin.value._key, { profilePicUrl: dataUrl });
+    notify.success('Profile picture updated');
+  } catch {
+    notify.error(store.error ?? 'Failed to update profile picture');
+  } finally {
+    uploadingImage.value = false;
+    input.value = '';
+  }
 }
 
 async function confirmDelete() {
@@ -118,8 +171,39 @@ async function confirmDelete() {
       <template v-if="twin">
         <header class="flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="lg" />
-            <span class="chip">{{ twin.name }}</span>
+            <button
+              type="button"
+              class="group relative inline-flex shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed"
+              :aria-label="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
+              :title="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
+              :disabled="uploadingImage"
+              @click="pickImage"
+            >
+              <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="lg" />
+              <span
+                class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-full bg-black/55 text-white opacity-0 backdrop-blur-[1px] transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+              >
+                <Icon :icon="Camera01Icon" :size="18" />
+                <span class="text-[10px] font-medium leading-none">Change</span>
+              </span>
+              <span
+                v-if="uploadingImage"
+                class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white"
+              >
+                <span class="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              </span>
+            </button>
+            <input
+              ref="imageInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="onImageChange"
+            />
+            <BaseButton variant="primary" size="md" rounded="full" @click="chatWithTwin">
+              <Icon :icon="BubbleChatIcon" :size="16" />
+              Chat
+            </BaseButton>
             <BaseToggle v-model="active" :label="active ? 'Active' : 'Inactive'" />
           </div>
           <BaseButton variant="danger" size="md" :loading="deleting" @click="deleteDialog = true">
@@ -161,24 +245,28 @@ async function confirmDelete() {
           </Transition>
         </div>
 
-        <div
+        <fieldset
+          :disabled="!editing"
           :class="[
             'rounded-2xl border bg-surface p-6 shadow-card transition-colors',
             editing ? 'border-accent/30 ring-1 ring-accent/10' : 'border-border',
+            !editing && 'opacity-70',
           ]"
         >
-          <GeneralTab
-            v-if="tab === 'general'"
-            ref="activeTab"
-            :twin="twin"
-            :editing="editing"
-          />
-          <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" />
-          <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
-          <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" />
-          <SystemPromptTab v-else-if="tab === 'system-prompt'" ref="activeTab" />
-          <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
-        </div>
+          <div :class="!editing && 'pointer-events-none select-none'">
+            <GeneralTab
+              v-if="tab === 'general'"
+              ref="activeTab"
+              :twin="twin"
+              :editing="editing"
+            />
+            <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" />
+            <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
+            <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" />
+            <SystemPromptTab v-else-if="tab === 'system-prompt'" ref="activeTab" />
+            <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
+          </div>
+        </fieldset>
       </template>
 
       <div v-else-if="loading" class="space-y-4">

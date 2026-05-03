@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { AiBrain01Icon, PlusSignIcon, Search01Icon } from '@hugeicons/core-free-icons';
+import { PlusSignIcon, Search01Icon, SparklesIcon } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
 import { notify } from '../lib/notify';
 import AiTwinCard from '../components/dashboard/AiTwinCard.vue';
@@ -80,7 +80,7 @@ async function onCreated(payload: { name: string; description: string; avatar: s
 
       <EmptyState
         v-else-if="store.error && !search.trim()"
-        :icon="AiBrain01Icon"
+        :icon="SparklesIcon"
         title="Couldn't load AI Twins"
         :description="store.error"
       >
@@ -98,7 +98,7 @@ async function onCreated(payload: { name: string; description: string; avatar: s
 
       <EmptyState
         v-else
-        :icon="AiBrain01Icon"
+        :icon="SparklesIcon"
         title="No AI Twins yet"
         description="Create your first AI Twin to start chatting and tracking conversations."
       >

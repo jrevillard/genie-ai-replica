@@ -6,10 +6,10 @@ import {
   ArrowRight01Icon,
   ChartHistogramIcon,
   MessageMultiple01Icon,
-  Mortarboard02Icon,
   Notification03Icon,
   Search01Icon,
   Settings01Icon,
+  SparklesIcon,
   UserIcon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../ui/BaseAvatar.vue';
@@ -22,9 +22,9 @@ const search = ref('');
 const commandOpen = ref(false);
 
 const items = [
-  { group: 'Pages', label: 'AI Twins', description: 'Create and manage AI Twins', to: '/ai-twins', icon: AiBrain01Icon },
+  { group: 'Pages', label: 'AI Twins', description: 'Create and manage AI Twins', to: '/ai-twins', icon: SparklesIcon },
   { group: 'Pages', label: 'Chat/Call History', description: 'Review chats, calls, transcripts, and summaries', to: '/chat-history', icon: MessageMultiple01Icon },
-  { group: 'Pages', label: 'Knowledge Set', description: 'Upload and ingest files for AI Twins', to: '/knowledge-set', icon: Mortarboard02Icon },
+  { group: 'Pages', label: 'Knowledge Set', description: 'Upload and ingest files for AI Twins', to: '/knowledge-set', icon: AiBrain01Icon },
   { group: 'Pages', label: 'Statistics', description: 'Usage and engagement metrics', to: '/statistics', icon: ChartHistogramIcon },
   { group: 'Useful routes', label: 'Profile', description: 'User profile area', to: '/ai-twins', icon: UserIcon },
   { group: 'Useful routes', label: 'Settings', description: 'Workspace configuration', to: '/ai-twins', icon: Settings01Icon },
@@ -76,7 +76,7 @@ function navigate(to: string) {
     <div class="flex-1" />
 
     <div class="flex items-center gap-2 rounded-full border border-neutral-300 bg-neutral-50 px-3 py-1 shadow-sm">
-      <BaseAvatar size="sm" :src="auth.user?.avatar || 'https://i.pravatar.cc/40?img=12'" :name="auth.displayName" />
+      <BaseAvatar size="sm" :src="auth.user?.avatar ?? null" :name="auth.displayName" />
       <span class="hidden flex-col items-start leading-tight md:flex">
         <span class="text-sm font-medium text-slate-900">{{ auth.displayName }}</span>
         <span v-if="auth.email" class="text-[11px] text-slate-500">{{ auth.email }}</span>

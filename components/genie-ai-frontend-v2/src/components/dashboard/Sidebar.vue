@@ -5,8 +5,8 @@ import {
   ChartHistogramIcon,
   Logout01Icon,
   MessageMultiple01Icon,
-  Mortarboard02Icon,
   SidebarLeftIcon,
+  SparklesIcon,
 } from '@hugeicons/core-free-icons';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
@@ -34,9 +34,9 @@ interface NavItem {
 }
 
 const items: NavItem[] = [
-  { label: 'AI Twins', icon: AiBrain01Icon, to: '/ai-twins' },
+  { label: 'AI Twins', icon: SparklesIcon, to: '/ai-twins' },
   { label: 'Chat/Call History', icon: MessageMultiple01Icon, to: '/chat-history' },
-  { label: 'Knowledge Set', icon: Mortarboard02Icon, to: '/knowledge-set' },
+  { label: 'Knowledge Set', icon: AiBrain01Icon, to: '/knowledge-set' },
   { label: 'Statistics', icon: ChartHistogramIcon, to: '/statistics' },
 ];
 

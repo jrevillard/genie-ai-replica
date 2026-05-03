@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { File02Icon, Mortarboard02Icon, PlusSignIcon, Upload01Icon } from '@hugeicons/core-free-icons';
+import { AiBrain01Icon, File02Icon, PlusSignIcon, Upload01Icon } from '@hugeicons/core-free-icons';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseDrawer from '../ui/BaseDrawer.vue';
 import EmptyState from '../ui/EmptyState.vue';
@@ -81,7 +81,7 @@ function formatBytes(bytes: number): string {
     </ul>
     <EmptyState
       v-else
-      :icon="Mortarboard02Icon"
+      :icon="AiBrain01Icon"
       title="No knowledge files yet"
       description="Upload PDFs, Word docs or text files so this AI Twin learns your domain."
     >

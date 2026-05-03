@@ -67,13 +67,7 @@ const router = createRouter({
   routes,
 });
 
-// TEMPORARY — design mode. Set to `false` to re-enable the auth guard so
-// unauthenticated users get bounced to /signin (the production behavior).
-const DESIGN_MODE = false;
-
 router.beforeEach((to) => {
-  if (DESIGN_MODE) return;
-
   const isPublic = to.meta.public === true;
   const session = readSession();
   if (!isPublic && !session?.accessToken) {

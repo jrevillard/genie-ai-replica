@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
-import { AiBrain01Icon, Upload01Icon } from '@hugeicons/core-free-icons';
+import { SparklesIcon, Upload01Icon } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../ui/BaseAvatar.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseDrawer from '../ui/BaseDrawer.vue';
@@ -72,7 +72,7 @@ watch(
     :open="open"
     title="Create AI Twin"
     badge="#NEW"
-    :icon="AiBrain01Icon"
+    :icon="SparklesIcon"
     width="md"
     @update:open="emit('update:open', $event)"
   >

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { PlayIcon, RecordIcon } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../ui/BaseAvatar.vue';
 import BaseButton from '../ui/BaseButton.vue';
@@ -31,32 +31,41 @@ const defaults: Voice[] = [
   { id: 'def-6', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=21', group: 'Professional Sounds' },
 ];
 
-const groupedDefaults = (): Record<string, Voice[]> => {
+const groupedDefaults = computed<Record<string, Voice[]>>(() => {
   const map: Record<string, Voice[]> = {};
   for (const v of defaults) {
     const g = v.group ?? 'Other';
     (map[g] ??= []).push(v);
   }
   return map;
-};
+});
+
+const itemClass = (id: string) => [
+  'flex items-center gap-3 rounded-2xl border bg-surface p-3 shadow-card transition cursor-pointer',
+  selectedVoice.value === id
+    ? 'border-accent bg-accent-soft/40 ring-1 ring-accent/20'
+    : 'border-border hover:bg-surface-muted',
+];
 </script>
 
 <template>
   <div class="space-y-5">
     <header class="flex items-center justify-between">
-      <h2 class="text-base font-semibold text-slate-900">Manage Your Voices From Here</h2>
+      <h2 class="text-title text-text">Manage Your Voices From Here</h2>
       <BaseButton variant="outline" size="sm" rounded="full">
         <Icon :icon="RecordIcon" :size="14" /> Change Voice
       </BaseButton>
     </header>
 
-    <div class="border-b border-slate-200">
-      <div class="flex gap-6">
+    <div class="border-b border-border">
+      <div class="flex gap-6" role="tablist">
         <button
           type="button"
+          role="tab"
+          :aria-selected="subTab === 'cloned'"
           :class="[
-            'pb-3 text-sm font-medium transition',
-            subTab === 'cloned' ? 'border-b-2 border-ieee-700 text-ieee-700' : 'text-slate-500 hover:text-slate-800',
+            'pb-3 text-body font-medium transition',
+            subTab === 'cloned' ? 'border-b-2 border-accent text-accent' : 'text-text-muted hover:text-text',
           ]"
           @click="subTab = 'cloned'"
         >
@@ -64,9 +73,11 @@ const groupedDefaults = (): Record<string, Voice[]> => {
         </button>
         <button
           type="button"
+          role="tab"
+          :aria-selected="subTab === 'default'"
           :class="[
-            'pb-3 text-sm font-medium transition',
-            subTab === 'default' ? 'border-b-2 border-ieee-700 text-ieee-700' : 'text-slate-500 hover:text-slate-800',
+            'pb-3 text-body font-medium transition',
+            subTab === 'default' ? 'border-b-2 border-accent text-accent' : 'text-text-muted hover:text-text',
           ]"
           @click="subTab = 'default'"
         >
@@ -76,32 +87,36 @@ const groupedDefaults = (): Record<string, Voice[]> => {
     </div>
 
     <div v-if="subTab === 'cloned'">
-      <ul v-if="cloned.length" class="space-y-3">
-        <li
-          v-for="v in cloned"
-          :key="v.id"
-          :class="[
-            'flex items-center gap-3 rounded-2xl border p-3 shadow-sm transition',
-            selectedVoice === v.id ? 'border-ieee-700 bg-ieee-50/40' : 'border-neutral-200',
-          ]"
-        >
-          <button class="rounded-full bg-ieee-50 p-2 text-ieee-700 transition hover:bg-ieee-100" aria-label="Play">
-            <Icon :icon="PlayIcon" :size="14" />
-          </button>
-          <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-slate-900">{{ v.name }}</p>
-            <p class="truncate text-xs text-slate-500">{{ v.caption }}</p>
-          </div>
-          <input
-            type="radio"
-            :value="v.id"
-            :checked="selectedVoice === v.id"
-            class="h-4 w-4 text-ieee-700 focus:ring-ieee-700"
-            @change="selectedVoice = v.id"
-          />
-        </li>
-      </ul>
+      <fieldset v-if="cloned.length">
+        <legend class="sr-only">Cloned voices</legend>
+        <ul class="space-y-3">
+          <li v-for="v in cloned" :key="v.id">
+            <label :class="itemClass(v.id)">
+              <button
+                type="button"
+                class="rounded-full bg-accent-soft p-2 text-accent transition hover:bg-ieee-100"
+                :aria-label="`Play preview of ${v.name}`"
+                @click.stop
+              >
+                <Icon :icon="PlayIcon" :size="14" />
+              </button>
+              <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-body font-medium text-text">{{ v.name }}</p>
+                <p class="truncate text-caption text-text-muted">{{ v.caption }}</p>
+              </div>
+              <input
+                type="radio"
+                name="cloned-voice"
+                :value="v.id"
+                :checked="selectedVoice === v.id"
+                class="h-4 w-4 cursor-pointer accent-accent"
+                @change="selectedVoice = v.id"
+              />
+            </label>
+          </li>
+        </ul>
+      </fieldset>
       <EmptyState
         v-else
         :icon="RecordIcon"
@@ -113,34 +128,38 @@ const groupedDefaults = (): Record<string, Voice[]> => {
     </div>
 
     <div v-else class="space-y-6">
-      <section v-for="(items, group) in groupedDefaults()" :key="group">
-        <h3 class="mb-3 text-sm font-semibold text-slate-700">{{ group }}</h3>
-        <ul class="space-y-3">
-          <li
-            v-for="v in items"
-            :key="v.id"
-            :class="[
-              'flex items-center gap-3 rounded-2xl border p-3 shadow-sm transition',
-              selectedVoice === v.id ? 'border-ieee-700 bg-ieee-50/40' : 'border-neutral-200',
-            ]"
-          >
-            <button class="rounded-full bg-ieee-50 p-2 text-ieee-700 transition hover:bg-ieee-100" aria-label="Play">
-              <Icon :icon="PlayIcon" :size="14" />
-            </button>
-            <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-slate-900">{{ v.name }}</p>
-              <p class="truncate text-xs text-slate-500">{{ v.caption }}</p>
-            </div>
-            <input
-              type="radio"
-              :value="v.id"
-              :checked="selectedVoice === v.id"
-              class="h-4 w-4 text-ieee-700 focus:ring-ieee-700"
-              @change="selectedVoice = v.id"
-            />
-          </li>
-        </ul>
+      <section v-for="(items, group) in groupedDefaults" :key="group">
+        <h3 class="mb-3 text-body font-semibold text-text">{{ group }}</h3>
+        <fieldset>
+          <legend class="sr-only">{{ group }}</legend>
+          <ul class="space-y-3">
+            <li v-for="v in items" :key="v.id">
+              <label :class="itemClass(v.id)">
+                <button
+                  type="button"
+                  class="rounded-full bg-accent-soft p-2 text-accent transition hover:bg-ieee-100"
+                  :aria-label="`Play preview of ${v.name}`"
+                  @click.stop
+                >
+                  <Icon :icon="PlayIcon" :size="14" />
+                </button>
+                <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-body font-medium text-text">{{ v.name }}</p>
+                  <p class="truncate text-caption text-text-muted">{{ v.caption }}</p>
+                </div>
+                <input
+                  type="radio"
+                  name="default-voice"
+                  :value="v.id"
+                  :checked="selectedVoice === v.id"
+                  class="h-4 w-4 cursor-pointer accent-accent"
+                  @change="selectedVoice = v.id"
+                />
+              </label>
+            </li>
+          </ul>
+        </fieldset>
       </section>
     </div>
   </div>

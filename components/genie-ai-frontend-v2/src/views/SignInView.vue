@@ -3,11 +3,11 @@ import { onMounted, reactive, ref } from 'vue';
 import { Eye, EyeOff } from 'lucide-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 import { sileo } from '../lib/notify';
-import AppButton from '../components/AppButton.vue';
-import AppInput from '../components/AppInput.vue';
 import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
 import BaseCheckbox from '../components/ui/BaseCheckbox.vue';
+import BaseInput from '../components/ui/BaseInput.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
 import { signInSchema, type SignInInput } from '../lib/validation/schemas';
@@ -56,7 +56,7 @@ async function onSubmit() {
           <p class="mt-1 text-sm text-slate-500">Login to access all your data</p>
 
           <form class="mt-8 space-y-4" novalidate @submit.prevent="onSubmit">
-            <AppInput
+            <BaseInput
               id="loginName"
               v-model="form.loginName"
               type="text"
@@ -64,10 +64,11 @@ async function onSubmit() {
               placeholder="Enter your username or email"
               autocomplete="username"
               required
+              rounded="full"
               :error="errors.loginName"
             />
 
-            <AppInput
+            <BaseInput
               id="password"
               v-model="form.password"
               :type="passwordVisible ? 'text' : 'password'"
@@ -75,12 +76,13 @@ async function onSubmit() {
               placeholder="Enter your password"
               autocomplete="current-password"
               required
+              rounded="full"
               :error="errors.password"
             >
               <template #trailing>
                 <button
                   type="button"
-                  class="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-neutral-100 hover:text-ieee-700"
+                  class="grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
                   :aria-label="passwordVisible ? 'Hide password' : 'Show password'"
                   @click="passwordVisible = !passwordVisible"
                 >
@@ -88,15 +90,15 @@ async function onSubmit() {
                   <Eye v-else class="h-4 w-4" />
                 </button>
               </template>
-            </AppInput>
+            </BaseInput>
 
             <BaseCheckbox v-model="form.remember" label="Remember me" size="sm" />
 
-            <AppButton type="submit" :loading="auth.loading">Login</AppButton>
+            <BaseButton type="submit" variant="primary" block :loading="auth.loading">Login</BaseButton>
 
-            <p class="pt-1 text-center text-sm text-slate-500">
+            <p class="pt-1 text-center text-body text-text-muted">
               Don't have an account?
-              <RouterLink to="/signup" class="font-semibold text-ieee-700 hover:underline">Register</RouterLink>
+              <RouterLink to="/signup" class="font-semibold text-accent hover:underline">Register</RouterLink>
             </p>
           </form>
         </div>

@@ -2,10 +2,10 @@
 import { reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { sileo } from '../lib/notify';
-import AppButton from '../components/AppButton.vue';
-import AppInput from '../components/AppInput.vue';
 import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
+import BaseInput from '../components/ui/BaseInput.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
 import { signUpSchema, type SignUpInput } from '../lib/validation/schemas';
@@ -55,25 +55,27 @@ async function onSubmit() {
           <p class="mt-1 text-sm text-slate-500">Enter your email to sign up</p>
 
           <form class="mt-8 space-y-4" novalidate @submit.prevent="onSubmit">
-            <AppInput
+            <BaseInput
               id="firstName"
               v-model="form.firstName"
               label="First Name"
               placeholder="John"
               autocomplete="given-name"
               required
+              rounded="full"
               :error="errors.firstName"
             />
-            <AppInput
+            <BaseInput
               id="lastName"
               v-model="form.lastName"
               label="Last Name"
               placeholder="Doe"
               autocomplete="family-name"
               required
+              rounded="full"
               :error="errors.lastName"
             />
-            <AppInput
+            <BaseInput
               id="email"
               v-model="form.email"
               type="email"
@@ -81,9 +83,10 @@ async function onSubmit() {
               placeholder="you@example.com"
               autocomplete="email"
               required
+              rounded="full"
               :error="errors.email"
             />
-            <AppInput
+            <BaseInput
               id="password"
               v-model="form.password"
               type="password"
@@ -91,14 +94,15 @@ async function onSubmit() {
               placeholder="At least 8 characters"
               autocomplete="new-password"
               required
+              rounded="full"
               :error="errors.password"
             />
 
-            <AppButton type="submit" :loading="auth.loading">Sign up</AppButton>
+            <BaseButton type="submit" variant="primary" block :loading="auth.loading">Sign up</BaseButton>
 
-            <p class="pt-1 text-center text-sm text-slate-500">
+            <p class="pt-1 text-center text-body text-text-muted">
               Already have an account?
-              <RouterLink to="/signin" class="font-semibold text-ieee-700 hover:underline">Sign in</RouterLink>
+              <RouterLink to="/signin" class="font-semibold text-accent hover:underline">Sign in</RouterLink>
             </p>
           </form>
         </div>

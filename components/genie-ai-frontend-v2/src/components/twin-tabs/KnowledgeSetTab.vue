@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { File02Icon, Mortarboard02Icon, PlusSignIcon, Upload01Icon } from '@hugeicons/core-free-icons';
 import BaseButton from '../ui/BaseButton.vue';
-import BaseDialog from '../ui/BaseDialog.vue';
+import BaseDrawer from '../ui/BaseDrawer.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import Icon from '../ui/Icon.vue';
 
@@ -54,8 +54,10 @@ function formatBytes(bytes: number): string {
   <div class="space-y-5">
     <header class="flex items-center justify-between">
       <div>
-        <h2 class="text-base font-semibold text-slate-900">Knowledge Set</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Upload files so your AI Twin can answer with your specific knowledge.</p>
+        <h2 class="text-title text-text">Knowledge Set</h2>
+        <p class="mt-0.5 text-caption text-text-muted">
+          Upload files so your AI Twin can answer with your specific knowledge.
+        </p>
       </div>
       <BaseButton variant="primary" size="sm" rounded="full" @click="dialogOpen = true">
         <Icon :icon="PlusSignIcon" :size="14" /> Add Knowledge
@@ -66,14 +68,14 @@ function formatBytes(bytes: number): string {
       <li
         v-for="f in files"
         :key="f.id"
-        class="flex items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm"
+        class="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-card"
       >
-        <div class="rounded-full bg-ieee-50 p-2 text-ieee-700">
+        <div class="rounded-full bg-accent-soft p-2 text-accent">
           <Icon :icon="File02Icon" :size="18" />
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-medium text-slate-900">{{ f.name }}</p>
-          <p class="text-xs text-slate-500">{{ f.size }}</p>
+          <p class="truncate text-body font-medium text-text">{{ f.name }}</p>
+          <p class="text-caption text-text-muted">{{ f.size }}</p>
         </div>
       </li>
     </ul>
@@ -88,23 +90,29 @@ function formatBytes(bytes: number): string {
       </BaseButton>
     </EmptyState>
 
-    <BaseDialog v-model:open="dialogOpen" size="md" title="Add Upload Knowledge">
-      <p class="mb-4 text-xs text-slate-500">
+    <BaseDrawer
+      v-model:open="dialogOpen"
+      title="Add Upload Knowledge"
+      badge="UPLOAD"
+      :icon="Upload01Icon"
+      width="md"
+    >
+      <p class="mb-4 text-caption text-text-muted">
         For further accuracy, you can upload files below to train your Agent to sound more like you.
       </p>
       <div
         :class="[
           'flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition',
-          dragOver ? 'border-ieee-500 bg-ieee-50' : 'border-slate-200 bg-slate-50',
+          dragOver ? 'border-accent bg-accent-soft' : 'border-border bg-surface-muted',
         ]"
         @dragover.prevent="dragOver = true"
         @dragleave="dragOver = false"
         @drop="onDrop"
       >
-        <Icon :icon="Upload01Icon" :size="28" class="text-slate-400" />
-        <p class="text-sm font-medium text-slate-700">Upload File</p>
-        <p class="max-w-xs text-xs text-slate-500">
-          File types allowed to be uploaded: PDF, Word, .csv, .doc, .txt, .docx
+        <Icon :icon="Upload01Icon" :size="28" class="text-text-subtle" />
+        <p class="text-body font-medium text-text">Upload File</p>
+        <p class="max-w-xs text-caption text-text-muted">
+          File types allowed: PDF, Word, .csv, .doc, .txt, .docx
         </p>
         <input ref="fileInput" type="file" multiple class="hidden" @change="onFileChange" />
         <BaseButton variant="soft" size="sm" rounded="full" @click="pickFile">
@@ -113,8 +121,15 @@ function formatBytes(bytes: number): string {
       </div>
 
       <template #footer>
+        <button
+          type="button"
+          class="text-body font-semibold text-text-muted transition hover:text-text"
+          @click="dialogOpen = false"
+        >
+          Cancel
+        </button>
         <BaseButton variant="primary" @click="dialogOpen = false">Add Knowledge</BaseButton>
       </template>
-    </BaseDialog>
+    </BaseDrawer>
   </div>
 </template>

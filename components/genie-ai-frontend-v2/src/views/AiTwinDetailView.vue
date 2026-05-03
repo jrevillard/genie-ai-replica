@@ -3,10 +3,12 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeft01Icon, Cancel01Icon, Edit02Icon } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
-import { sileo } from '../lib/notify';
+import { notify } from '../lib/notify';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
+import BaseBadge from '../components/ui/BaseBadge.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseDialog from '../components/ui/BaseDialog.vue';
+import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
 import BaseTabs, { type TabItem } from '../components/ui/BaseTabs.vue';
 import BaseToggle from '../components/ui/BaseToggle.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
@@ -91,10 +93,10 @@ async function confirmDelete() {
   try {
     await store.remove(twin.value._key);
     deleteDialog.value = false;
-    sileo.success({ title: 'AI Twin deleted' });
+    notify.success('AI Twin deleted');
     router.push({ name: 'ai-twins' });
   } catch {
-    sileo.error({ title: store.error ?? 'Failed to delete AI Twin' });
+    notify.error(store.error ?? 'Failed to delete AI Twin');
   } finally {
     deleting.value = false;
   }
@@ -103,10 +105,11 @@ async function confirmDelete() {
 
 <template>
   <DashboardLayout>
-    <section class="space-y-6 bg-white p-6">
+    <section class="space-y-6 bg-surface p-6">
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded-full bg-slate-50 p-2 text-slate-600 transition hover:bg-slate-100"
+        class="inline-flex items-center gap-1 rounded-full bg-surface-muted p-2 text-text-muted transition hover:bg-surface-subtle hover:text-text"
+        aria-label="Go back"
         @click="goBack"
       >
         <Icon :icon="ArrowLeft01Icon" :size="18" />
@@ -135,12 +138,7 @@ async function confirmDelete() {
               </BaseButton>
             </div>
             <div v-else key="edit" class="flex items-center gap-2">
-              <span
-                class="hidden items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200 sm:inline-flex"
-              >
-                <span class="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                Editing
-              </span>
+              <BaseBadge tone="warning" dot class="hidden sm:inline-flex">Editing</BaseBadge>
               <BaseButton
                 variant="ghost"
                 size="md"
@@ -165,8 +163,8 @@ async function confirmDelete() {
 
         <div
           :class="[
-            'rounded-2xl border bg-white p-6 shadow-sm transition-colors',
-            editing ? 'border-ieee-200 ring-1 ring-ieee-100' : 'border-neutral-200',
+            'rounded-2xl border bg-surface p-6 shadow-card transition-colors',
+            editing ? 'border-accent/30 ring-1 ring-accent/10' : 'border-border',
           ]"
         >
           <GeneralTab
@@ -184,10 +182,19 @@ async function confirmDelete() {
       </template>
 
       <div v-else-if="loading" class="space-y-4">
-        <div class="h-16 animate-pulse rounded-2xl bg-neutral-100" />
-        <div class="h-12 animate-pulse rounded-2xl bg-neutral-100" />
-        <div class="h-64 animate-pulse rounded-2xl bg-neutral-100" />
+        <BaseSkeleton height="4rem" />
+        <BaseSkeleton height="3rem" />
+        <BaseSkeleton height="16rem" />
       </div>
+
+      <EmptyState
+        v-else-if="store.error"
+        :icon="Cancel01Icon"
+        title="Couldn't load AI Twin"
+        :description="store.error"
+      >
+        <BaseButton variant="primary" @click="loadTwin">Retry</BaseButton>
+      </EmptyState>
 
       <EmptyState
         v-else
@@ -203,8 +210,8 @@ async function confirmDelete() {
         size="sm"
       >
         <div class="pr-10">
-          <h2 class="text-lg font-semibold text-slate-950">Delete AI Twin</h2>
-          <p class="mt-2 text-sm leading-6 text-slate-500">
+          <h2 class="text-title text-text">Delete AI Twin</h2>
+          <p class="mt-2 text-body leading-6 text-text-muted">
             This action can't be undone. All chats and call history attached to this twin will be removed.
           </p>
         </div>

@@ -6,15 +6,17 @@ import {
   Delete02Icon,
   Download04Icon,
   Pdf01Icon,
+  Search01Icon,
+  Upload01Icon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
+import BaseBadge from '../components/ui/BaseBadge.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
 import BaseCheckbox from '../components/ui/BaseCheckbox.vue';
+import BaseDrawer from '../components/ui/BaseDrawer.vue';
+import BaseInput from '../components/ui/BaseInput.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
-import ShadBadge from '../components/ui/shadcn/Badge.vue';
-import ShadButton from '../components/ui/shadcn/Button.vue';
-import ShadCard from '../components/ui/shadcn/Card.vue';
-import ShadDialog from '../components/ui/shadcn/Dialog.vue';
-import ShadInput from '../components/ui/shadcn/Input.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
 
 type DocumentItem = {
@@ -57,14 +59,34 @@ const uploadOpen = ref(false);
 const documentSearch = ref('');
 const twinSearch = ref('');
 
+const filteredDocuments = computed(() => {
+  const q = documentSearch.value.trim().toLowerCase();
+  if (!q) return documents.value;
+  return documents.value.filter((d) => d.name.toLowerCase().includes(q));
+});
+
+const filteredTwins = computed(() => {
+  const q = twinSearch.value.trim().toLowerCase();
+  if (!q) return twins.value;
+  return twins.value.filter((t) => t.name.toLowerCase().includes(q));
+});
+
 const allDocumentsSelected = computed({
-  get: () => documents.value.length > 0 && documents.value.every((document) => document.selected),
+  get: () => documents.value.length > 0 && documents.value.every((d) => d.selected),
   set: (value: boolean) => {
-    documents.value.forEach((document) => {
-      document.selected = value;
+    documents.value.forEach((d) => {
+      d.selected = value;
     });
   },
 });
+
+const selectedCount = computed(() => documents.value.filter((d) => d.selected).length);
+
+function statusTone(status: DocumentItem['status']) {
+  if (status === 'Pending') return 'neutral';
+  if (status === 'Ingesting') return 'accent';
+  return 'success';
+}
 
 function setDocumentSelected(document: DocumentItem, selected: boolean) {
   document.selected = selected;
@@ -79,45 +101,49 @@ function selectTwin(twin: Twin) {
 
 <template>
   <DashboardLayout>
-    <section class="h-full min-h-0 bg-white p-4 md:p-6">
+    <section class="h-full min-h-0 bg-surface p-4 md:p-6">
       <div class="flex h-full min-h-[700px] flex-col">
         <template v-if="mode === 'documents'">
           <header class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h1 class="text-lg font-bold text-slate-950">Document Management</h1>
-            </div>
-            <ShadButton
-              variant="secondary"
-              class="self-start lg:self-auto"
-              @click="uploadOpen = true"
-            >
+            <h1 class="text-headline text-text">Document Management</h1>
+            <BaseButton variant="primary" rounded="full" @click="uploadOpen = true">
+              <Icon :icon="Upload01Icon" :size="16" />
               Add Knowledge
-            </ShadButton>
+            </BaseButton>
           </header>
 
           <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <label class="block w-full max-w-md">
-              <ShadInput
+            <div class="w-full max-w-md">
+              <BaseInput
                 v-model="documentSearch"
                 placeholder="Search by file name"
-                class="rounded-full"
-              />
-            </label>
+                rounded="full"
+              >
+                <template #leading><Icon :icon="Search01Icon" :size="18" /></template>
+              </BaseInput>
+            </div>
           </div>
 
           <div class="mb-5 flex items-center justify-between gap-3">
             <BaseCheckbox v-model="allDocumentsSelected" size="sm" class="min-w-0">
-              <span class="truncate text-base font-bold text-slate-800">Select Files To Add Them For The Twins</span>
+              <span class="truncate text-body font-semibold text-text">
+                Select Files To Add Them For The Twins
+              </span>
             </BaseCheckbox>
-            <ShadButton variant="secondary" class="hidden shrink-0 sm:inline-flex">
-              Ingest Selected
-            </ShadButton>
+            <BaseButton
+              variant="primary"
+              rounded="full"
+              :disabled="selectedCount === 0"
+              class="hidden shrink-0 sm:inline-flex"
+            >
+              Ingest Selected ({{ selectedCount }})
+            </BaseButton>
           </div>
 
           <div class="min-h-0 flex-1 overflow-y-auto pr-1">
-            <div class="space-y-4">
+            <div v-if="filteredDocuments.length" class="space-y-4">
               <article
-                v-for="document in documents"
+                v-for="document in filteredDocuments"
                 :key="document.id"
                 class="grid grid-cols-[24px_minmax(0,1fr)] gap-3"
               >
@@ -127,170 +153,204 @@ function selectTwin(twin: Twin) {
                   class="mt-8 justify-center"
                   @update:model-value="setDocumentSelected(document, $event)"
                 />
-                <ShadCard class="p-4">
+                <div class="rounded-xl border border-border bg-surface p-4 shadow-card">
                   <div class="mb-3 flex items-start justify-between gap-4">
                     <div class="flex min-w-0 items-center gap-3">
-                      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-700 text-white">
+                      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-danger text-text-inverse">
                         <Icon :icon="Pdf01Icon" :size="22" />
                       </span>
                       <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
-                          <h2 class="truncate text-sm font-bold text-slate-900">{{ document.name }}</h2>
-                          <ShadBadge
-                            :class="[
-                              document.status === 'Pending' && 'bg-white text-neutral-600',
-                              document.status === 'Ingesting' && 'bg-ieee-100 text-ieee-800',
-                              document.status === 'Ingested' && 'bg-ieee-700 text-white',
-                            ]"
-                          >
+                          <h2 class="truncate text-body font-semibold text-text">{{ document.name }}</h2>
+                          <BaseBadge :tone="statusTone(document.status)" dot>
                             {{ document.status }}
-                          </ShadBadge>
+                          </BaseBadge>
                         </div>
-                        <p class="text-xs text-slate-500">{{ document.date }}</p>
+                        <p class="text-caption text-text-muted">{{ document.date }}</p>
                       </div>
                     </div>
-                    <div class="flex shrink-0 items-center gap-2">
-                      <button type="button" class="text-red-500 transition hover:text-red-600" aria-label="Delete document">
+                    <div class="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        class="grid h-8 w-8 place-items-center rounded-lg text-danger transition hover:bg-danger-soft"
+                        aria-label="Delete document"
+                      >
                         <Icon :icon="Delete02Icon" :size="18" />
                       </button>
-                      <button type="button" class="text-neutral-400 transition hover:text-ieee-800" aria-label="Download document">
+                      <button
+                        type="button"
+                        class="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-subtle hover:text-text"
+                        aria-label="Download document"
+                      >
                         <Icon :icon="Download04Icon" :size="18" />
                       </button>
                     </div>
                   </div>
-                  <p class="text-xs leading-relaxed text-slate-500">
-                    AI humor can be a delightful mix of clever algorithms and unexpected punchlines. It's like having a virtual comedian in your device, ready to crack a joke at the tap of a button. From witty wordplay to quirky observations, AI's humor is a unique blend of human creativity and machine logic.
+                  <p class="text-caption leading-relaxed text-text-muted">
+                    AI humor can be a delightful mix of clever algorithms and unexpected punchlines. It's like having a virtual comedian in your device, ready to crack a joke at the tap of a button.
                   </p>
-                </ShadCard>
+                </div>
               </article>
             </div>
+
+            <EmptyState
+              v-else-if="documentSearch.trim()"
+              :icon="Search01Icon"
+              title="No matches"
+              description="No documents match your search. Try a different keyword."
+            >
+              <BaseButton variant="outline" @click="documentSearch = ''">Clear search</BaseButton>
+            </EmptyState>
+
+            <EmptyState
+              v-else
+              :icon="CloudUploadIcon"
+              title="No documents yet"
+              description="Upload knowledge files to attach them to your AI Twins."
+            >
+              <BaseButton variant="primary" @click="uploadOpen = true">
+                <Icon :icon="Upload01Icon" :size="16" />
+                Add Knowledge
+              </BaseButton>
+            </EmptyState>
           </div>
 
           <footer class="mt-5 flex items-center justify-between">
-            <ShadButton variant="outline">
-              Cancel
-            </ShadButton>
-            <ShadButton
-              variant="secondary"
-              @click="mode = 'twins'"
-            >
+            <BaseButton variant="outline" rounded="full">Cancel</BaseButton>
+            <BaseButton variant="primary" rounded="full" @click="mode = 'twins'">
               Select
-            </ShadButton>
+            </BaseButton>
           </footer>
         </template>
 
         <template v-else>
           <header class="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <h1 class="text-lg font-bold text-slate-950">Select AI Twins to Add files for them</h1>
+            <h1 class="text-headline text-text">Select AI Twins to Add files for them</h1>
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <label class="block w-full sm:w-80 lg:w-[460px]">
-                <ShadInput
-                  v-model="twinSearch"
-                  placeholder="Search"
-                  class="rounded-full"
-                />
-              </label>
-              <ShadButton variant="secondary">
+              <div class="w-full sm:w-80 lg:w-[460px]">
+                <BaseInput v-model="twinSearch" placeholder="Search" rounded="full">
+                  <template #leading><Icon :icon="Search01Icon" :size="18" /></template>
+                </BaseInput>
+              </div>
+              <BaseButton variant="primary" rounded="full">
                 <Icon :icon="AddCircleIcon" :size="17" />
-                Create Ai Twin
-              </ShadButton>
+                Create AI Twin
+              </BaseButton>
             </div>
           </header>
 
           <div class="min-h-0 flex-1 overflow-y-auto pr-1">
-            <div class="grid gap-4 xl:grid-cols-2">
-              <ShadCard
-                v-for="twin in twins"
+            <div v-if="filteredTwins.length" class="grid gap-4 xl:grid-cols-2">
+              <button
+                v-for="twin in filteredTwins"
                 :key="twin.id"
+                type="button"
                 :class="[
-                  'p-4 transition',
-                  twin.selected ? 'border-ieee-700 ring-1 ring-ieee-700' : 'hover:border-neutral-300',
+                  'rounded-xl border bg-surface p-4 text-left shadow-card transition',
+                  twin.selected ? 'border-accent ring-1 ring-accent' : 'border-border hover:border-border-strong',
                 ]"
+                @click="selectTwin(twin)"
               >
                 <div class="mb-5 flex items-start justify-between gap-4">
                   <div class="flex min-w-0 items-center gap-4">
                     <BaseAvatar :src="`https://i.pravatar.cc/96?img=${20 + twin.id}`" :name="twin.name" size="lg" />
-                    <h2 class="truncate text-lg font-bold text-slate-950">{{ twin.name }}</h2>
+                    <h2 class="truncate text-title text-text">{{ twin.name }}</h2>
                   </div>
-                  <button
-                    type="button"
+                  <span
                     :class="[
-                      'mt-3 grid h-4 w-4 place-items-center rounded-full border',
-                      twin.selected ? 'border-ieee-700 ring-4 ring-ieee-50' : 'border-slate-400',
+                      'mt-3 grid h-4 w-4 shrink-0 place-items-center rounded-full border',
+                      twin.selected ? 'border-accent ring-4 ring-accent-soft' : 'border-text-subtle',
                     ]"
-                    aria-label="Select AI Twin"
-                    @click="selectTwin(twin)"
+                    aria-hidden="true"
                   >
-                    <span v-if="twin.selected" class="h-2 w-2 rounded-full bg-ieee-700" />
-                  </button>
+                    <span v-if="twin.selected" class="h-2 w-2 rounded-full bg-accent" />
+                  </span>
                 </div>
 
-                <div class="mb-4 flex items-center justify-between gap-4 text-xs">
-                  <span class="font-bold text-slate-900">Date Edited</span>
-                  <span class="text-slate-700">{{ twin.dateEdited }}</span>
+                <div class="mb-4 flex items-center justify-between gap-4 text-meta">
+                  <span class="font-semibold text-text">Date Edited</span>
+                  <span class="text-text-muted">{{ twin.dateEdited }}</span>
                 </div>
 
-                <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-slate-100 text-xs">
-                  <div class="grid grid-cols-2 gap-2 bg-slate-50 px-3 py-3">
-                    <dt class="font-bold text-slate-900">Voice Library</dt>
-                    <dd class="text-slate-600">{{ twin.voice }}</dd>
+                <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border-subtle text-meta">
+                  <div class="grid grid-cols-2 gap-2 bg-surface-muted px-3 py-3">
+                    <dt class="font-semibold text-text">Voice Library</dt>
+                    <dd class="text-text-muted">{{ twin.voice }}</dd>
                   </div>
-                  <div class="grid grid-cols-2 gap-2 bg-slate-50 px-3 py-3">
-                    <dt class="font-bold text-slate-900">Number of Chats</dt>
-                    <dd class="text-right text-slate-700">{{ twin.chats }}</dd>
+                  <div class="grid grid-cols-2 gap-2 bg-surface-muted px-3 py-3">
+                    <dt class="font-semibold text-text">Number of Chats</dt>
+                    <dd class="text-right text-text-muted">{{ twin.chats }}</dd>
                   </div>
-                  <div class="grid grid-cols-2 gap-2 bg-slate-50 px-3 py-3">
-                    <dt class="font-bold text-slate-900">Date Created</dt>
-                    <dd class="text-slate-600">{{ twin.dateCreated }}</dd>
+                  <div class="grid grid-cols-2 gap-2 bg-surface-muted px-3 py-3">
+                    <dt class="font-semibold text-text">Date Created</dt>
+                    <dd class="text-text-muted">{{ twin.dateCreated }}</dd>
                   </div>
-                  <div class="grid grid-cols-2 gap-2 bg-slate-50 px-3 py-3">
-                    <dt class="font-bold text-slate-900">Number of Calls</dt>
-                    <dd class="text-right text-slate-700">{{ twin.calls }}</dd>
+                  <div class="grid grid-cols-2 gap-2 bg-surface-muted px-3 py-3">
+                    <dt class="font-semibold text-text">Number of Calls</dt>
+                    <dd class="text-right text-text-muted">{{ twin.calls }}</dd>
                   </div>
                 </dl>
-              </ShadCard>
+              </button>
             </div>
+
+            <EmptyState
+              v-else
+              :icon="Search01Icon"
+              title="No matches"
+              description="No AI Twins match your search."
+            >
+              <BaseButton variant="outline" @click="twinSearch = ''">Clear search</BaseButton>
+            </EmptyState>
           </div>
 
           <footer class="mt-5 flex items-center justify-between">
-            <ShadButton
-              variant="outline"
-              @click="mode = 'documents'"
-            >
+            <BaseButton variant="outline" rounded="full" @click="mode = 'documents'">
               Cancel
-            </ShadButton>
-            <ShadButton variant="secondary">
+            </BaseButton>
+            <BaseButton variant="primary" rounded="full">
               Select Twin
-            </ShadButton>
+            </BaseButton>
           </footer>
         </template>
       </div>
 
-      <ShadDialog v-model:open="uploadOpen" content-class="flex max-h-[88vh] max-w-3xl flex-col p-6 md:p-7">
-            <header class="mb-6">
-              <h2 class="text-2xl font-bold text-slate-950">Add Upload Knowledge</h2>
-              <p class="mt-4 text-base text-slate-600">
-                For further accuracy, you can upload file below to train your Agent to sound more like you.
-              </p>
-            </header>
+      <BaseDrawer
+        v-model:open="uploadOpen"
+        title="Add Upload Knowledge"
+        badge="UPLOAD"
+        :icon="CloudUploadIcon"
+        width="lg"
+      >
+        <header class="mb-6">
+          <p class="text-body text-text-muted">
+            For further accuracy, you can upload a file below to train your Agent to sound more like you.
+          </p>
+        </header>
 
-            <label class="grid min-h-[260px] flex-1 cursor-pointer place-items-center rounded-2xl border border-neutral-200 bg-neutral-50 p-8 transition hover:border-ieee-700 hover:bg-ieee-50/40 md:min-h-[320px]">
-              <input type="file" class="sr-only" multiple />
-              <span class="flex flex-col items-center text-center">
-                <Icon :icon="CloudUploadIcon" :size="58" color="#cfd4dc" />
-                <span class="mt-5 text-2xl font-semibold text-slate-300">Upload File</span>
-                <span class="mt-4 max-w-2xl text-sm text-slate-400">
-                  File types allowed to be uploaded: Pdf, word doc, excel, csv, txt, mov, and mp4.
-                </span>
-              </span>
-            </label>
+        <label class="grid min-h-[260px] cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-border bg-surface-muted p-8 transition hover:border-accent hover:bg-accent-soft/40 md:min-h-[320px]">
+          <input type="file" class="sr-only" multiple />
+          <span class="flex flex-col items-center text-center">
+            <Icon :icon="CloudUploadIcon" :size="58" color="#cfd4dc" />
+            <span class="mt-5 text-display text-text-subtle">Upload File</span>
+            <span class="mt-4 max-w-2xl text-body text-text-muted">
+              File types allowed: PDF, Word, Excel, CSV, TXT, MOV, MP4.
+            </span>
+          </span>
+        </label>
 
-            <footer class="mt-6 flex justify-end gap-3">
-              <ShadButton variant="secondary" size="lg" @click="uploadOpen = false">
-                Add Knowledge
-              </ShadButton>
-            </footer>
-      </ShadDialog>
+        <template #footer>
+          <button
+            type="button"
+            class="text-body font-semibold text-text-muted transition hover:text-text"
+            @click="uploadOpen = false"
+          >
+            Cancel
+          </button>
+          <BaseButton variant="primary" @click="uploadOpen = false">
+            Add Knowledge
+          </BaseButton>
+        </template>
+      </BaseDrawer>
     </section>
   </DashboardLayout>
 </template>

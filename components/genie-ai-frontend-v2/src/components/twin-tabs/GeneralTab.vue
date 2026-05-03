@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
 import { PlusSignIcon } from '@hugeicons/core-free-icons';
-import { sileo } from '../../lib/notify';
+import { notify } from '../../lib/notify';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseDialog from '../ui/BaseDialog.vue';
 import BaseInput from '../ui/BaseInput.vue';
@@ -9,6 +9,8 @@ import BaseTextarea from '../ui/BaseTextarea.vue';
 import Icon from '../ui/Icon.vue';
 import { useAiTwinsStore } from '../../stores/aiTwins';
 import type { AiTwin } from '../../services/aiTwins';
+import { useZodForm } from '../../composables/useZodForm';
+import { updateAiTwinSchema, type UpdateAiTwinInput } from '../../lib/validation/schemas';
 
 const props = withDefaults(
   defineProps<{ twin: AiTwin; editing?: boolean }>(),
@@ -17,12 +19,14 @@ const props = withDefaults(
 
 const store = useAiTwinsStore();
 
-const form = reactive({
+const form = reactive<UpdateAiTwinInput & { pageGreeting: string; chatGreeting: string }>({
   name: props.twin.name,
   description: props.twin.description,
   pageGreeting: '',
   chatGreeting: '',
 });
+
+const { errors, validate, reset } = useZodForm(updateAiTwinSchema, ['name', 'description']);
 
 const numbers = reactive<string[]>([]);
 const numberDialogOpen = ref(false);
@@ -33,29 +37,27 @@ watch(
   (t) => {
     form.name = t.name;
     form.description = t.description;
+    reset();
   }
 );
 
 function discard() {
   form.name = props.twin.name;
   form.description = props.twin.description;
+  reset();
 }
 
 async function save(): Promise<boolean> {
-  const name = form.name.trim();
-  if (!name) {
-    sileo.error({ title: 'Name is required' });
-    return false;
-  }
+  if (!validate(form)) return false;
   try {
     await store.update(props.twin._key, {
-      name,
-      description: form.description,
+      name: form.name?.trim(),
+      description: form.description ?? '',
     });
-    sileo.success({ title: 'Changes saved' });
+    notify.success('Changes saved');
     return true;
   } catch {
-    sileo.error({ title: store.error ?? 'Failed to save changes' });
+    notify.error(store.error ?? 'Failed to save changes');
     return false;
   }
 }
@@ -80,26 +82,28 @@ function addNumber() {
 <template>
   <div class="space-y-8">
     <section>
-      <h2 class="text-base font-semibold text-slate-900">Change Your General Information</h2>
+      <h2 class="text-title text-text">Change Your General Information</h2>
       <div class="mt-4 space-y-5">
         <BaseInput
           v-model="form.name"
           label="AI Twin Name"
           placeholder="Enter the twin's name"
           :disabled="!editing"
+          :error="errors.name"
         />
         <BaseTextarea
           v-model="form.description"
           label="Description"
           :rows="6"
           :disabled="!editing"
+          :error="errors.description"
         />
       </div>
     </section>
 
     <section>
       <header class="flex items-center justify-between">
-        <h2 class="text-base font-semibold text-slate-900">AI Twin Number</h2>
+        <h2 class="text-title text-text">AI Twin Number</h2>
         <BaseButton
           variant="primary"
           size="sm"
@@ -120,13 +124,13 @@ function addNumber() {
           :disabled="!editing"
         />
       </div>
-      <p v-else class="mt-3 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 p-4 text-center text-xs text-slate-500">
+      <p v-else class="mt-3 rounded-2xl border border-dashed border-border bg-surface-muted p-4 text-center text-caption text-text-muted">
         No phone numbers added yet. Click "Add Number" to attach one.
       </p>
     </section>
 
     <section>
-      <h2 class="text-base font-semibold text-slate-900">Page Greeting</h2>
+      <h2 class="text-title text-text">Page Greeting</h2>
       <div class="mt-3">
         <BaseTextarea
           v-model="form.pageGreeting"
@@ -138,7 +142,7 @@ function addNumber() {
     </section>
 
     <section>
-      <h2 class="text-base font-semibold text-slate-900">Chat Greeting</h2>
+      <h2 class="text-title text-text">Chat Greeting</h2>
       <div class="mt-3">
         <BaseTextarea
           v-model="form.chatGreeting"
@@ -151,8 +155,8 @@ function addNumber() {
 
     <BaseDialog v-model:open="numberDialogOpen" size="sm">
       <div class="pr-10">
-        <h2 class="text-lg font-semibold text-slate-950">Add Number</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">
+        <h2 class="text-title text-text">Add Number</h2>
+        <p class="mt-2 text-body leading-6 text-text-muted">
           Attach a phone number to this AI Twin.
         </p>
       </div>

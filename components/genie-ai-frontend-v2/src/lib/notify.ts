@@ -45,6 +45,23 @@ interface SileoApi {
 
 export const sileo = _sileo as SileoApi;
 
+// Convenience helpers — prefer these over raw sileo.success / sileo.error so
+// every call site speaks the same vocabulary.
+export const notify = {
+  success(title: string, description?: string) {
+    return sileo.success({ title, description });
+  },
+  error(title: string, description?: string) {
+    return sileo.error({ title, description });
+  },
+  warning(title: string, description?: string) {
+    return sileo.warning({ title, description });
+  },
+  info(title: string, description?: string) {
+    return sileo.info({ title, description });
+  },
+};
+
 export const Toaster = _Toaster as DefineComponent<{
   position?: SileoPosition;
   offset?: number;

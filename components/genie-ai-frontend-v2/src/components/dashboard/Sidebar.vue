@@ -53,13 +53,14 @@ function isNavActive(to: string): boolean {
 
 <template>
   <aside :class="['dash-sidebar', collapsed && 'dash-sidebar--collapsed']">
-    <header class="flex items-center justify-between gap-2 border-b border-neutral-100 p-4">
+    <header class="flex items-center justify-between gap-2 border-b border-border-subtle p-4">
       <img v-if="!collapsed" src="/images/logo.svg" alt="IEEE" class="h-7" />
       <img v-else src="/images/logo.svg" alt="IEEE" class="h-7 w-full object-contain" />
       <button
         type="button"
-        class="rounded-lg p-1.5 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900"
-        :title="collapsed ? 'Expand' : 'Collapse'"
+        class="rounded-lg p-1.5 text-text-subtle transition hover:bg-surface-subtle hover:text-text"
+        :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+        :aria-label="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
         @click="$emit('toggle')"
       >
         <Icon :icon="SidebarLeftIcon" :size="18" />
@@ -85,13 +86,14 @@ function isNavActive(to: string): boolean {
       </RouterLink>
     </nav>
 
-    <footer class="border-t border-neutral-100 p-3">
+    <footer class="border-t border-border-subtle p-3">
       <button
         type="button"
         :class="[
-          'flex w-full items-center gap-3 rounded-xl bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100',
+          'flex w-full items-center gap-3 rounded-xl bg-danger-soft px-3 py-2.5 text-body font-semibold text-danger transition hover:bg-danger/10',
           collapsed && 'justify-center',
         ]"
+        :aria-label="collapsed ? 'Log out' : undefined"
         @click="logoutDialogOpen = true"
       >
         <Icon :icon="Logout01Icon" :size="20" />
@@ -104,8 +106,8 @@ function isNavActive(to: string): boolean {
       size="sm"
     >
       <div class="pr-10">
-        <h2 class="text-lg font-semibold text-slate-950">Log out?</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">
+        <h2 class="text-title text-text">Log out?</h2>
+        <p class="mt-2 text-body leading-6 text-text-muted">
           You will be signed out of this admin workspace.
         </p>
       </div>

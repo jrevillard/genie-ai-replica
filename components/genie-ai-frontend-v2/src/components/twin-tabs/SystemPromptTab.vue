@@ -24,37 +24,40 @@ const customPrompt = ref('');
 <template>
   <div class="space-y-5">
     <header>
-      <h2 class="text-base font-semibold text-slate-900">Edit Your System Prompt</h2>
-      <p class="text-xs text-slate-500">Choose Prompt Or Custom Your's</p>
+      <h2 class="text-title text-text">Edit Your System Prompt</h2>
+      <p class="text-caption text-text-muted">Choose a preset or write your own.</p>
     </header>
 
-    <ul class="space-y-3">
-      <li
+    <fieldset class="space-y-3">
+      <legend class="sr-only">System prompt</legend>
+
+      <label
         v-for="p in prompts"
         :key="p.id"
         :class="[
-          'flex gap-3 rounded-2xl border bg-white p-4 shadow-sm transition',
-          selected === p.id ? 'border-ieee-700 bg-ieee-50/40 ring-1 ring-ieee-200' : 'border-neutral-200',
+          'flex cursor-pointer gap-3 rounded-2xl border bg-surface p-4 shadow-card transition',
+          selected === p.id ? 'border-accent bg-accent-soft/40 ring-1 ring-accent/30' : 'border-border hover:bg-surface-muted',
         ]"
       >
-        <p class="flex-1 text-xs leading-relaxed text-slate-600">{{ p.body }}</p>
+        <p class="flex-1 text-caption leading-relaxed text-text-muted">{{ p.body }}</p>
         <input
           type="radio"
+          name="system-prompt"
           :value="p.id"
           :checked="selected === p.id"
-          class="mt-1 h-4 w-4 shrink-0 text-ieee-700 focus:ring-ieee-700"
+          class="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-accent"
           @change="selected = p.id"
         />
-      </li>
+      </label>
 
-      <li
+      <label
         :class="[
-          'flex gap-3 rounded-2xl border bg-white p-4 shadow-sm transition',
-          selected === 'custom' ? 'border-ieee-700 bg-ieee-50/40 ring-1 ring-ieee-200' : 'border-neutral-200',
+          'flex cursor-pointer gap-3 rounded-2xl border bg-surface p-4 shadow-card transition',
+          selected === 'custom' ? 'border-accent bg-accent-soft/40 ring-1 ring-accent/30' : 'border-border hover:bg-surface-muted',
         ]"
       >
         <div class="flex-1">
-          <p class="mb-2 text-xs font-medium text-slate-700">Write Your Prompt Here</p>
+          <p class="mb-2 text-caption font-medium text-text">Write Your Prompt Here</p>
           <BaseTextarea
             v-model="customPrompt"
             :rows="4"
@@ -64,12 +67,13 @@ const customPrompt = ref('');
         </div>
         <input
           type="radio"
+          name="system-prompt"
           value="custom"
           :checked="selected === 'custom'"
-          class="mt-1 h-4 w-4 shrink-0 text-ieee-700 focus:ring-ieee-700"
+          class="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-accent"
           @change="selected = 'custom'"
         />
-      </li>
-    </ul>
+      </label>
+    </fieldset>
   </div>
 </template>

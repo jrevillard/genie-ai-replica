@@ -31,11 +31,11 @@ function add() {
 <template>
   <div class="space-y-5">
     <header>
-      <h2 class="text-base font-semibold text-slate-900">Instructions</h2>
-      <p class="text-xs text-slate-500">Add specific dos and don'ts for your AI Twin to follow.</p>
+      <h2 class="text-title text-text">Instructions</h2>
+      <p class="text-caption text-text-muted">Add specific dos and don'ts for your AI Twin to follow.</p>
     </header>
 
-    <div class="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+    <div class="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card">
       <BaseInput v-model="draftTitle" placeholder="Title (e.g. Tone of voice)" />
       <BaseInput v-model="draftBody" placeholder="Detail the instruction…" />
       <div class="flex justify-end">
@@ -46,9 +46,9 @@ function add() {
     </div>
 
     <ul v-if="items.length" class="space-y-2">
-      <li v-for="i in items" :key="i.id" class="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-        <p class="text-sm font-semibold text-slate-900">{{ i.title }}</p>
-        <p v-if="i.body" class="mt-1 text-xs text-slate-600">{{ i.body }}</p>
+      <li v-for="i in items" :key="i.id" class="rounded-2xl border border-border bg-surface p-4 shadow-card">
+        <p class="text-body font-semibold text-text">{{ i.title }}</p>
+        <p v-if="i.body" class="mt-1 text-caption text-text-muted">{{ i.body }}</p>
       </li>
     </ul>
     <EmptyState

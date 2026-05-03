@@ -8,12 +8,12 @@ const responseLength = ref('medium');
 
 <template>
   <div class="space-y-8">
-    <h2 class="text-base font-semibold text-slate-900">Edit Your AI Personality</h2>
+    <h2 class="text-title text-text">Edit Your AI Personality</h2>
 
     <section>
       <header class="mb-3">
-        <h3 class="text-sm font-semibold text-slate-800">Language Style</h3>
-        <p class="text-xs text-slate-500">Choose how you want your AI Twin to communicate</p>
+        <h3 class="text-body font-semibold text-text">Language Style</h3>
+        <p class="text-caption text-text-muted">Choose how you want your AI Twin to communicate</p>
       </header>
       <div class="space-y-3">
         <BaseRadioCard v-model="language" value="slang" label="Slang Use" />
@@ -24,8 +24,8 @@ const responseLength = ref('medium');
 
     <section>
       <header class="mb-3">
-        <h3 class="text-sm font-semibold text-slate-800">Response Length</h3>
-        <p class="text-xs text-slate-500">Choose how long your AI Twin responses should be</p>
+        <h3 class="text-body font-semibold text-text">Response Length</h3>
+        <p class="text-caption text-text-muted">Choose how long your AI Twin responses should be</p>
       </header>
       <div class="space-y-3">
         <BaseRadioCard

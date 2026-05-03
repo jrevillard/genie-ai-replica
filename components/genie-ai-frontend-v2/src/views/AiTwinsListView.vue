@@ -2,11 +2,12 @@
 import { computed, onMounted, ref } from 'vue';
 import { AiBrain01Icon, PlusSignIcon, Search01Icon } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
-import { sileo } from '../lib/notify';
+import { notify } from '../lib/notify';
 import AiTwinCard from '../components/dashboard/AiTwinCard.vue';
 import CreateAiTwinDialog from '../components/dashboard/CreateAiTwinDialog.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
+import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
@@ -24,11 +25,13 @@ const filtered = computed(() => {
   return twins.value.filter((t) => t.name.toLowerCase().includes(q));
 });
 
-onMounted(() => {
+function loadTwins() {
   store.fetchAll().catch(() => {
-    sileo.error({ title: store.error ?? 'Failed to load AI Twins' });
+    notify.error(store.error ?? 'Failed to load AI Twins');
   });
-});
+}
+
+onMounted(loadTwins);
 
 async function onCreated(payload: { name: string; description: string; avatar: string | null }) {
   try {
@@ -37,19 +40,19 @@ async function onCreated(payload: { name: string; description: string; avatar: s
       description: payload.description,
       profilePicUrl: payload.avatar,
     });
-    sileo.success({ title: 'AI Twin created' });
+    notify.success('AI Twin created');
   } catch {
-    sileo.error({ title: store.error ?? 'Failed to create AI Twin' });
+    notify.error(store.error ?? 'Failed to create AI Twin');
   }
 }
 </script>
 
 <template>
   <DashboardLayout>
-    <section class="space-y-6 bg-white p-6">
+    <section class="space-y-6 bg-surface p-6">
       <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <h1 class="text-xl font-semibold text-slate-900">AI Twins</h1>
+          <h1 class="text-headline text-text">AI Twins</h1>
           <div class="w-full sm:w-[360px]">
             <BaseInput
               v-model="search"
@@ -68,16 +71,21 @@ async function onCreated(payload: { name: string; description: string; avatar: s
       </header>
 
       <div v-if="loading && !filtered.length" class="grid gap-4 lg:grid-cols-2">
-        <div
-          v-for="n in 4"
-          :key="n"
-          class="h-44 animate-pulse rounded-2xl border border-neutral-200 bg-neutral-100"
-        />
+        <BaseSkeleton v-for="n in 4" :key="n" height="11rem" />
       </div>
 
       <div v-else-if="filtered.length" class="grid gap-4 lg:grid-cols-2">
         <AiTwinCard v-for="twin in filtered" :key="twin._key" :twin="twin" />
       </div>
+
+      <EmptyState
+        v-else-if="store.error && !search.trim()"
+        :icon="AiBrain01Icon"
+        title="Couldn't load AI Twins"
+        :description="store.error"
+      >
+        <BaseButton variant="primary" size="md" @click="loadTwins">Retry</BaseButton>
+      </EmptyState>
 
       <EmptyState
         v-else-if="search.trim()"

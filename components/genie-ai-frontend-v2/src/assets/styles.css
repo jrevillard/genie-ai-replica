@@ -18,62 +18,49 @@
 }
 
 @layer components {
-  /* Pill-style input matching the rounded inputs in the Figma. */
-  .input-pill {
-    @apply w-full rounded-full border border-neutral-300 bg-neutral-50 px-5 py-3 text-sm text-neutral-950 placeholder-neutral-500 transition focus:border-ieee-700 focus:outline-none focus:ring-2 focus:ring-ieee-100;
-  }
-  .input-pill[aria-invalid='true'] {
-    @apply border-red-400 focus:border-red-500 focus:ring-red-100;
-  }
+  /* Link-as-button styles for <RouterLink>. For real <button>s, prefer BaseButton. */
   .btn-primary {
-    @apply inline-flex w-full items-center justify-center rounded-full bg-ieee-700 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-ieee-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700 disabled:cursor-not-allowed disabled:bg-ieee-700/60;
+    @apply inline-flex w-full items-center justify-center rounded-full bg-accent px-6 py-3 text-body font-semibold text-text-inverse shadow-card transition hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:bg-accent/60;
   }
   .btn-soft {
-    @apply inline-flex w-full items-center justify-center rounded-full bg-ieee-50 px-6 py-3 text-sm font-semibold text-ieee-800 transition hover:bg-ieee-100 disabled:cursor-not-allowed disabled:opacity-70;
-  }
-  .form-label {
-    @apply mb-1.5 block text-sm font-medium text-slate-700;
-  }
-  .form-error {
-    @apply mt-1 pl-4 text-xs text-red-600;
+    @apply inline-flex w-full items-center justify-center rounded-full bg-accent-soft px-6 py-3 text-body font-semibold text-accent-hover transition hover:bg-ieee-100 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
   /* Split auth layout: form + brand panel (Sign in, Sign up, registration success). */
   .auth-shell {
-    @apply flex min-h-screen w-full flex-col bg-white lg:flex-row;
+    @apply flex min-h-screen w-full flex-col bg-surface lg:flex-row;
   }
   .auth-form-pane {
     @apply flex flex-1 flex-col px-6 py-8 sm:px-10 lg:max-w-[58%] lg:px-16;
   }
 
   /* ===== Dashboard shell ===== */
-  /* Outer frame + light sidebar (matches main column / content card); inset white card scrolls. */
+  /* Outer frame + light sidebar; inset white card scrolls. */
   .dash-shell {
-    @apply flex h-[100dvh] min-h-0 w-full min-w-0 gap-4 overflow-hidden bg-ieee-850 p-3 sm:p-4;
+    @apply flex h-[100dvh] min-h-0 w-full min-w-0 gap-4 overflow-hidden bg-surface-inverse p-3 sm:p-4;
   }
   .dash-sidebar {
-    @apply hidden w-64 shrink-0 flex-col rounded-2xl bg-neutral-50 text-neutral-950 shadow-md ring-1 ring-neutral-300 md:flex;
+    @apply hidden w-64 shrink-0 flex-col rounded-2xl bg-surface-muted text-text shadow-elevated ring-1 ring-border md:flex;
   }
   .dash-sidebar--collapsed {
     @apply md:w-20;
   }
   .dash-main {
-    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-neutral-200;
+    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-surface shadow-elevated ring-1 ring-border;
   }
-
   .dash-main__card {
-    @apply flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden rounded-2xl bg-white shadow-md ring-1 ring-neutral-200;
+    @apply flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden rounded-2xl bg-surface shadow-elevated ring-1 ring-border;
   }
   .dash-nav-item {
-    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-600 transition hover:bg-neutral-200/80 hover:text-neutral-950;
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-body font-semibold text-text-muted transition hover:bg-surface-subtle hover:text-text;
   }
   .dash-nav-item--active {
-    @apply bg-ieee-700 text-white shadow-sm hover:bg-ieee-800 hover:text-white;
+    @apply bg-accent text-text-inverse shadow-card hover:bg-accent-hover hover:text-text-inverse;
   }
 
   /* ===== Misc reusable utility ===== */
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full bg-ieee-50 px-2.5 py-1 text-xs font-medium text-ieee-800;
+    @apply inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-meta font-medium text-accent-hover;
   }
   .scrollbar-thin {
     scrollbar-width: thin;

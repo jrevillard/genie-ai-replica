@@ -4,7 +4,7 @@
 
 import os
 import time
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 from integrations.genieai_retriever_arangodb import GenieaiArangoRetriever
 
@@ -56,6 +56,7 @@ class GenieEmbedDoc(EmbedDoc):
     traversal_max_depth: Optional[int] = None
     traversal_max_returned: Optional[int] = None
     traversal_score_threshold: Optional[float] = None
+    context: Optional[Dict] = None  # retrieval filter context (categoryLabel, serviceLabels, etc.)
 
 retriever_component_name = os.getenv("RETRIEVER_COMPONENT_NAME", "GENIE_RETRIEVER_ARANGODB")
 
@@ -78,6 +79,9 @@ async def retrieve_docs(
     input: Union[GenieEmbedDoc, EmbedMultimodalDoc, RetrievalRequest, RetrievalRequestArangoDB, ChatCompletionRequest],
 ) -> Union[SearchedDoc, SearchedMultimodalDoc, RetrievalResponse, ChatCompletionRequest]:
     start = time.time()
+
+    _ctx_field = getattr(input, "context", None) or (input.get("context") if isinstance(input, dict) else None)
+    logger.info(f"TRACE_CTX [6/7] retriever_microservice:retrieve_docs: input.context={_ctx_field}")
 
     if logflag:
         logger.info(f"[ retrieval ] input: {input}")

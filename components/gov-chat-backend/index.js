@@ -154,12 +154,27 @@ const swaggerOptions = {
         email: 'support@example.com'
       }
     },
-    servers: [
-      {
-        url: process.env.API_URL || `http://localhost:${PORT}/api`,
-        description: 'Development server'
+    servers: (() => {
+      const trimSlash = (u) => (typeof u === 'string' ? u.replace(/\/$/, '') : '');
+      // Order: production/public first so Swagger UI defaults to the real host (not localhost).
+      const primary =
+        trimSlash(process.env.SWAGGER_SERVER_URL) ||
+        trimSlash(process.env.API_PUBLIC_URL) ||
+        trimSlash(process.env.API_URL) ||
+        'https://genie.innov8ai.com/api';
+      const local = trimSlash(`http://localhost:${PORT}/api`);
+      const list = [
+        {
+          url: primary,
+          description:
+            'Deployed API (set SWAGGER_SERVER_URL or API_PUBLIC_URL on the backend container)'
+        }
+      ];
+      if (local !== primary) {
+        list.push({ url: local, description: `Local backend (${PORT})` });
       }
-    ],
+      return list;
+    })(),
     components: {
       schemas: {
         Event: {
@@ -429,6 +444,10 @@ const swaggerOptions = {
       {
         name: 'Translation',
         description: 'On-the-fly text translation endpoints'
+      },
+      {
+        name: 'AI Twins',
+        description: 'Admin — AI twin personas (name, profile image URL, description)'
       }
     ]
   },
@@ -438,11 +457,18 @@ const swaggerOptions = {
 try {
   const swaggerSpec = swaggerJsdoc(swaggerOptions);
   logger.info('Swagger specification generated successfully');
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  const swaggerUiOptions = {
     explorer: true,
     customCss: '.swagger-ui .topbar { display: none }'
-  }));
+  };
+  // Primary: /api-docs. Mirror under /api/api-docs so gateways that only expose /api/* still serve Swagger.
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+  app.use('/api/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
   app.get('/api-docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+  });
+  app.get('/api/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
   });
@@ -709,6 +735,9 @@ async function initializeServices() {
   let authService, userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, sessionService, logsService;
   let databaseOperationsService, weatherService, securityScanService, translationService;
+  let voiceTokenService, voiceSessionService;
+  let aiTwinService;
+  let chatSessionService;
 
   const importService = async (name, path) => {
     logger.info(`Importing service: ${name}`);
@@ -741,6 +770,10 @@ async function initializeServices() {
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
+    voiceTokenService = await importService('VoiceTokenService', './services/voice-token-service');
+    voiceSessionService = await importService('VoiceSessionService', './services/voice-session-service');
+    aiTwinService = await importService('AiTwinService', './services/ai-twin-service');
+    chatSessionService = await importService('ChatSessionService', './services/chat-session-service');
 
     logger.info('Constructing service map');
     const serviceMap = {
@@ -756,7 +789,11 @@ async function initializeServices() {
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
-      translationService: { instance: translationService, name: 'TranslationService' }
+      translationService: { instance: translationService, name: 'TranslationService' },
+      voiceTokenService: { instance: voiceTokenService, name: 'VoiceTokenService' },
+      voiceSessionService: { instance: voiceSessionService, name: 'VoiceSessionService' },
+      aiTwinService: { instance: aiTwinService, name: 'AiTwinService' },
+      chatSessionService: { instance: chatSessionService, name: 'ChatSessionService' }
     };
 
     // Validate services
@@ -801,11 +838,20 @@ async function initializeServices() {
       { service: services.analyticsService, name: 'AnalyticsService' },
       { service: services.databaseOperationsService, name: 'DatabaseOperationsService' },
       { service: services.queryService, name: 'QueryService' },
+      {
+        service: services.chatSessionService,
+        name: 'ChatSessionService',
+        preInit: () => {
+          services.chatSessionService.setQueryService(services.queryService);
+        }
+      },
       { service: services.chatHistoryService, name: 'ChatHistoryService' },
       { service: services.logsService, name: 'LogsService' },
       // Marked optional: true to prevent boot failure on rate limits
       { service: services.weatherService, name: 'WeatherService', optional: true },
-      { service: services.translationService, name: 'TranslationService' }
+      { service: services.translationService, name: 'TranslationService' },
+      { service: services.aiTwinService, name: 'AiTwinService' },
+      { service: services.voiceSessionService, name: 'VoiceSessionService' }
     ];
 
     for (const { service, name, preInit, optional } of initPromises) {
@@ -983,7 +1029,10 @@ async function startApp() {
     { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
     { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService },
     { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService },
-    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService }
+    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService },
+    { file: 'voice-routes', paths: ['/api/voice'], service: services.voiceTokenService, extraService: services.voiceSessionService },
+    { file: 'ai-twin-routes', paths: ['/api/ai-twins', '/api/ai-twin'], service: services.aiTwinService },
+    { file: 'chat-session-routes', paths: ['/api/chat-sessions', '/api/chat-session'], service: services.chatSessionService }
   ];
 
   // Log route configurations
@@ -1051,7 +1100,7 @@ async function startApp() {
         const AnalyticsController = require('./controllers/analyticsController');
         const analyticsController = new AnalyticsController(config.service);
         routeInstance = routeModule(config.service, analyticsController);
-      } else if (config.file === 'admin-routes') {
+      } else if (config.file === 'admin-routes' || config.file === 'voice-routes') {
         routeInstance = routeModule(config.service, config.extraService);
       } else {
         routeInstance = routeModule(config.service);

@@ -118,7 +118,8 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 # 1. Comment out unused integrations in the *base* OPEA microservice.
 # 2. Fix the duplicate import path for 'arangodb.py' to resolve the ValueError.
 RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
-    sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py
+    sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
+    sed -i 's/openai\.error\.AuthenticationError/openai.AuthenticationError/g' /app/comps/dataprep/src/integrations/arangodb.py
 
 # Step K: Run the new GENIE-AI entry point from its new location
 CMD ["python", "comps/dataprep/src/genieai_dataprep_microservice.py"]

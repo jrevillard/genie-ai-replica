@@ -237,6 +237,8 @@ class GenieaiRetrieverParms(RetrieverParms):
     traversal_max_depth: int = RETRIEVER_TRAVERSAL_MAX_DEPTH
     traversal_max_returned: int = RETRIEVER_TRAVERSAL_MAX_RETURNED
     traversal_score_threshold: float = RETRIEVER_TRAVERSAL_SCORE_THRESHOLD
+    # Ensure context survives .dict() export and is passed to retriever.
+    context: dict | None = None
 
 class GenieaiRerankerParms(RerankerParms):
     reranking_strategy: str = RERANKING_STRATEGY
@@ -526,7 +528,7 @@ class UserContextBuilder:
         if lines:
             user_context_string = "\n".join(lines) + "\n        ---\n"
 
-        return user_context_stringe
+        return user_context_string
 
 
 
@@ -583,19 +585,20 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         retriever_parameters = kwargs.get("retriever_parameters", None)
         if retriever_parameters:
-            # inputs.update(retriever_parameters.dict())
-            safe_params = retriever_parameters.dict(exclude_unset=True, exclude_none=True)
+            safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
             inputs.update(safe_params)
 
         retrieval_context = kwargs.get('retrieval_context', {})
+        logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): context in inputs={inputs.get('context')}, kwargs retrieval_context={retrieval_context}")
         if retrieval_context:
             inputs['context'] = retrieval_context
+        logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): final inputs[context]={inputs.get('context')}")
         
     
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = kwargs.get("reranker_parameters", None)
         if reranker_parameters:
-            inputs.update(reranker_parameters.dict())
+            inputs.update(reranker_parameters.model_dump())
         if logflag:
             logger.debug(f"Aligned input of the reranker: {inputs}")
 
@@ -722,6 +725,12 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             data = data["data"]
         assert isinstance(data, list)
         next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
+        # Preserve retrieval context across node transitions (embedding -> retriever).
+        if "context" in inputs:
+            next_data["context"] = inputs["context"]
+            logger.info(f"TRACE_CTX [4/7] chatqna:align_outputs(EMBEDDING): context preserved={inputs['context']}")
+        else:
+            logger.info("TRACE_CTX [4/7] chatqna:align_outputs(EMBEDDING): context MISSING from inputs - will not reach retriever")
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
@@ -907,7 +916,30 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         else:
             if logflag:
                 logger.debug(f'\nRaw output of the llm\n {data}\n')
-            next_data["text"] = data["choices"][0]["message"]["content"]
+            # Handle non-OpenAI-shaped error payloads gracefully (e.g. {"error": ...}).
+            llm_text = ""
+            try:
+                llm_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            except Exception:
+                llm_text = ""
+
+            if not llm_text:
+                error_details = ""
+                if isinstance(data, dict):
+                    if "error" in data:
+                        error_details = str(data.get("error"))
+                    else:
+                        error_details = f"Unexpected LLM response keys: {list(data.keys())}"
+                else:
+                    error_details = f"Unexpected LLM response type: {type(data).__name__}"
+
+                logger.error(f"LLM response parsing failed: {error_details}")
+                llm_text = (
+                    "I am currently unable to generate a response due to an upstream model error. "
+                    "Please try again in a moment."
+                )
+
+            next_data["text"] = llm_text
         if logflag:
             logger.debug(f'\nAligned output of the llm\n {next_data}\n')
     else:
@@ -1389,7 +1421,7 @@ class ChatQnAService:
         # -----------------------------------------------
 
 
-        chat_request = ChatCompletionRequest.parse_obj(data)
+        chat_request = ChatCompletionRequest.model_validate(data)
         
 
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
@@ -1400,9 +1432,9 @@ class ChatQnAService:
         if chat_request.context:
             try:
                 retrieval_context = chat_request.context.model_dump(exclude_unset=True)
-            except:
+            except Exception:
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
-        logger.info(f"Context: {retrieval_context}")
+        logger.info(f"TRACE_CTX [3/7] chatqna:handle_request: retrieval_context={retrieval_context}")
         # -----------------------------------------------
 
         if logflag:
@@ -1500,7 +1532,7 @@ class ChatQnAService:
             try:
                 # If Pydantic is v2+
                 retrieval_context = chat_request.context.model_dump(exclude_unset=True)
-            except:
+            except Exception:
                 # Backup - can be removed later
                 logger.warning(".model_dump method not supported")
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
@@ -1534,6 +1566,9 @@ class ChatQnAService:
             distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
             lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
             score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
+            # Also attach context directly to retriever params so alignment does not
+            # depend on schedule kwargs propagation behavior.
+            context=retrieval_context if retrieval_context else None,
         )
 
         reranker_parameters = GenieaiRerankerParms(
@@ -1542,8 +1577,13 @@ class ChatQnAService:
         	reranking_threshold=chat_request.reranking_threshold if chat_request.reranking_threshold is not None else RERANKING_THRESHOLD,
         )
 
+        initial_inputs = {"text": last_translated_message_content}
+        if retrieval_context:
+            # Keep context in the runtime payload so it is preserved across node transitions.
+            initial_inputs["context"] = retrieval_context
+
         result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs={"text": last_translated_message_content},
+            initial_inputs=initial_inputs,
             llm_parameters=parameters,
             retriever_parameters=retriever_parameters,
             reranker_parameters=reranker_parameters,

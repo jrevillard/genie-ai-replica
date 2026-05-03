@@ -180,6 +180,7 @@ module.exports = (queryService) => {
    */
   router.post('/', async (req, res) => {
     try {
+      logger.info(`TRACE_CTX [1/7] query-routes: context=${JSON.stringify(req.body?.context ?? null)}`);
       logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
       const query = await queryService.createQuery(req.body);
       res.status(201).json(query);

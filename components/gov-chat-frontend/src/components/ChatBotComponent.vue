@@ -146,6 +146,9 @@
           </div>
         </div>
       </div>
+      <!-- Voice Call -->
+      <voice-call-component :locale="currentLocale" />
+
       <!-- Input Area -->
       <div class="chat-input">
         <textarea
@@ -260,6 +263,7 @@ import { mapGetters, mapActions } from 'vuex'
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
 import ModalDialog from './ModalDialog.vue'
 import RightSideBarComponent from './RightSideBarComponent.vue'
+import VoiceCallComponent from './VoiceCallComponent.vue'
 import chatbotService from '../services/chatbotService'
 import serviceTreeService from '../services/serviceTreeService' // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -275,6 +279,7 @@ export default {
     ModalDialog,
     RightSideBarComponent,
     ConfirmDialog,
+    VoiceCallComponent,
   },
 
   data() {
@@ -335,6 +340,10 @@ export default {
       isSaving: false, // Loading state for save operation to prevent double-save
       relatedDocuments: [], // Holds documents for the right sidebar
       hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
+      /** Server chat session id (POST /chat-sessions); backend stores history — client sends only latest text + context. */
+      serverChatSessionId: null,
+      /** Legacy queries API session correlation (optional). */
+      currentSessionId: null,
     }
   },
 
@@ -365,6 +374,7 @@ export default {
       if (this.conversationId === deletedChatId) {
         this.conversationId = null
         this.currentChatId = null
+        this.serverChatSessionId = null
         this.chatMessages = [
           {
             sender: 'bot',
@@ -380,6 +390,7 @@ export default {
           messages: JSON.parse(JSON.stringify(this.chatMessages)),
           contextItems: [],
         }
+        this.bootstrapServerChatSessionAfterNewChat()
         console.log(`Reset conversation ID after deletion of chat ${deletedChatId}`)
       }
     })
@@ -748,52 +759,78 @@ export default {
       const startTime = performance.now() // Start timing
 
       try {
-        const useConversationContext = this.selectedContextItems.length > 0
-        const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message'
-        let queryData
-        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId)
+        const currentUser = this.$store.getters.currentUser
+        const useServerOwnedSession = !this.conversationId && Boolean(currentUser?._key)
+
+        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId) || 'General'
         console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`)
-        if (contextOption === 'conversation-with-labels') {
-          const serviceLabels = this.selectedContextItems.map((item) => item.service)
-          // Build messages array, replacing last user message with hidden prompt if available
-          const messagesForQuery = this.chatMessages.map((msg) => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content,
-          }))
 
-          // Replace the last user message with the hidden prompt (for dual-prompt mechanism)
-          const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user')
-          if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
-            messagesForQuery[lastUserMsgIndex].content = messageForBackend
-          }
+        let result
 
-          queryData = {
-            conversationId: this.conversationId,
-            userId: this.$store.getters.currentUser?._key || 'anonymous',
-            sessionId: this.currentSessionId || 'new-session',
-            messages: messagesForQuery,
-            context: {
-              categoryLabel: categoryLabel,
-              serviceLabels: serviceLabels,
-              language: this.currentLocale.toUpperCase(),
-            },
-            contextOption: 'conversation-with-context-labels',
-            timestamp: new Date().toISOString(),
+        if (useServerOwnedSession) {
+          if (!this.serverChatSessionId) {
+            const created = await chatbotService.createChatSession()
+            this.serverChatSessionId = created.sessionId
           }
+          const contextPayload = {
+            categoryLabel,
+            serviceLabels: this.selectedContextItems.map((item) => item.service),
+            language: this.currentLocale.toUpperCase(),
+          }
+          this.checkContextConfig(contextPayload)
+          console.log('Sending server chat session message', {
+            sessionId: this.serverChatSessionId,
+            context: contextPayload,
+          })
+          result = await chatbotService.sendChatSessionMessage(
+            this.serverChatSessionId,
+            messageForBackend,
+            contextPayload
+          )
         } else {
-          queryData = {
-            userId: this.$store.getters.currentUser?._key || 'anonymous',
-            sessionId: this.currentSessionId || 'new-session',
-            text: messageForBackend,
-            contextOption: contextOption,
-            timestamp: new Date().toISOString(),
+          const useConversationContext = this.selectedContextItems.length > 0
+          const contextOption = useConversationContext ? 'conversation-with-labels' : 'single-message'
+          let queryData
+          if (contextOption === 'conversation-with-labels') {
+            const serviceLabels = this.selectedContextItems.map((item) => item.service)
+            const messagesForQuery = this.chatMessages.map((msg) => ({
+              role: msg.sender === 'user' ? 'user' : 'assistant',
+              content: msg.content,
+            }))
+
+            const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user')
+            if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
+              messagesForQuery[lastUserMsgIndex].content = messageForBackend
+            }
+
+            queryData = {
+              conversationId: this.conversationId,
+              userId: currentUser?._key || 'anonymous',
+              sessionId: this.currentSessionId || 'new-session',
+              messages: messagesForQuery,
+              context: {
+                categoryLabel: categoryLabel,
+                serviceLabels: serviceLabels,
+                language: this.currentLocale.toUpperCase(),
+              },
+              contextOption: 'conversation-with-context-labels',
+              timestamp: new Date().toISOString(),
+            }
+          } else {
+            queryData = {
+              userId: currentUser?._key || 'anonymous',
+              sessionId: this.currentSessionId || 'new-session',
+              text: messageForBackend,
+              contextOption: contextOption,
+              timestamp: new Date().toISOString(),
+            }
           }
+          console.log('Submitting query with data:', JSON.stringify(queryData, null, 2))
+
+          this.checkContextConfig(queryData.context)
+
+          result = await chatbotService.submitQuery(queryData)
         }
-        console.log('Submitting query with data:', JSON.stringify(queryData, null, 2))
-
-        this.checkContextConfig(queryData.context)
-
-        const result = await chatbotService.submitQuery(queryData)
 
         // --- Success State Update ---
         const endTime = performance.now()
@@ -844,7 +881,7 @@ export default {
           }
         }
         this.chatMessages.push(botMessage)
-        if (result.sessionId) {
+        if (result.sessionId && !useServerOwnedSession) {
           this.currentSessionId = result.sessionId
         }
       } catch (error) {
@@ -923,6 +960,8 @@ export default {
         if (!conversation) {
           throw new Error('Conversation not found')
         }
+
+        this.serverChatSessionId = null
 
         // DEBUG: Log the full response from backend
         console.log('[DEBUG] Conversation loaded successfully:', conversation)
@@ -1334,7 +1373,7 @@ export default {
       return `Chat - ${now.toLocaleDateString()}`
     },
 
-    startNewChat() {
+    async startNewChat() {
       if (this.hasUnsavedChanges()) {
         this.showNewChatConfirm = true
         this.newChatDialog = {
@@ -1345,7 +1384,7 @@ export default {
           secondaryText: this.translate('common.cancel'),
         }
       } else {
-        this.startNewChatConfirmed()
+        await this.startNewChatConfirmed()
       }
     },
 
@@ -1369,14 +1408,25 @@ export default {
             })
           })
         }
-        this.startNewChatConfirmed()
+        await this.startNewChatConfirmed()
       } catch (error) {
         console.error('Error saving before starting new chat:', error)
         notificationService.error('Failed to save changes. Please try again.')
       }
     },
 
-    startNewChatConfirmed() {
+    async bootstrapServerChatSessionAfterNewChat() {
+      const user = this.$store.getters.currentUser
+      if (!user?._key || this.conversationId) return
+      try {
+        const out = await chatbotService.createChatSession()
+        this.serverChatSessionId = out.sessionId
+      } catch (e) {
+        console.error('[ChatBotComponent] Could not create server chat session:', e)
+      }
+    },
+
+    async startNewChatConfirmed() {
       this.showNewChatConfirm = false
       this.chatMessages = [
         {
@@ -1388,6 +1438,7 @@ export default {
       ]
       this.currentChatId = null
       this.conversationId = null
+      this.serverChatSessionId = null
       this.selectedContextItems = []
       this.newMessage = ''
       this.currentCategoryId = null
@@ -1398,6 +1449,7 @@ export default {
         messages: JSON.parse(JSON.stringify(this.chatMessages)),
         contextItems: [],
       }
+      await this.bootstrapServerChatSessionAfterNewChat()
       this.scrollToBottom()
       notificationService.info(this.translate('chatbot.newChatStarted'), 1500)
     },

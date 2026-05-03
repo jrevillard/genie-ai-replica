@@ -520,6 +520,7 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         filter_data = input_dict.get("context", {})
         filter_strategy = input_dict.get("filter_strategy", ARANGO_FILTER_STRATEGY).upper()
+        logger.info(f"TRACE_CTX [7/7] retriever_arangodb:invoke: filter_data={filter_data} filter_strategy={filter_strategy}")
 
         # Consolidate all labels into a single list (this will need to change later)
         labels_to_filter = []
@@ -527,6 +528,7 @@ class GenieaiArangoRetriever(OpeaComponent):
             labels_to_filter.append(filter_data["categoryLabel"])
         if filter_data.get("serviceLabels"):
             labels_to_filter.extend(filter_data["serviceLabels"])
+        logger.info(f"TRACE_TMP retriever:labels labels_to_filter={labels_to_filter}")
 
         # CONSTRUCT THE AQL FILTER CLAUSE
         aql_filter_clause = ""
@@ -548,6 +550,9 @@ class GenieaiArangoRetriever(OpeaComponent):
             
             if logflag:
                 logger.debug(f"Applying filter strategy '{filter_strategy}' with labels: {labels_to_filter}")
+            logger.info(f"TRACE_TMP retriever:filter_clause aql_filter_clause={aql_filter_clause}")
+        else:
+            logger.info("TRACE_TMP retriever:filter_clause empty (no labels_to_filter)")
 
 
         if not graph_name:
@@ -715,10 +720,12 @@ class GenieaiArangoRetriever(OpeaComponent):
 
         if not search_res:
             logger.info("No documents found.")
+            logger.info("TRACE_TMP retriever:search_result_count=0")
             return []
 
         logger.info(f"Found {len(search_res)} documents.")
         logger.info(f"Search results after similarity search: {search_res}")
+        logger.info(f"TRACE_TMP retriever:search_result_count={len(search_res)}")
         
 
         # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
@@ -735,6 +742,9 @@ class GenieaiArangoRetriever(OpeaComponent):
                     cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
                     file_ids = list(doc for doc in cursor)
                     r['doc'].metadata['file_ids'] = file_ids if file_ids else []
+                    logger.info(
+                        f"TRACE_TMP retriever:file_ids chunk_id={chunk_id} mapped_file_ids={r['doc'].metadata['file_ids']}"
+                    )
             logger.info(f"Adding file id metadata after similarity search: {search_res}")
             
 

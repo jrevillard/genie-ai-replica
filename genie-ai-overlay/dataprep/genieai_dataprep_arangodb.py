@@ -62,6 +62,7 @@ CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea")
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 # New: Concurrency Control for Batches
 MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "5"))
+GRAPH_BATCH_SIZE = int(os.getenv("DATAPREP_GRAPH_BATCH_SIZE", "2"))
 
 # Spec 5.3: Externalized Prompt - Two-tier priority
 # Level 1: ENV VAR (highest priority) - override via .env
@@ -127,6 +128,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" ARANGO_DB            : {os.getenv('ARANGO_DB')}")
         print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
         print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
+        print(f" GRAPH BATCH SIZE     : {GRAPH_BATCH_SIZE}")
         print("="*60 + "\n")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
@@ -342,8 +344,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _label_with_llm(self, chunks: List[str], all_labels: List[str], file_labels: List[str], file_id: str):
         """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
-        client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
-        model = os.getenv("VLLM_MODEL_ID")
+        # Resolve endpoint/model with compatibility across VLLM_* and OPENAI_* env patterns.
+        vllm_endpoint = os.getenv("VLLM_ENDPOINT", "http://vllm:8000").rstrip("/")
+        base_url = (os.getenv("OPENAI_BASE_URL") or f"{vllm_endpoint}/v1").rstrip("/")
+        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("VLLM_API_KEY", "EMPTY")
+        model = os.getenv("OPENAI_LLM_MODEL") or os.getenv("VLLM_MODEL_ID")
+        request_timeout = float(os.getenv("DATAPREP_LABEL_LLM_TIMEOUT_SEC", "45"))
+
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=request_timeout)
+
+        logger.info(
+            f"[LABELING] file_id={file_id} resolved_client base_url={base_url} model={model} timeout_sec={request_timeout}"
+        )
+        await self._write_ingestion_log(
+            file_id,
+            "INFO",
+            "Labeling",
+            f"LLM labeling client resolved: base_url={base_url}, model={model}, timeout={request_timeout}s",
+        )
     
         # Debug Requirement 3: Print what is sent to LLM
         print("\n" + "-"*60)
@@ -356,11 +374,40 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         
         # Parallel Processing with Semaphore
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES) # Reuse same concurrency limit or define a new one
+
+        def _parse_labels_response(raw_content: str) -> List[str]:
+            """Parse model output into labels, tolerating fenced JSON and minor formatting noise."""
+            if not raw_content:
+                raise ValueError("Empty LLM response content")
+
+            content = raw_content.strip()
+
+            # Handle fenced markdown blocks: ```json ... ``` or ```
+            if content.startswith("```"):
+                content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+                content = re.sub(r"\s*```$", "", content)
+                content = content.strip()
+
+            parsed_obj = None
+            try:
+                parsed_obj = json.loads(content)
+            except json.JSONDecodeError:
+                # Fallback: extract first JSON object block if model added extra prose
+                match = re.search(r"\{[\s\S]*\}", content)
+                if not match:
+                    raise
+                parsed_obj = json.loads(match.group(0))
+
+            labels = parsed_obj.get("labels", []) if isinstance(parsed_obj, dict) else []
+            if not isinstance(labels, list):
+                raise ValueError(f"'labels' must be a list, got {type(labels).__name__}")
+            return labels
         
         async def _label_single_chunk(i, text):
             async with semaphore:
                 retries = 0
                 suggested_labels = []
+                used_metadata_fallback = False
 
                 # Validate that all labels are plain strings (not dicts/objects)
                 def _validate_labels(labels):
@@ -372,7 +419,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 while retries < 3:
                     try:
                         # Replace {labels_list} placeholder with actual labels
-                        system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
+                        system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", json.dumps(all_labels, ensure_ascii=False))
                         response = await client.chat.completions.create(
                             model=model,
                             messages=[
@@ -380,8 +427,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                 {"role": "user", "content": f"Input: {text}"}
                             ]
                         )
-                        parsed = json.loads(response.choices[0].message.content)
-                        suggested_labels = parsed.get("labels", [])
+                        raw_content = (response.choices[0].message.content or "").strip()
+                        suggested_labels = _parse_labels_response(raw_content)
 
                         # Validate label format — retry if LLM returned objects instead of strings
                         valid, bad_items = _validate_labels(suggested_labels)
@@ -396,6 +443,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         break
                     except Exception as e:
                         retries += 1
+                        await self._write_ingestion_log(
+                            file_id, "WARN", "Labeling",
+                            f"Chunk {i}: Label parse/call failure on attempt {retries}/3 (base_url={base_url}, model={model}): {str(e)[:300]}"
+                        )
 
                 if retries == 3:
                     await self._write_ingestion_log(
@@ -403,6 +454,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"Chunk {i}: LLM failed to return valid labels after 3 attempts. Falling back to file metadata labels: {file_labels}"
                     )
                     suggested_labels = list(file_labels) if file_labels else []
+                    used_metadata_fallback = True
 
                 final_labels = set()
 
@@ -417,7 +469,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         final_labels.add(label)
                         await self._write_ingestion_log(
                             file_id, "INFO", "Labeling", 
-                            f"Chunk {i}: LLM selected label '{label}'."
+                            f"Chunk {i}: Selected label '{label}'."
                         )
                         continue
                 
@@ -446,6 +498,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     await self._write_ingestion_log(
                         file_id, "INFO", "Labeling",
                         f"Chunk {i}: Final Labels: {labels_list}"
+                    )
+                elif used_metadata_fallback:
+                    await self._write_ingestion_log(
+                        file_id, "INFO", "Labeling",
+                        f"Chunk {i}: Metadata fallback yielded no taxonomy-matching labels."
                     )
 
                 return {"text": text, "labels": labels_list}
@@ -536,11 +593,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         embed_relationships=getattr(input, "embed_edges", True),
                         capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
                     )
+                    return {"batch": current_batch_num, "status": "success", "inserted_docs": len(graph_docs)}
+                return {"batch": current_batch_num, "status": "failed", "inserted_docs": 0}
             except (ValidationError, Exception) as ve:
                 logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
                 await self._write_ingestion_log(input.file_id, "WARN", "Graph", f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}")
                 
                 # Retry logic for individual docs in case of failure
+                retry_success_count = 0
                 for retry_doc in batch_docs:
                     try:
                         retry_graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, [retry_doc])
@@ -558,8 +618,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                 embed_relationships=getattr(input, "embed_edges", True),
                                 capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
                             )
+                            retry_success_count += len(retry_graph_docs)
                     except Exception as inner_e:
                         logger.error(f"Skipping individual bad document: {inner_e}")
+                if retry_success_count > 0:
+                    return {"batch": current_batch_num, "status": "partial_success", "inserted_docs": retry_success_count}
+                return {"batch": current_batch_num, "status": "failed", "inserted_docs": 0}
 
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo, lock_file=None):
         """
@@ -631,7 +695,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         }
                     ))
 
-                BATCH_SIZE = 10 
+                BATCH_SIZE = GRAPH_BATCH_SIZE
                 total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
                 
                 self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
@@ -649,8 +713,30 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     tasks.append(task)
                 
                 # Wait for all batches to complete
+                batch_results = []
                 if tasks:
-                    await asyncio.gather(*tasks)
+                    batch_results = await asyncio.gather(*tasks)
+                
+                successful_batches = sum(1 for r in batch_results if r.get("status") in {"success", "partial_success"})
+                failed_batches = sum(1 for r in batch_results if r.get("status") == "failed")
+                inserted_docs = sum(int(r.get("inserted_docs", 0)) for r in batch_results)
+
+                if tasks and successful_batches == 0:
+                    await self._write_ingestion_log(
+                        input.file_id,
+                        "ERROR",
+                        "Graph",
+                        "All graph batches failed. No graph documents were inserted."
+                    )
+                    raise Exception("Graph extraction failed for all batches.")
+
+                if failed_batches > 0:
+                    await self._write_ingestion_log(
+                        input.file_id,
+                        "WARN",
+                        "Graph",
+                        f"Graph ingestion partially completed. Successful batches: {successful_batches}/{total_batches}, inserted graph docs: {inserted_docs}."
+                    )
 
                 # 6. Final Status Update
                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))

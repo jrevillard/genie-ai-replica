@@ -409,6 +409,12 @@ class QueryService {
 
           opeaPayload = {
             messages: queryText,
+            context: {
+              categoryLabel: queryData.context.categoryLabel,
+              serviceLabels: queryData.context.serviceLabels,
+              language: queryData.context.language
+            },
+            user_id: queryData.userId,
             stream: false
           };
         } else {
@@ -426,6 +432,7 @@ class QueryService {
         }
 
         logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
+        logger.info(`TRACE_CTX [2/7] query-service -> OPEA: context=${JSON.stringify(opeaPayload?.context ?? null)}`);
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
         // *** CHANGED: Use Worker Thread for OPEA Call ***
@@ -477,6 +484,142 @@ class QueryService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Run ChatQnA with a full messages[] built on the server (e.g. server-owned chat sessions).
+   * Always uses conversation-shaped OPEA payloads. System/instructions live in ChatQnA (CHATQNA_SYSTEM_PROMPT), not here.
+   *
+   * @param {Object} opts
+   * @param {string} opts.userId
+   * @param {string} opts.sessionId - Client/session correlation id for analytics (chat session _key)
+   * @param {Array<{role:string,content:string}>} opts.messages - Full turn list including latest user message
+   * @param {Object} opts.context - { categoryLabel, serviceLabels, language }
+   * @param {string} [opts.chatSessionId] - Stored on the queries doc as chatSessionId
+   * @returns {Promise<{queryId: string, response: *, metadata: *, responseTime: number}>}
+   */
+  async executeChatqnaTurn({ userId, sessionId, messages, context, chatSessionId }) {
+    const startTime = Date.now();
+    if (!userId || !Array.isArray(messages) || messages.length === 0) {
+      throw new Error('executeChatqnaTurn: userId and non-empty messages are required');
+    }
+    const ctx = context && typeof context === 'object' ? context : { categoryLabel: 'General', serviceLabels: [], language: 'EN' };
+    if (!Array.isArray(ctx.serviceLabels)) ctx.serviceLabels = [];
+    if (!ctx.categoryLabel) ctx.categoryLabel = 'General';
+
+    const lastMessage = messages[messages.length - 1];
+    const queryText = lastMessage && lastMessage.content ? lastMessage.content : '';
+
+    let categoryId = null;
+    if (ctx.categoryLabel) {
+      try {
+        const categoryQuery = aql`
+            FOR cat IN ${this.serviceCategories}
+              FILTER cat.nameEN == ${ctx.categoryLabel}
+              LIMIT 1
+              RETURN cat._key
+          `;
+        const cursor = await this.db.query(categoryQuery);
+        categoryId = await cursor.next();
+      } catch (e) {
+        logger.error(`executeChatqnaTurn category resolve: ${e.message}`);
+      }
+    }
+
+    let serviceIds = [];
+    if (ctx.serviceLabels && ctx.serviceLabels.length > 0) {
+      try {
+        const servicesQuery = aql`
+            FOR svc IN ${this.services}
+              FILTER svc.nameEN IN ${ctx.serviceLabels}
+              RETURN svc._key
+          `;
+        const cursor = await this.db.query(servicesQuery);
+        serviceIds = await cursor.all();
+      } catch (e) {
+        logger.error(`executeChatqnaTurn service resolve: ${e.message}`);
+      }
+    }
+
+    const basicQueryDoc = {
+      userId,
+      sessionId,
+      chatSessionId: chatSessionId || null,
+      timestamp: new Date().toISOString(),
+      isAnswered: false,
+      categoryId: categoryId,
+      serviceId: serviceIds.length > 0 ? serviceIds : null,
+      responseTime: 0,
+      contextOption: 'server-chat-session',
+      messages,
+      context: ctx,
+      text: queryText,
+    };
+
+    const query = await this.queries.save(basicQueryDoc);
+    const queryId = query._key;
+    logger.info('QueryService.executeChatqnaTurn query_created', { queryId, chatSessionId });
+
+    const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
+    let opeaResponseContent = null;
+    let opeaMetadata = null;
+    let opeaResponseTime = 0;
+    const opeaStartTime = Date.now();
+
+    if (backendMode === 'test-mode') {
+      const mockData = this.getMockOpeaResponse({ messages, context: ctx });
+      opeaResponseContent = mockData.response;
+      opeaMetadata = mockData.metadata;
+      opeaResponseTime = Date.now() - opeaStartTime;
+      await this.queries.update(queryId, {
+        response: opeaResponseContent,
+        responseTime: opeaResponseTime,
+        isAnswered: true,
+        metadata: opeaMetadata,
+      });
+    } else {
+      const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+      const opeaPort = process.env.OPEA_PORT || '8888';
+      const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+      const opeaPayload = {
+        messages,
+        context: {
+          categoryLabel: ctx.categoryLabel,
+          serviceLabels: ctx.serviceLabels,
+          language: ctx.language || 'EN',
+        },
+        user_id: userId,
+        stream: false,
+      };
+      logger.info(`TRACE_CTX executeChatqnaTurn -> OPEA context=${JSON.stringify(opeaPayload.context)}`);
+      const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
+      opeaResponseTime = workerResult.responseTime;
+      opeaResponseContent = workerResult.response;
+      opeaMetadata = workerResult.metadata;
+      await this.queries.update(queryId, {
+        response: opeaResponseContent,
+        responseTime: opeaResponseTime,
+        isAnswered: true,
+        metadata: opeaMetadata,
+      });
+    }
+
+    if (this.analyticsService) {
+      await this.analyticsService.recordQuery(await this.queries.document(queryId));
+    }
+
+    logger.info('QueryService.executeChatqnaTurn complete', {
+      queryId,
+      durationMs: Date.now() - startTime,
+    });
+
+    return {
+      queryId,
+      response: opeaResponseContent,
+      metadata: opeaMetadata,
+      responseTime: opeaResponseTime,
+      sessionId,
+    };
   }
 
   /**

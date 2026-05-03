@@ -26,8 +26,9 @@ const securityHeaders = (req, res, next) => {
   res.set('Referrer-Policy', 'no-referrer-when-downgrade');
   
   // Controls browser feature permissions
-  res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.set('Feature-Policy', 'camera none; microphone none; geolocation none');
+  // Microphone allowed on same origin to support the voice-call agent.
+  res.set('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
+  res.set('Feature-Policy', "camera none; microphone 'self'; geolocation none");
 
   // Optional: Logging for secure requests can remain if you find it useful
   logger.info(`HTTP_SECURE_REQUEST: ${req.method} ${req.url}`, {

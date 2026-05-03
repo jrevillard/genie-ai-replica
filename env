@@ -281,6 +281,77 @@ HUGGING_FACE_HUB_TOKEN=
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
 
 # =============================================================================
+# SECTION 8b: VOICE BRIDGE (OPTIONAL — `--profile voice`)
+# =============================================================================
+# WebSocket-based voice call. Bridges browser ↔ ASR (faster-whisper) ↔
+# chatqna LLM ↔ TTS (Piper). Uses only the existing TLS port 443 via the
+# nginx /voice/ proxy — no WebRTC, no TURN, no extra ports.
+#
+# Enable with: docker compose --profile opea --profile voice up -d
+
+# Public WebSocket URL the browser connects to. The backend hands this
+# value to the frontend via /api/voice/token.
+# Local dev: ws://localhost/voice/v1/voice/stream
+# Production: wss://<your-gateway-fqdn>/voice/v1/voice/stream
+VOICE_BRIDGE_WS_URL=wss://localhost/voice/v1/voice/stream
+
+# Voice-bridge tuning (all optional — defaults work)
+# VOICE_BRIDGE_MAX_TOKENS=128        # short voice replies; raise for longer answers
+# VOICE_BRIDGE_TEMPERATURE=0.7       # LLM sampling temperature
+# VOICE_BRIDGE_VAD_AGGRESSIVENESS=2  # 0-3, higher = more aggressive silence detection
+# VOICE_BRIDGE_SILENCE_FRAMES=25     # frames of silence before utterance ends (~500 ms)
+# VOICE_BRIDGE_DRAIN_S=1.5           # post-reply drain window to kill echo
+#
+# To route voice through chatqna's RAG (slower but uses the knowledge base):
+# VOICE_BRIDGE_LLM_ENDPOINT=http://chatqna-xeon-backend-server:8888/v1/chatqna
+#
+# Override the voice-call system prompt per language (single-line in .env;
+# use literal \n for line breaks). Leave blank/unset to use the built-in
+# Genie / Gambia health prompt.
+# VOICE_SYSTEM_PROMPT_EN=
+# VOICE_SYSTEM_PROMPT_FR=
+# VOICE_SYSTEM_PROMPT_ES=
+
+# Whisper ASR
+ASR_WHISPER_MODEL=large-v3-turbo
+ASR_WHISPER_DEVICE=cuda
+ASR_WHISPER_COMPUTE_TYPE=float16
+ASR_WHISPER_LANGUAGES=fr,en,es,sw
+
+# Piper TTS — voice file names (must exist under ./data/piper-voices/<name>.onnx + .json)
+# Defaults: when the caller doesn't specify a voice. Add new voices via
+# scripts/download-piper-voices.sh.
+TTS_PIPER_DEFAULT_VOICE_FR=fr_FR-siwis-medium
+TTS_PIPER_DEFAULT_VOICE_EN=en_US-libritts_r-medium
+TTS_PIPER_DEFAULT_VOICE_ES=es_MX-claude-high
+TTS_PIPER_DEFAULT_VOICE_SW=sw_CD-lanfrica-medium
+
+# Per-language gender mapping — used when the frontend selects Female / Male.
+# Voice files are downloaded by scripts/download-piper-voices.sh.
+# Swahili only has one Piper voice; both genders fall back to it.
+TTS_PIPER_VOICE_FEMALE_EN=en_US-lessac-high
+TTS_PIPER_VOICE_MALE_EN=en_US-ryan-high
+TTS_PIPER_VOICE_FEMALE_FR=fr_FR-siwis-medium
+TTS_PIPER_VOICE_MALE_FR=fr_FR-tom-medium
+TTS_PIPER_VOICE_FEMALE_ES=es_ES-sharvard-medium
+TTS_PIPER_VOICE_MALE_ES=es_MX-claude-high
+TTS_PIPER_VOICE_FEMALE_SW=sw_CD-lanfrica-medium
+TTS_PIPER_VOICE_MALE_SW=sw_CD-lanfrica-medium
+
+# =============================================================================
+# SECTION 8c: LEGACY VOICE STACK (LiveKit + coturn — `--profile legacy_voice`)
+# =============================================================================
+# Kept for reference only. Not used by the default voice profile.
+# LIVEKIT_API_KEY=genieai-devkey
+# LIVEKIT_API_SECRET=genieai-devsecret-change-me-32chars
+# LIVEKIT_WS_URL=ws://localhost:7880
+# LIVEKIT_NODE_IP=127.0.0.1
+# TURN_USERNAME=genieai_voice
+# TURN_CREDENTIAL=genieai-turn-secret-change-me
+# TURN_EXTERNAL_IP=127.0.0.1
+# TURN_PORT=7881
+
+# =============================================================================
 # SECTION 9: GPU-SPECIFIC CONFIGURATION
 # =============================================================================
 # These variables override GPU memory utilization and model settings.

@@ -79,23 +79,24 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max tok
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
-CHATQNA_SYSTEM_PROMPT = """You are Keletso, an AI agricultural advisor for the Lesotho Ministry of Agriculture. You help extension workers with practical farming advice specific to Lesotho.
+CHATQNA_SYSTEM_PROMPT = """You are Keletso, an AI agricultural advisor for the Lesotho Ministry of Agriculture.
 
-When a farmer asks you a question, read it carefully and answer only what was asked. Do not volunteer extra information. Keep answers to 3 sentences maximum.
+Your job is to answer the SPECIFIC question asked. Read the question carefully. Answer only what was asked in 2-3 sentences maximum.
 
-If asked who you are, say only: I am Keletso, your AI agricultural advisor for Lesotho Ministry of Agriculture.
+Key facts about Lesotho agriculture:
+- Maize varieties: PAN 3M-01, PAN 12, PAN 4M-19 only. Never recommend other varieties.
+- Bean varieties: Pinto NW 590, Kranskop Red Speckled Sugar Bean, PAN 148, PAN 178 only.
+- Maize planting: October to December. Maize harvest: April to June.
+- Bean planting: October to November. Bean harvest: March to April.
+- Highlands (Leribe, Butha-Buthe, Mokhotlong): PAN 3M-01 and PAN 4M-19.
+- Lowlands (Maseru, Berea, Mafeteng): PAN 3M-01 and PAN 12.
+- Maize fertilizer: 2:3:2 basal at planting, LAN top-dress at knee height 6 weeks later.
+- Bean fertilizer: basal only, no top-dress.
+- Fall Armyworm: ragged leaf damage and frass in whorl. Control with early planting and pesticides.
 
-If asked about maize varieties, recommend only PAN 3M-01, PAN 12, or PAN 4M-19. For Leribe, Butha-Buthe and Mokhotlong highlands recommend PAN 3M-01 and PAN 4M-19. For Maseru, Berea and Mafeteng lowlands recommend PAN 3M-01 and PAN 12.
-
-If asked about planting dates, maize is planted October to December and harvested April to June. Beans are planted October to November and harvested March to April.
-
-If asked about fertilizer, apply 2:3:2 basal at planting for maize, then LAN top-dress at knee height 6 weeks after planting. For beans use basal only.
-
-If asked about Fall Armyworm, look for ragged leaf damage and frass in the whorl. Control with early planting and pesticides. Report outbreaks to the Ministry immediately.
-
-If the question is not about agriculture, respond only: I am Keletso, I can only assist with farming and agriculture questions.
-
-Never mention SC varieties. Never mention K124 or K125. Never output information that was not asked for."""
+If asked about identity: say only "I am Keletso, your AI agricultural advisor for Lesotho Ministry of Agriculture."
+If not about agriculture: say only "I am Keletso, I can only assist with farming and agriculture questions."
+Never mention SC varieties, P varieties, RR2 or any non-Lesotho variety names."""
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -1244,10 +1245,13 @@ class ChatQnAService:
 
                 # Attempt to detect language from the last user message
                 last_user_content = ""
-                for msg in reversed(full_chat_history):
-                    if msg.get("role") == "user":
-                        last_user_content = msg.get("content", "")
-                        break
+                if isinstance(full_chat_history, str):
+                    last_user_content = full_chat_history
+                elif isinstance(full_chat_history, list):
+                    for msg in reversed(full_chat_history):
+                        if isinstance(msg, dict) and msg.get("role") == "user":
+                            last_user_content = msg.get("content", "")
+                            break
 
                 if logflag:
                     logger.info(f"Last user content for detection (first 100 chars): {last_user_content[:100] if last_user_content else 'None'}")

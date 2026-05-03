@@ -83,7 +83,8 @@ function goBack() {
 
 function chatWithTwin() {
   if (!twin.value) return;
-  notify.info(`Chat with ${twin.value.name} — coming soon`);
+  const href = router.resolve({ name: 'chat', params: { twinId: twin.value._key } }).href;
+  window.open(href, '_blank', 'noopener');
 }
 
 function startEditing() {

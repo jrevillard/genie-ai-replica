@@ -44,6 +44,21 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/AiTwinDetailView.vue'),
   },
   {
+    path: '/chat/:twinId?',
+    name: 'chat',
+    component: () => import('../views/ChatView.vue'),
+    // Standalone, end-user surface. No auth required so shareable session URLs
+    // (twinId in path) work for unauthenticated visitors once the public API lands.
+    meta: { public: true },
+  },
+  {
+    path: '/call/:twinId?',
+    name: 'call',
+    component: () => import('../views/CallView.vue'),
+    // Standalone voice surface. Same shareability story as /chat.
+    meta: { public: true },
+  },
+  {
     path: '/chat-history',
     name: 'chat-history',
     component: () => import('../views/ChatHistoryView.vue'),

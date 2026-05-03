@@ -79,7 +79,23 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max tok
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
-CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
+CHATQNA_SYSTEM_PROMPT = """You are Keletso, an AI agricultural advisor for the Lesotho Ministry of Agriculture. You help extension workers with practical farming advice specific to Lesotho.
+
+When a farmer asks you a question, read it carefully and answer only what was asked. Do not volunteer extra information. Keep answers to 3 sentences maximum.
+
+If asked who you are, say only: I am Keletso, your AI agricultural advisor for Lesotho Ministry of Agriculture.
+
+If asked about maize varieties, recommend only PAN 3M-01, PAN 12, or PAN 4M-19. For Leribe, Butha-Buthe and Mokhotlong highlands recommend PAN 3M-01 and PAN 4M-19. For Maseru, Berea and Mafeteng lowlands recommend PAN 3M-01 and PAN 12.
+
+If asked about planting dates, maize is planted October to December and harvested April to June. Beans are planted October to November and harvested March to April.
+
+If asked about fertilizer, apply 2:3:2 basal at planting for maize, then LAN top-dress at knee height 6 weeks after planting. For beans use basal only.
+
+If asked about Fall Armyworm, look for ragged leaf damage and frass in the whorl. Control with early planting and pesticides. Report outbreaks to the Ministry immediately.
+
+If the question is not about agriculture, respond only: I am Keletso, I can only assist with farming and agriculture questions.
+
+Never mention SC varieties. Never mention K124 or K125. Never output information that was not asked for."""
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -1251,7 +1267,8 @@ class ChatQnAService:
                     'mokhotlong', 'thaba', 'harvest', 'store', 'silo', 'grain bag',
                     'pan 3m', 'pan 12', 'pan 4m', 'kranskop', 'pinto', 'advice',
                     'advise', 'recommend', 'help', 'farmer', 'hectare', 'acre',
-                    'visit', 'field day', 'training', 'workshop', 'demo plot']
+                    'visit', 'field day', 'training', 'workshop', 'demo plot',
+                    'who are you', 'what are you', 'keletso', 'introduce', 'your name', 'who is']
                 _ql = last_user_content.lower() if last_user_content else ''
                 _is_agri = any(kw in _ql for kw in _agri)
                 _blocked = not _is_agri
@@ -1385,13 +1402,30 @@ class ChatQnAService:
         llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get("text", "Sorry, I could not generate a response.")
         # ── AgriConnect post-processing filter ──────────────────────────────
         # Remove SC variety mentions from LLM response (IBM Granite training data leak)
-        sc_pattern = r'SC\d{3}\s*\([TM]{1,2}\)[,\s]*'
+        sc_pattern = r'SC\d{3}(\s*\([TM]{1,2}\))?[,\s]*'
         llm_response = re.sub(sc_pattern, '', llm_response)
         # Remove "Monot'sa" references
         llm_response = re.sub(r"Monot'sa[^.]*\.", '', llm_response)
         # Clean up any double spaces or orphaned punctuation left by removal
         llm_response = re.sub(r'\s{2,}', ' ', llm_response).strip()
         llm_response = re.sub(r',\s*\.', '.', llm_response)
+
+        # Override identity response
+        user_msg = last_user_content.lower() if last_user_content else ""
+
+        # Block non-agriculture questions that slipped through guardrail
+        non_agri_patterns = ['king of lesotho', 'prime minister', 'president', 'politician', 'football', 'soccer', 'music', 'movie', 'celebrity']
+        if any(p in user_msg for p in non_agri_patterns):
+            llm_response = 'I am Keletso, I can only assist with farming and agriculture questions.'
+        if any(phrase in user_msg for phrase in ['who are you', 'what are you', 'introduce yourself', 'your name']):
+            llm_response = 'I am Keletso, your AI agricultural advisor for the Lesotho Ministry of Agriculture. I help extension workers with practical farming advice. Ask me about maize, beans, pests, fertilizer or planting seasons.'
+
+        # Remove Granite artifacts - fake Q&A patterns
+        llm_response = re.sub(r'###.*', '', llm_response, flags=re.DOTALL).strip()
+        llm_response = re.sub(r'Question:.*', '', llm_response, flags=re.DOTALL).strip()
+        llm_response = re.sub(r'USER:.*', '', llm_response, flags=re.DOTALL).strip()
+        llm_response = re.sub(r'CONTENT FROM.*', '', llm_response, flags=re.DOTALL).strip()
+        llm_response = re.sub(r'Answer:.*$', '', llm_response, flags=re.DOTALL).strip()
         llm_response = re.sub(r'are\s*\.\s*', 'are listed in the knowledge base. ', llm_response)
         # ── End post-processing filter ───────────────────────────────────────
         

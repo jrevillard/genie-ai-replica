@@ -1418,8 +1418,11 @@ class ChatQnAService:
         user_msg = last_user_content.lower() if last_user_content else ""
 
         # Block non-agriculture questions that slipped through guardrail
-        non_agri_patterns = ['king of lesotho', 'prime minister', 'president', 'politician', 'football', 'soccer', 'music', 'movie', 'celebrity']
+        non_agri_patterns = ['king of lesotho', 'king letsie', 'king moshoeshoe', 'prime minister', 'president', 'politician', 'football', 'soccer', 'music', 'movie', 'celebrity', 'elon musk', 'bitcoin', 'crypto', 'joke', 'poem', 'world cup']
         if any(p in user_msg for p in non_agri_patterns):
+            llm_response = 'I am Keletso, I can only assist with farming and agriculture questions.'
+        non_agri_response = ['elon musk is', 'bitcoin is', 'world cup', 'spacex', 'tesla motors']
+        if any(p in llm_response.lower() for p in non_agri_response):
             llm_response = 'I am Keletso, I can only assist with farming and agriculture questions.'
         if any(phrase in user_msg for phrase in ['who are you', 'what are you', 'introduce yourself', 'your name']):
             llm_response = 'I am Keletso, your AI agricultural advisor for the Lesotho Ministry of Agriculture. I help extension workers with practical farming advice. Ask me about maize, beans, pests, fertilizer or planting seasons.'

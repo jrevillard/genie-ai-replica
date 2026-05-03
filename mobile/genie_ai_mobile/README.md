@@ -249,7 +249,7 @@ assets/                                 # Static assets
 
 ### Optional Software
 - **Xcode** (macOS only) - Required for iOS builds
-- **Chrome/Edge** - For web development testing
+- **Microsoft Edge** - For web development testing
 
 ### IDE Setup (VS Code)
 
@@ -292,6 +292,12 @@ flutter pub get
 ### 3. Verify Flutter Setup
 
 ```bash
+# Linux
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
+
+# Windows PowerShell
+$env:CHROME_EXECUTABLE = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+
 flutter doctor
 ```
 
@@ -309,7 +315,15 @@ Edit [assets/config/genie-ai-config.json](assets/config/genie-ai-config.json) to
 
 ```bash
 # Web (fastest for UI testing)
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
 flutter run -d chrome
+
+# Web against hosted API
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
+flutter run -d chrome --dart-define=API_BASE_URL=https://164.52.194.143/api
+
+# Android/Linux against hosted API
+flutter run --dart-define=API_BASE_URL=https://164.52.194.143/api
 
 # Android (requires device or emulator)
 flutter run
@@ -326,6 +340,13 @@ flutter run -d <device-id>
 ### App Configuration (genie-ai-config.json)
 
 The app uses a JSON configuration file for customization:
+
+The API base URL defaults to `https://164.52.194.143/api` in [api_service.dart](lib/services/api_service.dart). Override it at run or build time with:
+
+```bash
+flutter run --dart-define=API_BASE_URL=https://164.52.194.143/api
+flutter build apk --release --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
 
 ```json
 {
@@ -418,10 +439,23 @@ The app includes `MyHttpOverrides` in [main.dart](lib/main.dart:36-44) to bypass
 
 #### Web Development (Fastest Iteration)
 ```bash
+export CHROME_EXECUTABLE=/usr/bin/microsoft-edge
 flutter run -d chrome
 ```
 - Note: CORS and asset handling differ from mobile
+- Flutter still uses the `chrome` device id for web runs, but `CHROME_EXECUTABLE` makes it launch Microsoft Edge.
 - Use for UI/UX testing only
+
+Normal username/password login uses the hosted legacy JWT auth routes from `gov-chat-backend`:
+
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+
+```bash
+flutter run --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
+
+The app hashes the password before sending it as `encPassword`, matching the MEWA backend contract.
 
 #### Android Debug
 ```bash

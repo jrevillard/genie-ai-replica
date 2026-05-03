@@ -390,8 +390,7 @@ class QueryService {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
         const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
         const opeaPort = process.env.OPEA_PORT || '8888';
-        const opeaPath = process.env.OPEA_PATH || '/v1/chat/completions';
-        const opeaUrl = `http://${opeaHost}:${opeaPort}${opeaPath}`;
+        const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
         let opeaPayload;
         if (backendMode === 'single-message') {
@@ -404,13 +403,19 @@ class QueryService {
           }
 
           opeaPayload = {
-            messages: [{ role: 'user', content: queryText }],
+            messages: [{"role": "user", "content": queryText}],
             stream: false
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
           opeaPayload = {
             messages: queryData.messages,
+            context: {
+              categoryLabel: queryData.context.categoryLabel,
+              serviceLabels: queryData.context.serviceLabels,
+              language: queryData.context.language
+            },
+            user_id: queryData.userId,
             stream: false
           };
         }

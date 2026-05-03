@@ -45,14 +45,34 @@ async function _getGoogleToken() {
 }
 
 
+// 2026-05-04: Wait for FB.init to actually complete. The SDK script
+// is async/defer, so on a fast click after page load `window.FB` can
+// exist while `fbAsyncInit` (which calls FB.init) hasn't fired yet —
+// FB.login() then throws "init not called with valid version". The
+// flag `window.__AMINA_FB_INIT_DONE` is set by fbAsyncInit in
+// index.html only AFTER FB.init succeeds.
+async function _waitForFbInit(timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (window.__AMINA_FB_INIT_ERROR) {
+      throw new Error("FB.init failed: " + window.__AMINA_FB_INIT_ERROR);
+    }
+    if (window.FB && window.__AMINA_FB_INIT_DONE) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  if (!window.FB) {
+    throw new Error("Facebook SDK not loaded. Check internet connection.");
+  }
+  throw new Error("Facebook SDK loaded but FB.init() never ran — check the appId.");
+}
+
+
 async function _getFacebookToken() {
   const appId = window.__AMINA_FACEBOOK_APP_ID || "";
   if (!appId || appId.includes("%VITE_")) {
     throw new Error("Facebook login not configured. Set VITE_FACEBOOK_APP_ID.");
   }
-  if (!window.FB) {
-    throw new Error("Facebook SDK not loaded. Check internet connection.");
-  }
+  await _waitForFbInit();
   return await new Promise((resolve, reject) => {
     window.FB.login(
       (resp) => resp.status === "connected"

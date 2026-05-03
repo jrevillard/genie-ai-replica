@@ -140,8 +140,25 @@ export default function AuthScreen({ onLogin, onAdminLogin, onCaregiverLogin }) 
           setError("Facebook login not configured. Set VITE_FACEBOOK_APP_ID in frontend .env");
           setLoading(false); return;
         }
+        // 2026-05-04: wait for FB.init() to actually complete, not just
+        // for the SDK script to load. The SDK is async/defer; FB.init
+        // runs only after fbAsyncInit fires (in index.html) which sets
+        // window.__AMINA_FB_INIT_DONE. Calling FB.login() before init
+        // throws "init not called with valid version". Up to 5 s wait.
+        const fbDeadline = Date.now() + 5000;
+        while (Date.now() < fbDeadline && !(window.FB && window.__AMINA_FB_INIT_DONE)) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        if (window.__AMINA_FB_INIT_ERROR) {
+          setError("Facebook SDK init failed: " + window.__AMINA_FB_INIT_ERROR);
+          setLoading(false); return;
+        }
         if (!window.FB) {
           setError("Facebook SDK failed to load. Check your internet connection.");
+          setLoading(false); return;
+        }
+        if (!window.__AMINA_FB_INIT_DONE) {
+          setError("Facebook SDK loaded but FB.init() never ran. Reload the page.");
           setLoading(false); return;
         }
         accessToken = await new Promise((resolve, reject) => {

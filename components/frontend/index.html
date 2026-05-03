@@ -39,11 +39,41 @@
     />
 
     <!-- Facebook JS SDK -->
+    <!-- 2026-05-04: bumped graph version v19.0 -> v22.0. Meta deprecated
+         v19.0 on 2026-04-09 per the platform changelog; FB.init silently
+         accepts the bad version, then FB.login() throws "init not called
+         with valid version". Bumping to v22.0 (released Oct 2024, supported
+         through late 2026) restores login. The version string is the only
+         thing that needed to change — appId / scope / fields are unchanged.
+         Also setting window.__AMINA_FB_INIT_DONE so login code can wait
+         for init to complete instead of just checking that window.FB
+         exists (the SDK script is async/defer; FB.init runs only after
+         both the SDK loads AND fbAsyncInit fires). -->
     <script>
       window.fbAsyncInit = function() {
         var appId = window.__AMINA_FACEBOOK_APP_ID;
-        if (appId && appId !== "%VITE_FACEBOOK_APP_ID%") {
-          FB.init({ appId: appId, cookie: true, xfbml: false, version: "v19.0" });
+        // 2026-05-04 (BUG FIX): the previous guard was
+        //   if (appId && appId !== "%VITE_FACEBOOK_APP_ID%")
+        // intended to skip init when Vite hadn't substituted the
+        // placeholder. But Vite substitutes the placeholder on BOTH
+        // sides of the comparison, so once VITE_FACEBOOK_APP_ID gets
+        // set to "1388627716614900", the served HTML becomes
+        //   if (appId && appId !== "1388627716614900")
+        // which is exactly the wrong condition — FB.init was NEVER
+        // called and FB.login then threw "init not called with valid
+        // version". Fix: detect the un-substituted placeholder by
+        // shape (starts with "%VITE_") instead of by literal match,
+        // since Vite only substitutes occurrences that exactly match
+        // the placeholder syntax — substring checks like indexOf are
+        // immune.
+        if (appId && appId.indexOf("%VITE_") !== 0) {
+          try {
+            FB.init({ appId: appId, cookie: true, xfbml: false, version: "v22.0" });
+            window.__AMINA_FB_INIT_DONE = true;
+          } catch (e) {
+            console.error("[AMINA] FB.init failed:", e);
+            window.__AMINA_FB_INIT_ERROR = String(e && e.message || e);
+          }
         }
       };
     </script>

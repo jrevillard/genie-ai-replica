@@ -19,7 +19,7 @@ from openai import AsyncOpenAI
 from langchain_community.embeddings import HuggingFaceHubEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import HTMLHeaderTextSplitter, MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_arangodb import ArangoGraph
 # Import exceptions for robust error handling
 from arango.exceptions import AQLQueryExecuteError
@@ -311,6 +311,29 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         else:
             if path.endswith(".html"):
                 docs = text_splitter.split_text(content)
+            elif path.endswith(".md"):
+                # Split at markdown header boundaries so each section (e.g. "## October - Week 43")
+                # becomes its own chunk. strip_headers=False keeps the section header in the chunk
+                # text. The parent H1 title ends up only in metadata, so we re-inject it into each
+                # child chunk's text — otherwise weekly data chunks contain no crop/region context
+                # and retrieval fails for queries like "vegetative growth of potato in dhaka".
+                # A secondary RecursiveCharacterTextSplitter pass caps oversized sections for long
+                # prose MDs — safe fallback so any markdown type is handled correctly.
+                md_splitter = MarkdownHeaderTextSplitter(
+                    headers_to_split_on=[("#", "H1"), ("##", "H2"), ("###", "H3")],
+                    strip_headers=False,
+                )
+                md_docs = md_splitter.split_text(content)
+                for doc in md_docs:
+                    h1 = doc.metadata.get("H1", "")
+                    if h1 and not doc.page_content.lstrip().startswith("# "):
+                        doc.page_content = f"# {h1}\n{doc.page_content}"
+                secondary_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=doc_path.chunk_size,
+                    chunk_overlap=doc_path.chunk_overlap,
+                    separators=get_separators(),
+                )
+                docs = secondary_splitter.split_documents(md_docs)
             else:
                 docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]

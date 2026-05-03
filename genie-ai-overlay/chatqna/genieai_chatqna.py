@@ -1487,27 +1487,30 @@ class ChatQnAService:
                             else:
                                 logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
                                 # Assigning error values to avoid service crashing [to be optimised]
-                                labels = "error" 
+                                labels = "error"
                                 file_id = "error"
                                 file_name = "error"
                                 file_read_url = "error"
-                                score = 0
+                                # Note: score is intentionally NOT reset here — the reranker
+                                # score is still valid even when document metadata is unavailable.
 
                         source_documents_formatted.append({
                             "document_id": file_id,
                             "document_name": file_name,
                             "url": file_read_url,
-                            "categoryLabel": labels, 
-                            "serviceLabels": [], 
+                            "categoryLabel": labels,
+                            "serviceLabels": [],
                             "score": score,
                             })
 
                         scores.append(score)
-            
+
             logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
 
-        # Calculate overall confidence score (e.g., average of top documents)
-        confidence_score = sum(scores) / len(scores) if scores else 0.0
+        # Use the best (max) reranker score as confidence — it reflects how well the
+        # top retrieved chunk matches the query. Averaging pulls the score down when
+        # lower-ranked chunks are irrelevant, which is expected and not a failure.
+        confidence_score = max(scores) if scores else 0.0
         logger.info(f"\n\n[ DEBUG ] document confidence scores: {scores} ")
 
         # Construct the final JSON payload

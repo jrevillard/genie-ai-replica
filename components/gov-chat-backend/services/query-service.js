@@ -31,14 +31,14 @@ async function classifyWeatherWithLLM(query) {
           {
             role: 'user',
             content:
-              `Is the following query asking for a real-time weather forecast or ` +
-              `current/future meteorological conditions for a specific location?\n\nQuery: "${query}"`,
+              `Is the following query asking about weather conditions or a meteorological ` +
+              `forecast for a specific location or time period (past, present, or future)?\n\nQuery: "${query}"`,
           },
         ],
         max_tokens: 3,
         temperature: 0,
       },
-      { timeout: 2500 },
+      { timeout: 5000 },
     );
     const answer = (resp.data?.choices?.[0]?.message?.content || '').trim().toUpperCase();
     logger.info(`[WEATHER] LLM classifier → "${answer}"`);
@@ -453,6 +453,15 @@ class QueryService {
           'threshold', 'calendar', 'table', 'chart', 'section', 'page', 'schedule',
           'what does', 'what is listed', 'what is stated', 'document says',
         ];
+        // Question-form phrases that are unambiguously live forecast requests — they never
+        // appear in document/knowledge-base queries, so no LLM classification is needed.
+        const WEATHER_FORECAST_PHRASES = [
+          'how is the weather', 'what is the weather', 'what will the weather',
+          'weather today', 'weather tomorrow', 'weather this week', 'weather next week',
+          'weather in 1', 'weather in 2', 'weather in 3', 'weather in 4', 'weather in 5',
+          'weather in 6', 'weather in 7', 'weather forecast', 'current weather',
+          'will it rain', 'will it be hot', 'will it be cold', 'how hot will', 'how cold will',
+        ];
         const WEATHER_HARD      = ['rainfall', 'storm', 'flood', 'cyclone', 'monsoon', 'typhoon'];
         const AGRO_TERMS        = [
           'soil', 'crop', 'plant', 'pest', 'disease', 'seed', 'harvest', 'fertilizer',
@@ -463,22 +472,23 @@ class QueryService {
         ];
         const WEATHER_AMBIGUOUS = ['weather', 'temperature', 'rain', 'humid', 'climate', 'forecast', 'wind', 'drought'];
 
-        const lowerMsg       = lastUserMsg.toLowerCase();
-        const hasRagOverride = RAG_OVERRIDE.some(kw => lowerMsg.includes(kw));
-        const hasHardSignal  = WEATHER_HARD.some(kw => lowerMsg.includes(kw));
-        const hasAgroTerm    = AGRO_TERMS.some(kw => lowerMsg.includes(kw));
-        const hasAmbiguous   = WEATHER_AMBIGUOUS.some(kw => lowerMsg.includes(kw));
+        const lowerMsg          = lastUserMsg.toLowerCase();
+        const hasRagOverride    = RAG_OVERRIDE.some(kw => lowerMsg.includes(kw));
+        const hasForecastPhrase = WEATHER_FORECAST_PHRASES.some(kw => lowerMsg.includes(kw));
+        const hasHardSignal     = WEATHER_HARD.some(kw => lowerMsg.includes(kw));
+        const hasAgroTerm       = AGRO_TERMS.some(kw => lowerMsg.includes(kw));
+        const hasAmbiguous      = WEATHER_AMBIGUOUS.some(kw => lowerMsg.includes(kw));
 
         let isWeatherQuery = false;
         if (weatherEnabled) {
           if (hasRagOverride) {
             // Tier 0: document/knowledge query signals — always RAG, no LLM call needed
             logger.info('[WEATHER] Tier 0 — document/knowledge signal detected → RAG');
-          } else if (hasHardSignal) {
-            // Tier 1: unambiguous weather event — route to weather even if agro terms present
-            // e.g. "Should I harvest before the cyclone?" is still a weather question
+          } else if (hasForecastPhrase || hasHardSignal) {
+            // Tier 1: unambiguous forecast phrase ("how is the weather", "weather tomorrow"…)
+            // or hard event keyword (cyclone, flood…) — route to weather without LLM call
             isWeatherQuery = true;
-            logger.info('[WEATHER] Tier 1 — hard weather keyword → weather');
+            logger.info(`[WEATHER] Tier 1 — ${hasForecastPhrase ? 'forecast phrase' : 'hard weather keyword'} → weather`);
           } else if (hasAgroTerm) {
             // Tier 2: agricultural/knowledge context — route to RAG without LLM call
             // Agro terms (soil, pest, crop, worm…) never appear in real forecast queries

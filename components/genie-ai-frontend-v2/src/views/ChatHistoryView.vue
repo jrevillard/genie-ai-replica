@@ -907,9 +907,12 @@ onMounted(() => {
               <span />
             </div>
             <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
-              <div v-if="callsLoading && callSessions.length === 0" class="space-y-2 p-4">
-                <BaseSkeleton v-for="n in 5" :key="n" height="3rem" />
-              </div>
+              <TableRowsSkeleton
+                v-if="callsLoading && callSessions.length === 0"
+                :rows="5"
+                height="3rem"
+                class="p-4"
+              />
 
               <div
                 v-else-if="callsError"
@@ -1046,9 +1049,12 @@ onMounted(() => {
               </button>
             </div>
 
-            <div v-if="loadingDetail" class="space-y-2 py-4">
-              <BaseSkeleton v-for="n in 4" :key="n" height="1.5rem" />
-            </div>
+            <TableRowsSkeleton
+              v-if="loadingDetail"
+              :rows="4"
+              height="1.5rem"
+              class="py-4"
+            />
             <div v-else-if="detailError" class="py-6 text-sm text-red-600">{{ detailError }}</div>
             <template v-else>
               <div v-if="detailMode === 'transcript'" class="min-h-[260px] py-4 text-sm leading-relaxed">

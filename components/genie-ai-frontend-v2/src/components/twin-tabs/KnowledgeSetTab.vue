@@ -84,16 +84,11 @@ function formatBytes(bytes: number): string {
       :icon="AiBrain01Icon"
       title="No knowledge files yet"
       description="Upload PDFs, Word docs or text files so this AI Twin learns your domain."
-    >
-      <BaseButton variant="primary" size="md" @click="dialogOpen = true">
-        <Icon :icon="PlusSignIcon" :size="16" /> Add Knowledge
-      </BaseButton>
-    </EmptyState>
+    />
 
     <BaseDrawer
       v-model:open="dialogOpen"
       title="Add Upload Knowledge"
-      badge="UPLOAD"
       :icon="Upload01Icon"
       width="md"
     >

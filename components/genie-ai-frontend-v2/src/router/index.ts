@@ -68,11 +68,6 @@ const routes: RouteRecordRaw[] = [
     name: 'knowledge-set',
     component: () => import('../views/KnowledgeSetView.vue'),
   },
-  {
-    path: '/statistics',
-    name: 'statistics',
-    component: () => import('../views/StatisticsView.vue'),
-  },
 
   { path: '/:pathMatch(.*)*', redirect: '/ai-twins' },
 ];

@@ -82,7 +82,7 @@ async function onSubmit() {
               <template #trailing>
                 <button
                   type="button"
-                  class="grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
+                  class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
                   :aria-label="passwordVisible ? 'Hide password' : 'Show password'"
                   @click="passwordVisible = !passwordVisible"
                 >

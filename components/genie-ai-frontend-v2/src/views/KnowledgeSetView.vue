@@ -56,8 +56,24 @@ const twins = ref<Twin[]>([
 
 const mode = ref<'documents' | 'twins'>('documents');
 const uploadOpen = ref(false);
+const dragOver = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
 const documentSearch = ref('');
 const twinSearch = ref('');
+
+function pickFile() {
+  fileInput.value?.click();
+}
+
+function onFileChange(_e: Event) {
+  // TODO: wire to upload service when endpoint is available
+}
+
+function onDrop(e: DragEvent) {
+  e.preventDefault();
+  dragOver.value = false;
+  // TODO: wire to upload service when endpoint is available
+}
 
 const filteredDocuments = computed(() => {
   const q = documentSearch.value.trim().toLowerCase();
@@ -88,8 +104,8 @@ function statusTone(status: DocumentItem['status']) {
   return 'success';
 }
 
-function setDocumentSelected(document: DocumentItem, selected: boolean) {
-  document.selected = selected;
+function toggleDocument(document: DocumentItem) {
+  document.selected = !document.selected;
 }
 
 function selectTwin(twin: Twin) {
@@ -140,57 +156,62 @@ function selectTwin(twin: Twin) {
             </BaseButton>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div class="-mx-2 min-h-0 flex-1 overflow-y-auto px-2 py-1">
             <div v-if="filteredDocuments.length" class="space-y-4">
-              <article
+              <div
                 v-for="document in filteredDocuments"
                 :key="document.id"
-                class="grid grid-cols-[24px_minmax(0,1fr)] gap-3"
+                role="checkbox"
+                tabindex="0"
+                :aria-checked="!!document.selected"
+                :class="[
+                  'cursor-pointer rounded-xl border bg-surface p-4 shadow-card transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                  document.selected
+                    ? 'border-accent ring-1 ring-accent bg-accent-soft/30'
+                    : 'border-border hover:border-border-strong hover:bg-surface-subtle',
+                ]"
+                @click="toggleDocument(document)"
+                @keydown.enter.prevent="toggleDocument(document)"
+                @keydown.space.prevent="toggleDocument(document)"
               >
-                <BaseCheckbox
-                  :model-value="document.selected"
-                  size="sm"
-                  class="mt-8 justify-center"
-                  @update:model-value="setDocumentSelected(document, $event)"
-                />
-                <div class="rounded-xl border border-border bg-surface p-4 shadow-card">
-                  <div class="mb-3 flex items-start justify-between gap-4">
-                    <div class="flex min-w-0 items-center gap-3">
-                      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-danger text-text-inverse">
-                        <Icon :icon="Pdf01Icon" :size="22" />
-                      </span>
-                      <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <h2 class="truncate text-body font-semibold text-text">{{ document.name }}</h2>
-                          <BaseBadge :tone="statusTone(document.status)" dot>
-                            {{ document.status }}
-                          </BaseBadge>
-                        </div>
-                        <p class="text-caption text-text-muted">{{ document.date }}</p>
+                <div class="mb-3 flex items-start justify-between gap-4">
+                  <div class="flex min-w-0 items-center gap-3">
+                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-danger text-text-inverse">
+                      <Icon :icon="Pdf01Icon" :size="22" />
+                    </span>
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="truncate text-body font-semibold text-text">{{ document.name }}</h2>
+                        <BaseBadge :tone="statusTone(document.status)" dot>
+                          {{ document.status }}
+                        </BaseBadge>
                       </div>
-                    </div>
-                    <div class="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        class="grid h-8 w-8 place-items-center rounded-lg text-danger transition hover:bg-danger-soft"
-                        aria-label="Delete document"
-                      >
-                        <Icon :icon="Delete02Icon" :size="18" />
-                      </button>
-                      <button
-                        type="button"
-                        class="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-subtle hover:text-text"
-                        aria-label="Download document"
-                      >
-                        <Icon :icon="Download04Icon" :size="18" />
-                      </button>
+                      <p class="text-caption text-text-muted">{{ document.date }}</p>
                     </div>
                   </div>
-                  <p class="text-caption leading-relaxed text-text-muted">
-                    AI humor can be a delightful mix of clever algorithms and unexpected punchlines. It's like having a virtual comedian in your device, ready to crack a joke at the tap of a button.
-                  </p>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      class="grid h-8 w-8 place-items-center rounded-lg text-danger transition hover:bg-danger-soft"
+                      aria-label="Delete document"
+                      @click.stop
+                    >
+                      <Icon :icon="Delete02Icon" :size="18" />
+                    </button>
+                    <button
+                      type="button"
+                      class="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-subtle hover:text-text"
+                      aria-label="Download document"
+                      @click.stop
+                    >
+                      <Icon :icon="Download04Icon" :size="18" />
+                    </button>
+                  </div>
                 </div>
-              </article>
+                <p class="text-caption leading-relaxed text-text-muted">
+                  AI humor can be a delightful mix of clever algorithms and unexpected punchlines. It's like having a virtual comedian in your device, ready to crack a joke at the tap of a button.
+                </p>
+              </div>
             </div>
 
             <EmptyState
@@ -317,26 +338,31 @@ function selectTwin(twin: Twin) {
       <BaseDrawer
         v-model:open="uploadOpen"
         title="Add Upload Knowledge"
-        badge="UPLOAD"
-        :icon="CloudUploadIcon"
-        width="lg"
+        :icon="Upload01Icon"
+        width="md"
       >
-        <header class="mb-6">
-          <p class="text-body text-text-muted">
-            For further accuracy, you can upload a file below to train your Agent to sound more like you.
+        <p class="mb-4 text-caption text-text-muted">
+          For further accuracy, you can upload files below to train your Agent to sound more like you.
+        </p>
+        <div
+          :class="[
+            'flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition',
+            dragOver ? 'border-accent bg-accent-soft' : 'border-border bg-surface-muted',
+          ]"
+          @dragover.prevent="dragOver = true"
+          @dragleave="dragOver = false"
+          @drop="onDrop"
+        >
+          <Icon :icon="Upload01Icon" :size="28" class="text-text-subtle" />
+          <p class="text-body font-medium text-text">Upload File</p>
+          <p class="max-w-xs text-caption text-text-muted">
+            File types allowed: PDF, Word, .csv, .doc, .txt, .docx
           </p>
-        </header>
-
-        <label class="grid min-h-[260px] cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-border bg-surface-muted p-8 transition hover:border-accent hover:bg-accent-soft/40 md:min-h-[320px]">
-          <input type="file" class="sr-only" multiple />
-          <span class="flex flex-col items-center text-center">
-            <Icon :icon="CloudUploadIcon" :size="58" color="#cfd4dc" />
-            <span class="mt-5 text-display text-text-subtle">Upload File</span>
-            <span class="mt-4 max-w-2xl text-body text-text-muted">
-              File types allowed: PDF, Word, Excel, CSV, TXT, MOV, MP4.
-            </span>
-          </span>
-        </label>
+          <input ref="fileInput" type="file" multiple class="hidden" @change="onFileChange" />
+          <BaseButton variant="soft" size="sm" rounded="full" @click="pickFile">
+            Browse files
+          </BaseButton>
+        </div>
 
         <template #footer>
           <button

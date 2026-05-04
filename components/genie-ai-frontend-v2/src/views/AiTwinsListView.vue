@@ -18,6 +18,7 @@ const { twins, loading } = storeToRefs(store);
 
 const search = ref('');
 const dialogOpen = ref(false);
+const creating = ref(false);
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -34,15 +35,23 @@ function loadTwins() {
 onMounted(loadTwins);
 
 async function onCreated(payload: { name: string; description: string; avatar: string | null }) {
+  if (creating.value) return;
+  creating.value = true;
   try {
+    // TODO: upload avatar to file service, then pass returned URL as profilePicUrl.
+    // The API expects a URL string ≤ 2048 chars; data URLs from FileReader are too long.
+    void payload.avatar;
     await store.create({
       name: payload.name,
       description: payload.description,
-      profilePicUrl: payload.avatar,
+      profilePicUrl: null,
     });
     notify.success('AI Twin created');
+    dialogOpen.value = false;
   } catch {
     notify.error(store.error ?? 'Failed to create AI Twin');
+  } finally {
+    creating.value = false;
   }
 }
 </script>
@@ -109,6 +118,6 @@ async function onCreated(payload: { name: string; description: string; avatar: s
       </EmptyState>
     </section>
 
-    <CreateAiTwinDialog v-model:open="dialogOpen" @created="onCreated" />
+    <CreateAiTwinDialog v-model:open="dialogOpen" :submitting="creating" @created="onCreated" />
   </DashboardLayout>
 </template>

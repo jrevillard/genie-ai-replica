@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+# Claude
+.claude/
 
 # Local Docker Compose overrides (dev-only, never deployed)
 docker-compose.override.yml

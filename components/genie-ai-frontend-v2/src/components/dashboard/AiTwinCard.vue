@@ -36,23 +36,22 @@ function open() {
       <h3 class="truncate text-base font-semibold text-slate-900">{{ twin.name }}</h3>
     </header>
 
-    <!-- Date Edited row, divided top + bottom from the rest of the card -->
-    <div class="flex items-center justify-between border-y border-slate-100 py-3">
-      <span class="text-xs font-medium text-slate-500">Date Edited</span>
-      <span class="text-xs text-slate-700">{{ dateEdited }}</span>
+    <div class="grid grid-cols-2 items-center gap-x-6 rounded-2xl bg-neutral-50 px-4 py-3 text-xs">
+      <dl class="flex flex-col gap-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <dt class="text-slate-500">Date Created</dt>
+          <dd class="font-medium text-slate-800">{{ dateCreated }}</dd>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <dt class="text-slate-500">Date Edited</dt>
+          <dd class="font-medium text-slate-800">{{ dateEdited }}</dd>
+        </div>
+      </dl>
+      <div class="flex items-center justify-between gap-3 border-l border-slate-200 pl-6">
+        <span class="text-slate-500">KB Files</span>
+        <span class="font-medium text-slate-800">{{ twin.linkedKbFileIds.length }}</span>
+      </div>
     </div>
-
-    <!-- Stats panel — its own bordered/rounded subcard -->
-    <dl class="grid grid-cols-2 gap-x-6 gap-y-3 rounded-2xl bg-neutral-50 px-4 py-3 text-xs">
-      <div class="flex items-center justify-between gap-3">
-        <dt class="text-slate-500">Date Created</dt>
-        <dd class="font-medium text-slate-800">{{ dateCreated }}</dd>
-      </div>
-      <div class="flex items-center justify-between gap-3">
-        <dt class="text-slate-500">KB Files</dt>
-        <dd class="font-medium text-slate-800">{{ twin.linkedKbFileIds.length }}</dd>
-      </div>
-    </dl>
 
     <!-- Action: View AI Twin (soft IEEE blue, bottom-right) -->
     <div class="flex justify-end">

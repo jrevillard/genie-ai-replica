@@ -13,11 +13,11 @@ import {
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
-import FlagIcon from '../components/ui/FlagIcon.vue';
 import Icon from '../components/ui/Icon.vue';
 import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore } from '../stores/chat';
+import { mintVoiceToken, type VoiceTokenResponse } from '../services/voice';
 
 type CallState = 'connecting' | 'listening' | 'aiSpeaking' | 'ended';
 interface Caption {
@@ -47,6 +47,8 @@ const muted = ref(false);
 const elapsed = ref(0);
 const captions = ref<Caption[]>([]);
 const langOpen = ref(false);
+const tokenInfo = ref<VoiceTokenResponse | null>(null);
+const tokenError = ref<string | null>(null);
 
 let tickHandle: number | null = null;
 let scriptHandle: number | null = null;
@@ -136,8 +138,27 @@ async function loadTwin(): Promise<void> {
   }
 }
 
+async function fetchVoiceToken(): Promise<void> {
+  tokenError.value = null;
+  tokenInfo.value = null;
+  try {
+    const res = await mintVoiceToken(lang.value);
+    tokenInfo.value = res;
+    // eslint-disable-next-line no-console
+    console.log('[voice] /voice/token response', res);
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const message = e?.response?.data?.message ?? e?.message ?? 'Unknown error';
+    tokenError.value = status ? `${status} — ${message}` : message;
+    // eslint-disable-next-line no-console
+    console.error('[voice] /voice/token failed', err);
+  }
+}
+
 onMounted(() => {
   void loadTwin();
+  void fetchVoiceToken();
   startCallTimer();
   startCallScript();
   document.addEventListener('click', onDocumentClick);
@@ -280,34 +301,47 @@ const lastAi = computed(() => {
             aria-haspopup="listbox"
             @click="langOpen = !langOpen"
           >
-            <FlagIcon :code="currentLang.flag" :width="20" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+            </svg>
             <span class="uppercase">{{ currentLang.code }}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3 transition-transform" :class="langOpen && 'rotate-180'" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+            </svg>
           </button>
           <ul
             v-if="langOpen"
             role="listbox"
-            class="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-white/15 bg-[#022c4a] p-1 text-white shadow-popover"
+            class="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-white/15 bg-[#022c4a] p-2 text-white shadow-popover"
           >
-            <li v-for="opt in CHAT_LANGS" :key="opt.code">
+            <li v-for="opt in CHAT_LANGS" :key="opt.code" role="option" :aria-selected="opt.code === lang">
               <button
                 type="button"
-                role="option"
-                :aria-selected="opt.code === lang"
-                :class="[
-                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-body transition',
-                  opt.code === lang ? 'bg-white/15' : 'hover:bg-white/10',
-                ]"
+                class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-white/90 transition hover:bg-white/10"
                 @click="setLanguage(opt.code)"
               >
-                <FlagIcon :code="opt.flag" :width="20" />
-                <span class="flex-1 truncate">{{ opt.label }}</span>
-                <span class="text-meta uppercase text-white/60">{{ opt.code }}</span>
+                <span class="font-medium">{{ opt.label }}</span>
+                <span class="rounded-md bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white">
+                  {{ opt.code }}
+                </span>
               </button>
             </li>
           </ul>
         </div>
       </div>
     </header>
+
+    <!-- Voice-token debug strip (temporary) -->
+    <div
+      v-if="tokenInfo || tokenError"
+      class="relative z-10 mx-6 mb-2 rounded-2xl border px-4 py-3 text-meta"
+      :class="tokenError ? 'border-red-400/40 bg-red-500/15 text-red-100' : 'border-white/15 bg-white/10 text-white/85'"
+    >
+      <p class="font-semibold uppercase tracking-wide text-white/60">/voice/token</p>
+      <pre v-if="tokenInfo" class="mt-1 whitespace-pre-wrap break-all">{{ JSON.stringify(tokenInfo, null, 2) }}</pre>
+      <p v-else>{{ tokenError }}</p>
+    </div>
 
     <!-- Body -->
     <main class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-2">

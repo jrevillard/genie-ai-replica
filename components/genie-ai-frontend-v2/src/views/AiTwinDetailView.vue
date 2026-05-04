@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeft01Icon,
-  BubbleChatIcon,
   Camera01Icon,
   Cancel01Icon,
   Edit02Icon,
@@ -24,7 +23,6 @@ import GeneralTab from '../components/twin-tabs/GeneralTab.vue';
 import VoiceTab from '../components/twin-tabs/VoiceTab.vue';
 import PersonalityTab from '../components/twin-tabs/PersonalityTab.vue';
 import KnowledgeSetTab from '../components/twin-tabs/KnowledgeSetTab.vue';
-import SystemPromptTab from '../components/twin-tabs/SystemPromptTab.vue';
 import InstructionsTab from '../components/twin-tabs/InstructionsTab.vue';
 import { useAiTwinsStore } from '../stores/aiTwins';
 
@@ -52,7 +50,6 @@ const tabs: TabItem[] = [
   { value: 'voice', label: 'Voice' },
   { value: 'personality', label: 'AI Personality' },
   { value: 'knowledge', label: 'Knowledge Set' },
-  { value: 'system-prompt', label: 'System Prompt' },
   { value: 'instructions', label: 'Instructions' },
 ];
 
@@ -115,6 +112,19 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+async function removeImage() {
+  if (!twin.value || uploadingImage.value || !twin.value.profilePicUrl) return;
+  uploadingImage.value = true;
+  try {
+    await store.update(twin.value._key, { profilePicUrl: '' });
+    notify.success('Profile picture removed');
+  } catch {
+    notify.error(store.error ?? 'Failed to remove profile picture');
+  } finally {
+    uploadingImage.value = false;
+  }
+}
+
 async function onImageChange(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -171,29 +181,40 @@ async function confirmDelete() {
 
       <template v-if="twin">
         <header class="flex flex-wrap items-center justify-between gap-4">
-          <div class="flex items-center gap-3">
-            <button
-              type="button"
-              class="group relative inline-flex shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed"
-              :aria-label="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
-              :title="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
-              :disabled="uploadingImage"
-              @click="pickImage"
-            >
-              <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="lg" />
-              <span
-                class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-full bg-black/55 text-white opacity-0 backdrop-blur-[1px] transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+          <div class="flex items-center gap-4">
+            <div class="relative shrink-0">
+              <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="xl" />
+
+              <button
+                v-if="twin.profilePicUrl"
+                type="button"
+                class="absolute -right-1 -top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ieee-700 text-white shadow-md ring-2 ring-white transition hover:bg-ieee-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="uploadingImage"
+                aria-label="Remove profile picture"
+                title="Remove profile picture"
+                @click="removeImage"
               >
-                <Icon :icon="Camera01Icon" :size="18" />
-                <span class="text-[10px] font-medium leading-none">Change</span>
-              </span>
+                <Icon :icon="Cancel01Icon" :size="12" />
+              </button>
+
+              <button
+                type="button"
+                class="absolute -bottom-1 left-1/2 inline-flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-white text-ieee-700 shadow-md ring-1 ring-slate-200 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="uploadingImage"
+                :aria-label="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
+                :title="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
+                @click="pickImage"
+              >
+                <Icon :icon="Camera01Icon" :size="14" />
+              </button>
+
               <span
                 v-if="uploadingImage"
                 class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white"
               >
                 <span class="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
               </span>
-            </button>
+            </div>
             <input
               ref="imageInput"
               type="file"
@@ -201,9 +222,8 @@ async function confirmDelete() {
               class="hidden"
               @change="onImageChange"
             />
-            <BaseButton variant="primary" size="md" rounded="full" @click="chatWithTwin">
-              <Icon :icon="BubbleChatIcon" :size="16" />
-              Chat
+            <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
+              IEEE Page
             </BaseButton>
             <BaseToggle v-model="active" :label="active ? 'Active' : 'Inactive'" />
           </div>
@@ -264,7 +284,6 @@ async function confirmDelete() {
             <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" />
             <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
             <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" />
-            <SystemPromptTab v-else-if="tab === 'system-prompt'" ref="activeTab" />
             <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
           </div>
         </fieldset>

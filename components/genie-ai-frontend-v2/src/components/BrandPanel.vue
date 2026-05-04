@@ -23,21 +23,41 @@
       <div class="min-h-0 flex-1" aria-hidden="true" />
 
       <header class="mb-6 max-w-xl lg:mb-8">
-        <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-white/90">GENIE.AI</p>
+        <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-white/90">IEEE</p>
         <h2
           class="mt-3 text-3xl font-bold leading-[1.15] tracking-tight sm:text-4xl lg:text-[2.5rem] lg:leading-tight"
         >
-          Welcome to GENIE.AI
+          Welcome to IEEE
         </h2>
         <p class="mt-4 text-sm leading-relaxed text-white/90 sm:text-base sm:leading-relaxed">
-          GENIE.AI helps you create and manage AI Twins, giving you full control over your data while
+          IEEE helps you create and manage AI Twins, giving you full control over your data while
           seamlessly tracking all your chat and call history.
         </p>
       </header>
 
-      <!-- Glass block: notched top-right (Figma-style) -->
-      <div class="brand-panel__glass w-full max-w-xl">
-        <div class="brand-panel__glass-inner border border-white/25 bg-white/[0.14] p-6 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-[18px] sm:p-8">
+      <!--
+        Glass block — shape is driven by /images/auth-card.svg (rounded body
+        with a concave inner corner connecting a smaller top-left tab to a
+        wider bottom). The SVG renders the fill + stroke; content layers on top.
+      -->
+      <div class="brand-panel__glass relative w-full max-w-xl">
+        <svg
+          class="block h-auto w-full"
+          viewBox="0 0 600.438 232.254"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M460.606 0H30C13.4315 0 0 13.4315 0 30V202.254C0 218.822 13.4315 232.254 30 232.254H570.438C587.006 232.254 600.438 218.822 600.438 202.254V113.308C600.438 96.7398 587.006 83.3084 570.438 83.3084H520.606C504.038 83.3084 490.606 69.8769 490.606 53.3084V30C490.606 13.4315 477.175 0 460.606 0Z"
+            fill="rgba(255,255,255,0.14)"
+            stroke="rgba(255,255,255,0.28)"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          />
+        </svg>
+        <div
+          class="absolute inset-0 flex flex-col justify-center px-6 py-6 pr-24 text-white sm:px-8 sm:py-8 sm:pr-32"
+        >
           <h3 class="text-lg font-bold leading-snug text-white sm:text-xl">NCDs in Gambia</h3>
           <p class="mt-3 text-sm font-normal leading-relaxed text-white/90 sm:text-[15px]">
             To empower individuals and communities in The Gambia with accessible, personalized, and
@@ -51,20 +71,7 @@
 </template>
 
 <style scoped>
-/* Chamfered top-right so the glass reads “notched” like the design */
 .brand-panel__glass {
-  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.25));
-}
-
-.brand-panel__glass-inner {
-  clip-path: polygon(0 0, calc(100% - 2.75rem) 0, 100% 2.75rem, 100% 100%, 0 100%);
-  border-radius: 0 0 0 1.25rem;
-}
-
-@media (min-width: 640px) {
-  .brand-panel__glass-inner {
-    clip-path: polygon(0 0, calc(100% - 3.25rem) 0, 100% 3.25rem, 100% 100%, 0 100%);
-    border-radius: 0 0 0 1.5rem;
-  }
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.35));
 }
 </style>

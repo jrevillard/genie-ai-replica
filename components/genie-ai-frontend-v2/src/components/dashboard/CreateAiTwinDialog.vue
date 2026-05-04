@@ -10,7 +10,7 @@ import Icon from '../ui/Icon.vue';
 import { useZodForm } from '../../composables/useZodForm';
 import { createAiTwinSchema, type CreateAiTwinInput } from '../../lib/validation/schemas';
 
-const props = defineProps<{ open: boolean }>();
+const props = defineProps<{ open: boolean; submitting?: boolean }>();
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void;
   (e: 'created', twin: { name: string; description: string; avatar: string | null }): void;
@@ -27,6 +27,7 @@ const { errors, validate, reset } = useZodForm(createAiTwinSchema, ['name', 'des
 const fileInput = ref<HTMLInputElement | null>(null);
 
 function close() {
+  if (props.submitting) return;
   emit('update:open', false);
 }
 
@@ -45,13 +46,13 @@ function onFileChange(e: Event) {
 }
 
 function onSubmit() {
+  if (props.submitting) return;
   if (!validate(form)) return;
   emit('created', {
     name: form.name.trim(),
     description: (form.description ?? '').trim(),
     avatar: form.profilePicUrl ?? null,
   });
-  close();
 }
 
 watch(
@@ -71,10 +72,10 @@ watch(
   <BaseDrawer
     :open="open"
     title="Create AI Twin"
-    badge="#NEW"
     :icon="SparklesIcon"
     width="md"
-    @update:open="emit('update:open', $event)"
+    :close-on-backdrop="!submitting"
+    @update:open="(v) => !submitting && emit('update:open', v)"
   >
     <section class="space-y-4">
       <header>
@@ -131,12 +132,13 @@ watch(
     <template #footer>
       <button
         type="button"
-        class="text-body font-semibold text-text-muted transition hover:text-text"
+        class="text-body font-semibold text-text-muted transition hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="submitting"
         @click="close"
       >
         Cancel
       </button>
-      <BaseButton variant="primary" size="md" @click="onSubmit">
+      <BaseButton variant="primary" size="md" :loading="submitting" @click="onSubmit">
         Create Twin
       </BaseButton>
     </template>

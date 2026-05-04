@@ -2,7 +2,6 @@
 import { ref } from 'vue';
 import {
   AiBrain01Icon,
-  ChartHistogramIcon,
   Logout01Icon,
   MessageMultiple01Icon,
   SidebarLeftIcon,
@@ -37,7 +36,6 @@ const items: NavItem[] = [
   { label: 'AI Twins', icon: SparklesIcon, to: '/ai-twins' },
   { label: 'Chat/Call History', icon: MessageMultiple01Icon, to: '/chat-history' },
   { label: 'Knowledge Set', icon: AiBrain01Icon, to: '/knowledge-set' },
-  { label: 'Statistics', icon: ChartHistogramIcon, to: '/statistics' },
 ];
 
 async function onLogout() {
@@ -53,7 +51,12 @@ function isNavActive(to: string): boolean {
 
 <template>
   <aside :class="['dash-sidebar', collapsed && 'dash-sidebar--collapsed']">
-    <header class="flex items-center justify-between gap-2 border-b border-border-subtle p-4">
+    <header
+      :class="[
+        'gap-2 border-b border-border-subtle p-4',
+        collapsed ? 'flex flex-col items-center' : 'flex items-center justify-between',
+      ]"
+    >
       <img v-if="!collapsed" src="/images/logo.svg" alt="IEEE" class="h-7" />
       <img v-else src="/images/logo.svg" alt="IEEE" class="h-7 w-full object-contain" />
       <button

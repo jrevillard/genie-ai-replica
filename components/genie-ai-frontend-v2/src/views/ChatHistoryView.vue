@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import {
   ArrowDown01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Attachment01Icon,
+  CallEnd01Icon,
   CallIcon,
   Calendar03Icon,
   Download04Icon,
@@ -14,8 +16,14 @@ import {
   Search01Icon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
+import BaseDropdown from '../components/ui/BaseDropdown.vue';
+import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
+import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
+import { useAuthStore } from '../stores/auth';
+import { useVoiceStore } from '../stores/voice';
+import type { VoiceSession } from '../services/voice';
 
 type Conversation = {
   id: number;
@@ -33,16 +41,6 @@ type Message = {
   audio?: boolean;
   time?: string;
   compact?: boolean;
-};
-
-type CallRecord = {
-  id: number;
-  aiTwin: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  duration: string;
-  callerName: string;
 };
 
 const conversations: Conversation[] = [
@@ -80,16 +78,6 @@ const rightCalendar = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1
 const waveformBars = [18, 28, 36, 26, 44, 32, 40, 30, 48, 34, 24, 42, 30, 38, 22, 46, 36, 26, 40, 30, 34, 22, 28, 18];
 const detailWaveformBars = [54, 72, 88, 64, 92, 46, 76, 82, 60, 78, 70, 92, 98, 74, 50, 66, 86, 44, 72, 82, 58, 74, 88, 54, 68, 38, 82, 76, 90, 48, 72, 60, 80, 44, 76, 62, 88, 54, 74, 92, 46, 66, 84, 58, 78, 52, 90, 64];
 
-const callRecords: CallRecord[] = [
-  { id: 1, aiTwin: 'John Doe', date: 'Jan 6, 2025', startTime: 'Jan 4, 2025', endTime: 'Jan 4, 2025', duration: '2h', callerName: 'Olivia Rhye' },
-  { id: 2, aiTwin: 'John Doe', date: 'Jan 6, 2025', startTime: 'Jan 4, 2025', endTime: 'Jan 4, 2025', duration: '2h', callerName: 'Phoenix Baker' },
-  { id: 3, aiTwin: 'John Doe', date: 'Jan 6, 2025', startTime: 'Jan 2, 2025', endTime: 'Jan 2, 2025', duration: '2h', callerName: 'Lana Steiner' },
-  { id: 4, aiTwin: 'John Doe', date: 'Jan 6, 2025', startTime: 'Jan 6, 2025', endTime: 'Jan 6, 2025', duration: '2h', callerName: 'Demi Wilkinson' },
-  { id: 5, aiTwin: 'John Doe', date: 'Jan 6, 2025', startTime: 'Jan 8, 2025', endTime: 'Jan 8, 2025', duration: '2h', callerName: 'Candice Wu' },
-  { id: 6, aiTwin: 'John Doe', date: 'Jan 6, 2025', startTime: 'Jan 6, 2025', endTime: 'Jan 6, 2025', duration: '2h', callerName: 'Natali Craig' },
-  { id: 7, aiTwin: 'John Doe', date: 'Jan 6, 2025', startTime: 'Jan 4, 2025', endTime: 'Jan 4, 2025', duration: '2h', callerName: 'Drew Cano' },
-];
-
 const activeTab = ref<'Chats' | 'Calls'>('Chats');
 const selectedDate = ref('Today');
 const dateMenuOpen = ref(false);
@@ -106,10 +94,146 @@ function chooseDate(option: string) {
   selectedDate.value = option;
 }
 
-function openCallDetails(mode: 'transcript' | 'summary') {
+const auth = useAuthStore();
+const voice = useVoiceStore();
+const { sessions: callSessions, current: currentSession, messages: currentMessages, loading: callsLoading, loadingDetail, error: callsError, detailError, hasMore, offset: callsOffset, limit: callsLimit } = storeToRefs(voice);
+
+const pageSizes = [10, 25, 50] as const;
+const callerName = computed(() => auth.displayName);
+
+const callDateFilter = ref('all');
+const callSort = ref('newest');
+const callLanguageFilter = ref('all');
+
+const dateFilterOptions = [
+  { value: 'all', label: 'All dates' },
+  { value: 'today', label: 'Today' },
+  { value: 'last7', label: 'Last 7 days' },
+  { value: 'last30', label: 'Last 30 days' },
+];
+
+const sortOptions = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'longest', label: 'Longest' },
+  { value: 'shortest', label: 'Shortest' },
+];
+
+const languageOptions = computed(() => {
+  const langs = Array.from(
+    new Set(callSessions.value.map((s) => s.language).filter(Boolean))
+  ).sort();
+  return [
+    { value: 'all', label: 'All languages' },
+    ...langs.map((l) => ({ value: l, label: l.toUpperCase() })),
+  ];
+});
+
+const displayedSessions = computed<VoiceSession[]>(() => {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const cutoffByFilter: Record<string, number> = {
+    all: 0,
+    today: now - day,
+    last7: now - 7 * day,
+    last30: now - 30 * day,
+  };
+  const cutoff = cutoffByFilter[callDateFilter.value] ?? 0;
+
+  let rows = callSessions.value.slice();
+
+  if (cutoff > 0) {
+    rows = rows.filter((s) => {
+      const t = new Date(s.startAt).getTime();
+      return Number.isFinite(t) && t >= cutoff;
+    });
+  }
+
+  if (callLanguageFilter.value !== 'all') {
+    rows = rows.filter((s) => s.language === callLanguageFilter.value);
+  }
+
+  if (callSort.value === 'oldest') {
+    rows.sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+  } else if (callSort.value === 'longest') {
+    rows.sort((a, b) => b.durationSeconds - a.durationSeconds);
+  } else if (callSort.value === 'shortest') {
+    rows.sort((a, b) => a.durationSeconds - b.durationSeconds);
+  } else {
+    rows.sort((a, b) => +new Date(b.startAt) - +new Date(a.startAt));
+  }
+
+  return rows;
+});
+
+const displayedRangeStart = computed(() =>
+  displayedSessions.value.length ? callsOffset.value + 1 : 0
+);
+const displayedRangeEnd = computed(
+  () => callsOffset.value + displayedSessions.value.length
+);
+
+const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
+
+function formatSessionDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : dateFormatter.format(d);
+}
+
+function formatSessionTime(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : timeFormatter.format(d);
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s.toString().padStart(2, '0')}s`;
+  return `${s}s`;
+}
+
+function loadCalls(): void {
+  voice.fetchSessions().catch(() => {
+    // store.error renders into the inline error row
+  });
+}
+
+async function openCallDetails(session: VoiceSession, mode: 'transcript' | 'summary') {
   detailMode.value = mode;
   callDetailOpen.value = true;
+  try {
+    await voice.openSession(session._key);
+  } catch {
+    // detailError renders inside the dialog
+  }
 }
+
+function closeCallDetails(): void {
+  callDetailOpen.value = false;
+  voice.closeSession();
+}
+
+function changePageSize(event: Event): void {
+  const next = Number((event.target as HTMLSelectElement).value);
+  if (Number.isFinite(next) && next > 0) voice.setLimit(next);
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'Calls' && callSessions.value.length === 0 && !callsLoading.value) {
+    loadCalls();
+  }
+}, { immediate: false });
+
+onMounted(() => {
+  // Don't preload Calls — only fetch when the tab is opened.
+});
 </script>
 
 <template>
@@ -338,24 +462,27 @@ function openCallDetails(mode: 'transcript' | 'summary') {
         </div>
 
         <div v-else class="flex min-h-0 flex-1 flex-col gap-3">
-          <div class="grid gap-3 sm:grid-cols-3">
-            <button type="button" class="flex h-11 items-center justify-between rounded-full border border-neutral-200 bg-white px-4 text-sm text-slate-500 shadow-sm">
-              <span>Select Date</span>
-              <Icon :icon="ArrowDown01Icon" :size="15" />
-            </button>
-            <button type="button" class="flex h-11 items-center justify-between rounded-full border border-neutral-200 bg-white px-4 text-sm text-slate-500 shadow-sm">
-              <span>Sort By</span>
-              <Icon :icon="ArrowDown01Icon" :size="15" />
-            </button>
-            <button type="button" class="flex h-11 items-center justify-between rounded-full border border-neutral-200 bg-white px-4 text-sm text-slate-500 shadow-sm">
-              <span>AI Twin</span>
-              <Icon :icon="ArrowDown01Icon" :size="15" />
-            </button>
+          <div class="flex flex-wrap items-center gap-3">
+            <BaseDropdown
+              v-model="callDateFilter"
+              :options="dateFilterOptions"
+              placeholder="Select Date"
+            />
+            <BaseDropdown
+              v-model="callSort"
+              :options="sortOptions"
+              placeholder="Sort By"
+            />
+            <BaseDropdown
+              v-model="callLanguageFilter"
+              :options="languageOptions"
+              placeholder="Language"
+            />
           </div>
 
-          <div class="min-h-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+          <div class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             <div class="grid grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_1.1fr_40px] border-b border-neutral-100 bg-neutral-50 px-5 py-3 text-xs font-semibold text-slate-500">
-              <span>AI Twin</span>
+              <span>Language</span>
               <span>Date</span>
               <span>Start Time</span>
               <span>End Time</span>
@@ -363,24 +490,53 @@ function openCallDetails(mode: 'transcript' | 'summary') {
               <span>Caller Name</span>
               <span />
             </div>
-            <div class="min-h-0 divide-y divide-neutral-100 overflow-y-auto">
+            <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
+              <div v-if="callsLoading && callSessions.length === 0" class="space-y-2 p-4">
+                <BaseSkeleton v-for="n in 5" :key="n" height="3rem" />
+              </div>
+
               <div
-                v-for="record in callRecords"
-                :key="record.id"
+                v-else-if="callsError"
+                class="flex items-center justify-between gap-4 px-5 py-6 text-sm text-red-600"
+              >
+                <span>{{ callsError }}</span>
+                <button
+                  type="button"
+                  class="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                  @click="loadCalls"
+                >
+                  Retry
+                </button>
+              </div>
+
+              <div v-else-if="displayedSessions.length === 0" class="px-5 py-12">
+                <EmptyState
+                  :icon="CallEnd01Icon"
+                  :title="callSessions.length === 0 ? 'No calls yet' : 'No matches'"
+                  :description="callSessions.length === 0
+                    ? 'Voice calls you make will appear here once they finish.'
+                    : 'No calls match the current filters.'"
+                />
+              </div>
+
+              <div
+                v-for="record in displayedSessions"
+                v-else
+                :key="record._key"
                 class="grid grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_1.1fr_40px] items-center px-5 py-4 text-sm text-slate-600"
               >
-                <button type="button" class="flex items-center gap-3 text-left font-semibold text-slate-900" @click="openCallDetails('transcript')">
+                <button type="button" class="flex items-center gap-3 text-left font-semibold text-slate-900" @click="openCallDetails(record, 'transcript')">
                   <span class="grid h-6 w-6 place-items-center rounded-full bg-violet-50 text-violet-500">
                     <Icon :icon="CallIcon" :size="14" />
                   </span>
-                  {{ record.aiTwin }}
+                  <span class="uppercase">{{ record.language || '—' }}</span>
                 </button>
-                <span>{{ record.date }}</span>
-                <span>{{ record.startTime }}</span>
-                <span>{{ record.endTime }}</span>
-                <span>{{ record.duration }}</span>
-                <button type="button" class="text-left transition hover:text-ieee-800" @click="openCallDetails('summary')">
-                  {{ record.callerName }}
+                <span>{{ formatSessionDate(record.startAt) }}</span>
+                <span>{{ formatSessionTime(record.startAt) }}</span>
+                <span>{{ formatSessionTime(record.endAt) }}</span>
+                <span>{{ formatDuration(record.durationSeconds) }}</span>
+                <button type="button" class="text-left transition hover:text-ieee-800" @click="openCallDetails(record, 'summary')">
+                  {{ callerName }}
                 </button>
                 <button type="button" class="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-500" aria-label="Delete call" @click="deleteDialogOpen = true">
                   <Icon :icon="MoreVerticalIcon" :size="18" />
@@ -388,12 +544,33 @@ function openCallDetails(mode: 'transcript' | 'summary') {
               </div>
             </div>
             <footer class="flex items-center justify-end gap-6 border-t border-neutral-100 px-5 py-3 text-sm text-slate-500">
-              <span>Rows per page: <strong class="font-medium text-slate-700">10</strong></span>
-              <span>1-5 of 13</span>
-              <button type="button" class="text-slate-400 hover:text-ieee-800" aria-label="Previous page">
+              <label class="inline-flex items-center gap-2">
+                <span>Rows per page:</span>
+                <select
+                  :value="callsLimit"
+                  class="rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm font-medium text-slate-700 outline-none transition hover:border-neutral-300 focus:border-ieee-700"
+                  @change="changePageSize"
+                >
+                  <option v-for="n in pageSizes" :key="n" :value="n">{{ n }}</option>
+                </select>
+              </label>
+              <span>{{ displayedRangeStart }}-{{ displayedRangeEnd }}</span>
+              <button
+                type="button"
+                class="text-slate-400 transition hover:text-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Previous page"
+                :disabled="callsOffset === 0 || callsLoading"
+                @click="voice.prevPage()"
+              >
                 <Icon :icon="ArrowLeft01Icon" :size="17" />
               </button>
-              <button type="button" class="text-slate-700 hover:text-ieee-800" aria-label="Next page">
+              <button
+                type="button"
+                class="text-slate-700 transition hover:text-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Next page"
+                :disabled="!hasMore || callsLoading"
+                @click="voice.nextPage()"
+              >
                 <Icon :icon="ArrowRight01Icon" :size="17" />
               </button>
             </footer>

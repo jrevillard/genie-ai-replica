@@ -22,7 +22,6 @@ import {
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
-import FlagIcon from '../components/ui/FlagIcon.vue';
 import Icon from '../components/ui/Icon.vue';
 import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
 import { notify } from '../lib/notify';
@@ -286,30 +285,30 @@ function formatTime(d: Date): string {
               @click="langOpen = !langOpen"
               @blur="onLangButtonBlur"
             >
-              <FlagIcon :code="currentLang.flag" :width="20" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+              </svg>
               <span class="uppercase">{{ currentLang.code }}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3 transition-transform" :class="langOpen && 'rotate-180'" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+              </svg>
             </button>
             <ul
               v-if="langOpen"
               role="listbox"
-              class="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-border bg-surface p-1 shadow-popover"
+              class="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
             >
-              <li v-for="opt in CHAT_LANGS" :key="opt.code">
+              <li v-for="opt in CHAT_LANGS" :key="opt.code" role="option" :aria-selected="opt.code === lang">
                 <button
                   type="button"
-                  role="option"
-                  :aria-selected="opt.code === lang"
-                  :class="[
-                    'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-body transition',
-                    opt.code === lang
-                      ? 'bg-accent-soft text-accent-hover'
-                      : 'text-text hover:bg-surface-muted',
-                  ]"
+                  class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                   @click="setLanguage(opt.code)"
                 >
-                  <FlagIcon :code="opt.flag" :width="20" />
-                  <span class="flex-1 truncate">{{ opt.label }}</span>
-                  <span class="text-meta uppercase text-text-subtle">{{ opt.code }}</span>
+                  <span class="font-medium">{{ opt.label }}</span>
+                  <span class="rounded-md bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold text-ieee-700">
+                    {{ opt.code }}
+                  </span>
                 </button>
               </li>
             </ul>

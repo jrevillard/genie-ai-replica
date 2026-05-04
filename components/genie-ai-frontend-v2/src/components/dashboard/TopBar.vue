@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router';
 import {
   AiBrain01Icon,
   ArrowRight01Icon,
-  ChartHistogramIcon,
   MessageMultiple01Icon,
   Notification03Icon,
   Search01Icon,
@@ -25,7 +24,6 @@ const items = [
   { group: 'Pages', label: 'AI Twins', description: 'Create and manage AI Twins', to: '/ai-twins', icon: SparklesIcon },
   { group: 'Pages', label: 'Chat/Call History', description: 'Review chats, calls, transcripts, and summaries', to: '/chat-history', icon: MessageMultiple01Icon },
   { group: 'Pages', label: 'Knowledge Set', description: 'Upload and ingest files for AI Twins', to: '/knowledge-set', icon: AiBrain01Icon },
-  { group: 'Pages', label: 'Statistics', description: 'Usage and engagement metrics', to: '/statistics', icon: ChartHistogramIcon },
   { group: 'Useful routes', label: 'Profile', description: 'User profile area', to: '/ai-twins', icon: UserIcon },
   { group: 'Useful routes', label: 'Settings', description: 'Workspace configuration', to: '/ai-twins', icon: Settings01Icon },
 ];

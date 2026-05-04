@@ -1,50 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import CodeInput from '../components/CodeInput.vue';
 import { useAuthStore } from '../stores/auth';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 
-const code = ref('');
 const status = ref<'idle' | 'verifying' | 'success' | 'error'>('idle');
 const message = ref<string | null>(null);
-const email = ref<string>((route.query.email as string) ?? '');
-
-// 60-second countdown for the Resend button. Starts on mount (the user has just
-// arrived from sign-up) and restarts whenever they tap Resend.
-const RESEND_SECONDS = 60;
-const cooldown = ref(RESEND_SECONDS);
-let timer: ReturnType<typeof setInterval> | null = null;
-
-function startCountdown() {
-  cooldown.value = RESEND_SECONDS;
-  if (timer) clearInterval(timer);
-  timer = setInterval(() => {
-    cooldown.value -= 1;
-    if (cooldown.value <= 0 && timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }, 1000);
-}
 
 onMounted(() => {
-  startCountdown();
   const tokenFromUrl = route.query.token as string | undefined;
   if (tokenFromUrl) runVerify(tokenFromUrl);
 });
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer);
-});
-
-const canResend = computed(() => cooldown.value <= 0 && !!email.value);
-const resendLabel = computed(() =>
-  cooldown.value > 0 ? `Resend Code in ${cooldown.value}s` : 'Resend Code'
-);
 
 async function runVerify(token: string) {
   status.value = 'verifying';
@@ -55,18 +24,7 @@ async function runVerify(token: string) {
     setTimeout(() => router.push({ name: 'signin' }), 1500);
   } catch {
     status.value = 'error';
-    message.value = auth.error ?? 'Verification failed. Check the code and try again.';
-  }
-}
-
-async function onResend() {
-  if (!canResend.value) return;
-  try {
-    await auth.resendVerification(email.value);
-    message.value = 'A new verification message has been sent if the email exists in our system.';
-    startCountdown();
-  } catch {
-    message.value = 'Could not resend right now. Please try again later.';
+    message.value = auth.error ?? 'Verification failed. The link may have expired.';
   }
 }
 </script>
@@ -85,43 +43,26 @@ async function onResend() {
 
         <h1 class="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Verify Your Email</h1>
         <p class="mt-2 max-w-md text-sm text-slate-500">
-          We've sent you a verification code. If you can't find it, check your spam folder too!
+          We've sent you a verification link. Please open the email and click
+          <span class="font-semibold text-slate-700">Verify Email</span> to continue.
+          If you can't find it, check your spam folder too!
         </p>
-
-        <div class="mt-8 w-full">
-          <CodeInput
-            v-model="code"
-            :length="6"
-            :disabled="status === 'verifying' || status === 'success'"
-            @complete="runVerify"
-          />
-        </div>
 
         <p
           v-if="message"
-          class="mt-4 max-w-md rounded-2xl px-4 py-2 text-sm"
+          class="mt-6 max-w-md rounded-2xl px-4 py-2 text-sm"
           :class="status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
         >
           {{ message }}
+        </p>
+        <p v-if="status === 'verifying'" class="mt-6 text-sm text-slate-500">
+          Verifying your email…
         </p>
         <p v-if="status === 'success'" class="mt-2 text-sm text-green-700">
           Email verified — redirecting to sign in…
         </p>
 
-        <button
-          type="button"
-          class="btn-soft mt-8 max-w-md"
-          :disabled="!canResend"
-          @click="onResend"
-        >
-          {{ resendLabel }}
-        </button>
-
-        <p v-if="cooldown > 0" class="mt-3 text-xs text-slate-400">
-          Wait for {{ cooldown }} Second{{ cooldown === 1 ? '' : 's' }} to receive email
-        </p>
-
-        <RouterLink to="/signup" class="mt-4 text-sm font-semibold text-ieee-700 hover:underline">
+        <RouterLink to="/signup" class="mt-8 text-sm font-semibold text-ieee-700 hover:underline">
           Back to signup
         </RouterLink>
       </div>

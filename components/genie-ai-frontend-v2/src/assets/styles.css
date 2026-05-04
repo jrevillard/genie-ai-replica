@@ -46,10 +46,10 @@
     @apply md:w-20;
   }
   .dash-main {
-    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-surface shadow-elevated ring-1 ring-border;
+    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface shadow-elevated ring-1 ring-border;
   }
   .dash-main__card {
-    @apply flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden rounded-2xl bg-surface shadow-elevated ring-1 ring-border;
+    @apply flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-surface shadow-elevated ring-1 ring-border;
   }
   .dash-nav-item {
     @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-body font-semibold text-text-muted transition hover:bg-surface-subtle hover:text-text;
@@ -68,13 +68,37 @@
 }
 
 /*
- * vue-sileo: brand toast surface (#003e62 = ieee-800 / main navy).
+ * vue-sileo: neutral dark-slate toast surface so colored state badges
+ * (success / error / warning) stay legible without competing with brand navy.
  * Load vue-sileo before this file (see main.ts) so these override library defaults.
  */
-[data-sileo-viewport][data-theme='light'],
-[data-sileo-viewport][data-theme='dark'] {
-  --sileo-fill: #003e62;
-  --sileo-text: #ffffff;
-  --sileo-description: rgba(255, 255, 255, 0.85);
-  --sileo-shadow: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.22));
+[data-sileo-viewport] {
+  --sileo-fill: #1f2937;
+  --sileo-text: #f9fafb;
+  --sileo-description: rgba(249, 250, 251, 0.78);
+  --sileo-shadow: drop-shadow(0 6px 20px rgba(15, 23, 42, 0.28));
+}
+
+/* Global scrollbar styling — soft neutral so it recedes from the UI. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d4 #f5f5f5;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #d4d4d4;
+  border-radius: 9999px;
+  border: 2px solid #f5f5f5;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #a3a3a3;
+}
+*::-webkit-scrollbar-corner {
+  background: #f5f5f5;
 }

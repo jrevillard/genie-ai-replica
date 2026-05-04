@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
+import { Eye, EyeOff } from 'lucide-vue-next';
 import { useRouter } from 'vue-router';
 import { sileo } from '../lib/notify';
 import AuthHeader from '../components/AuthHeader.vue';
@@ -26,6 +27,8 @@ const { errors, validate } = useZodForm(signUpSchema, [
   'email',
   'password',
 ]);
+
+const passwordVisible = ref(false);
 
 async function onSubmit() {
   if (!validate(form)) return;
@@ -59,7 +62,7 @@ async function onSubmit() {
               id="firstName"
               v-model="form.firstName"
               label="First Name"
-              placeholder="John"
+              placeholder="Enter your first name"
               autocomplete="given-name"
               required
               rounded="full"
@@ -69,7 +72,7 @@ async function onSubmit() {
               id="lastName"
               v-model="form.lastName"
               label="Last Name"
-              placeholder="Doe"
+              placeholder="Enter your last name"
               autocomplete="family-name"
               required
               rounded="full"
@@ -80,7 +83,7 @@ async function onSubmit() {
               v-model="form.email"
               type="email"
               label="Email Address"
-              placeholder="you@example.com"
+              placeholder="Enter your email address"
               autocomplete="email"
               required
               rounded="full"
@@ -89,14 +92,26 @@ async function onSubmit() {
             <BaseInput
               id="password"
               v-model="form.password"
-              type="password"
+              :type="passwordVisible ? 'text' : 'password'"
               label="Password"
-              placeholder="At least 8 characters"
+              placeholder="Enter your password"
               autocomplete="new-password"
               required
               rounded="full"
               :error="errors.password"
-            />
+            >
+              <template #trailing>
+                <button
+                  type="button"
+                  class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
+                  :aria-label="passwordVisible ? 'Hide password' : 'Show password'"
+                  @click="passwordVisible = !passwordVisible"
+                >
+                  <EyeOff v-if="passwordVisible" class="h-4 w-4" />
+                  <Eye v-else class="h-4 w-4" />
+                </button>
+              </template>
+            </BaseInput>
 
             <BaseButton type="submit" variant="primary" block :loading="auth.loading">Sign up</BaseButton>
 

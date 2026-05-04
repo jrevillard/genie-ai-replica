@@ -285,7 +285,7 @@ async function confirmDelete() {
             />
             <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" />
             <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
-            <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" />
+            <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" :twin="twin" />
             <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
           </div>
         </fieldset>

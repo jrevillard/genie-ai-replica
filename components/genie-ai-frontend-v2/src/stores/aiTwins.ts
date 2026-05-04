@@ -116,10 +116,29 @@ export const useAiTwinsStore = defineStore('aiTwins', {
     },
 
     async linkKbFile(twinId: string, fileId: string): Promise<AiTwin> {
-      const twin = await api.linkKbFile(twinId, fileId);
-      upsert(this.twins, twin);
-      if (this.current?._key === twinId) this.current = twin;
-      return twin;
+      this.error = null;
+      try {
+        const twin = await api.linkKbFile(twinId, fileId);
+        upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = twin;
+        return twin;
+      } catch (err) {
+        this.error = extractError(err, 'Failed to link knowledge file');
+        throw err;
+      }
+    },
+
+    async unlinkKbFile(twinId: string, fileId: string): Promise<AiTwin> {
+      this.error = null;
+      try {
+        const twin = await api.unlinkKbFile(twinId, fileId);
+        upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = twin;
+        return twin;
+      } catch (err) {
+        this.error = extractError(err, 'Failed to unlink knowledge file');
+        throw err;
+      }
     },
 
     async uploadAvatar(twinId: string, file: File): Promise<AiTwin> {
@@ -139,10 +158,16 @@ export const useAiTwinsStore = defineStore('aiTwins', {
     },
 
     async replaceKbFiles(twinId: string, fileIds: string[]): Promise<AiTwin> {
-      const twin = await api.replaceKbFiles(twinId, fileIds);
-      upsert(this.twins, twin);
-      if (this.current?._key === twinId) this.current = twin;
-      return twin;
+      this.error = null;
+      try {
+        const twin = await api.replaceKbFiles(twinId, fileIds);
+        upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = twin;
+        return twin;
+      } catch (err) {
+        this.error = extractError(err, 'Failed to update knowledge files');
+        throw err;
+      }
     },
   },
 });

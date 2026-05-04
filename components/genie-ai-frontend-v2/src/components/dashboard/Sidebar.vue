@@ -10,6 +10,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
+import { notify } from '../../lib/notify';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseDialog from '../ui/BaseDialog.vue';
 import Icon from '../ui/Icon.vue';
@@ -41,8 +42,15 @@ const items: NavItem[] = [
 
 async function onLogout() {
   logoutDialogOpen.value = false;
-  await auth.signOut();
-  router.push({ name: 'signin' });
+  try {
+    await auth.signOut();
+    notify.success('Signed out', 'See you soon!');
+  } catch (err) {
+    const e = err as { message?: string };
+    notify.error('Sign-out failed', e?.message ?? 'Could not complete sign-out.');
+  } finally {
+    router.push({ name: 'signin' });
+  }
 }
 
 function isNavActive(to: string): boolean {

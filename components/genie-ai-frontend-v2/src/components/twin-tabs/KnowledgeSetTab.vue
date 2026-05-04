@@ -1,130 +1,243 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { AiBrain01Icon, File02Icon, PlusSignIcon, Upload01Icon } from '@hugeicons/core-free-icons';
+import {
+  AiBrain01Icon,
+  Delete02Icon,
+  File02Icon,
+  Link01Icon,
+  PlusSignIcon,
+} from '@hugeicons/core-free-icons';
+import { notify } from '../../lib/notify';
 import BaseButton from '../ui/BaseButton.vue';
+import BaseDialog from '../ui/BaseDialog.vue';
 import BaseDrawer from '../ui/BaseDrawer.vue';
+import BaseInput from '../ui/BaseInput.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import Icon from '../ui/Icon.vue';
+import { useAiTwinsStore } from '../../stores/aiTwins';
+import type { AiTwin } from '../../services/aiTwins';
 
-interface KnowledgeFile {
-  id: string;
-  name: string;
-  size: string;
+const props = defineProps<{ twin: AiTwin }>();
+const store = useAiTwinsStore();
+
+const linkDialogOpen = ref(false);
+const newFileId = ref('');
+const linking = ref(false);
+
+const removeDialogOpen = ref(false);
+const fileIdToRemove = ref<string | null>(null);
+const removing = ref(false);
+
+const clearDialogOpen = ref(false);
+const clearing = ref(false);
+
+function openLinkDialog() {
+  newFileId.value = '';
+  linkDialogOpen.value = true;
 }
 
-const files = ref<KnowledgeFile[]>([]);
-const dialogOpen = ref(false);
-const dragOver = ref(false);
-const fileInput = ref<HTMLInputElement | null>(null);
-
-function pickFile() {
-  fileInput.value?.click();
+async function linkFile() {
+  const id = newFileId.value.trim();
+  if (!id || linking.value) return;
+  if (props.twin.linkedKbFileIds.includes(id)) {
+    notify.warning('That file is already linked to this twin');
+    return;
+  }
+  linking.value = true;
+  try {
+    await store.linkKbFile(props.twin._key, id);
+    notify.success('File linked');
+    linkDialogOpen.value = false;
+    newFileId.value = '';
+  } catch {
+    notify.error(store.error ?? 'Failed to link file');
+  } finally {
+    linking.value = false;
+  }
 }
 
-function addFile(file: File) {
-  files.value.push({
-    id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    name: file.name,
-    size: formatBytes(file.size),
-  });
+function askRemove(fileId: string) {
+  fileIdToRemove.value = fileId;
+  removeDialogOpen.value = true;
 }
 
-function onFileChange(e: Event) {
-  const list = (e.target as HTMLInputElement).files;
-  if (!list) return;
-  for (const f of Array.from(list)) addFile(f);
+async function confirmRemove() {
+  const id = fileIdToRemove.value;
+  if (!id || removing.value) return;
+  removing.value = true;
+  try {
+    await store.unlinkKbFile(props.twin._key, id);
+    notify.success('File unlinked');
+    removeDialogOpen.value = false;
+    fileIdToRemove.value = null;
+  } catch {
+    notify.error(store.error ?? 'Failed to unlink file');
+  } finally {
+    removing.value = false;
+  }
 }
 
-function onDrop(e: DragEvent) {
-  e.preventDefault();
-  dragOver.value = false;
-  const list = e.dataTransfer?.files;
-  if (!list) return;
-  for (const f of Array.from(list)) addFile(f);
+async function confirmClearAll() {
+  if (clearing.value) return;
+  clearing.value = true;
+  try {
+    await store.replaceKbFiles(props.twin._key, []);
+    notify.success('Cleared all linked files');
+    clearDialogOpen.value = false;
+  } catch {
+    notify.error(store.error ?? 'Failed to clear files');
+  } finally {
+    clearing.value = false;
+  }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+// KB linking is its own atomic mutation, independent of the General-tab edit
+// cycle — nothing to commit/discard via the parent's Save flow.
+function save(): boolean {
+  return true;
 }
+function discard(): void {}
+defineExpose({ save, discard });
 </script>
 
 <template>
   <div class="space-y-5">
-    <header class="flex items-center justify-between">
+    <header class="flex items-center justify-between gap-3">
       <div>
-        <h2 class="text-title text-text">Knowledge Set</h2>
+        <h2 class="text-title text-text">Knowledge Files</h2>
         <p class="mt-0.5 text-caption text-text-muted">
-          Upload files so your AI Twin can answer with your specific knowledge.
+          Files linked here are used to answer with this AI Twin's specific knowledge.
         </p>
       </div>
-      <BaseButton variant="primary" size="sm" rounded="full" @click="dialogOpen = true">
-        <Icon :icon="PlusSignIcon" :size="14" /> Add Knowledge
-      </BaseButton>
+      <div class="flex items-center gap-2">
+        <BaseButton
+          v-if="twin.linkedKbFileIds.length"
+          variant="ghost"
+          size="sm"
+          rounded="full"
+          @click="clearDialogOpen = true"
+        >
+          Clear all
+        </BaseButton>
+        <BaseButton variant="primary" size="sm" rounded="full" @click="openLinkDialog">
+          <Icon :icon="PlusSignIcon" :size="14" /> Link File
+        </BaseButton>
+      </div>
     </header>
 
-    <ul v-if="files.length" class="space-y-2">
+    <ul v-if="twin.linkedKbFileIds.length" class="space-y-2">
       <li
-        v-for="f in files"
-        :key="f.id"
+        v-for="fileId in twin.linkedKbFileIds"
+        :key="fileId"
         class="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-card"
       >
         <div class="rounded-full bg-accent-soft p-2 text-accent">
           <Icon :icon="File02Icon" :size="18" />
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-body font-medium text-text">{{ f.name }}</p>
-          <p class="text-caption text-text-muted">{{ f.size }}</p>
+          <p class="truncate text-body font-medium text-text">{{ fileId }}</p>
+          <p class="text-caption text-text-muted">Document repository ID</p>
         </div>
+        <button
+          type="button"
+          class="grid h-9 w-9 place-items-center rounded-full text-text-muted transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="removing"
+          aria-label="Unlink file"
+          @click="askRemove(fileId)"
+        >
+          <Icon :icon="Delete02Icon" :size="18" />
+        </button>
       </li>
     </ul>
+
     <EmptyState
       v-else
       :icon="AiBrain01Icon"
-      title="No knowledge files yet"
-      description="Upload PDFs, Word docs or text files so this AI Twin learns your domain."
-    />
+      title="No knowledge files linked yet"
+      description="Link document-repository file IDs so this AI Twin can use them when answering."
+    >
+      <BaseButton variant="primary" rounded="full" @click="openLinkDialog">
+        <Icon :icon="PlusSignIcon" :size="14" /> Link File
+      </BaseButton>
+    </EmptyState>
 
     <BaseDrawer
-      v-model:open="dialogOpen"
-      title="Add Upload Knowledge"
-      :icon="Upload01Icon"
+      v-model:open="linkDialogOpen"
+      title="Link a knowledge file"
+      :icon="Link01Icon"
       width="md"
     >
       <p class="mb-4 text-caption text-text-muted">
-        For further accuracy, you can upload files below to train your Agent to sound more like you.
+        Paste a file ID from the Document Repository. Any optional
+        <code class="rounded bg-surface-muted px-1 py-0.5 text-[11px]">files/</code>
+        prefix is stripped automatically.
       </p>
-      <div
-        :class="[
-          'flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition',
-          dragOver ? 'border-accent bg-accent-soft' : 'border-border bg-surface-muted',
-        ]"
-        @dragover.prevent="dragOver = true"
-        @dragleave="dragOver = false"
-        @drop="onDrop"
-      >
-        <Icon :icon="Upload01Icon" :size="28" class="text-text-subtle" />
-        <p class="text-body font-medium text-text">Upload File</p>
-        <p class="max-w-xs text-caption text-text-muted">
-          File types allowed: PDF, Word, .csv, .doc, .txt, .docx
-        </p>
-        <input ref="fileInput" type="file" multiple class="hidden" @change="onFileChange" />
-        <BaseButton variant="soft" size="sm" rounded="full" @click="pickFile">
-          Browse files
-        </BaseButton>
-      </div>
+      <BaseInput
+        id="kb-file-id"
+        v-model="newFileId"
+        label="File ID"
+        placeholder="e.g. a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        rounded="lg"
+        @keydown.enter.prevent="linkFile"
+      />
 
       <template #footer>
         <button
           type="button"
-          class="text-body font-semibold text-text-muted transition hover:text-text"
-          @click="dialogOpen = false"
+          class="text-body font-semibold text-text-muted transition hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="linking"
+          @click="linkDialogOpen = false"
         >
           Cancel
         </button>
-        <BaseButton variant="primary" @click="dialogOpen = false">Add Knowledge</BaseButton>
+        <BaseButton variant="primary" :loading="linking" @click="linkFile">
+          Link File
+        </BaseButton>
       </template>
     </BaseDrawer>
+
+    <BaseDialog v-model:open="removeDialogOpen" size="sm">
+      <div class="pr-10">
+        <h2 class="text-title text-text">Unlink this file?</h2>
+        <p class="mt-2 text-body leading-6 text-text-muted">
+          This twin will stop using the file for retrieval. The file itself stays
+          in the Document Repository.
+        </p>
+      </div>
+      <div class="mt-7 flex justify-end gap-3">
+        <BaseButton
+          variant="ghost"
+          :disabled="removing"
+          @click="removeDialogOpen = false"
+        >
+          Cancel
+        </BaseButton>
+        <BaseButton variant="danger" :loading="removing" @click="confirmRemove">
+          Unlink
+        </BaseButton>
+      </div>
+    </BaseDialog>
+
+    <BaseDialog v-model:open="clearDialogOpen" size="sm">
+      <div class="pr-10">
+        <h2 class="text-title text-text">Clear all linked files?</h2>
+        <p class="mt-2 text-body leading-6 text-text-muted">
+          {{ twin.linkedKbFileIds.length }} file(s) will be unlinked from this twin. The
+          files themselves stay in the Document Repository.
+        </p>
+      </div>
+      <div class="mt-7 flex justify-end gap-3">
+        <BaseButton
+          variant="ghost"
+          :disabled="clearing"
+          @click="clearDialogOpen = false"
+        >
+          Cancel
+        </BaseButton>
+        <BaseButton variant="danger" :loading="clearing" @click="confirmClearAll">
+          Clear all
+        </BaseButton>
+      </div>
+    </BaseDialog>
   </div>
 </template>

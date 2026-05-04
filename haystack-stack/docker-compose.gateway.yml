@@ -1,0 +1,89 @@
+# AMINA API Gateway overlay (Phase 0+1)
+# ─────────────────────────────────────────────────────────────────────
+# Adds the amina-gateway service in PARALLEL to the existing stack.
+# Does NOT change ports on haystack-chatqna, frontend, or any other
+# service. The UNICC tester demo flow (frontend :5174 -> backend :8000)
+# is byte-for-byte unchanged when this overlay is layered.
+#
+# What this gives you:
+#   * New surface on http://localhost:8443
+#   * /api/v1/public/chat — schema-validated + jailbreak-filtered
+#     proxy to AMINA's /api/v1/agent/chat
+#   * /api/v1/public/security/status — public-safe view of active
+#     security layers + recent block stats (powers the frontend's
+#     "🛡️ Jailbreak protection active" badge)
+#   * /health — plain liveness probe
+#
+# What this DOES NOT do (sprint backlog):
+#   * mTLS / client certs
+#   * JWT issuance / scope enforcement
+#   * Cloudflare DDoS / GeoIP
+#   * Adaptive rate limiting tied to backend metrics
+#   * Cutover (frontend still talks directly to :8000)
+#
+# Layer in via start.ps1 (auto) or:
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.override.yml \
+#                  -f docker-compose.nllb.yml \
+#                  -f docker-compose.gateway.yml \
+#                  up -d amina-gateway
+#
+# Disable by setting AMINA_GATEWAY_ENABLED=false in .env — the
+# container still runs but every public endpoint returns 503.
+
+services:
+  amina-gateway:
+    build:
+      context: ../components/api-gateway
+      dockerfile: Dockerfile
+    container_name: amina-gateway
+    restart: unless-stopped
+    ports:
+      # Plain HTTP for now. mTLS/HTTPS layered in Phase 2.
+      - "8443:8443"
+    environment:
+      AMINA_GATEWAY_ENABLED:           ${AMINA_GATEWAY_ENABLED:-true}
+      AMINA_GATEWAY_AUDIT_ENABLED:     ${AMINA_GATEWAY_AUDIT_ENABLED:-true}
+      AMINA_GATEWAY_JAILBREAK_ENABLED: ${AMINA_GATEWAY_JAILBREAK_ENABLED:-true}
+      AMINA_GATEWAY_JWT_ENABLED:       ${AMINA_GATEWAY_JWT_ENABLED:-true}
+      # Admin secret for POST /api/v1/admin/issue-token. If unset the
+      # gateway generates a random hex per process and logs it, but
+      # restarts mint a new one and break any external issuance scripts.
+      # Set this in haystack-stack/.env to keep it stable.
+      AMINA_GATEWAY_ADMIN_SECRET:      ${AMINA_GATEWAY_ADMIN_SECRET:-}
+      AMINA_GATEWAY_TOKEN_TTL_S:       ${AMINA_GATEWAY_TOKEN_TTL_S:-3600}
+      AMINA_GATEWAY_MAX_TOKEN_TTL_S:   ${AMINA_GATEWAY_MAX_TOKEN_TTL_S:-28800}
+      # Persistent JWT keypair: mount a PKCS8 PEM file at this path to
+      # keep tokens valid across container restarts. Default empty ->
+      # ephemeral keypair, all tokens invalidated on restart.
+      AMINA_GATEWAY_JWT_PRIVATE_KEY_PATH: ${AMINA_GATEWAY_JWT_PRIVATE_KEY_PATH:-}
+      # Phase 4 -- L2 adaptive rate limit. DEFAULT OFF on purpose so
+      # the UNICC demo flow can never hit a 429 from a misconfigured
+      # threshold during evaluation. Operators flip true in prod.
+      AMINA_GATEWAY_RATE_LIMIT_ENABLED:    ${AMINA_GATEWAY_RATE_LIMIT_ENABLED:-false}
+      AMINA_GATEWAY_RATE_LIMIT_REDIS_URL:  ${AMINA_GATEWAY_RATE_LIMIT_REDIS_URL:-redis://amina-redis:6379/3}
+      AMINA_BACKEND_URL:               http://haystack-chatqna:8000
+      ARCADEDB_URL:                    http://arcadedb:2480
+      ARCADEDB_DB:                     ${ARCADEDB_DB:-genie}
+      ARCADEDB_USER:                   root
+      ARCADEDB_ROOT_PASSWORD:          ${ARCADEDB_ROOT_PASSWORD:-genieRoot123}
+    depends_on:
+      arcadedb:
+        condition: service_healthy
+      # NB: gateway does NOT depend on haystack-chatqna being healthy
+      # at startup — it boots happily and returns 503 from the proxy
+      # until the backend is reachable. This means a slow backend
+      # boot doesn't take the gateway's audit log offline.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8443/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - chatqna_default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M

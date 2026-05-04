@@ -106,6 +106,12 @@ app.include_router(meta_router,               prefix="/api/v1")
 from src.api.caregiver_privacy_routes import router as caregiver_privacy_router  # noqa: E402
 app.include_router(caregiver_privacy_router, prefix="/api/v1")
 
+# Phase E: abuse-defense admin endpoints. All gated by admin JWT
+# (role=admin). Read endpoints (status/flagged/recent/user/stats) and
+# one mutation (POST /user/{key}/release) which writes an audit row.
+from src.api.abuse_admin_routes import router as abuse_admin_router  # noqa: E402
+app.include_router(abuse_admin_router, prefix="/api/v1")
+
 # Health check is vital for Docker
 @app.get("/health")
 def health_check():
@@ -219,6 +225,26 @@ async def startup_event():
         print("✅ DHIS2 referral pull scheduler started (every 15 min)")
     except Exception as e:
         print(f"⚠️ DHIS2 pull init warning: {e}")
+
+    # Phase F: pre-translate abuse-defense response copy into Mandinka
+    # via translator_v4 and cache in memory. Failure here is non-fatal —
+    # Mandinka users fall back to English copy if the cache is empty.
+    try:
+        from src.abuse_defense import responses_mn as _abuse_mn
+        stats = await _abuse_mn.bootstrap_async()
+        print(f"✅ Abuse-defense Mandinka cache: {stats}")
+    except Exception as e:
+        print(f"⚠️ Abuse-defense MN bootstrap warning: {e}")
+
+    # Phase G.1: pre-warm the semantic abuse classifier so the first
+    # chat request doesn't pay the model-load cost. Failure is
+    # non-fatal — semantic falls back to regex-only if model load fails.
+    try:
+        from src.abuse_defense import semantic as _abuse_semantic
+        sem_stats = await _abuse_semantic.warm_up_async()
+        print(f"✅ Abuse-defense semantic classifier: {sem_stats}")
+    except Exception as e:
+        print(f"⚠️ Abuse-defense semantic warm-up warning: {e}")
 
 
 if __name__ == "__main__":

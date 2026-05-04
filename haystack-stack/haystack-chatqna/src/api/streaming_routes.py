@@ -166,6 +166,75 @@ async def agent_chat_stream(
     agent = get_agent()
     is_guest = not _has_valid_auth(http_request)
 
+    # Phase B/C/D: abuse defender. Shadow-mode logs only; warn-mode may
+    # short-circuit with WARNING_1/2/3 or the crisis-support template;
+    # enforce-mode also terminates and serves a cool-down notice.
+    # is_minor=False is a Phase D.1 follow-up (needs PatientVertex
+    # age lookup); until then minors with a profile are protected via
+    # the wire in agent_routes.py /chat once that is wired.
+    from src.abuse_defense import defender as _abuse_defender
+    _abuse_lang = (request.language or "en").strip().lower()
+    _abuse_decision = _abuse_defender.evaluate(
+        request.message,
+        route="/api/v1/chat-stream",
+        session_id=request.session_id,
+        user_id=request.patient_id,
+        is_minor=False,
+        language=_abuse_lang,           # Phase F: select Mandinka response copy
+        channel=request.channel or "web",
+        user_role=request.user_role,
+        is_guest=is_guest,
+    )
+    if _abuse_decision is not None and _abuse_decision.action in (
+        "warn", "crisis", "session_terminate", "terminate", "cooldown",
+    ):
+        # Short-circuit: emit the warning/crisis text as a single token
+        # event followed by a done event, so the frontend renders it
+        # identically to any other streamed reply. The agent is NOT
+        # called; no LLM is consulted.
+        _warn_text = _abuse_decision.response_text or ""
+        _warn_session_id = request.session_id
+
+        # Phase D.5 / Phase D — surface the strong-action hint so the
+        # SSE frontend can clear-chat / lock input on session_terminate
+        # and cooldown. None for plain warn/crisis (user keeps chatting).
+        _strong = {
+            "session_terminate": "session_terminate",
+            "terminate":         "terminate",
+            "cooldown":          "cooldown",
+        }.get(_abuse_decision.action)
+
+        _cd_remaining = (
+            _abuse_decision.cooldown_remaining_s
+            if _abuse_decision.action in ("terminate", "cooldown")
+            else None
+        )
+
+        async def _abuse_short_circuit_stream():
+            yield f"event: token\ndata: {json.dumps({'text': _warn_text})}\n\n"
+            done = {
+                "response": _warn_text,
+                "session_id": _warn_session_id,
+                "is_emergency": False,
+                "user_role": request.user_role,
+                "tools_used": [],
+                "session_action": _strong,
+                "cooldown_remaining_s": _cd_remaining,
+            }
+            yield f"event: done\ndata: {json.dumps(done)}\n\n"
+
+        sse = StreamingResponse(
+            _abuse_short_circuit_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+        _ensure_session_cookie(http_request, sse)
+        return sse
+
     sse = StreamingResponse(
         _stream_response(agent, request, is_guest),
         media_type="text/event-stream",

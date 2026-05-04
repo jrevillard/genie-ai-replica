@@ -1620,6 +1620,11 @@ export default function App() {
   const [micOk, setMicOk] = useState("prompt");
   const [sessionId, setSessionId] = useState(initialSessionId);
   const [lastTriage, setLastTriage] = useState(null);
+  // Phase D.5 (revised 2026-05-05) — abuse-defense session lock state.
+  // Set by _finalize() when backend returns session_action ∈ {session_terminate,
+  // terminate, cooldown}. Disables the chat input + shows a lock banner with
+  // a "Start New Conversation" button. Cleared when user starts a new chat.
+  const [abuseLock, setAbuseLock] = useState({ active: false, kind: null, duration: null, since: 0 });
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState(localStorage.getItem("VOICE_MIC_DEVICE_ID") || "");
   const [avatarSpeaking, setAvatarSpeaking] = useState(false);
@@ -1892,6 +1897,42 @@ export default function App() {
       if (d.suggest_language_switch === "ma" && !langPromptShown && language !== "ma") {
         setTimeout(() => setShowLangPrompt(true), 500);
         setLangPromptShown(true);
+      }
+
+      // Phase D.5 (revised 2026-05-05) — abuse-defense session lock.
+      // Behaviour the user asked for: when the backend says the session
+      // is over (session_action ∈ {session_terminate, terminate}), the
+      // chat history STAYS visible (so the user can read what AMINA
+      // told them), but the input is LOCKED so they can't keep typing
+      // in this session. They must click "New Conversation" or the
+      // existing Clear button to start fresh.
+      //
+      // For "cooldown" (the user is mid-lockout — already had cool-down
+      // activated earlier), we lock the input too so they can't keep
+      // sending messages until the timer expires.
+      if (d.session_action === "session_terminate" ||
+          d.session_action === "terminate" ||
+          d.session_action === "cooldown") {
+        const cdMin = d.cooldown_remaining_s
+          ? Math.max(1, Math.round(d.cooldown_remaining_s / 60))
+          : 0;
+        const friendlyDuration = cdMin > 0
+          ? (cdMin >= 60 * 24
+              ? Math.round(cdMin / (60 * 24)) + " day" + (cdMin >= 60 * 48 ? "s" : "")
+              : cdMin >= 60
+                ? Math.round(cdMin / 60) + " hour" + (cdMin >= 120 ? "s" : "")
+                : cdMin + " minute" + (cdMin === 1 ? "" : "s"))
+          : null;
+        // Setting state.lockReason puts the input bar into the locked
+        // mode (see input-render gate further down). status="terminated"
+        // prevents accidental retries from any in-flight typewriter.
+        setStatus("terminated");
+        setAbuseLock({
+          active:    true,
+          kind:      d.session_action,
+          duration:  friendlyDuration,
+          since:     Date.now(),
+        });
       }
     };
 
@@ -2874,6 +2915,9 @@ export default function App() {
     setMsgs([]); setLive(""); setErr(""); setStatus("idle"); setLastTriage(null);
     setFreedOffset(0);
     setSessionId(genSessionId());
+    // Phase D.5 — clear any abuse-defense session lock so the new
+    // conversation starts unlocked.
+    setAbuseLock({ active: false, kind: null, duration: null, since: 0 });
     // Reset any in-flight confirm + cancel the pending timer so the
     // Clear button returns to its resting state immediately.
     setClearPending(false);
@@ -3162,6 +3206,8 @@ export default function App() {
           if (msgs.length > 0) saveThread(sessionId, msgs, lastTriage);
           fetch(`${base.replace(/\/+$/, "")}/api/v1/agent/session/${sessionId}/end`, { method: "POST" }).catch(() => {});
           setMsgs([]); setLive(""); setErr(""); setStatus("idle"); setLastTriage(null);
+          // Phase D.5 — sidebar New Chat also clears any abuse lock.
+          setAbuseLock({ active: false, kind: null, duration: null, since: 0 });
           const newSid = `s_${authPatient.id}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
           setSessionId(newSid);
           localStorage.setItem("AMINA_SID", newSid);
@@ -3602,21 +3648,98 @@ export default function App() {
               </div>
             )}
 
+            {/* Phase D.5 — abuse-defense session lock banner. */}
+            {abuseLock.active && (
+              <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  margin: "8px 0",
+                  padding: "12px 16px",
+                  background: "rgba(220, 38, 38, 0.08)",
+                  border: "1px solid rgba(220, 38, 38, 0.35)",
+                  borderRadius: "8px",
+                  color: "#fca5a5",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ flex: "1 1 auto", fontSize: "0.92rem", lineHeight: "1.4" }}>
+                  <strong style={{ color: "#fecaca" }}>This conversation has ended.</strong>
+                  <span style={{ marginLeft: 6, opacity: 0.85 }}>
+                    {abuseLock.kind === "session_terminate" &&
+                      "Start a new conversation when you're ready. The chat history above stays visible for your reference."}
+                    {abuseLock.kind === "terminate" && abuseLock.duration &&
+                      `AMINA will be available again in about ${abuseLock.duration}. For urgent emergencies, dial 199.`}
+                    {abuseLock.kind === "terminate" && !abuseLock.duration &&
+                      "Please come back later. For urgent emergencies, dial 199."}
+                    {abuseLock.kind === "cooldown" && abuseLock.duration &&
+                      `Cool-down active — about ${abuseLock.duration} remaining. For urgent emergencies, dial 199.`}
+                    {abuseLock.kind === "cooldown" && !abuseLock.duration &&
+                      "Cool-down active. For urgent emergencies, dial 199."}
+                  </span>
+                </div>
+                {/* Only offer "New Conversation" for the soft session_terminate.
+                    During a real cool-down (terminate / cooldown) the user
+                    must wait the timer out — starting a new session would
+                    just trigger the cool-down notice again on their first
+                    message anyway. */}
+                {abuseLock.kind === "session_terminate" && (
+                  <button
+                    onClick={() => {
+                      // Drop old session server-side, mint a new one,
+                      // wipe the input, clear the lock. History stays.
+                      const oldSid = sessionId;
+                      fetch(
+                        `${base.replace(/\/+$/, "")}/api/v1/agent/session/${oldSid}/end`,
+                        { method: "POST" }
+                      ).catch(() => {});
+                      setMsgs([]);
+                      setLive("");
+                      setErr("");
+                      setStatus("idle");
+                      setLastTriage(null);
+                      setFreedOffset(0);
+                      setSessionId(genSessionId());
+                      setChatInput("");
+                      setAbuseLock({ active: false, kind: null, duration: null, since: 0 });
+                    }}
+                    style={{
+                      flex: "0 0 auto",
+                      padding: "8px 14px",
+                      background: "rgba(220, 38, 38, 0.18)",
+                      border: "1px solid rgba(220, 38, 38, 0.45)",
+                      borderRadius: "6px",
+                      color: "#fecaca",
+                      cursor: "pointer",
+                      fontSize: "0.88rem",
+                      fontWeight: 500,
+                    }}
+                  >
+                    New Conversation
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Text Chat Row */}
             <div className="chat-input-row">
               <input
                 type="text"
                 className="chat-input"
-                placeholder={t("type_msg")}
+                placeholder={abuseLock.active ? "This conversation has ended" : t("type_msg")}
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") sendTextMessage(); }}
-                disabled={processing || rec}
+                disabled={processing || rec || abuseLock.active}
               />
               <button
                 className="chat-send-btn"
                 onClick={sendTextMessage}
-                disabled={!chatInput.trim() || processing || rec}
+                disabled={!chatInput.trim() || processing || rec || abuseLock.active}
                 title="Send"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
@@ -3624,7 +3747,7 @@ export default function App() {
               <button
                 className="chat-rx-btn"
                 onClick={() => setShowSymptomForm(true)}
-                disabled={processing || rec}
+                disabled={processing || rec || abuseLock.active}
                 title="Describe symptoms with a guided form"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -3633,7 +3756,7 @@ export default function App() {
               <button
                 className="chat-rx-btn"
                 onClick={() => setShowRxHelper(true)}
-                disabled={processing || rec}
+                disabled={processing || rec || abuseLock.active}
                 title="Enter prescription details manually"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12h6m-3-3v6M21 15V7a2 2 0 0 0-2-2h-4l-2-2H8L6 5H5a2 2 0 0 0-2 2v8" /><path d="M3 15h18v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4Z" /></svg>

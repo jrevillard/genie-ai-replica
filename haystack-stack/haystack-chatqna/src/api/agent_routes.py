@@ -258,6 +258,15 @@ class AgentChatResponse(BaseModel):
     export_action: Optional[dict] = None  # {type:"download_chat_pdf", session_id} — frontend auto-triggers
     detected_language: Optional[str] = None  # "ma" when response was translated to Mandinka
     english_original: Optional[str] = None  # original English text before Mandinka translation
+    # Phase D.5 / Phase D — frontend hint that the abuse-defense
+    # decision wants the UI to take a stronger action than just
+    # rendering the response text. Values:
+    #   "session_terminate" — clear chat + new session (one-shot soft escalation)
+    #   "terminate"          — cool-down activated (clear chat, lock input until cooldown_remaining_s)
+    #   "cooldown"           — user is currently locked out (no clear, just notice)
+    # None on every other reply.
+    session_action: Optional[str] = None
+    cooldown_remaining_s: Optional[int] = None
 
 
 class SessionSummaryResponse(BaseModel):
@@ -293,6 +302,61 @@ async def agent_chat(
     # route through FREE models only (Groq → Gemini). Amina LoRA needs
     # Tailscale; GPT costs money; neither is available to guests.
     is_guest = not _has_valid_auth(http_request)
+
+    # Phase B/C/D: abuse defender. Modes "off"/"shadow" log only and
+    # return None (no override). Modes "warn"/"enforce" may return a
+    # Decision to short-circuit with WARNING_1/2/3, the crisis-support
+    # template, a termination notice, or a cool-down notice.
+    # NEVER raises — fail-open by design (a broken defender must not
+    # silence AMINA).
+    #
+    # Phase D minor-protection hook: ``is_minor`` defaults to False here
+    # because we don't yet have a fast patient-age lookup at this call
+    # site. Wiring patient-profile age from PatientVertex is a Phase D.1
+    # follow-up; until then enforce-mode termination is gated only by
+    # the guest/auth flag (we never auto-terminate guests we can't
+    # identify, but signed-in patients can be terminated).
+    from src.abuse_defense import defender as _abuse_defender
+    _abuse_lang = (request.language or "en").strip().lower()
+    _abuse_decision = _abuse_defender.evaluate(
+        request.message,
+        route="/api/v1/chat",
+        session_id=request.session_id,
+        user_id=request.patient_id,
+        is_minor=False,
+        language=_abuse_lang,           # Phase F: select Mandinka response copy
+        channel=request.channel or "web",
+        user_role=request.user_role,
+        is_guest=is_guest,
+    )
+    if _abuse_decision is not None and _abuse_decision.action in (
+        "warn", "crisis", "session_terminate", "terminate", "cooldown",
+    ):
+        # Short-circuit: do NOT call the agent / LLM. Return the
+        # defender's response text in the standard AgentChatResponse
+        # shape so the frontend renders it like any other reply.
+        #
+        # session_action is surfaced for the strong-action rungs so
+        # the frontend can clear the chat / lock the input. Plain
+        # "warn" and "crisis" rungs deliberately leave session_action
+        # null — the user keeps chatting, just gets a warning bubble.
+        _strong_actions = {
+            "session_terminate": "session_terminate",
+            "terminate":         "terminate",
+            "cooldown":          "cooldown",
+        }
+        return AgentChatResponse(
+            response=_abuse_decision.response_text or "",
+            session_id=request.session_id,
+            is_emergency=False,
+            user_role=request.user_role,
+            session_action=_strong_actions.get(_abuse_decision.action),
+            cooldown_remaining_s=(
+                _abuse_decision.cooldown_remaining_s
+                if _abuse_decision.action in ("terminate", "cooldown")
+                else None
+            ),
+        )
 
     async def _call_agent(pref: Optional[str]):
         return await agent.process_message(
@@ -824,6 +888,16 @@ async def agent_voice_chat(
     if not transcript:
         raise HTTPException(status_code=422, detail="Could not transcribe audio")
 
+    # Phase B: shadow-mode abuse classifier on the transcribed text.
+    from src.abuse_defense import shadow as _abuse_shadow
+    _abuse_shadow.log_message(
+        transcript,
+        route="/api/v1/voice-chat (agent)",
+        session_id=session_id,
+        user_id=patient_id,
+        channel="voice",
+    )
+
     # Step 2: Agent processing
     agent = get_agent()
     result = await agent.process_message(
@@ -870,6 +944,16 @@ async def agent_voice_chat_audio(
     transcript = await transcribe(audio_bytes, file.filename or "audio.ogg")
     if not transcript:
         raise HTTPException(status_code=422, detail="Could not transcribe")
+
+    # Phase B: shadow-mode abuse classifier on the transcribed text.
+    from src.abuse_defense import shadow as _abuse_shadow
+    _abuse_shadow.log_message(
+        transcript,
+        route="/api/v1/voice-chat-audio (agent)",
+        session_id=session_id,
+        user_id=patient_id,
+        channel="voice",
+    )
 
     agent = get_agent()
     result = await agent.process_message(

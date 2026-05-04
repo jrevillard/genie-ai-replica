@@ -53,6 +53,9 @@ build_compose_args() {
     [ -f docker-compose.meta-channels.yml ] && args+=( -f docker-compose.meta-channels.yml )
     # Translation v4.2 -- NLLB sidecar overlay (optional)
     [ -f docker-compose.nllb.yml ]          && args+=( -f docker-compose.nllb.yml )
+    # API Gateway (Phase 0+1) -- jailbreak detection on port 8443.
+    # Parallel to the existing :5174 / :8000 demo flow.
+    [ -f docker-compose.gateway.yml ]       && args+=( -f docker-compose.gateway.yml )
     echo "${args[@]}"
 }
 

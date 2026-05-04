@@ -37,6 +37,15 @@ async def chat_endpoint(request: ChatRequest):
     try:
         history_dicts = [{"role": msg.role, "content": msg.content} for msg in request.history]
 
+        # Phase B: shadow-mode abuse classifier (no behaviour change).
+        from src.abuse_defense import shadow as _abuse_shadow
+        _abuse_shadow.log_message(
+            request.query,
+            route="/api/v1/chat (rag)",
+            user_age=request.user_age,
+            user_gender=request.user_gender,
+        )
+
         result = chat_pipeline.run(
             data={
                 "classifier": {"query": request.query},
@@ -92,6 +101,15 @@ async def chat_endpoint(request: ChatRequest):
 async def text_chat_endpoint(request: TextChatRequest):
     try:
         history_dicts = [{"role": msg.role, "content": msg.content} for msg in request.history]
+
+        # Phase B: shadow-mode abuse classifier (no behaviour change).
+        from src.abuse_defense import shadow as _abuse_shadow
+        _abuse_shadow.log_message(
+            request.text,
+            route="/api/v1/text-chat",
+            user_age=request.user_age,
+            user_gender=request.user_gender,
+        )
 
         result = chat_pipeline.run(
             data={
@@ -205,6 +223,16 @@ async def voice_chat_endpoint(
     if not transcript:
         raise HTTPException(status_code=422, detail="Could not transcribe audio")
 
+    # Phase B: shadow-mode abuse classifier on the transcribed text
+    # (post-STT so we see what the user actually said, not the raw audio).
+    from src.abuse_defense import shadow as _abuse_shadow
+    _abuse_shadow.log_message(
+        transcript,
+        route="/api/v1/voice-chat (rag)",
+        user_age=user_age,
+        user_gender=user_gender,
+    )
+
     # Step 2: Parse history
     try:
         history_list = json.loads(history) if history else []
@@ -279,6 +307,15 @@ async def voice_chat_audio_endpoint(
     transcript = await transcribe(audio_bytes, file.filename or "audio.ogg")
     if not transcript:
         raise HTTPException(status_code=422, detail="Could not transcribe")
+
+    # Phase B: shadow-mode abuse classifier on the transcribed text.
+    from src.abuse_defense import shadow as _abuse_shadow
+    _abuse_shadow.log_message(
+        transcript,
+        route="/api/v1/voice-chat-audio (rag)",
+        user_age=user_age,
+        user_gender=user_gender,
+    )
 
     try:
         history_list = json.loads(history) if history else []

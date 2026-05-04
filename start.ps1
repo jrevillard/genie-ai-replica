@@ -191,6 +191,15 @@ if (Test-Path "haystack-stack\docker-compose.nllb.yml") {
     $composeFiles += @("-f", "docker-compose.nllb.yml")
     Write-Host "       Layering docker-compose.nllb.yml (NLLB translation sidecar)" -ForegroundColor Cyan
 }
+# API Gateway (Phase 0+1): jailbreak detection + schema validation +
+# tamper-evident audit log on a parallel surface (port 8443). The
+# existing UNICC tester flow (frontend :5174 -> backend :8000) is
+# unchanged. Set AMINA_GATEWAY_ENABLED=false in .env to start the
+# container in disabled mode (every public endpoint returns 503).
+if (Test-Path "haystack-stack\docker-compose.gateway.yml") {
+    $composeFiles += @("-f", "docker-compose.gateway.yml")
+    Write-Host "       Layering docker-compose.gateway.yml (API gateway, port 8443)" -ForegroundColor Cyan
+}
 
 Push-Location haystack-stack
 try {

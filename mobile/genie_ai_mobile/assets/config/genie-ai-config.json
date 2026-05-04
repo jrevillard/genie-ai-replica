@@ -326,7 +326,7 @@
     "theme"
   ],
   "app": {
-    "title": "Genie AI",
+    "title": "AgroGenie Bangladesh",
     "icon": {
       "type": "file",
       "value": "assets/config/genie-ai-icon-light.svg"
@@ -345,8 +345,8 @@
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome to Genie AI, for Global Empowerment, Intelligence and Equity",
-      "botName": "Genie AI",
+      "welcomeMessage": "Welcome to AgroGenie Bangladesh - Your Assistant for Agriculture and Weather",
+      "botName": "AgroGenie",
       "quickHelp": {
         "layout": {
           "columns": 2,
@@ -501,94 +501,6 @@
             }
           },
           {
-            "id": "business-trade",
-            "category": "8",
-            "action": {
-              "visibleText": "quickhelp.startBusinessUserPrompt",
-              "hiddenPrompt": "quickhelp.startBusinessPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.startBusiness",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/business-trade.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#2E4053",
-                      "end": "#212F3D",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "id": "healthcare-social",
-            "category": "2",
-            "action": {
-              "visibleText": "quickhelp.findHealthcareUserPrompt",
-              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.findHealthcare",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/healthcare-social.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#2980B9",
-                      "end": "#1F618D",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
             "id": "education-learning",
             "category": "3",
             "action": {
@@ -633,50 +545,6 @@
             }
           },
           {
-            "id": "transportation-mobility",
-            "category": "7",
-            "action": {
-              "visibleText": "quickhelp.transportLicensesUserPrompt",
-              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.transportLicenses",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/transportation-mobility.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#F39C12",
-                      "end": "#B9770E",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
             "id": "housing-urban",
             "category": "9",
             "action": {
@@ -713,50 +581,6 @@
                     "gradient": {
                       "start": "#D35400",
                       "end": "#A04000",
-                      "direction": "horizontal"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "id": "employment-labor",
-            "category": "4",
-            "action": {
-              "visibleText": "quickhelp.findJobsUserPrompt",
-              "hiddenPrompt": "quickhelp.findJobsPrompt"
-            },
-            "appearance": {
-              "label": {
-                "text": "quickhelp.findJobs",
-                "color": "#1C2526"
-              },
-              "icon": {
-                "value": "/config/quickhelp/employment-labor.svg",
-                "color": "#4682B4"
-              },
-              "style": {
-                "background": {
-                  "gradient": {
-                    "start": "#D3E0EA",
-                    "end": "#A3BFFA",
-                    "direction": "horizontal"
-                  }
-                }
-              },
-              "darkMode": {
-                "label": {
-                  "color": "#FFFFFF"
-                },
-                "icon": {
-                  "color": "#FFFFFF"
-                },
-                "style": {
-                  "background": {
-                    "gradient": {
-                      "start": "#8E44AD",
-                      "end": "#6C3483",
                       "direction": "horizontal"
                     }
                   }

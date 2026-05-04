@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart'; // For kIsWeb
+// For kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
@@ -11,21 +11,26 @@ import 'package:genie_ai_mobile/services/connectivity_service.dart';
 class NavBarComponent extends StatelessWidget {
   final Map<String, dynamic> user;
   final VoidCallback onLogout;
+  final VoidCallback? onHomeTap;
   final bool showRightDrawerButton;
 
   const NavBarComponent({
     super.key,
     required this.user,
     required this.onLogout,
+    this.onHomeTap,
     this.showRightDrawerButton = false,
   });
 
   // FIX: Made async because toggleUserOfflineMode returns Future<bool>
   Future<void> _handleConnectivityToggle(
-      BuildContext context, bool isOnline) async {
+    BuildContext context,
+    bool isOnline,
+  ) async {
     final bool newState = await ConnectivityService().toggleUserOfflineMode();
-    final message =
-        newState ? "Switched to Offline Mode" : "Switched to Online Mode";
+    final message = newState
+        ? "Switched to Offline Mode"
+        : "Switched to Online Mode";
 
     // Check mounted mostly for safety, though Stateless usually fine for SnackBar if context valid
     if (context.mounted) {
@@ -61,32 +66,59 @@ class NavBarComponent extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
           child: Row(
             children: [
-              // 1. LOGO
-              SizedBox(
-                width: 32,
-                height: 32,
-                child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-                    ? SvgPicture.asset(GenieAiConfig.iconPath,
-                        fit: BoxFit.contain)
-                    : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
-              ),
-              const SizedBox(width: 12),
-
-              // 2. TITLE
-              Text(
-                GenieAiConfig.title,
-                style: TextStyle(
-                  color: contentColor,
-                  fontWeight: FontWeight.w900, // Extra Bold
-                  fontSize: 22,
-                  letterSpacing: 1.5,
+              // 1. BRAND / HOME
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: onHomeTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 32,
+                          height: 32,
+                          child:
+                              GenieAiConfig.iconPath.toLowerCase().endsWith(
+                                '.svg',
+                              )
+                              ? SvgPicture.asset(
+                                  GenieAiConfig.iconPath,
+                                  fit: BoxFit.contain,
+                                )
+                              : Image.asset(
+                                  GenieAiConfig.iconPath,
+                                  fit: BoxFit.contain,
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              GenieAiConfig.title,
+                              maxLines: 1,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: contentColor,
+                                fontWeight: FontWeight.w900, // Extra Bold
+                                fontSize: 20,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
 
-              const Spacer(),
+              const SizedBox(width: 8),
 
               // 3. CONNECTIVITY (Small Dot/Icon)
               StreamBuilder<bool>(
@@ -95,6 +127,12 @@ class NavBarComponent extends StatelessWidget {
                 builder: (context, snapshot) {
                   final isOnline = snapshot.data ?? false;
                   return IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 40,
+                      height: 40,
+                    ),
                     icon: Icon(
                       isOnline ? Icons.wifi : Icons.cloud_off,
                       color: isOnline ? contentColor : Colors.white38,
@@ -109,6 +147,12 @@ class NavBarComponent extends StatelessWidget {
 
               // 4. LOGOUT
               IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 40,
+                  height: 40,
+                ),
                 icon: Icon(Icons.logout, color: contentColor),
                 tooltip: tr('nav.logout'),
                 onPressed: onLogout,
@@ -124,6 +168,11 @@ class NavBarComponent extends StatelessWidget {
 
                   return PopupMenuButton<String>(
                     icon: Icon(Icons.more_vert, color: contentColor),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 40,
+                      height: 40,
+                    ),
                     tooltip: "More",
                     onSelected: (value) {
                       switch (value) {
@@ -131,7 +180,8 @@ class NavBarComponent extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(user: user)),
+                              builder: (_) => UserProfileScreen(user: user),
+                            ),
                           );
                           break;
                         case 'settings':
@@ -150,31 +200,34 @@ class NavBarComponent extends StatelessWidget {
                     },
                     itemBuilder: (BuildContext context) =>
                         <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
-                        value: 'profile',
-                        enabled: isOnline, // DISABLE PROFILE IF OFFLINE
-                        child: ListTile(
-                          leading: Icon(Icons.person_outline,
-                              color: isOnline ? null : Colors.grey),
-                          title: Text(
-                            'Profile',
-                            style:
-                                TextStyle(color: isOnline ? null : Colors.grey),
+                          PopupMenuItem<String>(
+                            value: 'profile',
+                            enabled: isOnline, // DISABLE PROFILE IF OFFLINE
+                            child: ListTile(
+                              leading: Icon(
+                                Icons.person_outline,
+                                color: isOnline ? null : Colors.grey,
+                              ),
+                              title: Text(
+                                'Profile',
+                                style: TextStyle(
+                                  color: isOnline ? null : Colors.grey,
+                                ),
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
                           ),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'settings',
-                        child: ListTile(
-                          leading: Icon(Icons.settings_outlined),
-                          title: Text('Settings'),
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                    ],
+                          const PopupMenuItem<String>(
+                            value: 'settings',
+                            child: ListTile(
+                              leading: Icon(Icons.settings_outlined),
+                              title: Text('Settings'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
                   );
                 },
               ),

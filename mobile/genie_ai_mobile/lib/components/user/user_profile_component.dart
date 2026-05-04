@@ -471,18 +471,18 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
     final lower = value.toLowerCase();
     if (type == 'gender') {
-      if (lower == 'male')
+      if (lower == 'male') {
         key = 'male';
-      else if (lower == 'female')
+      } else if (lower == 'female')
         key = 'female';
       else if (lower == 'other')
         key = 'other';
       else if (lower.contains('prefer')) key = 'preferNot';
       return tr('userProfile.gender.$key');
     } else if (type == 'marital') {
-      if (lower == 'single')
+      if (lower == 'single') {
         key = 'single';
-      else if (lower == 'married')
+      } else if (lower == 'married')
         key = 'married';
       else if (lower == 'divorced')
         key = 'divorced';
@@ -625,7 +625,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: DropdownButtonFormField<String>(
-        value: normalizedValue,
+        initialValue: normalizedValue,
         decoration: InputDecoration(
           labelText: translatedLabel,
           border: const OutlineInputBorder(),
@@ -639,7 +639,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         onChanged: (v) {
           setState(() {
             _formData[section] ??= {};
-            _formData[section][field] = v ?? null;
+            _formData[section][field] = v;
             debugPrint('[UI] Dropdown updated $section.$field = "$v"');
           });
         },
@@ -804,8 +804,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(currentDob.isEmpty
-                  ? tr('userProfile.instructions.dobHelp').substring(0, 10) +
-                      '...'
+                  ? '${tr('userProfile.instructions.dobHelp').substring(0, 10)}...'
                   : currentDob),
               const Icon(Icons.calendar_today),
             ],

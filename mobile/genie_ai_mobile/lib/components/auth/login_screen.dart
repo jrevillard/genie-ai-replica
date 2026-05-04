@@ -66,8 +66,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty)
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
       return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -256,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(tr('login.noAccount') + ' ',
+        Text('${tr('login.noAccount')} ',
             style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.grey[400] : Colors.grey[700])),

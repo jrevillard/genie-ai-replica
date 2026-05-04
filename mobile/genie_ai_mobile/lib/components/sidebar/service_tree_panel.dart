@@ -35,7 +35,7 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   // Visual Selection Tracking
   // Maps Category Key -> List of Selected Child Indices
   // Example: { 'category_1': [0, 2], 'category_5': [1] }
-  Map<String, List<int>> _selectedNodes = {};
+  final Map<String, List<int>> _selectedNodes = {};
 
   // Logic Selection Tracking
   // Keeps track of the exact order of selection to determine the "Primary" category

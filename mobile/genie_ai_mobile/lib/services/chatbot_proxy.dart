@@ -27,8 +27,8 @@ class ChatbotProxy {
     if ((categoryId != null && categoryId.isNotEmpty) ||
         (contextLabels != null && contextLabels.isNotEmpty)) {
       payload['context'] = {
-        if (categoryId != null) 'categoryId': categoryId,
-        if (contextLabels != null) 'labels': contextLabels,
+        'categoryId': ?categoryId,
+        'labels': ?contextLabels,
       };
       if (categoryId != null) payload['categoryId'] = categoryId;
     }

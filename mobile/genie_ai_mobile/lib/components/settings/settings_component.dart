@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
 
 // Service Imports
 import 'package:genie_ai_mobile/services/user_service.dart';
@@ -417,9 +416,10 @@ class _SettingsComponentState extends State<SettingsComponent> {
                 await _userService.deleteAccount(
                     _deleteAccountPasswordController.text,
                     reason: _deleteAccountReasonController.text);
-                if (mounted)
+                if (mounted) {
                   Navigator.pushNamedAndRemoveUntil(
                       context, '/login', (r) => false);
+                }
               } catch (e) {
                 setState(() {
                   _isDeletingAccount = false;
@@ -945,7 +945,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
           value: value,
           onChanged: onChanged,
           // FIX: Using dynamic active color instead of hardcoded hex
-          activeColor: activeColor)
+          activeThumbColor: activeColor)
     ]);
   }
 

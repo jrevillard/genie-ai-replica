@@ -123,7 +123,7 @@ The app follows a clean architecture with separated concerns for UI components, 
 - **compileSdk**: 36
 - **targetSdk**: 36
 - **minSdk**: 21 (Android 5.0 Lollipop)
-- **NDK**: 27.0.12077973
+- **NDK**: 28.2.13676358
 
 ### Dependencies
 

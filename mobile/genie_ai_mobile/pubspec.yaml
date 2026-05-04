@@ -50,7 +50,11 @@ dependencies:
   package_info_plus: ^9.0.0
 
   flutter_launcher_icons: ^0.14.4
+  speech_to_text: ^7.3.0
+  flutter_tts: ^4.2.5
 
+  intl: any
+  markdown: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

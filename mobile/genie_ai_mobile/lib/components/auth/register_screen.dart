@@ -242,7 +242,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       value: _acceptTerms,
       onChanged: (v) => setState(() => _acceptTerms = v!),
       title: Wrap(children: [
-        Text(tr('register.acceptTerms') + ' ',
+        Text('${tr('register.acceptTerms')} ',
             style: TextStyle(color: colors['text'], fontSize: 13)),
         Text(tr('register.termsOfService'),
             style: TextStyle(
@@ -277,7 +277,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(tr('register.alreadyHaveAccount') + ' ',
+          Text('${tr('register.alreadyHaveAccount')} ',
             style: TextStyle(
                   color: isDark ? Colors.grey[400] : Colors.grey[700])),
           GestureDetector(

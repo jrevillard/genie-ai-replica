@@ -13,7 +13,7 @@ class UserProfileProxy {
 
   /// GET /api/users/:userId
   Future<Map<String, dynamic>> getProfile(String userId) async {
-    final res = await _api.get('$userId');
+    final res = await _api.get(userId);
     if (res.statusCode != 200) {
       throw Exception('Failed to load profile: ${res.statusCode} ${res.body}');
     }
@@ -26,7 +26,7 @@ class UserProfileProxy {
     final bool hasFiles = _containsFiles(profileData);
 
     if (!hasFiles) {
-      final res = await _api.put('$userId', profileData);
+      final res = await _api.put(userId, profileData);
       if (res.statusCode != 200) {
         throw Exception('Update failed: ${res.statusCode} ${res.body}');
       }

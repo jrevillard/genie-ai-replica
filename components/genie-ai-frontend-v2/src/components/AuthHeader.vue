@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import {
+  setLocale,
+  SUPPORTED_LOCALES,
+  type LocaleCode,
+  type LocaleOption,
+} from '../i18n';
 
 withDefaults(
   defineProps<{
@@ -11,28 +18,21 @@ withDefaults(
   { showLanguage: true, align: 'center' }
 );
 
-interface LanguageOption {
-  code: string;
-  label: string;
-}
-
-// TODO: wire to i18n / persisted user setting once backend is ready.
-const languages: LanguageOption[] = [
-  { code: 'EN', label: 'English' },
-  { code: 'FR', label: 'France' },
-  { code: 'MN', label: 'Mandinka' },
-];
-
-const selected = ref<LanguageOption>(languages[0]);
+const { locale } = useI18n();
 const open = ref(false);
 const wrapperRef = ref<HTMLElement | null>(null);
+
+const selected = computed<LocaleOption>(
+  () =>
+    SUPPORTED_LOCALES.find((opt) => opt.code === locale.value) ?? SUPPORTED_LOCALES[0]
+);
 
 function toggle() {
   open.value = !open.value;
 }
 
-function pick(option: LanguageOption) {
-  selected.value = option;
+async function pick(code: LocaleCode) {
+  await setLocale(code);
   open.value = false;
 }
 
@@ -66,7 +66,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
           <circle cx="12" cy="12" r="9" />
           <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
         </svg>
-        {{ selected.code }}
+        <span class="uppercase">{{ selected.code }}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3 transition-transform" :class="open && 'rotate-180'" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
         </svg>
@@ -85,14 +85,19 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
           role="listbox"
           class="absolute right-0 top-full z-20 mt-2 w-48 origin-top-right overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
         >
-          <li v-for="option in languages" :key="option.code" role="option" :aria-selected="selected.code === option.code">
+          <li v-for="option in SUPPORTED_LOCALES" :key="option.code" role="option" :aria-selected="selected.code === option.code">
             <button
               type="button"
-              class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-              @click="pick(option)"
+              :class="[
+                'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                selected.code === option.code
+                  ? 'bg-ieee-50 text-ieee-800 font-semibold'
+                  : 'text-slate-700 hover:bg-slate-50',
+              ]"
+              @click="pick(option.code)"
             >
-              <span class="font-medium">{{ option.label }}</span>
-              <span class="rounded-md bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold text-ieee-700">
+              <span>{{ option.label }}</span>
+              <span class="rounded-md bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-ieee-700">
                 {{ option.code }}
               </span>
             </button>

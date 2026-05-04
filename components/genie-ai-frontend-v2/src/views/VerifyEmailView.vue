@@ -3,7 +3,9 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { sileo } from '../lib/notify';
 import { useAuthStore } from '../stores/auth';
+import { useT } from '../i18n/composables';
 
+const { t } = useT();
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
@@ -51,7 +53,7 @@ async function runVerify(token: string) {
     setTimeout(() => router.push({ name: 'signin' }), 1500);
   } catch {
     status.value = 'error';
-    message.value = auth.error ?? 'Verification failed. The link may have expired.';
+    message.value = auth.error ?? t('auth.verify.failed', 'Verification failed. The link may have expired.');
   }
 }
 
@@ -60,14 +62,20 @@ async function onResend() {
   resending.value = true;
   try {
     await auth.resendVerification(email.value);
-    sileo.success({ title: 'Verification email sent.' });
+    sileo.success({ title: t('auth.verify.sentToast', 'Verification email sent.') });
     startCooldown();
   } catch {
-    sileo.error({ title: 'Could not resend right now. Please try again later.' });
+    sileo.error({ title: t('auth.verify.sendFailedToast', 'Could not resend right now. Please try again later.') });
   } finally {
     resending.value = false;
   }
 }
+
+const resendLabel = computed(() => {
+  if (cooldown.value > 0) return t('auth.verify.resendIn', { seconds: cooldown.value }, `Resend in ${cooldown.value}s`);
+  if (resending.value) return t('auth.verify.sending', 'Sending…');
+  return t('auth.verify.resend', 'Resend');
+});
 </script>
 
 <template>
@@ -82,11 +90,11 @@ async function onResend() {
       <div class="flex flex-col items-center text-center">
         <img src="/images/verify-email.svg" alt="" class="h-40 w-auto" aria-hidden="true" />
 
-        <h1 class="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Verify Your Email</h1>
+        <h1 class="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">{{ t('auth.verify.title', 'Verify Your Email') }}</h1>
         <p class="mt-2 max-w-md text-sm text-slate-500">
-          We've sent you a verification link. Please open the email and click
-          <span class="font-semibold text-slate-700">Verify Email</span> to continue.
-          If you can't find it, check your spam folder too!
+          {{ t('auth.verify.bodyPrefix', "We've sent you a verification link. Please open the email and click") }}
+          <span class="font-semibold text-slate-700">{{ t('auth.verify.verifyEmailHighlight', 'Verify Email') }}</span>
+          {{ t('auth.verify.bodySuffix', " to continue. If you can't find it, check your spam folder too!") }}
         </p>
 
         <p
@@ -97,26 +105,26 @@ async function onResend() {
           {{ message }}
         </p>
         <p v-if="status === 'verifying'" class="mt-6 text-sm text-slate-500">
-          Verifying your email…
+          {{ t('auth.verify.verifying', 'Verifying your email…') }}
         </p>
         <p v-if="status === 'success'" class="mt-2 text-sm text-green-700">
-          Email verified — redirecting to sign in…
+          {{ t('auth.verify.success', 'Email verified — redirecting to sign in…') }}
         </p>
 
         <p v-if="email" class="mt-8 text-sm text-slate-500">
-          Didn't receive the email?
+          {{ t('auth.verify.didntReceive', "Didn't receive the email?") }}
           <button
             type="button"
             class="ml-1 font-semibold text-ieee-700 transition hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
             :disabled="cooldown > 0 || resending"
             @click="onResend"
           >
-            {{ cooldown > 0 ? `Resend in ${cooldown}s` : resending ? 'Sending…' : 'Resend' }}
+            {{ resendLabel }}
           </button>
         </p>
 
         <RouterLink to="/signup" class="mt-3 text-sm font-semibold text-ieee-700 hover:underline">
-          Back to signup
+          {{ t('auth.verify.backToSignup', 'Back to signup') }}
         </RouterLink>
       </div>
 

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import * as api from '../services/aiTwins';
 import type { AiTwin, CreateAiTwinPayload, UpdateAiTwinPayload } from '../services/aiTwins';
+import { readSession } from '../services/http';
 
 interface AiTwinsState {
   twins: AiTwin[];
@@ -55,7 +56,11 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       this.loading = true;
       this.error = null;
       try {
-        const twin = await api.getAiTwin(twinId);
+        // Guests use the public read; the backend only exposes the default
+        // twin there, but it's enough to render a shareable chat surface.
+        const twin = readSession()
+          ? await api.getAiTwin(twinId)
+          : await api.getPublicAiTwin(twinId);
         this.current = twin;
         upsert(this.twins, twin);
         return twin;

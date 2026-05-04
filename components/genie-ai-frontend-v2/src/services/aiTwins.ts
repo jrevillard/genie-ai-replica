@@ -55,6 +55,13 @@ export async function getAiTwin(twinId: string): Promise<AiTwin> {
   return res.data;
 }
 
+// Guest read of a twin — backend only exposes the default twin here, with
+// admin fields stripped. Returns 404 for any non-default twin id.
+export async function getPublicAiTwin(twinId: string): Promise<AiTwin> {
+  const res = await api.get<AiTwin>(`/public/ai-twins/${encodeURIComponent(twinId)}`);
+  return res.data;
+}
+
 export async function createAiTwin(payload: CreateAiTwinPayload): Promise<AiTwin> {
   const res = await api.post<AiTwin>('/ai-twins', payload);
   return res.data;

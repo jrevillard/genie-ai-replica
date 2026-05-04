@@ -123,6 +123,40 @@ export const useChatHistoryStore = defineStore('chatHistory', {
       }
     },
 
+    async sendVoice(audio: Blob, opts: api.SendVoiceMessageOptions = {}): Promise<void> {
+      if (this.sending) return;
+      const sessionId = this.selectedSessionId;
+      if (!sessionId) return;
+
+      this.sending = true;
+      try {
+        const res = await api.sendVoiceMessage(sessionId, audio, opts);
+        const now = new Date().toISOString();
+        this.messages.push({
+          _key: res.userMessage.id,
+          role: 'user',
+          content: res.userMessage.text,
+          audioUrl: res.userMessage.audioUrl ?? null,
+          createdAt: now,
+        });
+        this.messages.push({
+          _key: res.assistantMessage.id,
+          role: 'assistant',
+          content: res.assistantMessage.text,
+          createdAt: new Date().toISOString(),
+        });
+        const idx = this.sessions.findIndex((s) => s._key === sessionId);
+        if (idx !== -1) {
+          this.sessions[idx] = {
+            ...this.sessions[idx],
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      } finally {
+        this.sending = false;
+      }
+    },
+
     async sendMessage(text: string): Promise<void> {
       const trimmed = text.trim();
       if (!trimmed || this.sending) return;

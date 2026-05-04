@@ -8,7 +8,9 @@ import BaseInput from '../components/ui/BaseInput.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
 import { requestPasswordResetSchema, type RequestPasswordResetInput } from '../lib/validation/schemas';
+import { useT } from '../i18n/composables';
 
+const { t } = useT();
 const auth = useAuthStore();
 
 const form = reactive<RequestPasswordResetInput>({ email: '' });
@@ -22,7 +24,7 @@ async function onSubmit() {
   } catch {
     // We still show the neutral success state to avoid leaking which emails
     // are registered. Real errors are surfaced via toast for visibility.
-    sileo.error({ title: auth.error ?? 'Could not send reset instructions' });
+    sileo.error({ title: auth.error ?? t('auth.forgot.failed', 'Could not send reset instructions') });
   } finally {
     submitted.value = true;
   }
@@ -36,20 +38,18 @@ async function onSubmit() {
 
       <div class="flex flex-1 flex-col justify-center">
         <div class="mx-auto w-full max-w-md">
-          <h1 class="text-3xl font-semibold text-slate-900">Forgot your password?</h1>
+          <h1 class="text-3xl font-semibold text-slate-900">{{ t('auth.forgot.title', 'Forgot your password?') }}</h1>
           <p class="mt-1 text-sm text-slate-500">
-            Enter the email tied to your account and we'll send you a reset link.
+            {{ t('auth.forgot.subtitle', "Enter the email tied to your account and we'll send you a reset link.") }}
           </p>
 
           <div
             v-if="submitted"
             class="mt-8 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800"
           >
-            <p class="font-semibold">Check your inbox.</p>
+            <p class="font-semibold">{{ t('auth.forgot.successTitle', 'Check your inbox.') }}</p>
             <p class="mt-1">
-              If an account exists for
-              <span class="font-medium">{{ form.email }}</span
-              >, we've sent reset instructions. The link is valid for a short time.
+              {{ t('auth.forgot.successBody', { email: form.email }, "If an account exists for " + form.email + ", we've sent reset instructions. The link is valid for a short time.") }}
             </p>
           </div>
 
@@ -58,32 +58,32 @@ async function onSubmit() {
               id="email"
               v-model="form.email"
               type="email"
-              label="Email Address"
-              placeholder="Enter your email address"
+              :label="t('auth.forgot.emailLabel', 'Email Address')"
+              :placeholder="t('auth.forgot.emailPlaceholder', 'Enter your email address')"
               autocomplete="email"
               required
               rounded="full"
               :error="errors.email"
             />
             <BaseButton type="submit" variant="primary" block :loading="auth.loading">
-              Send reset link
+              {{ t('auth.forgot.submit', 'Send reset link') }}
             </BaseButton>
           </form>
 
           <p class="pt-6 text-center text-body text-text-muted">
-            Remembered it?
+            {{ t('auth.forgot.remembered', 'Remembered it?') }}
             <RouterLink to="/signin" class="font-semibold text-accent hover:underline">
-              Back to sign in
+              {{ t('common.backToSignIn', 'Back to sign in') }}
             </RouterLink>
           </p>
         </div>
       </div>
 
       <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
-        By signing up, you agree to our
-        <a href="#" class="text-ieee-700 hover:underline">terms of service</a>
-        and
-        <a href="#" class="text-ieee-700 hover:underline">privacy policy</a>.
+        {{ t('auth.legal.prefix', 'By signing up, you agree to our') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.terms', 'terms of service') }}</a>
+        {{ t('auth.legal.and', 'and') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.privacy', 'privacy policy') }}</a>.
       </p>
     </section>
 

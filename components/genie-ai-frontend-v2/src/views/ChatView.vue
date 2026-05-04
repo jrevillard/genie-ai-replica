@@ -241,15 +241,15 @@ function formatTime(d: Date): string {
           >
             <Icon :icon="ArrowLeft01Icon" :size="18" />
           </button>
-          <template v-if="twin">
+          <template v-if="twinId">
             <BaseAvatar
-              :src="twin.profilePicUrl ?? ''"
-              :name="twin.name"
+              :src="twin?.profilePicUrl ?? ''"
+              :name="twin?.name ?? 'AI Twin'"
               size="md"
               badge="online"
             />
             <div class="min-w-0">
-              <p class="truncate text-title text-text">{{ twin.name }}</p>
+              <p class="truncate text-title text-text">{{ twin?.name ?? 'AI Twin' }}</p>
               <p class="truncate text-meta text-text-muted">
                 {{ t.subgreeting.split('.')[0] }}
               </p>
@@ -340,9 +340,9 @@ function formatTime(d: Date): string {
           </BaseButton>
         </EmptyState>
 
-        <!-- Empty hero (twin loaded, no messages) -->
+        <!-- Empty hero (twin selected, no messages yet) -->
         <div
-          v-else-if="twin && messages.length === 0"
+          v-else-if="messages.length === 0"
           class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10 text-center"
         >
           <h1 class="text-display text-text">{{ t.greeting }}</h1>
@@ -375,7 +375,7 @@ function formatTime(d: Date): string {
 
         <!-- Active conversation -->
         <div
-          v-else-if="twin"
+          v-else
           class="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6 scrollbar-thin"
         >
           <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
@@ -397,8 +397,8 @@ function formatTime(d: Date): string {
               >
                 <BaseAvatar
                   v-if="m.role === 'assistant'"
-                  :src="twin.profilePicUrl ?? ''"
-                  :name="twin.name"
+                  :src="twin?.profilePicUrl ?? ''"
+                  :name="twin?.name ?? 'AI Twin'"
                   size="sm"
                 />
                 <div

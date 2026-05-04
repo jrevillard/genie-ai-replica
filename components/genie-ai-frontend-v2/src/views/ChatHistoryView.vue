@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import {
   ArrowDown01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
-  Attachment01Icon,
   BubbleChatIcon,
   CallEnd01Icon,
   CallIcon,
@@ -14,9 +13,13 @@ import {
   Delete02Icon,
   Download04Icon,
   FilterHorizontalIcon,
+  Mic01Icon,
   MoreVerticalIcon,
+  PauseIcon,
   PlayIcon,
   Search01Icon,
+  StopCircleIcon,
+  VolumeHighIcon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
@@ -30,6 +33,7 @@ import { useAuthStore } from '../stores/auth';
 import { useChatHistoryStore } from '../stores/chatHistory';
 import { useVoiceStore } from '../stores/voice';
 import type { AiTwin } from '../services/aiTwins';
+import * as chatSessionsApi from '../services/chatSessions';
 import type { ChatSessionRecord } from '../services/chatSessions';
 import type { VoiceSession } from '../services/voice';
 
@@ -50,7 +54,6 @@ const chatSort = ref<'newest' | 'oldest'>('newest');
 
 const chatSearchOpen = ref(false);
 const chatSearchInput = ref('');
-const chatActionsMenuOpen = ref(false);
 const chatDeleteDialogOpen = ref(false);
 const chatToDeleteId = ref<string | null>(null);
 
@@ -79,6 +82,24 @@ const {
 
 const composerDraft = ref('');
 const messagesScrollEl = ref<HTMLElement | null>(null);
+
+const isRecording = ref(false);
+const recordingSeconds = ref(0);
+let mediaRecorder: MediaRecorder | null = null;
+let recordedChunks: Blob[] = [];
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let recordingStream: MediaStream | null = null;
+let recordingCancelled = false;
+
+interface MessageAudioState {
+  loading: boolean;
+  playing: boolean;
+  url: string | null;
+  audio: HTMLAudioElement | null;
+  duration: number;
+  currentTime: number;
+}
+const assistantAudio = ref<Record<string, MessageAudioState>>({});
 
 const phoneInput = ref('');
 
@@ -294,7 +315,29 @@ function formatSessionTime(iso?: string | null): string {
 function formatSessionListDate(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : sessionListDateFormatter.format(d);
+  if (Number.isNaN(d.getTime())) return '';
+
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return timeFormatter.format(d);
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate();
+  if (isYesterday) return 'Yesterday';
+
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (diffDays > 0 && diffDays < 7) {
+    return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(d);
+  }
+
+  return sessionListDateFormatter.format(d);
 }
 
 function formatMessageTime(iso?: string | null): string {
@@ -378,7 +421,6 @@ function clearChatSearch(): void {
 function openChatDeleteDialog(): void {
   if (!selectedSessionId.value) return;
   chatToDeleteId.value = selectedSessionId.value;
-  chatActionsMenuOpen.value = false;
   chatDeleteDialogOpen.value = true;
 }
 
@@ -425,6 +467,212 @@ function onComposerKeydown(e: KeyboardEvent): void {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     sendComposerMessage();
+  }
+}
+
+function pickRecorderMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
+}
+
+function formatRecordingClock(seconds: number): string {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function stopRecordingStream(): void {
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+  if (recordingStream) {
+    recordingStream.getTracks().forEach((t) => t.stop());
+    recordingStream = null;
+  }
+}
+
+async function startRecording(): Promise<void> {
+  if (isRecording.value || composerDisabled.value) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    notify.error('Recording not supported', 'Your browser cannot record audio.');
+    return;
+  }
+  try {
+    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    const e = err as { name?: string; message?: string };
+    notify.error(
+      'Microphone unavailable',
+      e?.name === 'NotAllowedError'
+        ? 'Permission denied. Allow microphone access and try again.'
+        : e?.message ?? 'Could not access the microphone.',
+    );
+    return;
+  }
+
+  const mimeType = pickRecorderMimeType();
+  recordedChunks = [];
+  recordingCancelled = false;
+  try {
+    mediaRecorder = mimeType
+      ? new MediaRecorder(recordingStream, { mimeType })
+      : new MediaRecorder(recordingStream);
+  } catch {
+    stopRecordingStream();
+    notify.error('Recording failed', 'Could not initialize the recorder.');
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (event: BlobEvent) => {
+    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+  };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
+    stopRecordingStream();
+    mediaRecorder = null;
+    isRecording.value = false;
+    if (recordingCancelled || blob.size === 0) {
+      recordingSeconds.value = 0;
+      return;
+    }
+    submitVoiceMessage(blob).finally(() => {
+      recordingSeconds.value = 0;
+    });
+  };
+
+  mediaRecorder.start();
+  isRecording.value = true;
+  recordingSeconds.value = 0;
+  recordingTimer = setInterval(() => {
+    recordingSeconds.value += 1;
+    if (recordingSeconds.value >= 600) stopRecording();
+  }, 1000);
+}
+
+function stopRecording(): void {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+  }
+}
+
+function cancelRecording(): void {
+  if (!mediaRecorder) return;
+  recordingCancelled = true;
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+    recordingSeconds.value = 0;
+  }
+}
+
+async function submitVoiceMessage(blob: Blob): Promise<void> {
+  if (!selectedSessionId.value) return;
+  try {
+    await chatHistory.sendVoice(blob);
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const message =
+      e?.response?.data?.message ??
+      (status === 413
+        ? 'Recording is too large (max 10 MB).'
+        : status === 502
+          ? 'Voice transcription service is temporarily unavailable.'
+          : e?.message ?? 'Could not send voice message.');
+    notify.error('Voice message failed', message);
+  }
+}
+
+function ensureAudioState(messageId: string): MessageAudioState {
+  if (!assistantAudio.value[messageId]) {
+    assistantAudio.value[messageId] = {
+      loading: false,
+      playing: false,
+      url: null,
+      audio: null,
+      duration: 0,
+      currentTime: 0,
+    };
+  }
+  return assistantAudio.value[messageId];
+}
+
+function stopAllMessageAudio(): void {
+  Object.values(assistantAudio.value).forEach((state) => {
+    if (state.audio && state.playing) {
+      state.audio.pause();
+      state.playing = false;
+    }
+  });
+}
+
+function attachAudioListeners(state: MessageAudioState): void {
+  if (!state.audio) return;
+  const audio = state.audio;
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+  });
+  audio.addEventListener('timeupdate', () => {
+    state.currentTime = audio.currentTime;
+  });
+  audio.addEventListener('ended', () => {
+    state.playing = false;
+    state.currentTime = 0;
+  });
+  audio.addEventListener('pause', () => {
+    if (audio.currentTime >= audio.duration) state.playing = false;
+  });
+}
+
+function formatAudioClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+async function toggleMessageAudio(message: { _key?: string; role: string }): Promise<void> {
+  const messageId = message._key;
+  if (!messageId || !selectedSessionId.value) return;
+  const state = ensureAudioState(messageId);
+  if (state.playing && state.audio) {
+    state.audio.pause();
+    state.playing = false;
+    return;
+  }
+  stopAllMessageAudio();
+  try {
+    if (!state.url) {
+      state.loading = true;
+      const blob = await chatSessionsApi.fetchMessageAudio(selectedSessionId.value, messageId);
+      state.url = URL.createObjectURL(blob);
+    }
+    if (!state.audio) {
+      state.audio = new Audio(state.url);
+      attachAudioListeners(state);
+    }
+    await state.audio.play();
+    state.playing = true;
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const fallback =
+      status === 404
+        ? 'Audio for this message could not be found.'
+        : status === 502
+          ? 'Voice synthesis is temporarily unavailable.'
+          : e?.message ?? 'Could not play audio.';
+    notify.error('Playback failed', e?.response?.data?.message ?? fallback);
+  } finally {
+    state.loading = false;
   }
 }
 
@@ -495,6 +743,28 @@ watch(activeTab, (tab) => {
 
 onMounted(() => {
   loadChats();
+});
+
+function cleanupAssistantAudio(): void {
+  Object.values(assistantAudio.value).forEach((state) => {
+    if (state.audio) {
+      state.audio.pause();
+      state.audio.src = '';
+    }
+    if (state.url) URL.revokeObjectURL(state.url);
+  });
+  assistantAudio.value = {};
+}
+
+watch(selectedSessionId, () => {
+  cleanupAssistantAudio();
+  if (isRecording.value) cancelRecording();
+});
+
+onBeforeUnmount(() => {
+  cleanupAssistantAudio();
+  if (isRecording.value) cancelRecording();
+  stopRecordingStream();
 });
 </script>
 
@@ -678,23 +948,49 @@ onMounted(() => {
                 />
               </div>
 
-              <div v-else class="p-2">
+              <div v-else class="space-y-1 p-2">
                 <button
                   v-for="item in sortedChatSessions"
                   :key="item._key"
                   type="button"
                   :class="[
-                    'flex w-full items-center gap-2.5 rounded-lg p-2.5 transition hover:bg-ieee-50',
-                    item._key === selectedSessionId && 'bg-ieee-50',
+                    'group relative flex w-full items-start gap-3 overflow-hidden rounded-xl border p-2.5 text-left transition',
+                    item._key === selectedSessionId
+                      ? 'border-ieee-200 bg-ieee-50/70 shadow-sm'
+                      : 'border-transparent hover:border-slate-200 hover:bg-slate-50',
                   ]"
                   @click="selectChatSession(item._key)"
                 >
+                  <span
+                    aria-hidden="true"
+                    :class="[
+                      'absolute left-0 top-2 bottom-2 w-1 rounded-full transition',
+                      item._key === selectedSessionId ? 'bg-ieee-700' : 'bg-transparent',
+                    ]"
+                  />
                   <BaseAvatar :src="sessionAvatar(item)" :name="sessionTitle(item)" size="sm" />
-                  <span class="min-w-0 flex-1 text-left">
-                    <span class="block truncate text-sm font-semibold text-slate-900">{{ sessionTitle(item) }}</span>
-                    <span class="block truncate text-xs text-slate-500">{{ sessionPreview(item) }}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="flex items-center justify-between gap-2">
+                      <span class="truncate text-sm font-semibold text-slate-900">{{ sessionTitle(item) }}</span>
+                      <time class="shrink-0 text-[11px] text-slate-400">
+                        {{ formatSessionListDate(item.updatedAt || item.createdAt) }}
+                      </time>
+                    </span>
+                    <span class="mt-0.5 flex items-center gap-1.5">
+                      <span
+                        :class="[
+                          'inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold',
+                          item.type === 'whatsapp'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-ieee-50 text-ieee-700',
+                        ]"
+                      >
+                        <Icon :icon="BubbleChatIcon" :size="10" />
+                        {{ item.type === 'whatsapp' ? 'WhatsApp' : 'Chat' }}
+                      </span>
+                      <span class="min-w-0 truncate text-xs text-slate-500">{{ sessionPreview(item) }}</span>
+                    </span>
                   </span>
-                  <time class="text-[11px] shrink-0 text-slate-400">{{ formatSessionListDate(item.updatedAt || item.createdAt) }}</time>
                 </button>
               </div>
             </div>
@@ -725,26 +1021,14 @@ onMounted(() => {
                 </button>
                 <button
                   type="button"
-                  class="grid h-9 w-9 place-items-center rounded-md transition hover:bg-white hover:text-ieee-800"
-                  aria-label="Conversation actions"
-                  @click="chatActionsMenuOpen = !chatActionsMenuOpen"
+                  class="grid h-9 w-9 place-items-center rounded-md text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Delete conversation"
+                  title="Delete conversation"
+                  :disabled="!selectedSessionId"
+                  @click="openChatDeleteDialog"
                 >
-                  <Icon :icon="MoreVerticalIcon" :size="19" />
+                  <Icon :icon="Delete02Icon" :size="19" />
                 </button>
-                <div
-                  v-if="chatActionsMenuOpen"
-                  class="absolute right-0 top-full z-30 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
-                  @mouseleave="chatActionsMenuOpen = false"
-                >
-                  <button
-                    type="button"
-                    class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                    @click="openChatDeleteDialog"
-                  >
-                    <Icon :icon="Delete02Icon" :size="16" />
-                    Delete conversation
-                  </button>
-                </div>
               </div>
             </header>
 
@@ -829,6 +1113,38 @@ onMounted(() => {
                   />
                   <div :class="['flex max-w-[86%] flex-col gap-1 md:max-w-[430px]', message.role === 'user' && 'items-end']">
                     <div
+                      v-if="message.role === 'user' && message.audioUrl && message._key"
+                      class="flex items-center gap-3 rounded-2xl rounded-tr-md bg-ieee-700 px-3 py-2.5 text-white shadow-sm"
+                    >
+                      <button
+                        type="button"
+                        class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
+                        :aria-label="assistantAudio[message._key]?.playing ? 'Pause voice note' : 'Play voice note'"
+                        :disabled="assistantAudio[message._key]?.loading"
+                        @click="toggleMessageAudio(message)"
+                      >
+                        <span v-if="assistantAudio[message._key]?.loading" class="typing-dots typing-dots--sm"><span /><span /><span /></span>
+                        <Icon
+                          v-else-if="assistantAudio[message._key]?.playing"
+                          :icon="PauseIcon"
+                          :size="16"
+                        />
+                        <Icon v-else :icon="PlayIcon" :size="16" />
+                      </button>
+                      <span class="flex h-7 flex-1 items-center gap-0.5" aria-hidden="true">
+                        <span
+                          v-for="(bar, barIdx) in detailWaveformBars.slice(0, 32)"
+                          :key="barIdx"
+                          class="w-0.5 rounded-full bg-white/60"
+                          :style="{ height: `${Math.max(20, bar * 0.6)}%` }"
+                        />
+                      </span>
+                      <span class="shrink-0 text-[11px] font-semibold tabular-nums text-white/80">
+                        {{ formatAudioClock(assistantAudio[message._key]?.duration ?? 0) || '0:00' }}
+                      </span>
+                    </div>
+                    <div
+                      v-else
                       :class="[
                         'rounded-2xl px-3.5 py-3 text-xs leading-relaxed whitespace-pre-wrap',
                         message.role === 'user'
@@ -838,41 +1154,117 @@ onMounted(() => {
                     >
                       <p>{{ message.content }}</p>
                     </div>
-                    <time v-if="message.createdAt" class="text-[11px] text-slate-400">{{ formatMessageTime(message.createdAt) }}</time>
+                    <div class="flex items-center gap-2">
+                      <time v-if="message.createdAt" class="text-[11px] text-slate-400">{{ formatMessageTime(message.createdAt) }}</time>
+                      <button
+                        v-if="message.role === 'assistant' && message._key"
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition hover:bg-ieee-50 hover:text-ieee-800 disabled:opacity-50"
+                        :aria-label="assistantAudio[message._key]?.playing ? 'Pause audio' : 'Play audio'"
+                        :disabled="assistantAudio[message._key]?.loading"
+                        @click="toggleMessageAudio(message)"
+                      >
+                        <span v-if="assistantAudio[message._key]?.loading" class="typing-dots typing-dots--sm"><span /><span /><span /></span>
+                        <Icon
+                          v-else-if="assistantAudio[message._key]?.playing"
+                          :icon="PauseIcon"
+                          :size="12"
+                        />
+                        <Icon v-else :icon="VolumeHighIcon" :size="12" />
+                        {{ assistantAudio[message._key]?.playing ? 'Playing' : 'Listen' }}
+                      </button>
+                    </div>
                   </div>
                   <BaseAvatar v-if="message.role === 'user'" :name="callerName" size="xs" />
+                </div>
+
+                <div
+                  v-if="sendingChat"
+                  class="mb-5 flex items-start gap-2.5"
+                  aria-live="polite"
+                  aria-label="Assistant is typing"
+                >
+                  <BaseAvatar
+                    :src="sessionAvatar(selectedChatSession)"
+                    :name="sessionTitle(selectedChatSession)"
+                    size="xs"
+                  />
+                  <div class="flex flex-col gap-1">
+                    <div class="rounded-2xl rounded-tl-md bg-white px-3.5 py-3 shadow-sm">
+                      <span class="typing-dots" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </div>
+                    <span class="text-[11px] text-slate-400">{{ sessionTitle(selectedChatSession) }} is typing…</span>
+                  </div>
                 </div>
               </template>
             </div>
 
             <footer class="flex gap-3 border-t border-slate-200 bg-white/80 px-3 py-3 md:px-4 md:pb-4">
-              <label class="flex min-w-0 flex-1 items-center gap-2.5 rounded-full bg-slate-100 px-4">
-                <input
-                  v-model="composerDraft"
-                  type="text"
-                  :placeholder="composerPlaceholder"
-                  :disabled="composerDisabled"
-                  class="h-11 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
-                  @keydown="onComposerKeydown"
-                />
+              <template v-if="!isRecording">
+                <label class="flex min-w-0 flex-1 items-center gap-2.5 rounded-full bg-slate-100 px-4">
+                  <input
+                    v-model="composerDraft"
+                    type="text"
+                    :placeholder="composerPlaceholder"
+                    :disabled="composerDisabled"
+                    class="h-11 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                    @keydown="onComposerKeydown"
+                  />
+                  <button
+                    type="button"
+                    class="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-ieee-800 disabled:opacity-40"
+                    aria-label="Record voice message"
+                    :disabled="composerDisabled"
+                    @click="startRecording"
+                  >
+                    <Icon :icon="Mic01Icon" :size="18" />
+                  </button>
+                </label>
                 <button
                   type="button"
-                  class="text-slate-500 hover:text-ieee-800 disabled:opacity-40"
-                  aria-label="Attach file"
-                  disabled
+                  class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Send message"
+                  :disabled="composerDisabled || !composerDraft.trim()"
+                  @click="sendComposerMessage"
                 >
-                  <Icon :icon="Attachment01Icon" :size="18" />
+                  <Icon :icon="ArrowRight01Icon" :size="21" />
                 </button>
-              </label>
-              <button
-                type="button"
-                class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Send message"
-                :disabled="composerDisabled || !composerDraft.trim()"
-                @click="sendComposerMessage"
+              </template>
+
+              <div
+                v-else
+                class="flex min-w-0 flex-1 items-center gap-3 rounded-full bg-red-50 px-4 py-1 ring-1 ring-red-100"
+                role="status"
+                aria-live="polite"
               >
-                <Icon :icon="ArrowRight01Icon" :size="21" />
-              </button>
+                <span class="relative grid h-8 w-8 place-items-center rounded-full bg-red-500 text-white">
+                  <span class="absolute h-8 w-8 animate-ping rounded-full bg-red-500/40" aria-hidden="true" />
+                  <Icon :icon="Mic01Icon" :size="16" />
+                </span>
+                <span class="flex-1 text-xs font-semibold text-red-700">
+                  Recording… <span class="ml-1 tabular-nums text-red-500">{{ formatRecordingClock(recordingSeconds) }}</span>
+                </span>
+                <button
+                  type="button"
+                  class="grid h-9 w-9 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-700"
+                  aria-label="Cancel recording"
+                  @click="cancelRecording"
+                >
+                  <Icon :icon="Cancel01Icon" :size="16" />
+                </button>
+                <button
+                  type="button"
+                  class="grid h-11 w-11 place-items-center rounded-full bg-red-500 text-white transition hover:bg-red-600"
+                  aria-label="Stop and send recording"
+                  @click="stopRecording"
+                >
+                  <Icon :icon="StopCircleIcon" :size="20" />
+                </button>
+              </div>
             </footer>
           </article>
         </div>
@@ -1151,3 +1543,30 @@ onMounted(() => {
     </section>
   </DashboardLayout>
 </template>
+
+<style scoped>
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.typing-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #94a3b8;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing-dots--sm span {
+  width: 4px;
+  height: 4px;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-3px); opacity: 1; }
+}
+</style>

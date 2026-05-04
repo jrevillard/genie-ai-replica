@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { PauseIcon, PlayIcon, RecordIcon } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../ui/BaseAvatar.vue';
 import VoiceListSkeleton from '../ui/skeletons/VoiceListSkeleton.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import Icon from '../ui/Icon.vue';
 import { notify } from '../../lib/notify';
+import { useAiTwinsStore } from '../../stores/aiTwins';
 import { listVoices, previewVoice, type Voice } from '../../services/voices';
 
 const PREVIEW_TEXT = 'Hello, this is a preview of my voice.';
@@ -15,16 +17,24 @@ const LANGUAGE_LABELS: Record<string, string> = {
   mnk: 'Mandinka',
   es: 'Spanish',
   ar: 'Arabic',
+  sw: 'Swahili',
 };
+
+const aiTwinsStore = useAiTwinsStore();
+const { current: twin } = storeToRefs(aiTwinsStore);
 
 const voices = ref<Voice[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-// TODO(voice-persistence): the AiTwin schema currently has no voiceId field.
-// Selection lives in component state; wire to twin update once the backend
-// exposes a voice column on /ai-twins.
-const selectedVoiceId = ref<string | null>(null);
+// Selection mirrors the twin's persisted voiceId; saves go through the store.
+const selectedVoiceId = ref<string | null>(twin.value?.voiceId ?? null);
+watch(
+  () => twin.value?.voiceId ?? null,
+  (next) => {
+    selectedVoiceId.value = next;
+  }
+);
 
 const playingVoiceId = ref<string | null>(null);
 const previewLoadingId = ref<string | null>(null);
@@ -65,8 +75,11 @@ const itemClass = (id: string) => [
 
 function stopAudio(): void {
   if (currentAudio) {
+    // Detach handlers BEFORE tearing down so the teardown itself doesn't
+    // fire an `error`/`ended` event back into the listeners we just left.
+    currentAudio.onended = null;
+    currentAudio.onerror = null;
     currentAudio.pause();
-    currentAudio.src = '';
     currentAudio = null;
   }
   if (currentAudioUrl) {
@@ -90,11 +103,13 @@ async function togglePreview(voice: Voice): Promise<void> {
     const audio = new Audio(url);
     currentAudio = audio;
     currentAudioUrl = url;
-    audio.addEventListener('ended', stopAudio);
-    audio.addEventListener('error', () => {
+    audio.onended = stopAudio;
+    audio.onerror = () => {
+      // Ignore stale errors from an audio that has already been replaced.
+      if (currentAudio !== audio) return;
       stopAudio();
       notify.error('Failed to play voice preview');
-    });
+    };
     playingVoiceId.value = voice._key;
     await audio.play();
   } catch (err) {
@@ -125,14 +140,21 @@ async function loadVoices(): Promise<void> {
   }
 }
 
-function save(): boolean {
-  // Persisting the selection on the twin is pending backend support (no
-  // voiceId field on /ai-twins). Surface the choice locally for now.
-  return true;
+async function save(): Promise<boolean> {
+  if (!twin.value) return true;
+  if (selectedVoiceId.value === (twin.value.voiceId ?? null)) return true;
+  try {
+    await aiTwinsStore.update(twin.value._key, { voiceId: selectedVoiceId.value });
+    notify.success('Voice updated');
+    return true;
+  } catch {
+    notify.error(aiTwinsStore.error ?? 'Failed to save voice');
+    return false;
+  }
 }
 
 function discard(): void {
-  // No persistent state to revert yet — see save() note.
+  selectedVoiceId.value = twin.value?.voiceId ?? null;
 }
 
 defineExpose({ save, discard });

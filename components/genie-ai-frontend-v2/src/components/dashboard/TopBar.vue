@@ -10,7 +10,6 @@ import {
   SparklesIcon,
   UserIcon,
 } from '@hugeicons/core-free-icons';
-import BaseAvatar from '../ui/BaseAvatar.vue';
 import Icon from '../ui/Icon.vue';
 import { useAuthStore } from '../../stores/auth';
 
@@ -72,16 +71,9 @@ function navigate(to: string) {
     <div class="flex-1" />
 
     <div class="flex items-center gap-2 rounded-full border border-neutral-300 bg-neutral-50 px-3 py-1 shadow-sm">
-      <BaseAvatar size="sm" :src="auth.user?.avatar ?? null" :name="auth.displayName" />
       <span class="hidden flex-col items-start leading-tight md:flex">
         <span class="text-sm font-medium text-slate-900">{{ auth.displayName }}</span>
         <span v-if="auth.email" class="text-[11px] text-slate-500">{{ auth.email }}</span>
-      </span>
-      <span
-        v-if="auth.role"
-        class="hidden rounded-full bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold text-ieee-700 md:inline"
-      >
-        {{ auth.role }}
       </span>
     </div>
 

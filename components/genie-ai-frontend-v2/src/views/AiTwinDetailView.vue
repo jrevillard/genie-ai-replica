@@ -226,7 +226,7 @@ async function confirmDelete() {
               @change="onImageChange"
             />
             <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
-              IEEE Page
+              Chat With Twin
             </BaseButton>
           </div>
           <BaseButton variant="danger" size="md" :loading="deleting" @click="deleteDialog = true">

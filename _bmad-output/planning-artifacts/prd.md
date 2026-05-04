@@ -454,37 +454,47 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - FR45: The framework leverages AI to generate test scaffolding (boilerplate test files, mock factories, fixture generators) from existing code
 - FR46: The framework leverages AI to suggest test cases based on code changes and API specifications
 
+### Deployment Target Verification (Growth)
+
+- FR47: The verification suite validates service topology and placement constraints against a Docker Swarm deployment, verifying node labels (`gateway=true`, `gpu=true`, `genieai=true`) and healthcheck behavior
+- FR48: The verification suite validates service discovery, networking, and configuration against a Kubernetes deployment, verifying resource limits, health probes, and ConfigMap/Secret mounting
+
+### E2E Expansion (Growth)
+
+- FR49: The E2E test suite covers chatbot interaction flows (send message, receive RAG response, conversation history) via Playwright against a deployed stack
+- FR50: The E2E test suite covers document upload, processing, and search flows (upload PDF, verify ingestion, search and retrieve) via Playwright against a deployed stack
+
+### Performance Benchmarking (Growth)
+
+- FR51: The benchmarking suite measures API endpoint latency (p50, p95, p99) and throughput under load using k6 or equivalent, producing baseline reports for regression detection
+
 ## Non-Functional Requirements
 
 ### Performance
 
 - NFR1: Unit and contract test stages complete in under 10 minutes total on every merge request
-- NFR2: Configuration validation completes in under 2 minutes
-- NFR3: Full E2E test suite (Playwright) completes in under 30 minutes
-- NFR4: Individual component test suites execute in isolation without waiting for other components (parallel execution where possible)
-- NFR5: RAG quality regression suite completes in under 60 minutes against a deployed environment
+- NFR2: Configuration validation completes in under 2 minutes as measured by CI pipeline job duration for the config-validation stage
+- NFR3: Full E2E test suite (Playwright) completes in under 30 minutes as measured by CI pipeline job duration for the e2e stage
+- NFR4: Individual component test suites execute in parallel with no inter-suite wait time, verified by CI pipeline logs showing concurrent job execution across component stages
+- NFR5: RAG quality regression suite completes in under 60 minutes against a deployed environment, measured by elapsed wall-clock time from suite start to RAGAS report generation
 
 ### Reliability & Determinism
 
 - NFR6: All unit and contract tests produce identical results across repeated executions with the same inputs (no flaky tests in mandatory CI gates)
-- NFR7: Test execution is independent of execution order — no test depends on side effects from another test
+- NFR7: Test execution is independent of execution order — verified by running each component suite 3 times with randomized order (`jest --shuffle` / `pytest --random-order`) producing identical pass/fail results
 - NFR8: Tests requiring external services (ArangoDB, Redis, Keycloak, vLLM) use mocked dependencies in CI; real service integration runs only in scheduled pipelines against deployed infrastructure
-- NFR9: GPU-dependent tests are conditionally skipped in CI environments without GPU access, with clear skip reporting
-- NFR10: Test fixtures are version-controlled and produce reproducible results across environments
+- NFR9: GPU-dependent tests are conditionally skipped in CI environments without GPU access, with each skipped test logged in JUnit XML as `<skipped>` element including skip reason
 
 ### Maintainability
 
 - NFR11: Test code follows the same linting and formatting standards as production code (ESLint, Ruff, Flutter analyze)
-- NFR12: Test file structure mirrors the production code structure within each component
 - NFR13: Mock and fixture definitions are centralized in `__tests__/mocks/` (backend, frontend) and `tests/` (Python) directories, not duplicated across test files
 - NFR14: AI-assisted test generation produces code that passes linting and follows project conventions
-- NFR15: Adding a new test for an existing feature requires changes in only one file (the test file) — no cross-file fixture setup for standard cases
 
 ### Compatibility
 
-- NFR16: The CI pipeline operates identically across GitLab shared runners and self-hosted runners
+- NFR16: The CI pipeline operates identically across GitLab shared runners and self-hosted runners, verified by running the full pipeline on both runner types and comparing JUnit XML test results for zero-diff pass/fail outcomes
 - NFR17: All test runners produce JUnit XML reports in a format consumable by GitLab CI test reporting
-- NFR18: The test framework supports execution in Docker Compose, Docker Swarm, and Kubernetes environments
 - NFR19: Python tests run on Python 3.10+; Node.js tests run on Node.js 18+; Dart tests run on Flutter 3.10+
 - NFR20: Test output formats are compatible with OpenTelemetry ingestion (structured JSON, trace context propagation) for MELT integration in Sprint 23
 
@@ -494,3 +504,12 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - NFR22: Frontend component tests use Options API exclusively (no Composition API patterns)
 - NFR23: Python test files include ITU copyright headers as required by project convention
 - NFR24: All Python test code passes Ruff linting and formatting checks
+
+### Test Conventions
+
+Architectural principles governing test structure and maintenance — enforced through code review and CI lint checks, not through automated measurement:
+
+- TC1: Test fixtures are version-controlled in the repository alongside production code; test databases use controlled snapshots with deterministic seeding
+- TC2: Test file structure mirrors the production code structure within each component — enforced during code review
+- TC3: Adding a new test for an existing feature requires changes in only the test file — shared fixtures and factory functions eliminate cross-file setup for standard cases
+- TC4: The test framework supports execution across deployment targets (Docker Compose baseline, Docker Swarm, Kubernetes); MVP targets Docker Compose, Swarm and K8s verification deferred to Growth phase

@@ -8,6 +8,7 @@ GENIE.AI OPEA ChatQnA pipeline, and sends the AI reply back via the Graph API.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,7 +16,7 @@ import config
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from models.webhook import WhatsAppMessage, WhatsAppWebhookPayload
-from services import conversation, opea_client, whatsapp_sender
+from services import chat_session, conversation, opea_client, whatsapp_sender
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL, logging.INFO),
@@ -98,12 +99,22 @@ async def _process_message(message: WhatsAppMessage) -> None:
         logger.error("Redis write failed for %s: %s", phone, exc)
         history = [{"role": "user", "content": user_text}]
 
+    logger.info("Incoming from %s: %r", phone, user_text)
+
+    # Persist to Arango chatSessions (type='whatsapp') alongside web chat sessions.
+    # Runs off the event loop because python-arango is sync.
+    session_id = await asyncio.to_thread(chat_session.find_or_create_session, phone)
+    await asyncio.to_thread(chat_session.append_message, session_id, "user", user_text)
+
     ai_reply = await opea_client.chat(history)
+    logger.info("AI reply for %s: %r", phone, ai_reply)
 
     try:
         await conversation.add_message(phone, "assistant", ai_reply)
     except Exception as exc:
         logger.error("Redis assistant-write failed for %s: %s", phone, exc)
+
+    await asyncio.to_thread(chat_session.append_message, session_id, "assistant", ai_reply)
 
     await whatsapp_sender.send_text(phone, ai_reply)
 

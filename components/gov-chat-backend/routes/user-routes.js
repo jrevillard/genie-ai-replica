@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const authMiddleware = require('../middleware/auth-middleware');
 const { logger } = require('../shared-lib');
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
@@ -64,7 +64,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/', keycloakAuthMiddleware.authenticate, async (req, res) => {
+  router.get('/', authMiddleware.authenticate, async (req, res) => {
     try {
       const userId = req.user.iss_sub;
       const userKey = req.user._key;
@@ -96,7 +96,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/context', keycloakAuthMiddleware.authenticate, async (req, res) => {
+  router.get('/context', authMiddleware.authenticate, async (req, res) => {
     try {
       const userKey = req.user._key;
       const user = await userService.getUserProfile(userKey);
@@ -133,7 +133,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/reset-data', keycloakAuthMiddleware.authenticate, async (req, res) => {
+  router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
     try {
       const userId = req.user.iss_sub;
       const userKey = req.user._key;
@@ -173,7 +173,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/delete', keycloakAuthMiddleware.authenticate, async (req, res) => {
+  router.post('/delete', authMiddleware.authenticate, async (req, res) => {
     try {
       const userId = req.user.iss_sub;
       const userKey = req.user._key;
@@ -230,7 +230,7 @@ module.exports = (userService) => {
    *       500:
    *         description: Server error
    */
-  router.put('/', keycloakAuthMiddleware.authenticate, upload.any(), async (req, res) => {
+  router.put('/', authMiddleware.authenticate, upload.any(), async (req, res) => {
     const userId = req.user.iss_sub;
     const userKey = req.user._key;
 

@@ -35,11 +35,39 @@ async def close_client() -> None:
         _client = None
 
 
+def _strip_prompt_artifacts(text: str) -> str:
+    """Strip assembled-prompt prefix that chatqna sometimes returns alongside
+    the LLM completion. The prompt template uses fixed section headers; if any
+    appear in the response we keep only the text after the last marker."""
+    markers = (
+        "CONTENT FROM THE KNOWLEDGE BASE:",
+        "[Returned Documents]",
+        "[Retrieved Document]",
+        "CHAT HISTORY:",
+        "USER INFORMATION:",
+    )
+    cut = -1
+    for m in markers:
+        idx = text.rfind(m)
+        if idx > cut:
+            cut = idx + len(m)
+    if cut > 0:
+        # Trim past the marker and the next blank line if present.
+        tail = text[cut:].lstrip("\n").lstrip()
+        # If the tail starts with the user's echoed query line, drop the first line.
+        if tail and tail[0] != "\n":
+            first_nl = tail.find("\n\n")
+            if first_nl != -1 and first_nl < 200:
+                tail = tail[first_nl + 2:]
+        return tail.strip()
+    return text
+
+
 def _extract_response_text(payload: object) -> str | None:
     if isinstance(payload, dict):
         text = payload.get("response")
         if isinstance(text, str) and text.strip():
-            return text.strip()
+            return _strip_prompt_artifacts(text.strip()) or text.strip()
     return None
 
 

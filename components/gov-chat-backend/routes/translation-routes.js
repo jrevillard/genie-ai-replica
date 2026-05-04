@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const authMiddleware = require('../middleware/auth-middleware');
 const { logger } = require('../shared-lib');
 
 /**
@@ -18,7 +18,7 @@ module.exports = (translationService) => {
   logger.debug('[TRANSLATION-ROUTES] translation-routes initialized with translationService');
 
   // Secure all translation routes with authentication middleware
-  router.use(keycloakAuthMiddleware.authenticate);
+  router.use(authMiddleware.authenticate);
 
   /**
    * @swagger

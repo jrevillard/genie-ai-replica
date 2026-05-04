@@ -480,6 +480,12 @@ services:
       - WHATSAPP_REDIS_TTL=${WHATSAPP_REDIS_TTL:-86400}
       - WHATSAPP_REDIS_MAX_MESSAGES=${WHATSAPP_REDIS_MAX_MESSAGES:-20}
       - WHATSAPP_MESSAGE_MAX_LENGTH=${WHATSAPP_MESSAGE_MAX_LENGTH:-4000}
+      # ArangoDB — whatsapp-service writes chatSessions/chatSessionMessages
+      # directly so every WhatsApp conversation is persisted alongside web chats.
+      - ARANGO_URL=${ARANGO_URL:-http://arangodb:8529}
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_USERNAME=${ARANGO_USERNAME:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

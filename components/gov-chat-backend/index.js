@@ -406,25 +406,16 @@ const swaggerOptions = {
         }
       },
       securitySchemes: {
-        KeycloakOAuth2: {
-          type: 'oauth2',
-          description: 'Keycloak OAuth2 authentication (Authorization Code + PKCE)',
-          flows: {
-            authorizationCode: {
-              authorizationUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
-              tokenUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
-              scopes: {
-                openid: 'OpenID Connect scope',
-                profile: 'User profile information',
-                email: 'User email address'
-              }
-            }
-          }
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Paste the accessToken returned by POST /auth/login'
         }
       }
     },
     security: [
-      { KeycloakOAuth2: ['openid', 'profile'] }
+      { bearerAuth: [] }
     ],
     tags: [
       {
@@ -731,7 +722,9 @@ async function initializeServices() {
   let databaseOperationsService, weatherService, securityScanService, translationService;
   let voiceTokenService, voiceSessionService;
   let aiTwinService;
+  let voiceCatalogService;
   let chatSessionService;
+  let authService, sessionService;
 
   const importService = async (name, path) => {
     logger.info(`Importing service: ${name}`);
@@ -765,7 +758,10 @@ async function initializeServices() {
     voiceTokenService = await importService('VoiceTokenService', './services/voice-token-service');
     voiceSessionService = await importService('VoiceSessionService', './services/voice-session-service');
     aiTwinService = await importService('AiTwinService', './services/ai-twin-service');
+    voiceCatalogService = await importService('VoiceCatalogService', './services/voice-catalog-service');
     chatSessionService = await importService('ChatSessionService', './services/chat-session-service');
+    authService = await importService('AuthService', './services/auth-service');
+    sessionService = await importService('SessionService', './services/session-service');
 
     // Initialize user provisioning schema (indexes, legacy cleanup)
     const userProvisioningService = require('./services/user-provisioning-service');
@@ -787,7 +783,10 @@ async function initializeServices() {
       voiceTokenService: { instance: voiceTokenService, name: 'VoiceTokenService' },
       voiceSessionService: { instance: voiceSessionService, name: 'VoiceSessionService' },
       aiTwinService: { instance: aiTwinService, name: 'AiTwinService' },
-      chatSessionService: { instance: chatSessionService, name: 'ChatSessionService' }
+      voiceCatalogService: { instance: voiceCatalogService, name: 'VoiceCatalogService' },
+      chatSessionService: { instance: chatSessionService, name: 'ChatSessionService' },
+      authService: { instance: authService, name: 'AuthService' },
+      sessionService: { instance: sessionService, name: 'SessionService' }
     };
 
     // Validate services
@@ -842,8 +841,19 @@ async function initializeServices() {
       // Marked optional: true to prevent boot failure on rate limits
       { service: services.weatherService, name: 'WeatherService', optional: true },
       { service: services.translationService, name: 'TranslationService' },
-      { service: services.aiTwinService, name: 'AiTwinService' },
-      { service: services.voiceSessionService, name: 'VoiceSessionService' }
+      { service: services.voiceCatalogService, name: 'VoiceCatalogService' },
+      {
+        service: services.aiTwinService,
+        name: 'AiTwinService',
+        preInit: () => services.aiTwinService.setVoiceCatalogService(services.voiceCatalogService),
+      },
+      { service: services.voiceSessionService, name: 'VoiceSessionService' },
+      { service: services.sessionService, name: 'SessionService' },
+      {
+        service: services.authService,
+        name: 'AuthService',
+        preInit: () => services.authService.setSessionService(services.sessionService),
+      }
     ];
 
     for (const { service, name, preInit, optional } of initPromises) {
@@ -1011,6 +1021,7 @@ async function startApp() {
     { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService },
     { file: 'voice-routes', paths: ['/api/voice'], service: services.voiceTokenService, extraService: services.voiceSessionService },
     { file: 'ai-twin-routes', paths: ['/api/ai-twins', '/api/ai-twin'], service: services.aiTwinService },
+    { file: 'voice-catalog-routes', paths: ['/api/voices'], service: services.voiceCatalogService },
     { file: 'chat-session-routes', paths: ['/api/chat-sessions', '/api/chat-session'], service: services.chatSessionService }
   ];
 
@@ -1081,9 +1092,12 @@ async function startApp() {
         routeInstance = routeModule(config.service, analyticsController);
       } else if (config.file === 'admin-routes' || config.file === 'voice-routes') {
         routeInstance = routeModule(config.service, config.extraService);
-      } else if (config.file === 'auth-routes') {
-        // auth-routes exports a plain router (no factory function)
-        routeInstance = routeModule;
+      } else if (config.file === 'chat-session-routes') {
+        // Needs aiTwinService + voiceCatalogService for voice-message + TTS playback.
+        routeInstance = routeModule(config.service, {
+          aiTwinService: services.aiTwinService,
+          voiceCatalogService: services.voiceCatalogService,
+        });
       } else {
         routeInstance = routeModule(config.service);
       }

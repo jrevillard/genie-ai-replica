@@ -6,6 +6,12 @@ const { NotFoundError, ValidationError } = require('../middleware/errors');
 const COLLECTION = 'aiTwins';
 /** Max linked KB file ids per twin (document-repository `file_id` values, normalized). */
 const MAX_LINKED_KB_FILES = 10000;
+const MAX_GREETING_LEN = 5000;
+const MAX_TWIN_NUMBER_LEN = 32;
+/** Default WhatsApp/voice number used by newly-created twins. */
+const DEFAULT_TWIN_NUMBER = '+1 (575) 223-6878';
+/** Default greeting used for both chat and call on new twins. */
+const DEFAULT_GREETING = 'Hey, How can I help you today ?';
 
 /** @typedef {import('arangojs').DocumentCollection} DocumentCollection */
 
@@ -38,6 +44,12 @@ class AiTwinService {
     /** @type {DocumentCollection | null} */
     this.collection = null;
     this.initialized = false;
+    /** Optional VoiceCatalogService — set externally to enable voiceId default + validation. */
+    this.voiceCatalogService = null;
+  }
+
+  setVoiceCatalogService(service) {
+    this.voiceCatalogService = service;
   }
 
   async init() {
@@ -50,9 +62,50 @@ class AiTwinService {
       this.collection = this.db.collection(COLLECTION);
       this.initialized = true;
       logger.info('AiTwinService initialized');
+      await this._seedDefaultTwin();
     } catch (error) {
       logger.error(`AiTwinService init failed: ${error.message}`, { stack: error.stack });
       throw error;
+    }
+  }
+
+  /**
+   * Ensure exactly one twin exists with isDefault=true. Idempotent.
+   *
+   * If no default exists yet, creates a "Genie" twin holding the project
+   * phone number. Subsequent boots are a no-op.
+   */
+  async _seedDefaultTwin() {
+    try {
+      const cursor = await this.db.query(
+        'FOR t IN @@coll FILTER t.isDefault == true LIMIT 1 RETURN t._key',
+        { '@coll': COLLECTION }
+      );
+      const existing = await cursor.next();
+      if (existing) return;
+
+      const voiceId = this.voiceCatalogService
+        ? this.voiceCatalogService.getDefaultVoiceKey()
+        : null;
+      const now = new Date().toISOString();
+      const doc = {
+        _key: uuidv4(),
+        name: 'Genie',
+        profilePicUrl: null,
+        description: '',
+        voiceId,
+        chatGreeting: DEFAULT_GREETING,
+        callGreeting: DEFAULT_GREETING,
+        isDefault: true,
+        twinNumber: DEFAULT_TWIN_NUMBER,
+        linkedKbFileIds: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      await this.collection.save(doc);
+      logger.info(`AiTwin seeded default twin: ${doc._key} (twinNumber=${DEFAULT_TWIN_NUMBER})`);
+    } catch (error) {
+      logger.warn(`AiTwin seed default failed (non-fatal): ${error.message}`);
     }
   }
 
@@ -65,15 +118,66 @@ class AiTwinService {
     const linkedKbFileIds = Array.isArray(raw)
       ? [...new Set(raw.map((x) => normalizeKbFileId(x)).filter(Boolean))]
       : [];
+    const isDefault = doc.isDefault === true;
     return {
       _key: doc._key,
       name: doc.name,
       profilePicUrl: doc.profilePicUrl ?? null,
       description: doc.description ?? '',
+      voiceId: doc.voiceId ?? null,
+      chatGreeting: doc.chatGreeting || DEFAULT_GREETING,
+      callGreeting: doc.callGreeting || DEFAULT_GREETING,
+      isDefault,
+      // twinNumber is only meaningful on the default twin; non-default twins
+      // surface an empty string regardless of any legacy stored value.
+      twinNumber: isDefault ? (doc.twinNumber || DEFAULT_TWIN_NUMBER) : '',
       linkedKbFileIds,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
+  }
+
+  /** Validate and normalize an optional greeting (chat or call). */
+  _normalizeGreeting(value, fieldName) {
+    if (value === undefined || value === null) return '';
+    if (typeof value !== 'string') {
+      throw new ValidationError(`${fieldName} must be a string`);
+    }
+    const v = value.trim();
+    if (v.length > MAX_GREETING_LEN) {
+      throw new ValidationError(`${fieldName} must be at most ${MAX_GREETING_LEN} characters`);
+    }
+    return v;
+  }
+
+  /** Validate and normalize the twin phone number. Empty string allowed. */
+  _normalizeTwinNumber(value) {
+    if (value === undefined || value === null || value === '') return '';
+    if (typeof value !== 'string') {
+      throw new ValidationError('twinNumber must be a string');
+    }
+    const v = value.trim();
+    if (v.length > MAX_TWIN_NUMBER_LEN) {
+      throw new ValidationError(`twinNumber must be at most ${MAX_TWIN_NUMBER_LEN} characters`);
+    }
+    return v;
+  }
+
+  /**
+   * Resolve a voiceId from the request, falling back to the catalog default
+   * (en male) when missing. Validates the id exists in the catalog.
+   */
+  async _resolveVoiceId(voiceId) {
+    if (!this.voiceCatalogService) return null;
+    if (voiceId === undefined || voiceId === null || voiceId === '') {
+      return this.voiceCatalogService.getDefaultVoiceKey();
+    }
+    if (typeof voiceId !== 'string') {
+      throw new ValidationError('voiceId must be a string');
+    }
+    const voice = await this.voiceCatalogService.getVoice(voiceId);
+    if (!voice) throw new ValidationError(`voiceId "${voiceId}" not found in catalog`);
+    return voice._key;
   }
 
   /**
@@ -141,6 +245,14 @@ class AiTwinService {
       profilePicUrl = u;
     }
 
+    const voiceId = await this._resolveVoiceId(data.voiceId);
+    const chatGreeting = data.chatGreeting === undefined
+      ? DEFAULT_GREETING
+      : this._normalizeGreeting(data.chatGreeting, 'chatGreeting');
+    const callGreeting = data.callGreeting === undefined
+      ? DEFAULT_GREETING
+      : this._normalizeGreeting(data.callGreeting, 'callGreeting');
+
     const now = new Date().toISOString();
     const _key = uuidv4();
     const doc = {
@@ -148,6 +260,13 @@ class AiTwinService {
       name,
       profilePicUrl,
       description,
+      voiceId,
+      chatGreeting,
+      callGreeting,
+      // New twins are never the default and never carry a phone number.
+      // Use POST /api/ai-twins/:twinId/default to promote one.
+      isDefault: false,
+      twinNumber: '',
       linkedKbFileIds: [],
       createdAt: now,
       updatedAt: now,
@@ -201,6 +320,24 @@ class AiTwinService {
         throw new ValidationError('profilePicUrl must be a string or null');
       }
     }
+    if (patch.voiceId !== undefined) {
+      updates.voiceId = await this._resolveVoiceId(patch.voiceId);
+    }
+    if (patch.chatGreeting !== undefined) {
+      updates.chatGreeting = this._normalizeGreeting(patch.chatGreeting, 'chatGreeting');
+    }
+    if (patch.callGreeting !== undefined) {
+      updates.callGreeting = this._normalizeGreeting(patch.callGreeting, 'callGreeting');
+    }
+    if (patch.twinNumber !== undefined) {
+      const current = await this.getTwinByKey(key);
+      if (!current.isDefault) {
+        const e = new ValidationError('twinNumber can only be set on the default twin (POST /:twinId/default first)');
+        e.statusCode = 400;
+        throw e;
+      }
+      updates.twinNumber = this._normalizeTwinNumber(patch.twinNumber);
+    }
 
     if (Object.keys(updates).length === 0) {
       return this.getTwinByKey(key);
@@ -210,9 +347,123 @@ class AiTwinService {
     return this.getTwinByKey(key);
   }
 
+  /**
+   * Read the chat greeting, call greeting and twin number for a twin.
+   * Falls back to the default twin number when the doc has no value.
+   */
+  async getSettings(key) {
+    const twin = await this.getTwinByKey(key);
+    return {
+      chatGreeting: twin.chatGreeting || DEFAULT_GREETING,
+      callGreeting: twin.callGreeting || DEFAULT_GREETING,
+      // twin.twinNumber is already empty for non-default twins (sanitized).
+      twinNumber: twin.twinNumber,
+    };
+  }
+
+  /**
+   * Update any subset of {chatGreeting, callGreeting, twinNumber}.
+   * Returns the new settings (same shape as getSettings).
+   */
+  async updateSettings(key, patch) {
+    if (!patch || typeof patch !== 'object') {
+      throw new ValidationError('settings body is required');
+    }
+    const updates = {};
+    if (patch.chatGreeting !== undefined) {
+      updates.chatGreeting = this._normalizeGreeting(patch.chatGreeting, 'chatGreeting');
+    }
+    if (patch.callGreeting !== undefined) {
+      updates.callGreeting = this._normalizeGreeting(patch.callGreeting, 'callGreeting');
+    }
+    if (patch.twinNumber !== undefined) {
+      const current = await this.getTwinByKey(key);
+      if (!current.isDefault) {
+        const e = new ValidationError('twinNumber can only be set on the default twin (POST /:twinId/default first)');
+        e.statusCode = 400;
+        throw e;
+      }
+      updates.twinNumber = this._normalizeTwinNumber(patch.twinNumber);
+    }
+    if (Object.keys(updates).length === 0) {
+      return this.getSettings(key);
+    }
+    await this.getTwinByKey(key); // 404 if missing
+    updates.updatedAt = new Date().toISOString();
+    await this.collection.update(key, updates);
+    return this.getSettings(key);
+  }
+
+  /**
+   * Count sessions linked to a twin across the chat / whatsapp / call channels.
+   * Uses raw AQL against the existing collections (`chatSessions`,
+   * `call_sessions`) so we don't have to inject the other services. Returns
+   * zeros when a collection is missing (e.g. fresh deploy).
+   *
+   * @param {string} twinId
+   * @returns {Promise<{ numChats: number, numWhatsappChats: number, numCalls: number }>}
+   */
+  async getTwinSessionCounts(twinId) {
+    const out = { numChats: 0, numWhatsappChats: 0, numCalls: 0 };
+    if (!twinId) return out;
+
+    const safeCount = async (aqlString, bind) => {
+      try {
+        const cursor = await this.db.query(aqlString, bind);
+        const n = await cursor.next();
+        return Number.isFinite(n) ? n : 0;
+      } catch (e) {
+        // collection or view not found — treat as zero, log at debug only.
+        if (e.errorNum === 1203) return 0;
+        logger.warn(`getTwinSessionCounts query failed: ${e.message}`);
+        return 0;
+      }
+    };
+
+    out.numChats = await safeCount(
+      "RETURN LENGTH(FOR s IN chatSessions FILTER s.twinId == @twinId AND s.type == 'chat' RETURN 1)",
+      { twinId }
+    );
+    out.numWhatsappChats = await safeCount(
+      "RETURN LENGTH(FOR s IN chatSessions FILTER s.twinId == @twinId AND s.type == 'whatsapp' RETURN 1)",
+      { twinId }
+    );
+    out.numCalls = await safeCount(
+      'RETURN LENGTH(FOR c IN call_sessions FILTER c.twinId == @twinId RETURN 1)',
+      { twinId }
+    );
+    return out;
+  }
+
+  /** Return the default twin or null when none is marked. */
+  async getDefaultTwin() {
+    const cursor = await this.db.query(
+      'FOR t IN @@coll FILTER t.isDefault == true LIMIT 1 RETURN t',
+      { '@coll': COLLECTION }
+    );
+    const doc = await cursor.next();
+    return doc ? this._sanitizeTwin(doc) : null;
+  }
+
   async deleteTwin(key) {
     if (!key || typeof key !== 'string') {
       throw new ValidationError('Invalid twin id');
+    }
+    // Guard: the default twin owns the project phone number and is required
+    // for the WhatsApp flow. Block deletion regardless of caller.
+    let existing;
+    try {
+      existing = await this.collection.document(key);
+    } catch (e) {
+      if (e.errorNum === 1202) {
+        throw new NotFoundError('AI twin not found');
+      }
+      throw e;
+    }
+    if (existing.isDefault === true) {
+      const err = new ValidationError('The default twin cannot be deleted');
+      err.statusCode = 409;
+      throw err;
     }
     try {
       await this.collection.remove(key);

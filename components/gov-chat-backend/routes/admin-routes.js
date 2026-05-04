@@ -1,7 +1,7 @@
 // src/routes/admin-routes.js
 const express = require('express');
 const router = express.Router();
-const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
+const authMiddleware = require('../middleware/auth-middleware');
 const securityScanService = require('../services/security-scan-service');
 const { logger } = require('../shared-lib');
 const { execFile } = require('child_process');
@@ -86,8 +86,8 @@ module.exports = (adminService, logsService) => {
     next();
   });
 
-  router.use(keycloakAuthMiddleware.authenticate);
-  router.use(keycloakAuthMiddleware.requireAdmin);
+  router.use(authMiddleware.authenticate);
+  router.use(authMiddleware.isAdmin);
 
   /**
    * @swagger

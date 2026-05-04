@@ -61,6 +61,9 @@ class ChatSessionService {
       createdAt: now,
       updatedAt: now,
       twinId: twinId || null,
+      // Channel: 'chat' = web chat page, 'whatsapp' = WhatsApp service.
+      // Existing rows without this field are treated as 'chat' by readers.
+      type: 'chat',
     };
     const meta = await this.sessions.save(doc);
     const sessionId = meta._key;
@@ -108,15 +111,107 @@ class ChatSessionService {
     }));
   }
 
-  async appendMessage(sessionId, role, content) {
+  /**
+   * Append a single message to a session.
+   * @param {string} sessionId
+   * @param {string} role  'user' | 'assistant'
+   * @param {string} content
+   * @param {{ audioUrl?: string }} [extra]  optional fields to attach
+   *   (e.g. `audioUrl` when the user sent a voice note).
+   * @returns {Promise<string>} the new message _key
+   */
+  async appendMessage(sessionId, role, content, extra = {}) {
     const now = new Date().toISOString();
-    await this.sessionMessages.save({
+    const doc = {
       sessionId,
       role: role === 'assistant' ? 'assistant' : 'user',
       content: content == null ? '' : String(content),
       createdAt: now,
-    });
+    };
+    if (extra && typeof extra.audioUrl === 'string' && extra.audioUrl) {
+      doc.audioUrl = extra.audioUrl;
+    }
+    const meta = await this.sessionMessages.save(doc);
     await this.sessions.update(sessionId, { updatedAt: now });
+    return meta._key;
+  }
+
+  /**
+   * Delete a chat session and all of its messages. Owner-only via the route.
+   * @param {string} sessionId
+   * @returns {Promise<{ deletedMessages: number }>}
+   */
+  async deleteSession(sessionId) {
+    const result = await this.db.query(
+      aql`
+        FOR m IN ${this.sessionMessages}
+          FILTER m.sessionId == ${sessionId}
+          REMOVE m IN ${this.sessionMessages}
+          COLLECT WITH COUNT INTO n
+          RETURN n
+      `
+    );
+    const [deletedMessages] = await result.all();
+    try {
+      await this.sessions.remove(sessionId);
+    } catch (e) {
+      if (e.errorNum === 1202) {
+        throw new NotFoundError('Chat session not found');
+      }
+      throw e;
+    }
+    logger.info(`ChatSession deleted ${sessionId} (messages=${deletedMessages || 0})`);
+    return { deletedMessages: deletedMessages || 0 };
+  }
+
+  /**
+   * Search messages in a session by content (case-insensitive LIKE).
+   * @param {string} sessionId
+   * @param {string} q
+   * @param {number} [limit=200]
+   */
+  async searchMessages(sessionId, q, limit = 200) {
+    const lim = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+    const needle = String(q || '').trim().toLowerCase();
+    if (!needle) return [];
+    const pattern = `%${needle.replace(/([%_\\])/g, '\\$1')}%`;
+    const cursor = await this.db.query(
+      aql`
+        FOR m IN ${this.sessionMessages}
+          FILTER m.sessionId == ${sessionId}
+          FILTER LIKE(LOWER(m.content), ${pattern}, true)
+          SORT m.createdAt ASC
+          LIMIT ${lim}
+          RETURN m
+      `
+    );
+    const rows = await cursor.all();
+    return rows.map((m) => ({
+      _key: m._key,
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content == null ? '' : String(m.content),
+      audioUrl: m.audioUrl || null,
+      createdAt: m.createdAt,
+    }));
+  }
+
+  /** Look up a single message by _key, scoped to a session. */
+  async getMessage(sessionId, messageKey) {
+    let doc;
+    try {
+      doc = await this.sessionMessages.document(messageKey);
+    } catch (e) {
+      if (e.errorNum === 1202) {
+        const err = new NotFoundError('Message not found');
+        throw err;
+      }
+      throw e;
+    }
+    if (String(doc.sessionId) !== String(sessionId)) {
+      const err = new NotFoundError('Message not found in this session');
+      throw err;
+    }
+    return doc;
   }
 
   /**
@@ -124,8 +219,11 @@ class ChatSessionService {
    * @param {string} sessionId
    * @param {string} text
    * @param {object} context { categoryLabel, serviceLabels, language }
+   * @param {{ userAudioUrl?: string }} [options]  attach audioUrl to the
+   *   newly-stored user message (for voice notes); does not affect history
+   *   sent to chatqna.
    */
-  async sendMessage(userId, sessionId, text, context) {
+  async sendMessage(userId, sessionId, text, context, options = {}) {
     if (!this.queryService || typeof this.queryService.executeChatqnaTurn !== 'function') {
       throw new Error('QueryService.executeChatqnaTurn is not available');
     }
@@ -153,9 +251,14 @@ class ChatSessionService {
       chatSessionId: sessionId,
     });
 
-    await this.appendMessage(sessionId, 'user', t);
+    const userMessageKey = await this.appendMessage(
+      sessionId,
+      'user',
+      t,
+      options && options.userAudioUrl ? { audioUrl: options.userAudioUrl } : {}
+    );
     const reply = result.response == null ? '' : String(result.response);
-    await this.appendMessage(sessionId, 'assistant', reply);
+    const assistantMessageKey = await this.appendMessage(sessionId, 'assistant', reply);
 
     return {
       queryId: result.queryId,
@@ -163,6 +266,8 @@ class ChatSessionService {
       metadata: result.metadata,
       responseTime: result.responseTime,
       sessionId,
+      userMessageId: userMessageKey,
+      assistantMessageId: assistantMessageKey,
     };
   }
 }

@@ -87,10 +87,19 @@ server {
         try_files $uri =404;
     }
 
-    # For the /uploads/ location specifically
+    # /Uploads/ — user-uploaded assets (AI twin avatars, etc.). Files live on
+    # the backend container's volume, so we reverse-proxy there instead of
+    # try_files (nginx has no shared filesystem with the backend).
     location /Uploads/ {
         include conf.d/security-headers.inc;
-        try_files $uri =404;
+        set $backend_addr backend:3000;
+        proxy_pass http://$backend_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+        add_header Cache-Control "public, max-age=86400";
     }
 
     # Keycloak Identity Provider proxied to Kong
@@ -201,6 +210,22 @@ server {
         proxy_connect_timeout 300s;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+    }
+
+    # WhatsApp Cloud API webhook — proxied directly to whatsapp-service (bypasses Kong).
+    # Meta calls GET /webhook/whatsapp for verification and POST /webhook/whatsapp for messages.
+    # Must appear before the frontend catch-all so it doesn't fall into location /.
+    location /webhook/whatsapp {
+        set $whatsapp_addr whatsapp-service:8000;
+        proxy_pass http://$whatsapp_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
     }
 
     # Frontend Vue.js application

@@ -104,11 +104,73 @@ export const useAuthStore = defineStore('auth', {
       await authApi.resendVerification(email);
     },
 
+    async requestPasswordReset(email: string): Promise<void> {
+      this.loading = true;
+      this.error = null;
+      try {
+        await authApi.requestPasswordReset(email);
+      } catch (err) {
+        this.error = extractError(err, 'Failed to send reset instructions');
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    // Maps the four documented HTTP outcomes (200 / 400 / 409 / 410) onto a
+    // discriminated UI state so the view can render distinct copy without
+    // sniffing axios errors itself.
+    async validateResetToken(token: string): Promise<ResetTokenStatus> {
+      this.loading = true;
+      this.error = null;
+      try {
+        await authApi.validateResetToken(token);
+        return { status: 'valid' };
+      } catch (err) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 410) return { status: 'expired', message: 'This reset link has expired.' };
+        if (status === 409) return { status: 'used', message: 'This reset link has already been used.' };
+        return { status: 'invalid', message: 'This reset link is not valid.' };
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+      this.loading = true;
+      this.error = null;
+      try {
+        await authApi.confirmPasswordReset(token, newPassword);
+      } catch (err) {
+        this.error = extractError(err, 'Failed to reset password');
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+      this.loading = true;
+      this.error = null;
+      try {
+        await authApi.changePassword(currentPassword, newPassword);
+      } catch (err) {
+        this.error = extractError(err, 'Failed to change password');
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
+
     persistSession(session: Record<string, unknown>): void {
       writeSession(session);
     },
   },
 });
+
+export type ResetTokenStatus =
+  | { status: 'valid' }
+  | { status: 'invalid' | 'used' | 'expired'; message: string };
 
 function extractError(err: unknown, fallback: string): string {
   const e = err as { response?: { data?: { message?: string } }; message?: string };

@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
-  ArrowLeft01Icon,
   BubbleChatIcon,
   CallEnd01Icon,
   Mic01Icon,
@@ -17,14 +16,10 @@ import Icon from '../components/ui/Icon.vue';
 import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore } from '../stores/chat';
-import { mintVoiceToken, type VoiceTokenResponse } from '../services/voice';
 
-type CallState = 'connecting' | 'listening' | 'aiSpeaking' | 'ended';
-interface Caption {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-}
+// UI-only state. The voice API will be wired in later by the backend team;
+// nothing here calls the network or simulates a conversation.
+type CallState = 'idle' | 'ended';
 
 const route = useRoute();
 const router = useRouter();
@@ -33,7 +28,6 @@ const chatStore = useChatStore();
 const { current: twin } = storeToRefs(aiTwinsStore);
 const { lang } = storeToRefs(chatStore);
 
-// Single English source — the API will return localised strings later.
 const t = chatStrings;
 const c = chatStrings.call;
 
@@ -42,91 +36,9 @@ const twinId = computed(() => {
   return Array.isArray(raw) ? raw[0] : (raw ?? '');
 });
 
-const state = ref<CallState>('connecting');
+const state = ref<CallState>('idle');
 const muted = ref(false);
-const elapsed = ref(0);
-const captions = ref<Caption[]>([]);
 const langOpen = ref(false);
-const tokenInfo = ref<VoiceTokenResponse | null>(null);
-const tokenError = ref<string | null>(null);
-
-let tickHandle: number | null = null;
-let scriptHandle: number | null = null;
-let typingHandle: number | null = null;
-
-// Demo replies cycled while the call is "live". Real translations will come
-// from the backend; the frontend ships only the English source.
-const DEMO_REPLIES: string[] = [
-  'Cutting back on salt is one of the fastest wins. Try to stay under one teaspoon a day, and watch out for hidden salt in bread, sauces and stock cubes.',
-  'A 30-minute brisk walk most days lowers blood pressure on its own. Even three 10-minute walks split through the day count.',
-  'Make sure to take any blood-pressure medicine your clinic has prescribed at the same time every day, even when you feel fine.',
-];
-
-function rid(): string {
-  return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-}
-
-function pickReply(): string {
-  return DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)];
-}
-
-function clearTimers(): void {
-  if (tickHandle !== null) window.clearInterval(tickHandle);
-  if (scriptHandle !== null) window.clearTimeout(scriptHandle);
-  if (typingHandle !== null) window.clearInterval(typingHandle);
-  tickHandle = scriptHandle = typingHandle = null;
-}
-
-function startCallTimer(): void {
-  tickHandle = window.setInterval(() => {
-    if (state.value !== 'ended') elapsed.value += 1;
-  }, 1000);
-}
-
-function typeOutReply(): void {
-  const full = pickReply();
-  const id = rid();
-  captions.value.push({ id, role: 'assistant', text: '' });
-  let i = 0;
-  typingHandle = window.setInterval(() => {
-    i += Math.max(2, Math.round(full.length / 90));
-    const target = captions.value.find((cap) => cap.id === id);
-    if (!target) return;
-    target.text = full.slice(0, i);
-    if (i >= full.length) {
-      target.text = full;
-      if (typingHandle !== null) window.clearInterval(typingHandle);
-      typingHandle = null;
-      // Brief pause then back to listening for the next user turn.
-      scriptHandle = window.setTimeout(() => {
-        if (state.value === 'aiSpeaking') {
-          state.value = 'listening';
-          // Loop: schedule another simulated user turn after a moment.
-          scriptHandle = window.setTimeout(simulateUserTurn, 4500);
-        }
-      }, 700);
-    }
-  }, 35);
-}
-
-function simulateUserTurn(): void {
-  if (state.value === 'ended') return;
-  captions.value.push({ id: rid(), role: 'user', text: c.demoUserLine });
-  scriptHandle = window.setTimeout(() => {
-    if (state.value === 'ended') return;
-    state.value = 'aiSpeaking';
-    typeOutReply();
-  }, 900);
-}
-
-function startCallScript(): void {
-  // Connecting → listening → first simulated user prompt → AI speaking, etc.
-  scriptHandle = window.setTimeout(() => {
-    if (state.value === 'ended') return;
-    state.value = 'listening';
-    scriptHandle = window.setTimeout(simulateUserTurn, 2200);
-  }, 1200);
-}
 
 async function loadTwin(): Promise<void> {
   if (!twinId.value) return;
@@ -138,65 +50,25 @@ async function loadTwin(): Promise<void> {
   }
 }
 
-async function fetchVoiceToken(): Promise<void> {
-  tokenError.value = null;
-  tokenInfo.value = null;
-  try {
-    const res = await mintVoiceToken(lang.value);
-    tokenInfo.value = res;
-    // eslint-disable-next-line no-console
-    console.log('[voice] /voice/token response', res);
-  } catch (err) {
-    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
-    const status = e?.response?.status;
-    const message = e?.response?.data?.message ?? e?.message ?? 'Unknown error';
-    tokenError.value = status ? `${status} — ${message}` : message;
-    // eslint-disable-next-line no-console
-    console.error('[voice] /voice/token failed', err);
-  }
-}
-
 onMounted(() => {
   void loadTwin();
-  void fetchVoiceToken();
-  startCallTimer();
-  startCallScript();
   document.addEventListener('click', onDocumentClick);
 });
 
 onBeforeUnmount(() => {
-  clearTimers();
   document.removeEventListener('click', onDocumentClick);
 });
 
 watch(twinId, () => loadTwin());
 
-const elapsedLabel = computed(() => {
-  const m = Math.floor(elapsed.value / 60)
-    .toString()
-    .padStart(2, '0');
-  const s = (elapsed.value % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
-});
-
 const statusLabel = computed(() => {
-  if (muted.value && state.value !== 'ended') return c.muted;
-  switch (state.value) {
-    case 'connecting':
-      return c.connecting;
-    case 'listening':
-      return c.listening;
-    case 'aiSpeaking':
-      return c.aiSpeaking;
-    case 'ended':
-      return c.ended;
-  }
-  return '';
+  if (state.value === 'ended') return c.ended;
+  if (muted.value) return c.muted;
+  return c.listening;
 });
 
 function endCall(): void {
   state.value = 'ended';
-  clearTimers();
 }
 
 function returnToTwin(): void {
@@ -236,26 +108,9 @@ const currentLang = computed(
 );
 
 const orbStateClass = computed(() => {
+  if (state.value === 'ended') return 'orb--ended';
   if (muted.value) return 'orb--muted';
-  return {
-    connecting: 'orb--connecting',
-    listening: 'orb--listening',
-    aiSpeaking: 'orb--speaking',
-    ended: 'orb--ended',
-  }[state.value];
-});
-
-const lastUser = computed(() => {
-  for (let i = captions.value.length - 1; i >= 0; i -= 1) {
-    if (captions.value[i].role === 'user') return captions.value[i];
-  }
-  return null;
-});
-const lastAi = computed(() => {
-  for (let i = captions.value.length - 1; i >= 0; i -= 1) {
-    if (captions.value[i].role === 'assistant') return captions.value[i];
-  }
-  return null;
+  return 'orb--listening';
 });
 </script>
 
@@ -267,30 +122,8 @@ const lastAi = computed(() => {
     <!-- Top bar -->
     <header
       v-if="twinId"
-      class="relative z-10 flex flex-wrap items-center justify-between gap-3 px-6 py-4"
+      class="relative z-10 flex flex-wrap items-center justify-end gap-3 px-6 py-4"
     >
-      <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/15"
-          aria-label="Go back"
-          @click="returnToTwin"
-        >
-          <Icon :icon="ArrowLeft01Icon" :size="18" />
-        </button>
-        <template v-if="twin">
-          <BaseAvatar
-            :src="twin.profilePicUrl ?? ''"
-            :name="twin.name"
-            size="sm"
-          />
-          <div class="min-w-0">
-            <p class="truncate text-body font-semibold leading-tight">{{ twin.name }}</p>
-            <p class="truncate text-meta text-white/65">{{ c.twin }} · {{ elapsedLabel }}</p>
-          </div>
-        </template>
-      </div>
-
       <div class="flex items-center gap-2">
         <div class="relative" data-lang-root>
           <button
@@ -332,17 +165,6 @@ const lastAi = computed(() => {
       </div>
     </header>
 
-    <!-- Voice-token debug strip (temporary) -->
-    <div
-      v-if="tokenInfo || tokenError"
-      class="relative z-10 mx-6 mb-2 rounded-2xl border px-4 py-3 text-meta"
-      :class="tokenError ? 'border-red-400/40 bg-red-500/15 text-red-100' : 'border-white/15 bg-white/10 text-white/85'"
-    >
-      <p class="font-semibold uppercase tracking-wide text-white/60">/voice/token</p>
-      <pre v-if="tokenInfo" class="mt-1 whitespace-pre-wrap break-all">{{ JSON.stringify(tokenInfo, null, 2) }}</pre>
-      <p v-else>{{ tokenError }}</p>
-    </div>
-
     <!-- Body -->
     <main class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-2">
       <!-- No twin: empty state -->
@@ -364,9 +186,6 @@ const lastAi = computed(() => {
         </div>
         <h1 class="text-display">{{ c.ended }}</h1>
         <p class="mt-2 max-w-md text-lead text-white/70">{{ c.endedSubtitle }}</p>
-        <p v-if="elapsed > 0" class="mt-1 text-meta text-white/55">
-          {{ elapsedLabel }}
-        </p>
         <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
           <BaseButton variant="outline" rounded="full" @click="switchToChat">
             <Icon :icon="BubbleChatIcon" :size="16" />
@@ -378,9 +197,8 @@ const lastAi = computed(() => {
         </div>
       </div>
 
-      <!-- Active call -->
+      <!-- Idle call shell (UI only — voice API not yet wired) -->
       <template v-else-if="twin">
-        <!-- Orb -->
         <div :class="['orb', orbStateClass]" aria-hidden="true">
           <span class="orb__ring orb__ring--1" />
           <span class="orb__ring orb__ring--2" />
@@ -394,37 +212,7 @@ const lastAi = computed(() => {
           </div>
         </div>
 
-        <!-- Status -->
         <p class="mt-8 text-headline tracking-wide text-white">{{ statusLabel }}</p>
-        <p class="mt-1 text-meta text-white/55">{{ elapsedLabel }}</p>
-
-        <!-- Audio visualizer (only while speaking) -->
-        <div
-          v-if="state === 'aiSpeaking' && !muted"
-          class="visualizer mt-6"
-          aria-hidden="true"
-        >
-          <span v-for="i in 7" :key="i" :style="{ animationDelay: `${i * 90}ms` }" />
-        </div>
-
-        <!-- Captions -->
-        <div class="mt-10 w-full max-w-2xl space-y-3">
-          <div v-if="lastUser" class="caption caption--user">
-            <span class="caption__label">{{ c.you }}</span>
-            <p>{{ lastUser.text }}</p>
-          </div>
-          <div v-if="lastAi" class="caption caption--ai">
-            <span class="caption__label">{{ twin.name }}</span>
-            <p>
-              {{ lastAi.text }}
-              <span
-                v-if="state === 'aiSpeaking' && lastAi.text.length"
-                class="caret"
-                aria-hidden="true"
-              />
-            </p>
-          </div>
-        </div>
       </template>
     </main>
 

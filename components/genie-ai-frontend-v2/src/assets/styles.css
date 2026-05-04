@@ -7,7 +7,7 @@
 
 @layer base {
   html, body, #app {
-    @apply h-full;
+    @apply h-full overflow-hidden;
   }
   body {
     @apply bg-white text-neutral-950;
@@ -46,10 +46,10 @@
     @apply md:w-20;
   }
   .dash-main {
-    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface shadow-elevated ring-1 ring-border;
+    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-surface shadow-elevated ring-1 ring-border;
   }
   .dash-main__card {
-    @apply flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-surface shadow-elevated ring-1 ring-border;
+    @apply flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-surface shadow-elevated ring-1 ring-border;
   }
   .dash-nav-item {
     @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-body font-semibold text-text-muted transition hover:bg-surface-subtle hover:text-text;

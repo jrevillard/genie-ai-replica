@@ -1,160 +1,211 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { PlayIcon, RecordIcon } from '@hugeicons/core-free-icons';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { PauseIcon, PlayIcon, RecordIcon } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../ui/BaseAvatar.vue';
-import BaseButton from '../ui/BaseButton.vue';
+import BaseSkeleton from '../ui/BaseSkeleton.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import Icon from '../ui/Icon.vue';
+import { notify } from '../../lib/notify';
+import { listVoices, previewVoice, type Voice } from '../../services/voices';
 
-interface Voice {
-  id: string;
-  name: string;
-  caption: string;
-  avatar: string;
-  group?: string;
-}
+const PREVIEW_TEXT = 'Hello, this is a preview of my voice.';
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: 'English',
+  fr: 'French',
+  mnk: 'Mandinka',
+  es: 'Spanish',
+  ar: 'Arabic',
+};
 
-const subTab = ref<'cloned' | 'default'>('cloned');
-const selectedVoice = ref<string>('billie-1');
+const voices = ref<Voice[]>([]);
+const loading = ref(false);
+const error = ref<string | null>(null);
 
-const cloned: Voice[] = [
-  { id: 'billie-1', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=14' },
-  { id: 'billie-2', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=15' },
-];
+// TODO(voice-persistence): the AiTwin schema currently has no voiceId field.
+// Selection lives in component state; wire to twin update once the backend
+// exposes a voice column on /ai-twins.
+const selectedVoiceId = ref<string | null>(null);
 
-const defaults: Voice[] = [
-  { id: 'def-1', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=16', group: 'Top Picks' },
-  { id: 'def-2', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=17', group: 'Top Picks' },
-  { id: 'def-3', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=18', group: 'Top Picks' },
-  { id: 'def-4', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=19', group: 'Newly Added' },
-  { id: 'def-5', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=20', group: 'Newly Added' },
-  { id: 'def-6', name: 'Billie Voice 1', caption: 'Voice Library — Top Picks For You', avatar: 'https://i.pravatar.cc/40?img=21', group: 'Professional Sounds' },
-];
+const playingVoiceId = ref<string | null>(null);
+const previewLoadingId = ref<string | null>(null);
+let currentAudio: HTMLAudioElement | null = null;
+let currentAudioUrl: string | null = null;
 
-const groupedDefaults = computed<Record<string, Voice[]>>(() => {
-  const map: Record<string, Voice[]> = {};
-  for (const v of defaults) {
-    const g = v.group ?? 'Other';
-    (map[g] ??= []).push(v);
+const enabledVoices = computed(() => voices.value.filter((v) => v.enabled !== false));
+
+const groupedByLanguage = computed<Array<{ language: string; label: string; voices: Voice[] }>>(() => {
+  const map = new Map<string, Voice[]>();
+  for (const v of enabledVoices.value) {
+    const key = v.language || 'other';
+    const list = map.get(key) ?? [];
+    list.push(v);
+    map.set(key, list);
   }
-  return map;
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([language, list]) => ({
+      language,
+      label: LANGUAGE_LABELS[language] ?? language.toUpperCase(),
+      voices: list,
+    }));
 });
+
+function voiceCaption(v: Voice): string {
+  const gender = v.gender ? v.gender.charAt(0).toUpperCase() + v.gender.slice(1) : '';
+  const lang = LANGUAGE_LABELS[v.language] ?? v.language?.toUpperCase() ?? '';
+  return [lang, gender].filter(Boolean).join(' · ');
+}
 
 const itemClass = (id: string) => [
   'flex items-center gap-3 rounded-2xl border bg-surface p-3 shadow-card transition cursor-pointer',
-  selectedVoice.value === id
+  selectedVoiceId.value === id
     ? 'border-accent bg-accent-soft/40 ring-1 ring-accent/20'
     : 'border-border hover:bg-surface-muted',
 ];
+
+function stopAudio(): void {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = '';
+    currentAudio = null;
+  }
+  if (currentAudioUrl) {
+    URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = null;
+  }
+  playingVoiceId.value = null;
+}
+
+async function togglePreview(voice: Voice): Promise<void> {
+  if (playingVoiceId.value === voice._key) {
+    stopAudio();
+    return;
+  }
+  stopAudio();
+
+  previewLoadingId.value = voice._key;
+  try {
+    const blob = await previewVoice(voice._key, PREVIEW_TEXT);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    currentAudioUrl = url;
+    audio.addEventListener('ended', stopAudio);
+    audio.addEventListener('error', () => {
+      stopAudio();
+      notify.error('Failed to play voice preview');
+    });
+    playingVoiceId.value = voice._key;
+    await audio.play();
+  } catch (err) {
+    const message = (err as { response?: { data?: { message?: string } }; message?: string })
+      ?.response?.data?.message ?? (err as Error)?.message ?? 'Failed to load voice preview';
+    notify.error(message);
+    stopAudio();
+  } finally {
+    previewLoadingId.value = null;
+  }
+}
+
+async function loadVoices(): Promise<void> {
+  loading.value = true;
+  error.value = null;
+  try {
+    voices.value = await listVoices();
+    if (!selectedVoiceId.value) {
+      const first = enabledVoices.value[0];
+      if (first) selectedVoiceId.value = first._key;
+    }
+  } catch (err) {
+    error.value =
+      (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
+        ?.message ?? (err as Error)?.message ?? 'Failed to load voices';
+  } finally {
+    loading.value = false;
+  }
+}
+
+function save(): boolean {
+  // Persisting the selection on the twin is pending backend support (no
+  // voiceId field on /ai-twins). Surface the choice locally for now.
+  return true;
+}
+
+function discard(): void {
+  // No persistent state to revert yet — see save() note.
+}
+
+defineExpose({ save, discard });
+
+onMounted(loadVoices);
+onBeforeUnmount(stopAudio);
 </script>
 
 <template>
   <div class="space-y-5">
     <header class="flex items-center justify-between">
-      <h2 class="text-title text-text">Manage Your Voices From Here</h2>
-      <BaseButton variant="outline" size="sm" rounded="full">
-        <Icon :icon="RecordIcon" :size="14" /> Change Voice
-      </BaseButton>
+      <h2 class="text-title text-text">Pick a Voice For Your AI Twin</h2>
     </header>
 
-    <div class="border-b border-border">
-      <div class="flex gap-6" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="subTab === 'cloned'"
-          :class="[
-            'pb-3 text-body font-medium transition',
-            subTab === 'cloned' ? 'border-b-2 border-accent text-accent' : 'text-text-muted hover:text-text',
-          ]"
-          @click="subTab = 'cloned'"
-        >
-          Cloned Voices
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :aria-selected="subTab === 'default'"
-          :class="[
-            'pb-3 text-body font-medium transition',
-            subTab === 'default' ? 'border-b-2 border-accent text-accent' : 'text-text-muted hover:text-text',
-          ]"
-          @click="subTab = 'default'"
-        >
-          Default Voices
-        </button>
-      </div>
+    <div v-if="loading && voices.length === 0" class="space-y-3">
+      <BaseSkeleton v-for="n in 4" :key="n" height="4rem" />
     </div>
 
-    <div v-if="subTab === 'cloned'">
-      <fieldset v-if="cloned.length">
-        <legend class="sr-only">Cloned voices</legend>
-        <ul class="space-y-3">
-          <li v-for="v in cloned" :key="v.id">
-            <label :class="itemClass(v.id)">
-              <button
-                type="button"
-                class="rounded-full bg-accent-soft p-2 text-accent transition hover:bg-ieee-100"
-                :aria-label="`Play preview of ${v.name}`"
-                @click.stop
-              >
-                <Icon :icon="PlayIcon" :size="14" />
-              </button>
-              <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-body font-medium text-text">{{ v.name }}</p>
-                <p class="truncate text-caption text-text-muted">{{ v.caption }}</p>
-              </div>
-              <input
-                type="radio"
-                name="cloned-voice"
-                :value="v.id"
-                :checked="selectedVoice === v.id"
-                class="h-4 w-4 cursor-pointer accent-accent"
-                @change="selectedVoice = v.id"
-              />
-            </label>
-          </li>
-        </ul>
-      </fieldset>
-      <EmptyState
-        v-else
-        :icon="RecordIcon"
-        title="No cloned voices yet"
-        description="Clone your voice to make this AI Twin sound exactly like you."
+    <div
+      v-else-if="error"
+      class="flex items-center justify-between gap-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600"
+    >
+      <span>{{ error }}</span>
+      <button
+        type="button"
+        class="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+        @click="loadVoices"
       >
-        <BaseButton variant="primary" size="md">Clone a voice</BaseButton>
-      </EmptyState>
+        Retry
+      </button>
     </div>
+
+    <EmptyState
+      v-else-if="enabledVoices.length === 0"
+      :icon="RecordIcon"
+      title="No voices available"
+      description="No voices have been enabled yet. Check back once your administrator has added some."
+    />
 
     <div v-else class="space-y-6">
-      <section v-for="(items, group) in groupedDefaults" :key="group">
-        <h3 class="mb-3 text-body font-semibold text-text">{{ group }}</h3>
+      <section v-for="group in groupedByLanguage" :key="group.language">
+        <h3 class="mb-3 text-body font-semibold text-text">{{ group.label }}</h3>
         <fieldset>
-          <legend class="sr-only">{{ group }}</legend>
+          <legend class="sr-only">{{ group.label }}</legend>
           <ul class="space-y-3">
-            <li v-for="v in items" :key="v.id">
-              <label :class="itemClass(v.id)">
+            <li v-for="v in group.voices" :key="v._key">
+              <label :class="itemClass(v._key)">
                 <button
                   type="button"
-                  class="rounded-full bg-accent-soft p-2 text-accent transition hover:bg-ieee-100"
-                  :aria-label="`Play preview of ${v.name}`"
-                  @click.stop
+                  class="rounded-full bg-accent-soft p-2 text-accent transition hover:bg-ieee-100 disabled:opacity-50"
+                  :aria-label="playingVoiceId === v._key ? `Stop preview of ${v.name}` : `Play preview of ${v.name}`"
+                  :disabled="previewLoadingId === v._key"
+                  @click.stop.prevent="togglePreview(v)"
                 >
-                  <Icon :icon="PlayIcon" :size="14" />
+                  <span
+                    v-if="previewLoadingId === v._key"
+                    class="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                    aria-hidden="true"
+                  />
+                  <Icon v-else :icon="playingVoiceId === v._key ? PauseIcon : PlayIcon" :size="14" />
                 </button>
-                <BaseAvatar :src="v.avatar" :name="v.name" size="md" />
+                <BaseAvatar :name="v.name" size="md" />
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-body font-medium text-text">{{ v.name }}</p>
-                  <p class="truncate text-caption text-text-muted">{{ v.caption }}</p>
+                  <p class="truncate text-caption text-text-muted">{{ voiceCaption(v) }}</p>
                 </div>
                 <input
                   type="radio"
-                  name="default-voice"
-                  :value="v.id"
-                  :checked="selectedVoice === v.id"
+                  name="twin-voice"
+                  :value="v._key"
+                  :checked="selectedVoiceId === v._key"
                   class="h-4 w-4 cursor-pointer accent-accent"
-                  @change="selectedVoice = v.id"
+                  @change="selectedVoiceId = v._key"
                 />
               </label>
             </li>

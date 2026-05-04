@@ -14,11 +14,19 @@ const router = useRouter();
 const dateEdited = computed(() => formatDate(props.twin.updatedAt));
 const dateCreated = computed(() => formatDate(props.twin.createdAt));
 
+const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 function formatDate(iso: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return dateTimeFormatter.format(d);
 }
 
 function open() {

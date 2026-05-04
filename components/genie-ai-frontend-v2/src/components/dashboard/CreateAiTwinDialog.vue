@@ -13,7 +13,7 @@ import { createAiTwinSchema, type CreateAiTwinInput } from '../../lib/validation
 const props = defineProps<{ open: boolean; submitting?: boolean }>();
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void;
-  (e: 'created', twin: { name: string; description: string; avatar: string | null }): void;
+  (e: 'created', twin: { name: string; description: string; avatarFile: File | null }): void;
 }>();
 
 const form = reactive<CreateAiTwinInput>({
@@ -25,6 +25,8 @@ const form = reactive<CreateAiTwinInput>({
 const { errors, validate, reset } = useZodForm(createAiTwinSchema, ['name', 'description']);
 
 const fileInput = ref<HTMLInputElement | null>(null);
+const avatarFile = ref<File | null>(null);
+const previewUrl = ref<string | null>(null);
 
 function close() {
   if (props.submitting) return;
@@ -36,13 +38,13 @@ function pickFile() {
 }
 
 function onFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    form.profilePicUrl = String(reader.result);
-  };
-  reader.readAsDataURL(file);
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value);
+  avatarFile.value = file;
+  previewUrl.value = URL.createObjectURL(file);
+  input.value = '';
 }
 
 function onSubmit() {
@@ -51,7 +53,7 @@ function onSubmit() {
   emit('created', {
     name: form.name.trim(),
     description: (form.description ?? '').trim(),
-    avatar: form.profilePicUrl ?? null,
+    avatarFile: avatarFile.value,
   });
 }
 
@@ -62,6 +64,11 @@ watch(
       form.name = '';
       form.description = '';
       form.profilePicUrl = null;
+      avatarFile.value = null;
+      if (previewUrl.value) {
+        URL.revokeObjectURL(previewUrl.value);
+        previewUrl.value = null;
+      }
       reset();
     }
   }
@@ -84,7 +91,7 @@ watch(
       </header>
 
       <div class="flex items-center gap-4">
-        <BaseAvatar :src="form.profilePicUrl" name="?" size="lg" />
+        <BaseAvatar :src="previewUrl" name="?" size="lg" />
         <div class="flex-1">
           <p class="text-caption text-text-muted">
             Upload your photo here for the profile picture
@@ -92,7 +99,7 @@ watch(
           <input
             ref="fileInput"
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/gif"
             class="hidden"
             @change="onFileChange"
           />
@@ -101,8 +108,11 @@ watch(
             class="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-caption font-medium text-text shadow-card transition hover:bg-surface-muted"
             @click="pickFile"
           >
-            <Icon :icon="Upload01Icon" :size="14" /> Upload
+            <Icon :icon="Upload01Icon" :size="14" /> {{ avatarFile ? 'Replace' : 'Upload' }}
           </button>
+          <p v-if="avatarFile" class="mt-1 truncate text-caption text-text-muted">
+            {{ avatarFile.name }}
+          </p>
         </div>
       </div>
     </section>

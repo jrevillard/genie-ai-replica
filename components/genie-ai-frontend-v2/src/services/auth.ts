@@ -104,3 +104,23 @@ export async function confirmPasswordReset(
   const res = await api.post('/auth/reset-password/confirm', { token, newPassword: encPassword });
   return res.data;
 }
+
+export async function validateResetToken(token: string): Promise<{ valid: boolean; message?: string }> {
+  const res = await api.post('/auth/validate-token', { token });
+  return res.data;
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> {
+  const [encCurrent, encNew] = await Promise.all([
+    sha256Hex(currentPassword),
+    sha256Hex(newPassword),
+  ]);
+  const res = await api.post('/auth/change-password', {
+    currentPassword: encCurrent,
+    newPassword: encNew,
+  });
+  return res.data;
+}

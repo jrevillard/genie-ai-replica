@@ -7,7 +7,6 @@ import {
   MessageMultiple01Icon,
   Notification03Icon,
   Search01Icon,
-  Settings01Icon,
   SparklesIcon,
   UserIcon,
 } from '@hugeicons/core-free-icons';
@@ -25,7 +24,6 @@ const items = [
   { group: 'Pages', label: 'Chat/Call History', description: 'Review chats, calls, transcripts, and summaries', to: '/chat-history', icon: MessageMultiple01Icon },
   { group: 'Pages', label: 'Knowledge Set', description: 'Upload and ingest files for AI Twins', to: '/knowledge-set', icon: AiBrain01Icon },
   { group: 'Useful routes', label: 'Profile', description: 'User profile area', to: '/ai-twins', icon: UserIcon },
-  { group: 'Useful routes', label: 'Settings', description: 'Workspace configuration', to: '/ai-twins', icon: Settings01Icon },
 ];
 
 const filteredItems = computed(() => {

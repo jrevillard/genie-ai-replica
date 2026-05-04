@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { sileo } from '../lib/notify';
 import { useAuthStore } from '../stores/auth';
 
 const route = useRoute();
@@ -10,9 +11,35 @@ const auth = useAuthStore();
 const status = ref<'idle' | 'verifying' | 'success' | 'error'>('idle');
 const message = ref<string | null>(null);
 
+const email = computed(() => {
+  const raw = route.query.email;
+  return Array.isArray(raw) ? (raw[0] ?? '') : (raw ?? '');
+});
+
+const RESEND_COOLDOWN_S = 30;
+const cooldown = ref(0);
+const resending = ref(false);
+let cooldownHandle: ReturnType<typeof setInterval> | null = null;
+
+function startCooldown() {
+  cooldown.value = RESEND_COOLDOWN_S;
+  if (cooldownHandle) clearInterval(cooldownHandle);
+  cooldownHandle = setInterval(() => {
+    cooldown.value -= 1;
+    if (cooldown.value <= 0 && cooldownHandle) {
+      clearInterval(cooldownHandle);
+      cooldownHandle = null;
+    }
+  }, 1000);
+}
+
 onMounted(() => {
   const tokenFromUrl = route.query.token as string | undefined;
   if (tokenFromUrl) runVerify(tokenFromUrl);
+});
+
+onUnmounted(() => {
+  if (cooldownHandle) clearInterval(cooldownHandle);
 });
 
 async function runVerify(token: string) {
@@ -25,6 +52,20 @@ async function runVerify(token: string) {
   } catch {
     status.value = 'error';
     message.value = auth.error ?? 'Verification failed. The link may have expired.';
+  }
+}
+
+async function onResend() {
+  if (!email.value || cooldown.value > 0 || resending.value) return;
+  resending.value = true;
+  try {
+    await auth.resendVerification(email.value);
+    sileo.success({ title: 'Verification email sent.' });
+    startCooldown();
+  } catch {
+    sileo.error({ title: 'Could not resend right now. Please try again later.' });
+  } finally {
+    resending.value = false;
   }
 }
 </script>
@@ -62,7 +103,19 @@ async function runVerify(token: string) {
           Email verified — redirecting to sign in…
         </p>
 
-        <RouterLink to="/signup" class="mt-8 text-sm font-semibold text-ieee-700 hover:underline">
+        <p v-if="email" class="mt-8 text-sm text-slate-500">
+          Didn't receive the email?
+          <button
+            type="button"
+            class="ml-1 font-semibold text-ieee-700 transition hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+            :disabled="cooldown > 0 || resending"
+            @click="onResend"
+          >
+            {{ cooldown > 0 ? `Resend in ${cooldown}s` : resending ? 'Sending…' : 'Resend' }}
+          </button>
+        </p>
+
+        <RouterLink to="/signup" class="mt-3 text-sm font-semibold text-ieee-700 hover:underline">
           Back to signup
         </RouterLink>
       </div>

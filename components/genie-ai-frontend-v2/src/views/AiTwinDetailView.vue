@@ -15,7 +15,6 @@ import BaseButton from '../components/ui/BaseButton.vue';
 import BaseDialog from '../components/ui/BaseDialog.vue';
 import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
 import BaseTabs, { type TabItem } from '../components/ui/BaseTabs.vue';
-import BaseToggle from '../components/ui/BaseToggle.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
@@ -36,10 +35,10 @@ const router = useRouter();
 const store = useAiTwinsStore();
 const { current: twin, loading, saving } = storeToRefs(store);
 
-const active = ref(true);
 const tab = ref<string>('general');
 const deleteDialog = ref(false);
 const deleting = ref(false);
+const removeImageDialog = ref(false);
 const editing = ref(false);
 const activeTab = ref<EditableTab | null>(null);
 const imageInput = ref<HTMLInputElement | null>(null);
@@ -75,7 +74,7 @@ watch(tab, () => {
 });
 
 function goBack() {
-  router.back();
+  router.push({ name: 'ai-twins' });
 }
 
 function chatWithTwin() {
@@ -103,21 +102,21 @@ function pickImage() {
   imageInput.value?.click();
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('Failed to read image file'));
-    reader.readAsDataURL(file);
-  });
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+function askRemoveImage() {
+  if (uploadingImage.value || !twin.value?.profilePicUrl) return;
+  removeImageDialog.value = true;
 }
 
-async function removeImage() {
+async function confirmRemoveImage() {
   if (!twin.value || uploadingImage.value || !twin.value.profilePicUrl) return;
   uploadingImage.value = true;
   try {
     await store.update(twin.value._key, { profilePicUrl: '' });
     notify.success('Profile picture removed');
+    removeImageDialog.value = false;
   } catch {
     notify.error(store.error ?? 'Failed to remove profile picture');
   } finally {
@@ -132,16 +131,20 @@ async function onImageChange(e: Event) {
     input.value = '';
     return;
   }
-  if (!file.type.startsWith('image/')) {
-    notify.error('Please select an image file');
+  if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
+    notify.error('Image must be JPEG, PNG, WebP, or GIF');
+    input.value = '';
+    return;
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    notify.error('Image must be 5 MB or smaller');
     input.value = '';
     return;
   }
 
   uploadingImage.value = true;
   try {
-    const dataUrl = await readFileAsDataUrl(file);
-    await store.update(twin.value._key, { profilePicUrl: dataUrl });
+    await store.uploadAvatar(twin.value._key, file);
     notify.success('Profile picture updated');
   } catch {
     notify.error(store.error ?? 'Failed to update profile picture');
@@ -169,7 +172,7 @@ async function confirmDelete() {
 
 <template>
   <DashboardLayout>
-    <section class="space-y-6 bg-surface p-6">
+    <section class="min-h-full space-y-6 bg-surface p-6 pb-10">
       <button
         type="button"
         class="inline-flex items-center gap-1 rounded-full bg-surface-muted p-2 text-text-muted transition hover:bg-surface-subtle hover:text-text"
@@ -192,7 +195,7 @@ async function confirmDelete() {
                 :disabled="uploadingImage"
                 aria-label="Remove profile picture"
                 title="Remove profile picture"
-                @click="removeImage"
+                @click="askRemoveImage"
               >
                 <Icon :icon="Cancel01Icon" :size="12" />
               </button>
@@ -218,14 +221,13 @@ async function confirmDelete() {
             <input
               ref="imageInput"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               class="hidden"
               @change="onImageChange"
             />
             <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
               IEEE Page
             </BaseButton>
-            <BaseToggle v-model="active" :label="active ? 'Active' : 'Inactive'" />
           </div>
           <BaseButton variant="danger" size="md" :loading="deleting" @click="deleteDialog = true">
             Delete AI Twin
@@ -325,6 +327,34 @@ async function confirmDelete() {
         </div>
         <div class="mt-7 flex justify-end">
           <BaseButton variant="danger" :loading="deleting" @click="confirmDelete">Yes, delete</BaseButton>
+        </div>
+      </BaseDialog>
+
+      <BaseDialog
+        v-model:open="removeImageDialog"
+        size="sm"
+      >
+        <div class="pr-10">
+          <h2 class="text-title text-text">Remove profile picture?</h2>
+          <p class="mt-2 text-body leading-6 text-text-muted">
+            The current profile picture will be removed and the twin will fall back to its initials.
+          </p>
+        </div>
+        <div class="mt-7 flex justify-end gap-3">
+          <BaseButton
+            variant="ghost"
+            :disabled="uploadingImage"
+            @click="removeImageDialog = false"
+          >
+            Cancel
+          </BaseButton>
+          <BaseButton
+            variant="danger"
+            :loading="uploadingImage"
+            @click="confirmRemoveImage"
+          >
+            Remove
+          </BaseButton>
         </div>
       </BaseDialog>
     </section>

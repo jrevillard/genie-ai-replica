@@ -6,6 +6,7 @@ import {
   MessageMultiple01Icon,
   SidebarLeftIcon,
   SparklesIcon,
+  UserIcon,
 } from '@hugeicons/core-free-icons';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
@@ -89,7 +90,27 @@ function isNavActive(to: string): boolean {
       </RouterLink>
     </nav>
 
-    <footer class="border-t border-border-subtle p-3">
+    <footer class="space-y-2 border-t border-border-subtle p-3">
+      <RouterLink
+        to="/profile"
+        custom
+        v-slot="{ navigate }"
+      >
+        <button
+          type="button"
+          :class="[
+            'dash-nav-item w-full',
+            isNavActive('/profile') && 'dash-nav-item--active',
+            collapsed && 'justify-center',
+          ]"
+          :aria-label="collapsed ? 'Profile' : undefined"
+          @click="navigate"
+        >
+          <Icon :icon="UserIcon" :size="20" />
+          <span v-if="!collapsed" class="truncate">Profile</span>
+        </button>
+      </RouterLink>
+
       <button
         type="button"
         :class="[

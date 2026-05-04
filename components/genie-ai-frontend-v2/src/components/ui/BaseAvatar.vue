@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -32,17 +32,41 @@ const initials = computed(() => {
     .join('')
     .toUpperCase();
 });
+
+const loaded = ref(false);
+const errored = ref(false);
+watch(
+  () => props.src,
+  () => {
+    loaded.value = false;
+    errored.value = false;
+  }
+);
 </script>
 
 <template>
   <span class="relative inline-flex shrink-0">
     <span
       :class="[
-        'inline-flex items-center justify-center overflow-hidden rounded-full bg-slate-200 font-semibold text-slate-600',
+        'relative inline-flex items-center justify-center overflow-hidden rounded-full bg-slate-200 font-semibold text-slate-600',
         sizeClass,
       ]"
     >
-      <img v-if="src" :src="src" :alt="name ?? ''" class="h-full w-full object-cover" />
+      <template v-if="src && !errored">
+        <span
+          v-if="!loaded"
+          class="absolute inset-0 avatar-shimmer"
+          aria-hidden="true"
+        />
+        <img
+          :src="src"
+          :alt="name ?? ''"
+          class="h-full w-full object-cover transition-opacity duration-200"
+          :class="loaded ? 'opacity-100' : 'opacity-0'"
+          @load="loaded = true"
+          @error="errored = true"
+        />
+      </template>
       <template v-else>{{ initials || '?' }}</template>
     </span>
     <span
@@ -52,3 +76,20 @@ const initials = computed(() => {
     />
   </span>
 </template>
+
+<style scoped>
+.avatar-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 0%,
+    rgba(241, 245, 249, 0.95) 50%,
+    rgba(226, 232, 240, 0.6) 100%
+  );
+  background-size: 200% 100%;
+  animation: avatar-shimmer 1.2s linear infinite;
+}
+@keyframes avatar-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+</style>

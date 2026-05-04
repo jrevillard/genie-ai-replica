@@ -17,7 +17,7 @@ export const useAiTwinsStore = defineStore('aiTwins', {
   state: (): AiTwinsState => ({
     twins: [],
     total: 0,
-    offset: 1,
+    offset: 0,
     limit: 50,
     current: null,
     loading: false,
@@ -47,6 +47,11 @@ export const useAiTwinsStore = defineStore('aiTwins', {
     },
 
     async fetchOne(twinId: string): Promise<AiTwin> {
+      // Clear stale `current` so the view shows its loading skeleton instead
+      // of the previously-opened twin while the new request is in flight.
+      if (this.current?._key !== twinId) {
+        this.current = null;
+      }
       this.loading = true;
       this.error = null;
       try {
@@ -115,6 +120,22 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       upsert(this.twins, twin);
       if (this.current?._key === twinId) this.current = twin;
       return twin;
+    },
+
+    async uploadAvatar(twinId: string, file: File): Promise<AiTwin> {
+      this.saving = true;
+      this.error = null;
+      try {
+        const twin = await api.uploadAiTwinAvatar(twinId, file);
+        upsert(this.twins, twin);
+        if (this.current?._key === twinId) this.current = twin;
+        return twin;
+      } catch (err) {
+        this.error = extractError(err, 'Failed to upload avatar');
+        throw err;
+      } finally {
+        this.saving = false;
+      }
     },
 
     async replaceKbFiles(twinId: string, fileIds: string[]): Promise<AiTwin> {

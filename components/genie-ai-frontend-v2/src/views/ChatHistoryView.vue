@@ -6,9 +6,12 @@ import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Attachment01Icon,
+  BubbleChatIcon,
   CallEnd01Icon,
   CallIcon,
   Calendar03Icon,
+  Cancel01Icon,
+  Delete02Icon,
   Download04Icon,
   FilterHorizontalIcon,
   MoreVerticalIcon,
@@ -21,85 +24,68 @@ import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
+import { notify } from '../lib/notify';
+import { useAiTwinsStore } from '../stores/aiTwins';
 import { useAuthStore } from '../stores/auth';
+import { useChatHistoryStore } from '../stores/chatHistory';
 import { useVoiceStore } from '../stores/voice';
+import type { AiTwin } from '../services/aiTwins';
+import type { ChatSessionRecord } from '../services/chatSessions';
 import type { VoiceSession } from '../services/voice';
-
-type Conversation = {
-  id: number;
-  name: string;
-  role: string;
-  preview: string;
-  date: string;
-  active?: boolean;
-};
-
-type Message = {
-  id: number;
-  side: 'inbound' | 'outbound';
-  text?: string;
-  audio?: boolean;
-  time?: string;
-  compact?: boolean;
-};
-
-const conversations: Conversation[] = [
-  { id: 1, name: 'Felecia Rower', role: 'UI Designer', preview: 'I will purchase it for sure.', date: 'Apr 10', active: true },
-  { id: 2, name: 'Adalberto Granzin', role: 'UI/UX Designer', preview: 'Shared design notes', date: 'Apr 8' },
-  { id: 3, name: 'Zenia Jacobs', role: 'Building surveyor', preview: 'Asked for a product deck', date: 'Jan 16' },
-  { id: 4, name: 'Heather Gislason', role: 'UI Designer', preview: 'Requested more examples', date: 'Jan 20' },
-  { id: 5, name: 'Rosemary Hettinger', role: 'Direct Mobility Manager', preview: 'Call follow-up required', date: 'Jan 22' },
-  { id: 6, name: 'Adalberto Granzin', role: 'UI/UX Designer', preview: 'Wants pricing details', date: 'Apr 8' },
-  { id: 7, name: 'Zenia Jacobs', role: 'Building surveyor', preview: 'Reviewing template', date: 'Jan 16' },
-  { id: 8, name: 'Heather Gislason', role: 'UI Designer', preview: 'Needs MUI support', date: 'Jan 20' },
-  { id: 9, name: 'Rosemary Hettinger', role: 'Direct Mobility Manager', preview: 'Final approval pending', date: 'Jan 22' },
-];
-
-const messages: Message[] = [
-  { id: 1, side: 'outbound', text: "How can we help? We're here for you!", time: '1:15 PM', compact: true },
-  {
-    id: 2,
-    side: 'inbound',
-    text: 'Hey John, I am looking for the best admin template. Could you please help me to find it out?',
-    audio: true,
-    time: '1:15 PM',
-  },
-  { id: 3, side: 'inbound', text: 'It should be MUI v5 compatible.', audio: true, compact: true },
-  { id: 4, side: 'outbound', text: 'Absolutely!', compact: true },
-  { id: 5, side: 'outbound', text: 'This admin template is built with MUI!', time: '1:16 PM', compact: true },
-  { id: 6, side: 'inbound', text: 'Looks clean and fresh UI.', audio: true },
-  { id: 7, side: 'inbound', text: "It's perfect for my next project.", compact: true },
-];
 
 const dateOptions = ['Today', 'Yesterday', 'Last 7 days', 'Last 30 days', 'Last month', 'Custom Date'];
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const leftCalendar = [28, 29, 30, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const rightCalendar = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
-const waveformBars = [18, 28, 36, 26, 44, 32, 40, 30, 48, 34, 24, 42, 30, 38, 22, 46, 36, 26, 40, 30, 34, 22, 28, 18];
 const detailWaveformBars = [54, 72, 88, 64, 92, 46, 76, 82, 60, 78, 70, 92, 98, 74, 50, 66, 86, 44, 72, 82, 58, 74, 88, 54, 68, 38, 82, 76, 90, 48, 72, 60, 80, 44, 76, 62, 88, 54, 74, 92, 46, 66, 84, 58, 78, 52, 90, 64];
 
 const activeTab = ref<'Chats' | 'Calls'>('Chats');
 const selectedDate = ref('Today');
 const dateMenuOpen = ref(false);
-const sortMenuOpen = ref(false);
 const filterPanelOpen = ref(false);
 const callDetailOpen = ref(false);
 const deleteDialogOpen = ref(false);
 const detailMode = ref<'transcript' | 'summary'>('transcript');
+const chatSort = ref<'newest' | 'oldest'>('newest');
 
-const selectedConversation = computed(() => conversations.find((item) => item.active) ?? conversations[0]);
+const chatSearchOpen = ref(false);
+const chatSearchInput = ref('');
+const chatActionsMenuOpen = ref(false);
+const chatDeleteDialogOpen = ref(false);
+const chatToDeleteId = ref<string | null>(null);
+
+const auth = useAuthStore();
+const voice = useVoiceStore();
+const aiTwins = useAiTwinsStore();
+const chatHistory = useChatHistoryStore();
+
+const { sessions: callSessions, current: currentSession, messages: currentMessages, loading: callsLoading, loadingDetail, error: callsError, detailError, hasMore, offset: callsOffset, limit: callsLimit } = storeToRefs(voice);
+const { twins } = storeToRefs(aiTwins);
+const {
+  sessions: chatSessions,
+  loading: chatsLoading,
+  error: chatsError,
+  selectedSessionId,
+  messages: chatMessages,
+  loadingMessages,
+  messagesError,
+  typeFilter,
+  scopeFilter,
+  phoneNumberFilter,
+  twinIdFilter,
+  deleting: deletingChat,
+} = storeToRefs(chatHistory);
+
+const phoneInput = ref('');
+
+const pageSizes = [10, 25, 50] as const;
+const callerName = computed(() => auth.displayName);
+
 const showCalendar = computed(() => selectedDate.value === 'Custom Date');
 
 function chooseDate(option: string) {
   selectedDate.value = option;
 }
-
-const auth = useAuthStore();
-const voice = useVoiceStore();
-const { sessions: callSessions, current: currentSession, messages: currentMessages, loading: callsLoading, loadingDetail, error: callsError, detailError, hasMore, offset: callsOffset, limit: callsLimit } = storeToRefs(voice);
-
-const pageSizes = [10, 25, 50] as const;
-const callerName = computed(() => auth.displayName);
 
 const callDateFilter = ref('all');
 const callSort = ref('newest');
@@ -119,6 +105,61 @@ const sortOptions = [
   { value: 'shortest', label: 'Shortest' },
 ];
 
+const chatSortOptions = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+];
+
+const typeOptions = [
+  { value: '', label: 'All channels' },
+  { value: 'chat', label: 'Chat' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+];
+
+const scopeOptions = [
+  { value: 'me', label: 'My sessions' },
+  { value: 'all', label: 'All users' },
+];
+
+const isAdmin = computed(() => auth.role === 'admin');
+
+const typeFilterValue = computed<string>({
+  get: () => typeFilter.value ?? '',
+  set: (v) => {
+    chatHistory.setTypeFilter((v as 'chat' | 'whatsapp') || null);
+    refreshChats();
+  },
+});
+
+const scopeFilterValue = computed<string>({
+  get: () => scopeFilter.value,
+  set: (v) => {
+    chatHistory.setScopeFilter((v as 'me' | 'all') || 'me');
+    refreshChats();
+  },
+});
+
+const showPhoneFilter = computed(
+  () => isAdmin.value && scopeFilter.value === 'all' && typeFilter.value === 'whatsapp'
+);
+
+let phoneDebounce: ReturnType<typeof setTimeout> | null = null;
+function onPhoneInput(event: Event): void {
+  const value = (event.target as HTMLInputElement).value;
+  phoneInput.value = value;
+  if (phoneDebounce) clearTimeout(phoneDebounce);
+  phoneDebounce = setTimeout(() => {
+    chatHistory.setPhoneNumberFilter(value);
+    refreshChats();
+  }, 300);
+}
+
+function refreshChats(): void {
+  chatHistory.fetchSessions().catch(() => {
+    // chatsError renders inline
+  });
+}
+
 const languageOptions = computed(() => {
   const langs = Array.from(
     new Set(callSessions.value.map((s) => s.language).filter(Boolean))
@@ -127,6 +168,62 @@ const languageOptions = computed(() => {
     { value: 'all', label: 'All languages' },
     ...langs.map((l) => ({ value: l, label: l.toUpperCase() })),
   ];
+});
+
+const twinFilterOptions = computed(() =>
+  twins.value.map((t) => ({ value: t._key, label: t.name }))
+);
+
+const twinFilterValue = computed<string>({
+  get: () => twinIdFilter.value ?? '',
+  set: (v) => chatHistory.setTwinFilter(v || null),
+});
+
+function twinById(twinId?: string | null): AiTwin | null {
+  if (!twinId) return null;
+  return twins.value.find((t) => t._key === twinId) ?? null;
+}
+
+function sessionTitle(session: ChatSessionRecord | null | undefined): string {
+  if (!session) return '';
+  const twin = twinById(session.twinId);
+  if (twin?.name) return twin.name;
+  if (session.phoneNumber) return session.phoneNumber;
+  return session.type === 'whatsapp' ? 'WhatsApp session' : 'Chat session';
+}
+
+function sessionPreview(session: ChatSessionRecord): string {
+  if (session.type === 'whatsapp') {
+    return session.phoneNumber ? `WhatsApp · ${session.phoneNumber}` : 'WhatsApp';
+  }
+  const twin = twinById(session.twinId);
+  return twin?.description?.trim() || 'Chat session';
+}
+
+function sessionAvatar(session: ChatSessionRecord | null | undefined): string | null {
+  if (!session) return null;
+  return twinById(session.twinId)?.profilePicUrl ?? null;
+}
+
+const sortedChatSessions = computed<ChatSessionRecord[]>(() => {
+  const rows = chatSessions.value
+    .filter((s) => !twinIdFilter.value || s.twinId === twinIdFilter.value)
+    .slice();
+  rows.sort((a, b) => {
+    const ta = new Date(a.updatedAt || a.createdAt).getTime() || 0;
+    const tb = new Date(b.updatedAt || b.createdAt).getTime() || 0;
+    return chatSort.value === 'oldest' ? ta - tb : tb - ta;
+  });
+  return rows;
+});
+
+const selectedChatSession = computed<ChatSessionRecord | null>(() => {
+  if (!selectedSessionId.value) return null;
+  return (
+    sortedChatSessions.value.find((s) => s._key === selectedSessionId.value) ??
+    chatSessions.value.find((s) => s._key === selectedSessionId.value) ??
+    null
+  );
 });
 
 const displayedSessions = computed<VoiceSession[]>(() => {
@@ -175,6 +272,8 @@ const displayedRangeEnd = computed(
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
+const sessionListDateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+const messageTimeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 function formatSessionDate(iso?: string | null): string {
   if (!iso) return '—';
@@ -186,6 +285,18 @@ function formatSessionTime(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '—' : timeFormatter.format(d);
+}
+
+function formatSessionListDate(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : sessionListDateFormatter.format(d);
+}
+
+function formatMessageTime(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : messageTimeFormatter.format(d);
 }
 
 function formatDuration(seconds: number): string {
@@ -203,6 +314,100 @@ function loadCalls(): void {
   voice.fetchSessions().catch(() => {
     // store.error renders into the inline error row
   });
+}
+
+async function loadChats(): Promise<void> {
+  try {
+    if (twins.value.length === 0) {
+      await aiTwins.fetchAll().catch(() => {});
+    }
+    if (!twinIdFilter.value && twins.value[0]) {
+      chatHistory.setTwinFilter(twins.value[0]._key);
+    }
+    phoneInput.value = phoneNumberFilter.value;
+    await chatHistory.fetchSessions();
+    const first = sortedChatSessions.value[0];
+    if (first && !selectedSessionId.value) {
+      chatHistory.selectSession(first._key).catch(() => {});
+    }
+  } catch {
+    // chatsError renders inline
+  }
+}
+
+async function selectChatSession(sessionId: string): Promise<void> {
+  if (selectedSessionId.value === sessionId) return;
+  chatSearchOpen.value = false;
+  chatSearchInput.value = '';
+  try {
+    await chatHistory.selectSession(sessionId);
+  } catch {
+    // messagesError renders in the chat pane
+  }
+}
+
+let messageSearchDebounce: ReturnType<typeof setTimeout> | null = null;
+function onChatSearchInput(event: Event): void {
+  const value = (event.target as HTMLInputElement).value;
+  chatSearchInput.value = value;
+  if (messageSearchDebounce) clearTimeout(messageSearchDebounce);
+  messageSearchDebounce = setTimeout(() => {
+    chatHistory.searchMessages(value).catch(() => {
+      // messagesError renders in the chat pane
+    });
+  }, 300);
+}
+
+function toggleChatSearch(): void {
+  chatSearchOpen.value = !chatSearchOpen.value;
+  if (!chatSearchOpen.value && chatSearchInput.value) {
+    clearChatSearch();
+  }
+}
+
+function clearChatSearch(): void {
+  chatSearchInput.value = '';
+  if (messageSearchDebounce) clearTimeout(messageSearchDebounce);
+  chatHistory.searchMessages('').catch(() => {});
+}
+
+function openChatDeleteDialog(): void {
+  if (!selectedSessionId.value) return;
+  chatToDeleteId.value = selectedSessionId.value;
+  chatActionsMenuOpen.value = false;
+  chatDeleteDialogOpen.value = true;
+}
+
+function cancelChatDelete(): void {
+  if (deletingChat.value) return;
+  chatDeleteDialogOpen.value = false;
+  chatToDeleteId.value = null;
+}
+
+async function confirmChatDelete(): Promise<void> {
+  if (!chatToDeleteId.value) return;
+  try {
+    const deletedMessages = await chatHistory.deleteSession(chatToDeleteId.value);
+    chatDeleteDialogOpen.value = false;
+    chatToDeleteId.value = null;
+    notify.success(
+      'Conversation deleted',
+      deletedMessages > 0
+        ? `${deletedMessages} message${deletedMessages === 1 ? '' : 's'} removed.`
+        : undefined,
+    );
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const message =
+      e?.response?.data?.message ??
+      (status === 403
+        ? "You don't have permission to delete this conversation."
+        : status === 404
+          ? 'This conversation no longer exists.'
+          : e?.message ?? 'Failed to delete conversation');
+    notify.error('Delete failed', message);
+  }
 }
 
 async function openCallDetails(session: VoiceSession, mode: 'transcript' | 'summary') {
@@ -229,10 +434,13 @@ watch(activeTab, (tab) => {
   if (tab === 'Calls' && callSessions.value.length === 0 && !callsLoading.value) {
     loadCalls();
   }
+  if (tab === 'Chats' && chatSessions.value.length === 0 && !chatsLoading.value) {
+    loadChats();
+  }
 }, { immediate: false });
 
 onMounted(() => {
-  // Don't preload Calls — only fetch when the tab is opened.
+  loadChats();
 });
 </script>
 
@@ -259,34 +467,28 @@ onMounted(() => {
         </header>
 
         <div v-if="activeTab === 'Chats'" class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm lg:grid-cols-[minmax(250px,330px)_minmax(0,1fr)]">
-          <aside class="relative z-10 flex max-h-[330px] min-h-0 flex-col border-b border-slate-200 bg-white lg:max-h-none lg:border-b-0 lg:border-r">
-            <div class="relative z-20 grid grid-cols-[1fr_1fr_36px] gap-2 border-b border-slate-100 px-3 py-4">
+          <aside class="relative z-10 flex max-h-[330px] min-h-0 flex-col overflow-hidden border-b border-slate-200 bg-white lg:max-h-none lg:border-b-0 lg:border-r">
+            <div class="relative z-20 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] gap-2 border-b border-slate-100 px-3 py-4">
+              <BaseDropdown
+                v-model="twinFilterValue"
+                :options="twinFilterOptions"
+                placeholder="AI Twin"
+                width="w-full"
+              />
+              <BaseDropdown
+                v-model="typeFilterValue"
+                :options="typeOptions"
+                placeholder="Channel"
+                width="w-full"
+              />
               <button
                 type="button"
-                class="flex h-9 items-center justify-between gap-2 rounded-full border border-neutral-200 bg-white px-3 text-xs text-neutral-500 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950"
-                @click="dateMenuOpen = !dateMenuOpen"
-              >
-                <span>AI Twin</span>
-                <Icon :icon="ArrowDown01Icon" :size="14" />
-              </button>
-              <div class="relative">
-                <button
-                  type="button"
-                  class="flex h-9 w-full items-center justify-between gap-2 rounded-full border border-neutral-200 bg-white px-3 text-xs text-neutral-500 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950"
-                  @click="sortMenuOpen = !sortMenuOpen"
-                >
-                  <span>Sort By</span>
-                  <Icon :icon="ArrowDown01Icon" :size="14" />
-                </button>
-                <div v-if="sortMenuOpen" class="absolute right-0 top-11 z-30 w-40 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-                  <button type="button" class="block w-full rounded-md px-3 py-2 text-left text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-900">Newest first</button>
-                  <button type="button" class="block w-full rounded-md px-3 py-2 text-left text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-900">Unread first</button>
-                  <button type="button" class="block w-full rounded-md px-3 py-2 text-left text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-900">Longest calls</button>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="grid h-9 place-items-center rounded-full border border-neutral-200 bg-white text-ieee-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
+                :class="[
+                  'grid h-10 w-10 place-items-center rounded-full border bg-white shadow-sm transition',
+                  filterPanelOpen
+                    ? 'border-ieee-300 bg-ieee-50 text-ieee-800'
+                    : 'border-neutral-200 text-ieee-700 hover:border-neutral-300 hover:bg-neutral-50',
+                ]"
                 aria-label="Open filters"
                 @click="filterPanelOpen = !filterPanelOpen"
               >
@@ -362,99 +564,243 @@ onMounted(() => {
               </div>
             </div>
 
-            <div v-if="filterPanelOpen" class="flex gap-2 border-b border-slate-100 px-3 pb-3">
-              <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                <Icon :icon="Calendar03Icon" :size="15" /> {{ selectedDate }}
-              </span>
-              <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">Unread only</span>
+            <div v-if="filterPanelOpen" class="flex flex-col gap-3 border-b border-slate-100 px-3 pb-3 pt-1">
+              <BaseDropdown
+                v-model="chatSort"
+                :options="chatSortOptions"
+                placeholder="Sort By"
+                width="w-full"
+              />
+              <BaseDropdown
+                v-if="isAdmin"
+                v-model="scopeFilterValue"
+                :options="scopeOptions"
+                placeholder="Scope"
+                width="w-full"
+              />
+              <input
+                v-if="showPhoneFilter"
+                type="tel"
+                inputmode="tel"
+                :value="phoneInput"
+                placeholder="Phone number"
+                class="h-10 w-full rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-ieee-700"
+                @input="onPhoneInput"
+              />
+              <div class="flex flex-wrap gap-2">
+                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                  <Icon :icon="Calendar03Icon" :size="15" /> {{ selectedDate }}
+                </span>
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">Unread only</span>
+              </div>
             </div>
 
-            <div class="min-h-0 overflow-y-auto p-2">
-              <button
-                v-for="item in conversations"
-                :key="`${item.id}-${item.name}`"
-                type="button"
-                :class="[
-                  'flex w-full items-center gap-2.5 rounded-lg p-2.5 transition hover:bg-ieee-50',
-                  item.active && 'bg-ieee-50',
-                ]"
-              >
-                <BaseAvatar :src="`https://i.pravatar.cc/80?img=${10 + item.id}`" :name="item.name" size="sm" />
-                <span class="min-w-0 flex-1 text-left">
-                  <span class="block truncate text-sm font-semibold text-slate-900">{{ item.name }}</span>
-                  <span class="block truncate text-xs text-slate-500">{{ item.preview || item.role }}</span>
-                </span>
-                <time class="text-[11px] text-slate-400">{{ item.date }}</time>
-              </button>
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <div v-if="chatsLoading && chatSessions.length === 0" class="space-y-2 p-4">
+                <BaseSkeleton v-for="n in 6" :key="n" height="3rem" />
+              </div>
+
+              <div v-else-if="chatsError" class="flex flex-col items-start gap-2 px-3 py-4 text-xs text-red-600">
+                <span>{{ chatsError }}</span>
+                <button
+                  type="button"
+                  class="rounded-full border border-red-200 px-3 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                  @click="loadChats"
+                >
+                  Retry
+                </button>
+              </div>
+
+              <div v-else-if="sortedChatSessions.length === 0" class="grid flex-1 place-items-center px-3 py-8">
+                <EmptyState
+                  :icon="BubbleChatIcon"
+                  :title="chatSessions.length === 0 ? 'No chats yet' : 'No matches'"
+                  :description="chatSessions.length === 0
+                    ? 'Conversations with your AI Twins will appear here.'
+                    : 'No conversations match the current filters.'"
+                />
+              </div>
+
+              <div v-else class="p-2">
+                <button
+                  v-for="item in sortedChatSessions"
+                  :key="item._key"
+                  type="button"
+                  :class="[
+                    'flex w-full items-center gap-2.5 rounded-lg p-2.5 transition hover:bg-ieee-50',
+                    item._key === selectedSessionId && 'bg-ieee-50',
+                  ]"
+                  @click="selectChatSession(item._key)"
+                >
+                  <BaseAvatar :src="sessionAvatar(item)" :name="sessionTitle(item)" size="sm" />
+                  <span class="min-w-0 flex-1 text-left">
+                    <span class="block truncate text-sm font-semibold text-slate-900">{{ sessionTitle(item) }}</span>
+                    <span class="block truncate text-xs text-slate-500">{{ sessionPreview(item) }}</span>
+                  </span>
+                  <time class="text-[11px] shrink-0 text-slate-400">{{ formatSessionListDate(item.updatedAt || item.createdAt) }}</time>
+                </button>
+              </div>
             </div>
           </aside>
 
           <article class="flex min-h-0 min-w-0 flex-col bg-white">
-            <header class="flex items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-4 py-3">
+            <header v-if="selectedChatSession" class="relative flex items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-4 py-3">
               <div class="flex items-center gap-3">
-                <BaseAvatar src="https://i.pravatar.cc/80?img=11" :name="selectedConversation.name" size="sm" badge="online" />
+                <BaseAvatar :src="sessionAvatar(selectedChatSession)" :name="sessionTitle(selectedChatSession)" size="sm" badge="online" />
                 <div>
-                  <h2 class="text-sm font-bold text-slate-700">{{ selectedConversation.name }}</h2>
-                  <p class="mt-0.5 text-[11px] text-slate-400">Active conversation</p>
+                  <h2 class="text-sm font-bold text-slate-700">{{ sessionTitle(selectedChatSession) }}</h2>
+                  <p class="mt-0.5 text-[11px] text-slate-400">
+                    {{ selectedChatSession.type === 'whatsapp' ? 'WhatsApp conversation' : 'AI Twin conversation' }}
+                  </p>
                 </div>
               </div>
-              <div class="flex items-center gap-1 text-slate-500">
-                <button type="button" class="grid h-9 w-9 place-items-center rounded-md transition hover:bg-white hover:text-ieee-800" aria-label="Search conversation">
+              <div class="relative flex items-center gap-1 text-slate-500">
+                <button
+                  type="button"
+                  :class="[
+                    'grid h-9 w-9 place-items-center rounded-md transition hover:bg-white hover:text-ieee-800',
+                    chatSearchOpen && 'bg-ieee-50 text-ieee-800',
+                  ]"
+                  aria-label="Search conversation"
+                  @click="toggleChatSearch"
+                >
                   <Icon :icon="Search01Icon" :size="19" />
                 </button>
-                <button type="button" class="grid h-9 w-9 place-items-center rounded-md transition hover:bg-white hover:text-ieee-800" aria-label="Conversation actions">
+                <button
+                  type="button"
+                  class="grid h-9 w-9 place-items-center rounded-md transition hover:bg-white hover:text-ieee-800"
+                  aria-label="Conversation actions"
+                  @click="chatActionsMenuOpen = !chatActionsMenuOpen"
+                >
                   <Icon :icon="MoreVerticalIcon" :size="19" />
                 </button>
+                <div
+                  v-if="chatActionsMenuOpen"
+                  class="absolute right-0 top-full z-30 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+                  @mouseleave="chatActionsMenuOpen = false"
+                >
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                    @click="openChatDeleteDialog"
+                  >
+                    <Icon :icon="Delete02Icon" :size="16" />
+                    Delete conversation
+                  </button>
+                </div>
               </div>
             </header>
 
-            <div class="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-7">
-              <div
-                v-for="message in messages"
-                :key="message.id"
-                :class="['mb-5 flex items-start gap-2.5', message.side === 'outbound' && 'justify-end']"
+            <div v-if="selectedChatSession && chatSearchOpen" class="flex items-center gap-2 border-b border-neutral-200 bg-white px-4 py-2">
+              <label class="flex flex-1 items-center gap-2 rounded-full bg-slate-100 px-4">
+                <Icon :icon="Search01Icon" :size="16" class="text-slate-400" />
+                <input
+                  type="text"
+                  :value="chatSearchInput"
+                  placeholder="Search in messages..."
+                  class="h-9 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
+                  @input="onChatSearchInput"
+                />
+                <button
+                  v-if="chatSearchInput"
+                  type="button"
+                  class="text-slate-400 transition hover:text-slate-700"
+                  aria-label="Clear search"
+                  @click="clearChatSearch"
+                >
+                  <Icon :icon="Cancel01Icon" :size="14" />
+                </button>
+              </label>
+              <button
+                type="button"
+                class="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                @click="toggleChatSearch"
               >
-                <BaseAvatar v-if="message.side === 'inbound'" src="https://i.pravatar.cc/80?img=11" name="Felecia Rower" size="xs" />
-                <div :class="['flex max-w-[86%] flex-col gap-1 md:max-w-[430px]', message.side === 'outbound' && 'items-end']">
-                  <div
-                    :class="[
-                      'rounded-2xl px-3.5 py-3 text-xs leading-relaxed',
-                      message.compact && 'w-fit py-2',
-                      message.side === 'inbound'
-                        ? 'rounded-tl-md bg-white text-slate-600 shadow-sm'
-                        : 'rounded-tr-md bg-ieee-700 text-white shadow-sm',
-                    ]"
-                  >
-                    <p v-if="message.text">{{ message.text }}</p>
-                    <div v-if="message.audio" class="mt-2 flex items-center gap-2">
-                      <button type="button" class="grid h-7 w-7 place-items-center rounded-full bg-ieee-700 text-white" aria-label="Play voice message">
-                        <Icon :icon="PlayIcon" :size="13" />
-                      </button>
-                      <div class="flex h-7 w-[min(195px,40vw)] items-center gap-0.5" aria-hidden="true">
-                        <span
-                          v-for="(height, index) in waveformBars"
-                          :key="`${message.id}-${index}`"
-                          class="w-0.5 min-h-[5px] rounded-full bg-neutral-300 [background:linear-gradient(180deg,#005280_0%,#005280_36%,#d4d4d4_36%,#d4d4d4_100%)]"
-                          :style="{ height: `${height}%` }"
-                        />
-                      </div>
-                      <span class="text-[11px] text-slate-400">00:50</span>
-                    </div>
-                  </div>
-                  <time v-if="message.time" class="text-[11px] text-slate-400">{{ message.time }}</time>
-                </div>
-                <BaseAvatar v-if="message.side === 'outbound'" src="https://i.pravatar.cc/80?img=32" name="John" size="xs" />
+                Close
+              </button>
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-7">
+              <div v-if="loadingMessages" class="space-y-3">
+                <BaseSkeleton v-for="n in 5" :key="n" height="2.5rem" />
               </div>
+
+              <div
+                v-else-if="messagesError"
+                class="flex items-center justify-between gap-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600"
+              >
+                <span>{{ messagesError }}</span>
+                <button
+                  v-if="selectedSessionId"
+                  type="button"
+                  class="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  @click="selectChatSession(selectedSessionId)"
+                >
+                  Retry
+                </button>
+              </div>
+
+              <div v-else-if="!selectedChatSession" class="grid h-full place-items-center">
+                <EmptyState
+                  :icon="BubbleChatIcon"
+                  title="Select a conversation"
+                  description="Pick a chat on the left to read its full history."
+                />
+              </div>
+
+              <div v-else-if="chatMessages.length === 0" class="grid h-full place-items-center">
+                <EmptyState
+                  :icon="BubbleChatIcon"
+                  :title="chatSearchInput ? 'No matches' : 'No messages yet'"
+                  :description="chatSearchInput
+                    ? `No messages contain &quot;${chatSearchInput}&quot;.`
+                    : 'This conversation does not contain any messages.'"
+                />
+              </div>
+
+              <template v-else>
+                <div
+                  v-for="(message, index) in chatMessages"
+                  :key="`${selectedChatSession?._key}-${index}`"
+                  :class="['mb-5 flex items-start gap-2.5', message.role === 'user' && 'justify-end']"
+                >
+                  <BaseAvatar
+                    v-if="message.role !== 'user'"
+                    :src="sessionAvatar(selectedChatSession)"
+                    :name="sessionTitle(selectedChatSession)"
+                    size="xs"
+                  />
+                  <div :class="['flex max-w-[86%] flex-col gap-1 md:max-w-[430px]', message.role === 'user' && 'items-end']">
+                    <div
+                      :class="[
+                        'rounded-2xl px-3.5 py-3 text-xs leading-relaxed whitespace-pre-wrap',
+                        message.role === 'user'
+                          ? 'rounded-tr-md bg-ieee-700 text-white shadow-sm'
+                          : 'rounded-tl-md bg-white text-slate-600 shadow-sm',
+                      ]"
+                    >
+                      <p>{{ message.content }}</p>
+                    </div>
+                    <time v-if="message.createdAt" class="text-[11px] text-slate-400">{{ formatMessageTime(message.createdAt) }}</time>
+                  </div>
+                  <BaseAvatar v-if="message.role === 'user'" :name="callerName" size="xs" />
+                </div>
+              </template>
             </div>
 
             <footer class="flex gap-3 border-t border-slate-200 bg-white/80 px-3 py-3 md:px-4 md:pb-4">
               <label class="flex min-w-0 flex-1 items-center gap-2.5 rounded-full bg-slate-100 px-4">
-                <input type="text" placeholder="Type your message here..." class="h-11 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400" />
-                <button type="button" class="text-slate-500 hover:text-ieee-800" aria-label="Attach file">
+                <input
+                  type="text"
+                  placeholder="Type your message here..."
+                  class="h-11 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                  disabled
+                />
+                <button type="button" class="text-slate-500 hover:text-ieee-800 disabled:opacity-40" aria-label="Attach file" disabled>
                   <Icon :icon="Attachment01Icon" :size="18" />
                 </button>
               </label>
-              <button type="button" class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800" aria-label="Send message">
+              <button type="button" class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:opacity-40" aria-label="Send message" disabled>
                 <Icon :icon="ArrowRight01Icon" :size="21" />
               </button>
             </footer>
@@ -585,7 +931,7 @@ onMounted(() => {
               type="button"
               class="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950"
               aria-label="Close call details"
-              @click="callDetailOpen = false"
+              @click="closeCallDetails"
             >
               <span class="text-2xl leading-none">&times;</span>
             </button>
@@ -630,29 +976,28 @@ onMounted(() => {
               </button>
             </div>
 
-            <div v-if="detailMode === 'transcript'" class="min-h-[260px] py-4 text-sm leading-relaxed">
-              <p class="font-bold text-ieee-700">Ai Twin</p>
-              <p class="mt-1 text-slate-950">Hey, how are you?</p>
-              <p class="mt-3 font-bold text-ieee-700">User</p>
-              <p class="mt-1 text-slate-950">I'm doing great how about you?</p>
-              <p class="mt-3 font-bold text-ieee-700">Ai Twin</p>
-              <p class="mt-1 text-slate-950">Great, thank you for asking.</p>
-              <p class="mt-3 font-bold text-ieee-700">Ai Twin</p>
-              <p class="mt-1 text-slate-950">Hey, how are you?</p>
-              <p class="mt-3 font-bold text-ieee-700">User</p>
+            <div v-if="loadingDetail" class="space-y-2 py-4">
+              <BaseSkeleton v-for="n in 4" :key="n" height="1.5rem" />
             </div>
-            <div v-else class="min-h-[260px] space-y-4 py-4 text-sm leading-relaxed text-slate-950">
-              <p>
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-              </p>
-              <p>
-                Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-              </p>
-              <p>
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-              </p>
-            </div>
-
+            <div v-else-if="detailError" class="py-6 text-sm text-red-600">{{ detailError }}</div>
+            <template v-else>
+              <div v-if="detailMode === 'transcript'" class="min-h-[260px] py-4 text-sm leading-relaxed">
+                <template v-if="currentMessages.length">
+                  <div v-for="msg in currentMessages" :key="msg._key" class="mb-3">
+                    <p class="font-bold text-ieee-700">{{ msg.isAssistant ? 'AI Twin' : 'User' }}</p>
+                    <p class="mt-1 text-slate-950 whitespace-pre-wrap">{{ msg.content }}</p>
+                  </div>
+                </template>
+                <p v-else class="text-slate-500">No transcript available for this call.</p>
+              </div>
+              <div v-else class="min-h-[260px] space-y-4 py-4 text-sm leading-relaxed text-slate-950">
+                <p v-if="currentSession">
+                  Call in <span class="font-semibold uppercase">{{ currentSession.language || '—' }}</span>,
+                  duration {{ formatDuration(currentSession.durationSeconds) }} on {{ formatSessionDate(currentSession.startAt) }}.
+                </p>
+                <p v-else class="text-slate-500">No summary available.</p>
+              </div>
+            </template>
           </section>
         </div>
       </Teleport>
@@ -675,6 +1020,53 @@ onMounted(() => {
             <footer class="mt-6 flex justify-end gap-3">
               <button type="button" class="h-10 rounded-full bg-red-500 px-5 text-sm font-semibold text-white hover:bg-red-600" @click="deleteDialogOpen = false">
                 Delete
+              </button>
+            </footer>
+          </section>
+        </div>
+      </Teleport>
+
+      <Teleport to="body">
+        <div
+          v-if="chatDeleteDialogOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center p-6"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            class="absolute inset-0 bg-neutral-900/35 backdrop-blur-sm"
+            @click="cancelChatDelete"
+          />
+          <section class="relative z-10 w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+            <button
+              type="button"
+              class="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950 disabled:opacity-40"
+              aria-label="Close delete dialog"
+              :disabled="deletingChat"
+              @click="cancelChatDelete"
+            >
+              <span class="text-2xl leading-none">&times;</span>
+            </button>
+            <h2 class="text-lg font-bold text-slate-950">Delete this conversation?</h2>
+            <p class="mt-4 text-sm leading-relaxed text-red-500">
+              The chat session and all of its messages will be permanently removed. This action cannot be undone.
+            </p>
+            <footer class="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                class="h-10 rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                :disabled="deletingChat"
+                @click="cancelChatDelete"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="h-10 rounded-full bg-red-500 px-5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-40"
+                :disabled="deletingChat"
+                @click="confirmChatDelete"
+              >
+                {{ deletingChat ? 'Deleting...' : 'Delete' }}
               </button>
             </footer>
           </section>

@@ -7,6 +7,11 @@ export interface AiTwin {
   name: string;
   profilePicUrl: string | null;
   description: string;
+  voiceId: string | null;
+  chatGreeting: string;
+  callGreeting: string;
+  isDefault: boolean;
+  twinNumber: string;
   linkedKbFileIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -28,6 +33,11 @@ export interface CreateAiTwinPayload {
   name: string;
   profilePicUrl?: string | null;
   description?: string;
+  voiceId?: string | null;
+  chatGreeting?: string;
+  callGreeting?: string;
+  isDefault?: boolean;
+  twinNumber?: string;
   linkedKbFileIds?: string[];
 }
 
@@ -35,7 +45,7 @@ export type UpdateAiTwinPayload = Partial<CreateAiTwinPayload>;
 
 export async function listAiTwins(params: ListAiTwinsParams = {}): Promise<ListAiTwinsResponse> {
   const res = await api.get<ListAiTwinsResponse>('/ai-twins', {
-    params: { offset: params.offset ?? 1, limit: params.limit ?? 50 },
+    params: { offset: params.offset ?? 0, limit: params.limit ?? 50 },
   });
   return res.data;
 }
@@ -69,6 +79,45 @@ export async function replaceKbFiles(twinId: string, linkedKbFileIds: string[]):
   const res = await api.patch<AiTwin>(
     `/ai-twins/${encodeURIComponent(twinId)}/kb-files`,
     { linkedKbFileIds }
+  );
+  return res.data;
+}
+
+export interface TwinSettings {
+  chatGreeting: string;
+  callGreeting: string;
+  twinNumber: string;
+}
+
+export type UpdateTwinSettingsPayload = Partial<TwinSettings>;
+
+export async function getTwinSettings(twinId: string): Promise<TwinSettings> {
+  const res = await api.get<TwinSettings>(
+    `/ai-twins/${encodeURIComponent(twinId)}/settings`
+  );
+  return res.data;
+}
+
+export async function updateTwinSettings(
+  twinId: string,
+  payload: UpdateTwinSettingsPayload
+): Promise<TwinSettings> {
+  const res = await api.post<TwinSettings>(
+    `/ai-twins/${encodeURIComponent(twinId)}/settings`,
+    payload
+  );
+  return res.data;
+}
+
+// Multipart upload — server stores the file and returns the updated twin
+// (profilePicUrl set to /Uploads/ai-twins/...). Limits: jpeg/png/webp/gif, ≤ 5 MB.
+export async function uploadAiTwinAvatar(twinId: string, file: File): Promise<AiTwin> {
+  const form = new FormData();
+  form.append('image', file);
+  const res = await api.post<AiTwin>(
+    `/ai-twins/${encodeURIComponent(twinId)}/avatar`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
   );
   return res.data;
 }

@@ -92,7 +92,15 @@ async function onSubmit() {
               </template>
             </BaseInput>
 
-            <BaseCheckbox v-model="form.remember" label="Remember me" size="sm" />
+            <div class="flex items-center justify-between">
+              <BaseCheckbox v-model="form.remember" label="Remember me" size="sm" />
+              <RouterLink
+                to="/forgot-password"
+                class="text-meta font-semibold text-accent hover:underline"
+              >
+                Forgot your password?
+              </RouterLink>
+            </div>
 
             <BaseButton type="submit" variant="primary" block :loading="auth.loading">Login</BaseButton>
 

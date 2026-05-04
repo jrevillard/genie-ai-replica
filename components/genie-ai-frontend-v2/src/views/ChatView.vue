@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
   ArrowLeft01Icon,
-  Attachment01Icon,
   BloodPressureIcon,
   BubbleChatIcon,
   CallIcon,
@@ -47,7 +46,6 @@ const twinId = computed(() => {
 const draft = ref('');
 const composer = ref<HTMLTextAreaElement | null>(null);
 const messagesEnd = ref<HTMLDivElement | null>(null);
-const fileInput = ref<HTMLInputElement | null>(null);
 const langOpen = ref(false);
 const langButton = ref<HTMLButtonElement | null>(null);
 
@@ -136,16 +134,6 @@ async function copyMessage(m: ChatMessage): Promise<void> {
 
 function regenerate(): void {
   void chatStore.regenerateLast();
-}
-
-function pickFile(): void {
-  fileInput.value?.click();
-}
-
-function onFileChange(): void {
-  // No upload handler yet — reset and tell the user this is a placeholder.
-  if (fileInput.value) fileInput.value.value = '';
-  notify.info(t.attachSoon);
 }
 
 function micPlaceholder(): void {
@@ -496,22 +484,6 @@ function formatTime(d: Date): string {
           <div
             class="flex items-end gap-2 rounded-3xl border border-border bg-surface px-3 py-2 shadow-card transition focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/20"
           >
-            <button
-              type="button"
-              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-muted hover:text-text"
-              :aria-label="t.attachAria"
-              :title="t.attachAria"
-              :disabled="sending"
-              @click="pickFile"
-            >
-              <Icon :icon="Attachment01Icon" :size="22" />
-            </button>
-            <input
-              ref="fileInput"
-              type="file"
-              class="hidden"
-              @change="onFileChange"
-            />
             <textarea
               ref="composer"
               v-model="draft"

@@ -59,8 +59,15 @@ api.interceptors.response.use(
     }
 
     // Don't try to refresh on auth endpoints themselves — that path leads to loops.
+    // /auth/change-password also returns 401 when the user supplies the wrong
+    // current password; that is a validation error, not an auth-session failure.
     const url = (original.url ?? '').toString();
-    if (url.includes('/auth/login') || url.includes('/auth/refresh-token') || url.includes('/auth/register')) {
+    if (
+      url.includes('/auth/login') ||
+      url.includes('/auth/refresh-token') ||
+      url.includes('/auth/register') ||
+      url.includes('/auth/change-password')
+    ) {
       return Promise.reject(error);
     }
 

@@ -21,9 +21,10 @@ const dialogOpen = ref(false);
 const creating = ref(false);
 
 const filtered = computed(() => {
+  const visible = twins.value.filter((t) => !t.isDefault);
   const q = search.value.trim().toLowerCase();
-  if (!q) return twins.value;
-  return twins.value.filter((t) => t.name.toLowerCase().includes(q));
+  if (!q) return visible;
+  return visible.filter((t) => t.name.toLowerCase().includes(q));
 });
 
 function loadTwins() {
@@ -34,18 +35,22 @@ function loadTwins() {
 
 onMounted(loadTwins);
 
-async function onCreated(payload: { name: string; description: string; avatar: string | null }) {
+async function onCreated(payload: { name: string; description: string; avatarFile: File | null }) {
   if (creating.value) return;
   creating.value = true;
   try {
-    // TODO: upload avatar to file service, then pass returned URL as profilePicUrl.
-    // The API expects a URL string ≤ 2048 chars; data URLs from FileReader are too long.
-    void payload.avatar;
-    await store.create({
+    const twin = await store.create({
       name: payload.name,
       description: payload.description,
       profilePicUrl: null,
     });
+    if (payload.avatarFile) {
+      try {
+        await store.uploadAvatar(twin._key, payload.avatarFile);
+      } catch {
+        notify.error(store.error ?? 'Twin created, but the avatar upload failed.');
+      }
+    }
     notify.success('AI Twin created');
     dialogOpen.value = false;
   } catch {

@@ -19,6 +19,15 @@ export default defineConfig({
           Referer: 'https://genie.innov8ai.com/',
         },
       },
+      '/Uploads': {
+        target: 'https://genie.innov8ai.com',
+        changeOrigin: true,
+        secure: true,
+        headers: {
+          Origin: 'https://genie.innov8ai.com',
+          Referer: 'https://genie.innov8ai.com/',
+        },
+      },
     },
   },
   build: {

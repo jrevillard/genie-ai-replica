@@ -55,6 +55,22 @@ export const confirmPasswordResetSchema = z
   });
 export type ConfirmPasswordResetInput = z.infer<typeof confirmPasswordResetSchema>;
 
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string().min(1, 'Confirm your password'),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match',
+  })
+  .refine((d) => d.currentPassword !== d.newPassword, {
+    path: ['newPassword'],
+    message: 'New password must be different from current password',
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
 // ---------- AI Twins ----------
 
 export const createAiTwinSchema = z.object({

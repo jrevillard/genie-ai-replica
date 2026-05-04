@@ -7,7 +7,7 @@ import AiTwinCard from '../components/dashboard/AiTwinCard.vue';
 import CreateAiTwinDialog from '../components/dashboard/CreateAiTwinDialog.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
-import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
+import AiTwinCardSkeleton from '../components/ui/skeletons/AiTwinCardSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
@@ -85,7 +85,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
       </header>
 
       <div v-if="loading && !filtered.length" class="grid gap-4 lg:grid-cols-2">
-        <BaseSkeleton v-for="n in 4" :key="n" height="11rem" />
+        <AiTwinCardSkeleton v-for="n in 4" :key="n" />
       </div>
 
       <div v-else-if="filtered.length" class="grid gap-4 lg:grid-cols-2">

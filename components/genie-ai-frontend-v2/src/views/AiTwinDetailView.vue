@@ -13,7 +13,7 @@ import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseBadge from '../components/ui/BaseBadge.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseDialog from '../components/ui/BaseDialog.vue';
-import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
+import AiTwinDetailSkeleton from '../components/ui/skeletons/AiTwinDetailSkeleton.vue';
 import BaseTabs, { type TabItem } from '../components/ui/BaseTabs.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
@@ -291,11 +291,7 @@ async function confirmDelete() {
         </fieldset>
       </template>
 
-      <div v-else-if="loading" class="space-y-4">
-        <BaseSkeleton height="4rem" />
-        <BaseSkeleton height="3rem" />
-        <BaseSkeleton height="16rem" />
-      </div>
+      <AiTwinDetailSkeleton v-else-if="loading" />
 
       <EmptyState
         v-else-if="store.error"

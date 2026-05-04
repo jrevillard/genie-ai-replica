@@ -9,6 +9,16 @@ test-results/
 .env
 .env.local
 .env.*.local
+# Claude
+.claude/
+
+# Local Docker Compose overrides (dev-only, never deployed)
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Local symlink/copy that materializes shared/lib for native `pnpm dev`.
+# In Docker the Dockerfile copies it in at build time; this folder is dev-local.
+components/gov-chat-backend/shared-lib/
 
 # SSL certificates and keys (secrets - never commit)
 # The secrets/ directory contains actual certificates - keep structure but not files

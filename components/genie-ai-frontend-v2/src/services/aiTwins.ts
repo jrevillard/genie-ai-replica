@@ -1,0 +1,123 @@
+import { api } from './http';
+
+// API shape. Mirrors the deployed `/ai-twins` endpoint exactly — do not add
+// UI-only fields here. Display formatting belongs in the components.
+export interface AiTwin {
+  _key: string;
+  name: string;
+  profilePicUrl: string | null;
+  description: string;
+  voiceId: string | null;
+  chatGreeting: string;
+  callGreeting: string;
+  isDefault: boolean;
+  twinNumber: string;
+  linkedKbFileIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListAiTwinsParams {
+  offset?: number;
+  limit?: number;
+}
+
+export interface ListAiTwinsResponse {
+  twins: AiTwin[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface CreateAiTwinPayload {
+  name: string;
+  profilePicUrl?: string | null;
+  description?: string;
+  voiceId?: string | null;
+  chatGreeting?: string;
+  callGreeting?: string;
+  isDefault?: boolean;
+  twinNumber?: string;
+  linkedKbFileIds?: string[];
+}
+
+export type UpdateAiTwinPayload = Partial<CreateAiTwinPayload>;
+
+export async function listAiTwins(params: ListAiTwinsParams = {}): Promise<ListAiTwinsResponse> {
+  const res = await api.get<ListAiTwinsResponse>('/ai-twins', {
+    params: { offset: params.offset ?? 0, limit: params.limit ?? 50 },
+  });
+  return res.data;
+}
+
+export async function getAiTwin(twinId: string): Promise<AiTwin> {
+  const res = await api.get<AiTwin>(`/ai-twins/${encodeURIComponent(twinId)}`);
+  return res.data;
+}
+
+export async function createAiTwin(payload: CreateAiTwinPayload): Promise<AiTwin> {
+  const res = await api.post<AiTwin>('/ai-twins', payload);
+  return res.data;
+}
+
+export async function updateAiTwin(twinId: string, payload: UpdateAiTwinPayload): Promise<AiTwin> {
+  const res = await api.patch<AiTwin>(`/ai-twins/${encodeURIComponent(twinId)}`, payload);
+  return res.data;
+}
+
+export async function deleteAiTwin(twinId: string): Promise<void> {
+  await api.delete(`/ai-twins/${encodeURIComponent(twinId)}`);
+}
+
+// KB-file linking — server normalises (strips optional `files/` prefix).
+export async function linkKbFile(twinId: string, fileId: string): Promise<AiTwin> {
+  const res = await api.post<AiTwin>(`/ai-twins/${encodeURIComponent(twinId)}/kb-files`, { fileId });
+  return res.data;
+}
+
+export async function replaceKbFiles(twinId: string, linkedKbFileIds: string[]): Promise<AiTwin> {
+  const res = await api.patch<AiTwin>(
+    `/ai-twins/${encodeURIComponent(twinId)}/kb-files`,
+    { linkedKbFileIds }
+  );
+  return res.data;
+}
+
+export interface TwinSettings {
+  chatGreeting: string;
+  callGreeting: string;
+  twinNumber: string;
+}
+
+export type UpdateTwinSettingsPayload = Partial<TwinSettings>;
+
+export async function getTwinSettings(twinId: string): Promise<TwinSettings> {
+  const res = await api.get<TwinSettings>(
+    `/ai-twins/${encodeURIComponent(twinId)}/settings`
+  );
+  return res.data;
+}
+
+export async function updateTwinSettings(
+  twinId: string,
+  payload: UpdateTwinSettingsPayload
+): Promise<TwinSettings> {
+  const res = await api.post<TwinSettings>(
+    `/ai-twins/${encodeURIComponent(twinId)}/settings`,
+    payload
+  );
+  return res.data;
+}
+
+// Multipart upload — server stores the file and returns the updated twin
+// (profilePicUrl set to /Uploads/ai-twins/...). Limits: jpeg/png/webp/gif, ≤ 5 MB.
+export async function uploadAiTwinAvatar(twinId: string, file: File): Promise<AiTwin> {
+  const form = new FormData();
+  form.append('image', file);
+  const res = await api.post<AiTwin>(
+    `/ai-twins/${encodeURIComponent(twinId)}/avatar`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return res.data;
+}

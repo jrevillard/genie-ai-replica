@@ -29,17 +29,28 @@
 #
 # These MUST be set in your .env for production deployment.
 
-# ArangoDB database name (default: genie-ai)
-# Uncomment and set for per-deployment database isolation (e.g. el-salvador)
-# ARANGO_DB=el-salvador
+# ArangoDB connection (required for backend). For Node on the host, use localhost.
+# Inside Docker-only networking, ARANGO_URL is often http://arango-vector-db:8529
+ARANGO_URL=http://127.0.0.1:8529
+ARANGO_DB=genie-ai
+ARANGO_USER=root
 
 # ArangoDB root password (vector + graph database)
 # Used by: backend, document-repository, dataprep, retriever
-ARANGO_PASSWORD=
+ARANGO_PASSWORD=hZWkks8LTy7si4xafZrBZKfk0idcWGXS47wnC8wV2i8
+
+# JWT token signing secret (backend auth + voice-bridge token verification)
+# Used by: backend, voice-bridge
+# Security: Must be kept secret. Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+JWT_SECRET=
+
+# Session encryption secret (user sessions)
+# Used by: backend
+SESSION_SECRET=
 
 # Redis cache password (translation service caching)
 # Used by: redis-cache, translation service
-TRANSLATION_CACHE_PASSWORD=
+TRANSLATION_CACHE_PASSWORD=TLIyYCWxIQhLOwcBFlUqjVV1-K3eXFGZVm38Kc6Mqhc
 
 # PostgreSQL shared instance (API gateway + Keycloak)
 # The shared PostgreSQL (postgres service) uses a superuser + dedicated users:
@@ -60,6 +71,11 @@ POSTGRES_PASSWORD=
 # Used by: postgres-init (creates 'kong' user), kong, kong-migrations
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KONG_DB_PASSWORD=
+
+# Internal microservice authentication (used by genie-ai-overlay/http-service)
+# Generate password: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+AUTH_SERVICE_USERNAME=genieai-internal
+AUTH_SERVICE_PASSWORD=
 
 # =============================================================================
 # SECTION 2: EMAIL CONFIGURATION (REQUIRED)
@@ -91,7 +107,7 @@ EMAIL_FROM=
 # Get your token at: https://huggingface.co/settings/tokens
 # Used by: vLLM, TEI (embedding/reranking services)
 # Accept: "Read" permissions sufficient
-HUGGING_FACE_HUB_TOKEN=
+HUGGING_FACE_HUB_TOKEN=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
 
 # Optional: vLLM API key if required by your vLLM deployment
 # VLLM_API_KEY=
@@ -121,7 +137,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Main LLM model for chat (OPEA ChatQnA service)
 # Default: meta-llama/Meta-Llama-3.1-8B-Instruct
 # Options: meta-llama/Llama-3.1-70B-Instruct (more accurate, slower)
-# VLLM_LLM_MODEL_ID=
+VLLM_LLM_MODEL_ID=meta-llama/Meta-Llama-3.1-8B-Instruct
 
 # Translation model (OPEA Translation service)
 # Default: google/gemma-3-4b-it
@@ -174,7 +190,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: /api (relative, works with Kong/nginx reverse proxy)
 # Direct backend access: http://localhost:3000/api
 # Production: https://your-domain.com/api
-# VUE_APP_API_URL=
+VUE_APP_API_URL=/api
 
 # Proxy host for frontend (used for CSP configuration)
 # Default: localhost
@@ -188,7 +204,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Production: 'self' https://your-domain.com wss://your-domain.com
 # IMPORTANT: Also set CSP_CONNECT_SRC (section 6) to the same value.
 # They serve the same purpose but at different stages (build-time vs runtime).
-# VUE_APP_CSP_CONNECT_SRC=
+VUE_APP_CSP_CONNECT_SRC="'self' https://genie.innov8ai.com wss://genie.innov8ai.com http://164.52.192.3:8080 https://164.52.192.3:8443 ws://164.52.192.3:8080 wss://164.52.192.3:8443"
 
 # =============================================================================
 # SECTION 6: BACKEND SERVICE CONFIGURATION
@@ -199,7 +215,8 @@ HUGGING_FACE_HUB_TOKEN=
 # Used by: backend (response headers)
 # Default: http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost
 # Production: https://your-domain.com,https://*.your-domain.com
-# CORS_ALLOWED_ORIGINS=
+# CORS_ALLOWED_ORIGINS=http://164.52.192.3:8080,https://164.52.192.3:8443
+CORS_ALLOWED_ORIGINS=https://genie.innov8ai.com,http://164.52.192.3,https://164.52.192.3
 
 # Content Security Policy for backend and nginx
 # Used by: backend (response headers), nginx (via CSP_CONNECT_SRC env var)
@@ -210,7 +227,7 @@ HUGGING_FACE_HUB_TOKEN=
 # Runtime default (if unset): same as local development example above
 # IMPORTANT: Also set VUE_APP_CSP_CONNECT_SRC (section 5) to the same value.
 # They serve the same purpose but at different stages (build-time vs runtime).
-# CSP_CONNECT_SRC=
+CSP_CONNECT_SRC="'self' https://genie.innov8ai.com wss://genie.innov8ai.com http://164.52.192.3:8080 https://164.52.192.3:8443 ws://164.52.192.3:8080 wss://164.52.192.3:8443"
 
 # Log level for backend and document-repository services
 # Used by: backend (shared-lib/logger.js), document-repository (appConfig.js)
@@ -240,15 +257,15 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: localhost
 # Production: your-domain.com
 # Used by: nginx (reverse proxy)
-# NGINX_PUBLIC_DOMAIN=
+NGINX_PUBLIC_DOMAIN=genie.innov8ai.com
 
 # NGINX HTTP port (host port for HTTP redirect)
 # Default: 80
-# NGINX_HTTP_PORT=
+NGINX_HTTP_PORT=80
 
 # NGINX HTTPS port (host port for HTTPS access)
 # Default: 443
-# NGINX_HTTPS_PORT=
+NGINX_HTTPS_PORT=443
 
 # Internal Docker service names (override ONLY if using custom service names)
 # NGINX_FRONTEND_HOST=frontend
@@ -262,8 +279,8 @@ HUGGING_FACE_HUB_TOKEN=
 # Let's Encrypt certificate management (optional)
 # Set CERTBOT_EMAIL to enable automatic SSL certificate provisioning via Let's Encrypt.
 # Activation requires: CERTBOT_EMAIL + deployment flag (--profile letsencrypt / CERTBOT_REPLICAS)
-# CERTBOT_EMAIL=your-email@example.com
-# CERTBOT_REPLICAS=0
+CERTBOT_EMAIL=dev@skew.digital
+CERTBOT_REPLICAS=1
 # CERTBOT_STAGING=false
 
 # Kong DNS stale TTL in seconds (default: 5)
@@ -526,8 +543,9 @@ KC_DATAPREP_CLIENT_SECRET=
 #
 # Common GPU variables (see env.t4/env.rtx6000 for full list):
 # - VLLM_GPU_UTILIZATION: GPU memory fraction (0.1-1.0)
-# - VLLM_MAX_MODEL_LEN: Maximum context length
-# - VLLM_MAX_NUM_SEQS: Maximum concurrent sequences
+VLLM_MAX_MODEL_LEN=8192
+VLLM_MAX_NUM_SEQS=64
+
 # - VLLM_DTYPE: Data type (half, float32, etc.)
 #
 # To use GPU-specific configuration:
@@ -649,3 +667,39 @@ META_PHONE_NUMBER_ID=
 
 # Optional — max characters per outbound WhatsApp message (default: 4000, hard cap 4096)
 # WHATSAPP_MESSAGE_MAX_LENGTH=4000
+
+# =============================================================================
+# SECTION 15: VOICE AGENT STACK (OPTIONAL)
+# =============================================================================
+# Voice agent has two implementations:
+#   - profile [voice]:        WebSocket bridge (asr-whisper + tts-piper + voice-bridge)
+#   - profile [legacy_voice]: WebRTC stack (livekit-server + voice-agent + coturn)
+
+# Public WebSocket URL the frontend connects to for the WS-based voice bridge
+VOICE_BRIDGE_WS_URL=wss://${NGINX_PUBLIC_DOMAIN}/voice/v1/voice/stream
+
+# Voice bridge tuning (defaults are fine for most deployments)
+# VOICE_BRIDGE_MAX_TOKENS=128
+# VOICE_BRIDGE_SILENCE_FRAMES=25
+
+# ASR Whisper model (faster-whisper)
+ASR_WHISPER_MODEL=large-v3-turbo
+ASR_WHISPER_DEVICE=cuda
+ASR_WHISPER_COMPUTE_TYPE=float16
+
+# Default per-language Piper voices (overridable; see voices catalog)
+TTS_PIPER_DEFAULT_VOICE_EN=en_US-libritts_r-medium
+TTS_PIPER_DEFAULT_VOICE_FR=fr_FR-siwis-medium
+TTS_PIPER_DEFAULT_VOICE_ES=es_MX-claude-high
+TTS_PIPER_DEFAULT_VOICE_SW=sw_CD-lanfrica-medium
+
+# Legacy WebRTC stack — only set when running with profile [legacy_voice].
+# Generate LIVEKIT_API_SECRET / TURN_CREDENTIAL with token_urlsafe(32).
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+LIVEKIT_WS_URL=
+LIVEKIT_NODE_IP=127.0.0.1
+TURN_USERNAME=
+TURN_CREDENTIAL=
+TURN_EXTERNAL_IP=
+TURN_PORT=7881

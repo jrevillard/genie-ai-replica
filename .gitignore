@@ -99,6 +99,22 @@ arango_data/
 craft_mlt_*.zip
 english_g2.zip
 
+# Piper TTS voice models (run scripts/download-piper-voices.sh on deploy)
+data/piper-voices/
+
+# Generic ML model formats — never commit large binaries
+*.onnx
+*.onnx.json
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.tflite
+*.h5
+*.pb
+data/**/*.bin
+
 # Claude Code settings
 .claude/settings.local.json
 

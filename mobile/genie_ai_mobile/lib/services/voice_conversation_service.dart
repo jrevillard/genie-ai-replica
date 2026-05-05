@@ -9,12 +9,25 @@ class VoiceConversationService {
   bool _speechReady = false;
   bool _ttsReady = false;
 
-  bool get isListening => _speech.isListening;
+  bool get isSupportedPlatform {
+    if (kIsWeb) return true;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
+  }
+
+  bool get isListening => isSupportedPlatform && _speech.isListening;
 
   Future<bool> initialize({
     ValueChanged<String>? onStatus,
     ValueChanged<String>? onError,
   }) async {
+    if (!isSupportedPlatform) {
+      debugPrint('[VOICE] Voice plugins are not available on this platform.');
+      return false;
+    }
+
     if (!_speechReady) {
       try {
         _speechReady = await _speech.initialize(
@@ -50,13 +63,18 @@ class VoiceConversationService {
     VoidCallback? onDone,
     ValueChanged<String>? onError,
   }) async {
+    if (!isSupportedPlatform) return false;
     final ready = await initialize(onError: onError);
     if (!ready) return false;
 
     try {
       await stopSpeaking();
+      final resolvedLocaleId = await _resolveSpeechLocale(localeId);
+      debugPrint(
+        '[VOICE] Speech locale requested=$localeId resolved=$resolvedLocaleId',
+      );
       await _speech.listen(
-        localeId: localeId,
+        localeId: resolvedLocaleId,
         listenFor: const Duration(seconds: 60),
         pauseFor: const Duration(seconds: 3),
         listenOptions: stt.SpeechListenOptions(
@@ -79,12 +97,14 @@ class VoiceConversationService {
   }
 
   Future<void> stopListening() async {
+    if (!isSupportedPlatform) return;
     if (_speechReady && _speech.isListening) {
       await _speech.stop();
     }
   }
 
   Future<void> cancelListening() async {
+    if (!isSupportedPlatform) return;
     if (_speechReady && _speech.isListening) {
       await _speech.cancel();
     }
@@ -95,7 +115,7 @@ class VoiceConversationService {
     required String localeId,
     bool awaitCompletion = false,
   }) async {
-    if (text.trim().isEmpty) return;
+    if (!isSupportedPlatform || text.trim().isEmpty) return;
     if (!_ttsReady) {
       await initialize();
     }
@@ -115,6 +135,7 @@ class VoiceConversationService {
   }
 
   Future<void> stopSpeaking() async {
+    if (!isSupportedPlatform) return;
     if (_ttsReady) {
       await _tts.stop();
     }
@@ -123,6 +144,30 @@ class VoiceConversationService {
   Future<void> dispose() async {
     await cancelListening();
     await stopSpeaking();
+  }
+
+  Future<String> _resolveSpeechLocale(String requestedLocaleId) async {
+    try {
+      final availableLocales = await _speech.locales();
+      if (availableLocales.isEmpty) return requestedLocaleId;
+
+      final requested = requestedLocaleId.toLowerCase().replaceAll('-', '_');
+      for (final locale in availableLocales) {
+        final normalized = locale.localeId.toLowerCase().replaceAll('-', '_');
+        if (normalized == requested) return locale.localeId;
+      }
+
+      final requestedLanguage = requested.split('_').first;
+      for (final locale in availableLocales) {
+        final normalized = locale.localeId.toLowerCase().replaceAll('-', '_');
+        if (normalized.split('_').first == requestedLanguage) {
+          return locale.localeId;
+        }
+      }
+    } catch (e) {
+      debugPrint('[VOICE] Could not resolve speech locale: $e');
+    }
+    return requestedLocaleId;
   }
 
   String localeForLanguageCode(String languageCode) {

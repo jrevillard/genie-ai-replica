@@ -1151,30 +1151,32 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: _isVoiceListening
-                              ? 'Stop voice input'
-                              : 'Start voice input',
-                          icon: Icon(
-                            _isVoiceListening ? Icons.stop_circle : Icons.mic,
+                        if (_voiceService.isSupportedPlatform) ...[
+                          IconButton(
+                            tooltip: _isVoiceListening
+                                ? 'Stop voice input'
+                                : 'Start voice input',
+                            icon: Icon(
+                              _isVoiceListening ? Icons.stop_circle : Icons.mic,
+                            ),
+                            color: _isVoiceListening
+                                ? Colors.redAccent
+                                : colors['primary'],
+                            onPressed: _isLoading ? null : _toggleVoiceInput,
                           ),
-                          color: _isVoiceListening
-                              ? Colors.redAccent
-                              : colors['primary'],
-                          onPressed: _isLoading ? null : _toggleVoiceInput,
-                        ),
-                        IconButton(
-                          tooltip: _spokenRepliesEnabled
-                              ? 'Mute spoken replies'
-                              : 'Enable spoken replies',
-                          icon: Icon(
-                            _spokenRepliesEnabled
-                                ? Icons.volume_up
-                                : Icons.volume_off,
+                          IconButton(
+                            tooltip: _spokenRepliesEnabled
+                                ? 'Mute spoken replies'
+                                : 'Enable spoken replies',
+                            icon: Icon(
+                              _spokenRepliesEnabled
+                                  ? Icons.volume_up
+                                  : Icons.volume_off,
+                            ),
+                            color: colors['primary'],
+                            onPressed: _toggleSpokenReplies,
                           ),
-                          color: colors['primary'],
-                          onPressed: _toggleSpokenReplies,
-                        ),
+                        ],
                         IconButton(
                           icon: const Icon(Icons.send),
                           color: colors['primary'],

@@ -216,6 +216,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _isOnline = true;
   bool _showHandsfreeMode = false;
   bool _isChatOnStartPage = true;
+  final VoiceConversationService _voiceSupport = VoiceConversationService();
 
   @override
   void initState() {
@@ -392,6 +393,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             // 2. HANDSFREE MODE BUTTON / OVERLAY
             if (!isWideScreen &&
                 _isOnline &&
+                _voiceSupport.isSupportedPlatform &&
                 _isChatOnStartPage &&
                 !_showHandsfreeMode)
               Positioned(

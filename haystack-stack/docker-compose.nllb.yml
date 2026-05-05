@@ -35,11 +35,19 @@ services:
           memory: 6G
         reservations:
           memory: 3G
+    # Healthcheck note (2026-05-06): the upstream image
+    # ghcr.io/winstxnhdw/nllb-api was rebuilt as a distroless image
+    # with no /bin/sh, so the previous `CMD-SHELL` test always failed
+    # with "exec: /bin/sh: stat /bin/sh: no such file or directory".
+    # The service itself was always healthy (GET /health returns
+    # {"label":"nllb-api","message":"online"}) — only the healthcheck
+    # was wedged. Switched to `CMD` + python's urllib so the test
+    # doesn't depend on a shell or curl being present.
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:7860/api/v4/health || curl -sf http://localhost:7860/health || exit 1"]
-      interval:     15s
-      timeout:      10s
-      retries:      20
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7860/health').read()"]
+      interval:     30s
+      timeout:      15s
+      retries:      10
       start_period: 120s
     restart: unless-stopped
     networks:

@@ -15,8 +15,8 @@ param(
     [switch]$SkipFrontend,
     [switch]$Rebuild,
     [switch]$Stop,
-    [switch]$Baseline,    # run scripts/translation_baseline.py after [6/8]
-    [switch]$SkipVerify   # skip the [6/8] v4.2 verify block (faster restarts)
+    [switch]$Baseline,    # run scripts/translation_baseline.py after [6/9]
+    [switch]$SkipVerify   # skip the [6/9] v4.2 verify block (faster restarts)
 )
 
 $ErrorActionPreference = "Continue"
@@ -84,6 +84,12 @@ if ($Stop) {
     if (Test-Path "haystack-stack\docker-compose.nllb.yml") {
         $composeFiles += @("-f", "docker-compose.nllb.yml")
     }
+    # gateway.yml must layer here too so amina-gateway tears down with
+    # the rest of the stack — start.sh already does this in its
+    # build_compose_args helper (parity fix 2026-05-06).
+    if (Test-Path "haystack-stack\docker-compose.gateway.yml") {
+        $composeFiles += @("-f", "docker-compose.gateway.yml")
+    }
 
     Push-Location haystack-stack
     $rcDown = Invoke-DockerCompose -ComposeArgs ($composeFiles + @("down"))
@@ -93,8 +99,19 @@ if ($Stop) {
     }
 
     if (Test-Path "components\multichannel-access\docker-compose.yml") {
+        # Layer the same compose files used on `up` so the watcher + the
+        # quick-tunnel container come down too. A bare `down` from the
+        # base file would leave amina-cf-quick-tunnel and
+        # telegram-webhook-watcher orphaned.
+        $mcDownFiles = @("-f", "docker-compose.yml")
+        if (Test-Path "components\multichannel-access\docker-compose.quick-tunnel.yml") {
+            $mcDownFiles += @("-f", "docker-compose.quick-tunnel.yml")
+        }
+        if (Test-Path "components\multichannel-access\docker-compose.quick-tunnel-watcher.yml") {
+            $mcDownFiles += @("-f", "docker-compose.quick-tunnel-watcher.yml")
+        }
         Push-Location components\multichannel-access
-        Invoke-DockerCompose -ComposeArgs @("down") | Out-Null
+        Invoke-DockerCompose -ComposeArgs ($mcDownFiles + @("down")) | Out-Null
         Pop-Location
     }
     Write-Host "[DONE] All services stopped." -ForegroundColor Green
@@ -102,7 +119,7 @@ if ($Stop) {
 }
 
 # ── 1. Docker check ────────────────────────────────────────────────
-Write-Host "[1/8] Checking Docker..." -ForegroundColor Yellow
+Write-Host "[1/9] Checking Docker..." -ForegroundColor Yellow
 $dockerInfo = docker info 2>&1
 $dockerOk   = ($LASTEXITCODE -eq 0) -and ($dockerInfo -match "Server Version")
 if (-not $dockerOk) {
@@ -119,7 +136,7 @@ Write-Host "       Docker is running." -ForegroundColor Green
 # bootstrap_models.ps1 downloads on first run and skips on subsequent
 # runs. A failure here is non-fatal: text chat still works, the
 # script just warns and proceeds.
-Write-Host "[2/8] Checking AI model files..." -ForegroundColor Yellow
+Write-Host "[2/9] Checking AI model files..." -ForegroundColor Yellow
 $prevPref = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 & "$PSScriptRoot\scripts\bootstrap_models.ps1"
@@ -138,7 +155,7 @@ if ($bootstrapExit -ne 0) {
 # for two services. If a real .env is missing, compose fails. We
 # bridge that gap by copying .env.defaults -> .env on first run.
 # .env is gitignored, so this never gets committed accidentally.
-Write-Host "[3/8] Resolving environment..." -ForegroundColor Yellow
+Write-Host "[3/9] Resolving environment..." -ForegroundColor Yellow
 
 $EnvFile     = Join-Path $RepoRoot "haystack-stack\.env"
 $EnvDefaults = Join-Path $RepoRoot "haystack-stack\.env.defaults"
@@ -163,7 +180,7 @@ if (Test-Path $EnvFile) {
 }
 
 # ── 3. Backend services up ─────────────────────────────────────────
-Write-Host "[4/8] Starting backend services..." -ForegroundColor Yellow
+Write-Host "[4/9] Starting backend services..." -ForegroundColor Yellow
 
 $composeFiles = @("-f", "docker-compose.yml")
 
@@ -224,7 +241,7 @@ try {
 Write-Host "       Backend containers launched." -ForegroundColor Green
 
 # ── 4. Wait for backend health ─────────────────────────────────────
-Write-Host "[5/8] Waiting for backend to report healthy..." -ForegroundColor Yellow
+Write-Host "[5/9] Waiting for backend to report healthy..." -ForegroundColor Yellow
 $maxWait = 180
 $waited  = 0
 $healthy = $false
@@ -260,7 +277,7 @@ if ($healthy) {
 #   * NLLB probe: fails -> v3.5 fallback (LLM-only) takes over.
 #   * Schema warm: fails -> first telemetry call lazy-bootstraps it instead.
 #   * Canary    : fails -> verbose error in the log; the chat path still works.
-Write-Host "[6/8] Verifying Translation v4.2 ..." -ForegroundColor Yellow
+Write-Host "[6/9] Verifying Translation v4.2 ..." -ForegroundColor Yellow
 
 # Globals for the summary block to read.
 $Script:NllbReady       = $false
@@ -297,7 +314,7 @@ if ($SkipVerify) {
 # Detect whether the NLLB overlay is in play. If not, skip silently --
 # we are running v3.5 (LLM-only) and there is no NLLB to verify.
 if ($SkipVerify) {
-    # short-circuit: do nothing (the body of [6/8] is bypassed; the
+    # short-circuit: do nothing (the body of [6/9] is bypassed; the
     # summary block prints "verify skipped" using the flag below).
 } elseif (-not (Test-Path "haystack-stack\docker-compose.nllb.yml")) {
     Write-Host "       NLLB overlay not present; v4.2 verify skipped (running v3.5 / LLM-only)." -ForegroundColor DarkGray
@@ -477,12 +494,97 @@ if ($Baseline) {
     }
 }
 
-# ── 7. Frontend ────────────────────────────────────────────────────
+# ── 7. Multichannel sidecar (Telegram + Cloudflare quick tunnel) ──
+# Optional: starts components/multichannel-access alongside the backend
+# so a UNICC tester running `.\start.ps1` gets the full demo surface
+# (Telegram bot reachable through a Cloudflare quick-tunnel) without
+# having to remember a second `docker compose` invocation.
+#
+# Hard rules:
+#   * NEVER block. If the multichannel stack fails to start the rest
+#     of AMINA (text chat, voice, translation) MUST keep working.
+#   * NEVER fail when components\multichannel-access is missing — a
+#     fresh clone without that directory is a valid configuration.
+#   * NEVER recreate the backend network. multichannel-access uses
+#     the existing chatqna_default network as `external: true`.
+$multichannelDir = "components\multichannel-access"
+if (Test-Path "$multichannelDir\docker-compose.yml") {
+    Write-Host "[7/9] Starting multichannel sidecar (Telegram + tunnel)..." -ForegroundColor Yellow
+
+    $mcComposeFiles = @("-f", "docker-compose.yml")
+    if (Test-Path "$multichannelDir\docker-compose.quick-tunnel.yml") {
+        $mcComposeFiles += @("-f", "docker-compose.quick-tunnel.yml")
+    }
+    if (Test-Path "$multichannelDir\docker-compose.quick-tunnel-watcher.yml") {
+        $mcComposeFiles += @("-f", "docker-compose.quick-tunnel-watcher.yml")
+    }
+
+    try {
+        # No `--no-build`: the multichannel-access service has a `build:`
+        # directive (no published image), so the first run on a fresh
+        # tester machine MUST build it. Subsequent runs reuse the cached
+        # image automatically — `up -d` is a no-op when nothing changed.
+        Push-Location $multichannelDir
+        $rcMc = Invoke-DockerCompose -ComposeArgs ($mcComposeFiles + @("up", "-d"))
+        Pop-Location
+
+        if ($rcMc -ne 0) {
+            Write-Host "       Multichannel failed to start (exit $rcMc)." -ForegroundColor Yellow
+            Write-Host "       Continuing — text chat / voice / translation still work." -ForegroundColor DarkGray
+        } else {
+            Start-Sleep -Seconds 5
+
+            # Health probe — best effort.
+            $mcHealthy = $false
+            try {
+                $mcCheck = curl.exe -s -o NUL -w "%{http_code}" --max-time 3 http://localhost:8020/health 2>$null
+                if ($mcCheck -eq "200") { $mcHealthy = $true }
+            } catch {}
+
+            if ($mcHealthy) {
+                Write-Host "       Multichannel sidecar healthy (http://localhost:8020)" -ForegroundColor Green
+            } else {
+                Write-Host "       Multichannel started; sidecar not yet responding on :8020" -ForegroundColor Yellow
+                Write-Host "       Check: docker logs multichannel-access --tail 30" -ForegroundColor DarkGray
+            }
+
+            # Surface the Cloudflare quick-tunnel URL once cloudflared has
+            # published it. The container typically registers the tunnel
+            # within 5-15 s; poll for up to 20 s so we don't miss it on a
+            # slightly slow start. Best-effort; absence of a URL is never
+            # a failure (named-tunnel deployments don't print one).
+            $tunnelDeadline = (Get-Date).AddSeconds(20)
+            while ((Get-Date) -lt $tunnelDeadline) {
+                try {
+                    $tunnelLine = docker logs amina-cf-quick-tunnel 2>&1 |
+                        Select-String "https://[a-z0-9-]+\.trycloudflare\.com" |
+                        Select-Object -Last 1
+                    if ($tunnelLine) {
+                        $m = [regex]::Match($tunnelLine.ToString(), "https://[a-z0-9-]+\.trycloudflare\.com")
+                        if ($m.Success) {
+                            $Script:TunnelUrl = $m.Value
+                            Write-Host "       Tunnel URL: $($Script:TunnelUrl)" -ForegroundColor Cyan
+                            break
+                        }
+                    }
+                } catch {}
+                Start-Sleep -Seconds 2
+            }
+        }
+    } catch {
+        Write-Host "       Multichannel startup raised: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "       Continuing — text chat / voice / translation still work." -ForegroundColor DarkGray
+    }
+} else {
+    Write-Host "[7/9] Multichannel sidecar not found — skipping Telegram." -ForegroundColor DarkGray
+}
+
+# ── 8. Frontend ────────────────────────────────────────────────────
 $frontendPort = "5174"
 if ($SkipFrontend) {
-    Write-Host "[7/8] Frontend skipped (--SkipFrontend)." -ForegroundColor DarkGray
+    Write-Host "[8/9] Frontend skipped (--SkipFrontend)." -ForegroundColor DarkGray
 } else {
-    Write-Host "[7/8] Starting frontend..." -ForegroundColor Yellow
+    Write-Host "[8/9] Starting frontend..." -ForegroundColor Yellow
 
     $frontendPath = Join-Path $RepoRoot "components\frontend"
     if (-not (Test-Path $frontendPath)) {
@@ -509,9 +611,9 @@ if ($SkipFrontend) {
     }
 }
 
-# ── 6. Summary ─────────────────────────────────────────────────────
+# ── 9. Summary ─────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "[8/8] AMINA is ready." -ForegroundColor Green
+Write-Host "[9/9] AMINA is ready." -ForegroundColor Green
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  AMINA Services"                        -ForegroundColor Cyan
@@ -535,6 +637,21 @@ $sttColor = if ($sttOk) { "Green" } else { "Yellow" }
 $ttsColor = if ($ttsOk) { "Green" } else { "Yellow" }
 Write-Host "  Voice STT:      http://localhost:8087  $sttTag" -ForegroundColor $sttColor
 Write-Host "  Voice TTS:      http://localhost:5500  $ttsTag" -ForegroundColor $ttsColor
+
+# Multichannel / Telegram health (best-effort; only shown when the
+# sidecar compose file is present so a checkout without it stays clean).
+if (Test-Path "components\multichannel-access\docker-compose.yml") {
+    $mcCode = ""
+    try { $mcCode = curl.exe -s -o NUL -w "%{http_code}" --max-time 2 http://localhost:8020/health 2>$null } catch {}
+    if ($mcCode -eq "200") {
+        Write-Host "  Multichannel:   http://localhost:8020  [OK]" -ForegroundColor Green
+        if ($Script:TunnelUrl) {
+            Write-Host "  Tunnel URL:     $($Script:TunnelUrl)" -ForegroundColor Cyan
+        }
+    } else {
+        Write-Host "  Multichannel:   http://localhost:8020  [NOT READY — Telegram / tunnel still warming up]" -ForegroundColor Yellow
+    }
+}
 
 # Translation v4.2: NLLB sidecar health (only shown when the overlay
 # was layered in -- otherwise omit entirely so the summary stays clean
@@ -571,7 +688,7 @@ if ($DemoMode) {
 }
 
 # Pre-pull tip: only when the NLLB image was NOT already cached at
-# [6/8] AND NLLB still isn't ready -- i.e., the user just sat through
+# [6/9] AND NLLB still isn't ready -- i.e., the user just sat through
 # (or is still sitting through) the 7.6 GB pull. Tells them how to skip
 # the wait next time. ``$imageExists`` may be unset if --SkipVerify was
 # passed, in which case we don't render the tip.

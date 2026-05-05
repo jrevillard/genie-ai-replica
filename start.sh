@@ -67,14 +67,26 @@ if [ "$STOP" -eq 1 ]; then
     docker compose $(build_compose_args) down 2>&1
     cd "$REPO_ROOT"
     if [ -f components/multichannel-access/docker-compose.yml ]; then
-        cd components/multichannel-access && docker compose down 2>&1 && cd "$REPO_ROOT"
+        # Layer the same compose files used on `up` so the watcher and
+        # quick-tunnel containers come down too. A bare `down` from the
+        # base file would orphan amina-cf-quick-tunnel and
+        # telegram-webhook-watcher.
+        MC_DOWN_FILES="-f docker-compose.yml"
+        [ -f components/multichannel-access/docker-compose.quick-tunnel.yml ] && \
+            MC_DOWN_FILES="$MC_DOWN_FILES -f docker-compose.quick-tunnel.yml"
+        [ -f components/multichannel-access/docker-compose.quick-tunnel-watcher.yml ] && \
+            MC_DOWN_FILES="$MC_DOWN_FILES -f docker-compose.quick-tunnel-watcher.yml"
+        cd components/multichannel-access
+        # shellcheck disable=SC2086
+        docker compose $MC_DOWN_FILES down 2>&1
+        cd "$REPO_ROOT"
     fi
     echo "[DONE] All services stopped."
     exit 0
 fi
 
 # ── 1. Docker check ────────────────────────────────────────────────
-echo "[1/8] Checking Docker..."
+echo "[1/9] Checking Docker..."
 if ! docker info >/dev/null 2>&1; then
     echo "[ERROR] Docker is not running."
     echo "        Please start Docker (or Docker Desktop) and re-run ./start.sh"
@@ -85,7 +97,7 @@ echo "       Docker is running."
 # ── 2. AI model bootstrap ──────────────────────────────────────────
 # Whisper + Piper model files are gitignored; download on first run
 # so voice-stt / voice-tts can boot. Idempotent on re-runs.
-echo "[2/8] Checking AI model files..."
+echo "[2/9] Checking AI model files..."
 set +e
 "$REPO_ROOT/scripts/bootstrap_models.sh"
 BOOTSTRAP_RC=$?
@@ -97,7 +109,7 @@ if [ "$BOOTSTRAP_RC" -ne 0 ]; then
 fi
 
 # ── 3. Environment resolution ──────────────────────────────────────
-echo "[3/8] Resolving environment..."
+echo "[3/9] Resolving environment..."
 ENV_FILE="$REPO_ROOT/haystack-stack/.env"
 ENV_DEFAULTS="$REPO_ROOT/haystack-stack/.env.defaults"
 
@@ -119,7 +131,7 @@ else
 fi
 
 # ── 3. Backend services up ─────────────────────────────────────────
-echo "[4/8] Starting backend services..."
+echo "[4/9] Starting backend services..."
 cd "$REPO_ROOT/haystack-stack"
 # Demo overlay is layered ONLY when we just bootstrapped from
 # .env.defaults. A team developer with a real .env keeps DEMO_MODE
@@ -143,7 +155,7 @@ cd "$REPO_ROOT"
 echo "       Backend containers launched."
 
 # ── 4. Wait for backend health ─────────────────────────────────────
-echo "[5/8] Waiting for backend to report healthy..."
+echo "[5/9] Waiting for backend to report healthy..."
 MAX_WAIT=180
 WAITED=0
 HEALTHY=0
@@ -176,7 +188,7 @@ CANARY_OUTPUT=""
 V4_ENABLED_RUNTIME=1
 GOLDEN_TOTAL=0
 VALIDATED_COUNT=0
-echo "[6/8] Verifying Translation v4.2 ..."
+echo "[6/9] Verifying Translation v4.2 ..."
 
 # Read validation progress so the summary can show "X/N validated".
 GOLDEN_FILE="haystack-stack/haystack-chatqna/src/translation_v4/eval/golden_translations.json"
@@ -299,12 +311,77 @@ if [ "$BASELINE" -eq 1 ]; then
     PYTHONIOENCODING=utf-8 python scripts/translation_baseline.py 2>&1 | sed 's/^/       /'
 fi
 
-# ── 7. Frontend ────────────────────────────────────────────────────
+# ── 7. Multichannel sidecar (Telegram + Cloudflare quick tunnel) ──
+# Optional: starts components/multichannel-access alongside the backend
+# so a tester running ./start.sh gets the full demo surface (Telegram
+# bot reachable through a Cloudflare quick-tunnel) without remembering
+# a second `docker compose` invocation.
+#
+# Hard rules:
+#   * NEVER block. Multichannel failure must NOT abort the script.
+#   * NEVER fail when components/multichannel-access is missing.
+#   * NEVER recreate the backend network. multichannel-access uses
+#     the existing chatqna_default network as `external: true`.
+MC_DIR="components/multichannel-access"
+if [ -f "$MC_DIR/docker-compose.yml" ]; then
+    echo "[7/9] Starting multichannel sidecar (Telegram + tunnel)..."
+
+    MC_FILES="-f docker-compose.yml"
+    [ -f "$MC_DIR/docker-compose.quick-tunnel.yml" ] && \
+        MC_FILES="$MC_FILES -f docker-compose.quick-tunnel.yml"
+    [ -f "$MC_DIR/docker-compose.quick-tunnel-watcher.yml" ] && \
+        MC_FILES="$MC_FILES -f docker-compose.quick-tunnel-watcher.yml"
+
+    set +e
+    # No `--no-build`: the multichannel-access service has a `build:`
+    # directive (no published image), so the first run on a fresh
+    # tester machine MUST build it. Subsequent runs reuse the cached
+    # image automatically — `up -d` is a no-op when nothing changed.
+    (
+        cd "$MC_DIR" && \
+        # shellcheck disable=SC2086
+        docker compose $MC_FILES up -d 2>&1 | sed 's/^/       /'
+    )
+    MC_RC=$?
+    set -e
+
+    if [ "$MC_RC" -ne 0 ]; then
+        echo "       Multichannel failed to start (exit ${MC_RC})."
+        echo "       Continuing — text chat / voice / translation still work."
+    else
+        sleep 5
+        if curl -sf --max-time 3 http://localhost:8020/health >/dev/null 2>&1; then
+            echo "       Multichannel sidecar healthy (http://localhost:8020)"
+        else
+            echo "       Multichannel started; sidecar not yet responding on :8020"
+            echo "       Check: docker logs multichannel-access --tail 30"
+        fi
+        # Poll for the Cloudflare quick-tunnel URL — cloudflared
+        # typically publishes it within 5-15 s. Best-effort; absence
+        # is never a failure (named-tunnel deployments don't print one).
+        TUNNEL_URL=""
+        for _i in 1 2 3 4 5 6 7 8 9 10; do
+            TUNNEL_URL=$(docker logs amina-cf-quick-tunnel 2>&1 \
+                | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' \
+                | tail -1 || echo "")
+            if [ -n "$TUNNEL_URL" ]; then break; fi
+            sleep 2
+        done
+        if [ -n "$TUNNEL_URL" ]; then
+            export TUNNEL_URL
+            echo "       Tunnel URL: $TUNNEL_URL"
+        fi
+    fi
+else
+    echo "[7/9] Multichannel sidecar not found — skipping Telegram."
+fi
+
+# ── 8. Frontend ────────────────────────────────────────────────────
 FRONTEND_PORT=5174
 if [ "$SKIP_FRONTEND" -eq 1 ]; then
-    echo "[7/8] Frontend skipped (--skip-frontend)."
+    echo "[8/9] Frontend skipped (--skip-frontend)."
 else
-    echo "[7/8] Starting frontend..."
+    echo "[8/9] Starting frontend..."
     if [ ! -d components/frontend ]; then
         echo "       components/frontend not found - skipping frontend."
     else
@@ -321,7 +398,7 @@ fi
 
 # ── 6. Summary ─────────────────────────────────────────────────────
 echo ""
-echo "[8/8] AMINA is ready."
+echo "[9/9] AMINA is ready."
 echo ""
 echo "========================================"
 echo "  AMINA Services"
@@ -345,6 +422,20 @@ if [ "$TTS_CODE" = "200" ]; then
 else
     echo "  Voice TTS:      http://localhost:5500  [NOT READY — model may still be downloading]"
 fi
+
+# Multichannel / Telegram health (best-effort; only shown when the
+# sidecar compose file is present so a checkout without it stays clean).
+if [ -f components/multichannel-access/docker-compose.yml ]; then
+    MC_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:8020/health 2>/dev/null || echo "")
+    if [ "$MC_CODE" = "200" ]; then
+        echo "  Multichannel:   http://localhost:8020  [OK]"
+        if [ -n "${TUNNEL_URL:-}" ]; then
+            echo "  Tunnel URL:     $TUNNEL_URL"
+        fi
+    else
+        echo "  Multichannel:   http://localhost:8020  [NOT READY — Telegram / tunnel still warming up]"
+    fi
+fi
 echo ""
 if [ "$DEMO_MODE" -eq 1 ]; then
     echo "  MODE: Demo (using .env.defaults values)"
@@ -355,7 +446,7 @@ else
     echo "  MODE: Team (using haystack-stack/.env)"
 fi
 
-# Pre-pull tip: only when the NLLB image was NOT cached at [6/8] AND
+# Pre-pull tip: only when the NLLB image was NOT cached at [6/9] AND
 # NLLB still isn't ready. Mirrors start.ps1.
 if [ "${IMAGE_CACHED:-1}" -eq 0 ] && [ "${NLLB_READY:-0}" -ne 1 ]; then
     echo ""

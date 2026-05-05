@@ -1,50 +1,49 @@
-## **What is AgriConnect?**
+## **What is Keletso?**
 
-AgriConnect is an advanced AI assistant that uses a technique called Retrieval-Augmented Generation (RAG). Instead of just relying on its pre-trained knowledge, it actively searches a specialized database of documents to find the most relevant, up-to-date information before answering your question. This ensures the answers are accurate and based on the latest data available in the system.
+Keletso is AgriConnect's AI agricultural advisor, built specifically for Lesotho extension workers. The name "Keletso" means "help" or "assistance" in Sesotho. Keletso uses a technique called Retrieval-Augmented Generation (RAG) — it searches a database of over 42,000 agricultural knowledge chunks before answering your question, ensuring advice is grounded in real documents from the Ministry of Agriculture, FAO, and agricultural research institutions.
 
-## **How can I get the most accurate answers?**
+## **What crops and topics does AgriConnect cover?**
 
-For the best results, provide as much specific context as possible.
+AgriConnect currently covers:
+- **Maize (Poone)** — varieties, planting, fertilizer, pest control, harvesting, storage
+- **Beans (Linaoa)** — varieties, planting, diseases, harvesting, market preparation
+- **Pest & Disease Management** — Fall Armyworm, Grey Leaf Spot, Angular Leaf Spot, bean rust and more
+- **Fertilizer & Soil** — NPK rates, LAN application, soil conservation, composting
+- **Weather & Climate** — seasonal planning, drought adaptation, frost management
+- **Government Programs** — Ministry of Agriculture support, LADB, input subsidies
+- **Market Linkages** — post-harvest handling, storage, pricing guidance
 
-* **Use the Service Tree:** Before asking a question, select the most relevant category or service from the tree on the left. This helps AgriConnect narrow its search to the correct set of documents.  
-* **Be Specific:** Instead of asking "What about my application?", ask "What is the status of my business registration application submitted last week?".  
-* **Ask One Question at a Time:** Complex, multi-part questions can sometimes confuse the AI. Try breaking them down into simpler, individual queries.
+## **How accurate is Keletso's advice?**
+
+Keletso has been tested on over 50 agricultural questions covering Lesotho-specific farming scenarios and scored 19 out of 20 on a structured evaluation. However, Keletso is an AI assistant — not a certified agronomist. Always apply your professional judgment as an extension worker. For complex disease diagnoses or emergency situations, consult your district agricultural officer or the Ministry of Agriculture directly.
+
+## **What does the confidence score mean?**
+
+The confidence score shows how closely the retrieved knowledge base documents match your question — not necessarily how correct the answer is. A high score means the system found documents closely related to your query. A low score means the question may be outside Keletso's current knowledge base. When confidence is low, Keletso will tell you it does not have enough information and refer you to a specialist.
+
+## **How do I get the best answers from Keletso?**
+
+- **Select the right topic** using the Quick Help buttons — Maize Farming, Beans Farming, Pest & Disease etc.
+- **Be specific** — include the farmer's district, crop, growth stage and symptoms
+- **For farm visits** — describe the farmer's situation: "I am visiting a farmer in Leribe with 2 hectares of maize showing yellowing leaves at knee height"
+- **For calculations** — tell Keletso the farm size: "How much fertilizer for 3 hectares?"
+
+## **How do I give feedback to improve Keletso?**
+
+After every response, click **Helpful** if the answer was correct and useful, or **Not helpful** if it was wrong or unhelpful. If you click "Not helpful" you can type a better answer or correction — this feedback is saved to the AgriConnect database and will be used by the Ministry of Agriculture to improve Keletso over time.
+
+## **What should I do if Keletso gives a wrong answer?**
+
+Click **Not helpful** and write the correct answer in the improvement box. This is extremely valuable — your corrections as an experienced extension worker help train and improve Keletso for all future users. You can also report serious errors to your district agricultural office or to the AgriConnect administrators.
 
 ## **What are the "Related Documents" in the sidebar?**
 
-The "Related Documents" section shows you the exact source documents that AgriConnect used to formulate its answer. This is a key feature of the RAG system, providing transparency and allowing you to verify the information. You can click on any document to view the source material directly.
+The Related Documents section shows the source documents Keletso used to formulate its answer. These come from the AgriConnect knowledge base which includes Ministry of Agriculture guidelines, FAO publications, and agricultural research documents. You can click any document to view the source material and verify the information directly.
 
-## **How does selecting a context help?**
+## **Can I use AgriConnect offline?**
 
-When you select an item from the "Quick Help" or the service tree on the left, you are telling AgriConnect which specific set of documents to focus on. This significantly improves accuracy by preventing the AI from searching irrelevant information. For example, selecting "Taxation" ensures that your query is only answered using tax-related documents.
+AgriConnect requires an internet connection to access Keletso's AI responses and the knowledge base. However, the app can be installed on your phone as a Progressive Web App (PWA) for easy access. Contact your district office for login credentials.
 
-## **What does the "Confidence" score mean?**
+## **Who do I contact for support?**
 
-The confidence score represents the AI's own assessment of how relevant a source document is to your specific question. A higher score (e.g., 95%) indicates that the system is very confident the document contains the information you are looking for. This score helps you quickly identify the most important sources for your answer.
-
-## **Can I trust the answers from AgriConnect?**
-
-Yes. Because AgriConnect uses a RAG model, its answers are grounded in the specific documents listed in the "Related Documents" section. Unlike some AIs that can invent information, AgriConnect's responses are directly tied to its source material. You can always click on the source documents to verify the answer for yourself.
-
-## **Why does clicking a document open a new tab with a complex URL?**
-
-Your queries and document access are secure and require authentication. A simple link cannot carry the necessary security token. When you click, the application fetches the document in the background using your secure credentials and then creates a temporary, local URL for the browser to open. This ensures you can view the document without compromising security.
-
-## **What is the difference between "Document Name" and "File Name"?**
-
-* **Document Name:** This is a user-friendly title or description of the document's content (e.g., "Annual Tax Guidelines").  
-* **File Name:** This is the actual name of the file stored in the system (e.g., tax\_guide\_v3\_final.pdf).
-
-Displaying both helps provide better context about the source document you are viewing.
-
-## **Can I chat without selecting a context?**
-
-Yes. You can start asking questions immediately for general queries. However, for questions related to a specific service or topic, selecting a context first will yield much more accurate and relevant results because it focuses the AI's search.
-
-## **Why did my query not return any results?**
-
-There are a few common reasons this might happen:
-
-* **Lack of Relevant Documents:** The system may not have any documents in its database that match the specific context of your query.  
-* **Query is Too Vague:** If your question is too broad (e.g., "Tell me about services"), the AI may not be able to find a precise answer. Try adding more detail or selecting a category from the service tree.  
-* **System is Processing:** During peak times, there might be a slight delay. If the "Thinking..." indicator is visible, please wait a moment for the response.
+For technical issues with AgriConnect, contact your district agricultural office. For questions about farming advice that Keletso cannot answer, contact the Lesotho Ministry of Agriculture, Food Security and Nutrition at their nearest district office. New extension workers should contact their district office to receive login credentials.

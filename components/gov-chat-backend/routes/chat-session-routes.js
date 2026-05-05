@@ -50,6 +50,29 @@ const audioUpload = multer({
   },
 });
 
+const CHAT_AUDIO_MIME_BY_EXT = {
+  '.wav': 'audio/wav',
+  '.webm': 'audio/webm',
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+};
+
+/**
+ * Resolve an audioUrl stored on a user message to a disk path inside the
+ * chat-audio dir. Returns null if the URL is missing/foreign or the file is
+ * outside the expected directory (path-traversal guard).
+ */
+function resolveUserAudioPath(audioUrl) {
+  if (!audioUrl || typeof audioUrl !== 'string') return null;
+  if (!audioUrl.startsWith(`${CHAT_AUDIO_PUBLIC_PREFIX}/`)) return null;
+  const filename = path.basename(audioUrl.slice(CHAT_AUDIO_PUBLIC_PREFIX.length + 1));
+  if (!filename || filename.includes('..') || filename.includes('/')) return null;
+  const abs = path.join(CHAT_AUDIO_DIR, filename);
+  if (!abs.startsWith(`${CHAT_AUDIO_DIR}${path.sep}`) && abs !== CHAT_AUDIO_DIR) return null;
+  return abs;
+}
+
 /** Wrap a 16-bit PCM buffer in a RIFF/WAVE header so it plays in any browser. */
 function wrapPcmInWav(pcm, sampleRate, channels, bitsPerSample) {
   const byteRate = (sampleRate * channels * bitsPerSample) / 8;
@@ -87,6 +110,34 @@ module.exports = (chatSessionService, deps = {}) => {
   function userIdFromReq(req) {
     return req.user._key || req.user.id || req.user.userId;
   }
+
+  /**
+   * @swagger
+   * /chat-sessions/languages:
+   *   get:
+   *     summary: List supported chat languages (translator coverage)
+   *     description: >-
+   *       Use the `code` as `context.language` on send-message requests to override
+   *       auto-detection. Auto-detection runs when no language is supplied.
+   *     tags: [Chat Sessions]
+   *     security: [ { bearerAuth: [] } ]
+   *     responses:
+   *       200:
+   *         description: Languages
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
+   *                 properties:
+   *                   code: { type: string, example: en }
+   *                   name: { type: string, example: English }
+   */
+  router.get('/languages', (req, res) => {
+    const { CHAT_LANGUAGES } = require('../constants/chat-languages');
+    res.json(CHAT_LANGUAGES);
+  });
 
   /**
    * @swagger
@@ -219,6 +270,16 @@ module.exports = (chatSessionService, deps = {}) => {
    *                   twinId: { type: string, nullable: true }
    *                   createdAt: { type: string, format: date-time }
    *                   updatedAt: { type: string, format: date-time }
+   *                   lastMessage:
+   *                     type: object
+   *                     nullable: true
+   *                     description: Most recent message in the session, or null when empty
+   *                     properties:
+   *                       _key:      { type: string }
+   *                       role:      { type: string, enum: [user, assistant] }
+   *                       content:   { type: string }
+   *                       audioUrl:  { type: string, nullable: true }
+   *                       createdAt: { type: string, format: date-time }
    *       401: { description: Unauthenticated }
    *       403: { description: scope=all requires admin }
    *       500: { description: Server error }
@@ -235,10 +296,13 @@ module.exports = (chatSessionService, deps = {}) => {
       const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
       const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
-      const { aql } = require('arangojs');
-      const sessions = chatSessionService.sessions;
       const filters = [];
-      const bind = { '@coll': 'chatSessions', limit, offset };
+      const bind = {
+        '@coll': 'chatSessions',
+        '@msgs': 'chatSessionMessages',
+        limit,
+        offset,
+      };
       if (scope === 'me') {
         filters.push('s.userId == @uid');
         bind.uid = String(userId);
@@ -252,8 +316,28 @@ module.exports = (chatSessionService, deps = {}) => {
         bind.phone = String(req.query.phoneNumber);
       }
       const where = filters.length ? `FILTER ${filters.join(' AND ')}` : '';
+      // Pull each session's most-recent message inline so the UI can render
+      // a chat list with previews in one round-trip. Subquery is bounded to
+      // LIMIT 1 per session.
       const cursor = await chatSessionService.db.query(
-        `FOR s IN @@coll ${where} SORT s.updatedAt DESC LIMIT @offset, @limit RETURN s`,
+        `FOR s IN @@coll
+           ${where}
+           SORT s.updatedAt DESC
+           LIMIT @offset, @limit
+           LET lastMessage = FIRST(
+             FOR m IN @@msgs
+               FILTER m.sessionId == s._key
+               SORT m.createdAt DESC
+               LIMIT 1
+               RETURN {
+                 _key: m._key,
+                 role: m.role == 'assistant' ? 'assistant' : 'user',
+                 content: m.content,
+                 audioUrl: m.audioUrl,
+                 createdAt: m.createdAt
+               }
+           )
+           RETURN MERGE(s, { lastMessage: lastMessage })`,
         bind
       );
       const rows = await cursor.all();
@@ -501,7 +585,7 @@ module.exports = (chatSessionService, deps = {}) => {
    * @swagger
    * /chat-sessions/{sessionId}/messages/{messageId}/audio:
    *   get:
-   *     summary: Synthesize audio for an assistant message using the session twin's voice (assistant only)
+   *     summary: Get audio for a message — original recording for user voice messages, Piper TTS for assistant messages
    *     tags: [Chat Sessions]
    *     security: [ { bearerAuth: [] } ]
    *     parameters:
@@ -515,11 +599,15 @@ module.exports = (chatSessionService, deps = {}) => {
    *         schema: { type: string }
    *     responses:
    *       200:
-   *         description: WAV audio stream synthesized via Piper
+   *         description: Audio stream — original upload mime for user, audio/wav for assistant TTS
    *         content:
    *           audio/wav: {}
-   *       400: { description: Message is a user message (not an assistant message) }
-   *       404: { description: Message / twin / voice not found }
+   *           audio/webm: {}
+   *           audio/ogg: {}
+   *           audio/mpeg: {}
+   *           audio/mp4: {}
+   *       400: { description: Message has no playable audio (text-only user message) }
+   *       404: { description: Message / twin / voice not found / file missing }
    *       502: { description: TTS upstream error }
    */
   router.get('/:sessionId/messages/:messageId/audio', async (req, res) => {
@@ -528,10 +616,26 @@ module.exports = (chatSessionService, deps = {}) => {
       const session = await chatSessionService.getSessionForUser(req.params.sessionId, userId);
       const msg = await chatSessionService.getMessage(req.params.sessionId, req.params.messageId);
 
-      // Only assistant messages can be synthesized here. User messages already
-      // carry their original recording at `audioUrl` if needed.
-      if (msg.role !== 'assistant') {
-        return res.status(400).json({ message: 'Audio playback only available for assistant messages' });
+      // User message: stream the original recording captured at upload time.
+      // Text-only user messages have no audio to play.
+      if (msg.role === 'user') {
+        if (!msg.audioUrl) {
+          return res.status(400).json({ message: 'This user message has no audio (text-only)' });
+        }
+        const abs = resolveUserAudioPath(msg.audioUrl);
+        if (!abs || !fs.existsSync(abs)) {
+          return res.status(404).json({ message: 'Audio file no longer available' });
+        }
+        const ext = path.extname(abs).toLowerCase();
+        const mime = CHAT_AUDIO_MIME_BY_EXT[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'no-store');
+        try {
+          res.setHeader('Content-Length', String(fs.statSync(abs).size));
+        } catch {
+          /* best-effort */
+        }
+        return fs.createReadStream(abs).pipe(res);
       }
 
       // Assistant: synthesize via the session twin's voice.

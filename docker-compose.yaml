@@ -93,8 +93,7 @@ services:
     image: kong:latest
     restart: "no"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     networks:
       - genieai_network
     environment:
@@ -124,8 +123,7 @@ services:
   kong-config:
     restart: "no"
     depends_on:
-      kong:
-        condition: service_healthy
+      - kong
     build: api-gateway-solution/new-config/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-kong-config:latest
     networks:
@@ -148,10 +146,8 @@ services:
 
   kong:
     depends_on:
-      postgres:
-        condition: service_healthy
-      kong-migrations:
-        condition: service_completed_successfully
+      - postgres
+      - kong-migrations
     restart: unless-stopped
     image: kong:latest
     environment:
@@ -197,10 +193,8 @@ services:
 
   nginx:
     depends_on:
-      kong:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
+      - kong
+      - frontend
     restart: unless-stopped
     build: api-gateway-solution/nginx/
     image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-nginx:latest
@@ -248,7 +242,6 @@ services:
   # Requires: CERTBOT_EMAIL set in .env
 
   certbot:
-    profiles: [letsencrypt]
     restart: unless-stopped
     image: certbot/certbot:latest
     entrypoint: ["/certbot-entrypoint.sh"]
@@ -334,8 +327,7 @@ services:
   db-migrations:
     restart: "no"
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
+      - arango-vector-db
     build:
       context: .
       dockerfile: components/gov-chat-backend/Dockerfile.migrations
@@ -359,14 +351,10 @@ services:
 
   backend:
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
-      redis-cache:
-        condition: service_healthy
-      keycloak-config:
-        condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
+      - arango-vector-db
+      - redis-cache
+      - keycloak-config
+      - db-migrations
     restart: unless-stopped
     build:
       context: components/
@@ -456,8 +444,7 @@ services:
   whatsapp-service:
     restart: unless-stopped
     depends_on:
-      redis-cache:
-        condition: service_healthy
+      - redis-cache
     build:
       context: .
       dockerfile: genie-ai-overlay/whatsapp/Dockerfile-whatsapp_genie-ai
@@ -505,10 +492,8 @@ services:
 
   document-repository:
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
-      keycloak-config:
-        condition: service_healthy
+      - arango-vector-db
+      - keycloak-config
     restart: unless-stopped
     build:
       context: components/
@@ -523,6 +508,8 @@ services:
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Shared secret with backend — used to verify the JWT on /api/files/* requests.
+      - JWT_SECRET=${JWT_SECRET}
     # Internal only - no host port mapping needed
     # ports:
     #   - "${DOC_REPO_PORT:-3001}:3001"
@@ -638,7 +625,6 @@ services:
   # ===========================================================================
 
   vllm:
-    profiles: [opea]
     restart: unless-stopped
     image: vllm/vllm-openai:latest
     # Swarm: internal only - access via Kong or docker exec
@@ -677,10 +663,8 @@ services:
         delay: 10s
 
   textgen:
-    profiles: [opea]
     depends_on:
-      vllm:
-        condition: service_healthy
+      - vllm
     restart: unless-stopped
     image: opea/llm-textgen:latest
     environment:
@@ -707,7 +691,6 @@ services:
         delay: 10s
 
   vllm-translation-guardrail:
-    profiles: [opea]
     restart: unless-stopped
     image: vllm/vllm-openai:latest
     # Internal only
@@ -747,10 +730,8 @@ services:
         delay: 10s
 
   translation:
-    profiles: [opea]
     depends_on:
-      vllm-translation-guardrail:
-        condition: service_healthy
+      - vllm-translation-guardrail
     restart: unless-stopped
     image: opea/translation:latest
     environment:
@@ -777,10 +758,8 @@ services:
         delay: 10s
 
   guardrail:
-    profiles: [opea]
     depends_on:
-      vllm-translation-guardrail:
-        condition: service_healthy
+      - vllm-translation-guardrail
     restart: unless-stopped
     image: opea/guardrails:latest
     environment:
@@ -809,7 +788,6 @@ services:
         delay: 10s
 
   tei:
-    profiles: [opea]
     restart: unless-stopped
     image: ${TEI_EMBEDDING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-base-en-v1.5} --auto-truncate"
@@ -839,10 +817,8 @@ services:
         delay: 10s
 
   embedding:
-    profiles: [opea]
     depends_on:
-      tei:
-        condition: service_healthy
+      - tei
     restart: unless-stopped
     image: opea/embedding:latest
     environment:
@@ -870,7 +846,6 @@ services:
         delay: 10s
 
   tei_reranker:
-    profiles: [opea]
     restart: unless-stopped
     image: ${TEI_RERANKING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-cross-encoder/ms-marco-MiniLM-L-6-v2} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-1024} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-8} --auto-truncate"
@@ -900,10 +875,8 @@ services:
         delay: 10s
 
   reranker:
-    profiles: [opea]
     depends_on:
-      tei_reranker:
-        condition: service_healthy
+      - tei_reranker
     restart: unless-stopped
     build:
       context: .
@@ -936,12 +909,9 @@ services:
         delay: 10s
 
   dataprep-arango-service:
-    profiles: [opea]
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
+      - arango-vector-db
+      - keycloak
     restart: unless-stopped
     build:
       context: .
@@ -1006,10 +976,8 @@ services:
         delay: 10s
 
   retriever-arango-service:
-    profiles: [opea]
     depends_on:
-      arango-vector-db:
-        condition: service_healthy
+      - arango-vector-db
     restart: unless-stopped
     build:
       context: .
@@ -1068,12 +1036,9 @@ services:
         delay: 10s
 
   chatqna-xeon-backend-server:
-    profiles: [opea]
     depends_on:
-      embedding:
-        condition: service_healthy
-      reranker:
-        condition: service_healthy
+      - embedding
+      - reranker
     restart: unless-stopped
     build:
       context: .
@@ -1129,7 +1094,6 @@ services:
   # OPEA UI/Nginx - disabled by default via profiles: [opea] (compose up) / replicas: 0 (Swarm).
   # Activate for OPEA debugging: compose up --profile opea / Swarm: change replicas to 1.
   chatqna-xeon-ui-server:
-    profiles: [opea]
     restart: "no"
     image: opea/chatqna-ui:latest
     # Internal OPEA service - no host port needed
@@ -1155,7 +1119,6 @@ services:
         delay: 10s
 
   chatqna-xeon-nginx-server:
-    profiles: [opea]
     restart: "no"
     image: opea/nginx:latest
     # Internal OPEA service - no host port needed
@@ -1236,8 +1199,9 @@ services:
       - KC_SMTP_HOST=${EMAIL_HOST:-}
       - KC_SMTP_PORT=${EMAIL_PORT:-587}
       - KC_SMTP_SSL=${EMAIL_SECURE:-false}
-      # AUTH derived from EMAIL_USER: enabled when user is set, disabled otherwise
-      - KC_SMTP_AUTH=${EMAIL_USER:+true}
+      # SMTP auth — defaults to true; set EMAIL_SMTP_AUTH=false in .env to disable.
+      # (Swarm's stack-deploy interpolator does not support the ${VAR:+value} form.)
+      - KC_SMTP_AUTH=${EMAIL_SMTP_AUTH:-true}
       # STARTTLS=true for default port 587; ignored when KC_SMTP_SSL=true (port 465)
       - KC_SMTP_STARTTLS=true
       - KC_SMTP_USER=${EMAIL_USER:-}
@@ -1299,7 +1263,7 @@ services:
       - EMAIL_HOST=${EMAIL_HOST:-}
       - EMAIL_PORT=${EMAIL_PORT:-587}
       - EMAIL_SECURE=${EMAIL_SECURE:-false}
-      - EMAIL_SMTP_AUTH=${EMAIL_USER:+true}
+      - EMAIL_SMTP_AUTH=${EMAIL_SMTP_AUTH:-true}
       - EMAIL_SMTP_STARTTLS=true
       - EMAIL_USER=${EMAIL_USER:-}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
@@ -1311,8 +1275,7 @@ services:
       retries: 3
       start_period: 120s
     depends_on:
-      keycloak:
-        condition: service_healthy
+      - keycloak
     networks:
       - genieai_network
     deploy:
@@ -1338,7 +1301,6 @@ services:
   # ===========================================================================
 
   livekit-server:
-    profiles: [legacy_voice]
     restart: unless-stopped
     image: livekit/livekit-server:v1.7
     command: --config /etc/livekit.yaml --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
@@ -1368,7 +1330,6 @@ services:
         max_attempts: 10
 
   asr-whisper:
-    profiles: [voice]
     restart: unless-stopped
     build:
       context: .
@@ -1405,7 +1366,6 @@ services:
         delay: 10s
 
   tts-piper:
-    profiles: [voice]
     restart: unless-stopped
     build:
       context: .
@@ -1453,7 +1413,6 @@ services:
         max_attempts: 30
 
   voice-agent:
-    profiles: [legacy_voice]
     restart: unless-stopped
     depends_on:
       - livekit-server
@@ -1492,7 +1451,6 @@ services:
         max_attempts: 30
 
   coturn:
-    profiles: [legacy_voice]
     restart: unless-stopped
     image: coturn/coturn:4.6
     command:
@@ -1537,7 +1495,6 @@ services:
   # environments without UDP reachability — uses only the existing TLS port
   # 443 via nginx /voice/ proxy.
   voice-bridge:
-    profiles: [voice]
     restart: unless-stopped
     depends_on:
       - asr-whisper

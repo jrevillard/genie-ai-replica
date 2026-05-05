@@ -17,6 +17,21 @@ class WhatsAppText(BaseModel):
     body: str
 
 
+class WhatsAppAudio(BaseModel):
+    """Voice notes and audio attachments from WhatsApp.
+
+    `voice=True` indicates a recorded voice note (the mic button); `voice=False`
+    is a regular audio file the user attached. Both come through the same
+    media-download flow."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    mime_type: str | None = None
+    voice: bool | None = None
+    sha256: str | None = None
+
+
 class WhatsAppMessage(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -25,6 +40,7 @@ class WhatsAppMessage(BaseModel):
     timestamp: str | None = None
     type: str
     text: WhatsAppText | None = None
+    audio: WhatsAppAudio | None = None
 
 
 class WhatsAppContactProfile(BaseModel):

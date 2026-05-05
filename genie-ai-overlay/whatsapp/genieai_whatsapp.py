@@ -16,7 +16,7 @@ import config
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from models.webhook import WhatsAppMessage, WhatsAppWebhookPayload
-from services import chat_session, conversation, opea_client, whatsapp_sender
+from services import asr, chat_session, conversation, media, opea_client, whatsapp_sender
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL, logging.INFO),
@@ -77,6 +77,21 @@ def _extract_first_text_message(
     return None
 
 
+async def _resolve_audio_transcript(message: WhatsAppMessage) -> str:
+    """Download the voice note from Meta and ASR it. Returns "" on failure."""
+    if message.audio is None:
+        return ""
+    blob = await media.download_media(message.audio.id)
+    if not blob:
+        return ""
+    audio_bytes, mime_type = blob
+    return await asr.transcribe(
+        audio_bytes,
+        mime_type or message.audio.mime_type or "audio/ogg",
+        config.CHATQNA_DEFAULT_LANGUAGE.lower()[:2],
+    )
+
+
 async def _process_message(message: WhatsAppMessage) -> None:
     phone = message.from_
 
@@ -84,12 +99,27 @@ async def _process_message(message: WhatsAppMessage) -> None:
         logger.info("Skipping duplicate message %s", message.id)
         return
 
-    if message.type != "text" or message.text is None:
+    user_text = ""
+    if message.type == "text" and message.text is not None:
+        user_text = message.text.body.strip()
+    elif message.type == "audio" and message.audio is not None:
+        # Voice note: download from Meta, transcribe via Whisper, treat the
+        # transcript as the user's text. Reply is still text for now (sending
+        # voice notes back requires ffmpeg in this image to transcode Piper
+        # WAV → OGG/Opus, which WhatsApp accepts).
+        user_text = await _resolve_audio_transcript(message)
+        if not user_text:
+            await whatsapp_sender.send_text(
+                phone,
+                "Sorry, I couldn't understand that voice note. Please try again or send text.",
+            )
+            return
+        logger.info("Voice note from %s transcribed as: %r", phone, user_text)
+    else:
         logger.info("Unsupported message type from %s: %s", phone, message.type)
         await whatsapp_sender.send_text(phone, config.WHATSAPP_UNSUPPORTED_TYPE_MESSAGE)
         return
 
-    user_text = message.text.body.strip()
     if not user_text:
         return
 
@@ -105,6 +135,12 @@ async def _process_message(message: WhatsAppMessage) -> None:
     # Runs off the event loop because python-arango is sync.
     session_id = await asyncio.to_thread(chat_session.find_or_create_session, phone)
     await asyncio.to_thread(chat_session.append_message, session_id, "user", user_text)
+
+    # Prepend the default twin's AI Personality directive so the LLM follows
+    # the configured tone + length. Mirrors the chat / call paths.
+    personality_prompt = await asyncio.to_thread(chat_session.get_default_twin_personality_prompt)
+    if personality_prompt:
+        history = [{"role": "system", "content": personality_prompt}, *history]
 
     ai_reply = await opea_client.chat(history)
     logger.info("AI reply for %s: %r", phone, ai_reply)

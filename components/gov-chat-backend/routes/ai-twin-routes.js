@@ -91,6 +91,16 @@ const settingsSchema = Joi.object({
   .min(1)
   .messages({ 'object.min': 'at least one of chatGreeting, callGreeting is required' });
 
+/** Personality patch — both fields optional; at least one required. */
+const personalitySchema = Joi.object({
+  languageStyle: Joi.string().valid('slang', 'casual', 'professional'),
+  responseLength: Joi.string().valid('short', 'medium', 'long'),
+})
+  .min(1)
+  .messages({
+    'object.min': 'at least one of languageStyle, responseLength is required',
+  });
+
 
 /** Assign KB files: either `fileId` or `fileIds` (document-repository file_id values). */
 const assignKbBodySchema = Joi.alternatives().try(
@@ -126,7 +136,18 @@ module.exports = (aiTwinService) => {
   }
 
   const router = express.Router();
-  router.use(authMiddleware.authenticate, authMiddleware.isAdmin);
+  // All endpoints require a valid session. Read endpoints (list, get-by-key,
+  // get-default, get-settings) are open to any authenticated user; mutating
+  // endpoints add `isAdmin` per-route. The public (no-auth) browse path lives
+  // under /api/public/ai-twins.
+  router.use(authMiddleware.authenticate);
+  const adminOnly = authMiddleware.isAdmin;
+
+  /** The current admin's user `_key` — used to scope every twin lookup so each
+   *  admin only sees / mutates their own twins. */
+  function ownerIdFromReq(req) {
+    return req.user && (req.user._key || req.user.id || req.user.userId);
+  }
 
   /**
    * @swagger
@@ -154,7 +175,7 @@ module.exports = (aiTwinService) => {
     try {
       const offset = req.query.offset;
       const limit = req.query.limit;
-      const result = await aiTwinService.listTwins({ offset, limit });
+      const result = await aiTwinService.listTwins({ offset, limit, ownerId: ownerIdFromReq(req) });
       res.json(result);
     } catch (error) {
       logger.error(`ai-twin list: ${error.message}`, { stack: error.stack });
@@ -209,13 +230,13 @@ module.exports = (aiTwinService) => {
    *       401: { description: Unauthorized }
    *       403: { description: Forbidden }
    */
-  router.post('/', async (req, res) => {
+  router.post('/', adminOnly, async (req, res) => {
     const { value, error } = createSchema.validate(req.body || {}, { stripUnknown: true });
     if (error) {
       return res.status(400).json({ message: error.details[0].message });
     }
     try {
-      const twin = await aiTwinService.createTwin(value);
+      const twin = await aiTwinService.createTwin(value, ownerIdFromReq(req));
       res.status(201).json(twin);
     } catch (error_) {
       if (error_.statusCode === 400) {
@@ -268,14 +289,14 @@ module.exports = (aiTwinService) => {
    *       400: { description: Validation error }
    *       404: { description: Twin not found }
    */
-  router.post('/:twinId/kb-files', async (req, res) => {
+  router.post('/:twinId/kb-files', adminOnly, async (req, res) => {
     const { value, error } = assignKbBodySchema.validate(req.body || {}, { stripUnknown: true });
     if (error) {
       return res.status(400).json({ message: error.details[0].message });
     }
     const ids = fileIdsFromAssignPayload(value);
     try {
-      const twin = await aiTwinService.assignKbFiles(req.params.twinId, ids);
+      const twin = await aiTwinService.assignKbFiles(req.params.twinId, ids, ownerIdFromReq(req));
       res.json(twin);
     } catch (error_) {
       if (error_.statusCode === 404) {
@@ -333,13 +354,13 @@ module.exports = (aiTwinService) => {
    *       400: { description: Unknown id or validation error }
    *       404: { description: Twin not found }
    */
-  router.patch('/:twinId/kb-files', async (req, res) => {
+  router.patch('/:twinId/kb-files', adminOnly, async (req, res) => {
     const { value, error } = replaceKbFilesSchema.validate(req.body || {}, { stripUnknown: true });
     if (error) {
       return res.status(400).json({ message: error.details[0].message });
     }
     try {
-      const twin = await aiTwinService.replaceKbFiles(req.params.twinId, value.linkedKbFileIds);
+      const twin = await aiTwinService.replaceKbFiles(req.params.twinId, value.linkedKbFileIds, ownerIdFromReq(req));
       res.json(twin);
     } catch (error_) {
       if (error_.statusCode === 404) {
@@ -394,7 +415,7 @@ module.exports = (aiTwinService) => {
    *       400: { description: Validation error }
    *       404: { description: Twin not found }
    */
-  router.delete('/:twinId/kb-files', async (req, res) => {
+  router.delete('/:twinId/kb-files', adminOnly, async (req, res) => {
     let ids = [];
     if (req.query.fileId && typeof req.query.fileId === 'string') {
       ids = [req.query.fileId];
@@ -406,7 +427,7 @@ module.exports = (aiTwinService) => {
       ids = fileIdsFromAssignPayload(value);
     }
     try {
-      const twin = await aiTwinService.unassignKbFiles(req.params.twinId, ids);
+      const twin = await aiTwinService.unassignKbFiles(req.params.twinId, ids, ownerIdFromReq(req));
       res.json(twin);
     } catch (error_) {
       if (error_.statusCode === 404) {
@@ -436,6 +457,13 @@ module.exports = (aiTwinService) => {
     try {
       const twin = await aiTwinService.getDefaultTwin();
       if (!twin) return res.status(404).json({ message: 'No default twin set' });
+      // Owner scope: only the admin who owns the default twin sees it via this
+      // endpoint. Internal services (whatsapp / voice-bridge) call the service
+      // directly and aren't affected.
+      const ownerId = ownerIdFromReq(req);
+      if (ownerId && twin.ownerId && twin.ownerId !== ownerId) {
+        return res.status(404).json({ message: 'No default twin set' });
+      }
       res.json(twin);
     } catch (error) {
       logger.error(`ai-twin get default: ${error.message}`, { stack: error.stack });
@@ -484,7 +512,7 @@ module.exports = (aiTwinService) => {
    */
   router.get('/:twinId', async (req, res) => {
     try {
-      const twin = await aiTwinService.getTwinByKey(req.params.twinId);
+      const twin = await aiTwinService.getTwinByKey(req.params.twinId, { ownerId: ownerIdFromReq(req) });
       const counts = await aiTwinService.getTwinSessionCounts(twin._key);
       res.json({ ...twin, ...counts });
     } catch (error) {
@@ -545,13 +573,13 @@ module.exports = (aiTwinService) => {
    *       404:
    *         description: Twin not found
    */
-  router.patch('/:twinId', async (req, res) => {
+  router.patch('/:twinId', adminOnly, async (req, res) => {
     const { value, error } = updateSchema.validate(req.body || {}, { stripUnknown: true });
     if (error) {
       return res.status(400).json({ message: error.details[0].message });
     }
     try {
-      const twin = await aiTwinService.updateTwin(req.params.twinId, value);
+      const twin = await aiTwinService.updateTwin(req.params.twinId, value, ownerIdFromReq(req));
       res.json(twin);
     } catch (error_) {
       if (error_.statusCode === 404) {
@@ -593,13 +621,13 @@ module.exports = (aiTwinService) => {
    *       400: { description: voiceId missing or not in catalog }
    *       404: { description: Twin not found }
    */
-  router.patch('/:twinId/voice', async (req, res) => {
+  router.patch('/:twinId/voice', adminOnly, async (req, res) => {
     const { value, error } = assignVoiceSchema.validate(req.body || {}, { stripUnknown: true });
     if (error) {
       return res.status(400).json({ message: error.details[0].message });
     }
     try {
-      const twin = await aiTwinService.updateTwin(req.params.twinId, { voiceId: value.voiceId });
+      const twin = await aiTwinService.updateTwin(req.params.twinId, { voiceId: value.voiceId }, ownerIdFromReq(req));
       res.json(twin);
     } catch (error_) {
       if (error_.statusCode === 404) {
@@ -643,7 +671,7 @@ module.exports = (aiTwinService) => {
    *       400: { description: Missing or invalid image }
    *       404: { description: Twin not found }
    */
-  router.post('/:twinId/avatar', (req, res, next) => {
+  router.post('/:twinId/avatar', adminOnly, (req, res, next) => {
     avatarUpload.single('image')(req, res, (err) => {
       if (err) {
         const code = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
@@ -657,7 +685,7 @@ module.exports = (aiTwinService) => {
     }
     const publicUrl = `${AVATAR_PUBLIC_PREFIX}/${req.file.filename}`;
     try {
-      const twin = await aiTwinService.updateTwin(req.params.twinId, { profilePicUrl: publicUrl });
+      const twin = await aiTwinService.updateTwin(req.params.twinId, { profilePicUrl: publicUrl }, ownerIdFromReq(req));
       res.json(twin);
     } catch (error) {
       // Best-effort cleanup so we don't leave an orphan file on disk.
@@ -723,7 +751,7 @@ module.exports = (aiTwinService) => {
    */
   router.get('/:twinId/settings', async (req, res) => {
     try {
-      const settings = await aiTwinService.getSettings(req.params.twinId);
+      const settings = await aiTwinService.getSettings(req.params.twinId, ownerIdFromReq(req));
       res.json(settings);
     } catch (error) {
       if (error.statusCode === 404) {
@@ -734,13 +762,13 @@ module.exports = (aiTwinService) => {
     }
   });
 
-  router.post('/:twinId/settings', async (req, res) => {
+  router.post('/:twinId/settings', adminOnly, async (req, res) => {
     const { value, error } = settingsSchema.validate(req.body || {}, { stripUnknown: true });
     if (error) {
       return res.status(400).json({ message: error.details[0].message });
     }
     try {
-      const settings = await aiTwinService.updateSettings(req.params.twinId, value);
+      const settings = await aiTwinService.updateSettings(req.params.twinId, value, ownerIdFromReq(req));
       res.json(settings);
     } catch (error_) {
       if (error_.statusCode === 404) {
@@ -750,6 +778,88 @@ module.exports = (aiTwinService) => {
         return res.status(400).json({ message: error_.message });
       }
       logger.error(`ai-twin post settings: ${error_.message}`, { stack: error_.stack });
+      res.status(500).json({ message: error_.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /ai-twins/{twinId}/personality:
+   *   get:
+   *     summary: Get the AI Personality (language style + response length) for a twin
+   *     description: >-
+   *       Defaults are applied when the twin doc has no personality field —
+   *       the response is always fully populated.
+   *     tags: [AI Twins]
+   *     security: [ { bearerAuth: [] } ]
+   *     parameters:
+   *       - in: path
+   *         name: twinId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: Personality
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 languageStyle:  { type: string, enum: [slang, casual, professional] }
+   *                 responseLength: { type: string, enum: [short, medium, long] }
+   *       404: { description: Twin not found }
+   *   post:
+   *     summary: Update AI Personality (partial — send only fields you want to change)
+   *     tags: [AI Twins]
+   *     security: [ { bearerAuth: [] } ]
+   *     parameters:
+   *       - in: path
+   *         name: twinId
+   *         required: true
+   *         schema: { type: string }
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               languageStyle:  { type: string, enum: [slang, casual, professional] }
+   *               responseLength: { type: string, enum: [short, medium, long] }
+   *     responses:
+   *       200: { description: Updated personality (full object) }
+   *       400: { description: Validation error / no fields }
+   *       404: { description: Twin not found }
+   */
+  router.get('/:twinId/personality', async (req, res) => {
+    try {
+      const personality = await aiTwinService.getPersonality(req.params.twinId, ownerIdFromReq(req));
+      res.json(personality);
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return res.status(404).json({ message: error.message });
+      }
+      logger.error(`ai-twin get personality: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  router.post('/:twinId/personality', adminOnly, async (req, res) => {
+    const { value, error } = personalitySchema.validate(req.body || {}, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ message: error.details[0].message });
+    }
+    try {
+      const personality = await aiTwinService.updatePersonality(req.params.twinId, value, ownerIdFromReq(req));
+      res.json(personality);
+    } catch (error_) {
+      if (error_.statusCode === 404) {
+        return res.status(404).json({ message: error_.message });
+      }
+      if (error_.statusCode === 400) {
+        return res.status(400).json({ message: error_.message });
+      }
+      logger.error(`ai-twin post personality: ${error_.message}`, { stack: error_.stack });
       res.status(500).json({ message: error_.message });
     }
   });
@@ -766,9 +876,9 @@ module.exports = (aiTwinService) => {
    *       404: { description: Twin not found }
    *       409: { description: Cannot delete the default twin }
    */
-  router.delete('/:twinId', async (req, res) => {
+  router.delete('/:twinId', adminOnly, async (req, res) => {
     try {
-      await aiTwinService.deleteTwin(req.params.twinId);
+      await aiTwinService.deleteTwin(req.params.twinId, ownerIdFromReq(req));
       res.status(204).send();
     } catch (error) {
       if (error.statusCode === 404) {

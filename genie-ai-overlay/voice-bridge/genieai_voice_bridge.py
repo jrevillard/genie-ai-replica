@@ -416,9 +416,38 @@ def verify_voice_token(token: str) -> Optional[dict]:
     return {"user_id": str(user_id), "twin_id": str(twin_id) if twin_id else None}
 
 
+def _build_personality_prompt(personality: Optional[dict]) -> str:
+    """Mirror of `buildPersonalityPromptFragment` in
+    components/gov-chat-backend/services/ai-twin-service.js. Keep wording in
+    sync with that file when changing — both produce the same directive so
+    chat / call / WhatsApp behave identically."""
+    style = (personality or {}).get("languageStyle")
+    length = (personality or {}).get("responseLength")
+    if style not in {"slang", "casual", "professional"}:
+        style = "slang"
+    if length not in {"short", "medium", "long"}:
+        length = "medium"
+    style_copy = {
+        "slang": "use natural slang and informal phrasing, like a friend in chat",
+        "casual": "speak in a casual, friendly register; contractions are fine; avoid jargon",
+        "professional": "use formal, precise language; full sentences; no contractions or slang",
+    }[style]
+    length_copy = {
+        "short": "keep responses to 1-2 short sentences; no preamble",
+        "medium": "keep responses moderately detailed, roughly 3-6 sentences",
+        "long": "give thorough, multi-paragraph explanations with examples when helpful",
+    }[length]
+    return (
+        "When replying to the user:\n"
+        f"- Tone: {style_copy}.\n"
+        f"- Length: {length_copy}."
+    )
+
+
 def _load_twin_settings_sync(twin_id: Optional[str]) -> Optional[dict]:
     """Resolve a twin to a tuple of overrides for the voice call. Returns:
-        { 'name', 'callGreeting', 'modelVoiceId' (Piper id), 'language' }
+        { 'name', 'callGreeting', 'modelVoiceId' (Piper id), 'language',
+          'personalityPrompt' }
     or None if the twin / its voice is not in the catalog. modelVoiceId may
     be None if the twin has no voice assigned — caller falls back to gender."""
     if not twin_id:
@@ -439,6 +468,7 @@ def _load_twin_settings_sync(twin_id: Optional[str]) -> Optional[dict]:
             "callGreeting": (twin.get("callGreeting") or "").strip(),
             "modelVoiceId": (voice_doc or {}).get("modelVoiceId") if voice_doc else None,
             "language": (voice_doc or {}).get("language") if voice_doc else None,
+            "personalityPrompt": _build_personality_prompt(twin.get("personality")),
         }
     except Exception as exc:
         logger.warning("[TWIN] load failed for %s: %s", twin_id, exc)
@@ -839,6 +869,10 @@ async def voice_stream(ws: WebSocket) -> None:
                 VAD_AGGRESSIVENESS, SILENCE_FRAMES_TO_END, MIN_UTTERANCE_FRAMES)
 
     history = [{"role": "system", "content": SYSTEM_PROMPTS[language]}]
+    # Twin's AI Personality is appended as a second system turn so the LLM
+    # follows the configured tone + length. Mirrors the chat path.
+    if twin_settings and twin_settings.get("personalityPrompt"):
+        history.append({"role": "system", "content": twin_settings["personalityPrompt"]})
     # Twin's callGreeting overrides the default per-language greeting. The
     # default voice prompt is in English; if the twin uses another language,
     # operators are responsible for setting a matching callGreeting.

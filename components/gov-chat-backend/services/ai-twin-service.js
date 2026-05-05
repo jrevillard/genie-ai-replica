@@ -13,6 +13,51 @@ const DEFAULT_TWIN_NUMBER = '+1 (575) 223-6878';
 /** Default greeting used for both chat and call on new twins. */
 const DEFAULT_GREETING = 'Hey, How can I help you today ?';
 
+/** Allowed AI Personality values. Both fields are open enums today; broaden in this list. */
+const LANGUAGE_STYLES = Object.freeze(['slang', 'casual', 'professional']);
+const RESPONSE_LENGTHS = Object.freeze(['short', 'medium', 'long']);
+/** Project-wide default personality applied to any twin that doesn't have one set. */
+const DEFAULT_PERSONALITY = Object.freeze({
+  languageStyle: 'slang',
+  responseLength: 'medium',
+});
+
+/**
+ * Map a twin's personality settings to a single instruction string that gets
+ * prepended (as a `role: system` message) to the chat history sent to chatqna.
+ * Exposed for the voice-bridge / whatsapp paths so they can inject the same
+ * directive without re-deriving the wording.
+ *
+ * @param {{ languageStyle?: string, responseLength?: string } | null | undefined} personality
+ * @returns {string} Single-paragraph directive. Falsy when personality is empty.
+ */
+function buildPersonalityPromptFragment(personality) {
+  const p = personality || {};
+  const style = LANGUAGE_STYLES.includes(p.languageStyle)
+    ? p.languageStyle
+    : DEFAULT_PERSONALITY.languageStyle;
+  const length = RESPONSE_LENGTHS.includes(p.responseLength)
+    ? p.responseLength
+    : DEFAULT_PERSONALITY.responseLength;
+
+  const STYLE_COPY = {
+    slang: 'use natural slang and informal phrasing, like a friend in chat',
+    casual: 'speak in a casual, friendly register; contractions are fine; avoid jargon',
+    professional: 'use formal, precise language; full sentences; no contractions or slang',
+  };
+  const LENGTH_COPY = {
+    short: 'keep responses to 1-2 short sentences; no preamble',
+    medium: 'keep responses moderately detailed, roughly 3-6 sentences',
+    long: 'give thorough, multi-paragraph explanations with examples when helpful',
+  };
+
+  return [
+    'When replying to the user:',
+    `- Tone: ${STYLE_COPY[style]}.`,
+    `- Length: ${LENGTH_COPY[length]}.`,
+  ].join('\n');
+}
+
 /** @typedef {import('arangojs').DocumentCollection} DocumentCollection */
 
 /**
@@ -121,6 +166,7 @@ class AiTwinService {
     const isDefault = doc.isDefault === true;
     return {
       _key: doc._key,
+      ownerId: doc.ownerId ?? null,
       name: doc.name,
       profilePicUrl: doc.profilePicUrl ?? null,
       description: doc.description ?? '',
@@ -132,8 +178,26 @@ class AiTwinService {
       // surface an empty string regardless of any legacy stored value.
       twinNumber: isDefault ? (doc.twinNumber || DEFAULT_TWIN_NUMBER) : '',
       linkedKbFileIds,
+      personality: this._readPersonality(doc),
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
+    };
+  }
+
+  /**
+   * Read a twin's personality, applying project defaults for any field that
+   * is missing or invalid. Always returns a fully-populated object — never
+   * `null` — so callers can blindly forward to `buildPersonalityPromptFragment`.
+   */
+  _readPersonality(doc) {
+    const raw = (doc && doc.personality) || {};
+    return {
+      languageStyle: LANGUAGE_STYLES.includes(raw.languageStyle)
+        ? raw.languageStyle
+        : DEFAULT_PERSONALITY.languageStyle,
+      responseLength: RESPONSE_LENGTHS.includes(raw.responseLength)
+        ? raw.responseLength
+        : DEFAULT_PERSONALITY.responseLength,
     };
   }
 
@@ -181,48 +245,85 @@ class AiTwinService {
   }
 
   /**
-   * @param {{ offset?: number, limit?: number }} opts
+   * @param {{ offset?: number, limit?: number, ownerId?: string }} opts
+   *   When `ownerId` is provided, only that owner's twins are returned (and
+   *   `total` reflects that filtered count). When omitted, lists all twins —
+   *   used by internal services that need a global view (public guest list,
+   *   admin diagnostics).
    */
   async listTwins(opts = {}) {
     const offset = Math.max(0, parseInt(String(opts.offset ?? 0), 10) || 0);
     const limitRaw = parseInt(String(opts.limit ?? 50), 10);
     const limit = Math.min(Math.max(limitRaw || 50, 1), 200);
+    const ownerId = typeof opts.ownerId === 'string' && opts.ownerId ? String(opts.ownerId) : null;
 
-    const countResult = await this.collection.count();
-    const total = countResult?.count ?? 0;
-
-    const cursor = await this.db.query(
-      aql`
-        FOR t IN ${this.collection}
-          SORT t.updatedAt DESC
-          LIMIT ${offset}, ${limit}
-          RETURN t
-      `
-    );
+    let total;
+    let cursor;
+    if (ownerId) {
+      const countCursor = await this.db.query(
+        aql`FOR t IN ${this.collection} FILTER t.ownerId == ${ownerId} COLLECT WITH COUNT INTO n RETURN n`
+      );
+      total = (await countCursor.all())[0] ?? 0;
+      cursor = await this.db.query(
+        aql`
+          FOR t IN ${this.collection}
+            FILTER t.ownerId == ${ownerId}
+            SORT t.updatedAt DESC
+            LIMIT ${offset}, ${limit}
+            RETURN t
+        `
+      );
+    } else {
+      const countResult = await this.collection.count();
+      total = countResult?.count ?? 0;
+      cursor = await this.db.query(
+        aql`
+          FOR t IN ${this.collection}
+            SORT t.updatedAt DESC
+            LIMIT ${offset}, ${limit}
+            RETURN t
+        `
+      );
+    }
     const rows = await cursor.all();
     const twins = rows.map((d) => this._sanitizeTwin(d));
     return { twins, total, offset, limit };
   }
 
-  async getTwinByKey(key) {
+  /**
+   * @param {string} key
+   * @param {{ ownerId?: string }} [opts]  when `ownerId` is provided, throws
+   *   NotFoundError if the twin's `ownerId` doesn't match. We deliberately
+   *   404 (not 403) so cross-tenant probing can't enumerate twin ids.
+   */
+  async getTwinByKey(key, opts = {}) {
     if (!key || typeof key !== 'string') {
       throw new ValidationError('Invalid twin id');
     }
+    let doc;
     try {
-      const doc = await this.collection.document(key);
-      return this._sanitizeTwin(doc);
+      doc = await this.collection.document(key);
     } catch (e) {
       if (e.errorNum === 1202) {
         throw new NotFoundError('AI twin not found');
       }
       throw e;
     }
+    if (opts && opts.ownerId && doc.ownerId !== opts.ownerId) {
+      throw new NotFoundError('AI twin not found');
+    }
+    return this._sanitizeTwin(doc);
   }
 
   /**
    * @param {{ name: string, profilePicUrl?: string | null, description?: string }} data
+   * @param {string} ownerId  user `_key` of the creating admin — stamped on
+   *   the row so subsequent reads can scope by owner.
    */
-  async createTwin(data) {
+  async createTwin(data, ownerId) {
+    if (!ownerId || typeof ownerId !== 'string') {
+      throw new ValidationError('ownerId is required');
+    }
     const name = typeof data.name === 'string' ? data.name.trim() : '';
     if (!name || name.length > 200) {
       throw new ValidationError('name is required and must be at most 200 characters');
@@ -257,6 +358,7 @@ class AiTwinService {
     const _key = uuidv4();
     const doc = {
       _key,
+      ownerId,
       name,
       profilePicUrl,
       description,
@@ -280,12 +382,13 @@ class AiTwinService {
   /**
    * @param {string} key
    * @param {{ name?: string, profilePicUrl?: string | null, description?: string }} patch
+   * @param {string} [ownerId]  scope the update to this owner — 404 otherwise.
    */
-  async updateTwin(key, patch) {
+  async updateTwin(key, patch, ownerId) {
     if (!key || typeof key !== 'string') {
       throw new ValidationError('Invalid twin id');
     }
-    await this.getTwinByKey(key);
+    await this.getTwinByKey(key, { ownerId });
 
     const updates = {};
     if (patch.name !== undefined) {
@@ -351,8 +454,8 @@ class AiTwinService {
    * Read the chat greeting, call greeting and twin number for a twin.
    * Falls back to the default twin number when the doc has no value.
    */
-  async getSettings(key) {
-    const twin = await this.getTwinByKey(key);
+  async getSettings(key, ownerId) {
+    const twin = await this.getTwinByKey(key, { ownerId });
     return {
       chatGreeting: twin.chatGreeting || DEFAULT_GREETING,
       callGreeting: twin.callGreeting || DEFAULT_GREETING,
@@ -362,10 +465,58 @@ class AiTwinService {
   }
 
   /**
+   * Read a twin's AI Personality (languageStyle + responseLength).
+   * Always returns a full object — defaults fill any missing field.
+   */
+  async getPersonality(key, ownerId) {
+    const twin = await this.getTwinByKey(key, { ownerId });
+    return twin.personality;
+  }
+
+  /**
+   * Patch a twin's personality. Partial updates supported — the object is
+   * shallow-merged with existing values, so a client can change one field
+   * at a time without resending the other.
+   * @returns {Promise<{ languageStyle: string, responseLength: string }>}
+   */
+  async updatePersonality(key, patch, ownerId) {
+    if (!patch || typeof patch !== 'object') {
+      throw new ValidationError('personality body is required');
+    }
+    const updates = {};
+    if (patch.languageStyle !== undefined) {
+      if (!LANGUAGE_STYLES.includes(patch.languageStyle)) {
+        throw new ValidationError(
+          `languageStyle must be one of: ${LANGUAGE_STYLES.join(', ')}`
+        );
+      }
+      updates.languageStyle = patch.languageStyle;
+    }
+    if (patch.responseLength !== undefined) {
+      if (!RESPONSE_LENGTHS.includes(patch.responseLength)) {
+        throw new ValidationError(
+          `responseLength must be one of: ${RESPONSE_LENGTHS.join(', ')}`
+        );
+      }
+      updates.responseLength = patch.responseLength;
+    }
+    if (Object.keys(updates).length === 0) {
+      return this.getPersonality(key, ownerId);
+    }
+    const twin = await this.getTwinByKey(key, { ownerId }); // 404 if missing or not yours
+    const merged = { ...twin.personality, ...updates };
+    await this.collection.update(key, {
+      personality: merged,
+      updatedAt: new Date().toISOString(),
+    });
+    return merged;
+  }
+
+  /**
    * Update any subset of {chatGreeting, callGreeting, twinNumber}.
    * Returns the new settings (same shape as getSettings).
    */
-  async updateSettings(key, patch) {
+  async updateSettings(key, patch, ownerId) {
     if (!patch || typeof patch !== 'object') {
       throw new ValidationError('settings body is required');
     }
@@ -377,7 +528,7 @@ class AiTwinService {
       updates.callGreeting = this._normalizeGreeting(patch.callGreeting, 'callGreeting');
     }
     if (patch.twinNumber !== undefined) {
-      const current = await this.getTwinByKey(key);
+      const current = await this.getTwinByKey(key, { ownerId });
       if (!current.isDefault) {
         const e = new ValidationError('twinNumber can only be set on the default twin (POST /:twinId/default first)');
         e.statusCode = 400;
@@ -386,12 +537,12 @@ class AiTwinService {
       updates.twinNumber = this._normalizeTwinNumber(patch.twinNumber);
     }
     if (Object.keys(updates).length === 0) {
-      return this.getSettings(key);
+      return this.getSettings(key, ownerId);
     }
-    await this.getTwinByKey(key); // 404 if missing
+    await this.getTwinByKey(key, { ownerId }); // 404 if missing or not yours
     updates.updatedAt = new Date().toISOString();
     await this.collection.update(key, updates);
-    return this.getSettings(key);
+    return this.getSettings(key, ownerId);
   }
 
   /**
@@ -445,7 +596,7 @@ class AiTwinService {
     return doc ? this._sanitizeTwin(doc) : null;
   }
 
-  async deleteTwin(key) {
+  async deleteTwin(key, ownerId) {
     if (!key || typeof key !== 'string') {
       throw new ValidationError('Invalid twin id');
     }
@@ -459,6 +610,9 @@ class AiTwinService {
         throw new NotFoundError('AI twin not found');
       }
       throw e;
+    }
+    if (ownerId && existing.ownerId !== ownerId) {
+      throw new NotFoundError('AI twin not found');
     }
     if (existing.isDefault === true) {
       const err = new ValidationError('The default twin cannot be deleted');
@@ -481,14 +635,14 @@ class AiTwinService {
    * @param {string} twinKey
    * @param {string[]} rawIds
    */
-  async assignKbFiles(twinKey, rawIds) {
+  async assignKbFiles(twinKey, rawIds, ownerId) {
     if (!twinKey || typeof twinKey !== 'string') {
       throw new ValidationError('Invalid twin id');
     }
     if (!Array.isArray(rawIds) || rawIds.length === 0) {
       throw new ValidationError('At least one file id is required');
     }
-    await this.getTwinByKey(twinKey);
+    await this.getTwinByKey(twinKey, { ownerId });
     const normalized = [...new Set(rawIds.map((id) => normalizeKbFileId(id)).filter(Boolean))];
     if (normalized.length === 0) {
       throw new ValidationError('No valid KB file ids');
@@ -521,14 +675,14 @@ class AiTwinService {
    * @param {string} twinKey
    * @param {string[]} rawIds
    */
-  async unassignKbFiles(twinKey, rawIds) {
+  async unassignKbFiles(twinKey, rawIds, ownerId) {
     if (!twinKey || typeof twinKey !== 'string') {
       throw new ValidationError('Invalid twin id');
     }
     if (!Array.isArray(rawIds) || rawIds.length === 0) {
       throw new ValidationError('At least one file id is required');
     }
-    await this.getTwinByKey(twinKey);
+    await this.getTwinByKey(twinKey, { ownerId });
     const removeSet = new Set(rawIds.map((id) => normalizeKbFileId(id)).filter(Boolean));
     if (removeSet.size === 0) {
       throw new ValidationError('No valid KB file ids');
@@ -585,14 +739,14 @@ class AiTwinService {
    * @param {string} twinKey
    * @param {string[]} rawIds - full replacement list (empty array clears all links)
    */
-  async replaceKbFiles(twinKey, rawIds) {
+  async replaceKbFiles(twinKey, rawIds, ownerId) {
     if (!twinKey || typeof twinKey !== 'string') {
       throw new ValidationError('Invalid twin id');
     }
     if (!Array.isArray(rawIds)) {
       throw new ValidationError('linkedKbFileIds must be an array');
     }
-    await this.getTwinByKey(twinKey);
+    await this.getTwinByKey(twinKey, { ownerId });
 
     const seen = new Set();
     const normalizedOrdered = [];
@@ -632,4 +786,11 @@ class AiTwinService {
   }
 }
 
-module.exports = new AiTwinService();
+const aiTwinService = new AiTwinService();
+// Singleton + side-channel helpers. The helper lets call/whatsapp paths
+// derive the personality directive without recreating the wording.
+module.exports = aiTwinService;
+module.exports.buildPersonalityPromptFragment = buildPersonalityPromptFragment;
+module.exports.LANGUAGE_STYLES = LANGUAGE_STYLES;
+module.exports.RESPONSE_LENGTHS = RESPONSE_LENGTHS;
+module.exports.DEFAULT_PERSONALITY = DEFAULT_PERSONALITY;

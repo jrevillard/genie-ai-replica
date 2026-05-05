@@ -62,6 +62,25 @@ const audioUpload = multer({
   },
 });
 
+const CHAT_AUDIO_MIME_BY_EXT = {
+  '.wav': 'audio/wav',
+  '.webm': 'audio/webm',
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+};
+
+/** Resolve a stored audioUrl to a disk path inside CHAT_AUDIO_DIR (path-traversal safe). */
+function resolveUserAudioPath(audioUrl) {
+  if (!audioUrl || typeof audioUrl !== 'string') return null;
+  if (!audioUrl.startsWith(`${CHAT_AUDIO_PUBLIC_PREFIX}/`)) return null;
+  const filename = path.basename(audioUrl.slice(CHAT_AUDIO_PUBLIC_PREFIX.length + 1));
+  if (!filename || filename.includes('..') || filename.includes('/')) return null;
+  const abs = path.join(CHAT_AUDIO_DIR, filename);
+  if (!abs.startsWith(`${CHAT_AUDIO_DIR}${path.sep}`) && abs !== CHAT_AUDIO_DIR) return null;
+  return abs;
+}
+
 function wrapPcmInWav(pcm, sampleRate, channels, bitsPerSample) {
   const byteRate = (sampleRate * channels * bitsPerSample) / 8;
   const blockAlign = (channels * bitsPerSample) / 8;
@@ -133,6 +152,33 @@ const router = express.Router();
  */
 
 /* =========================================================================
+   GET /api/public/chat-sessions/languages
+   ------------------------------------------------------------------------- */
+/**
+ * @swagger
+ * /public/chat-sessions/languages:
+ *   get:
+ *     summary: List supported chat languages (translator coverage) — same list as the authed endpoint
+ *     tags: [Public (Guest)]
+ *     responses:
+ *       200:
+ *         description: Languages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   code: { type: string, example: en }
+ *                   name: { type: string, example: English }
+ */
+router.get('/chat-sessions/languages', (req, res) => {
+  const { CHAT_LANGUAGES } = require('../constants/chat-languages');
+  res.json(CHAT_LANGUAGES);
+});
+
+/* =========================================================================
    GET /api/public/ai-twins   (sanitized public directory of twins)
    ------------------------------------------------------------------------- */
 /**
@@ -164,12 +210,9 @@ const router = express.Router();
  *                   items:
  *                     type: object
  *                     properties:
- *                       _key:          { type: string }
- *                       name:          { type: string }
- *                       profilePicUrl: { type: string, nullable: true }
- *                       description:   { type: string }
- *                       isDefault:     { type: boolean }
- *                       voiceId:       { type: string, nullable: true }
+ *                       _key:        { type: string }
+ *                       name:        { type: string }
+ *                       description: { type: string }
  */
 router.get('/ai-twins', async (req, res) => {
   try {
@@ -183,10 +226,7 @@ router.get('/ai-twins', async (req, res) => {
       twins: twins.map((t) => ({
         _key: t._key,
         name: t.name,
-        profilePicUrl: t.profilePicUrl,
         description: t.description,
-        isDefault: t.isDefault,
-        voiceId: t.voiceId,
       })),
     });
   } catch (error) {
@@ -202,7 +242,7 @@ router.get('/ai-twins', async (req, res) => {
  * @swagger
  * /public/ai-twins/{id}:
  *   get:
- *     summary: Read a public AI twin (only the default twin is exposed)
+ *     summary: Read a public AI twin by id
  *     tags: [Public (Guest)]
  *     parameters:
  *       - in: path
@@ -210,30 +250,29 @@ router.get('/ai-twins', async (req, res) => {
  *         required: true
  *         schema: { type: string }
  *     responses:
- *       200: { description: Twin (sanitized — no admin fields) }
- *       404: { description: Not found / not the default twin }
+ *       200:
+ *         description: Sanitized twin (same fields as the list endpoint)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _key:        { type: string }
+ *                 name:        { type: string }
+ *                 description: { type: string }
+ *       404: { description: Twin not found }
  */
 router.get('/ai-twins/:id', async (req, res) => {
   try {
-    const defaultKey = await getDefaultTwinKey();
-    if (req.params.id !== defaultKey) {
-      return res.status(404).json({ message: 'Twin not found' });
-    }
-    const twin = await aiTwinService.getTwinByKey(defaultKey);
-    // Strip fields a guest doesn't need to see.
+    const twin = await aiTwinService.getTwinByKey(req.params.id);
     res.json({
       _key: twin._key,
       name: twin.name,
-      profilePicUrl: twin.profilePicUrl,
       description: twin.description,
-      chatGreeting: twin.chatGreeting,
-      callGreeting: twin.callGreeting,
-      voiceId: twin.voiceId,
     });
   } catch (error) {
     const status = error.statusCode || 500;
     if (status === 404) return res.status(404).json({ message: 'Twin not found' });
-    if (status === 503) return res.status(503).json({ message: error.message });
     logger.error(`public ai-twin: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
@@ -246,8 +285,18 @@ router.get('/ai-twins/:id', async (req, res) => {
  * @swagger
  * /public/chat-sessions:
  *   post:
- *     summary: Create a new guest chat session against the default twin
+ *     summary: Create a new guest chat session against any twin (defaults to the default twin)
  *     tags: [Public (Guest)]
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               twinId:
+ *                 type: string
+ *                 description: Optional. When omitted the session targets the default twin.
  *     responses:
  *       201:
  *         description: Created
@@ -260,16 +309,29 @@ router.get('/ai-twins/:id', async (req, res) => {
  *                 guestId:   { type: string, description: "Synthetic id stamped on the session" }
  *                 twinId:    { type: string }
  *                 createdAt: { type: string, format: date-time }
+ *       400: { description: Provided twinId does not exist }
+ *       503: { description: No default twin configured (and no twinId provided) }
  */
 router.post('/chat-sessions', async (req, res) => {
   try {
-    const twinId = await getDefaultTwinKey();
+    // Pick the twin: explicit body.twinId wins; otherwise fall back to the default.
+    // Validate either way so the session never points at a non-existent twin.
+    let twinId = req.body?.twinId;
+    if (twinId) {
+      try {
+        await aiTwinService.getTwinByKey(String(twinId));
+      } catch (e) {
+        return res.status(400).json({ message: 'twinId does not exist' });
+      }
+      twinId = String(twinId);
+    } else {
+      twinId = await getDefaultTwinKey();
+    }
+
     const guestId = newGuestId();
-    // chatSessionService.createSession signs sessions with the caller's
-    // user-key. Strip the "guest:" prefix internally — its _uid() helper
-    // does that already, so the row gets userId = the bare uuid. We want
-    // to keep "guest:" so loadGuestSession() can detect it.
-    // Cleanest: write the session doc directly using the same shape.
+    // Write the session doc directly so the userId keeps the "guest:" prefix
+    // that loadGuestSession() relies on (chatSessionService.createSession would
+    // strip it via its internal _uid() helper).
     const now = new Date().toISOString();
     const meta = await chatSessionService.sessions.save({
       userId: guestId,
@@ -320,6 +382,23 @@ router.post('/chat-sessions', async (req, res) => {
  *                   categoryLabel: { type: string }
  *                   serviceLabels: { type: array, items: { type: string } }
  *                   language: { type: string, default: EN }
+ *     responses:
+ *       200:
+ *         description: Assistant reply with both turns persisted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 sessionId:          { type: string }
+ *                 userMessageId:      { type: string }
+ *                 assistantMessageId: { type: string }
+ *                 response:           { type: string, description: assistant reply text }
+ *                 responseTime:       { type: integer, description: ms }
+ *                 queryId:            { type: string, nullable: true }
+ *       400: { description: Missing or invalid text }
+ *       404: { description: Session not found / not a guest session }
+ *       500: { description: Internal error (LLM upstream, persistence, etc.) }
  */
 router.post('/chat-sessions/:sessionId/messages', async (req, res) => {
   try {
@@ -385,7 +464,7 @@ router.get('/chat-sessions/:sessionId/messages', async (req, res) => {
  * @swagger
  * /public/chat-sessions/{sessionId}/messages/{messageId}/audio:
  *   get:
- *     summary: Synthesize audio for an assistant message via the twin's voice
+ *     summary: Get audio for a message — original recording for user voice messages, Piper TTS for assistant messages
  *     tags: [Public (Guest)]
  *     parameters:
  *       - in: path
@@ -397,16 +476,28 @@ router.get('/chat-sessions/:sessionId/messages', async (req, res) => {
  *         required: true
  *         schema: { type: string }
  *     responses:
- *       200: { description: WAV stream, content: { audio/wav: {} } }
- *       400: { description: Audio playback only available for assistant messages }
- *       404: { description: Message / twin / voice not found }
+ *       200: { description: Audio stream — original mime for user, audio/wav for assistant TTS }
+ *       400: { description: This user message has no audio (text-only) }
+ *       404: { description: Message / twin / voice not found / file missing }
  */
 router.get('/chat-sessions/:sessionId/messages/:messageId/audio', async (req, res) => {
   try {
     const session = await loadGuestSession(req.params.sessionId);
     const msg = await chatSessionService.getMessage(req.params.sessionId, req.params.messageId);
-    if (msg.role !== 'assistant') {
-      return res.status(400).json({ message: 'Audio playback only available for assistant messages' });
+    if (msg.role === 'user') {
+      if (!msg.audioUrl) {
+        return res.status(400).json({ message: 'This user message has no audio (text-only)' });
+      }
+      const abs = resolveUserAudioPath(msg.audioUrl);
+      if (!abs || !fs.existsSync(abs)) {
+        return res.status(404).json({ message: 'Audio file no longer available' });
+      }
+      const ext = path.extname(abs).toLowerCase();
+      const mime = CHAT_AUDIO_MIME_BY_EXT[ext] || 'application/octet-stream';
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Cache-Control', 'no-store');
+      try { res.setHeader('Content-Length', String(fs.statSync(abs).size)); } catch (_) { /* best-effort */ }
+      return fs.createReadStream(abs).pipe(res);
     }
     if (!session.twinId) return res.status(404).json({ message: 'Session has no twin assigned' });
     let twin;
@@ -543,7 +634,7 @@ router.post(
  * @swagger
  * /public/voice/token:
  *   post:
- *     summary: Mint a short-lived voice JWT for a guest live call against the default twin
+ *     summary: Mint a short-lived voice JWT for a guest live call against any twin (defaults to the default twin)
  *     tags: [Public (Guest)]
  *     requestBody:
  *       required: false
@@ -553,9 +644,12 @@ router.post(
  *             type: object
  *             properties:
  *               language: { type: string, enum: [en, fr, es, sw], default: en }
+ *               twinId:
+ *                 type: string
+ *                 description: Optional. When omitted the call targets the default twin.
  *     responses:
  *       200:
- *         description: WS info + voiceToken (carries guest userId + default twinId)
+ *         description: WS info + voiceToken (carries guest userId + chosen twinId)
  *         content:
  *           application/json:
  *             schema:
@@ -566,6 +660,8 @@ router.post(
  *                 expiresIn: { type: integer }
  *                 language: { type: string }
  *                 twinId: { type: string }
+ *       400: { description: Provided twinId does not exist }
+ *       503: { description: Voice token service unavailable / no default twin }
  */
 router.post('/voice/token', async (req, res) => {
   try {
@@ -573,7 +669,21 @@ router.post('/voice/token', async (req, res) => {
       return res.status(503).json({ message: 'Voice token service unavailable' });
     }
     const language = (req.body && req.body.language) || 'en';
-    const twinId = await getDefaultTwinKey();
+
+    // Pick the twin: explicit body.twinId wins; otherwise fall back to default.
+    // Validate either way so the JWT never carries a non-existent twin.
+    let twinId = req.body && req.body.twinId;
+    if (twinId) {
+      try {
+        await aiTwinService.getTwinByKey(String(twinId));
+      } catch (e) {
+        return res.status(400).json({ message: 'twinId does not exist' });
+      }
+      twinId = String(twinId);
+    } else {
+      twinId = await getDefaultTwinKey();
+    }
+
     const guestId = newGuestId();
     const result = await voiceTokenService.mintToken({
       userId: guestId,

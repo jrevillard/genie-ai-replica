@@ -83,6 +83,52 @@ def _get_default_twin_key(db) -> Optional[str]:
     return None
 
 
+def _build_personality_prompt(personality: Optional[dict]) -> str:
+    """Mirror of `buildPersonalityPromptFragment` in
+    components/gov-chat-backend/services/ai-twin-service.js. Keep wording in
+    sync — chat / call / WhatsApp must agree on the directive."""
+    style = (personality or {}).get("languageStyle")
+    length = (personality or {}).get("responseLength")
+    if style not in {"slang", "casual", "professional"}:
+        style = "slang"
+    if length not in {"short", "medium", "long"}:
+        length = "medium"
+    style_copy = {
+        "slang": "use natural slang and informal phrasing, like a friend in chat",
+        "casual": "speak in a casual, friendly register; contractions are fine; avoid jargon",
+        "professional": "use formal, precise language; full sentences; no contractions or slang",
+    }[style]
+    length_copy = {
+        "short": "keep responses to 1-2 short sentences; no preamble",
+        "medium": "keep responses moderately detailed, roughly 3-6 sentences",
+        "long": "give thorough, multi-paragraph explanations with examples when helpful",
+    }[length]
+    return (
+        "When replying to the user:\n"
+        f"- Tone: {style_copy}.\n"
+        f"- Length: {length_copy}."
+    )
+
+
+def get_default_twin_personality_prompt() -> Optional[str]:
+    """Read the default twin's personality and return the LLM directive string.
+    Returns None when Arango isn't available or no default twin is seeded."""
+    db = get_db()
+    if db is None:
+        return None
+    twin_id = _get_default_twin_key(db)
+    if not twin_id:
+        return None
+    try:
+        twin = db.collection(TWINS_COLLECTION).get(twin_id)
+        if not twin:
+            return None
+        return _build_personality_prompt(twin.get("personality"))
+    except Exception as exc:
+        logger.warning("personality lookup failed for default twin: %s", exc)
+        return None
+
+
 def find_or_create_session(phone: str) -> Optional[str]:
     """Return the session _key for this phone, creating one if none exists.
 

@@ -231,11 +231,26 @@ class ChatSessionService {
     if (!t) {
       throw new ValidationError('Message text is required');
     }
-    await this.getSessionForUser(sessionId, userId);
+    const session = await this.getSessionForUser(sessionId, userId);
 
     const maxH = historyLimit();
     const history = await this.getRecentMessagesChronological(sessionId, maxH);
-    const opeaMessages = [...history, { role: 'user', content: t }];
+
+    // Personality directive: prepend the twin's tone+length instructions as a
+    // system message so the LLM follows them. Best-effort — if we can't load
+    // the twin (legacy session, twin deleted) we just skip the directive.
+    const opeaMessages = [];
+    if (session.twinId) {
+      try {
+        const aiTwinService = require('./ai-twin-service');
+        const personality = await aiTwinService.getPersonality(session.twinId);
+        const directive = aiTwinService.buildPersonalityPromptFragment(personality);
+        if (directive) opeaMessages.push({ role: 'system', content: directive });
+      } catch (e) {
+        logger.warn(`personality lookup failed for session ${sessionId}: ${e.message}`);
+      }
+    }
+    opeaMessages.push(...history, { role: 'user', content: t });
 
     const ctx = {
       categoryLabel: context?.categoryLabel || 'General',

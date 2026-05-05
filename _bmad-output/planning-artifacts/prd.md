@@ -59,6 +59,30 @@ The core insight is that this is not a feature bolted onto RAG — it is the **c
 | Complexity | `high` (borderline critical) | Three independent capability surfaces (search, registry, ingestion), each with its own security model, data lifecycle, and integration points. Sprint 24/25 cascade dependency — a slip here delays two downstream sprints |
 | Project Context | `brownfield` | Extending existing RAG pipeline (Embedding → Retrieval → Reranking → LLM → Translation) with established architecture, auth patterns, Docker Swarm deployment, and defined Sprint 20-25 roadmap |
 
+### Technology Conventions
+
+This is a brownfield project extending an existing codebase with a defined technology stack. The following technology names appear throughout this PRD as **established constraints**, not implementation choices:
+
+- **Python / FastAPI** — OPEA service runtime and web framework (existing)
+- **Redis / Redis Streams** — Cache, event transport, rate limiting (existing)
+- **ArangoDB** — Document, graph, and vector storage (existing)
+- **TEI** — Text Embeddings Inference for vector generation (existing)
+- **SearXNG** — Open-source meta-search engine, default web search backend (new, CPU-only)
+- **Vue 3** — Web frontend framework (existing, Options API)
+- **Flutter** — Mobile frontend framework (existing)
+- **Docker Swarm / Kubernetes** — Container orchestration (existing Swarm, planned K8s)
+- **Ansible** — Deployment automation (existing)
+- **Keycloak** — Identity and access management (existing)
+- **LangGraph** — Agentic workflow orchestrator (planned Sprint 24)
+- **JSON Schema / OpenAPI** — Tool definition standards (chosen for this initiative)
+- **YAML** — Configuration authoring format (existing convention)
+- **gRPC / REST** — Inter-service communication protocols (existing)
+- **Circuit breaker / Dead letter queue** — Resilience patterns (chosen for this initiative)
+- **Microsoft Presidio** — Reference PII redaction implementation (chosen, pluggable)
+- **MCP (Model Context Protocol)** — Future tool server protocol (vision phase)
+
+All FRs and NFRs referencing these technologies are binding constraints inherited from the existing stack or deliberate selections for this initiative. They are not suggestions or implementation options.
+
 ## Success Criteria
 
 ### User Success
@@ -205,15 +229,23 @@ He decides to wait. The circuit breaker's backoff policy means the feed will aut
 
 Samuel updates the incident ticket with his assessment and goes back to sleep. The system heals itself.
 
+### Journey 6: LangGraph Agent — Sprint 24 Integration Path
+
+**A LangGraph orchestrator** (Sprint 24) receives a citizen query about current health service availability. The workflow graph routes through a "decide tools" node, which calls the `ToolExecutor.execute("health-dashboard", {"region": "dar-es-salaam"})` interface. The ToolExecutor looks up the tool definition from the registry, applies PII redaction to the parameters, invokes the live API, and returns a structured `ToolResult` with results, confidence score, and source citations. The workflow graph merges this with RAG retrieval results and proceeds to the LLM response node.
+
+No adapter layer is needed — the same `ToolExecutor` interface that ChatQnA calls in the current pipeline is consumed directly by the LangGraph `ToolNode`. The tool registry, PII guardrail, rate limiting, and audit logging all operate identically regardless of whether the consumer is ChatQnA or LangGraph. This journey validates FR46 (ToolExecutor interface) and FR22 (cross-consumer compatibility).
+
 ### Journey Requirements Summary
 
-| Journey | Key Capabilities Revealed |
-|---------|--------------------------|
-| Amina's Tax Question | Rule-based trigger on low confidence, PII redaction, SearXNG search, result fusion with scoring/deduplication, source citations with provenance labels (KB vs web), context window budget allocation |
-| Joseph's Missing Permit | Result quality threshold enforcement, graceful degradation response, knowledge gap flagging, audit trail for unanswered queries, tool analytics for content gap identification |
-| Fatima's Deployment | YAML-based configuration, domain whitelisting, feed scheduling, retention policies, config validation tooling, health check endpoints, Ansible deployment integration, PII redaction audit verification |
-| Dr. Kofi's API Registration | OpenAPI spec import, YAML tool definition format, field mapping for API responses, tool registry auto-discovery, rate limiting, audit logging, no-code tool registration workflow |
-| Samuel's Midnight Alert | Circuit breaker pattern, dead letter queue, health check endpoints, exponential backoff recovery, monitoring integration, automatic self-healing, graceful single-source degradation without user impact |
+| Journey | Key Capabilities Revealed | Primary FRs |
+|---------|--------------------------|-------------|
+| Amina's Tax Question | Rule-based trigger on low confidence, PII redaction, SearXNG search, result fusion with scoring/deduplication, source citations with provenance labels (KB vs web), context window budget allocation | FR8, FR12, FR14, FR16, FR19-FR22 |
+| Joseph's Missing Permit | Result quality threshold enforcement, graceful degradation response, knowledge gap flagging, audit trail for unanswered queries, tool analytics for content gap identification | FR23, FR24, FR39, FR44 |
+| Fatima's Deployment | YAML-based configuration, domain whitelisting, feed scheduling, retention policies, config validation tooling, health check endpoints, Ansible deployment integration, PII redaction audit verification | FR1, FR4, FR6, FR17, FR29, FR31-FR35, FR45 |
+| Dr. Kofi's API Registration | OpenAPI spec import, YAML tool definition format, field mapping for API responses, tool registry auto-discovery, rate limiting, audit logging, no-code tool registration workflow | FR2, FR5, FR7, FR15, FR26 |
+| Samuel's Midnight Alert | Circuit breaker pattern, dead letter queue, health check endpoints, exponential backoff recovery, monitoring integration, automatic self-healing, graceful single-source degradation without user impact | FR25, FR41-FR43, FR45 |
+
+FRs not directly exercised by a user journey but validated through integration testing: FR3 (enable/disable at runtime), FR9 (time-sensitive patterns), FR10 (LLM-driven fallback), FR11 (authorization enforcement), FR13 (pluggable PII), FR18 (alternative backends), FR20 (context budget), FR27 (webhook), FR28 (TEI/ArangoDB pipeline), FR36 (config validation API), FR37-FR38 (user interaction surfaces — exercised via Amina's journey but on web/mobile platforms), FR40 (WCAG compliance), FR46 (ToolExecutor contract — Sprint 24 readiness), FR47 (ChatQnA integration point), FR48 (containerized deployment)
 
 ## Domain-Specific Requirements
 
@@ -238,6 +270,10 @@ The tool registry's use of JSON Schema and OpenAPI aligns with government intero
 ### Content Neutrality
 
 When web search augments RAG responses, the system must not introduce political or editorial bias through search engine result ranking. Domain whitelisting provides the primary mitigation by restricting results to approved government and institutional sources. Additional mitigations include: configurable result source labeling that distinguishes government sources from news/media sources, and the ability for deployments to weight government sources higher in result fusion scoring.
+
+### Data Residency
+
+All tool invocation data (queries, parameters, results, audit logs) must remain within the sovereign deployment boundary. External tool calls (web search, custom API tools) route queries outbound but store all results, metadata, and audit records locally. No tool invocation data is transmitted to third-party analytics, logging, or monitoring services outside the deployment boundary. This is enforced by architecture: the PII redaction guardrail and result capture layer operate before any data leaves the internal network, and all storage targets (ArangoDB, Redis, audit logs) are local to the deployment.
 
 ## Innovation & Novel Patterns
 
@@ -568,7 +604,7 @@ Within the single MVP release, capabilities are implemented in dependency order:
 - FR10: The system can invoke tools when the LLM determines the knowledge base is insufficient (LLM-driven selection, fallback to rule-based)
 - FR11: Tools that are disabled or unauthorized cannot be invoked by either rule-based or LLM-driven paths
 - FR12: The system redacts personally identifiable information from all tool parameters before external execution (mandatory guardrail)
-- FR13: The PII redaction component is pluggable — alternative implementations can be substituted without architectural changes
+- FR13: The PII redaction component is pluggable — alternative implementations can be substituted without architectural changes by implementing the `PIIRedactor` interface and updating the configuration
 - FR14: The system captures structured output from tool executions including results, source citations, confidence scores, and execution metadata
 - FR15: The system enforces per-tool rate limits to protect external service backends from overload
 
@@ -598,19 +634,19 @@ Within the single MVP release, capabilities are implemented in dependency order:
 
 ### Admin Configuration & Monitoring
 
-- FR31: System administrators can view and manage all tools through the Vue 3 admin UI (tool list, enable/disable, configuration editing)
-- FR32: System administrators can manage domain whitelists through the Vue 3 admin UI
-- FR33: System administrators can view tool and feed health status through the Vue 3 admin UI
-- FR34: System administrators can review audit logs for all tool invocations through the Vue 3 admin UI
-- FR35: System administrators can manage ingestion feeds (add, edit, schedule, configure retention) through the Vue 3 admin UI, integrated into the existing Document Management tab alongside current ingestion features
+- FR31: System administrators can view and manage all tools through the admin web interface (tool list, enable/disable, configuration editing)
+- FR32: System administrators can manage domain whitelists through the admin web interface
+- FR33: System administrators can view tool and feed health status through the admin web interface
+- FR34: System administrators can review audit logs for all tool invocations through the admin web interface
+- FR35: System administrators can manage ingestion feeds (add, edit, schedule, configure retention) through the admin web interface, integrated into the existing Document Management tab alongside current ingestion features
 - FR36: The system validates tool configuration changes before applying them and reports validation errors to the administrator
 
 ### User Interaction
 
-- FR37: Citizens using the Vue 3 web interface can see source citations on tool-augmented responses, with provenance labels distinguishing knowledge base documents from external web sources
-- FR38: Citizens using the Flutter mobile interface can see source citations on tool-augmented responses, with provenance labels matching the Vue 3 behavior
+- FR37: Citizens using the web interface can see source citations on tool-augmented responses, with provenance labels distinguishing knowledge base documents from external web sources
+- FR38: Citizens using the mobile interface can see source citations on tool-augmented responses, with provenance labels matching the web interface behavior
 - FR39: Citizens see transparent graceful degradation messages when the system cannot provide a sufficient answer, with guidance on alternative information sources
-- FR40: The system renders citation and graceful degradation elements in a manner compliant with government accessibility mandates (WCAG 2.1 AA)
+- FR40: The system renders citation and graceful degradation elements in a manner compliant with government accessibility mandates (WCAG 2.1 AA), verified by automated accessibility scan with zero AA-level violations
 
 ### Resilience & Operations
 
@@ -624,54 +660,54 @@ Within the single MVP release, capabilities are implemented in dependency order:
 
 - FR46: The tool executor exposes a standardized `ToolExecutor` interface consumable by both the current ChatQnA pipeline and future LangGraph orchestrators
 - FR47: The system integrates into the existing RAG pipeline at the retrieval stage, after ArangoDB retrieval and before LLM prompt construction
-- FR48: The system deploys as containerized services compatible with Docker Swarm and Kubernetes, integrated with the existing Ansible deployment playbooks
+- FR48: The system deploys as containerized services compatible with the existing container orchestration platforms, integrated with the existing infrastructure-as-code deployment workflows
 
 ## Non-Functional Requirements
 
 ### Performance
 
 - NFR1: Web search tool invocation adds no more than 2 seconds of additional latency to the RAG pipeline (P95), measured from trigger decision to result fusion completion
-- NFR2: Stream ingestion delivers content from feed publication to RAG availability within 4 hours end-to-end (feed poll → content extraction → TEI embedding → ArangoDB insertion → index propagation)
-- NFR3: Tool registry lookup (read a tool definition by name) completes within 50ms
-- NFR4: Admin API responses return within 500ms for standard CRUD operations
-- NFR5: The PII redaction service processes tool parameters within 100ms per invocation
+- NFR2: Stream ingestion delivers content from feed publication to RAG availability within 4 hours end-to-end (feed poll → content extraction → TEI embedding → ArangoDB insertion → index propagation). Verified by end-to-end pipeline latency test that publishes a test item to a feed, monitors each processing stage, and confirms the item appears in RAG query results within the time budget
+- NFR3: Tool registry lookup (read a tool definition by name) completes within 50ms. Verified by performance test that executes 1000 sequential registry lookups and confirms P95 latency is within the threshold
+- NFR4: Admin API responses return within 500ms for standard CRUD operations. Verified by performance test that executes each CRUD endpoint 500 times under normal load and confirms P95 response time is within the threshold
+- NFR5: The PII redaction service processes tool parameters within 100ms per invocation. Verified by performance test that redacts 100 parameter payloads of varying sizes (1KB–10KB) and confirms P99 processing time is within the threshold
 
 ### Security
 
-- NFR6: Zero PII leakage events across all deployments — all external tool invocations pass through the mandatory PII redaction guardrail, verified via audit logs
-- NFR7: Every tool invocation is audit-logged with user identity, timestamp, tool name, input parameters, and result metadata
-- NFR8: Audit logs are structured, queryable, and exportable to support Freedom of Information requests without transformation
-- NFR9: Webhook endpoints authenticate every request via API key or JWT Bearer token — unauthenticated requests are rejected
-- NFR10: The admin API enforces role-based access control — only users with `tools-admin` role can modify tool configurations
-- NFR11: Domain whitelisting restrictions are enforced at the tool executor level, not at the search backend level — whitelisted domains cannot be bypassed by modifying the search backend configuration
+- NFR6: Zero PII leakage events across all deployments — all external tool invocations pass through the mandatory PII redaction guardrail. Verified by automated PII injection test suite that sends queries containing synthetic PII through the tool pipeline and confirms no PII appears in external request logs
+- NFR7: Every tool invocation is audit-logged with user identity, timestamp, tool name, input parameters, and result metadata. Verified by integration test that executes tools across all tool types and confirms each invocation produces a corresponding audit log entry with all required fields
+- NFR8: Audit logs are structured, queryable, and exportable to support Freedom of Information requests without transformation. Verified by test that exports audit logs in standard formats (JSON, CSV) and confirms all required fields are present and correctly typed
+- NFR9: Webhook endpoints authenticate every request via API key or JWT Bearer token — unauthenticated requests are rejected. Verified by security test that sends requests with missing, invalid, and expired credentials and confirms all are rejected with appropriate error codes
+- NFR10: The admin API enforces role-based access control — only users with `tools-admin` role can modify tool configurations. Verified by integration test that attempts write operations with `tools-reader` role and unauthenticated tokens, confirming all are rejected
+- NFR11: Domain whitelisting restrictions are enforced at the tool executor level, not at the search backend level — whitelisted domains cannot be bypassed by modifying the search backend configuration. Verified by security test that modifies the search backend configuration to allow non-whitelisted domains and confirms the tool executor still rejects queries to those domains
 
 ### Reliability
 
-- NFR12: Zero hallucinated answers from failed tool invocations — all tool failures produce transparent fallback responses or graceful degradation messages
-- NFR13: Circuit breakers open after 3 consecutive failures to an external backend and automatically close after successful health check
-- NFR14: Failed ingestion entries are routed to dead letter queues and automatically reprocessed when the source backend recovers
-- NFR15: The tools layer degrades gracefully when individual components fail — a SearXNG outage does not affect tool registry operations; a feed failure does not affect web search
-- NFR16: >90% of cited URLs in tool-augmented responses are valid at query time
+- NFR12: Zero hallucinated answers from failed tool invocations — all tool failures produce transparent fallback responses or graceful degradation messages. Verified by adversarial test suite that triggers tool failures (timeout, backend down, empty results) and confirms no fabricated content appears in responses
+- NFR13: Circuit breakers open after 3 consecutive failures to an external backend and automatically close after successful health check. Verified by integration test that simulates consecutive backend failures and confirms circuit breaker state transitions (closed → open → half-open → closed)
+- NFR14: Failed ingestion entries are routed to dead letter queues and automatically reprocessed when the source backend recovers. Verified by integration test that kills a feed source mid-ingestion and confirms failed entries appear in the dead letter queue and are reprocessed after source recovery
+- NFR15: The tools layer degrades gracefully when individual components fail — a SearXNG outage does not affect tool registry operations; a feed failure does not affect web search. Verified by chaos test that terminates individual services and confirms unrelated tools and feeds continue operating normally
+- NFR16: >90% of cited URLs in tool-augmented responses are valid at query time. Verified by automated link validation test that checks all cited URLs from a representative query set and confirms at least 90% return HTTP 200
 
 ### Scalability
 
-- NFR17: The tools layer operates on existing infrastructure (Redis, TEI, ArangoDB) without requiring additional services beyond CPU-only containers (SearXNG, PII redaction)
-- NFR18: Redis-backed rate limiting and circuit breaker state support horizontal scaling across multiple service replicas
-- NFR19: SearXNG and the PII redaction service support horizontal scaling for high-traffic deployments
+- NFR17: The tools layer operates on existing infrastructure (Redis, TEI, ArangoDB) without requiring additional services beyond CPU-only containers (SearXNG, PII redaction). Verified by deployment test on a clean environment with only existing infrastructure, confirming all tools layer services start and operate without additional dependencies
+- NFR18: Redis-backed rate limiting and circuit breaker state support horizontal scaling across multiple service replicas. Verified by load test that runs multiple service replicas simultaneously and confirms rate limiting and circuit breaker state remain consistent across replicas
+- NFR19: SearXNG and the PII redaction service support horizontal scaling for high-traffic deployments. Verified by scaling test that increases replica count under load and confirms throughput scales proportionally without state inconsistencies
 
 ### Accessibility
 
-- NFR20: Source citations, provenance labels, and graceful degradation messages comply with WCAG 2.1 AA — screen-reader compatible, no visual-only cues
-- NFR21: Citation rendering is consistent across Vue 3 (web) and Flutter (mobile) platforms
+- NFR20: Source citations, provenance labels, and graceful degradation messages comply with WCAG 2.1 AA — screen-reader compatible, no visual-only cues. Verified by automated accessibility audit (axe-core or equivalent) that scans tool-augmented response pages and confirms no AA-level violations in citation and degradation elements
+- NFR21: Citation rendering is consistent across web and mobile platforms. Verified by cross-platform comparison test that renders identical tool-augmented responses on both platforms and confirms citation elements (URLs, provenance labels, source types) are visually and semantically equivalent
 
 ### Integration
 
-- NFR22: The `ToolExecutor` interface is consumable by the current ChatQnA pipeline and the Sprint 24 LangGraph orchestrator without adapter layers
-- NFR23: The tool registry loads tool definitions from YAML/JSON files at startup without requiring network connectivity to external services
-- NFR24: The tools layer deploys via the existing Ansible playbook with `--tags tools`, integrating with the current Docker Swarm and planned Kubernetes deployment workflows
-- NFR25: Stream ingestion uses the existing TEI embedding service and ArangoDB storage without requiring schema modifications to the current vector store
+- NFR22: The `ToolExecutor` interface is consumable by the current ChatQnA pipeline and the Sprint 24 LangGraph orchestrator without adapter layers. Verified by integration test that invokes the ToolExecutor from both ChatQnA and a LangGraph ToolNode mock and confirms both consumers receive identical results
+- NFR23: The tool registry loads tool definitions from YAML/JSON files at startup without requiring network connectivity to external services. Verified by startup test in an air-gapped environment that confirms all tool definitions load successfully from local files only
+- NFR24: The tools layer deploys via the existing Ansible playbook with `--tags tools`, integrating with the current Docker Swarm and planned Kubernetes deployment workflows. Verified by deployment test that runs the tagged playbook on a clean environment and confirms all tools layer services are running and healthy
+- NFR25: Stream ingestion uses the existing TEI embedding service and ArangoDB storage without requiring schema modifications to the current vector store. Verified by integration test that ingests feed content through the full pipeline and confirms embeddings are stored in the existing ArangoDB collections without schema changes
 
 ### Compliance
 
-- NFR26: All incorporated open-source tools follow DPG (Digital Public Goods Alliance) guidelines for permissive licensing (MIT, Apache 2.0, BSD) — Affero licenses (GPL, AGPL) used only for unmodified API-consumed services
-- NFR27: Tool invocation audit logs meet national archival standards where applicable — retention periods are configurable per deployment
+- NFR26: All incorporated open-source tools follow DPG (Digital Public Goods Alliance) guidelines for permissive licensing (MIT, Apache 2.0, BSD) — Affero licenses (GPL, AGPL) used only for unmodified API-consumed services. Verified by automated license scan of all dependencies that confirms no non-compliant licenses are used outside the allowed API-consumed exception
+- NFR27: Tool invocation audit logs meet national archival standards where applicable — retention periods are configurable per deployment. Verified by configuration test that sets custom retention periods and confirms expired entries are purged according to policy

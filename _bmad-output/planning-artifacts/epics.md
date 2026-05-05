@@ -12,6 +12,29 @@ inputDocuments:
 
 This document provides the complete epic and story breakdown for the Server-Side Tools initiative, decomposing the requirements from the PRD and Architecture into implementable stories organized by PRD wave.
 
+## Technology Conventions
+
+This is a brownfield project. The FRs and stories below reference specific technologies that are **established stack constraints**, not implementation choices to be debated during estimation:
+
+- **Python / FastAPI** — OPEA service runtime and web framework (existing)
+- **Redis / Redis Streams** — Cache, event transport, rate limiting (existing)
+- **ArangoDB** — Document, graph, and vector storage (existing)
+- **TEI** — Text Embeddings Inference for vector generation (existing)
+- **SearXNG** — Open-source meta-search engine, default web search backend (new, CPU-only)
+- **Vue 3** — Web frontend framework (existing, Options API)
+- **Flutter** — Mobile frontend framework (existing)
+- **Docker Swarm / Kubernetes** — Container orchestration (existing Swarm, planned K8s)
+- **Ansible** — Deployment automation (existing)
+- **Keycloak** — Identity and access management (existing)
+- **LangGraph** — Agentic workflow orchestrator (planned Sprint 24)
+- **JSON Schema / OpenAPI** — Tool definition standards (chosen for this initiative)
+- **YAML** — Configuration authoring format (existing convention)
+- **gRPC / REST** — Inter-service communication protocols (existing)
+- **Circuit breaker / Dead letter queue** — Resilience patterns (chosen for this initiative)
+- **Microsoft Presidio** — Reference PII redaction implementation (chosen, pluggable)
+
+When stories reference these technologies, the implementation direction is already determined. Estimation should focus on effort, not technology selection.
+
 ## Requirements Inventory
 
 ### Functional Requirements
@@ -69,9 +92,9 @@ This document provides the complete epic and story breakdown for the Server-Side
 
 - NFR1: Web search tool invocation adds no more than 2 seconds of additional latency to the RAG pipeline (P95)
 - NFR2: Stream ingestion delivers content from feed publication to RAG availability within 4 hours end-to-end
-- NFR3: Tool registry lookup completes within 50ms
-- NFR4: Admin API responses return within 500ms for standard CRUD operations
-- NFR5: PII redaction service processes tool parameters within 100ms per invocation
+- NFR3: Tool registry lookup completes within 50ms. Verified by performance test that executes 1000 sequential registry lookups and confirms P95 latency is within the threshold
+- NFR4: Admin API responses return within 500ms for standard CRUD operations. Verified by performance test that executes each CRUD endpoint 500 times under normal load and confirms P95 response time is within the threshold
+- NFR5: PII redaction service processes tool parameters within 100ms per invocation. Verified by performance test that redacts 100 parameter payloads of varying sizes (1KB–10KB) and confirms P99 processing time is within the threshold
 - NFR6: Zero PII leakage events across all deployments — mandatory PII redaction guardrail on all external tool invocations
 - NFR7: Every tool invocation is audit-logged with user identity, timestamp, tool name, input parameters, and result metadata
 - NFR8: Audit logs are structured, queryable, and exportable to support FOI requests without transformation

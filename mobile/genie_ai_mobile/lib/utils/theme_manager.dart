@@ -9,16 +9,16 @@ class ThemeManager extends ChangeNotifier {
   // ===========================================================================
   // STATE
   // ===========================================================================
-  
+
   /// Stores the loaded genie-ai-config.json
   Map<String, dynamic> _config = {};
 
   String currentTheme = 'light';
   String userPreference = 'light';
   bool isDarkMode = false;
-  
+
   /// Global Font Size Scaling Factor (Default 50.0 = 1.0x scale)
-  double fontSize = 50.0; 
+  double fontSize = 50.0;
 
   // ===========================================================================
   // ACTIONS
@@ -62,15 +62,24 @@ class ThemeManager extends ChangeNotifier {
   // CONFIG GETTERS & DEFAULTS
   // ===========================================================================
 
-  Color get _primaryColor => _parseColor(_config['theme']?['primaryColor'], const Color(0xFF4E97D1));
-  Color get _secondaryColor => _parseColor(_config['theme']?['secondaryColor'], const Color(0xFF26A69A));
-  Color get _lightBackground => _parseColor(_config['theme']?['backgroundColor'], const Color(0xFFF5F7FA));
-  Color get _lightText => _parseColor(_config['theme']?['textColor'], const Color(0xFF333333));
-  
+  Color get _primaryColor =>
+      _parseColor(_config['theme']?['primaryColor'], const Color(0xFF4E97D1));
+  Color get _secondaryColor =>
+      _parseColor(_config['theme']?['secondaryColor'], const Color(0xFF26A69A));
+  Color get _lightBackground => _parseColor(
+    _config['theme']?['backgroundColor'],
+    const Color(0xFFF5F7FA),
+  );
+  Color get _lightText =>
+      _parseColor(_config['theme']?['textColor'], const Color(0xFF333333));
+
   // Navbar Configuration
-  Color get _navGradientStart => _parseColor(_config['theme']?['navbar']?['gradientStart'], _primaryColor);
-  Color get _navGradientEnd => _parseColor(_config['theme']?['navbar']?['gradientEnd'], _secondaryColor);
-  Color get _navTextColor => _parseColor(_config['theme']?['navbar']?['textColor'], Colors.white);
+  Color get _navGradientStart =>
+      _parseColor(_config['theme']?['navbar']?['gradientStart'], _primaryColor);
+  Color get _navGradientEnd =>
+      _parseColor(_config['theme']?['navbar']?['gradientEnd'], _secondaryColor);
+  Color get _navTextColor =>
+      _parseColor(_config['theme']?['navbar']?['textColor'], Colors.white);
 
   // Standard Dark Mode Colors (High Contrast Defaults)
   final Color _darkBackground = const Color(0xFF1E1E1E);
@@ -98,7 +107,8 @@ class ThemeManager extends ChangeNotifier {
         primaryContainer: _primaryColor.withOpacity(0.1),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: _navGradientStart, // Fallback if gradient not supported in standard AppBar
+        backgroundColor:
+            _navGradientStart, // Fallback if gradient not supported in standard AppBar
         foregroundColor: _navTextColor,
         elevation: 0,
       ),
@@ -135,14 +145,30 @@ class ThemeManager extends ChangeNotifier {
   /// Scales text styles based on the user's font size preference (Base 50.0)
   TextTheme _buildTextTheme(Color color) {
     final double scale = fontSize / 50.0;
-    
+
     return TextTheme(
       bodyLarge: TextStyle(color: color, fontSize: 16.0 * scale),
       bodyMedium: TextStyle(color: color, fontSize: 14.0 * scale),
-      titleLarge: TextStyle(color: color, fontSize: 22.0 * scale, fontWeight: FontWeight.bold),
-      titleMedium: TextStyle(color: color, fontSize: 16.0 * scale, fontWeight: FontWeight.w600),
-      titleSmall: TextStyle(color: color, fontSize: 14.0 * scale, fontWeight: FontWeight.w500),
-      labelLarge: TextStyle(color: color, fontSize: 14.0 * scale, fontWeight: FontWeight.w500),
+      titleLarge: TextStyle(
+        color: color,
+        fontSize: 22.0 * scale,
+        fontWeight: FontWeight.bold,
+      ),
+      titleMedium: TextStyle(
+        color: color,
+        fontSize: 16.0 * scale,
+        fontWeight: FontWeight.w600,
+      ),
+      titleSmall: TextStyle(
+        color: color,
+        fontSize: 14.0 * scale,
+        fontWeight: FontWeight.w500,
+      ),
+      labelLarge: TextStyle(
+        color: color,
+        fontSize: 14.0 * scale,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 
@@ -159,10 +185,10 @@ class ThemeManager extends ChangeNotifier {
       'text': isDarkMode ? _darkText : _lightText,
       'border': isDarkMode ? _darkBorder : const Color(0xFFDCDFE4),
       'navbar': {
-         'gradientStart': _navGradientStart,
-         'gradientEnd': _navGradientEnd,
-         'text': _navTextColor
-      }
+        'gradientStart': _navGradientStart,
+        'gradientEnd': _navGradientEnd,
+        'text': _navTextColor,
+      },
     };
   }
 
@@ -194,13 +220,13 @@ class ThemeManager extends ChangeNotifier {
         'secondary': {
           'background': isDarkMode ? '#3a3a3a' : '#cccccc',
           'textColor': isDarkMode ? '#e0e0e0' : '#333333',
-        }
+        },
       },
       'input': {
         'background': isDarkMode ? '#333333' : '#ffffff',
         'textColor': text,
         'borderColor': isDarkMode ? '#555555' : '#cccccc',
-      }
+      },
     };
   }
 

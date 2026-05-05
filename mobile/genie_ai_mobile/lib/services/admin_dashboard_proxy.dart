@@ -14,7 +14,9 @@ class AdminDashboardProxy {
     return jsonDecode(res.body);
   }
 
-  Future<Map<String, dynamic>> getUserStats({Map<String, dynamic>? options}) async {
+  Future<Map<String, dynamic>> getUserStats({
+    Map<String, dynamic>? options,
+  }) async {
     final res = await _api.get('admin/user-stats', params: options);
     return jsonDecode(res.body);
   }
@@ -43,17 +45,23 @@ class AdminDashboardProxy {
     return jsonDecode(res.body);
   }
 
-  Future<Map<String, dynamic>> getLogsSummary({Map<String, dynamic>? options}) async {
+  Future<Map<String, dynamic>> getLogsSummary({
+    Map<String, dynamic>? options,
+  }) async {
     final res = await _api.get('admin/logs/summary', params: options);
     return jsonDecode(res.body);
   }
 
-  Future<Map<String, dynamic>> searchLogs({Map<String, dynamic>? options}) async {
+  Future<Map<String, dynamic>> searchLogs({
+    Map<String, dynamic>? options,
+  }) async {
     final res = await _api.get('admin/logs/search', params: options);
     return jsonDecode(res.body);
   }
 
-  Future<Map<String, dynamic>> searchUsers({Map<String, dynamic>? options}) async {
+  Future<Map<String, dynamic>> searchUsers({
+    Map<String, dynamic>? options,
+  }) async {
     final res = await _api.get('admin/users/search', params: options);
     return jsonDecode(res.body);
   }

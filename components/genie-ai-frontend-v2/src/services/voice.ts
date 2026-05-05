@@ -24,6 +24,7 @@ export interface VoiceTokenResponse {
   voiceToken: string;
   expiresIn: number;
   language: string;
+  twinId: string | null;
   identity: string;
   fullName: string;
 }
@@ -37,8 +38,13 @@ export interface GetVoiceMessagesParams {
   limit?: number;
 }
 
-export async function mintVoiceToken(language: string): Promise<VoiceTokenResponse> {
-  const res = await api.post<VoiceTokenResponse>('/voice/token', { language });
+export async function mintVoiceToken(
+  language: string,
+  twinId?: string
+): Promise<VoiceTokenResponse> {
+  const body: Record<string, string> = { language };
+  if (twinId) body.twinId = twinId;
+  const res = await api.post<VoiceTokenResponse>('/voice/token', body);
   return res.data;
 }
 

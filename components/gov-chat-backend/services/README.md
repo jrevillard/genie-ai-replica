@@ -1014,8 +1014,8 @@ sequenceDiagram
 - **OPEA Access Control**: Secure API access to OPEA endpoints
 
 #### Data Protection
-- **Password Encryption**: bcrypt password hashing
-- **Token Security**: Secure token generation and validation
+- **Authentication**: Keycloak OIDC with token passthrough architecture
+- **Token Security**: JWT validation via JWKS (RS256)
 - **File Upload Security**: Validated file uploads
 - **Database Security**: Parameterized queries and access controls
 
@@ -1092,8 +1092,6 @@ TRANSLATION_CACHE_PORT=6379
 TRANSLATION_CACHE_PASSWORD=optional
 
 # Authentication
-JWT_SECRET=your-secret-key
-JWT_EXPIRES_IN=24h
 SESSION_EXPIRATION_TIME=1800000
 
 # Email Configuration

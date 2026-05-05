@@ -1,11 +1,11 @@
 <template>
-  <div 
+  <div
+    ref="menu"
     class="context-menu"
     :style="{
       top: `${adjustedPosition.y}px`,
       left: `${adjustedPosition.x}px`
     }"
-    ref="menu"
   >
     <slot></slot>
   </div>
@@ -14,7 +14,7 @@
 <script>
 export default {
   name: 'ContextMenu',
-  
+
   props: {
     position: {
       type: Object,
@@ -24,7 +24,8 @@ export default {
       }
     }
   },
-  
+  emits: ['close'],
+
   data() {
     return {
       adjustedPosition: {
@@ -33,36 +34,36 @@ export default {
       }
     };
   },
-  
+
   mounted() {
     document.addEventListener('click', this.handleOutsideClick);
-    
+
     // Adjust position if menu would go off-screen
     this.$nextTick(() => {
       if (!this.$refs.menu) return;
-      
+
       const menu = this.$refs.menu;
       const rect = menu.getBoundingClientRect();
-      
+
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      
+
       // Adjust horizontal position if needed
       if (rect.right > viewportWidth) {
         this.adjustedPosition.x = Math.max(0, this.position.x - rect.width);
       }
-      
+
       // Adjust vertical position if needed
       if (rect.bottom > viewportHeight) {
         this.adjustedPosition.y = Math.max(0, this.position.y - rect.height);
       }
     });
   },
-  
+
   beforeUnmount() {
     document.removeEventListener('click', this.handleOutsideClick);
   },
-  
+
   methods: {
     handleOutsideClick(event) {
       // Check if click is outside of the menu

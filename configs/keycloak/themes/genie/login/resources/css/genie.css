@@ -1,0 +1,47 @@
+/* GENIE.AI Keycloak Login Theme — PatternFly v5 color overrides */
+/* Only overrides that differ from upstream PF5 defaults. Component-level variables
+   (buttons, forms, links) inherit from globals automatically — no need to set them. */
+
+:root {
+  /* Primary (upstream: #06c / #004080) */
+  --pf-v5-global--primary-color--100: #4E97D1;
+  --pf-v5-global--primary-color--200: #3a7da0;
+
+  /* Background (upstream: #fff / #f0f0f0) */
+  --pf-v5-global--BackgroundColor--100: #f5f7fa;
+  --pf-v5-global--BackgroundColor--200: #ffffff;
+
+  /* Text (upstream: #151515 / #6a6e73 / #3c3f42) */
+  --pf-v5-global--Color--100: #333333;
+  --pf-v5-global--Color--200: #4d4d4d;
+  --pf-v5-global--Color--300: #6c757d;
+
+  /* Borders (upstream: #d2d2d2 / #8a8d90) */
+  --pf-v5-global--BorderColor--100: #dcdfe4;
+  --pf-v5-global--BorderColor--200: #dcdfe4;
+
+  /* Status (upstream: #3e8635 / #f0ab00 / #c9190b) */
+  --pf-v5-global--success-color--100: #10b981;
+  --pf-v5-global--warning-color--100: #f59e0b;
+  --pf-v5-global--danger-color--100: #ef4444;
+  --pf-v5-global--danger-color--200: #ef4444;
+}
+
+/* Header brand */
+#kc-header-wrapper {
+  color: #4E97D1;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+#kc-header-wrapper img {
+  display: block;
+  width: 120px;
+  height: auto;
+  margin-bottom: 0.75rem;
+}
+
+/* Footer */
+#kc-footer-wrapper {
+  color: #6c757d;
+}

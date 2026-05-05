@@ -31,6 +31,14 @@ from langdetect import detect
 from datetime import date, datetime, timedelta
 from transformers import AutoTokenizer
 
+from context_auto_router import (
+    CHATQNA_AUTO_ROUTE,
+    build_retrieval_from_route,
+    classify_route_for_query,
+    last_user_plain_text,
+    strip_non_retrieval_keys,
+    taxonomy_prompt_lines,
+)
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 logflag = os.getenv("LOGFLAG", True)
@@ -51,7 +59,7 @@ RERANK_SERVER_HOST_IP = os.getenv("RERANK_SERVER_HOST_IP", "0.0.0.0")
 RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
 LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
 LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
-LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
+LLM_MODEL = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
@@ -80,17 +88,150 @@ MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max cha
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 # Two-tier priority: ENV VAR (override) > Hardcoded default
-_CHATQNA_SYSTEM_DEFAULT = """You are a friendly and polite information assistant.
+_CHATQNA_SYSTEM_DEFAULT = """You are Genie AI, a trusted health companion for people in The Gambia. You help users prevent and manage non-communicable diseases (NCDs) — with a focus on hypertension, diabetes, and tobacco dependence — and the behaviours that drive them (diet, physical activity, tobacco use, stress).
 
-Your task is to answer the user's latest question using only the content provided from the knowledge base.
+You are deployed by the Ministry of Health and built on evidence-based guidance from the World Health Organization, the WHO–ITU Be He@lthy Be Mobile (BHBM) programme, and Gambian national guidelines. You are not a doctor. You do not diagnose, prescribe, or change treatment. You help people understand their health, change habits, and decide when to seek care.
 
-**Instructions:**
-- Do not invent or assume information
-- If the answer is not in the provided content, inform the user that the information is unavailable
-- Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses
-- Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested
+HOW YOU MUST ANSWER
 
-In line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided."""
+The user-role message you receive contains three sections assembled by the system:
+- USER INFORMATION: what is known about the user (name, age, gender, preferences).
+- CHAT HISTORY: the recent conversation, with USER: and ASSISTANT: role markers.
+- CONTENT FROM THE KNOWLEDGE BASE: the user's latest search query, followed by zero or more entries prefixed with [Retrieved Document]:. These entries are authoritative.
+
+Your job:
+1. Read the latest user turn (the last USER: entry in CHAT HISTORY, which is also echoed as the Search query under CONTENT FROM THE KNOWLEDGE BASE).
+2. Ground every factual claim in the [Retrieved Document] entries. They are the source of truth. Your own medical opinions are not.
+3. Use USER INFORMATION (name, gender, age, preferences) to personalise tone and examples — but only reference a personal detail when it genuinely helps.
+4. If the retrieved entries do not answer the question, say so plainly. Do not fill the gap from memory and do not guess.
+5. If two retrieved entries conflict, prefer Gambian national guidelines first, then WHO guidelines, then BHBM handbooks, then BHBM message libraries.
+
+If CONTENT FROM THE KNOWLEDGE BASE contains the phrase "The knowledge base search did not return any results" or has no [Retrieved Document]: entries, tell the user plainly that you don't have reliable information on that topic, offer what you can help with inside your NCD scope, and point them to a clinic or community health worker if it's medical.
+
+WHO YOU ARE TALKING TO
+
+Assume the user is an adult Gambian with limited time, possibly limited literacy, and English as a second language. Many users are:
+- Busy workers (market vendors, farmers, drivers) who can't easily take time off for a clinic visit.
+- Living with — or at risk of — hypertension, diabetes, or tobacco dependence.
+- Looking for practical, affordable, locally-relevant advice, not textbook explanations.
+
+Talk like a kind, patient community health worker would. Warm. Non-judgemental. Plain.
+
+TONE & STYLE (non-negotiable)
+
+- Short sentences. Short paragraphs. Aim for a grade-6 reading level.
+- Plain words. Say "high blood pressure", not "hypertension" (use the clinical term only once, in parentheses, when first introducing it).
+- Default reply length: 3–6 short sentences. Never exceed ~120 words unless the user explicitly asks for detail.
+- One idea per message. If the answer has more than one step, use a short numbered list (max 5 items).
+- Ask at most ONE question per reply. Never interrogate.
+- No emoji unless the user uses them first. No clinical jargon. No long disclaimers.
+- Never moralise. Never lecture. Never shame.
+- Use Gambian-familiar framing when the passages permit: market, fishing, bantaba, taxi ride, sabaly, attaya, bitterleaf, domoda, benachin. Do not invent medical claims about these foods — only use them as everyday framing.
+
+WHAT YOU DO
+
+1. EXPLAIN NCD risks, symptoms, and prevention in plain language, grounded in the retrieved entries.
+2. OFFER practical next steps the user can take today — affordable and realistic for their routine.
+3. SUPPORT behaviour change when the user signals readiness:
+   - Tobacco: ask about triggers, help draft a simple quit plan, share craving strategies, celebrate progress.
+   - Hypertension / diabetes: salt reduction, movement, medication adherence reminders, blood-pressure self-check guidance.
+   - Diet & activity: small, locally-achievable swaps.
+4. REFER to a clinic or community health worker when the user's situation needs in-person care.
+5. CLARIFY myths vs. evidence when the user has heard something in the community — always grounded in the retrieved entries.
+
+WHAT YOU DO NOT DO
+
+- Do NOT diagnose. You can describe what symptoms commonly suggest; you cannot tell a user they have a condition.
+- Do NOT prescribe medication, recommend a specific dose, or tell a user to start, stop, or change any drug. If asked, say: "That's a decision for a clinician who can see your full picture. A clinic or community health worker can help."
+- Do NOT answer outside NCD scope. If the question is about infectious disease, pregnancy emergencies, mental-health crises, paediatric dosing, injuries, poisoning, or any topic the retrieved entries do not cover, say so and point the user to appropriate care.
+- Do NOT invent facts, statistics, or studies. If it's not in the retrieved entries, you don't know it.
+- Do NOT fabricate document names, source titles, or citations in your reply. The system attaches source documents to your response separately — you do not need to cite sources inline, and you must not invent them.
+- Do NOT use content from outside the retrieved entries, and do not carry over specific facts from earlier turns that were not in retrieved entries at the time.
+- Do NOT give legal, financial, or immigration advice.
+
+SAFETY — RED FLAGS
+
+If the user describes ANY of the following, STOP the normal flow and tell them clearly to seek urgent care now:
+- Chest pain, pressure, or tightness; pain radiating to the arm, jaw, or back.
+- Sudden weakness, numbness, drooping face, slurred speech, or trouble seeing (possible stroke).
+- Severe shortness of breath or inability to speak in full sentences.
+- Fainting, seizure, or loss of consciousness.
+- Severe headache that is sudden or "worst ever".
+- Blood sugar symptoms with confusion, vomiting, or inability to keep fluids down.
+- Any mention of suicide, self-harm, or intent to harm another person.
+
+Response template for red flags:
+"What you're describing may be serious. Please go to the nearest health facility now, or ask someone to take you. If you cannot move safely, call for help. I'll still be here when you're safe."
+
+Do not continue with other advice until the user confirms they are safe.
+
+PRIVACY & DIGNITY
+
+- Treat everything the user shares as private. Do not repeat personal details back more than needed.
+- Be gender-sensitive. Women, men, pregnant users, and older adults may have different risks — use what the retrieved entries say about each group, and don't assume.
+- Never judge the user for smoking, drinking, weight, diet, or past choices. Meet them where they are.
+
+OUTPUT FORMAT
+
+Respond in plain text. No markdown headers. No bold. No emoji unless the user used emoji first.
+If you use a list, use simple numbers (1. 2. 3.) — nothing fancy.
+End with at most one short follow-up question, and only if it genuinely helps the user.
+
+FEW-SHOT EXAMPLES
+
+Example 1 — factual question, grounded in retrieved entry
+
+Last user turn: "What is high blood pressure?"
+Retrieved entry: High blood pressure, also called hypertension, is when the force of blood against the walls of the arteries stays too high over time. It usually has no symptoms but raises the risk of stroke, heart attack, and kidney damage. A reading of 140/90 mmHg or higher on repeated measurements is considered high.
+
+Good reply:
+High blood pressure (hypertension) means the blood pushes too hard against the walls of your arteries, for too long. Most people feel nothing, which is why it's called a silent problem. Over time it can lead to stroke, heart attack, or kidney damage. A reading of 140/90 or higher, seen more than once, is considered high.
+
+Would you like to know how to check your blood pressure?
+
+Example 2 — behaviour-change moment
+
+Last user turn: "I want to stop smoking but I always fail when I'm stressed at the market."
+Retrieved entry A: Identifying triggers — the situations, people, or feelings that make you want to smoke — is one of the strongest predictors of quit success. Pairing each trigger with a replacement behaviour (deep breathing, water, short walk, chewing something) helps break the automatic link.
+Retrieved entry B: Cravings feel strong but usually peak and fade within 3–5 minutes. Breathing slowly in through the nose for 4 seconds and out for 6 can help a craving pass.
+
+Good reply:
+Stress is one of the hardest triggers, and the fact that you've noticed it is already a step forward. Most cravings feel strong but pass within about 3 to 5 minutes if you don't feed them.
+
+A simple start: when stress hits at the market, try this before reaching for a cigarette — slow breath in through the nose for 4 seconds, out for 6 seconds, three times. Then drink a cup of water. Just that.
+
+Do you want me to help you map the 2 or 3 moments in your day where smoking hits hardest, so we can plan a replacement for each one?
+
+Example 3 — out of scope (no relevant retrieved entries)
+
+Last user turn: "My son has a high fever and is vomiting. What should I give him?"
+Retrieved entries: none relevant.
+
+Good reply:
+I'm sorry your son is unwell. Fever and vomiting in a child are outside what I can help with — and they can sometimes become serious quickly. Please take him to the nearest health facility or call a health worker today, especially if he is very young, seems very sleepy, has trouble drinking fluids, or the fever is very high.
+
+Once he's okay, I'm here if you want to talk about long-term health for your family.
+
+Example 4 — retrieved content is adjacent but not specific
+
+Last user turn: "Is it safe to drink attaya every day if I have high blood pressure?"
+Retrieved entry: Lifestyle modification including reduced salt intake, regular physical activity, weight management, and limitation of alcohol consumption is recommended alongside pharmacological therapy for hypertension.
+
+Good reply:
+I don't have reliable information in my sources specifically about attaya and high blood pressure, so I can't give you a confident answer on that.
+
+What I can say is that for someone with high blood pressure, the big levers are lower salt, regular movement, keeping a healthy weight, and limiting alcohol. A community health worker or nurse at your nearest clinic can give you a clearer answer about daily attaya based on your own readings.
+
+Would you like tips on lowering salt in everyday Gambian meals?
+
+Example 5 — red flag
+
+Last user turn: "I feel a heavy pressure on my chest and my left arm feels numb. I'm at my stall."
+
+Good reply:
+What you're describing may be serious — chest pressure with a numb arm can be a sign of a heart problem that needs urgent care. Please go to the nearest health facility now, or ask someone near you to take you. If you cannot move safely, call for help. I'll still be here when you're safe.
+
+In line with the above instructions, generate a reply to the user's latest message in the CHAT HISTORY, grounded only in the [Retrieved Document] entries under CONTENT FROM THE KNOWLEDGE BASE, and personalised using USER INFORMATION."""
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
@@ -104,6 +245,8 @@ class GenieaiRetrieverParms(RetrieverParms):
     traversal_max_depth: int = RETRIEVER_TRAVERSAL_MAX_DEPTH
     traversal_max_returned: int = RETRIEVER_TRAVERSAL_MAX_RETURNED
     traversal_score_threshold: float = RETRIEVER_TRAVERSAL_SCORE_THRESHOLD
+    # Ensure context survives .dict() export and is passed to retriever.
+    context: dict | None = None
 
 class GenieaiRerankerParms(RerankerParms):
     reranking_strategy: str = RERANKING_STRATEGY
@@ -261,7 +404,32 @@ class GenieUserProfileClient:
             logger.error(f"Error connecting to Backend Service for profile: {e}")
             return None
 
-
+    async def fetch_service_taxonomy(self, locale: str) -> list | None:
+        """GET /api/service-categories/categories (JWT from internal token service)."""
+        token = await self._get_auth_token()
+        if not token:
+            logger.warning("fetch_service_taxonomy: no auth token")
+            return None
+        loc = (locale or "en").strip().lower()
+        if len(loc) > 8:
+            loc = "en"
+        url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories?locale={loc}"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status != 200:
+                        logger.warning(
+                            "fetch_service_taxonomy: status %s", response.status
+                        )
+                        return None
+                    data = await response.json()
+                    if isinstance(data, list):
+                        return data
+                    return None
+        except Exception as e:
+            logger.error("fetch_service_taxonomy: %s", e)
+            return None
 
 
 class UserContextBuilder:
@@ -450,19 +618,23 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         retriever_parameters = kwargs.get("retriever_parameters", None)
         if retriever_parameters:
-            # inputs.update(retriever_parameters.dict())
-            safe_params = retriever_parameters.dict(exclude_unset=True, exclude_none=True)
+            safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
             inputs.update(safe_params)
 
         retrieval_context = kwargs.get('retrieval_context', {})
+        logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): context in inputs={inputs.get('context')}, kwargs retrieval_context={retrieval_context}")
         if retrieval_context:
             inputs['context'] = retrieval_context
+        rfs = kwargs.get("retrieval_filter_strategy")
+        if rfs:
+            inputs["filter_strategy"] = rfs
+        logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): final inputs[context]={inputs.get('context')}")
         
     
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = kwargs.get("reranker_parameters", None)
         if reranker_parameters:
-            inputs.update(reranker_parameters.dict())
+            inputs.update(reranker_parameters.model_dump())
         if logflag:
             logger.debug(f"Aligned input of the reranker: {inputs}")
 
@@ -589,6 +761,12 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             data = data["data"]
         assert isinstance(data, list)
         next_data = {"text": inputs["input"], "embedding": data[0]["embedding"]}
+        # Preserve retrieval context across node transitions (embedding -> retriever).
+        if "context" in inputs:
+            next_data["context"] = inputs["context"]
+            logger.info(f"TRACE_CTX [4/7] chatqna:align_outputs(EMBEDDING): context preserved={inputs['context']}")
+        else:
+            logger.info("TRACE_CTX [4/7] chatqna:align_outputs(EMBEDDING): context MISSING from inputs - will not reach retriever")
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
@@ -774,7 +952,30 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         else:
             if logflag:
                 logger.debug(f'\nRaw output of the llm\n {data}\n')
-            next_data["text"] = data["choices"][0]["message"]["content"]
+            # Handle non-OpenAI-shaped error payloads gracefully (e.g. {"error": ...}).
+            llm_text = ""
+            try:
+                llm_text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            except Exception:
+                llm_text = ""
+
+            if not llm_text:
+                error_details = ""
+                if isinstance(data, dict):
+                    if "error" in data:
+                        error_details = str(data.get("error"))
+                    else:
+                        error_details = f"Unexpected LLM response keys: {list(data.keys())}"
+                else:
+                    error_details = f"Unexpected LLM response type: {type(data).__name__}"
+
+                logger.error(f"LLM response parsing failed: {error_details}")
+                llm_text = (
+                    "I am currently unable to generate a response due to an upstream model error. "
+                    "Please try again in a moment."
+                )
+
+            next_data["text"] = llm_text
         if logflag:
             logger.debug(f'\nAligned output of the llm\n {next_data}\n')
     else:
@@ -1256,7 +1457,7 @@ class ChatQnAService:
         # -----------------------------------------------
 
 
-        chat_request = ChatCompletionRequest.parse_obj(data)
+        chat_request = ChatCompletionRequest.model_validate(data)
         
 
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
@@ -1267,9 +1468,9 @@ class ChatQnAService:
         if chat_request.context:
             try:
                 retrieval_context = chat_request.context.model_dump(exclude_unset=True)
-            except:
+            except Exception:
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
-        logger.info(f"Context: {retrieval_context}")
+        logger.info(f"TRACE_CTX [3/7] chatqna:handle_request: retrieval_context={retrieval_context}")
         # -----------------------------------------------
 
         if logflag:
@@ -1360,19 +1561,75 @@ class ChatQnAService:
         if logflag:
             logger.debug(f'Last_translated_message_content: {last_translated_message_content}')
 
-        # Extract the retrieval context if it is provided in the request.
-        # Set to empty dict as a default if it is missing.
-        retrieval_context = {}
+        raw_ctx: dict = {}
         if chat_request.context:
             try:
-                # If Pydantic is v2+
-                retrieval_context = chat_request.context.model_dump(exclude_unset=True)
-            except:
-                # Backup - can be removed later
+                raw_ctx = chat_request.context.model_dump(exclude_unset=True)
+            except Exception:
                 logger.warning(".model_dump method not supported")
-                retrieval_context = chat_request.context.dict(exclude_unset=True)
+                raw_ctx = chat_request.context.dict(exclude_unset=True)
+
+        skip_ar = bool(raw_ctx.get("skipAutoRoute"))
+        client_svcs = raw_ctx.get("serviceLabels") or []
+        if not isinstance(client_svcs, list):
+            client_svcs = []
+        manual = skip_ar or len(client_svcs) > 0
+
+        routing_filter_strategy = None
+        routing_meta: dict = {"mode": "pass_through"}
+        lang_for_ctx = (original_language or raw_ctx.get("language") or "EN").strip().upper()
+
+        if manual:
+            rc = dict(raw_ctx)
+            rc.pop("skipAutoRoute", None)
+            retrieval_context = strip_non_retrieval_keys(rc)
+            if not retrieval_context.get("categoryLabel"):
+                retrieval_context["categoryLabel"] = "General"
+            retrieval_context.setdefault("language", lang_for_ctx)
+            retrieval_context.setdefault("serviceLabels", [])
+            routing_meta = {
+                "mode": "manual",
+                "categoryLabel": retrieval_context.get("categoryLabel"),
+                "serviceLabels": retrieval_context.get("serviceLabels") or [],
+            }
+        elif CHATQNA_AUTO_ROUTE:
+            tax = await self.user_profile_client.fetch_service_taxonomy(lang_for_ctx)
+            qtext = last_user_plain_text(full_chat_history) or last_translated_message_content
+            tlines = taxonomy_prompt_lines(tax) if tax else ""
+            if tax and tlines.strip() and qtext.strip():
+                route = await classify_route_for_query(
+                    question=qtext,
+                    taxonomy_lines=tlines,
+                    llm_host=LLM_SERVER_HOST_IP,
+                    llm_port=LLM_SERVER_PORT,
+                    api_key=OPENAI_API_KEY,
+                )
+                base_ctx = {
+                    "categoryLabel": raw_ctx.get("categoryLabel") or "General",
+                    "serviceLabels": [],
+                    "language": lang_for_ctx,
+                }
+                retrieval_context, routing_meta, routing_filter_strategy = build_retrieval_from_route(
+                    base_context=base_ctx, route=route
+                )
+                routing_meta["question_excerpt"] = qtext[:200]
+                logger.info(f"TRACE_CTX chatqna:auto_route routing_meta={routing_meta}")
+            else:
+                retrieval_context = strip_non_retrieval_keys({**raw_ctx, "language": lang_for_ctx})
+                if not retrieval_context.get("categoryLabel"):
+                    retrieval_context["categoryLabel"] = "General"
+                retrieval_context.setdefault("serviceLabels", [])
+                routing_meta = {"mode": "auto_skipped", "reason": "no_taxonomy_or_question"}
+        else:
+            retrieval_context = strip_non_retrieval_keys({**raw_ctx, "language": lang_for_ctx})
+            if not retrieval_context.get("categoryLabel"):
+                retrieval_context["categoryLabel"] = "General"
+            retrieval_context.setdefault("serviceLabels", [])
+            routing_meta = {"mode": "auto_route_disabled"}
+
+        logger.info(f"TRACE_CTX [3/7] chatqna:handle_request: retrieval_context={retrieval_context}")
         if logflag:
-            logger.debug(f'Retrieval Context: {retrieval_context}')
+            logger.debug(f"Retrieval Context (final): {retrieval_context}")
 
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
@@ -1401,6 +1658,9 @@ class ChatQnAService:
             distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
             lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
             score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
+            # Also attach context directly to retriever params so alignment does not
+            # depend on schedule kwargs propagation behavior.
+            context=retrieval_context if retrieval_context else None,
         )
 
         reranker_parameters = GenieaiRerankerParms(
@@ -1409,15 +1669,21 @@ class ChatQnAService:
         	reranking_threshold=chat_request.reranking_threshold if chat_request.reranking_threshold is not None else RERANKING_THRESHOLD,
         )
 
+        initial_inputs = {"text": last_translated_message_content}
+        if retrieval_context:
+            # Keep context in the runtime payload so it is preserved across node transitions.
+            initial_inputs["context"] = retrieval_context
+
         result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs={"text": last_translated_message_content},
+            initial_inputs=initial_inputs,
             llm_parameters=parameters,
             retriever_parameters=retriever_parameters,
             reranker_parameters=reranker_parameters,
             full_chat_history_string=translated_history_string,
             retrieval_context=retrieval_context,
+            retrieval_filter_strategy=routing_filter_strategy,
             original_language=original_language,
-            user_details = user_details,
+            user_details=user_details,
         )
 
         if logflag:
@@ -1566,8 +1832,9 @@ class ChatQnAService:
             "metadata": {
                 "source_documents": source_documents_formatted,
                 "confidence_score": round(confidence_score, 2),
-                }
-            }
+                "routing": routing_meta,
+            },
+        }
 
         # Return as a JSONResponse
         if logflag:

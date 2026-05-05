@@ -1,0 +1,149 @@
+# =============================================================================
+# Line Endings
+# =============================================================================
+# Enforce LF (Unix) line endings across all platforms.
+# This prevents CRLF leaks from Windows developers and ensures
+# consistent diffs regardless of contributor OS.
+#
+# Ref: https://www.gitattributes.io/manual/
+
+# Default: auto-detect text/binary, normalize to LF
+* text=auto eol=lf
+
+# =============================================================================
+# Binary Files — prevent Git from diffing or converting these
+# =============================================================================
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.webp binary
+*.bmp binary
+*.tiff binary
+
+# Fonts
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+
+# Documents
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.pptx binary
+
+# Archives & compressed files
+*.zip binary
+*.tar binary
+*.gz binary
+*.bz2 binary
+*.7z binary
+*.rar binary
+*.tgz binary
+
+# Data files
+*.sqlite binary
+*.db binary
+*.duckdb binary
+
+# Certificates and keys
+*.pem binary
+*.key binary
+*.crt binary
+*.p12 binary
+*.jks binary
+*.keystore binary
+*.pfx binary
+
+# Hugging Face model caches
+*.bin binary
+*.safetensors binary
+*.gguf binary
+
+# =============================================================================
+# Language-Specific
+# =============================================================================
+
+# Python — PEP 8 requires LF
+*.py text eol=lf
+
+# Shell scripts — POSIX requires LF
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+
+# Dart / Flutter
+*.dart text eol=lf
+*.freezed.dart text eol=lf
+
+# Kotlin (Android)
+*.kt text eol=lf
+*.kts text eol=lf
+
+# TypeScript / JavaScript
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+
+# Web assets
+*.css text eol=lf
+*.scss text eol=lf
+*.sass text eol=lf
+*.less text eol=lf
+
+# Vue / Svelte / JSX
+*.vue text eol=lf
+*.svelte text eol=lf
+*.jsx text eol=lf
+
+# =============================================================================
+# Config / Data Formats
+# =============================================================================
+
+# JSON / YAML / TOML
+*.json text eol=lf
+*.jsonl text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+
+# XML
+*.xml text eol=lf
+*.xsl text eol=lf
+*.svg text eol=lf
+
+# Markdown / Documentation
+*.md text eol=lf
+*.rst text eol=lf
+*.txt text eol=lf
+*.adoc text eol=lf
+*.txt text eol=lf
+
+# =============================================================================
+# Docker / CI/CD
+# =============================================================================
+
+Dockerfile* text eol=lf
+docker-compose*.yml text eol=lf
+docker-compose*.yaml text eol=lf
+.env* text eol=lf
+
+# =============================================================================
+# IDE & Editor — prevent large metadata files from being diffed
+# =============================================================================
+
+.vscode/ export-subst
+.idea/ export-subst
+*.swp binary
+*.swo binary
+*~ binary

@@ -5,11 +5,7 @@ class LanguageSelector extends StatelessWidget {
   final Color? textColor;
   final Color? dropdownColor;
 
-  const LanguageSelector({
-    super.key,
-    this.textColor,
-    this.dropdownColor,
-  });
+  const LanguageSelector({super.key, this.textColor, this.dropdownColor});
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +19,8 @@ class LanguageSelector extends StatelessWidget {
       listenable: i18n,
       builder: (context, child) {
         debugPrint(
-            "[LANG SELECTOR] Builder rebuilding. Current I18n Locale: ${i18n.currentLocale.languageCode}");
+          "[LANG SELECTOR] Builder rebuilding. Current I18n Locale: ${i18n.currentLocale.languageCode}",
+        );
 
         return DropdownButtonHideUnderline(
           child: DropdownButton<String>(
@@ -38,11 +35,12 @@ class LanguageSelector extends StatelessWidget {
                 child: Text(
                   entry.value,
                   style: TextStyle(
-                      color: displayColor,
-                      fontSize: 13,
-                      fontWeight: i18n.currentLocale.languageCode == entry.key
-                          ? FontWeight.bold
-                          : FontWeight.normal),
+                    color: displayColor,
+                    fontSize: 13,
+                    fontWeight: i18n.currentLocale.languageCode == entry.key
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
                 ),
               );
             }).toList(),

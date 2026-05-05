@@ -310,22 +310,7 @@ class AdminDashboardService {
       const formattedSize = (totalSize / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
-      logger.debug('Fetching last reindex time from analytics');
-      const reindexCursor = await this.db.query(`
-        FOR a IN analytics
-          FILTER a.event == 'reindex'
-          SORT a.timestamp DESC
-          LIMIT 1
-          RETURN a.timestamp
-      `);
-      const lastReindexTimestamp = await reindexCursor.next();
-      const lastReindex = lastReindexTimestamp
-        ? this.formatTimeAgo(new Date(lastReindexTimestamp))
-        : 'Never';
-      logger.debug(`Last reindex time: ${lastReindexTimestamp || 'Never'}, formatted: ${lastReindex}`);
-
       const response = {
-        lastReindex,
         databaseSize: formattedSize,
         totalTables: collections.length,
         collections: collectionStats
@@ -369,7 +354,7 @@ class AdminDashboardService {
     try {
       logger.debug('Fetching total user count');
       const userCountCursor = await this.db.query(`
-        RETURN LENGTH(FOR u IN users RETURN 1)
+        RETURN LENGTH(FOR u IN users FILTER u.deleted != true RETURN 1)
       `);
       const userCount = await userCountCursor.next();
       logger.debug(`Total users: ${userCount}`);
@@ -392,6 +377,7 @@ class AdminDashboardService {
         LET oneMonthAgo = DATE_SUBTRACT(DATE_NOW(), 1, "month")
         RETURN LENGTH(
           FOR u IN users
+            FILTER u.deleted != true
             FILTER DATE_TIMESTAMP(u.createdAt) >= DATE_TIMESTAMP(oneMonthAgo)
             RETURN 1
         )
@@ -402,14 +388,15 @@ class AdminDashboardService {
       logger.debug('Fetching sample user list (top 10)');
       const usersCursor = await this.db.query(`
         FOR u IN users
+          FILTER u.deleted != true
           SORT u.updatedAt DESC
           LIMIT 10
           RETURN {
             _key: u._key,
             loginName: u.loginName,
             email: u.email,
-            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-            role: HAS(u, "role") ? u.role : "User"
+            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+            roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : [])
           }
       `);
       const users = await usersCursor.all();
@@ -605,55 +592,6 @@ class AdminDashboardService {
    */
   async getLogsSummary(options = {}) {
     return this.logsService.getLogsSummary(options);
-    // Note I am just leaving this dead code here in case something comes up
-    const { date = new Date().toISOString().split('T')[0], level } = options;
-    logger.info(`Getting logs summary for date: ${date}, level: ${level}`);
-
-    try {
-      const logFile = path.join(__dirname, `../logs/combined-${date}.log`);
-      logger.debug(`Reading log file for summary: ${logFile}`);
-      let logs = [];
-
-      try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
-
-        logs = logLines.map(line => {
-          const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-          if (!match) return null;
-          const [, timestamp, level, service] = match;
-          return { level: level.toUpperCase(), service };
-        }).filter(log => log !== null);
-      } catch (error) {
-        logger.error(`Error reading log file ${logFile}: ${error.message}`);
-        return { byType: {}, byService: {} };
-      }
-
-      let filteredLogs = logs;
-      if (level) {
-        logger.debug(`Filtering logs by level: ${level}`);
-        filteredLogs = filteredLogs.filter(log => log.level.toLowerCase() === level.toLowerCase());
-      }
-
-      const byType = {};
-      const byService = {};
-
-      filteredLogs.forEach(log => {
-        byType[log.level] = (byType[log.level] || 0) + 1;
-        byService[log.service] = (byService[log.service] || 0) + 1;
-      });
-
-      const response = {
-        byType,
-        byService
-      };
-      logger.debug(`Logs summary response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in getLogsSummary: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
   }
 
   /**
@@ -703,45 +641,6 @@ class AdminDashboardService {
       return response;
     } catch (error) {
       logger.error(`Error in debugYesterdayLogs: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  /**
-   * Reindex database
-   * @returns {Promise<Object>} Reindex result
-   */
-  async reindexDatabase() {
-    if (!this.db) {
-      throw new Error('Database not initialized. Call init() first.');
-    }
-    logger.info('Reindexing database');
-
-    try {
-      logger.debug('Starting database reindex');
-      const collections = await this.db.collections();
-      for (const collection of collections) {
-        logger.debug(`Reindexing collection: ${collection.name}`);
-        // Simulate reindexing (actual implementation depends on ArangoDB setup)
-        await collection.figures();
-      }
-
-      const timestamp = new Date().toISOString();
-      await this.storeAnalyticsData({
-        event: 'reindex',
-        timestamp
-      });
-
-      const response = {
-        status: 'success',
-        message: 'Database reindexed successfully',
-        timestamp
-      };
-      logger.debug(`Reindex response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in reindexDatabase: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -1118,11 +1017,11 @@ class AdminDashboardService {
     logger.info(`Searching users with options: ${JSON.stringify(options)}`);
 
     try {
-      let { term = '', field = 'all', limit = 20, offset = 0 } = options;
+      const { term = '', field = 'all', limit = 20, offset = 0 } = options;
 
       // Correctly parse string query parameters to numbers
-      limit = parseInt(limit, 10) || 20;
-      offset = parseInt(offset, 10) || 0;
+      const parsedLimit = parseInt(limit, 10) || 20;
+      const parsedOffset = parseInt(offset, 10) || 0;
 
       let countQuery, usersQuery, queryParams;
 
@@ -1134,6 +1033,7 @@ class AdminDashboardService {
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `
               LOWER(u.loginName) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
             `;
             break;
@@ -1147,7 +1047,7 @@ class AdminDashboardService {
             break;
           case 'role':
             queryParams.term = `%${term.toLowerCase()}%`;
-            filterCondition = `HAS(u, "role") AND LOWER(u.role) LIKE @term`;
+            filterCondition = `HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0`;
             break;
           case 'all':
           default:
@@ -1155,8 +1055,9 @@ class AdminDashboardService {
             filterCondition = `
               LOWER(u.loginName) LIKE @term
               OR LOWER(u.email) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
-              OR (HAS(u, "role") AND LOWER(u.role) LIKE @term)
+              OR (HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0)
             `;
             break;
         }
@@ -1164,6 +1065,7 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               FILTER ${filterCondition}
               RETURN 1
           )
@@ -1171,15 +1073,17 @@ class AdminDashboardService {
 
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             FILTER ${filterCondition}
             SORT u.updatedAt DESC
-            LIMIT ${offset}, ${limit}
+            LIMIT ${parsedOffset}, ${parsedLimit}
             RETURN {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }
@@ -1189,19 +1093,22 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               RETURN 1
           )
         `;
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             SORT u.updatedAt DESC
-            LIMIT ${offset}, ${limit}
+            LIMIT ${parsedOffset}, ${parsedLimit}
             RETURN {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }

@@ -1,7 +1,53 @@
 // src/services/chatbotService.js - Chatbot and Analytics Service
-import httpService from './httpService';
+import httpService from './httpService'
 
 export default {
+  /**
+   * Create a server-owned chat session (persists turns in Arango; backend loads history for each send).
+   * @param {Object} [opts] - optional { twinId }
+   * @returns {Promise<{ sessionId, userId, createdAt, twinId }>}
+   */
+  async createChatSession(opts = {}) {
+    const response = await httpService.post('chat-sessions', opts.twinId ? { twinId: opts.twinId } : {})
+    return response.data
+  },
+
+  /**
+   * Send one user message; backend appends to session, loads recent history + system prompt via ChatQnA.
+   * @param {string} sessionId - chat session id from createChatSession
+   * @param {string} text - user message (may be hidden prompt for quick-help)
+   * @param {Object} [context] - { categoryLabel, serviceLabels, language }
+   * @returns {Promise} Same shape as submitQuery result (queryId, response, metadata, …)
+   */
+  async sendChatSessionMessage(sessionId, text, context = {}) {
+    try {
+      console.log('Chat session message:', sessionId, text?.slice?.(0, 80))
+      const startTime = Date.now()
+      const response = await httpService.post(`chat-sessions/${sessionId}/messages`, {
+        text,
+        context,
+      })
+      const data = response.data
+
+      if (data.response && data.response.startsWith('Error:')) {
+        console.error('OPEA service error in response:', data.response)
+        throw new Error(data.response)
+      }
+
+      const responseTime = Date.now() - startTime
+      const queryId = data.queryId
+      if (queryId) {
+        await this.updateQueryResponseTime(queryId, responseTime)
+        await this.markQueryAsAnswered(queryId, responseTime)
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error sending chat session message:', error.message)
+      throw error
+    }
+  },
+
   /**
    * Submit a query to the chatbot
    * @param {Object} queryData - Query data
@@ -9,40 +55,44 @@ export default {
    */
   async submitQuery(queryData) {
     try {
-      console.log('Submitting query:', JSON.stringify(queryData, null, 2));
-      const startTime = Date.now();
-      
+      console.log('Submitting query:', JSON.stringify(queryData, null, 2))
+      const startTime = Date.now()
+
       const response = await httpService.post('queries', {
         ...queryData,
-        timestamp: new Date().toISOString()
-      });
-      
+        timestamp: new Date().toISOString(),
+      })
+
       if (response.data.response && response.data.response.startsWith('Error:')) {
-        console.error('OPEA service error in response:', response.data.response);
-        throw new Error(response.data.response);
+        console.error('OPEA service error in response:', response.data.response)
+        throw new Error(response.data.response)
       }
-      
-      const responseTime = Date.now() - startTime;
-      console.log('Received response:', JSON.stringify(response.data, null, 2));
-      console.log('Response time:', responseTime, 'ms');
-      console.log('OPEA response content:', response.data.response || 'No response content available');
-      
+
+      const responseTime = Date.now() - startTime
+      console.log('Received response:', JSON.stringify(response.data, null, 2))
+      console.log('Response time:', responseTime, 'ms')
+      console.log('OPEA response content:', response.data.response || 'No response content available')
+
       if (response.data.metadata) {
-        console.log('Metadata:', JSON.stringify(response.data.metadata, null, 2));
+        console.log('Metadata:', JSON.stringify(response.data.metadata, null, 2))
       }
-      
-      const queryId = response.data.queryId;  // Fixed: Use queryId instead of _key
+
+      const queryId = response.data.queryId // Fixed: Use queryId instead of _key
       if (queryId) {
-        await this.updateQueryResponseTime(queryId, responseTime);
-        await this.markQueryAsAnswered(queryId, responseTime);
+        await this.updateQueryResponseTime(queryId, responseTime)
+        await this.markQueryAsAnswered(queryId, responseTime)
       } else {
-        console.warn('No queryId in response; skipping updates');
+        console.warn('No queryId in response; skipping updates')
       }
-      
-      return response.data;
+
+      return response.data
     } catch (error) {
-      console.error('Error submitting query:', error.message, error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data');
-      throw error;
+      console.error(
+        'Error submitting query:',
+        error.message,
+        error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data'
+      )
+      throw error
     }
   },
 
@@ -55,14 +105,14 @@ export default {
   async updateQueryResponseTime(queryId, responseTime) {
     try {
       const response = await httpService.patch(`queries/${queryId}/responsetime`, {
-        responseTime
-      });
-      
-      return response.data;
+        responseTime,
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error updating query response time:', error);
+      console.error('Error updating query response time:', error)
       // Non-critical error, can be ignored
-      return null;
+      return null
     }
   },
 
@@ -75,13 +125,13 @@ export default {
   async markQueryAsAnswered(queryId, responseTime) {
     try {
       const response = await httpService.patch(`queries/${queryId}/answered`, {
-        responseTime
-      });
-      
-      return response.data;
+        responseTime,
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error marking query as answered:', error);
-      throw error;
+      console.error('Error marking query as answered:', error)
+      throw error
     }
   },
 
@@ -93,11 +143,11 @@ export default {
    */
   async submitFeedback(queryId, feedback) {
     try {
-      const response = await httpService.post(`queries/${queryId}/feedback`, feedback);
-      return response.data;
+      const response = await httpService.post(`queries/${queryId}/feedback`, feedback)
+      return response.data
     } catch (error) {
-      console.error('Error submitting feedback:', error);
-      throw error;
+      console.error('Error submitting feedback:', error)
+      throw error
     }
   },
 
@@ -110,16 +160,16 @@ export default {
    */
   async getUserQueryHistory(userId, page = 1, limit = 20) {
     try {
-      const offset = (page - 1) * limit;
-      
+      const offset = (page - 1) * limit
+
       const response = await httpService.get('queries/history', {
-        params: { userId, limit, offset }
-      });
-      
-      return response.data;
+        params: { userId, limit, offset },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error fetching user query history:', error);
-      throw error;
+      console.error('Error fetching user query history:', error)
+      throw error
     }
   },
 
@@ -132,16 +182,16 @@ export default {
    */
   async getSavedQueries(userId, page = 1, limit = 20) {
     try {
-      const offset = (page - 1) * limit;
-      
+      const offset = (page - 1) * limit
+
       const response = await httpService.get('queries/saved', {
-        params: { userId, limit, offset }
-      });
-      
-      return response.data;
+        params: { userId, limit, offset },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error fetching saved queries:', error);
-      throw error;
+      console.error('Error fetching saved queries:', error)
+      throw error
     }
   },
 
@@ -152,11 +202,11 @@ export default {
    */
   async saveQuery(queryData) {
     try {
-      const response = await httpService.post('queries/saved', queryData);
-      return response.data;
+      const response = await httpService.post('queries/saved', queryData)
+      return response.data
     } catch (error) {
-      console.error('Error saving query:', error);
-      throw error;
+      console.error('Error saving query:', error)
+      throw error
     }
   },
 
@@ -169,13 +219,13 @@ export default {
   async getQueryRecommendations(userId, limit = 5) {
     try {
       const response = await httpService.get('queries/recommendations', {
-        params: { userId, limit }
-      });
-      
-      return response.data;
+        params: { userId, limit },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error fetching query recommendations:', error);
-      return [];
+      console.error('Error fetching query recommendations:', error)
+      return []
     }
   },
 
@@ -188,13 +238,13 @@ export default {
   async getSimilarQueries(queryText, limit = 5) {
     try {
       const response = await httpService.get('queries/similar', {
-        params: { query: queryText, limit }
-      });
-      
-      return response.data;
+        params: { query: queryText, limit },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error fetching similar queries:', error);
-      return [];
+      console.error('Error fetching similar queries:', error)
+      return []
     }
   },
 
@@ -207,13 +257,13 @@ export default {
   async getAnalytics(period = 'daily', date = new Date().toISOString().split('T')[0]) {
     try {
       const response = await httpService.get('analytics', {
-        params: { period, date }
-      });
-      
-      return response.data;
+        params: { period, date },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error fetching analytics:', error);
-      throw error;
+      console.error('Error fetching analytics:', error)
+      throw error
     }
   },
 
@@ -227,13 +277,13 @@ export default {
   async getUserStats(userId, startDate, endDate) {
     try {
       const response = await httpService.get(`analytics/users/${userId}`, {
-        params: { startDate, endDate }
-      });
-      
-      return response.data;
+        params: { startDate, endDate },
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error fetching user statistics:', error);
-      throw error;
+      console.error('Error fetching user statistics:', error)
+      throw error
     }
   },
 
@@ -244,11 +294,11 @@ export default {
    */
   async getSessionInfo(sessionId) {
     try {
-      const response = await httpService.get(`sessions/${sessionId}`);
-      return response.data;
+      const response = await httpService.get(`sessions/${sessionId}`)
+      return response.data
     } catch (error) {
-      console.error('Error fetching session information:', error);
-      throw error;
+      console.error('Error fetching session information:', error)
+      throw error
     }
   },
 
@@ -263,13 +313,13 @@ export default {
       const response = await httpService.post('sessions', {
         userId,
         deviceInfo,
-        timestamp: new Date().toISOString()
-      });
-      
-      return response.data;
+        timestamp: new Date().toISOString(),
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error starting session:', error);
-      throw error;
+      console.error('Error starting session:', error)
+      throw error
     }
   },
 
@@ -281,13 +331,13 @@ export default {
   async endSession(sessionId) {
     try {
       const response = await httpService.patch(`sessions/${sessionId}/end`, {
-        endTime: new Date().toISOString()
-      });
-      
-      return response.data;
+        endTime: new Date().toISOString(),
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error ending session:', error);
-      throw error;
+      console.error('Error ending session:', error)
+      throw error
     }
   },
 
@@ -299,13 +349,13 @@ export default {
   async keepSessionAlive(sessionId) {
     try {
       const response = await httpService.patch(`sessions/${sessionId}/keepalive`, {
-        lastActiveTime: new Date().toISOString()
-      });
-      
-      return response.data;
+        lastActiveTime: new Date().toISOString(),
+      })
+
+      return response.data
     } catch (error) {
-      console.error('Error keeping session alive:', error);
-      throw error;
+      console.error('Error keeping session alive:', error)
+      throw error
     }
-  }
-};
+  },
+}

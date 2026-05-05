@@ -147,7 +147,7 @@ restore_config() {
         log "Processing service $service_name"
         response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/services/$service_name" \
             -H "Content-Type: application/json" \
-            -d "$(echo "$service" | jq 'del(.id, .routes, .plugins, .created_at, .updated_at)')" < /dev/null)
+            -d "$(echo "$service" | jq 'del(.id, .routes, .plugins, .created_at, .updated_at, ._comment)')" < /dev/null)
         http_code=$(echo "$response" | sed -n '$p')
         body=$(echo "$response" | sed '$d')
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
@@ -173,7 +173,7 @@ restore_config() {
             errors=$((errors + 1))
             continue
         fi
-        route_payload=$(echo "$route" | jq --arg sid "$route_service_id" 'del(.id, .plugins, .created_at, .updated_at) | .service = {id: $sid}')
+        route_payload=$(echo "$route" | jq --arg sid "$route_service_id" 'del(.id, .plugins, .created_at, .updated_at, ._comment) | .service = {id: $sid}')
         existing_route=$(curl -s "$KONG_ADMIN_URL/routes/$route_name" < /dev/null)
         if [ "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
             response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/routes/$route_name" \
@@ -210,7 +210,7 @@ restore_config() {
                     log "Plugin $plugin_name already exists for route $route_name, skipping"
                     continue
                 fi
-                plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at)')
+                plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at, ._comment)')
                 response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/$route_name/plugins" \
                     -H "Content-Type: application/json" \
                     -d "$plugin_payload" < /dev/null)
@@ -230,32 +230,6 @@ restore_config() {
     done < ${_TMP_PREFIX}_routes.tmp
     rm -f ${_TMP_PREFIX}_routes.tmp
 
-    # Add user-admin-route (belongs to express-api service)
-    log "Adding user-admin-route"
-    existing_route=$(curl -s "$KONG_ADMIN_URL/routes/user-admin-route")
-    if [ -z "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/express-api/routes" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "user-admin-route",
-                "paths": ["/api/users/admin/users"],
-                "strip_path": false,
-                "preserve_host": true,
-                "protocols": ["http", "https"]
-            }')
-        http_code=$(echo "$response" | sed -n '$p')
-        body=$(echo "$response" | sed '$d')
-        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "Route user-admin-route added successfully"
-        else
-            log "ERROR: Failed to add route user-admin-route with HTTP status $http_code"
-            log "Response: $body"
-            errors=$((errors + 1))
-        fi
-    else
-        log "Route user-admin-route already exists, skipping"
-    fi
-
     # Update or create service plugins
     echo "$config_json" | jq -c '.plugins[] | select(.service?)' > ${_TMP_PREFIX}_svc_plugins.tmp
     while IFS= read -r plugin; do
@@ -274,7 +248,7 @@ restore_config() {
             errors=$((errors + 1))
             continue
         fi
-        plugin_payload=$(echo "$plugin" | jq --arg sid "$plugin_svc_id" 'del(.id, .created_at, .updated_at) | .service = {id: $sid}')
+        plugin_payload=$(echo "$plugin" | jq --arg sid "$plugin_svc_id" 'del(.id, .created_at, .updated_at, ._comment) | .service = {id: $sid}')
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$plugin_service_name/plugins" \
             -H "Content-Type: application/json" \
             -d "$plugin_payload" < /dev/null)
@@ -303,7 +277,7 @@ restore_config() {
             log "Global plugin $plugin_name already exists, skipping"
             continue
         fi
-        plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at)')
+        plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at, ._comment)')
         response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/plugins" \
             -H "Content-Type: application/json" \
             -d "$plugin_payload" < /dev/null)
@@ -325,7 +299,7 @@ restore_config() {
     while IFS= read -r upstream; do
         upstream_name=$(echo "$upstream" | jq -r '.name')
         log "Processing upstream $upstream_name"
-        upstream_payload=$(echo "$upstream" | jq 'del(.targets, .id, .created_at, .updated_at)')
+        upstream_payload=$(echo "$upstream" | jq 'del(.targets, .id, .created_at, .updated_at, ._comment)')
         response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/upstreams/$upstream_name" \
             -H "Content-Type: application/json" \
             -d "$upstream_payload" < /dev/null)
@@ -462,19 +436,16 @@ test_endpoints() {
         exit 1
     fi
 
-    # Test 2: POST /api/users/admin/users/{USER_ID}/force-logout
-    log "Testing POST /api/users/admin/users/$USER_ID/force-logout"
-    response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/users/admin/users/$USER_ID/force-logout" \
-        -H "Authorization: Bearer $jwt_token" \
-        -H "Content-Type: application/json" \
-        -d '{}')
+    # Test 2: GET /api/me (authenticated user profile)
+    log "Testing GET /api/me"
+    response=$(curl -s -w "\n%{http_code}" "$KONG_PUBLIC_URL/api/me" \
+        -H "Authorization: Bearer $jwt_token")
     http_code=$(echo "$response" | sed -n '$p')
     body=$(echo "$response" | sed '$d')
     if [ "$http_code" -eq 200 ]; then
-        log "SUCCESS: /api/users/admin/users/$USER_ID/force-logout returned 200"
-        log "Response: $body"
+        log "SUCCESS: /api/me returned 200"
     else
-        log "ERROR: /api/users/admin/users/$USER_ID/force-logout failed with status $http_code"
+        log "ERROR: /api/me failed with status $http_code"
         log "Response: $body"
         exit 1
     fi

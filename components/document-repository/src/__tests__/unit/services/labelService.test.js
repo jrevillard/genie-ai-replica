@@ -48,7 +48,7 @@ describe('labelService', () => {
     it('should return labels matching name filter', async () => {
       const labels = [
         { name: 'Label A', level: 'service' },
-        { name: 'Label B', level: 'category' },
+        { name: 'Label B', level: 'category' }
       ];
       const mockCursor = { all: jest.fn().mockResolvedValue(labels) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
@@ -68,9 +68,9 @@ describe('labelService', () => {
 
       labelService.getDb = jest.fn().mockResolvedValue(mockDb);
 
-      await expect(
-        labelService.createLabel({ name: 'Child', level: 'service', parentId: 'service1' })
-      ).rejects.toThrow('Parent must be a category');
+      await expect(labelService.createLabel({ name: 'Child', level: 'service', parentId: 'service1' })).rejects.toThrow(
+        'Parent must be a category'
+      );
     });
   });
 
@@ -79,7 +79,10 @@ describe('labelService', () => {
       const childLabel = { parentId: 'parent1' };
       const mockCursor = { all: jest.fn().mockResolvedValue([childLabel]) };
       const mockCollection = { remove: jest.fn() };
-      const mockDb = { query: jest.fn().mockResolvedValue(mockCursor), collection: jest.fn().mockReturnValue(mockCollection) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(mockCursor),
+        collection: jest.fn().mockReturnValue(mockCollection)
+      };
 
       labelService.getDb = jest.fn().mockResolvedValue(mockDb);
 

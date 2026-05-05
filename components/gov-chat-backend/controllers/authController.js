@@ -9,9 +9,8 @@ const { logger } = require('../shared-lib');
 function getFrontendUrl(req) {
   const envFrontendUrl = process.env.FRONTEND_URL;
   if (envFrontendUrl) {
-    const cleaned = envFrontendUrl.replace(/\/+$/, '');
-    logger.info(`Using environment FRONTEND_URL: ${cleaned}`);
-    return cleaned;
+    logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
+    return envFrontendUrl;
   }
   const origin = req.headers.origin;
   const referer = req.headers.referer;
@@ -28,14 +27,6 @@ function getFrontendUrl(req) {
     } catch (error) {
       logger.warn(`Could not parse referer URL: ${referer}`, { stack: error.stack });
     }
-  }
-  // Derive from forwarded headers (proxy deployments)
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  if (host) {
-    const forwardedUrl = `${protocol}://${host}`;
-    logger.info(`Using forwarded headers for frontend URL: ${forwardedUrl}`);
-    return forwardedUrl;
   }
   const fallbackUrl = 'http://localhost:8090';
   logger.info(`Using fallback URL: ${fallbackUrl}`);
@@ -156,7 +147,7 @@ class AuthController {
   
       if (!token) {
         logger.warn('Token is required for email verification');
-        return res.redirect(`${frontendUrl}/verify-email-success?status=error&reason=invalid`);
+        return res.redirect(`${frontendUrl}/registration-success?status=error&message=${encodeURIComponent('Token is required')}`);
       }
   
       const result = await this.authService.verifyEmail(token);
@@ -171,23 +162,24 @@ class AuthController {
   
       if (result.success) {
         logger.info('Email verified successfully');
-        return res.redirect(`${frontendUrl}/verify-email-success?status=success`);
+        return res.redirect(`${frontendUrl}/registration-success?email=${encodeURIComponent(userEmail)}`);
       } else {
-        let reason = 'invalid';
+        let errorMessage = result.message || 'Email verification failed';
         if (result.expired) {
           logger.warn('Email verification failed: Token expired');
-          reason = 'expired';
+          errorMessage = 'Token has expired';
         } else if (result.used) {
           logger.warn('Email verification failed: Token already used');
-          reason = 'used';
+          errorMessage = 'Token has already been used';
         } else {
           logger.warn('Email verification failed: Invalid token');
+          errorMessage = 'Invalid token';
         }
-        return res.redirect(`${frontendUrl}/verify-email-success?status=error&reason=${reason}`);
+        return res.redirect(`${frontendUrl}/registration-success?status=error&message=${encodeURIComponent(errorMessage)}&email=${encodeURIComponent(userEmail)}`);
       }
     } catch (error) {
       logger.error(`Email verification error: ${error.message}`, { stack: error.stack });
-      return res.redirect(`${getFrontendUrl(req)}/verify-email-success?status=error&reason=invalid`);
+      return res.redirect(`${getFrontendUrl(req)}/registration-success?status=error&message=${encodeURIComponent('An unexpected error occurred')}`);
     }
   }
 

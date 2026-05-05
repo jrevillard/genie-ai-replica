@@ -81,6 +81,12 @@
                 <span>{{ translate('admin.logs', 'Logs') }}</span>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="#" class="nav-link" @click.prevent="setActiveTab('liveLogs')">
+                <i>🖥️</i>
+                <span>{{ translate('admin.liveLogs', 'Live Service Logs') }}</span>
+              </a>
+            </li>
           </ul>
         </div>
 
@@ -506,7 +512,7 @@
                         @click="viewDocumentDetails(doc.file_id)"
                       >
                         <td @click.stop>
-                          <input v-model="selectedDocuments" type="checkbox" :value="doc._key" />
+                          <input v-model="selectedDocuments" type="checkbox" :value="doc.file_id" />
                         </td>
                         <td class="cell-main">{{ doc.file_name }}</td>
                         <td>
@@ -804,6 +810,87 @@
                       )
                     }}
                   </span>
+                </div>
+              </div>
+
+              <div v-if="activeTab === 'liveLogs'" class="dashboard-card" style="grid-column: span 2">
+                <div class="card-header">
+                  <div class="card-title">
+                    {{ translate('admin.liveLogs', 'Live Service Logs') }}
+                  </div>
+                  <div class="card-actions">
+                    <button class="btn btn-outline btn-sm" :disabled="serviceLogsLoading" @click="refreshServiceLogs">
+                      {{ translate('admin.refresh', 'Refresh') }}
+                    </button>
+                    <button class="btn btn-outline btn-sm" @click="toggleServiceLogsAutoRefresh">
+                      {{
+                        serviceLogsAutoRefresh ? translate('admin.pause', 'Pause') : translate('admin.resume', 'Resume')
+                      }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="live-log-controls">
+                  <select v-model="selectedLiveService" class="live-log-input">
+                    <option value="">{{ translate('admin.selectService', 'Select Service') }}</option>
+                    <option v-for="service in availableLiveServices" :key="service" :value="service">
+                      {{ service }}
+                    </option>
+                  </select>
+                  <input
+                    v-model="liveServiceSearchTerm"
+                    class="live-log-input"
+                    type="text"
+                    :placeholder="translate('admin.logSearch.searchPlaceholder', 'Search log messages...')"
+                  />
+                  <select v-model="liveServiceSince" class="live-log-input">
+                    <option value="1m">1m</option>
+                    <option value="2m">2m</option>
+                    <option value="5m">5m</option>
+                    <option value="10m">10m</option>
+                    <option value="30m">30m</option>
+                  </select>
+                  <span class="live-log-meta">
+                    {{
+                      serviceLogsLastUpdated
+                        ? `${translate('admin.lastUpdated', 'Last updated')}: ${serviceLogsLastUpdated}`
+                        : translate('admin.loading', 'Loading...')
+                    }}
+                  </span>
+                </div>
+
+                <div class="log-summary-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{{ translate('admin.logDate', 'Date') }}</th>
+                        <th>{{ translate('admin.logTime', 'Time') }}</th>
+                        <th>{{ translate('admin.logLevel', 'Level') }}</th>
+                        <th>{{ translate('admin.logMessage', 'Message') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(log, index) in serviceLogs" :key="'svc-log-' + index">
+                        <td>{{ log.date || '-' }}</td>
+                        <td>{{ log.time || '-' }}</td>
+                        <td>
+                          <span :class="['log-level', `log-${(log.level || 'info').toLowerCase()}`]">
+                            {{ log.level || 'INFO' }}
+                          </span>
+                        </td>
+                        <td class="live-log-message">{{ log.message }}</td>
+                      </tr>
+                      <tr v-if="!serviceLogsLoading && serviceLogs.length === 0">
+                        <td colspan="4" class="empty-logs">
+                          {{
+                            selectedLiveService
+                              ? translate('admin.noLogsFound', 'No logs found for today')
+                              : translate('admin.selectService', 'Select Service')
+                          }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
@@ -1541,7 +1628,6 @@ import ConfirmDialog from './ConfirmDialog.vue' // IMPORT ConfirmDialog
 import { eventBus } from '../eventBus.js'
 import { availableLanguages } from '../config/languageConfig.js'
 import documentFileService from '../services/documentFileService.js'
-import labelService from '../services/labelService.js'
 import { formatFileSize } from '../utils/fileUtils.js'
 import { themeManager } from '../utils/ThemeManager'
 
@@ -1595,6 +1681,7 @@ export default {
         { id: 'documents', label: 'Document Management' },
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
+        { id: 'liveLogs', label: 'Live Service Logs' },
         { id: 'security', label: 'Security' },
         { id: 'users', label: 'Users' },
       ],
@@ -1698,6 +1785,16 @@ export default {
         level: '',
         service: '',
       },
+      availableLiveServices: [],
+      selectedLiveService: '',
+      liveServiceSearchTerm: '',
+      liveServiceSince: '2m',
+      serviceLogs: [],
+      serviceLogsLoading: false,
+      serviceLogsAutoRefresh: true,
+      serviceLogsLastUpdated: '',
+      serviceLogsIntervalMs: 3000,
+      serviceLogsTimer: null,
 
       logsTotal: 1284,
 
@@ -1924,6 +2021,7 @@ export default {
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
     window.removeEventListener('themeChange', this.handleThemeChange)
+    this.stopServiceLogsPolling()
   },
   methods: {
     formatFileSize,
@@ -2117,19 +2215,87 @@ export default {
     // --- ADDED: Helper to load data based on tab ID ---
     loadDataForTab(tabId) {
       if (tabId === 'database') {
+        this.stopServiceLogsPolling()
         this.loadDatabaseStats()
       } else if (tabId === 'logs') {
+        this.stopServiceLogsPolling()
         this.loadLogsSummary()
         this.loadLogs()
+      } else if (tabId === 'liveLogs') {
+        this.startServiceLogsPolling()
       } else if (tabId === 'security') {
+        this.stopServiceLogsPolling()
         console.log(`[AdminDashboard] Loading security tab, isLoading: ${this.isLoading}`)
         this.loadSecurityMetrics()
       } else if (tabId === 'users') {
+        this.stopServiceLogsPolling()
         this.loadUserStats()
       } else if (tabId === 'documents') {
+        this.stopServiceLogsPolling()
         this.loadDocuments()
       } else if (tabId === 'hierarchy' && this.knowledgeHierarchy.length === 0) {
+        this.stopServiceLogsPolling()
         this.loadKnowledgeHierarchy()
+      } else {
+        this.stopServiceLogsPolling()
+      }
+    },
+
+    async startServiceLogsPolling() {
+      this.stopServiceLogsPolling()
+      this.serviceLogsAutoRefresh = true
+      await this.loadLiveServiceOptions()
+      await this.refreshServiceLogs()
+      this.serviceLogsTimer = setInterval(() => {
+        if (this.serviceLogsAutoRefresh && this.activeTab === 'liveLogs') {
+          this.refreshServiceLogs()
+        }
+      }, this.serviceLogsIntervalMs)
+    },
+
+    stopServiceLogsPolling() {
+      if (this.serviceLogsTimer) {
+        clearInterval(this.serviceLogsTimer)
+        this.serviceLogsTimer = null
+      }
+    },
+
+    toggleServiceLogsAutoRefresh() {
+      this.serviceLogsAutoRefresh = !this.serviceLogsAutoRefresh
+      if (this.serviceLogsAutoRefresh) {
+        this.refreshServiceLogs()
+      }
+    },
+
+    async loadLiveServiceOptions() {
+      try {
+        const response = await adminDashboardService.getLiveLogServices()
+        const services = response?.data?.services || []
+        this.availableLiveServices = services
+        if (!this.selectedLiveService && services.length > 0) {
+          this.selectedLiveService = services.find((service) => service.includes('dataprep')) || services[0]
+        }
+      } catch (error) {
+        console.error('Error loading live service options:', error)
+      }
+    },
+
+    async refreshServiceLogs() {
+      if (this.activeTab !== 'liveLogs' || !this.selectedLiveService) return
+      try {
+        this.serviceLogsLoading = true
+        const response = await adminDashboardService.getLiveServiceLogs({
+          service: this.selectedLiveService,
+          since: this.liveServiceSince,
+          tail: 300,
+          search: this.liveServiceSearchTerm,
+        })
+        this.serviceLogs = response?.data?.logs || []
+        this.serviceLogsLastUpdated = new Date().toLocaleTimeString()
+      } catch (error) {
+        console.error('Error refreshing service logs:', error)
+      } finally {
+        this.serviceLogsLoading = false
       }
     },
 
@@ -3158,8 +3324,7 @@ export default {
 
     selectAllDocuments(event) {
       if (event.target.checked) {
-        // MODIFICATION: Select based on _key, not file_id
-        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d._key)
+        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d.file_id)
       } else {
         this.selectedDocuments = []
       }
@@ -3183,7 +3348,7 @@ export default {
             // User confirmed, proceed with batch ingest
             this.isLoading = true // Use the main dashboard loading overlay
             try {
-              // Call the service with the array of selected document keys
+              // Call the service with the array of selected file IDs
               await documentFileService.ingestMultipleFiles(this.selectedDocuments)
 
               this.showNotification(
@@ -3559,6 +3724,34 @@ export default {
 .nav-link.active {
   background-color: var(--primary);
   color: white;
+}
+
+.live-log-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.live-log-input {
+  min-width: 180px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.live-log-meta {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.live-log-message {
+  max-width: 520px;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 /* Main Content */

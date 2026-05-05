@@ -89,7 +89,6 @@ GENIE.AI/
 │   ├── chatqna/                  # Chat microservice
 │   ├── core/                     # Core libraries and protocols
 │   ├── dataprep/                 # Data preparation service
-│   ├── http-service/             # HTTP client wrapper
 │   ├── retriever/                # Hybrid vector-graph retriever
 │   └── reranker/                 # Reranking microservice
 ├── api-gateway-solution/         # API Gateway (Kong/NGINX)
@@ -137,7 +136,7 @@ cd GENIE.AI
 
 ```bash
 cp env .env
-# Edit .env with your secrets (ARANGO_PASSWORD, JWT_SECRET, etc.)
+# Edit .env with your secrets (ARANGO_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.)
 ```
 
 ### 3. Start Services
@@ -191,7 +190,6 @@ See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full lo
 - **[ChatQnA Service](genie-ai-overlay/chatqna/README.md)** - Chat microservice with multilingual support
 - **[Core Library](genie-ai-overlay/core/README.md)** - Service types, API protocols, and constants
 - **[Data Preparation](genie-ai-overlay/dataprep/README.md)** - Document ingestion and processing pipeline
-- **[HTTP Service](genie-ai-overlay/http-service/README.md)** - HTTP client wrapper and authentication
 - **[Retriever Service](genie-ai-overlay/retriever/README.md)** - Hybrid vector-graph search
 
 ### Configuration
@@ -209,10 +207,11 @@ See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full lo
 GENIE.AI is built on a microservices architecture with the following layers:
 
 1. **Client Layer**: Web (Vue.js), Mobile (Flutter), API clients
-2. **API Gateway**: Kong/NGINX for routing, authentication, and rate limiting
-3. **Application Layer**: Backend services (Node.js/Express)
-4. **AI Layer**: OPEA microservices (LLM, Embeddings, Reranking)
-5. **Data Layer**: ArangoDB (graph + vector), file storage, Redis cache
+2. **Identity Provider**: Keycloak (OIDC, JWKS, JIT provisioning, service accounts)
+3. **API Gateway**: Kong/NGINX for routing, rate limiting, SSL termination
+4. **Application Layer**: Backend services (Node.js/Express)
+5. **AI Layer**: OPEA microservices (LLM, Embeddings, Reranking)
+6. **Data Layer**: ArangoDB (graph + vector), file storage, Redis cache
 
 ### Technology Stack
 
@@ -220,7 +219,8 @@ GENIE.AI is built on a microservices architecture with the following layers:
 |-------|-----------|
 | Frontend | Vue.js 3, Vite, Tailwind CSS |
 | Mobile | Flutter 3.10+ |
-| Backend | Node.js, Express, TypeScript |
+| Identity Provider | Keycloak 26 (OIDC, JWKS, service accounts) |
+| Backend | Node.js, Express |
 | AI/ML | OPEA, vLLM, TEI, ArangoDB |
 | Database | ArangoDB 3.12+ (multi-model) |
 | API Gateway | Kong, NGINX |
@@ -231,7 +231,7 @@ GENIE.AI is built on a microservices architecture with the following layers:
 - **Multilingual Support**: 11+ languages with automatic translation
 - **RAG Pipeline**: Hybrid vector-graph retrieval for context-aware responses
 - **Multi-Platform**: Web, mobile (Android, iOS, Windows, macOS, Linux)
-- **Authentication**: JWT-based with role-based access control
+- **Authentication**: Keycloak OIDC with JWKS token validation, role-based access control, and JIT user provisioning
 - **Analytics**: Comprehensive usage and performance analytics
 - **Document Management**: Secure file upload, processing, and knowledge base integration
 - **Admin Dashboard**: System monitoring, user management, and security scanning

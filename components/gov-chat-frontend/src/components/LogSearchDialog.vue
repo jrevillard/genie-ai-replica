@@ -3,22 +3,16 @@
     <div class="overlay" @click="$emit('close')"></div>
     <div class="modal-content">
       <div class="modal-title">
-        <h2>{{ translate("admin.logSearch.title", "Search Logs") }}</h2>
-        <button
-          class="close-btn"
-          @click="$emit('close')"
-          aria-label="Close dialog"
-        >
-          ×
-        </button>
+        <h2>{{ translate('admin.logSearch.title', 'Search Logs') }}</h2>
+        <button class="close-btn" aria-label="Close dialog" @click="$emit('close')">×</button>
       </div>
 
       <div class="modal-body">
         <!-- Loading indicator -->
-        <div class="search-loading" v-if="isSearching">
+        <div v-if="isSearching" class="search-loading">
           <div class="loading-spinner"></div>
           <p>
-            {{ translate("admin.logSearch.searching", "Searching logs...") }}
+            {{ translate('admin.logSearch.searching', 'Searching logs...') }}
           </p>
         </div>
 
@@ -26,73 +20,62 @@
         <div class="search-form">
           <div class="search-row">
             <div class="search-field search-term">
-              <label for="searchTerm">{{
-                translate("admin.logSearch.searchTerm", "Search Term")
-              }}</label>
+              <label for="searchTerm">{{ translate('admin.logSearch.searchTerm', 'Search Term') }}</label>
               <input
-                type="text"
                 id="searchTerm"
                 v-model="searchParams.term"
-                :placeholder="
-                  translate(
-                    'admin.logSearch.searchPlaceholder',
-                    'Search log messages...'
-                  )
-                "
+                type="text"
+                :placeholder="translate('admin.logSearch.searchPlaceholder', 'Search log messages...')"
               />
             </div>
 
             <div class="search-field">
-              <label for="logLevel">{{
-                translate("admin.logSearch.level", "Log Level")
-              }}</label>
+              <label for="logLevel">{{ translate('admin.logSearch.level', 'Log Level') }}</label>
               <select id="logLevel" v-model="searchParams.level">
                 <option value="">
-                  {{ translate("admin.logSearch.allLevels", "All Levels") }}
+                  {{ translate('admin.logSearch.allLevels', 'All Levels') }}
                 </option>
                 <option value="ERROR">
-                  {{ translate("admin.logLevels.error", "ERROR") }}
+                  {{ translate('admin.logLevels.error', 'ERROR') }}
                 </option>
                 <option value="WARN">
-                  {{ translate("admin.logLevels.warn", "WARN") }}
+                  {{ translate('admin.logLevels.warn', 'WARN') }}
                 </option>
                 <option value="INFO">
-                  {{ translate("admin.logLevels.info", "INFO") }}
+                  {{ translate('admin.logLevels.info', 'INFO') }}
                 </option>
                 <option value="DEBUG">
-                  {{ translate("admin.logLevels.debug", "DEBUG") }}
+                  {{ translate('admin.logLevels.debug', 'DEBUG') }}
                 </option>
               </select>
             </div>
 
             <div class="search-field">
-              <label for="logService">{{
-                translate("admin.logSearch.service", "Service")
-              }}</label>
+              <label for="logService">{{ translate('admin.logSearch.service', 'Service') }}</label>
               <select id="logService" v-model="searchParams.service">
                 <option value="">
-                  {{ translate("admin.logSearch.allServices", "All Services") }}
+                  {{ translate('admin.logSearch.allServices', 'All Services') }}
                 </option>
                 <option value="API Gateway">
-                  {{ translate("admin.services.apiGateway", "API Gateway") }}
+                  {{ translate('admin.services.apiGateway', 'API Gateway') }}
                 </option>
                 <option value="Auth Service">
-                  {{ translate("admin.services.authService", "Auth Service") }}
+                  {{ translate('admin.services.authService', 'Auth Service') }}
                 </option>
                 <option value="Data Service">
-                  {{ translate("admin.services.dataService", "Data Service") }}
+                  {{ translate('admin.services.dataService', 'Data Service') }}
                 </option>
                 <option value="Storage">
-                  {{ translate("admin.services.storage", "Storage") }}
+                  {{ translate('admin.services.storage', 'Storage') }}
                 </option>
                 <option value="Cache">
-                  {{ translate("admin.services.cache", "Cache") }}
+                  {{ translate('admin.services.cache', 'Cache') }}
                 </option>
                 <option value="Database">
-                  {{ translate("admin.services.database", "Database") }}
+                  {{ translate('admin.services.database', 'Database') }}
                 </option>
                 <option value="External API">
-                  {{ translate("admin.services.externalApi", "External API") }}
+                  {{ translate('admin.services.externalApi', 'External API') }}
                 </option>
               </select>
             </div>
@@ -100,34 +83,28 @@
 
           <div class="search-row">
             <div class="search-field date-range">
-              <label for="dateRange">{{
-                translate("admin.logSearch.dateRange", "Date Range")
-              }}</label>
+              <label for="dateRange">{{ translate('admin.logSearch.dateRange', 'Date Range') }}</label>
               <select id="dateRange" v-model="searchParams.dateRange">
                 <option value="today">
-                  {{ translate("admin.logSearch.today", "Today") }}
+                  {{ translate('admin.logSearch.today', 'Today') }}
                 </option>
                 <option value="yesterday">
-                  {{ translate("admin.logSearch.yesterday", "Yesterday") }}
+                  {{ translate('admin.logSearch.yesterday', 'Yesterday') }}
                 </option>
                 <option value="week">
-                  {{ translate("admin.logSearch.lastWeek", "Last 7 Days") }}
+                  {{ translate('admin.logSearch.lastWeek', 'Last 7 Days') }}
                 </option>
                 <option value="month">
-                  {{ translate("admin.logSearch.lastMonth", "Last 30 Days") }}
+                  {{ translate('admin.logSearch.lastMonth', 'Last 30 Days') }}
                 </option>
                 <option value="custom">
-                  {{ translate("admin.logSearch.customRange", "Custom Range") }}
+                  {{ translate('admin.logSearch.customRange', 'Custom Range') }}
                 </option>
               </select>
             </div>
 
             <div class="search-actions">
-              <button
-                class="btn btn-primary"
-                @click="performSearch"
-                :disabled="isSearching"
-              >
+              <button class="btn btn-primary" :disabled="isSearching" @click="performSearch">
                 <span class="btn-content">
                   <svg
                     v-if="isSearching"
@@ -159,94 +136,68 @@
                     <circle cx="11" cy="11" r="8"></circle>
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                   </svg>
-                  {{ translate("admin.logSearch.search", "Search") }}
+                  {{ translate('admin.logSearch.search', 'Search') }}
                 </span>
               </button>
-              <button
-                class="btn btn-outline"
-                @click="resetSearch"
-                :disabled="isSearching"
-              >
-                {{ translate("admin.logSearch.reset", "Reset") }}
+              <button class="btn btn-outline" :disabled="isSearching" @click="resetSearch">
+                {{ translate('admin.logSearch.reset', 'Reset') }}
               </button>
             </div>
           </div>
 
           <!-- Custom date range picker -->
-          <div
-            class="search-row custom-date-range"
-            v-if="searchParams.dateRange === 'custom'"
-          >
+          <div v-if="searchParams.dateRange === 'custom'" class="search-row custom-date-range">
             <div class="search-field">
-              <label for="startDate">{{
-                translate("admin.logSearch.startDate", "Start Date")
-              }}</label>
-              <input
-                type="date"
-                id="startDate"
-                v-model="searchParams.startDate"
-              />
+              <label for="startDate">{{ translate('admin.logSearch.startDate', 'Start Date') }}</label>
+              <input id="startDate" v-model="searchParams.startDate" type="date" />
             </div>
             <div class="search-field">
-              <label for="endDate">{{
-                translate("admin.logSearch.endDate", "End Date")
-              }}</label>
-              <input type="date" id="endDate" v-model="searchParams.endDate" />
+              <label for="endDate">{{ translate('admin.logSearch.endDate', 'End Date') }}</label>
+              <input id="endDate" v-model="searchParams.endDate" type="date" />
             </div>
           </div>
         </div>
 
         <!-- Search results -->
-        <div class="search-results" v-if="hasSearched">
+        <div v-if="hasSearched" class="search-results">
           <div class="results-header">
             <h3>
-              {{ translate("admin.logSearch.results", "Search Results") }}
+              {{ translate('admin.logSearch.results', 'Search Results') }}
             </h3>
             <span class="results-count">
               {{ searchResults.length }}
-              {{ translate("admin.logSearch.entriesFound", "entries found") }}
+              {{ translate('admin.logSearch.entriesFound', 'entries found') }}
             </span>
           </div>
 
           <div class="table-container">
-            <table
-              class="results-table"
-              v-if="searchResults.length > 0"
-              :key="tableKey"
-            >
+            <table v-if="searchResults.length > 0" :key="tableKey" class="results-table">
               <thead>
                 <tr>
-                  <th>{{ translate("admin.logDate", "Date") }}</th>
-                  <th>{{ translate("admin.logTime", "Time") }}</th>
-                  <th>{{ translate("admin.logLevel", "Level") }}</th>
-                  <th>{{ translate("admin.logService", "Service") }}</th>
-                  <th>{{ translate("admin.logMessage", "Message") }}</th>
+                  <th>{{ translate('admin.logDate', 'Date') }}</th>
+                  <th>{{ translate('admin.logTime', 'Time') }}</th>
+                  <th>{{ translate('admin.logLevel', 'Level') }}</th>
+                  <th>{{ translate('admin.logService', 'Service') }}</th>
+                  <th>{{ translate('admin.logMessage', 'Message') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(log, index) in searchResults" :key="index">
-                  <td>{{ log.date || "N/A" }}</td>
+                  <td>{{ log.date || 'N/A' }}</td>
                   <td>{{ log.time }}</td>
                   <td>
-                    <span
-                      :class="['log-level', `log-${log.level.toLowerCase()}`]"
-                    >
+                    <span :class="['log-level', `log-${log.level.toLowerCase()}`]">
                       {{ log.level }}
                     </span>
                   </td>
                   <td>{{ log.service }}</td>
-                  <td>{{ log.message || "" }}</td>
+                  <td>{{ log.message || '' }}</td>
                 </tr>
               </tbody>
             </table>
 
             <div v-else class="no-results">
-              {{
-                translate(
-                  "admin.logSearch.noResults",
-                  "No logs matching your search criteria were found."
-                )
-              }}
+              {{ translate('admin.logSearch.noResults', 'No logs matching your search criteria were found.') }}
             </div>
           </div>
         </div>
@@ -255,17 +206,13 @@
       <div class="modal-footer">
         <div style="display: flex; justify-content: space-between; width: 100%">
           <div>
-            <button
-              v-if="searchResults.length > 0"
-              class="btn btn-outline"
-              @click="exportLogs"
-            >
-              {{ translate("admin.logSearch.export", "Export CSV") }}
+            <button v-if="searchResults.length > 0" class="btn btn-outline" @click="exportLogs">
+              {{ translate('admin.logSearch.export', 'Export CSV') }}
             </button>
           </div>
           <div>
             <button class="btn btn-primary" @click="$emit('close')">
-              {{ translate("admin.operations.close", "Close") }}
+              {{ translate('admin.operations.close', 'Close') }}
             </button>
           </div>
         </div>
@@ -275,69 +222,60 @@
 </template>
 
 <script>
-import adminDashboardService from "../services/adminDashboardService";
+import adminDashboardService from '../services/adminDashboardService';
 
 export default {
-  name: "LogSearchDialog",
+  name: 'LogSearchDialog',
   props: {
     theme: {
       type: String,
-      default: "light",
-    },
+      default: 'light'
+    }
   },
-  emits: ["close", "search-completed"],
+  emits: ['close', 'search-completed'],
   data() {
     return {
       currentLocale: this.getCurrentLanguage(),
       searchParams: {
-        term: "",
-        level: "",
-        service: "",
-        dateRange: "today",
-        startDate: this.formatDate(
-          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        ),
-        endDate: this.formatDate(new Date()),
+        term: '',
+        level: '',
+        service: '',
+        dateRange: 'today',
+        startDate: this.formatDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+        endDate: this.formatDate(new Date())
       },
       hasSearched: false,
       isSearching: false,
       searchResults: [],
       tableKey: 0,
-      searchError: null,
+      searchError: null
     };
   },
   mounted() {
-    console.log("LogSearchDialog mounted with theme:", this.theme);
-    console.log(
-      "Dialog data-theme attribute:",
-      this.$el.getAttribute("data-theme")
-    );
+    console.log('LogSearchDialog mounted with theme:', this.theme);
+    console.log('Dialog data-theme attribute:', this.$el.getAttribute('data-theme'));
     this.$nextTick(() => {
       try {
         const rootStyles = getComputedStyle(document.documentElement);
-        const bgButtonPrimary = rootStyles
-          .getPropertyValue("--bg-button-primary")
-          .trim();
-        console.log("Global --bg-button-primary:", bgButtonPrimary);
+        const bgButtonPrimary = rootStyles.getPropertyValue('--bg-button-primary').trim();
+        console.log('Global --bg-button-primary:', bgButtonPrimary);
 
-        const primaryBtn = document.querySelector(
-          "[data-theme] .modal .search-actions .btn-primary"
-        );
+        const primaryBtn = document.querySelector('[data-theme] .modal .search-actions .btn-primary');
         if (primaryBtn) {
           const styles = window.getComputedStyle(primaryBtn);
-          const svg = primaryBtn.querySelector("svg");
+          const svg = primaryBtn.querySelector('svg');
           console.log(
-            "Search button computed styles:",
+            'Search button computed styles:',
             JSON.stringify(
               {
                 backgroundColor: styles.backgroundColor,
                 color: styles.color,
                 border: styles.border,
-                styleAttribute: primaryBtn.getAttribute("style") || "none",
+                styleAttribute: primaryBtn.getAttribute('style') || 'none',
                 padding: styles.padding,
                 fontSize: styles.fontSize,
                 width: styles.width,
-                svgStroke: svg ? svg.getAttribute("stroke") : "none",
+                svgStroke: svg ? svg.getAttribute('stroke') : 'none'
               },
               null,
               2
@@ -347,62 +285,49 @@ export default {
             .flatMap((sheet) => {
               try {
                 return Array.from(sheet.cssRules);
-              } catch (e) {
+              } catch {
                 return [];
               }
             })
             .filter(
-              (rule) =>
-                rule.selectorText &&
-                rule.selectorText.includes(".btn-primary") &&
-                rule.style.backgroundColor
+              (rule) => rule.selectorText && rule.selectorText.includes('.btn-primary') && rule.style.backgroundColor
             )
             .map((rule) => ({
               selector: rule.selectorText,
               backgroundColor: rule.style.backgroundColor,
-              source: rule.parentStyleSheet.href || "inline",
+              source: rule.parentStyleSheet.href || 'inline'
             }));
-          console.log(
-            "CSS rules affecting .btn-primary:",
-            JSON.stringify(rules, null, 2)
-          );
+          console.log('CSS rules affecting .btn-primary:', JSON.stringify(rules, null, 2));
           let parent = primaryBtn.parentElement;
-          let parentStyles = [];
+          const parentStyles = [];
           while (parent && parent !== document.body) {
             if (parent.className) {
               const parentComputed = window.getComputedStyle(parent);
               if (
-                parentComputed.backgroundColor !== "rgba(0, 0, 0, 0)" &&
-                parentComputed.backgroundColor !== "transparent"
+                parentComputed.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+                parentComputed.backgroundColor !== 'transparent'
               ) {
                 parentStyles.push({
                   class: parent.className,
-                  backgroundColor: parentComputed.backgroundColor,
+                  backgroundColor: parentComputed.backgroundColor
                 });
               }
             }
             parent = parent.parentElement;
           }
+          console.log('Parent elements with background styles:', JSON.stringify(parentStyles, null, 2));
           console.log(
-            "Parent elements with background styles:",
-            JSON.stringify(parentStyles, null, 2)
-          );
-          console.log(
-            "Search button parent classes:",
-            Array.from(
-              primaryBtn.closest(".modal").parentElement.classList
-            ).join(" > ")
+            'Search button parent classes:',
+            Array.from(primaryBtn.closest('.modal').parentElement.classList).join(' > ')
           );
         } else {
-          console.warn("No search button found in dialog");
+          console.warn('No search button found in dialog');
         }
-        const outlineBtn = document.querySelector(
-          "[data-theme] .modal .search-actions .btn-outline"
-        );
+        const outlineBtn = document.querySelector('[data-theme] .modal .search-actions .btn-outline');
         if (outlineBtn) {
           const styles = window.getComputedStyle(outlineBtn);
           console.log(
-            "Reset button computed styles:",
+            'Reset button computed styles:',
             JSON.stringify(
               {
                 backgroundColor: styles.backgroundColor,
@@ -410,25 +335,25 @@ export default {
                 border: styles.border,
                 padding: styles.padding,
                 fontSize: styles.fontSize,
-                width: styles.width,
+                width: styles.width
               },
               null,
               2
             )
           );
         } else {
-          console.warn("No reset button found in dialog");
+          console.warn('No reset button found in dialog');
         }
       } catch (e) {
-        console.error("Error in debug logging:", e);
+        console.error('Error in debug logging:', e);
       }
     });
   },
   updated() {
-    console.log("LogSearchDialog updated with theme:", this.theme);
+    console.log('LogSearchDialog updated with theme:', this.theme);
   },
   methods: {
-    translate(key, fallback = "") {
+    translate(key, fallback = '') {
       if (!this.$i18n) return fallback;
       try {
         const translation = this.$i18n.t(key, { locale: this.currentLocale });
@@ -437,7 +362,7 @@ export default {
         }
         return translation;
       } catch (e) {
-        console.error("Translation error:", e);
+        console.error('Translation error:', e);
         return fallback || key;
       }
     },
@@ -446,36 +371,32 @@ export default {
         return this.$i18n.locale;
       }
       try {
-        const savedLocale = localStorage.getItem("userLocale");
+        const savedLocale = localStorage.getItem('userLocale');
         if (savedLocale) {
           return savedLocale;
         }
       } catch (e) {
-        console.warn("Error accessing localStorage for language:", e);
+        console.warn('Error accessing localStorage for language:', e);
       }
-      return "en";
+      return 'en';
     },
     formatDate(date) {
-      return date.toISOString().split("T")[0];
+      return date.toISOString().split('T')[0];
     },
     ensureMessageColumnExists() {
       this.$nextTick(() => {
-        const table = document.querySelector(".results-table");
+        const table = document.querySelector('.results-table');
         if (table) {
-          const headerRow = table.querySelector("thead tr");
+          const headerRow = table.querySelector('thead tr');
           if (headerRow && headerRow.children.length < 5) {
-            const messageHeader = document.createElement("th");
-            messageHeader.textContent = this.translate(
-              "admin.logMessage",
-              "Message"
-            );
+            const messageHeader = document.createElement('th');
+            messageHeader.textContent = this.translate('admin.logMessage', 'Message');
             headerRow.appendChild(messageHeader);
-            const dataRows = table.querySelectorAll("tbody tr");
+            const dataRows = table.querySelectorAll('tbody tr');
             dataRows.forEach((row, index) => {
               if (row.children.length < 5) {
-                const messageCell = document.createElement("td");
-                messageCell.textContent =
-                  this.searchResults[index].message || "";
+                const messageCell = document.createElement('td');
+                messageCell.textContent = this.searchResults[index].message || '';
                 row.appendChild(messageCell);
               }
             });
@@ -492,71 +413,60 @@ export default {
           term: this.searchParams.term,
           level: this.searchParams.level,
           service: this.searchParams.service,
-          dateRange: this.searchParams.dateRange,
+          dateRange: this.searchParams.dateRange
         };
-        if (this.searchParams.dateRange === "custom") {
+        if (this.searchParams.dateRange === 'custom') {
           searchParams.startDate = this.searchParams.startDate;
           searchParams.endDate = this.searchParams.endDate;
         }
         const response = await adminDashboardService.searchLogs(searchParams);
-        console.log("Raw response:", response);
+        console.log('Raw response:', response);
         let logs = [];
         if (response && response.data) {
           logs = response.data.logs || response.data.data?.logs || [];
-          console.log("Logs before filtering:", logs);
+          console.log('Logs before filtering:', logs);
           if (this.searchParams.level && logs.length > 0) {
-            if (this.searchParams.level === "WARN") {
-              logs = logs.filter(
-                (log) =>
-                  log.level.toUpperCase() === "WARN" ||
-                  log.level.toUpperCase() === "WARNING"
-              );
+            if (this.searchParams.level === 'WARN') {
+              logs = logs.filter((log) => log.level.toUpperCase() === 'WARN' || log.level.toUpperCase() === 'WARNING');
             } else {
-              logs = logs.filter(
-                (log) =>
-                  log.level.toUpperCase() ===
-                  this.searchParams.level.toUpperCase()
-              );
+              logs = logs.filter((log) => log.level.toUpperCase() === this.searchParams.level.toUpperCase());
             }
-            console.log("Logs after filtering:", logs);
+            console.log('Logs after filtering:', logs);
           }
-          const today = new Date().toISOString().split("T")[0];
+          const today = new Date().toISOString().split('T')[0];
           logs = logs.map((log) => ({
             date: log.date || today,
-            time: log.time || "00:00:00",
-            level: log.level || "INFO",
-            service: log.service || "System",
-            message: log.message || "(No message)",
+            time: log.time || '00:00:00',
+            level: log.level || 'INFO',
+            service: log.service || 'System',
+            message: log.message || '(No message)'
           }));
           this.searchResults = logs;
           this.tableKey++;
-          console.log("Final processed logs:", this.searchResults);
+          console.log('Final processed logs:', this.searchResults);
           this.ensureMessageColumnExists();
         } else {
-          console.log("No valid response data");
+          console.log('No valid response data');
           this.searchResults = [];
         }
-        this.$emit("search-completed", this.searchResults);
+        this.$emit('search-completed', this.searchResults);
       } catch (error) {
-        console.error("Error searching logs:", error);
-        this.searchError =
-          error.message || "An error occurred while searching logs";
+        console.error('Error searching logs:', error);
+        this.searchError = error.message || 'An error occurred while searching logs';
         this.searchResults = [];
-        this.$emit("search-completed", []);
+        this.$emit('search-completed', []);
       } finally {
         this.isSearching = false;
       }
     },
     resetSearch() {
       this.searchParams = {
-        term: "",
-        level: "",
-        service: "",
-        dateRange: "today",
-        startDate: this.formatDate(
-          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        ),
-        endDate: this.formatDate(new Date()),
+        term: '',
+        level: '',
+        service: '',
+        dateRange: 'today',
+        startDate: this.formatDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+        endDate: this.formatDate(new Date())
       };
       this.hasSearched = false;
       this.searchResults = [];
@@ -565,98 +475,94 @@ export default {
     exportLogs() {
       if (!this.searchResults.length) return;
       try {
-        const headers = ["Date", "Time", "Level", "Service", "Message"];
+        const headers = ['Date', 'Time', 'Level', 'Service', 'Message'];
         const csvContent = [
-          headers.join(","),
+          headers.join(','),
           ...this.searchResults.map((log) =>
             [
-              log.date || "N/A",
+              log.date || 'N/A',
               log.time,
               log.level,
-              `"${(log.service || "").replace(/"/g, '""')}"`,
-              `"${(log.message || "").replace(/"/g, '""')}"`,
-            ].join(",")
-          ),
-        ].join("\n");
+              `"${(log.service || '').replace(/"/g, '""')}"`,
+              `"${(log.message || '').replace(/"/g, '""')}"`
+            ].join(',')
+          )
+        ].join('\n');
         const blob = new Blob([csvContent], {
-          type: "text/csv;charset=utf-8;",
+          type: 'text/csv;charset=utf-8;'
         });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute(
-          "download",
-          `log-export-${new Date().toISOString().slice(0, 10)}.csv`
-        );
-        link.style.visibility = "hidden";
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `log-export-${new Date().toISOString().slice(0, 10)}.csv`);
+        link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
       } catch (error) {
-        console.error("Error exporting logs:", error);
+        console.error('Error exporting logs:', error);
       }
     },
     useMockData() {
-      console.warn("Using mock data for log search");
+      console.warn('Using mock data for log search');
       return [
         {
-          time: "10:42:15",
-          level: "ERROR",
-          service: "API Gateway",
-          message: "Connection timeout to external provider",
+          time: '10:42:15',
+          level: 'ERROR',
+          service: 'API Gateway',
+          message: 'Connection timeout to external provider'
         },
         {
-          time: "09:36:22",
-          level: "ERROR",
-          service: "API Gateway",
-          message: "Connection timeout to external provider",
+          time: '09:36:22',
+          level: 'ERROR',
+          service: 'API Gateway',
+          message: 'Connection timeout to external provider'
         },
         {
-          time: "08:17:45",
-          level: "ERROR",
-          service: "Data Service",
-          message: "Database query failed: connection refused",
+          time: '08:17:45',
+          level: 'ERROR',
+          service: 'Data Service',
+          message: 'Database query failed: connection refused'
         },
         {
-          time: "10:38:22",
-          level: "WARN",
-          service: "Storage",
-          message: "Disk space below 10% threshold",
+          time: '10:38:22',
+          level: 'WARN',
+          service: 'Storage',
+          message: 'Disk space below 10% threshold'
         },
         {
-          time: "11:15:33",
-          level: "WARN",
-          service: "Database",
-          message:
-            "Slow query detected (2.5s): SELECT * FROM large_table WHERE...",
+          time: '11:15:33',
+          level: 'WARN',
+          service: 'Database',
+          message: 'Slow query detected (2.5s): SELECT * FROM large_table WHERE...'
         },
         {
-          time: "10:05:19",
-          level: "INFO",
-          service: "Auth Service",
-          message: "User role updated for admin@huduma.ai",
+          time: '10:05:19',
+          level: 'INFO',
+          service: 'Auth Service',
+          message: 'User role updated for admin@huduma.ai'
         },
         {
-          time: "10:12:44",
-          level: "INFO",
-          service: "Data Service",
-          message: "Automatic backup completed successfully",
+          time: '10:12:44',
+          level: 'INFO',
+          service: 'Data Service',
+          message: 'Automatic backup completed successfully'
         },
         {
-          time: "11:30:12",
-          level: "WARN",
-          service: "External API",
-          message: "Rate limit approaching (80% of quota used)",
+          time: '11:30:12',
+          level: 'WARN',
+          service: 'External API',
+          message: 'Rate limit approaching (80% of quota used)'
         },
         {
-          time: "09:45:23",
-          level: "INFO",
-          service: "Cache",
-          message: "Cache flush completed (10,243 entries cleared)",
-        },
+          time: '09:45:23',
+          level: 'INFO',
+          service: 'Cache',
+          message: 'Cache flush completed (10,243 entries cleared)'
+        }
       ];
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -980,7 +886,7 @@ export default {
 }
 
 /* Button Styles for Light Mode */
-[data-theme="light"] .modal .btn {
+[data-theme='light'] .modal .btn {
   padding: 0.5rem 0.75rem;
   border-radius: 0.375rem;
   border: none;
@@ -993,12 +899,12 @@ export default {
 }
 
 /* Search Button Specific Styles for Light Mode */
-[data-theme="light"] .modal .search-actions .btn-primary {
+[data-theme='light'] .modal .search-actions .btn-primary {
   padding: 0.5rem 0.825rem;
 }
 
 /* Button Styles for Dark Mode */
-[data-theme="dark"] .modal .btn {
+[data-theme='dark'] .modal .btn {
   padding: 0.5rem 0.75rem;
   border-radius: 0.375rem;
   border: none;
@@ -1011,7 +917,7 @@ export default {
 }
 
 /* Search Button Specific Styles for Dark Mode */
-[data-theme="dark"] .modal .search-actions .btn-primary {
+[data-theme='dark'] .modal .search-actions .btn-primary {
   padding: 0.5rem 0.825rem;
 }
 
@@ -1031,89 +937,89 @@ export default {
 }
 
 /* Dark mode adjustments */
-[data-theme="dark"] .modal-content {
+[data-theme='dark'] .modal-content {
   background-color: #2b2b2b !important;
 }
 
-[data-theme="dark"] .modal-body {
+[data-theme='dark'] .modal-body {
   background-color: #2b2b2b !important;
 }
 
-[data-theme="dark"] .search-loading {
+[data-theme='dark'] .search-loading {
   background-color: rgba(43, 43, 43, 0.7) !important;
 }
 
-[data-theme="dark"] .modal-title {
+[data-theme='dark'] .modal-title {
   background-color: #2b2b2b !important;
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .modal-title h2 {
+[data-theme='dark'] .modal-title h2 {
   color: #f8fafc !important;
 }
 
-[data-theme="dark"] .modal-footer {
+[data-theme='dark'] .modal-footer {
   background-color: #2b2b2b !important;
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .search-form {
+[data-theme='dark'] .search-form {
   background-color: #333333 !important;
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .search-field label {
+[data-theme='dark'] .search-field label {
   color: #bbbbbb !important;
 }
 
-[data-theme="dark"] .search-field input,
-[data-theme="dark"] .search-field select {
+[data-theme='dark'] .search-field input,
+[data-theme='dark'] .search-field select {
   background-color: #252525 !important;
   color: #e0e0e0 !important;
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .results-header {
+[data-theme='dark'] .results-header {
   background-color: #333333 !important;
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .results-header h3 {
+[data-theme='dark'] .results-header h3 {
   color: #f8fafc !important;
 }
 
-[data-theme="dark"] .search-results {
+[data-theme='dark'] .search-results {
   background-color: #2b2b2b !important;
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .custom-date-range {
+[data-theme='dark'] .custom-date-range {
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .results-table th {
+[data-theme='dark'] .results-table th {
   background-color: #333333 !important;
   color: #bbbbbb !important;
   box-shadow: 0 1px 0 #3d3d3d !important;
 }
 
-[data-theme="dark"] .results-table td {
+[data-theme='dark'] .results-table td {
   border-color: #3d3d3d !important;
 }
 
-[data-theme="dark"] .no-results {
+[data-theme='dark'] .no-results {
   color: #888888 !important;
 }
 
-[data-theme="dark"] .table-container {
+[data-theme='dark'] .table-container {
   background-color: #2b2b2b !important;
 }
 
-[data-theme="dark"] .results-table {
+[data-theme='dark'] .results-table {
   background-color: #2b2b2b !important;
 }
 
-[data-theme="dark"] .results-table tr {
+[data-theme='dark'] .results-table tr {
   background-color: #2b2b2b !important;
 }
 

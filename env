@@ -39,36 +39,43 @@ ARANGO_USER=root
 # Used by: backend, document-repository, dataprep, retriever
 ARANGO_PASSWORD=hZWkks8LTy7si4xafZrBZKfk0idcWGXS47wnC8wV2i8
 
-# JWT token signing secret (backend authentication)
-# Used by: backend
-# Security: Must be kept secret, used to sign JWT tokens
-JWT_SECRET=TcUKtFHeGySTmkoPVLSk-z07OtPhpBrMYODKTm-Cxqw
+# JWT token signing secret (backend auth + voice-bridge token verification)
+# Used by: backend, voice-bridge
+# Security: Must be kept secret. Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+JWT_SECRET=
 
 # Session encryption secret (user sessions)
 # Used by: backend
-# Security: Encrypts session data in cookies/storage
-SESSION_SECRET=dz7Q9Tt5YeoN_TLJ5SwAeXNbKZQv5NcFRhDRTbYCPIc
+SESSION_SECRET=
 
 # Redis cache password (translation service caching)
 # Used by: redis-cache, translation service
 TRANSLATION_CACHE_PASSWORD=TLIyYCWxIQhLOwcBFlUqjVV1-K3eXFGZVm38Kc6Mqhc
 
-# Kong PostgreSQL passwords (API gateway)
-# Used by: kong-database, kong
-#
-# Configuration with POSTGRES_USER=kong (default):
-#
-# - PostgreSQL creates 'kong' user with POSTGRES_PASSWORD
-# - The 'postgres' super-admin exists but has no password set
-# - Kong connects as 'kong' user with POSTGRES_PASSWORD
-#
-# Only one password needed for Kong deployment:
-POSTGRES_PASSWORD=tiyv8EHRvyY_wej856sol2n00maZXGShB0RIiL7HQRg
+# PostgreSQL shared instance (API gateway + Keycloak)
+# The shared PostgreSQL (postgres service) uses a superuser + dedicated users:
+# - Superuser 'genieai' (POSTGRES_USER) with POSTGRES_PASSWORD — created by PostgreSQL init
+# - Dedicated user 'kong' with KONG_DB_PASSWORD — created by postgres-init
+# - Dedicated user 'keycloak' with KEYCLOAK_DB_PASSWORD — created by postgres-init (see Section 9)
+# Each service MUST have its own unique password.
 
-# Internal microservice authentication (HTTP service)
-# Used by: http-service (auth token retrieval for microservices)
+# PostgreSQL superuser username (created by PostgreSQL init on first start)
+# Default: genieai (set in docker-compose.yaml)
+# POSTGRES_USER=genieai
+
+# PostgreSQL superuser password
+# Used by: postgres (init), postgres-init (superuser auth)
+POSTGRES_PASSWORD=
+
+# Kong dedicated database user password (MUST differ from POSTGRES_PASSWORD)
+# Used by: postgres-init (creates 'kong' user), kong, kong-migrations
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KONG_DB_PASSWORD=
+
+# Internal microservice authentication (used by genie-ai-overlay/http-service)
+# Generate password: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 AUTH_SERVICE_USERNAME=genieai-internal
-AUTH_SERVICE_PASSWORD=X6VG4q7ZQcK3H16wZHV609Dihb-1TPBIBX1QLHLZVeI
+AUTH_SERVICE_PASSWORD=
 
 # =============================================================================
 # SECTION 2: EMAIL CONFIGURATION (REQUIRED)
@@ -82,12 +89,14 @@ AUTH_SERVICE_PASSWORD=X6VG4q7ZQcK3H16wZHV609Dihb-1TPBIBX1QLHLZVeI
 #
 # Required for: User registration, email verification, password reset
 
-EMAIL_HOST=email-smtp.us-east-1.amazonaws.com
-EMAIL_PORT=465
-EMAIL_SECURE=true
-EMAIL_USER=AKIA5FTZAPDJ22AONU4H
-EMAIL_PASSWORD=BJ+bafo5f9YOeGY4A52iORKS5mrwymmhAG+qYmu+uUOz
-EMAIL_FROM=info@skew.digital
+EMAIL_HOST=
+EMAIL_PORT=
+# EMAIL_SECURE=false
+EMAIL_USER=
+EMAIL_PASSWORD=
+EMAIL_FROM=
+# SMTP AUTH (auto-derived from EMAIL_USER — set to "false" to disable auth while keeping EMAIL_USER)
+# EMAIL_SMTP_AUTH=
 
 # =============================================================================
 # SECTION 3: EXTERNAL API KEYS
@@ -220,6 +229,25 @@ CORS_ALLOWED_ORIGINS=https://genie.innov8ai.com,http://164.52.192.3,https://164.
 # They serve the same purpose but at different stages (build-time vs runtime).
 CSP_CONNECT_SRC="'self' https://genie.innov8ai.com wss://genie.innov8ai.com http://164.52.192.3:8080 https://164.52.192.3:8443 ws://164.52.192.3:8080 wss://164.52.192.3:8443"
 
+# Log level for backend and document-repository services
+# Used by: backend (shared-lib/logger.js), document-repository (appConfig.js)
+# Values: error, warn, info, debug
+# Default: info
+# LOG_LEVEL=debug
+
+# Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
+# Controls how long an inactive analytics session is kept before automatic cleanup.
+# Used by: backend (session-service.js)
+# Default: 1800000 (30 minutes in milliseconds)
+# IMPORTANT: Value is in MILLISECONDS. Common values:
+#   15 minutes = 900000
+#   30 minutes = 1800000 (default)
+#   1 hour     = 3600000
+# Alignment with Keycloak: set this value to match or slightly exceed Keycloak's
+# SSO Session Max or Access Token Lifespan to ensure sessions are purged after
+# the user's authentication expires.
+# SESSION_EXPIRATION_TIME=
+
 # =============================================================================
 # SECTION 7: API GATEWAY CONFIGURATION
 # =============================================================================
@@ -284,7 +312,231 @@ CERTBOT_REPLICAS=1
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
 
 # =============================================================================
+# SECTION 8b: VOICE BRIDGE (OPTIONAL — `--profile voice`)
+# =============================================================================
+# WebSocket-based voice call. Bridges browser ↔ ASR (faster-whisper) ↔
+# chatqna LLM ↔ TTS (Piper). Uses only the existing TLS port 443 via the
+# nginx /voice/ proxy — no WebRTC, no TURN, no extra ports.
+#
+# Enable with: docker compose --profile opea --profile voice up -d
+
+# Public WebSocket URL the browser connects to. The backend hands this
+# value to the frontend via /api/voice/token.
+# Local dev: ws://localhost/voice/v1/voice/stream
+# Production: wss://<your-gateway-fqdn>/voice/v1/voice/stream
+VOICE_BRIDGE_WS_URL=wss://localhost/voice/v1/voice/stream
+
+# Voice-bridge tuning (all optional — defaults work)
+# VOICE_BRIDGE_MAX_TOKENS=128        # short voice replies; raise for longer answers
+# VOICE_BRIDGE_TEMPERATURE=0.7       # LLM sampling temperature
+# VOICE_BRIDGE_VAD_AGGRESSIVENESS=2  # 0-3, higher = more aggressive silence detection
+# VOICE_BRIDGE_SILENCE_FRAMES=25     # frames of silence before utterance ends (~500 ms)
+# VOICE_BRIDGE_DRAIN_S=1.5           # post-reply drain window to kill echo
+#
+# To route voice through chatqna's RAG (slower but uses the knowledge base):
+# VOICE_BRIDGE_LLM_ENDPOINT=http://chatqna-xeon-backend-server:8888/v1/chatqna
+#
+# Override the voice-call system prompt per language (single-line in .env;
+# use literal \n for line breaks). Leave blank/unset to use the built-in
+# Genie / Gambia health prompt.
+# VOICE_SYSTEM_PROMPT_EN=
+# VOICE_SYSTEM_PROMPT_FR=
+# VOICE_SYSTEM_PROMPT_ES=
+
+# Whisper ASR
+ASR_WHISPER_MODEL=large-v3-turbo
+ASR_WHISPER_DEVICE=cuda
+ASR_WHISPER_COMPUTE_TYPE=float16
+ASR_WHISPER_LANGUAGES=fr,en,es,sw
+
+# Piper TTS — voice file names (must exist under ./data/piper-voices/<name>.onnx + .json)
+# Defaults: when the caller doesn't specify a voice. Add new voices via
+# scripts/download-piper-voices.sh.
+TTS_PIPER_DEFAULT_VOICE_FR=fr_FR-siwis-medium
+TTS_PIPER_DEFAULT_VOICE_EN=en_US-libritts_r-medium
+TTS_PIPER_DEFAULT_VOICE_ES=es_MX-claude-high
+TTS_PIPER_DEFAULT_VOICE_SW=sw_CD-lanfrica-medium
+
+# Per-language gender mapping — used when the frontend selects Female / Male.
+# Voice files are downloaded by scripts/download-piper-voices.sh.
+# Swahili only has one Piper voice; both genders fall back to it.
+TTS_PIPER_VOICE_FEMALE_EN=en_US-lessac-high
+TTS_PIPER_VOICE_MALE_EN=en_US-ryan-high
+TTS_PIPER_VOICE_FEMALE_FR=fr_FR-siwis-medium
+TTS_PIPER_VOICE_MALE_FR=fr_FR-tom-medium
+TTS_PIPER_VOICE_FEMALE_ES=es_ES-sharvard-medium
+TTS_PIPER_VOICE_MALE_ES=es_MX-claude-high
+TTS_PIPER_VOICE_FEMALE_SW=sw_CD-lanfrica-medium
+TTS_PIPER_VOICE_MALE_SW=sw_CD-lanfrica-medium
+
+# =============================================================================
+# SECTION 8c: LEGACY VOICE STACK (LiveKit + coturn — `--profile legacy_voice`)
+# =============================================================================
+# Kept for reference only. Not used by the default voice profile.
+# LIVEKIT_API_KEY=genieai-devkey
+# LIVEKIT_API_SECRET=genieai-devsecret-change-me-32chars
+# LIVEKIT_WS_URL=ws://localhost:7880
+# LIVEKIT_NODE_IP=127.0.0.1
+# TURN_USERNAME=genieai_voice
+# TURN_CREDENTIAL=genieai-turn-secret-change-me
+# TURN_EXTERNAL_IP=127.0.0.1
+# TURN_PORT=7881
+
+# =============================================================================
 # SECTION 9: GPU-SPECIFIC CONFIGURATION
+# SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)
+# =============================================================================
+# Keycloak is the identity provider for OIDC authentication.
+# All passwords below MUST be set in your .env before deployment.
+
+# Keycloak public URL (for backend OIDC discovery and token validation)
+# Used by: backend (keycloak-auth-service.js)
+# Must be the public URL via NGINX proxy so the issuer matches the JWT's iss claim.
+# In docker-compose, this is auto-derived from NGINX_PUBLIC_DOMAIN:
+#   KEYCLOAK_URL=https://<NGINX_PUBLIC_DOMAIN>/auth
+# Note: keycloak-config service uses its own internal KEYCLOAK_URL (http://keycloak:8080)
+# REQUIRED — app will not start without this value
+KEYCLOAK_URL=https://localhost/auth
+
+# Keycloak realm name
+# REQUIRED — app will not start without this value
+KEYCLOAK_REALM=genie
+
+# OIDC client ID for the GENIE.AI application
+# REQUIRED — app will not start without this value
+KEYCLOAK_CLIENT_ID=genie-app
+
+# OIDC client secret (REQUIRED — generate a strong value)
+# Used by: backend (token validation), keycloak-config-cli (realm setup)
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_CLIENT_SECRET=
+
+# Additional Keycloak realms for backend token validation (JSON map: realm-name -> client-id)
+# Each additional realm must have a corresponding OIDC client configured in Keycloak admin console
+# with Authorization Code Flow + PKCE enabled and Valid Redirect URIs set to the frontend URL.
+# The frontend only authenticates against the primary realm (KEYCLOAK_REALM).
+# Users from additional realms authenticate via their own Keycloak login URL.
+# Example: KEYCLOAK_ADDITIONAL_REALMS={"partner-org":"partner-app","contractor":"contractor-app"}
+# KEYCLOAK_ADDITIONAL_REALMS=
+
+# Keycloak master admin password (REQUIRED — set a strong value)
+# Used by: admin console access, keycloak-config-cli (master realm authentication)
+# WARNING: This is the master admin account password (NOT the GENIE realm admin)
+KEYCLOAK_ADMIN_PASSWORD=
+
+# GENIE realm admin username (default: genie-admin)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+# GENIE_ADMIN_USERNAME=genie-admin
+
+# GENIE realm admin password (REQUIRED — must satisfy KEYCLOAK_PASSWORD_POLICY)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+GENIE_ADMIN_PASSWORD=
+
+# Keycloak PostgreSQL password (REQUIRED — must differ from POSTGRES_PASSWORD)
+# Used by: postgres-init (creates dedicated 'keycloak' DB user), keycloak service
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_DB_PASSWORD=
+
+# Keycloak database configuration
+# Uses the shared PostgreSQL instance with a dedicated 'keycloak' database and user
+# Used by: keycloak service
+# KC_DB=postgres
+
+# Keycloak PostgreSQL JDBC URL
+# Points to the shared PostgreSQL instance, 'keycloak' database
+# KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
+
+# Keycloak PostgreSQL username (dedicated user, created by postgres-init)
+# KC_DB_USERNAME=keycloak
+
+# Valid redirect URIs for the OIDC client
+# Default: http://localhost:8090/* (frontend dev URL)
+# Production: https://your-domain.com/*
+# KEYCLOAK_VALID_REDIRECT_URIS=http://localhost:8090/*
+
+# Web origins for CORS
+# Default: http://localhost:8090 (frontend dev URL)
+# Production: https://your-domain.com
+# KEYCLOAK_WEB_ORIGINS=http://localhost:8090
+
+# TLS verification for backend → NGINX OIDC discovery/JWKS fetches
+# Default: 1 (strict, production). Set to 0 for local dev with self-signed NGINX certs.
+# NODE_TLS_REJECT_UNAUTHORIZED=0
+
+# Keycloak proxy service account (REQUIRED — set a strong value)
+# Used by: backend (keycloak-admin-service.js) for Admin API proxy operations
+# The genie-proxy-client has restricted permissions: manage-users, view-users,
+# manage-roles, query-users ONLY. Cannot modify realm settings or client config.
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_PROXY_CLIENT_SECRET=
+
+# Dataprep service account client (client_credentials grant for service-to-service auth)
+# Used by: Dataprep → Document Repository and Backend API calls
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KC_DATAPREP_CLIENT_ID=dataprep-service-client
+KC_DATAPREP_CLIENT_SECRET=
+
+# --- Realm properties (optional) ---
+# These control registration, email verification, password policy, and more.
+# Uncomment and override only if you need non-default behavior.
+
+# User self-registration (default: true)
+# Requires SMTP configuration for verification emails.
+# KEYCLOAK_REGISTRATION_ENABLED=true
+
+# Require email verification after registration (default: true)
+# Requires SMTP configuration for verification emails to work.
+# KEYCLOAK_VERIFY_EMAIL=true
+
+# Allow "Forgot Password" flow (default: true)
+# Requires SMTP configuration for reset emails to work.
+# KEYCLOAK_RESET_PASSWORD=true
+
+# Allow login with email address (default: true)
+# KEYCLOAK_LOGIN_WITH_EMAIL=true
+
+# Allow multiple accounts with the same email (default: false)
+# KEYCLOAK_DUPLICATE_EMAILS=false
+
+# Brute force detection (lock account after failed attempts, default: true)
+# KEYCLOAK_BRUTE_FORCE=true
+
+# Password policy (Keycloak policy syntax)
+# Default (in docker-compose.yaml): length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
+# To simplify: KEYCLOAK_PASSWORD_POLICY=length(8)
+# KEYCLOAK_PASSWORD_POLICY=
+
+# Theme for login, account console, and email (default: genie — custom GENIE.AI theme)
+# KEYCLOAK_THEME=genie
+
+# Internationalization (default: true)
+# KEYCLOAK_I18N_ENABLED=true
+
+# Default locale for login pages (default: en)
+# KEYCLOAK_LOCALE=en
+
+# Access token lifespan in seconds (default: 300 = 5 minutes)
+# KEYCLOAK_ACCESS_TOKEN_LIFESPAN=300
+
+# =============================================================================
+# SECTION 9B: EXTERNAL IDENTITY PROVIDERS (OPTIONAL)
+# =============================================================================
+# External IdP credentials are configured in Keycloak, NOT in GENIE.AI's .env.
+# See docs/external-idp-integration-guide.md for step-by-step instructions.
+#
+# GENIE.AI's backend and frontend code does NOT need any external IdP configuration.
+# Keycloak handles the entire identity brokering flow and issues standard OIDC tokens
+# to GENIE.AI, regardless of which external IdP was used.
+#
+# If using keycloak-config-cli for automated IdP provisioning (optional), inject
+# secrets via environment variables on the keycloak-config service:
+#   KEYCLOAK_GOOGLE_CLIENT_ID=<google-oauth-client-id>
+#   KEYCLOAK_GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
+# These are NOT GENIE.AI variables — they are Keycloak configuration only.
+# Add them to docker-compose.yaml under keycloak-config environment section.
+
+# =============================================================================
+# SECTION 10: GPU-SPECIFIC CONFIGURATION
 # =============================================================================
 # These variables override GPU memory utilization and model settings.
 # See env.t4 (NVIDIA T4 16GB) or env.rtx6000 (RTX 6000 ADA 24GB) for examples.
@@ -300,7 +552,7 @@ VLLM_MAX_NUM_SEQS=64
 #   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
 # =============================================================================
-# SECTION 10: PROXY CONFIGURATION (OPTIONAL)
+# SECTION 11: PROXY CONFIGURATION (OPTIONAL)
 # =============================================================================
 # Uncomment ONLY if behind a corporate firewall that requires proxy.
 # Most deployments do NOT need these.
@@ -310,7 +562,7 @@ VLLM_MAX_NUM_SEQS=64
 # https_proxy=http://your-proxy:port
 
 # =============================================================================
-# SECTION 11: TELEMETRY & OBSERVABILITY (OPTIONAL)
+# SECTION 12: TELEMETRY & OBSERVABILITY (OPTIONAL)
 # =============================================================================
 # Uncomment to enable observability/tracing for debugging.
 
@@ -319,7 +571,7 @@ VLLM_MAX_NUM_SEQS=64
 # TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
 
 # =============================================================================
-# SECTION 12: DOCKER SWARM MULTI-NODE (OPTIONAL)
+# SECTION 13: DOCKER SWARM MULTI-NODE (OPTIONAL)
 # =============================================================================
 # Override these variables when deploying with Docker Swarm (docker stack deploy).
 # Default values are for single-node Docker deployment (localhost).
@@ -353,6 +605,7 @@ VLLM_MAX_NUM_SEQS=64
 #
 # VUE_APP_API_URL=https://<gateway-node-fqdn>/api
 #   Docker: /api (relative, works with local proxy)
+#
 #   Swarm:  Full HTTPS URL pointing to the gateway node
 #
 # CSP_CONNECT_SRC='self' https://<gateway-node-fqdn> wss://<gateway-node-fqdn>
@@ -364,8 +617,8 @@ VLLM_MAX_NUM_SEQS=64
 #   Swarm:  https://<gateway-node-fqdn>
 #
 # Variables that MUST be identical across all nodes:
-#   ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, TRANSLATION_CACHE_PASSWORD,
-#   POSTGRES_PASSWORD, AUTH_SERVICE_USERNAME, AUTH_SERVICE_PASSWORD
+#   ARANGO_PASSWORD, TRANSLATION_CACHE_PASSWORD,
+#   POSTGRES_PASSWORD, KC_DATAPREP_CLIENT_SECRET
 #
 # Variables that MUST be identical (AI model IDs):
 #   EMBEDDING_MODEL_ID, RERANKER_MODEL_ID, VLLM_LLM_MODEL_ID
@@ -373,42 +626,80 @@ VLLM_MAX_NUM_SEQS=64
 # GPU-specific overrides work the same as Docker:
 #   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
-VLLM_TRANSLATION_DTYPE=bfloat16
-LOG_LEVEL=debug
 
-LLM_MODEL=meta-llama/Meta-Llama-3.1-8B-Instruct
-VLLM_MODEL_ID=meta-llama/Meta-Llama-3.1-8B-Instruct
-VLLM_LLM_MODEL_ID=meta-llama/Meta-Llama-3.1-8B-Instruct
-LLM_MODEL_ID=meta-llama/Meta-Llama-3.1-8B-Instruct
+# =============================================================================
+# SECTION 14: WHATSAPP AI AGENT (OPTIONAL)
+# =============================================================================
+# Configuration for the WhatsApp AI Agent microservice (genie-ai-overlay/whatsapp).
+# The service receives Meta WhatsApp Cloud API webhooks and forwards user messages
+# to the OPEA ChatQnA pipeline. Conversation history is kept in Redis for 24h.
+#
+# Setup:
+#   1. Create a Meta App at https://developers.facebook.com/ (Business type)
+#   2. Add the WhatsApp product, verify a phone number, copy the Phone Number ID
+#   3. Choose any secret string for META_VERIFY_TOKEN (also enter it in the
+#      Meta dashboard webhook config so verification can succeed)
+#   4. Set META_ACCESS_TOKEN to the temporary token shown in API Setup, then
+#      replace it with a permanent System User token before going live
+#   5. Register webhook URL in Meta:
+#         https://<NGINX_PUBLIC_DOMAIN>/webhook/whatsapp
+#      and subscribe to the "messages" field
+#
+# Documentation: https://developers.facebook.com/docs/whatsapp/cloud-api/get-started
 
+# Required — secret string you choose; must match the value in Meta dashboard
+META_VERIFY_TOKEN=change_this_verify_token
 
-LIVEKIT_API_KEY=genieai-devkey
-LIVEKIT_API_SECRET=abb064558488e4f3477293ed44ee2f4b36259902ab4226bd264fd9442da9d4c5
-LIVEKIT_WS_URL=wss://genie.innov8ai.com/livekit
+# Required — Meta access token (permanent system user token for production)
+META_ACCESS_TOKEN=
 
-# Legacy voice implemenation
-LIVEKIT_NODE_IP=127.0.0.1
+# Required — Phone Number ID from Meta API Setup page (NOT the phone number itself)
+META_PHONE_NUMBER_ID=
+
+# Optional — Meta Graph API version (default: v21.0)
+# META_GRAPH_API_VERSION=v21.0
+
+# Optional — conversation history TTL in seconds (default: 86400 = 24h)
+# WHATSAPP_REDIS_TTL=86400
+
+# Optional — max messages kept per user (default: 20)
+# WHATSAPP_REDIS_MAX_MESSAGES=20
+
+# Optional — max characters per outbound WhatsApp message (default: 4000, hard cap 4096)
+# WHATSAPP_MESSAGE_MAX_LENGTH=4000
+
+# =============================================================================
+# SECTION 15: VOICE AGENT STACK (OPTIONAL)
+# =============================================================================
+# Voice agent has two implementations:
+#   - profile [voice]:        WebSocket bridge (asr-whisper + tts-piper + voice-bridge)
+#   - profile [legacy_voice]: WebRTC stack (livekit-server + voice-agent + coturn)
+
+# Public WebSocket URL the frontend connects to for the WS-based voice bridge
+VOICE_BRIDGE_WS_URL=wss://${NGINX_PUBLIC_DOMAIN}/voice/v1/voice/stream
+
+# Voice bridge tuning (defaults are fine for most deployments)
+# VOICE_BRIDGE_MAX_TOKENS=128
+# VOICE_BRIDGE_SILENCE_FRAMES=25
+
+# ASR Whisper model (faster-whisper)
 ASR_WHISPER_MODEL=large-v3-turbo
 ASR_WHISPER_DEVICE=cuda
 ASR_WHISPER_COMPUTE_TYPE=float16
+
+# Default per-language Piper voices (overridable; see voices catalog)
 TTS_PIPER_DEFAULT_VOICE_EN=en_US-libritts_r-medium
 TTS_PIPER_DEFAULT_VOICE_FR=fr_FR-siwis-medium
 TTS_PIPER_DEFAULT_VOICE_ES=es_MX-claude-high
+TTS_PIPER_DEFAULT_VOICE_SW=sw_CD-lanfrica-medium
 
-
-# Websocket voice bridge URL
-VOICE_BRIDGE_WS_URL=wss://genie.innov8ai.com/voice/v1/voice/stream
-
-VOICE_BRIDGE_MAX_TOKENS=128
-VOICE_BRIDGE_SILENCE_FRAMES=25
-
-
-TURN_USERNAME=genieai_voice
-TURN_CREDENTIAL=2e0ccf8459161bc7f1bd23e1c0f89a0f
-TURN_EXTERNAL_IP=164.52.192.3
+# Legacy WebRTC stack — only set when running with profile [legacy_voice].
+# Generate LIVEKIT_API_SECRET / TURN_CREDENTIAL with token_urlsafe(32).
+LIVEKIT_API_KEY=
+LIVEKIT_API_SECRET=
+LIVEKIT_WS_URL=
+LIVEKIT_NODE_IP=127.0.0.1
+TURN_USERNAME=
+TURN_CREDENTIAL=
+TURN_EXTERNAL_IP=
 TURN_PORT=7881
-
-
-VOICE_BRIDGE_TTS_URL=http://tts-melo:9201
-TTS_MELO_DEVICE=cuda
-TTS_MELO_SPEED=1.0

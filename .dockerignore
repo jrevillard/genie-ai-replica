@@ -33,6 +33,15 @@ Thumbs.db
 # Docker
 docker-compose*.yaml
 
+# GENIE.AI components (not needed by OPEA Dockerfiles)
+components/
+!components/gov-chat-backend/Dockerfile.migrations
+!components/gov-chat-backend/scripts/migrations/
+api-gateway-solution/
+
+# Secrets (never in build context)
+secrets/
+
 # Deploy
 deploy/
 

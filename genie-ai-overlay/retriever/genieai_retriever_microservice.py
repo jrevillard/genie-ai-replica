@@ -4,7 +4,7 @@
 
 import os
 import time
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 from integrations.genieai_retriever_arangodb import GenieaiArangoRetriever
 
@@ -49,13 +49,15 @@ from comps.cores.proto.genieai_api_protocol import (
 logger = CustomLogger("genieai_retriever_microservice")
 logflag = os.getenv("LOGFLAG", False)
 
+
 # Custom data subclass
-class GenieEmbedDoc(EmbedDoc): 
+class GenieEmbedDoc(EmbedDoc):
     search_start: Optional[str] = None
     enable_traversal: Optional[str] = None
     traversal_max_depth: Optional[int] = None
     traversal_max_returned: Optional[int] = None
     traversal_score_threshold: Optional[float] = None
+    context: Optional[Dict] = None  # retrieval filter context (categoryLabel, serviceLabels, etc.)
 
 retriever_component_name = os.getenv("RETRIEVER_COMPONENT_NAME", "GENIE_RETRIEVER_ARANGODB")
 
@@ -75,9 +77,12 @@ loader = OpeaComponentLoader(
 )
 @register_statistics(names=["opea_service@retrievers"])
 async def retrieve_docs(
-    input: Union[GenieEmbedDoc, EmbedMultimodalDoc, RetrievalRequest, RetrievalRequestArangoDB, ChatCompletionRequest],
-) -> Union[SearchedDoc, SearchedMultimodalDoc, RetrievalResponse, ChatCompletionRequest]:
+    input: GenieEmbedDoc | EmbedMultimodalDoc | RetrievalRequest | RetrievalRequestArangoDB | ChatCompletionRequest,
+) -> SearchedDoc | SearchedMultimodalDoc | RetrievalResponse | ChatCompletionRequest:
     start = time.time()
+
+    _ctx_field = getattr(input, "context", None) or (input.get("context") if isinstance(input, dict) else None)
+    logger.info(f"TRACE_CTX [6/7] retriever_microservice:retrieve_docs: input.context={_ctx_field}")
 
     if logflag:
         logger.info(f"[ retrieval ] input: {input}")
@@ -88,18 +93,18 @@ async def retrieve_docs(
             logger.debug(f"[ retrieval ] Retriever component response: {response}")
 
         retrieved_docs = []
-        if isinstance(input, EmbedDoc) or isinstance(input, EmbedMultimodalDoc):
+        if isinstance(input, (EmbedDoc, EmbedMultimodalDoc)):
             metadata_list = []
             for r in response:
                 # If the input had an image, pass that through in the metadata along with the search result image
                 if isinstance(input, EmbedMultimodalDoc) and input.base64_image:
-                    if r['doc'].metadata["b64_img_str"]:
-                        r['doc'].metadata["b64_img_str"] = [input.base64_image, r['doc'].metadata["b64_img_str"]]
+                    if r["doc"].metadata["b64_img_str"]:
+                        r["doc"].metadata["b64_img_str"] = [input.base64_image, r["doc"].metadata["b64_img_str"]]
                     else:
-                        r['doc'].metadata["b64_img_str"] = input.base64_image
-                if r['doc'].metadata:
-                    metadata_list.append(r['doc'].metadata)
-                retrieved_docs.append(TextDoc(text=r['doc'].page_content))
+                        r["doc"].metadata["b64_img_str"] = input.base64_image
+                if r["doc"].metadata:
+                    metadata_list.append(r["doc"].metadata)
+                retrieved_docs.append(TextDoc(text=r["doc"].page_content))
             result = SearchedMultimodalDoc(
                 retrieved_docs=retrieved_docs, initial_query=input.text, metadata=metadata_list
             )
@@ -108,7 +113,7 @@ async def retrieve_docs(
                 if isinstance(r, str):
                     retrieved_docs.append(RetrievalResponseData(text=r, metadata=None))
                 else:
-                    retrieved_docs.append(RetrievalResponseData(text=r['doc'].page_content, metadata=r['doc'].metadata))
+                    retrieved_docs.append(RetrievalResponseData(text=r["doc"].page_content, metadata=r["doc"].metadata))
             if isinstance(input, RetrievalRequest):
                 result = RetrievalResponse(retrieved_docs=retrieved_docs)
             elif isinstance(input, ChatCompletionRequest):

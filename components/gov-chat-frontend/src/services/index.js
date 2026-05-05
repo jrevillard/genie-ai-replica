@@ -6,13 +6,7 @@ import fileService from './fileService';
 import analyticsService from './analyticsService';
 
 // Export individual services
-export {
-  userProfileService,
-  serviceTreeService,
-  chatbotService,
-  fileService,
-  analyticsService
-};
+export { userProfileService, serviceTreeService, chatbotService, fileService, analyticsService };
 
 // Export as a single services object
 export default {

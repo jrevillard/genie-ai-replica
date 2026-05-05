@@ -5,13 +5,13 @@
       <div class="analytics-header">
         <h2>{{ $t('analytics.title') }}</h2>
 
-        <button class="close-btn" @click="close" aria-label="Close">×</button>
+        <button class="close-btn" aria-label="Close" @click="close">×</button>
       </div>
-      
+
       <div class="analytics-body">
         <!-- Usage Trend Chart -->
         <usage-trend-chart ref="usageTrendChart" />
-        
+
         <!-- Top Queries Section -->
         <div class="analytics-section">
           <h3>{{ $t('analytics.topQueries') }}</h3>
@@ -36,7 +36,7 @@
             </table>
           </div>
         </div>
-        
+
         <!-- Service Categories Usage -->
         <div class="analytics-section">
           <h3>{{ $t('analytics.serviceUsage') }}</h3>
@@ -53,126 +53,129 @@
 </template>
 
 <script>
-import UsageTrendChart from './UsageTrendChart.vue'
+import UsageTrendChart from './UsageTrendChart.vue';
 
 export default {
   name: 'AnalyticsComponent',
   components: {
     UsageTrendChart
   },
-  
+
   emits: ['close'],
-  
+
   data() {
     return {
       loading: true,
       chart: null,
-      
+
       // Sample data (will be translated)
       topQueries: [],
       categoryData: []
     };
   },
-  
+
   created() {
     // Initialize translations
     this.translateQueries();
     this.translateCategories();
   },
-  
+
   mounted() {
     this.initCategoryChart();
     window.addEventListener('resize', this.handleResize);
-    
+
     // Listen for locale changes
-    this.$watch(() => this.$i18n.locale, (newLocale) => {
-      this.translateQueries();
-      this.translateCategories();
-      
-      // Also tell the usage chart to update
-      if (this.$refs.usageTrendChart) {
-        this.$refs.usageTrendChart.updateTranslations();
+    this.$watch(
+      () => this.$i18n.locale,
+      () => {
+        this.translateQueries();
+        this.translateCategories();
+
+        // Also tell the usage chart to update
+        if (this.$refs.usageTrendChart) {
+          this.$refs.usageTrendChart.updateTranslations();
+        }
       }
-    });
+    );
   },
-  
+
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
     this.disposeChart();
   },
-  
+
   methods: {
     translateQueries() {
       const sampleQueriesPerLanguage = {
-        'en': [
-          { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
-          { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
+        en: [
+          { text: 'How do I apply for a business license?', count: 2347, avgTime: 2.3 },
+          { text: 'Where can I find tax forms?', count: 1982, avgTime: 1.8 },
           { text: "How to renew my driver's license?", count: 1645, avgTime: 2.1 },
-          { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
-          { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
+          { text: 'What documents do I need for passport application?', count: 1423, avgTime: 3.4 },
+          { text: 'When are property taxes due?', count: 1289, avgTime: 1.5 }
         ],
-        'fr': [
-          { text: "Comment faire une demande de licence commerciale?", count: 2347, avgTime: 2.3 },
-          { text: "Où puis-je trouver des formulaires fiscaux?", count: 1982, avgTime: 1.8 },
-          { text: "Comment renouveler mon permis de conduire?", count: 1645, avgTime: 2.1 },
-          { text: "Quels documents me faut-il pour une demande de passeport?", count: 1423, avgTime: 3.4 },
-          { text: "Quand les taxes foncières sont-elles dues?", count: 1289, avgTime: 1.5 }
+        fr: [
+          { text: 'Comment faire une demande de licence commerciale?', count: 2347, avgTime: 2.3 },
+          { text: 'Où puis-je trouver des formulaires fiscaux?', count: 1982, avgTime: 1.8 },
+          { text: 'Comment renouveler mon permis de conduire?', count: 1645, avgTime: 2.1 },
+          { text: 'Quels documents me faut-il pour une demande de passeport?', count: 1423, avgTime: 3.4 },
+          { text: 'Quand les taxes foncières sont-elles dues?', count: 1289, avgTime: 1.5 }
         ],
-        'sw': [
-          { text: "Nawezaje kuomba leseni ya biashara?", count: 2347, avgTime: 2.3 },
-          { text: "Naweza kupata fomu za kodi wapi?", count: 1982, avgTime: 1.8 },
-          { text: "Jinsi ya kufanya upya leseni yangu ya udereva?", count: 1645, avgTime: 2.1 },
-          { text: "Ni nyaraka gani ninahitaji kwa maombi ya pasipoti?", count: 1423, avgTime: 3.4 },
-          { text: "Kodi za mali hulipwa lini?", count: 1289, avgTime: 1.5 }
+        sw: [
+          { text: 'Nawezaje kuomba leseni ya biashara?', count: 2347, avgTime: 2.3 },
+          { text: 'Naweza kupata fomu za kodi wapi?', count: 1982, avgTime: 1.8 },
+          { text: 'Jinsi ya kufanya upya leseni yangu ya udereva?', count: 1645, avgTime: 2.1 },
+          { text: 'Ni nyaraka gani ninahitaji kwa maombi ya pasipoti?', count: 1423, avgTime: 3.4 },
+          { text: 'Kodi za mali hulipwa lini?', count: 1289, avgTime: 1.5 }
         ]
       };
-      
+
       // Use current locale or fall back to English
       const locale = this.$i18n.locale || 'en';
       this.topQueries = sampleQueriesPerLanguage[locale] || sampleQueriesPerLanguage['en'];
     },
-    
+
     translateCategories() {
       const categoryDataPerLanguage = {
-        'en': [
-          { category: "Business & Economy", value: 24 },
-          { category: "Transportation", value: 18 },
-          { category: "Taxes & Revenue", value: 16 },
-          { category: "Immigration & Citizenship", value: 12 },
-          { category: "Education & Learning", value: 10 },
-          { category: "Housing & Properties", value: 8 },
-          { category: "Others", value: 12 }
+        en: [
+          { category: 'Business & Economy', value: 24 },
+          { category: 'Transportation', value: 18 },
+          { category: 'Taxes & Revenue', value: 16 },
+          { category: 'Immigration & Citizenship', value: 12 },
+          { category: 'Education & Learning', value: 10 },
+          { category: 'Housing & Properties', value: 8 },
+          { category: 'Others', value: 12 }
         ],
-        'fr': [
-          { category: "Affaires & Économie", value: 24 },
-          { category: "Transport", value: 18 },
-          { category: "Impôts & Recettes", value: 16 },
-          { category: "Immigration & Citoyenneté", value: 12 },
-          { category: "Éducation & Apprentissage", value: 10 },
-          { category: "Logement & Propriétés", value: 8 },
-          { category: "Autres", value: 12 }
+        fr: [
+          { category: 'Affaires & Économie', value: 24 },
+          { category: 'Transport', value: 18 },
+          { category: 'Impôts & Recettes', value: 16 },
+          { category: 'Immigration & Citoyenneté', value: 12 },
+          { category: 'Éducation & Apprentissage', value: 10 },
+          { category: 'Logement & Propriétés', value: 8 },
+          { category: 'Autres', value: 12 }
         ],
-        'sw': [
-          { category: "Biashara & Uchumi", value: 24 },
-          { category: "Usafiri", value: 18 },
-          { category: "Kodi & Mapato", value: 16 },
-          { category: "Uhamiaji & Uraia", value: 12 },
-          { category: "Elimu & Mafunzo", value: 10 },
-          { category: "Makazi & Mali", value: 8 },
-          { category: "Nyinginezo", value: 12 }
+        sw: [
+          { category: 'Biashara & Uchumi', value: 24 },
+          { category: 'Usafiri', value: 18 },
+          { category: 'Kodi & Mapato', value: 16 },
+          { category: 'Uhamiaji & Uraia', value: 12 },
+          { category: 'Elimu & Mafunzo', value: 10 },
+          { category: 'Makazi & Mali', value: 8 },
+          { category: 'Nyinginezo', value: 12 }
         ]
       };
-      
+
       // Use current locale or fall back to English
       const locale = this.$i18n.locale || 'en';
       this.categoryData = categoryDataPerLanguage[locale] || categoryDataPerLanguage['en'];
-      
+
       // If the chart is already rendered, update it
       if (this.chart) {
         this.renderCategoryChart();
       }
     },
-    
+
     async initCategoryChart() {
       try {
         const echarts = await import('echarts');
@@ -182,24 +185,24 @@ export default {
         this.loading = false;
       }
     },
-    
+
     async renderCategoryChart(echartLib = null) {
       if (!this.$refs.categoryChart) return;
-      
+
       this.loading = true;
-      
+
       // Use a timeout to ensure UI updates before chart rendering
       setTimeout(async () => {
         try {
           // Dispose of old chart properly before creating a new one
           this.disposeChart();
-          
+
           // Load echarts library if not provided
-          const echarts = echartLib || await import('echarts');
-          
+          const echarts = echartLib || (await import('echarts'));
+
           // Create new chart instance
           this.chart = echarts.init(this.$refs.categoryChart);
-          
+
           // Set chart options
           const option = {
             tooltip: {
@@ -210,7 +213,7 @@ export default {
               orient: 'vertical',
               right: 10,
               top: 'center',
-              data: this.categoryData.map(item => item.category)
+              data: this.categoryData.map((item) => item.category)
             },
             series: [
               {
@@ -232,7 +235,7 @@ export default {
                 labelLine: {
                   show: false
                 },
-                data: this.categoryData.map(item => ({
+                data: this.categoryData.map((item) => ({
                   name: item.category,
                   value: item.value
                 })),
@@ -243,15 +246,12 @@ export default {
                 }
               }
             ],
-            color: [
-              '#5470c6', '#91cc75', '#fac858', '#ee6666',
-              '#73c0de', '#3ba272', '#fc8452'
-            ]
+            color: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452']
           };
-          
+
           // Apply the chart configuration
           this.chart.setOption(option);
-          
+
           // End loading
           this.loading = false;
         } catch (error) {
@@ -260,7 +260,7 @@ export default {
         }
       }, 100);
     },
-    
+
     disposeChart() {
       if (this.chart) {
         try {
@@ -271,7 +271,7 @@ export default {
         this.chart = null;
       }
     },
-    
+
     handleResize() {
       if (this.chart) {
         try {
@@ -283,13 +283,13 @@ export default {
         }
       }
     },
-    
+
     close() {
       this.disposeChart();
       this.$emit('close');
     }
   }
-}
+};
 </script>
 
 <style scoped>
@@ -414,7 +414,7 @@ td {
     width: 95%;
     max-height: 95vh;
   }
-  
+
   .analytics-header h2 {
     font-size: 1.3rem;
   }

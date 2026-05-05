@@ -45,8 +45,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate() || !_acceptTerms) {
       if (!_acceptTerms) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(tr('register.mustAcceptTerms'))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr('register.mustAcceptTerms'))));
       }
       return;
     }
@@ -61,11 +62,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = false);
     if (res['success']) {
-      Navigator.pushReplacementNamed(context, '/registration-success',
-          arguments: _email.text);
+      Navigator.pushReplacementNamed(
+        context,
+        '/registration-success',
+        arguments: _email.text,
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(res['message'] ?? tr('register.registrationFailed'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? tr('register.registrationFailed')),
+        ),
+      );
     }
   }
 
@@ -87,7 +94,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return FutureBuilder(
       future: GenieAiConfig.load(),
       builder: (context, snapshot) {
-        if (!GenieAiConfig.isLoaded && snapshot.connectionState != ConnectionState.done) {
+        if (!GenieAiConfig.isLoaded &&
+            snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
             backgroundColor: colors['background'],
             body: const Center(child: CircularProgressIndicator()),
@@ -108,75 +116,95 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       // [ADDED] Dynamic Logo Display
                       SizedBox(
                         height: 80,
-                        child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-                            ? SvgPicture.asset(GenieAiConfig.iconPath, fit: BoxFit.contain)
-                            : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
+                        child:
+                            GenieAiConfig.iconPath.toLowerCase().endsWith(
+                              '.svg',
+                            )
+                            ? SvgPicture.asset(
+                                GenieAiConfig.iconPath,
+                                fit: BoxFit.contain,
+                              )
+                            : Image.asset(
+                                GenieAiConfig.iconPath,
+                                fit: BoxFit.contain,
+                              ),
                       ),
                       const SizedBox(height: 24),
 
-                      Text(tr('register.createAccount'),
-                          style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: colors['text'])),
+                      Text(
+                        tr('register.createAccount'),
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: colors['text'],
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       _buildInput(
-                          _username,
-                          tr('register.username'),
-                          Icons.person,
-                          (v) => v!.length < 3
-                              ? tr('register.usernameMinLength')
-                              : _userErr,
-                          (v) => _checkAvailability('username', v),
-                          colors,
-                          isDark),
+                        _username,
+                        tr('register.username'),
+                        Icons.person,
+                        (v) => v!.length < 3
+                            ? tr('register.usernameMinLength')
+                            : _userErr,
+                        (v) => _checkAvailability('username', v),
+                        colors,
+                        isDark,
+                      ),
                       _buildInput(
-                          _email,
-                          tr('register.email'),
-                          Icons.email,
-                          (v) => !v!.contains('@')
-                              ? tr('register.invalidEmail')
-                              : _emailErr,
-                          (v) => _checkAvailability('email', v),
-                          colors,
-                          isDark),
+                        _email,
+                        tr('register.email'),
+                        Icons.email,
+                        (v) => !v!.contains('@')
+                            ? tr('register.invalidEmail')
+                            : _emailErr,
+                        (v) => _checkAvailability('email', v),
+                        colors,
+                        isDark,
+                      ),
                       _buildInput(
-                          _password,
-                          tr('register.password'),
-                          Icons.lock,
-                          (v) => !_strength['isValid']
-                              ? tr('register.passwordRequirements')
-                              : null,
-                          _checkPassword,
-                          colors,
-                          isDark,
-                          isPass: true),
+                        _password,
+                        tr('register.password'),
+                        Icons.lock,
+                        (v) => !_strength['isValid']
+                            ? tr('register.passwordRequirements')
+                            : null,
+                        _checkPassword,
+                        colors,
+                        isDark,
+                        isPass: true,
+                      ),
                       // Strength Meter
                       if (_password.text.isNotEmpty)
                         Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: LinearProgressIndicator(
-                                value: _strength['score'] / 4,
-                                color: _strength['color'] ?? Colors.red)),
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: LinearProgressIndicator(
+                            value: _strength['score'] / 4,
+                            color: _strength['color'] ?? Colors.red,
+                          ),
+                        ),
                       _buildInput(
-                          _confirm,
-                          tr('register.confirmPassword'),
-                          Icons.lock_outline,
-                          (v) => v != _password.text
-                              ? tr('register.passwordsDoNotMatch')
-                              : null,
-                          null,
-                          colors,
-                          isDark,
-                          isPass: true),
+                        _confirm,
+                        tr('register.confirmPassword'),
+                        Icons.lock_outline,
+                        (v) => v != _password.text
+                            ? tr('register.passwordsDoNotMatch')
+                            : null,
+                        null,
+                        colors,
+                        isDark,
+                        isPass: true,
+                      ),
                       _buildTerms(colors),
                       const SizedBox(height: 24),
                       _buildRegisterButton(colors),
                       _buildLoginLink(colors, isDark),
                       const SizedBox(height: 24),
-                      Text(tr('register.privacyNotice'),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      Text(
+                        tr('register.privacyNotice'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
                       const SizedBox(height: 16),
                       LanguageSelector(textColor: colors['text']),
                     ],
@@ -186,19 +214,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         );
-      }
+      },
     );
   }
 
   Widget _buildInput(
-      TextEditingController ctrl,
-      String label,
-      IconData icon,
-      String? Function(String?) validator,
-      Function(String)? onChanged,
-      Map<String, dynamic> colors,
-      bool isDark,
-      {bool isPass = false}) {
+    TextEditingController ctrl,
+    String label,
+    IconData icon,
+    String? Function(String?) validator,
+    Function(String)? onChanged,
+    Map<String, dynamic> colors,
+    bool isDark, {
+    bool isPass = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -209,8 +238,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         validator: validator,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle:
-              TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+          labelStyle: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
           prefixIcon: Icon(icon, color: colors['primary']),
           filled: true,
           fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
@@ -224,15 +254,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return CheckboxListTile(
       value: _acceptTerms,
       onChanged: (v) => setState(() => _acceptTerms = v!),
-      title: Wrap(children: [
-        Text(tr('register.acceptTerms') + ' ',
-            style: TextStyle(color: colors['text'], fontSize: 13)),
-        Text(tr('register.termsOfService'),
+      title: Wrap(
+        children: [
+          Text(
+            tr('register.acceptTerms') + ' ',
+            style: TextStyle(color: colors['text'], fontSize: 13),
+          ),
+          Text(
+            tr('register.termsOfService'),
             style: TextStyle(
-                color: colors['primary'],
-                fontWeight: FontWeight.bold,
-                fontSize: 13))
-      ]),
+              color: colors['primary'],
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
       controlAffinity: ListTileControlAffinity.leading,
       activeColor: colors['primary'],
       contentPadding: EdgeInsets.zero,
@@ -243,31 +280,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildRegisterButton(Map<String, dynamic> colors) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-          backgroundColor: colors['primary'],
-          minimumSize: const Size(double.infinity, 45),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+        backgroundColor: colors['primary'],
+        minimumSize: const Size(double.infinity, 45),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
       onPressed: _isLoading || !_acceptTerms ? null : _handleRegister,
       child: _isLoading
           ? const CircularProgressIndicator(color: Colors.white)
-          : Text(tr('register.registerButton'),
+          : Text(
+              tr('register.registerButton'),
               style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold)),
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
     );
   }
 
   Widget _buildLoginLink(Map<String, dynamic> colors, bool isDark) {
     return Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(tr('register.alreadyHaveAccount') + ' ',
-              style: TextStyle(
-                  color: isDark ? Colors.grey[400] : Colors.grey[700])),
+      padding: const EdgeInsets.only(top: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            tr('register.alreadyHaveAccount') + ' ',
+            style: TextStyle(
+              color: isDark ? Colors.grey[400] : Colors.grey[700],
+            ),
+          ),
           GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Text(tr('register.loginNow'),
-                  style: TextStyle(
-                      color: colors['primary'], fontWeight: FontWeight.bold)))
-        ]));
+            onTap: () => Navigator.pop(context),
+            child: Text(
+              tr('register.loginNow'),
+              style: TextStyle(
+                color: colors['primary'],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

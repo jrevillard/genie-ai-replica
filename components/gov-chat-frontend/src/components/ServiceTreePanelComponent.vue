@@ -1,9 +1,9 @@
 <!-- ServiceTreePanelComponent.vue with Android keyboard fix -->
 <template>
-  <div class="service-tree-panel" ref="treePanel">
-    <h4>{{ $t("sidebar.governmentServices") }}</h4>
+  <div ref="treePanel" class="service-tree-panel">
+    <h4>{{ $t('sidebar.governmentServices') }}</h4>
 
-    <div class="search-container" ref="searchContainer">
+    <div ref="searchContainer" class="search-container">
       <input
         v-model="searchQuery"
         class="search-box"
@@ -15,35 +15,29 @@
       />
       <button
         class="expand-collapse-btn"
-        @click="toggleAllNodes"
         :title="isAnyNodeExpanded ? 'Collapse All' : 'Expand All'"
+        @click="toggleAllNodes"
       >
-        {{ isAnyNodeExpanded ? "−" : "+" }}
+        {{ isAnyNodeExpanded ? '−' : '+' }}
       </button>
     </div>
 
-    <div class="tree-list-container" ref="treeListContainer">
+    <div ref="treeListContainer" class="tree-list-container">
       <ul class="service-tree-list">
         <li v-for="node in nodes" :key="node.catKey">
           <div class="node-label" @click="toggleNode(node)">
-            <span
-              v-if="node.children && node.children.length > 0"
-              class="toggle-icon"
-            >
-              {{ node.expanded ? "▼" : "▶" }}
+            <span v-if="node.children && node.children.length > 0" class="toggle-icon">
+              {{ node.expanded ? '▼' : '▶' }}
             </span>
             <span class="node-name">{{ node.name }}</span>
           </div>
 
-          <ul
-            v-if="node.expanded && node.children && node.children.length > 0"
-            class="child-list"
-          >
+          <ul v-if="node.expanded && node.children && node.children.length > 0" class="child-list">
             <li
               v-for="(childName, cIndex) in node.children"
               :key="cIndex"
-              @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
               :class="{ selected: isChildSelected(node.catKey, cIndex) }"
+              @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
             >
               <div class="node-label child-row">
                 <span class="toggle-icon placeholder"></span>
@@ -58,26 +52,26 @@
 </template>
 
 <script>
-import { eventBus } from "../eventBus.js";
-import serviceTreeService from "../services/serviceTreeService.js";
+import { eventBus } from '../eventBus.js';
+import serviceTreeService from '../services/serviceTreeService.js';
 
 export default {
-  name: "ServiceTreePanelComponent",
+  name: 'ServiceTreePanelComponent',
 
   data() {
     return {
-      searchQuery: "",
+      searchQuery: '',
       selectedNodes: {},
       nodes: [],
-      currentLocale: "en",
-      isAndroid: false,
+      currentLocale: 'en',
+      isAndroid: false
     };
   },
 
   computed: {
     isAnyNodeExpanded() {
       return this.nodes.some((node) => node.expanded);
-    },
+    }
   },
 
   created() {
@@ -91,7 +85,7 @@ export default {
       this.$watch(
         () => this.$i18n.locale,
         (newLocale) => {
-          console.log("Locale changed to:", newLocale);
+          console.log('Locale changed to:', newLocale);
           this.currentLocale = newLocale;
           // Reload categories when locale changes
           this.loadCategories(newLocale);
@@ -107,63 +101,63 @@ export default {
   },
 
   mounted() {
-    console.log("ServiceTreePanel - mounted");
-    eventBus.$on("contextItemRemoved", this.handleContextItemRemoved);
+    console.log('ServiceTreePanel - mounted');
+    eventBus.$on('contextItemRemoved', this.handleContextItemRemoved);
 
     // Add Android keyboard detection
     if (/Android/i.test(navigator.userAgent)) {
       const originalHeight = window.innerHeight;
 
       // Listen for resize events (keyboard opening/closing)
-      window.addEventListener("resize", () => {
+      window.addEventListener('resize', () => {
         // If keyboard is likely open (height decreased significantly)
         if (window.innerHeight < originalHeight * 0.75) {
           // Force sidebar open
-          const sideBar = document.querySelector(".side-bar");
+          const sideBar = document.querySelector('.side-bar');
           if (sideBar) {
-            sideBar.classList.add("side-bar-open");
-            sideBar.style.transform = "translateX(0)";
-            sideBar.style.display = "block";
-            sideBar.style.position = "fixed";
-            sideBar.style.top = "60px"; // Adjust based on your header height
-            sideBar.style.bottom = "0";
-            sideBar.style.zIndex = "9999";
+            sideBar.classList.add('side-bar-open');
+            sideBar.style.transform = 'translateX(0)';
+            sideBar.style.display = 'block';
+            sideBar.style.position = 'fixed';
+            sideBar.style.top = '60px'; // Adjust based on your header height
+            sideBar.style.bottom = '0';
+            sideBar.style.zIndex = '9999';
           }
 
           // Add fixed position to sidebar content
-          const sidebarContent = document.querySelector(".sidebar-content");
+          const sidebarContent = document.querySelector('.sidebar-content');
           if (sidebarContent) {
-            sidebarContent.style.display = "block";
-            sidebarContent.style.overflow = "auto";
-            sidebarContent.style.height = "auto";
-            sidebarContent.style.maxHeight = "70vh";
+            sidebarContent.style.display = 'block';
+            sidebarContent.style.overflow = 'auto';
+            sidebarContent.style.height = 'auto';
+            sidebarContent.style.maxHeight = '70vh';
           }
 
           // Hide any elements that might interfere
-          const weatherContainer = document.querySelector(".weather-container");
+          const weatherContainer = document.querySelector('.weather-container');
           if (weatherContainer) {
-            weatherContainer.style.display = "none";
+            weatherContainer.style.display = 'none';
           }
         } else {
           // Restore normal state
-          const sideBar = document.querySelector(".side-bar");
+          const sideBar = document.querySelector('.side-bar');
           if (sideBar) {
-            sideBar.style.position = "";
-            sideBar.style.top = "";
-            sideBar.style.bottom = "";
-            sideBar.style.zIndex = "";
+            sideBar.style.position = '';
+            sideBar.style.top = '';
+            sideBar.style.bottom = '';
+            sideBar.style.zIndex = '';
           }
 
-          const sidebarContent = document.querySelector(".sidebar-content");
+          const sidebarContent = document.querySelector('.sidebar-content');
           if (sidebarContent) {
-            sidebarContent.style.overflow = "";
-            sidebarContent.style.height = "";
-            sidebarContent.style.maxHeight = "";
+            sidebarContent.style.overflow = '';
+            sidebarContent.style.height = '';
+            sidebarContent.style.maxHeight = '';
           }
 
-          const weatherContainer = document.querySelector(".weather-container");
+          const weatherContainer = document.querySelector('.weather-container');
           if (weatherContainer) {
-            weatherContainer.style.display = "";
+            weatherContainer.style.display = '';
           }
         }
       });
@@ -171,106 +165,37 @@ export default {
   },
 
   beforeUnmount() {
-    eventBus.$off("contextItemRemoved", this.handleContextItemRemoved);
+    eventBus.$off('contextItemRemoved', this.handleContextItemRemoved);
   },
 
   methods: {
-    // Handle focus on search input
-    handleInputFocus() {
-      // Specifically for Android devices
-      if (/Android/i.test(navigator.userAgent)) {
-        // Prevent the sidebar from being toggled/closed when keyboard opens
-        const sideBar = document.querySelector(".side-bar");
-        if (sideBar) {
-          // Force sidebar to stay open regardless of toggle state
-          sideBar.style.transform = "translateX(0)";
-
-          // Store original width to restore it later
-          sideBar._originalWidth = sideBar.style.width;
-
-          // Ensure sidebar has proper width
-          sideBar.style.width = "85%";
-          sideBar.style.maxWidth = "320px";
-
-          // Set a high z-index to keep it above other elements
-          sideBar.style.zIndex = "9999";
-        }
-
-        // Force the sidebar content to stay visible
-        const sidebarContent = document.querySelector(".sidebar-content");
-        if (sidebarContent) {
-          sidebarContent.style.display = "block";
-          sidebarContent.style.visibility = "visible";
-        }
-
-        // Add a flag to body to indicate keyboard is open
-        document.body.classList.add("android-keyboard-open");
-      }
-    },
-
-    // Handle blur on search input
-    handleInputBlur() {
-      // For Android devices
-      if (/Android/i.test(navigator.userAgent)) {
-        // Use timeout to ensure keyboard has fully closed
-        setTimeout(() => {
-          // Restore sidebar to its original state
-          const sideBar = document.querySelector(".side-bar");
-          if (sideBar) {
-            // If sidebar is meant to be closed, restore transform
-            if (!sideBar.classList.contains("side-bar-open")) {
-              sideBar.style.transform = "translateX(-100%)";
-            } else {
-              sideBar.style.transform = "";
-            }
-
-            // Restore original width if it was stored
-            if (sideBar._originalWidth !== undefined) {
-              sideBar.style.width = sideBar._originalWidth;
-              delete sideBar._originalWidth;
-            } else {
-              sideBar.style.width = "";
-            }
-
-            sideBar.style.maxWidth = "";
-            sideBar.style.zIndex = "";
-          }
-
-          // Remove the flag from body
-          document.body.classList.remove("android-keyboard-open");
-        }, 300);
-      }
-    },
     // Load categories from the API
     async loadCategories(locale) {
       try {
         const categories = await serviceTreeService.getAllCategories(locale);
-        console.log("Raw API response:", categories);
+        console.log('Raw API response:', categories);
 
         // Verify each category has the expected properties
         if (!categories || !Array.isArray(categories)) {
-          throw new Error("Invalid API response format");
+          throw new Error('Invalid API response format');
         }
 
         // Check categories without using unused index variable
         categories.forEach((cat) => {
           if (!cat.name) {
-            console.warn(
-              `Category ${cat.catKey || "unknown"} is missing name property:`,
-              cat
-            );
+            console.warn(`Category ${cat.catKey || 'unknown'} is missing name property:`, cat);
           }
         });
 
         // Process the API response - just add expanded property
         this.nodes = categories.map((category) => ({
           ...category,
-          expanded: false,
+          expanded: false
         }));
 
-        console.log("Categories loaded:", this.nodes);
+        console.log('Categories loaded:', this.nodes);
       } catch (error) {
-        console.error("Error loading categories:", error);
+        console.error('Error loading categories:', error);
       }
     },
 
@@ -279,23 +204,23 @@ export default {
       // Only apply on Android
       if (this.isAndroid) {
         // Force the sidebar content to remain visible
-        const sidebarContent = document.querySelector(".sidebar-content");
+        const sidebarContent = document.querySelector('.sidebar-content');
         if (sidebarContent) {
-          sidebarContent.style.position = "fixed";
-          sidebarContent.style.top = "60px";
-          sidebarContent.style.bottom = "0";
-          sidebarContent.style.left = "0";
-          sidebarContent.style.width = "85%";
-          sidebarContent.style.maxWidth = "320px";
-          sidebarContent.style.zIndex = "9999";
-          sidebarContent.style.backgroundColor = "var(--bg-sidebar, #222)";
-          sidebarContent.style.overflowY = "auto";
+          sidebarContent.style.position = 'fixed';
+          sidebarContent.style.top = '60px';
+          sidebarContent.style.bottom = '0';
+          sidebarContent.style.left = '0';
+          sidebarContent.style.width = '85%';
+          sidebarContent.style.maxWidth = '320px';
+          sidebarContent.style.zIndex = '9999';
+          sidebarContent.style.backgroundColor = 'var(--bg-sidebar, #222)';
+          sidebarContent.style.overflowY = 'auto';
         }
 
         // Show the weather container
-        const weatherContainer = document.querySelector(".weather-container");
+        const weatherContainer = document.querySelector('.weather-container');
         if (weatherContainer) {
-          weatherContainer.style.display = "none";
+          weatherContainer.style.display = 'none';
         }
       }
     },
@@ -306,23 +231,23 @@ export default {
       if (this.isAndroid) {
         setTimeout(() => {
           // Reset sidebar content position
-          const sidebarContent = document.querySelector(".sidebar-content");
+          const sidebarContent = document.querySelector('.sidebar-content');
           if (sidebarContent) {
-            sidebarContent.style.position = "";
-            sidebarContent.style.top = "";
-            sidebarContent.style.bottom = "";
-            sidebarContent.style.left = "";
-            sidebarContent.style.width = "";
-            sidebarContent.style.maxWidth = "";
-            sidebarContent.style.zIndex = "";
-            sidebarContent.style.backgroundColor = "";
-            sidebarContent.style.overflowY = "";
+            sidebarContent.style.position = '';
+            sidebarContent.style.top = '';
+            sidebarContent.style.bottom = '';
+            sidebarContent.style.left = '';
+            sidebarContent.style.width = '';
+            sidebarContent.style.maxWidth = '';
+            sidebarContent.style.zIndex = '';
+            sidebarContent.style.backgroundColor = '';
+            sidebarContent.style.overflowY = '';
           }
 
           // Show the weather container
-          const weatherContainer = document.querySelector(".weather-container");
+          const weatherContainer = document.querySelector('.weather-container');
           if (weatherContainer) {
-            weatherContainer.style.display = "";
+            weatherContainer.style.display = '';
           }
         }, 300);
       }
@@ -343,18 +268,13 @@ export default {
       if (!item || !item.category || !item.service) return;
 
       const catKey = item.category;
-      const children =
-        this.nodes.find((n) => n.catKey === catKey)?.children || [];
-      const childIndex = children.findIndex(
-        (child) => String(child) === String(item.service)
-      );
+      const children = this.nodes.find((n) => n.catKey === catKey)?.children || [];
+      const childIndex = children.findIndex((child) => String(child) === String(item.service));
 
       if (childIndex !== -1 && this.selectedNodes[catKey]) {
         // Filter out the removed index
         const nodeSelection = this.selectedNodes[catKey] || [];
-        this.selectedNodes[catKey] = nodeSelection.filter(
-          (idx) => idx !== childIndex
-        );
+        this.selectedNodes[catKey] = nodeSelection.filter((idx) => idx !== childIndex);
       }
     },
 
@@ -379,10 +299,10 @@ export default {
       }
 
       // Notify chat component
-      eventBus.$emit("treeNodeSelected", {
+      eventBus.$emit('treeNodeSelected', {
         category: catKey,
         service: childName,
-        selected: isSelected,
+        selected: isSelected
       });
     },
 
@@ -394,10 +314,8 @@ export default {
       const query = this.searchQuery.toLowerCase();
 
       this.nodes.forEach((node) => {
-        const categoryName = (node.name || "").toLowerCase();
-        const childNames = (node.children || []).map((name) =>
-          typeof name === "string" ? name.toLowerCase() : ""
-        );
+        const categoryName = (node.name || '').toLowerCase();
+        const childNames = (node.children || []).map((name) => (typeof name === 'string' ? name.toLowerCase() : ''));
 
         if (!query) {
           node.expanded = false;
@@ -407,8 +325,8 @@ export default {
           node.expanded = matchesCategory || matchesChild;
         }
       });
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -557,43 +475,43 @@ li {
 }
 
 /* Dark mode specific styles */
-[data-theme="dark"] .service-tree-panel h4 {
+[data-theme='dark'] .service-tree-panel h4 {
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.75rem; /* Ensure consistency */
 }
 
-[data-theme="dark"] .search-container {
+[data-theme='dark'] .search-container {
   background-color: var(--bg-sidebar);
 }
 
-[data-theme="dark"] .search-box {
+[data-theme='dark'] .search-box {
   background-color: var(--bg-input) !important;
   color: var(--text-primary) !important;
   border: 1px solid var(--border-input) !important;
 }
 
-[data-theme="dark"] .expand-collapse-btn {
+[data-theme='dark'] .expand-collapse-btn {
   background-color: var(--bg-button-secondary) !important;
   color: var(--text-button-secondary) !important;
   border: 1px solid var(--border-light);
   border-radius: 4px;
 }
 
-[data-theme="dark"] .node-name {
+[data-theme='dark'] .node-name {
   color: var(--text-primary);
 }
 
 /* Restored missing dark mode styles */
-[data-theme="dark"] .service-tree-list,
-[data-theme="dark"] .service-tree-list * {
+[data-theme='dark'] .service-tree-list,
+[data-theme='dark'] .service-tree-list * {
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
-[data-theme="dark"] .node-label {
+[data-theme='dark'] .node-label {
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
-[data-theme="dark"] .toggle-icon {
+[data-theme='dark'] .toggle-icon {
   color: rgba(255, 255, 255, 0.6) !important;
 }
 
@@ -613,19 +531,19 @@ li {
 }
 
 /* Additional dark mode title styles */
-[data-theme="dark"] h4,
-[data-theme="dark"] .service-tree-panel h4,
-[data-theme="dark"] .service-categories-title,
-[data-theme="dark"] .knowledge-areas-title {
+[data-theme='dark'] h4,
+[data-theme='dark'] .service-tree-panel h4,
+[data-theme='dark'] .service-categories-title,
+[data-theme='dark'] .knowledge-areas-title {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
-[data-theme="dark"] .sidebar-section-title,
-[data-theme="dark"] .sidebar-header h3 {
+[data-theme='dark'] .sidebar-section-title,
+[data-theme='dark'] .sidebar-header h3 {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
-[data-theme="dark"] .node-label:hover {
+[data-theme='dark'] .node-label:hover {
   background-color: #4a4a4a !important;
 }
 </style>

@@ -27,13 +27,9 @@ module.exports = (weatherService) => {
    *               longitude:
    *                 type: number
    *                 description: Longitude of the location
-   *               userId:
-   *                 type: string
-   *                 description: ID of the user requesting weather
    *           example:
    *             latitude: -6.2088
    *             longitude: 106.8456
-   *             userId: "2133"
    *     responses:
    *       200:
    *         description: Weather data retrieved successfully
@@ -78,7 +74,7 @@ module.exports = (weatherService) => {
    */
   router.post('/', async (req, res) => {
     try {
-      const { latitude, longitude, userId } = req.body;
+      const { latitude, longitude } = req.body;
 
       // Validate coordinates if provided
       if ((latitude && !longitude) || (!latitude && longitude)) {
@@ -91,7 +87,12 @@ module.exports = (weatherService) => {
         return res.status(400).json({ message: 'Invalid longitude' });
       }
 
-      logger.info(`Fetching weather for user ${userId || 'anonymous'} at lat:${latitude}, lon:${longitude}`);
+      const userId = req.user?.iss_sub;
+      if (!userId) {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+      }
+
+      logger.info(`Fetching weather for user ${userId} at lat:${latitude}, lon:${longitude}`);
 
       const weatherData = await weatherService.getWeather({ latitude, longitude, userId });
       res.json(weatherData);

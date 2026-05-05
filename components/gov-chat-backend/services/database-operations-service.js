@@ -52,173 +52,7 @@ class DatabaseOperationsService {
       logger.info('Database connection tested successfully');
     } catch (error) {
       logger.error(`Failed to initialize database connection: ${error.message}`, { stack: error.stack });
-      throw new Error('Database connection unavailable');
-    }
-  }
-
-  async reindexDatabase() {
-    try {
-      logger.info('Starting database reindexing');
-      const collections = await this.db.collections();
-      const reindexResults = [];
-
-      for (const collection of collections) {
-        try {
-          const collectionName = collection.name;
-          const existingIndexes = await collection.indexes();
-
-          for (const index of existingIndexes) {
-            try {
-              if (index.type === 'primary') continue;
-              await collection.dropIndex(index.id);
-              logger.info(`Dropped index ${index.id} from collection ${collectionName}`);
-            } catch (dropError) {
-              // Graph edge collections have auto-managed indexes that cannot be dropped — skip silently
-              if (dropError.message.includes('forbidden')) {
-                logger.debug(`Skipped graph-managed index ${index.id} on ${collectionName}`);
-              } else {
-                logger.warn(`Error dropping index ${index.id} for collection ${collectionName}: ${dropError.message}`, { stack: dropError.stack });
-              }
-            }
-          }
-
-          const recreatedIndexes = await this._recreateCollectionIndexes(collection);
-          reindexResults.push({
-            collection: collectionName,
-            status: 'success',
-            indexesRecreated: recreatedIndexes.length
-          });
-          logger.info(`Reindexed collection: ${collectionName}`);
-        } catch (collectionError) {
-          logger.error(`Reindexing error for collection ${collection.name}: ${collectionError.message}`, { stack: collectionError.stack });
-          reindexResults.push({
-            collection: collection.name,
-            status: 'error',
-            error: collectionError.message
-          });
-        }
-      }
-
-      await this._saveReindexTimestamp();
-      logger.info('Database reindexing completed successfully');
-      return {
-        success: true,
-        message: 'Database reindexing completed',
-        results: reindexResults
-      };
-    } catch (error) {
-      logger.error(`Overall database reindexing error: ${error.message}`, { stack: error.stack });
-      return {
-        success: false,
-        message: 'Failed to reindex database',
-        error: error.message
-      };
-    }
-  }
-
-  async _recreateCollectionIndexes(collection) {
-    try {
-      const indexCreationResults = [];
-      const collectionName = collection.name;
-      logger.info(`Starting index recreation for collection: ${collectionName}`);
-
-      const indexDefinitions = {
-        'users': [
-          {
-            type: 'hash',
-            fields: ['email'],
-            unique: true,
-            name: 'email_unique_index'
-          },
-          {
-            type: 'skiplist',
-            fields: ['createdAt'],
-            name: 'users_created_at_index'
-          }
-        ],
-        'sessions': [
-          {
-            type: 'hash',
-            fields: ['userId', 'createdAt'],
-            name: 'user_session_index'
-          }
-        ],
-        'userSessions': [
-          {
-            type: 'hash',
-            fields: ['userId', 'createdAt'],
-            name: 'user_session_index'
-          }
-        ],
-        'serviceCategories': [
-          {
-            type: 'skiplist',
-            fields: ['catCode', 'order'],
-            name: 'category_order_index'
-          }
-        ],
-        'services': [
-          {
-            type: 'hash',
-            fields: ['categoryId', 'order'],
-            name: 'service_category_order_index'
-          }
-        ]
-      };
-
-      const collectionIndexes = indexDefinitions[collectionName] || [
-        {
-          type: 'skiplist',
-          fields: ['createdAt'],
-          name: `${collectionName}_created_at_index`
-        }
-      ];
-
-      for (const indexDef of collectionIndexes) {
-        try {
-          logger.info(`Creating index for ${collectionName}: ${JSON.stringify(indexDef)}`);
-          if (!indexDef.fields || indexDef.fields.length === 0) {
-            logger.warn(`Skipping invalid index definition for ${collectionName}`);
-            continue;
-          }
-
-          const indexParams = {
-            type: indexDef.type,
-            fields: indexDef.fields
-          };
-
-          if (indexDef.unique) {
-            indexParams.unique = true;
-          }
-
-          await collection.ensureIndex(indexParams);
-          indexCreationResults.push({
-            name: indexDef.name,
-            type: indexDef.type,
-            fields: indexDef.fields
-          });
-          logger.info(`Successfully created index ${indexDef.name} for ${collectionName}`);
-        } catch (indexError) {
-          logger.error(`Error creating index ${indexDef.name} for ${collectionName}: ${indexError.message}`, { stack: indexError.stack });
-        }
-      }
-
-      logger.info(`Index creation completed successfully for ${collectionName}: ${indexCreationResults.length} indexes created`);
-      return indexCreationResults;
-    } catch (error) {
-      logger.error(`Comprehensive error in index recreation for ${collection.name}: ${error.message}`, { stack: error.stack });
-      return [];
-    }
-  }
-
-  async _saveReindexTimestamp() {
-    try {
-      const timestamp = new Date().toISOString();
-      const reindexTrackingFile = path.join(process.cwd(), 'logs', 'last_reindex.txt');
-      await fs.writeFile(reindexTrackingFile, timestamp);
-      logger.info(`Reindex timestamp saved successfully: ${timestamp}`);
-    } catch (error) {
-      logger.error(`Error saving reindex timestamp: ${error.message}`, { stack: error.stack });
+      throw new Error('Database connection unavailable', { cause: error });
     }
   }
 
@@ -471,7 +305,6 @@ class DatabaseOperationsService {
       logger.info('Fetching database statistics');
       const collections = await this.db.collections();
       const stats = await this.db.route('/_api/statistics').get();
-      const dbInfo = await this.db.get();
 
       let totalSize = 0;
       const collectionStats = [];
@@ -488,7 +321,6 @@ class DatabaseOperationsService {
         }
       }
 
-      const lastReindex = await this._getLastReindexTime();
       const formattedSize = this._formatSize(totalSize);
 
       logger.info('Database statistics retrieved successfully');
@@ -496,7 +328,6 @@ class DatabaseOperationsService {
         success: true,
         databaseSize: formattedSize,
         totalTables: collections.length,
-        lastReindex: lastReindex,
         collections: collectionStats,
         systemStats: stats ? stats.body : null,
         server: {
@@ -512,27 +343,6 @@ class DatabaseOperationsService {
         message: 'Failed to get database stats',
         error: error.message
       };
-    }
-  }
-
-  async _getLastReindexTime() {
-    try {
-      const reindexTrackingFile = path.join(process.cwd(), 'logs', 'last_reindex.txt');
-      try {
-        const lastReindexData = await fs.readFile(reindexTrackingFile, 'utf8');
-        const timestamp = new Date(lastReindexData.trim());
-        const now = new Date();
-        const diffTime = Math.abs(now - timestamp);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        logger.info(`Last reindex time retrieved successfully: ${diffDays} days ago`);
-        return `${diffDays} days ago`;
-      } catch (readError) {
-        logger.warn(`Failed to read reindex tracking file, using default: ${readError.message}`, { stack: readError.stack });
-        return '5 days ago';
-      }
-    } catch (error) {
-      logger.error(`Error determining last reindex time: ${error.message}`, { stack: error.stack });
-      return '5 days ago';
     }
   }
 

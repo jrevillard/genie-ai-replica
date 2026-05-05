@@ -256,7 +256,7 @@ class AqlParser {
     }
 
     parseComparison() {
-        let left = this.parsePrimary();
+        const left = this.parsePrimary();
         const operatorMatch = this.consume(/^(==|!=|>=|<=|>|<|LIKE|IN)/i);
         if (operatorMatch) {
             const operator = operatorMatch[0];

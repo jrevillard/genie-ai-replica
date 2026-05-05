@@ -4,7 +4,7 @@ const config = require('../config/appConfig');
 /**
  * Global error handler middleware
  */
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, _next) => {
   // Log error details
   const errorLog = {
     message: err.message,
@@ -86,7 +86,7 @@ const notFoundHandler = (req, res) => {
     userAgent: req.get('User-Agent'),
     timestamp: new Date().toISOString()
   });
-  
+
   res.status(404).json({
     success: false,
     error: 'Route not found',

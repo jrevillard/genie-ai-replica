@@ -46,7 +46,6 @@
 
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
-const path = require('path');
 const readline = require('readline');
 
 // To support modern ESM-only packages like inquirer v9+, we will dynamically import it.
@@ -432,7 +431,7 @@ async function readImportFile(importConfig) {
     // Check if file exists
     try {
       await fs.access(importConfig.inputFile);
-    } catch (error) {
+    } catch {
       throw new Error(`Import file not found: ${importConfig.inputFile}`);
     }
     
@@ -545,8 +544,8 @@ async function validateImportData(importData, importConfig) {
     
     console.log('Validating import data...');
     
-    let errors = [];
-    let warnings = [];
+    const errors = [];
+    const warnings = [];
     
     // Validate serviceCategories
     console.log('Validating serviceCategories...');
@@ -554,7 +553,7 @@ async function validateImportData(importData, importConfig) {
     const categoryKeySet = new Set();
     
     importData.serviceCategories.forEach((doc, index) => {
-      const missingFields = categoryRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      const missingFields = categoryRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field) || doc[field] === null || doc[field] === undefined);
       if (missingFields.length > 0) {
         errors.push(`ServiceCategory ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
@@ -578,7 +577,7 @@ async function validateImportData(importData, importConfig) {
     const serviceKeySet = new Set();
     
     importData.services.forEach((doc, index) => {
-      const missingFields = serviceRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      const missingFields = serviceRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field) || doc[field] === null || doc[field] === undefined);
       if (missingFields.length > 0) {
         errors.push(`Service ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
@@ -614,7 +613,7 @@ async function validateImportData(importData, importConfig) {
     const edgeKeySet = new Set();
     
     importData.categoryServices.forEach((doc, index) => {
-      const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      const missingFields = edgeRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field) || doc[field] === null || doc[field] === undefined);
       if (missingFields.length > 0) {
         errors.push(`CategoryServices edge ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
@@ -647,7 +646,7 @@ async function validateImportData(importData, importConfig) {
     const categoryTranslationKeySet = new Set();
     
     importData.serviceCategoryTranslations.forEach((doc, index) => {
-      const missingFields = categoryTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      const missingFields = categoryTranslationRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field) || doc[field] === null || doc[field] === undefined);
       if (missingFields.length > 0) {
         errors.push(`ServiceCategoryTranslation ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
@@ -670,7 +669,7 @@ async function validateImportData(importData, importConfig) {
     const categoryTranslationEdgeKeySet = new Set();
     
     importData.serviceCategoryTranslationsEdge.forEach((doc, index) => {
-      const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      const missingFields = edgeRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field) || doc[field] === null || doc[field] === undefined);
       if (missingFields.length > 0) {
         errors.push(`ServiceCategoryTranslationsEdge ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
@@ -703,7 +702,7 @@ async function validateImportData(importData, importConfig) {
     const serviceTranslationKeySet = new Set();
     
     importData.serviceTranslations.forEach((doc, index) => {
-      const missingFields = serviceTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      const missingFields = serviceTranslationRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field) || doc[field] === null || doc[field] === undefined);
       if (missingFields.length > 0) {
         errors.push(`ServiceTranslation ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
@@ -726,7 +725,7 @@ async function validateImportData(importData, importConfig) {
     const serviceTranslationEdgeKeySet = new Set();
     
     importData.serviceTranslationsEdge.forEach((doc, index) => {
-      const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      const missingFields = edgeRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field) || doc[field] === null || doc[field] === undefined);
       if (missingFields.length > 0) {
         errors.push(`ServiceTranslationsEdge ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
@@ -788,7 +787,7 @@ async function validateImportData(importData, importConfig) {
 }
 
 // Check for existing data conflicts
-async function checkExistingData(collections, importData) {
+async function checkExistingData(collections) {
   try {
     console.log('Checking existing data status...');
     
@@ -1050,12 +1049,12 @@ async function importDocumentsForCollection(collection, documents, collectionNam
         // Use individual saves for better debugging
         for (let j = 0; j < batch.length; j++) {
           try {
-            const result = await collection.save(batch[j], { 
+            await collection.save(batch[j], {
               returnNew: false,
               returnOld: false,
               waitForSync: true
             });
-            
+
             if (['categoryServices', 'serviceCategoryTranslationsEdge', 'serviceTranslationsEdge'].includes(collectionName)) {
               console.log(`    ✓ Edge ${batch[j]._from} → ${batch[j]._to} imported`);
             } else {
@@ -1274,7 +1273,7 @@ async function verifyImport(collections, originalData) {
           categoryVerifiedCount++;
           console.log(`  ✓ serviceCategory ${key}: ${doc.nameEN}`);
         }
-      } catch (error) {
+      } catch {
         console.log(`  ✗ serviceCategory ${key}: not found`);
       }
     }
@@ -1293,7 +1292,7 @@ async function verifyImport(collections, originalData) {
           serviceVerifiedCount++;
           console.log(`  ✓ service ${key}: ${doc.nameEN} (category: ${doc.categoryId})`);
         }
-      } catch (error) {
+      } catch {
         console.log(`  ✗ service ${key}: not found`);
       }
     }
@@ -1340,7 +1339,7 @@ async function verifyImport(collections, originalData) {
           categoryTranslationVerifiedCount++;
           console.log(`  ✓ serviceCategoryTranslation ${key}: ${doc.translation} (${doc.languageCode})`);
         }
-      } catch (error) {
+      } catch {
         console.log(`  ✗ serviceCategoryTranslation ${key}: not found`);
       }
     }
@@ -1387,7 +1386,7 @@ async function verifyImport(collections, originalData) {
           serviceTranslationVerifiedCount++;
           console.log(`  ✓ serviceTranslation ${key}: ${doc.translation} (${doc.languageCode})`);
         }
-      } catch (error) {
+      } catch {
         console.log(`  ✗ serviceTranslation ${key}: not found`);
       }
     }
@@ -1534,7 +1533,7 @@ async function executeImport(dbConfig, importConfig) {
     };
     
     // Check for existing data conflicts
-    const { conflicts, canProceed } = await checkExistingData(collections, importData, importConfig);
+    const { canProceed } = await checkExistingData(collections);
     if (!canProceed) {
       console.log('✗ Import aborted due to existing data conflicts');
       return false;

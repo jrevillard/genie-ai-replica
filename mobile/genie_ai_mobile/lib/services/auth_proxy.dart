@@ -9,9 +9,9 @@ class AuthProxy {
     // Note: Use a utility to hash the password as per authService.js hashPassword()
     final response = await _api.post('auth/login', {
       'loginName': loginName,
-      'encPassword': password, 
+      'encPassword': password,
     });
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data['accessToken'] != null) {
@@ -27,7 +27,7 @@ class AuthProxy {
     final response = await _api.post('auth/refresh-token', {
       'refreshToken': refreshToken,
     });
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data['accessToken'] != null) {

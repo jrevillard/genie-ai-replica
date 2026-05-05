@@ -123,63 +123,6 @@
         </button>
       </div>
 
-      <div v-if="savedAccounts.length > 0" class="saved-accounts">
-        <h3 style="color: #fff !important">{{ $t('login.savedAccounts') }}</h3>
-        <div class="accounts-container">
-          <div
-            v-for="account in savedAccounts"
-            :key="account.id"
-            class="account-item"
-            @click="loginWithSavedAccount(account)"
-          >
-            <div class="account-left">
-              <div class="account-initials">
-                {{ account.name.charAt(0) }}{{ account.name.split(' ')[1]?.charAt(0) || '' }}
-              </div>
-              <span class="account-name">{{ account.name }}</span>
-            </div>
-
-            <div class="account-provider">
-              <template v-if="account.provider === 'Google'">
-                <svg class="provider-icon" viewBox="0 0 24 24" width="16" height="16">
-                  <g transform="matrix(1, 0, 0, 1, 0, 0)">
-                    <path
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      fill="#34A853"
-                    />
-                    <path
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      fill="#EA4335"
-                    />
-                  </g>
-                </svg>
-                <span>Google</span>
-              </template>
-              <template v-else-if="account.provider === 'Facebook'">
-                <svg class="provider-icon" width="16" height="16" viewBox="0 0 24 24">
-                  <path
-                    d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
-                    fill="#1877F2"
-                  />
-                </svg>
-                <span>Facebook</span>
-              </template>
-              <template v-else>
-                {{ account.provider }}
-              </template>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="login-footer">
         <p class="terms-policy">By logging in, you agree to our Terms of Service and Privacy Policy</p>
         <div class="language-selector">
@@ -214,20 +157,6 @@ export default {
       rememberMe: false,
       isLoading: false,
       error: '',
-      savedAccounts: [
-        {
-          id: 1,
-          name: 'John Doe',
-          provider: 'Google',
-          email: 'john.doe@gmail.com',
-        },
-        {
-          id: 2,
-          name: 'Jane Smith',
-          provider: 'Facebook',
-          email: 'jane.smith@facebook.com',
-        },
-      ],
     }
   },
   watch: {
@@ -381,19 +310,6 @@ export default {
         this.error = this.$t('login.oauthNotImplemented')
       } catch (error) {
         console.error('Facebook login error:', error)
-        this.error = this.$t('login.loginFailed')
-      } finally {
-        this.isLoading = false
-      }
-    },
-
-    async loginWithSavedAccount(account) {
-      try {
-        this.error = ''
-        this.isLoading = true
-        this.error = this.$t('login.savedLoginNotImplemented')
-      } catch (error) {
-        console.error('Saved account login error:', error)
         this.error = this.$t('login.loginFailed')
       } finally {
         this.isLoading = false
@@ -739,126 +655,6 @@ export default {
   background-color: var(--bg-button-primary-hover, #24887d);
 }
 
-.saved-accounts {
-  margin-top: 16px;
-  border-top: 1px solid #444;
-  padding-top: 14px;
-}
-
-[data-theme='light'] .saved-accounts {
-  background-color: var(--bg-secondary, #ffffff);
-  color: var(--text-primary, #333333);
-}
-
-[data-theme='dark'] .saved-accounts {
-  background-color: var(--bg-secondary, #252525);
-  color: var(--text-primary, #f0f0f0);
-}
-
-.saved-accounts h3 {
-  font-size: 15px;
-  margin: 0 0 10px 0;
-  font-weight: 500;
-}
-
-[data-theme='light'] .saved-accounts h3 {
-  color: var(--text-primary, #333333);
-}
-
-[data-theme='dark'] .saved-accounts h3 {
-  color: var(--text-primary, #f0f0f0);
-}
-
-.accounts-container {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-[data-theme='light'] .accounts-container {
-  background-color: var(--bg-secondary, #ffffff);
-}
-
-[data-theme='dark'] .accounts-container {
-  background-color: var(--bg-secondary, #252525);
-}
-
-.account-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  background-color: var(--bg-button-primary, #2a9d8f);
-}
-
-[data-theme='dark'] .account-item {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.account-item:hover {
-  background-color: var(--bg-button-primary-hover, #24887d);
-}
-
-.account-left {
-  display: flex;
-  align-items: center;
-}
-
-.account-initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background-color: var(--bg-button-primary, #2a9d8f);
-  color: white;
-  font-weight: bold;
-  margin-right: 10px;
-  font-size: 13px;
-}
-
-.account-name {
-  font-weight: 500;
-  font-size: 14px;
-}
-
-[data-theme='light'] .account-name {
-  color: var(--text-primary, #333333);
-}
-
-[data-theme='dark'] .account-name {
-  color: var(--text-primary, #f0f0f0);
-}
-
-.account-provider {
-  display: flex;
-  align-items: center;
-  padding: 3px 6px;
-  border-radius: 6px;
-  font-size: 11px;
-}
-
-[data-theme='light'] .account-provider {
-  background-color: var(--bg-tertiary, #f0f2f5);
-  color: var(--text-muted, #6c757d);
-}
-
-[data-theme='dark'] .account-provider {
-  background-color: var(--bg-tertiary, #2a2a2a);
-  color: var(--text-muted, #9ca3af);
-}
-
-.provider-icon {
-  margin-right: 5px;
-  width: 14px;
-  height: 14px;
-}
-
 .login-footer {
   margin-top: auto;
   padding-top: 10px;
@@ -944,13 +740,5 @@ export default {
     padding: 24px;
     max-height: 760px;
   }
-}
-
-.saved-accounts h3 {
-  color: #fff !important;
-}
-
-.login-card .saved-accounts h3 {
-  color: inherit !important;
 }
 </style>

@@ -34,7 +34,7 @@ class _AboutScreenState extends State<AboutScreen> {
     if (kIsWeb) {
       // Safe fallback for Web where Platform.* throws errors
       dartVer = "Dart (Web)";
-      os = "Web Browser"; 
+      os = "Web Browser";
     } else {
       // Mobile/Desktop logic (Safe to use Platform.X here)
       try {
@@ -81,7 +81,7 @@ class _AboutScreenState extends State<AboutScreen> {
     return Scaffold(
       appBar: AppBar(
         // Ensure 'about.title' exists in your locale files
-        title: Text(tr('about.title')), 
+        title: Text(tr('about.title')),
         centerTitle: true,
         elevation: 0,
       ),
@@ -153,7 +153,11 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: 16),
             _buildTechCard(context, [
-              _buildTechItem(context, 'App ID', _packageName.isEmpty ? 'Loading...' : _packageName),
+              _buildTechItem(
+                context,
+                'App ID',
+                _packageName.isEmpty ? 'Loading...' : _packageName,
+              ),
               _buildTechItem(context, 'Framework', 'Flutter'), // Implicit
               _buildTechItem(context, 'Runtime', 'Dart $_dartVersion'),
               _buildTechItem(context, 'OS Platform', _osVersion),
@@ -180,15 +184,11 @@ class _AboutScreenState extends State<AboutScreen> {
       color: theme.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: theme.dividerColor.withOpacity(0.1),
-        ),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: children,
-        ),
+        child: Column(children: children),
       ),
     );
   }
@@ -199,10 +199,7 @@ class _AboutScreenState extends State<AboutScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
           Expanded(
             child: Text(
               value,

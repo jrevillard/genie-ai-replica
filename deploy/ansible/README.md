@@ -134,12 +134,17 @@ Set in `group_vars/<env>/vault.yml`:
 | Variable | Description |
 |----------|-------------|
 | `arango_password` | ArangoDB root password |
-| `jwt_secret` | JWT token signing secret |
 | `session_secret` | Session encryption secret |
 | `translation_cache_password` | Redis cache password |
-| `postgres_password` | Kong PostgreSQL password |
-| `auth_service_username` | Internal microservice auth username |
-| `auth_service_password` | Internal microservice auth password |
+| `postgres_password` | PostgreSQL superuser password |
+| `kong_db_password` | PostgreSQL dedicated Kong user password (must differ from `postgres_password`) |
+| `keycloak_admin_password` | Keycloak master admin console password |
+| `genie_admin_password` | GENIE realm admin user password (frontend admin) |
+| `genie_admin_email` | GENIE realm admin user email (required for email verification) |
+| `keycloak_db_password` | PostgreSQL dedicated Keycloak user password |
+| `keycloak_client_secret` | OIDC client secret for genie-app |
+| `keycloak_proxy_client_secret` | Service account secret for admin API proxy |
+| `kc_dataprep_client_secret` | Dataprep service account secret (client_credentials grant) |
 | `email_password` | SMTP password |
 | `hugging_face_hub_token` | Hugging Face Hub token |
 
@@ -178,6 +183,7 @@ Set in `group_vars/<env>/vars.yml`:
 | `context_option` | `conversation-with-context-labels` | Conversation mode: `conversation-with-context-labels` (full context) or `single-message` (legacy) |
 | `cors_allowed_origins` | `""` | CORS allowed origins |
 | `csp_connect_src` | `""` | Nginx CSP connect sources |
+| `log_level` | `info` | Log level for backend and document-repository: `error`, `warn`, `info`, `debug` |
 
 ### Email Configuration (non-secret)
 
@@ -288,6 +294,24 @@ Set in `group_vars/<env>/vars.yml`:
 |----------|---------|-------------|
 | `label_selector_system_prompt` | (built-in) | System prompt for automatic document labeling (optional, has built-in default with `{labels_list}` placeholder) |
 
+### Keycloak Identity Provider (Required)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `keycloak_realm` | `genie` | Keycloak realm name |
+| `keycloak_client_id` | `genie-app` | OIDC client ID |
+| `keycloak_valid_redirect_uris` | `http://<domain>:<port>/*` | Valid redirect URIs for OIDC |
+| `keycloak_web_origins` | `http://<domain>:<port>` | Allowed web origins |
+| `keycloak_additional_realms` | — | Additional realms to configure (optional) |
+| `keycloak_google_client_id` | — | Google IdP client ID (optional) |
+| `keycloak_google_client_secret` | — | Google IdP client secret (optional, in vault) |
+| `keycloak_microsoft_client_id` | — | Microsoft IdP client ID (optional) |
+| `keycloak_microsoft_client_secret` | — | Microsoft IdP client secret (optional, in vault) |
+
+Keycloak is proxied by NGINX at `/auth/*`. The `keycloak-config` service automatically applies realm configuration (clients, roles, mappers) on startup.
+
+See `docs/keycloak-admin-guide.md` for admin console access and `docs/external-idp-integration-guide.md` for external IdP setup.
+
 ### Let's Encrypt Certificate Management (optional)
 
 | Variable | Default | Description |
@@ -344,7 +368,7 @@ Shared variables in `group_vars/all.yml`:
 |-----|-------------|
 | `install` | Docker, NVIDIA toolkit, Swarm init, registry |
 | `prepare` | Git clone, directories, SSL certs |
-| `build` | Build and push images to local registry |
+| `build` | Build and push 12 images to local registry |
 | `deploy` | Generate .env, validate, deploy stack, verify |
 
 ```bash
@@ -416,13 +440,27 @@ The `deploy` tag automatically verifies:
 3. **Backend health** — polls `/api/health` via HTTPS
 4. **Frontend** — polls `/` via HTTPS
 
-If any running service has 0 replicas, the playbook fails. One-shot services (`kong-config`, `kong-migrations`) and intentionally disabled services (0/0 replicas) are excluded.
+If any running service has 0 replicas, the playbook fails. One-shot services (`kong-config`, `kong-migrations`, `postgres-init`, `keycloak-config`) and intentionally disabled services (0/0 replicas) are excluded.
+
+### Keycloak Verification
+
+After deployment, verify Keycloak is running:
+```bash
+# Check Keycloak service health
+ssh node "docker service ls --filter name=genieai_keycloak"
+
+# Access master admin console
+# URL: https://<NGINX_PUBLIC_DOMAIN>/auth/admin/
+# Username: admin
+# Password: <keycloak_admin_password from vault>
+# Note: GENIE realm admin (genie-admin) has separate credentials (genie_admin_password)
+```
 
 ### Variable Substitution and Resolved Compose File
 
 Docker Swarm (`docker stack deploy`) does **not** automatically load `.env` files like Docker Compose does. To ensure environment variables are correctly substituted:
 
-1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, JWT_SECRET, SESSION_SECRET, POSTGRES_PASSWORD) are set in the `.env` file before deployment
+1. The playbook verifies that critical vault variables (ARANGO_PASSWORD, POSTGRES_PASSWORD, KC_DATAPREP_CLIENT_SECRET) are set in the `.env` file before deployment
 2. It generates a resolved `docker-compose.yaml` with all variables substituted using `docker compose config`
 3. Post-processing fixes known `docker compose config` issues:
    - **Port integers**: `docker compose config` converts published ports to strings (e.g. `"80"` instead of `80`), which Swarm rejects. A `sed` fix restores them to integers.

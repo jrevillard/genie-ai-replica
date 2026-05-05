@@ -22,7 +22,8 @@ function buildContentDisposition(disposition, filename) {
   // Strip CRLF to prevent header injection
   const sanitized = filename.replace(/[\r\n]/g, '');
 
-  const hasNonAscii = /[^\x00-\x7F]/.test(sanitized);
+  // Check for non-ASCII characters without using control characters in regex
+  const hasNonAscii = sanitized.split('').some((char) => char.charCodeAt(0) > 127);
   if (hasNonAscii) {
     const encoded = encodeURIComponent(sanitized).replace(/['()]/g, escape);
     return `${disposition}; filename="${sanitized}"; filename*=UTF-8''${encoded}`;
@@ -60,19 +61,16 @@ const getFilesSchema = Joi.object({
   language: Joi.string().min(2).max(5).optional(),
   mimeType: Joi.string().optional(),
   search: Joi.string().max(100).optional(),
-  dataprepStatus: Joi.string().valid(
-    'pending', 
-    'ingesting', 
-    'ingested', 
-    'ingested with warnings', 
-    'ingestion error', 
-    'retracted', 
-    'killed'
-  ).optional(),
+  dataprepStatus: Joi.string()
+    .valid('pending', 'ingesting', 'ingested', 'ingested with warnings', 'ingestion error', 'retracted', 'killed')
+    .optional()
 });
 
 const updateFileSchema = Joi.object({
-  file_name: Joi.string().max(255).pattern(/^[^\r\n]*$/).optional(),
+  file_name: Joi.string()
+    .max(255)
+    .pattern(/^[^\r\n]*$/)
+    .optional(),
   labels: Joi.array().items(Joi.string()).optional(),
   author: Joi.string().max(200).optional(),
   create_date: Joi.date().optional(),
@@ -87,26 +85,20 @@ const updateFileSchema = Joi.object({
 const ingestionLogSchema = Joi.object({
   level: Joi.string().valid('INFO', 'WARN', 'ERROR').required(),
   stage: Joi.string().required(),
-  message: Joi.string().required(),
+  message: Joi.string().required()
 });
 
 // Schema for status update from OPEA
 // UPDATED: Added 'Killed' to supported statuses
 const updateStatusSchema = Joi.object({
   dataprep: Joi.object({
-    status: Joi.string().valid(
-      'Pending', 
-      'Ingesting', 
-      'Ingested', 
-      'Ingested with Warnings', 
-      'Ingestion Error', 
-      'Retracted', 
-      'Killed'
-    ).required(),
+    status: Joi.string()
+      .valid('Pending', 'Ingesting', 'Ingested', 'Ingested with Warnings', 'Ingestion Error', 'Retracted', 'Killed')
+      .required(),
     ingest_date: Joi.string().isoDate().optional().allow(null, ''),
-    retract_date: Joi.string().isoDate().optional().allow(null, ''),
+    retract_date: Joi.string().isoDate().optional().allow(null, '')
   }).required(),
-  chunk_count: Joi.number().integer().min(0).optional(),
+  chunk_count: Joi.number().integer().min(0).optional()
 });
 
 // Schema for scheduling a site crawl
@@ -130,7 +122,7 @@ class FileController {
     this.viewFileInBrowser = this.viewFileInBrowser.bind(this);
     this.uploadFile = this.uploadFile.bind(this);
     this.uploadMultipleFiles = this.uploadMultipleFiles.bind(this);
-    this.uploadLink = this.uploadLink.bind(this); 
+    this.uploadLink = this.uploadLink.bind(this);
     this.getFiles = this.getFiles.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
     this.searchFiles = this.searchFiles.bind(this);
@@ -141,17 +133,17 @@ class FileController {
     this.retractFile = this.retractFile.bind(this);
     this.ingestMultipleFiles = this.ingestMultipleFiles.bind(this);
     this.retractMultipleFiles = this.retractMultipleFiles.bind(this);
-    
+
     // --- NEW BINDS ---
     this.addIngestionLog = this.addIngestionLog.bind(this);
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
     this.killIngestion = this.killIngestion.bind(this);
-    
+
     // --- CRAWLER BINDS ---
     this.scheduleSiteCrawl = this.scheduleSiteCrawl.bind(this);
     this.getCrawlJob = this.getCrawlJob.bind(this);
-    this.getCrawlMetrics = this.getCrawlMetrics.bind(this); 
+    this.getCrawlMetrics = this.getCrawlMetrics.bind(this);
     this.getCrawlLogs = this.getCrawlLogs.bind(this);
     this.killCrawlTask = this.killCrawlTask.bind(this);
   }
@@ -164,27 +156,25 @@ class FileController {
    */
   _processLabels(body) {
     if (!body.labels) return [];
-    
+
     try {
       let labels = body.labels;
-      
+
       if (typeof labels === 'string') {
         try {
           labels = JSON.parse(labels);
-        } catch (e) {
-          labels = labels.split(',').map(label => label.trim());
+        } catch {
+          labels = labels.split(',').map((label) => label.trim());
         }
       }
-      
+
       // Ensure we have an array
       if (!Array.isArray(labels)) {
         labels = [labels];
       }
-      
+
       // Filter out empty labels and ensure all labels are strings
-      return labels
-        .map(label => String(label).trim())
-        .filter(label => label.length > 0);
+      return labels.map((label) => String(label).trim()).filter((label) => label.length > 0);
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Error processing labels:', error);
       return [];
@@ -217,7 +207,7 @@ class FileController {
    */
   _handleUploadError(error) {
     logger.error('Upload error:', error);
-    
+
     if (error.status) {
       return {
         status: error.status,
@@ -228,9 +218,12 @@ class FileController {
         }
       };
     }
-    
+
     // --- UPDATED: Added specific check for language error ---
-    if (error.message.includes('documents are supported for ingestion') || error.message.includes('conflicting languages')) {
+    if (
+      error.message.includes('documents are supported for ingestion') ||
+      error.message.includes('conflicting languages')
+    ) {
       return {
         status: 400,
         response: {
@@ -251,7 +244,7 @@ class FileController {
         }
       };
     }
-    
+
     if (error.message.includes('File size exceeds')) {
       return {
         status: 400,
@@ -262,7 +255,7 @@ class FileController {
         }
       };
     }
-    
+
     if (error.message.includes('virus')) {
       return {
         status: 400,
@@ -300,16 +293,16 @@ class FileController {
       file_hash: fileRecord.file_hash,
       labels: fileRecord.labels,
       author: fileRecord.author,
-      upload_date: fileRecord.uploaded_date, 
+      upload_date: fileRecord.uploaded_date,
       create_date: fileRecord.create_date,
       crawl_date: fileRecord.crawl_date,
       source_url: fileRecord.source_url,
       language: fileRecord.language,
       chunk_count: fileRecord.chunk_count,
-      dataprep : {
+      dataprep: {
         status: fileRecord.dataprep.status,
         ingest_date: fileRecord.dataprep.ingest_date,
-        retract_date: fileRecord.dataprep.retract_date,
+        retract_date: fileRecord.dataprep.retract_date
       }
     };
   }
@@ -333,7 +326,7 @@ class FileController {
     // retrieve file from database and search actual file on disk
     const file = await metadataService.getMetadataById(fileId);
     logger.debug(`[FILE-CONTROLLER] Retrieved file: ${JSON.stringify(file, null, 2)}`);
-    
+
     if (!file) {
       throw {
         status: 404,
@@ -360,7 +353,7 @@ class FileController {
     // Check if file exists
     try {
       await fs.access(resolvedPath);
-    } catch (error) {
+    } catch {
       throw {
         status: 404,
         error: 'File not found',
@@ -401,7 +394,7 @@ class FileController {
       const { status, response } = this._handleUploadError(error);
       res.status(status).json(response);
     }
-  }
+  };
 
   /**
    * Upload multiple files
@@ -428,20 +421,19 @@ class FileController {
 
       req.body.labels = this._processLabels(req.body);
       const validatedData = this._validateUploadRequest(req.body);
-      const uploadPromises = req.files.map(file => fileService.uploadFile(file, validatedData));
+      const uploadPromises = req.files.map((file) => fileService.uploadFile(file, validatedData));
       const fileRecords = await Promise.all(uploadPromises);
 
       res.status(201).json({
         success: true,
         message: 'Files uploaded successfully',
-        data: fileRecords.map(record => this._formatFileRecord(record))
+        data: fileRecords.map((record) => this._formatFileRecord(record))
       });
     } catch (error) {
       const { status, response } = this._handleUploadError(error);
       res.status(status).json(response);
     }
-  }
-
+  };
 
   uploadLink = async (req, res) => {
     try {
@@ -452,9 +444,9 @@ class FileController {
 
       // Call fileService to handle crawling and saving
       const fileRecord = await fileService.uploadLink(url, fileType);
-      
+
       logger.debug(`[FILE-CONTROLLER] fileRecord: ${fileRecord}`);
-      
+
       res.status(201).json({
         success: true,
         message: 'URL crawled and html file saved successfully',
@@ -464,8 +456,7 @@ class FileController {
       const { status, response } = this._handleUploadError(error);
       res.status(status).json(response);
     }
-  }
-
+  };
 
   /**
    * Get all files with pagination and filtering
@@ -502,7 +493,6 @@ class FileController {
     }
   }
 
-
   /**
    * Download file
    * @param {Object} req - Express request object
@@ -521,7 +511,7 @@ class FileController {
       res.sendFile(path.resolve(filePath));
     } catch (error) {
       logger.error('Download file error:', error);
-      
+
       if (error.status) {
         return res.status(error.status).json({
           success: false,
@@ -540,34 +530,34 @@ class FileController {
 
   async downloadMultipleFiles(req, res) {
     try {
-    const { error, value } = batchFileIdsSchema.validate(req.body);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        error: 'Validation error',
-        message: error.details[0].message
-      });
-    }
-    const { fileIds } = value;
-
-    // Set response headers for ZIP
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename="files.zip"');
-
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.pipe(res);
-
-    for (const fileId of fileIds) {
-      try {
-        const { file, filePath } = await this._getFileAndPath(fileId);
-        archive.file(filePath, { name: file.file_name });
-      } catch (error) {
-        // Optionally, add a text file with error info for missing files
-        archive.append(`Error: Could not find file with ID ${fileId}\n`, { name: `ERROR_${fileId}.txt` });
+      const { error, value } = batchFileIdsSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
       }
-    }
+      const { fileIds } = value;
 
-    archive.finalize();
+      // Set response headers for ZIP
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', 'attachment; filename="files.zip"');
+
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      archive.pipe(res);
+
+      for (const fileId of fileIds) {
+        try {
+          const { file, filePath } = await this._getFileAndPath(fileId);
+          archive.file(filePath, { name: file.file_name });
+        } catch {
+          // Optionally, add a text file with error info for missing files
+          archive.append(`Error: Could not find file with ID ${fileId}\n`, { name: `ERROR_${fileId}.txt` });
+        }
+      }
+
+      archive.finalize();
     } catch (error) {
       logger.error('Download multiple files error:', error);
       res.status(500).json({
@@ -578,14 +568,12 @@ class FileController {
     }
   }
 
-
   async _getFileBase64(fileId) {
     const { file, filePath } = await this._getFileAndPath(fileId);
     const fileBuffer = await fs.readFile(filePath);
     const base64String = fileBuffer.toString('base64');
     return { file, base64String };
   }
-
 
   /**
    * Get file as base64
@@ -611,7 +599,7 @@ class FileController {
       });
     } catch (error) {
       logger.error('Get file as base64 error:', error);
-      
+
       if (error.status) {
         return res.status(error.status).json({
           success: false,
@@ -641,7 +629,7 @@ class FileController {
       res.sendFile(path.resolve(filePath));
     } catch (error) {
       logger.error('View file in browser error:', error);
-      
+
       if (error.status) {
         return res.status(error.status).json({
           success: false,
@@ -657,7 +645,6 @@ class FileController {
       });
     }
   }
-
 
   /**
    * Delete file by ID
@@ -680,30 +667,30 @@ class FileController {
       if (deleted) {
         res.json({
           success: true,
-          message: 'File deleted successfully',
+          message: 'File deleted successfully'
         });
       } else {
         return res.status(404).json({
           success: false,
-          error: error.message || 'An error occurred',
+          error: 'File not found'
         });
       }
     } catch (error) {
       logger.error('Delete file error:', error);
-    
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,
           error: 'File not found',
           message: 'The requested file does not exist'
         });
-      };
+      }
 
       res.status(500).json({
         success: false,
         error: 'Delete failed',
         message: 'An error occurred while deleting the file'
-      })
+      });
     }
   }
 
@@ -745,7 +732,6 @@ class FileController {
       });
     }
   }
-
 
   /**
    * Update file metadata
@@ -794,15 +780,20 @@ class FileController {
 
       // Update file record in database
       const db = await fileService.getDb();
-      const updatedFile = await db.query(`
+      const updatedFile = await db
+        .query(
+          `
         FOR file IN files
         FILTER file.file_id == @fileId
         UPDATE file WITH @updates IN files
         RETURN NEW
-      `, { 
-        fileId,
-        updates: value
-      }).then(cursor => cursor.next());
+      `,
+          {
+            fileId,
+            updates: value
+          }
+        )
+        .then((cursor) => cursor.next());
 
       if (!updatedFile) {
         throw new Error('Failed to update file record');
@@ -815,7 +806,7 @@ class FileController {
       });
     } catch (error) {
       logger.error('Update file error:', error);
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,
@@ -831,7 +822,6 @@ class FileController {
       });
     }
   }
-
 
   /**
    * Search files
@@ -870,24 +860,23 @@ class FileController {
     }
   }
 
-
   /**
    * Search file by metadata
    */
   async searchMetadata(req, res) {
     try {
       const {
-          file_name,
-          file_type,
-          uploaded_date_from,
-          uploaded_date_to,
-          create_date_from,
-          create_date_to,
-          labels,
-          author,
-          status,
-          language
-        } = req.query;
+        file_name,
+        file_type,
+        uploaded_date_from,
+        uploaded_date_to,
+        create_date_from,
+        create_date_to,
+        labels,
+        author,
+        status,
+        language
+      } = req.query;
 
       const allowedFields = [
         'file_name',
@@ -902,9 +891,7 @@ class FileController {
         'language'
       ];
 
-      const invalidFields = Object.keys(req.query).filter(
-        key => !allowedFields.includes(key)
-      );
+      const invalidFields = Object.keys(req.query).filter((key) => !allowedFields.includes(key));
       if (invalidFields.length > 0) {
         return res.status(400).json({
           success: false,
@@ -914,11 +901,7 @@ class FileController {
       }
 
       // Parse labels if present (comma-separated string to array)
-      const labelsArray = labels
-        ? Array.isArray(labels)
-          ? labels
-          : labels.split(',').map(l => l.trim())
-        : [];
+      const labelsArray = labels ? (Array.isArray(labels) ? labels : labels.split(',').map((l) => l.trim())) : [];
 
       const results = await metadataService.searchMetadata(
         file_name,
@@ -944,11 +927,10 @@ class FileController {
       logger.error('Search metadata error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Search failed',
+        error: error.message || 'Search failed'
       });
     }
   }
-
 
   /**
    * Get file metadata by file_id
@@ -983,41 +965,56 @@ class FileController {
       logger.error('Get metadata by ID error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to retrieve metadata',
+        error: error.message || 'Failed to retrieve metadata'
       });
     }
   }
 
-
   // --- Helper for ingesting a single file ---
 
   async _ingestFileById(fileId) {
+    logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:start fileId=${fileId}`);
     const { file, base64String } = await this._getFileBase64(fileId);
+    logger.info(
+      `[TRACE_TMP][doc-repo] _ingestFileById:fileLoaded fileId=${fileId} file_id=${file?.file_id} file_name=${file?.file_name} status=${file?.dataprep?.status}`
+    );
     if (file.dataprep && file.dataprep.status === 'ingested') {
+      logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:skipAlreadyIngested fileId=${fileId}`);
       return { success: false, error: 'File has already been ingested' };
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
+    logger.info(
+      `[TRACE_TMP][doc-repo] _ingestFileById:beforeDataprepPost fileId=${fileId} dataprepUrl=${dataprepUrl} base64Length=${base64String?.length || 0}`
+    );
     logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
     const response = await axios.post(dataprepUrl, {
       fileId: file.file_id,
       fileName: file.file_name,
       fileType: file.file_type,
-      fileLabels:file.labels,
+      fileLabels: file.labels,
       uploadDate: file.uploaded_date,
       storagePath: file.storage_path,
-      fileBase64: base64String,
+      fileBase64: base64String
     });
+    logger.info(
+      `[TRACE_TMP][doc-repo] _ingestFileById:afterDataprepPost fileId=${fileId} status=${response?.status} success=${response?.data?.success} message=${response?.data?.message || ''}`
+    );
     if (response.data.success) {
+      logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:updatingMetadata fileId=${fileId} nextStatus=Ingesting`);
       await metadataService.updateMetadata(fileId, {
         chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
         dataprep: {
           status: 'Ingesting',
           ingest_date: new Date().toISOString(),
-          retract_date: file.dataprep.retract_date || null,
+          retract_date: file.dataprep.retract_date || null
         }
       });
+      logger.info(`[TRACE_TMP][doc-repo] _ingestFileById:success fileId=${fileId}`);
       return { success: true };
     } else {
+      logger.warn(
+        `[TRACE_TMP][doc-repo] _ingestFileById:dataprepReturnedFailure fileId=${fileId} payload=${JSON.stringify(response.data)}`
+      );
       return { success: false, error: response.data };
     }
   }
@@ -1034,16 +1031,17 @@ class FileController {
       }
     } catch (error) {
       logger.error('Ingest file error:', error);
-      
+
       // --- FIXED: Check for 429 Busy status from Dataprep ---
       if (error.response && error.response.status === 429) {
         return res.status(429).json({
           success: false,
           error: 'Too Many Requests',
-          message: "Only a single dataprep job can be run at any given time. Wait until the current job finishes before submitting new jobs"
+          message:
+            'Only a single dataprep job can be run at any given time. Wait until the current job finishes before submitting new jobs'
         });
       }
-      
+
       res.status(500).json({ success: false, error: error.message });
     }
   }
@@ -1051,27 +1049,36 @@ class FileController {
   // --- Multiple file ingest ---
   async ingestMultipleFiles(req, res) {
     try {
+      logger.info('[TRACE_TMP][doc-repo] ingestMultipleFiles:start');
       const { error, value } = batchFileIdsSchema.validate(req.body);
       if (error) {
+        logger.warn(`[TRACE_TMP][doc-repo] ingestMultipleFiles:validationError message=${error.details[0].message}`);
         return res.status(400).json({ success: false, error: 'Validation error', message: error.details[0].message });
       }
       const { fileIds } = value;
+      logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:validated fileCount=${fileIds.length} fileIds=${JSON.stringify(fileIds)}`);
       const results = [];
       for (const fileId of fileIds) {
+        logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:processing fileId=${fileId}`);
         try {
           const result = await this._ingestFileById(fileId);
+          logger.info(
+            `[TRACE_TMP][doc-repo] ingestMultipleFiles:result fileId=${fileId} success=${result?.success} error=${result?.error || ''}`
+          );
           results.push({ fileId, ...result });
         } catch (error) {
+          logger.error(`[TRACE_TMP][doc-repo] ingestMultipleFiles:exception fileId=${fileId} error=${error.message}`, { stack: error.stack });
           results.push({ fileId, success: false, error: error.message });
         }
       }
+      logger.info(`[TRACE_TMP][doc-repo] ingestMultipleFiles:complete results=${JSON.stringify(results)}`);
       res.json({ success: true, results });
     } catch (error) {
+      logger.error(`[TRACE_TMP][doc-repo] ingestMultipleFiles:fatal error=${error.message}`, { stack: error.stack });
       logger.error('Ingest multiple files error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   }
-  
 
   // --- Helper for retracting a single file ---
   async _retractFileById(fileId) {
@@ -1088,7 +1095,7 @@ class FileController {
         dataprep: {
           status: 'retracted',
           ingest_date: file.dataprep.ingest_date || null,
-          retract_date: new Date().toISOString(),
+          retract_date: new Date().toISOString()
         }
       });
       return { success: true };
@@ -1114,7 +1121,6 @@ class FileController {
       res.status(500).json({ success: false, error: error.message });
     }
   }
-
 
   // --- Multiple file retract ---
   async retractMultipleFiles(req, res) {
@@ -1164,7 +1170,6 @@ class FileController {
         message: 'Log entry created',
         data: logEntry
       });
-
     } catch (error) {
       logger.error('Add ingestion log error:', error);
       res.status(500).json({
@@ -1213,7 +1218,7 @@ class FileController {
           message: error.details[0].message
         });
       }
-      
+
       // Use metadataService.updateMetadata to safely update allowed fields
       const updatedFile = await metadataService.updateMetadata(fileId, value);
 
@@ -1222,7 +1227,6 @@ class FileController {
         message: 'File status updated successfully',
         data: updatedFile
       });
-
     } catch (error) {
       logger.error('Update file status error:', error);
       if (error.message.includes('not found')) {
@@ -1244,7 +1248,7 @@ class FileController {
       const { fileId } = req.params;
       // Triggers the signal in genieai_dataprep_microservice.py
       const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}/v1/dataprep/kill_ingest`;
-    
+
       const response = await axios.post(dataprepUrl, { fileId });
       res.json(response.data);
     } catch (error) {
@@ -1261,7 +1265,7 @@ class FileController {
   async scheduleSiteCrawl(req, res) {
     try {
       const { error, value } = scheduleCrawlSchema.validate(req.body);
-      
+
       if (error) {
         return res.status(400).json({
           success: false,
@@ -1271,7 +1275,7 @@ class FileController {
       }
 
       const { url, depth, config } = value;
-      
+
       // Delegate to service (passing config)
       const fileRecord = await fileService.scheduleSiteCrawl(url, depth, config);
 
@@ -1280,7 +1284,6 @@ class FileController {
         message: 'Site crawl scheduled successfully',
         data: this._formatFileRecord(fileRecord)
       });
-
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Schedule crawl error:', error);
       res.status(500).json({
@@ -1302,7 +1305,7 @@ class FileController {
       }
 
       const job = await fileService.getCrawlJobByFileId(fileId);
-      
+
       if (!job) {
         return res.status(404).json({ success: false, error: 'Crawl job not found' });
       }
@@ -1312,7 +1315,6 @@ class FileController {
         message: 'Crawl job retrieved',
         data: job
       });
-
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Get crawl job error:', error);
       res.status(500).json({ success: false, error: error.message });
@@ -1331,7 +1333,7 @@ class FileController {
 
       // Call service
       const metrics = await fileService.getCrawlMetrics(fileId);
-      
+
       if (!metrics) {
         // Return defaults if no metrics found yet
         return res.json({ success: true, data: { crawlRate: 0, processed: 0 } });
@@ -1342,7 +1344,6 @@ class FileController {
         message: 'Crawl metrics retrieved',
         data: metrics
       });
-
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Get crawl metrics error:', error);
       res.status(500).json({ success: false, error: error.message });
@@ -1367,7 +1368,6 @@ class FileController {
         data: logs,
         count: logs.length
       });
-
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Get crawl logs error:', error);
       res.status(500).json({ success: false, error: error.message });
@@ -1390,13 +1390,11 @@ class FileController {
         success: true,
         message: 'Kill signal sent to crawl task'
       });
-
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Kill crawl error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   }
 }
-
 
 module.exports = new FileController();

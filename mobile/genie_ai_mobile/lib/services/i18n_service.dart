@@ -24,7 +24,8 @@ class I18nService extends ChangeNotifier {
 
   I18nService._internal() {
     debugPrint(
-        "[I18N SERVICE] Singleton Initialized. Default Locale: ${_currentLocale.languageCode}");
+      "[I18N SERVICE] Singleton Initialized. Default Locale: ${_currentLocale.languageCode}",
+    );
   }
 
   // Current Locale State (Default to English)
@@ -78,13 +79,15 @@ class I18nService extends ChangeNotifier {
 
     if (_currentLocale.languageCode == languageCode) {
       debugPrint(
-          "[I18N SERVICE] Language is already $languageCode. No change.");
+        "[I18N SERVICE] Language is already $languageCode. No change.",
+      );
       return;
     }
 
     _currentLocale = Locale(languageCode);
     debugPrint(
-        "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...");
+      "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...",
+    );
     notifyListeners();
   }
 

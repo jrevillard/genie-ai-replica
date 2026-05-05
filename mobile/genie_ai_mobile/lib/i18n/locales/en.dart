@@ -196,7 +196,7 @@ const Map<String, dynamic> enLocale = {
     "VN": "Vietnam",
     "YE": "Yemen",
     "ZM": "Zambia",
-    "ZW": "Zimbabwe"
+    "ZW": "Zimbabwe",
   },
   "verification": {
     "verifying": "Verifying your email...",
@@ -209,7 +209,7 @@ const Map<String, dynamic> enLocale = {
     "generalError":
         "An error occurred during verification. Please try again later.",
     "proceedToLogin": "Proceed to Login",
-    "backToLogin": "Back to Login"
+    "backToLogin": "Back to Login",
   },
   "passwordResetConfirm": {
     "appTitle": "Genie AI",
@@ -242,15 +242,15 @@ const Map<String, dynamic> enLocale = {
       "weak": "Weak",
       "fair": "Fair",
       "good": "Good",
-      "strong": "Strong"
+      "strong": "Strong",
     },
     "passwordSuggestions": {
       "atLeast8Chars": "Use at least 8 characters",
       "addUppercase": "Add uppercase letters",
       "addLowercase": "Add lowercase letters",
       "addNumbers": "Add numbers",
-      "addSpecialChars": "Add special characters"
-    }
+      "addSpecialChars": "Add special characters",
+    },
   },
   "passwordReset": {
     "appTitle": "Genie AI",
@@ -266,7 +266,7 @@ const Map<String, dynamic> enLocale = {
     "resetRequestSuccess": "Password reset link has been sent to your email",
     "resetRequestFailed":
         "Unable to send password reset link. Please try again.",
-    "checkEmail": "Please check your email for further instructions."
+    "checkEmail": "Please check your email for further instructions.",
   },
   "register": {
     "appTitle": "Genie AI",
@@ -308,7 +308,8 @@ const Map<String, dynamic> enLocale = {
         "Failed to resend verification email. Please try again.",
     "usernameInvalidChars":
         "Username can only contain letters, numbers, underscores, dots and hyphens",
-    "networkError": "Network error. Please check your connection and try again."
+    "networkError":
+        "Network error. Please check your connection and try again.",
   },
   "login": {
     "appTitle": "Genie AI",
@@ -334,7 +335,7 @@ const Map<String, dynamic> enLocale = {
     "tooManyAttempts": "Too many login attempts. Please try again later.",
     "loginFailed": "Login failed. Please try again.",
     "oauthNotImplemented": "Social login is not yet implemented",
-    "savedLoginNotImplemented": "Saved account login is not yet implemented"
+    "savedLoginNotImplemented": "Saved account login is not yet implemented",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -353,8 +354,8 @@ const Map<String, dynamic> enLocale = {
       "swahili": "Swahili",
       "german": "German",
       "spanish": "Spanish",
-      "arabic": "Arabic"
-    }
+      "arabic": "Arabic",
+    },
   },
   "systemStatus": {
     "title": "Service Status",
@@ -368,20 +369,20 @@ const Map<String, dynamic> enLocale = {
     "checking": "Checking...",
     "nextDeadline": "Next Deadline",
     "days": "days",
-    "viewDetails": "View Details"
+    "viewDetails": "View Details",
   },
   "services": {
     "eCitizen": "eCitizen Portal",
     "taxFiling": "Tax Filing System",
     "idApplication": "ID Application",
     "businessReg": "Business Registration",
-    "drivingLicense": "Driving License"
+    "drivingLicense": "Driving License",
   },
   "deadlines": {
     "taxFiling": "Tax Filing Deadline",
     "businessRenewal": "Business License Renewal",
     "idRenewal": "ID Card Renewal",
-    "vehicleRegistration": "Vehicle Registration Deadline"
+    "vehicleRegistration": "Vehicle Registration Deadline",
   },
   "sidebar": {
     "governmentServices": "Knowledge Areas",
@@ -420,7 +421,7 @@ const Map<String, dynamic> enLocale = {
       "rain": "Rain",
       "shower": "Shower",
       "thunderstorm": "Thunderstorm",
-      "snow": "Snow"
+      "snow": "Snow",
     },
     "folders": "Folders",
     "emptyFolder":
@@ -434,7 +435,7 @@ const Map<String, dynamic> enLocale = {
       "all": "All Chats",
       "folders": "Folders",
       "starred": "Starred",
-      "archived": "Archived"
+      "archived": "Archived",
     },
     "savedChats": "Saved Chats",
     "chats": "Chats",
@@ -492,7 +493,7 @@ const Map<String, dynamic> enLocale = {
     "noConversations": "No conversations found",
     "noStarred": "No starred conversations",
     "noArchived": "No archived conversations",
-    "folderEmptyState": "Folder is empty"
+    "folderEmptyState": "Folder is empty",
   },
   "leftPanel": {
     "cat1": {
@@ -502,8 +503,8 @@ const Map<String, dynamic> enLocale = {
         "National ID cards",
         "Passports",
         "Marriage and death certificates",
-        "Voter registration"
-      ]
+        "Voter registration",
+      ],
     },
     "cat2": {
       "name": "2. Healthcare & Social Services",
@@ -512,8 +513,8 @@ const Map<String, dynamic> enLocale = {
         "Vaccination programs",
         "Health insurance",
         "Disability benefits",
-        "Welfare and food assistance"
-      ]
+        "Welfare and food assistance",
+      ],
     },
     "cat3": {
       "name": "3. Education & Learning",
@@ -521,8 +522,8 @@ const Map<String, dynamic> enLocale = {
         "Public schools and universities",
         "Scholarships and student loans",
         "Adult education programs",
-        "Online learning resources"
-      ]
+        "Online learning resources",
+      ],
     },
     "cat4": {
       "name": "4. Employment & Labor Services",
@@ -530,8 +531,8 @@ const Map<String, dynamic> enLocale = {
         "Job search and unemployment benefits",
         "Worker protections and labor rights",
         "Workplace safety regulations",
-        "Skills training and apprenticeships"
-      ]
+        "Skills training and apprenticeships",
+      ],
     },
     "cat5": {
       "name": "5. Taxes & Revenue",
@@ -539,8 +540,8 @@ const Map<String, dynamic> enLocale = {
         "Income tax filing and refunds",
         "Property tax payments",
         "Business tax compliance",
-        "Customs and import duties"
-      ]
+        "Customs and import duties",
+      ],
     },
     "cat6": {
       "name": "6. Public Safety & Justice",
@@ -548,8 +549,8 @@ const Map<String, dynamic> enLocale = {
         "Police and emergency services",
         "Court and legal aid services",
         "Crime reporting",
-        "Consumer protection laws"
-      ]
+        "Consumer protection laws",
+      ],
     },
     "cat7": {
       "name": "7. Transportation & Mobility",
@@ -557,8 +558,8 @@ const Map<String, dynamic> enLocale = {
         "Driver's licenses and vehicle registration",
         "Public transit and infrastructure",
         "Traffic violations and fines",
-        "Road safety programs"
-      ]
+        "Road safety programs",
+      ],
     },
     "cat8": {
       "name": "8. Housing & Urban Development",
@@ -566,8 +567,8 @@ const Map<String, dynamic> enLocale = {
         "Public housing assistance",
         "Property registration and land records",
         "Housing loans and subsidies",
-        "Zoning and building permits"
-      ]
+        "Zoning and building permits",
+      ],
     },
     "cat9": {
       "name": "9. Utilities & Environment",
@@ -575,8 +576,8 @@ const Map<String, dynamic> enLocale = {
         "Water and electricity services",
         "Waste management and recycling",
         "Environmental regulations",
-        "Renewable energy initiatives"
-      ]
+        "Renewable energy initiatives",
+      ],
     },
     "cat10": {
       "name": "10. Business & Trade",
@@ -584,8 +585,8 @@ const Map<String, dynamic> enLocale = {
         "Business registration and licensing",
         "Trade regulations and permits",
         "Small business grants and incentives",
-        "E-commerce and digital business support"
-      ]
+        "E-commerce and digital business support",
+      ],
     },
     "cat11": {
       "name": "11. Social Security & Pensions",
@@ -593,8 +594,8 @@ const Map<String, dynamic> enLocale = {
         "Retirement benefits",
         "Pension fund management",
         "Survivor benefits",
-        "Disability pensions"
-      ]
+        "Disability pensions",
+      ],
     },
     "cat12": {
       "name": "12. Community & Civic Engagement",
@@ -602,9 +603,9 @@ const Map<String, dynamic> enLocale = {
         "Voting and elections",
         "Public feedback and citizen complaints",
         "Volunteering and community programs",
-        "Local government participation"
-      ]
-    }
+        "Local government participation",
+      ],
+    },
   },
   "settings": {
     "title": "Settings",
@@ -620,7 +621,7 @@ const Map<String, dynamic> enLocale = {
     "languages": {
       "english": "English",
       "french": "French",
-      "swahili": "Swahili"
+      "swahili": "Swahili",
     },
     "theme": "Theme",
     "themes": {"light": "Light", "dark": "Dark", "system": "System"},
@@ -652,14 +653,14 @@ const Map<String, dynamic> enLocale = {
           "This will clear all your profile data and chat history.",
       "confirmReset":
           "Are you sure you want to reset all your data? This cannot be undone.",
-      "resetComplete": "Your data has been reset."
+      "resetComplete": "Your data has been reset.",
     },
     "language": {"title": "Language", "selectLabel": "Display Language"},
     "appearance": {
       "title": "Appearance",
       "lightTheme": "Light",
       "darkTheme": "Dark",
-      "systemTheme": "System"
+      "systemTheme": "System",
     },
     "confirmDeleteAccount":
         "Are you sure you want to delete your account? This action cannot be undone.",
@@ -702,7 +703,7 @@ const Map<String, dynamic> enLocale = {
     "confirmResetUserData":
         "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.",
     "reset": "Reset",
-    "deleteAccountTitle": "Delete Account"
+    "deleteAccountTitle": "Delete Account",
   },
   "userProfile": {
     "title": "User Profile",
@@ -748,7 +749,7 @@ const Map<String, dynamic> enLocale = {
       "tab9": "Social Security & Welfare",
       "tab10": "Criminal & Legal Records",
       "tab11": "Transportation & Mobility",
-      "tab12": "Civic & Political Participation"
+      "tab12": "Civic & Political Participation",
     },
     "tabsShort": {
       "personal": "Personal",
@@ -762,14 +763,14 @@ const Map<String, dynamic> enLocale = {
       "social": "Social",
       "criminal": "Criminal",
       "transport": "Transport",
-      "civic": "Civic"
+      "civic": "Civic",
     },
     "actions": {
       "cancel": "Cancel",
       "save": "Save Profile",
       "previous": "Previous",
       "next": "Next",
-      "saving": "Saving..."
+      "saving": "Saving...",
     },
     "fields": {
       "fullName": "Full name (including aliases)",
@@ -843,7 +844,7 @@ const Map<String, dynamic> enLocale = {
       "electionHistory": "Election participation history",
       "partyMembership": "Political party membership",
       "militaryStatus": "Military service or conscription status",
-      "publicServiceRoles": "Public service roles"
+      "publicServiceRoles": "Public service roles",
     },
     "placeholders": {
       "fullName": "Enter your full legal name",
@@ -853,7 +854,7 @@ const Map<String, dynamic> enLocale = {
       "searchDisciplines": "Search disciplines...",
       "selectDiscipline": "Select a discipline",
       "searchDegrees": "Search degrees...",
-      "selectDegree": "Select a degree"
+      "selectDegree": "Select a degree",
     },
     "validation": {
       "nameRequired": "Full name is required",
@@ -864,7 +865,7 @@ const Map<String, dynamic> enLocale = {
       "futureDate": "Date cannot be in the future",
       "invalidSelection": "Please make a valid selection",
       "passwordLength": "Password must be at least 8 characters",
-      "matchError": "Fields do not match"
+      "matchError": "Fields do not match",
     },
     "errors": {
       "savingFailed": "Failed to save profile",
@@ -873,7 +874,7 @@ const Map<String, dynamic> enLocale = {
       "invalidFileType": "Invalid file type",
       "fileTooLarge": "File is too large",
       "countryLoadError": "Error loading countries",
-      "countryUpdateError": "Error updating country"
+      "countryUpdateError": "Error updating country",
     },
     "notifications": {
       "saveSuccess": "Profile saved successfully",
@@ -886,7 +887,7 @@ const Map<String, dynamic> enLocale = {
       "formChanged": "You have unsaved changes",
       "sessionExpired": "Your session has expired, please log in again",
       "profileUpdated": "Your profile has been updated",
-      "profileIncomplete": "Your profile is incomplete"
+      "profileIncomplete": "Your profile is incomplete",
     },
     "instructions": {
       "fullNameHelp":
@@ -902,7 +903,7 @@ const Map<String, dynamic> enLocale = {
       "nextTab": "Continue to next section",
       "previousTab": "Return to previous section",
       "saveInstructions": "Click Save to store your information",
-      "cancelInstructions": "Click Cancel to discard changes"
+      "cancelInstructions": "Click Cancel to discard changes",
     },
     "completionStatus": {
       "notStarted": "Not Started",
@@ -910,26 +911,26 @@ const Map<String, dynamic> enLocale = {
       "complete": "Complete",
       "percentComplete": "{percent}% complete",
       "tabsCompleted": "{completed} of {total} sections completed",
-      "tabComplete": "Tab completed!"
+      "tabComplete": "Tab completed!",
     },
     "gender": {
       "male": "Male",
       "female": "Female",
       "other": "Other",
-      "preferNot": "Prefer not to say"
+      "preferNot": "Prefer not to say",
     },
     "maritalStatus": {
       "single": "Single",
       "married": "Married",
       "divorced": "Divorced",
       "widowed": "Widowed",
-      "other": "Other"
+      "other": "Other",
     },
     "residencyStatuses": {
       "citizen": "Citizen",
       "permanentResident": "Permanent Resident",
       "temporaryResident": "Temporary Resident",
-      "other": "Other"
+      "other": "Other",
     },
     "employmentStatuses": {
       "employed": "Employed",
@@ -938,7 +939,7 @@ const Map<String, dynamic> enLocale = {
       "student": "Student",
       "retired": "Retired",
       "homemaker": "Homemaker",
-      "other": "Other"
+      "other": "Other",
     },
     "educationLevels": {
       "primary": "Primary Education",
@@ -950,14 +951,14 @@ const Map<String, dynamic> enLocale = {
       "master": "Master's Degree",
       "doctoral": "Doctoral Degree",
       "professional": "Professional Degree",
-      "other": "Other"
+      "other": "Other",
     },
     "proficiencyLevels": {
       "native": "Native",
       "fluent": "Fluent",
       "advanced": "Advanced",
       "intermediate": "Intermediate",
-      "basic": "Basic"
+      "basic": "Basic",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -968,7 +969,7 @@ const Map<String, dynamic> enLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
     },
     "languages": {
       "english": "English",
@@ -983,7 +984,7 @@ const Map<String, dynamic> enLocale = {
       "russian": "Russian",
       "hindi": "Hindi",
       "urdu": "Urdu",
-      "other": "Other"
+      "other": "Other",
     },
     "yesNo": {"yes": "Yes", "no": "No"},
     "select": "Please select",
@@ -1090,7 +1091,7 @@ const Map<String, dynamic> enLocale = {
       "Veterinary Medicine",
       "Web Development",
       "Wildlife Biology",
-      "Zoology"
+      "Zoology",
     ],
     "degreeOptions": [
       "Associate Degree",
@@ -1120,7 +1121,7 @@ const Map<String, dynamic> enLocale = {
       "Vocational Certificate",
       "Graduate Certificate",
       "Post-Graduate Diploma",
-      "Post-Doctoral"
+      "Post-Doctoral",
     ],
     "aria": {
       "tabList": "Profile form sections",
@@ -1129,8 +1130,8 @@ const Map<String, dynamic> enLocale = {
       "closeButton": "Close profile form",
       "saveButton": "Save profile data",
       "requiredField": "Required field",
-      "dropdownSelect": "Select an option"
-    }
+      "dropdownSelect": "Select an option",
+    },
   },
   "chatbot": {
     "placeholder": "Type your query here...",
@@ -1194,10 +1195,10 @@ const Map<String, dynamic> enLocale = {
         "discardAndNew": "Discard & New",
         "discardAndLoad": "Discard & Load",
         "saveFirst": "Save First",
-        "export": "Export"
-      }
+        "export": "Export",
+      },
     },
-    "shareWhatsApp": "Share on WhatsApp"
+    "shareWhatsApp": "Share on WhatsApp",
   },
   "quickhelp": {
     // Labels (Short for UI)
@@ -1256,7 +1257,7 @@ const Map<String, dynamic> enLocale = {
         "I want to find out about the Affordable Housing Program (Boma Yangu) in Kenya.",
     "findJobsUserPrompt":
         "I want to ask about government job opportunities and PSC applications in Kenya.",
-    "justChatUserPrompt": "I want to chat generally about life in Kenya."
+    "justChatUserPrompt": "I want to chat generally about life in Kenya.",
   },
   "common": {
     "cancel": "Cancel",
@@ -1272,7 +1273,7 @@ const Map<String, dynamic> enLocale = {
     "open": "Open",
     "done": "Done",
     "confirm": "Confirm",
-    "edit": "Edit"
+    "edit": "Edit",
   },
   "feedback": {
     "title": "Feedback",
@@ -1286,7 +1287,7 @@ const Map<String, dynamic> enLocale = {
     "thankYouMessage": "Thank you for your feedback!",
     "submitting": "Submitting...",
     "error": "Something went wrong. Please try again.",
-    "success": "Thank you for your feedback!"
+    "success": "Thank you for your feedback!",
   },
   "responseRating": {
     "title": "Help Us Improve",
@@ -1298,11 +1299,11 @@ const Map<String, dynamic> enLocale = {
       "2": "Slightly Helpful",
       "3": "Moderately Helpful",
       "4": "Very Helpful",
-      "5": "Life Changing"
+      "5": "Life Changing",
     },
     "additionalComments": "Additional comments...",
     "submit": "Submit",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
   },
   "upload": {"alt": "Upload"},
   "uploadDialog": {
@@ -1320,8 +1321,8 @@ const Map<String, dynamic> enLocale = {
           "Shortcut files (.url) are not supported. Please drag the actual file.",
       "duplicate": "File \"{fileName}\" has already been added.",
       "uploadSuccess": "Successfully uploaded {fileName}",
-      "uploadFailed": "Failed to upload {fileName}."
-    }
+      "uploadFailed": "Failed to upload {fileName}.",
+    },
   },
   "about": {
     "title": "About",
@@ -1329,6 +1330,6 @@ const Map<String, dynamic> enLocale = {
     "description":
         "Genie AI is your intelligent assistant for navigating government services and information.",
     "techStack": "Tech Stack",
-    "copyright": "All rights reserved."
-  }
+    "copyright": "All rights reserved.",
+  },
 };

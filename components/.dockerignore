@@ -25,3 +25,7 @@ Thumbs.db
 
 # Tests
 tests/
+
+# Exclude backend local symlink to shared lib (conflicts with Dockerfile COPY)
+gov-chat-backend/shared-lib
+gov-chat-backend/shared-lib/**

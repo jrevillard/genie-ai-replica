@@ -15,27 +15,25 @@ export default {
     return {
       currentLocale: this.$i18n.locale,
       localeNames: localeNames
-    }
+    };
   },
   watch: {
     '$i18n.locale'(newLocale) {
-      this.currentLocale = newLocale
+      this.currentLocale = newLocale;
     }
   },
   methods: {
     changeLanguage() {
-      this.$i18n.locale = this.currentLocale
+      if (!this.$i18n) return;
+      this.$i18n.locale = this.currentLocale;
       try {
-        localStorage.setItem('userLocale', this.currentLocale)
-        window.dispatchEvent(new CustomEvent('languageChanged', {
-          detail: { language: this.currentLocale }
-        }))
+        localStorage.setItem('userLocale', this.currentLocale);
       } catch (e) {
-        console.warn('Unable to save locale preference:', e)
+        console.warn('Unable to save locale preference:', e);
       }
     }
   }
-}
+};
 </script>
 
 <style scoped>

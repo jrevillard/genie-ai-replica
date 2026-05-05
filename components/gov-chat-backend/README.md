@@ -538,7 +538,7 @@ app.use(morgan(customFormat));
 
 // Route-specific middleware
 app.use('/api/admin', authMiddleware.authenticate, authMiddleware.isAdmin);
-app.use('/api/users', authMiddleware.authenticate);
+app.use('/api/me', authMiddleware.authenticate);
 ```
 
 ## Shared Libraries
@@ -948,16 +948,10 @@ sequenceDiagram
 
 ### Security Features
 
-#### JWT Token Security
+#### Token Security
 ```javascript
-// JWT token generation with user context
-const token = jwt.sign({
-  userId: user._key,
-  loginName: user.loginName,
-  email: user.email
-}, process.env.JWT_SECRET, { 
-  expiresIn: process.env.JWT_EXPIRES_IN || '24h' 
-});
+// OIDC token validation with user context via Keycloak
+const userInfo = await keycloak.grantManager.validateAccessToken(token);
 ```
 
 #### Role-Based Authorization
@@ -1001,7 +995,7 @@ graph TB
         CHAT_API["/api/chat-history<br/>Conversations"]
         ANALYTICS_API["/api/analytics<br/>Metrics"]
         ADMIN_API["/api/admin<br/>Administration"]
-        USER_API["/api/users<br/>User Management"]
+        USER_API["/api/me<br/>User Profile"]
     end
     
     subgraph "Route Handlers"

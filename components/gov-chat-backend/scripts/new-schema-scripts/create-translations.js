@@ -59,7 +59,7 @@ const { Translate } = require('@google-cloud/translate').v2;
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const crypto = require('crypto');
+const nodeCrypto = require('crypto');
 require('dotenv').config();
 
 // --- Internal Translation Service Client ---
@@ -130,7 +130,7 @@ class InternalTranslationClient {
    * @returns {string} The hashed password
    */
   hashPassword(password) {
-    return crypto
+    return nodeCrypto
       .createHash('sha256')
       .update(password)
       .digest('hex');
@@ -259,7 +259,7 @@ class TranslationCreator {
       const credentialsRaw = fs.readFileSync(path.resolve(credentialsPath), 'utf8');
       credentials = JSON.parse(credentialsRaw);
     } catch (error) {
-      throw new Error(`Failed to read Google credentials from ${credentialsPath}: ${error.message}`);
+      throw new Error(`Failed to read Google credentials from ${credentialsPath}: ${error.message}`, { cause: error });
     }
 
     // Map service account fields to expected names

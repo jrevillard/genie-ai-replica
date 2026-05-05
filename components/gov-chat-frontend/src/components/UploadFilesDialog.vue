@@ -78,9 +78,9 @@
 </template>
 
 <script>
-import documentFileService from '../services/documentFileService.js'
-import { eventBus } from '../eventBus.js'
-import { formatFileSize } from '../utils/fileUtils.js'
+import documentFileService from '../services/documentFileService.js';
+import { eventBus } from '../eventBus.js';
+import { formatFileSize } from '../utils/fileUtils.js';
 
 export default {
   name: 'UploadFilesDialog',
@@ -92,77 +92,77 @@ export default {
       isUploading: false,
       errorMessage: '', // --- ADDED ---
       // MODIFIED per Spec 4.2
-      allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
-    }
+      allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt']
+    };
   },
   methods: {
     formatFileSize,
     // --- ADDED: Translation Method ---
     translate(key, fallback) {
       if (this.$i18n && this.$i18n.t) {
-        const translation = this.$i18n.t(key)
+        const translation = this.$i18n.t(key);
         if (translation === key) {
-          return fallback || key
+          return fallback || key;
         }
-        return translation
+        return translation;
       }
-      return fallback || key
+      return fallback || key;
     },
     // --- Existing Methods ---
     openFileDialog() {
-      this.$refs.fileInput.click()
+      this.$refs.fileInput.click();
     },
     handleFileSelect(event) {
-      this.errorMessage = '' // --- ADDED ---
-      this.addFiles([...event.target.files])
-      event.target.value = ''
+      this.errorMessage = ''; // --- ADDED ---
+      this.addFiles([...event.target.files]);
+      event.target.value = '';
     },
     handleDrop(event) {
-      this.isDragging = false
-      this.errorMessage = '' // --- ADDED ---
-      event.preventDefault()
-      const droppedFiles = []
+      this.isDragging = false;
+      this.errorMessage = ''; // --- ADDED ---
+      event.preventDefault();
+      const droppedFiles = [];
       if (event.dataTransfer.items) {
         for (let i = 0; i < event.dataTransfer.items.length; i++) {
-          const item = event.dataTransfer.items[i]
+          const item = event.dataTransfer.items[i];
           if (item.kind === 'file') {
-            const file = item.getAsFile()
+            const file = item.getAsFile();
             if (file) {
-              droppedFiles.push(file)
+              droppedFiles.push(file);
             }
           }
         }
       } else {
-        droppedFiles.push(...event.dataTransfer.files)
+        droppedFiles.push(...event.dataTransfer.files);
       }
       if (droppedFiles.length > 0) {
-        this.addFiles(droppedFiles)
+        this.addFiles(droppedFiles);
       } else {
         // --- UPDATED ---
         const errorMsg = this.translate(
           'uploadDialog.notifications.dropError',
           'Only files can be dropped. Please check you are dragging a valid file from your computer.'
-        )
-        this.errorMessage = errorMsg // --- ADDED ---
-        this.showNotification(errorMsg, 'error')
+        );
+        this.errorMessage = errorMsg; // --- ADDED ---
+        this.showNotification(errorMsg, 'error');
       }
     },
     addFiles(newFiles) {
       // Clear previous validation errors when adding new files
-      this.errorMessage = '' // --- ADDED ---
+      this.errorMessage = ''; // --- ADDED ---
 
       newFiles.forEach((file) => {
-        const extension = '.' + file.name.split('.').pop().toLowerCase()
+        const extension = '.' + file.name.split('.').pop().toLowerCase();
 
         if (!this.allowedExtensions.includes(extension)) {
           // --- UPDATED ---
           const errorMsg = this.translate(
             'uploadDialog.notifications.typeNotAllowed',
             `File type "{extension}" is not allowed.`
-          ).replace('{extension}', extension)
-          this.errorMessage = errorMsg // --- ADDED ---
-          this.showNotification(errorMsg, 'error')
-          return
+          ).replace('{extension}', extension);
+          this.errorMessage = errorMsg; // --- ADDED ---
+          this.showNotification(errorMsg, 'error');
+          return;
         }
 
         if (file.name.toLowerCase().endsWith('.url')) {
@@ -170,10 +170,10 @@ export default {
           const errorMsg = this.translate(
             'uploadDialog.notifications.shortcutUnsupported',
             'Shortcut files (.url) are not supported. Please drag the actual file.'
-          )
-          this.errorMessage = errorMsg // --- ADDED ---
-          this.showNotification(errorMsg, 'error')
-          return
+          );
+          this.errorMessage = errorMsg; // --- ADDED ---
+          this.showNotification(errorMsg, 'error');
+          return;
         }
 
         if (this.files.some((f) => f.name === file.name && f.size === file.size)) {
@@ -184,34 +184,34 @@ export default {
               file.name
             ),
             'info'
-          )
-          return
+          );
+          return;
         }
 
-        this.files.push(file)
-      })
+        this.files.push(file);
+      });
     },
     removeFile(index) {
-      this.files.splice(index, 1)
-      this.errorMessage = '' // --- ADDED ---
+      this.files.splice(index, 1);
+      this.errorMessage = ''; // --- ADDED ---
     },
     onDragOver() {
-      this.isDragging = true
+      this.isDragging = true;
     },
     onDragLeave() {
-      this.isDragging = false
+      this.isDragging = false;
     },
     async handleUpload() {
-      this.isUploading = true
-      this.errorMessage = '' // --- ADDED ---
-      const successfulUploads = []
+      this.isUploading = true;
+      this.errorMessage = ''; // --- ADDED ---
+      const successfulUploads = [];
 
       for (const file of this.files) {
         try {
-          const formData = new FormData()
-          formData.append('file', file)
-          await documentFileService.uploadFile(formData)
-          successfulUploads.push(file.name)
+          const formData = new FormData();
+          formData.append('file', file);
+          await documentFileService.uploadFile(formData);
+          successfulUploads.push(file.name);
           // UPDATED
           this.showNotification(
             this.translate('uploadDialog.notifications.uploadSuccess', `Successfully uploaded {fileName}`).replace(
@@ -219,7 +219,7 @@ export default {
               file.name
             ),
             'success'
-          )
+          );
         } catch (error) {
           // --- THIS IS THE KEY FIX ---
           // Robustly extract the specific error message from the backend.
@@ -230,34 +230,34 @@ export default {
             this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace(
               '{fileName}',
               file.name
-            ) // 4. Fallback
+            ); // 4. Fallback
 
           // --- UPDATED ---
-          this.errorMessage = backendMessage // --- ADDED: Show error in the dialog box
-          this.showNotification(backendMessage, 'error')
+          this.errorMessage = backendMessage; // --- ADDED: Show error in the dialog box
+          this.showNotification(backendMessage, 'error');
 
-          console.error(`Error uploading ${file.name}. Displayed message:`, backendMessage)
-          console.error(`Full error object for ${file.name}:`, error)
+          console.error(`Error uploading ${file.name}. Displayed message:`, backendMessage);
+          console.error(`Full error object for ${file.name}:`, error);
           if (error.response) {
-            console.error('Error response data:', error.response.data)
+            console.error('Error response data:', error.response.data);
           }
           // --- END FIX ---
         }
       }
-      this.isUploading = false
+      this.isUploading = false;
       if (successfulUploads.length > 0) {
-        this.$emit('files-uploaded', successfulUploads)
+        this.$emit('files-uploaded', successfulUploads);
       }
       // Only close if ALL files were uploaded successfully
       if (successfulUploads.length === this.files.length && this.files.length > 0) {
-        this.$emit('close')
+        this.$emit('close');
       }
     },
     showNotification(message, type = 'success') {
-      eventBus.$emit('notification:show', { message, type })
-    },
-  },
-}
+      eventBus.$emit('notification:show', { message, type });
+    }
+  }
+};
 </script>
 
 <style scoped>

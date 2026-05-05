@@ -34,7 +34,7 @@ classification:
       - 'document-repository (Node.js)'
       - 'genie_ai_mobile (Flutter/Dart)'
     deploymentTargets: ['Docker Compose', 'Docker Swarm', 'Kubernetes']
-    testEcosystems: ['Jest', 'pytest', 'Vue Test Utils', 'Flutter test', 'Patrol', 'Playwright', 'Pact', 'fast-check', 'Hypothesis']
+    testEcosystems: ['Jest', 'pytest', 'Vue Test Utils', 'Flutter test', 'Patrol', 'Playwright', 'fast-check', 'Hypothesis']
     existingCoverage: 'Sparse — backend auth-only, frontend stores-only, OPEA zero, mobile service-layer-only, E2E auth-only, CI/CD zero'
   testingPhilosophy: >
     Interface-based: treat each layer and component as an interface with specific
@@ -145,7 +145,7 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 - Frontend test suite: component tests for critical UI flows, store/service tests
 - OPEA microservice test suite: pytest for retriever, dataprep, reranker, core (interface tests with mocked dependencies); Hypothesis property-based tests for parsers; golden/master tests for pipeline outputs
 - Document-repository test suite: route handler tests, middleware tests
-- Pact contract tests: consumer contracts for backend→OPEA and frontend→backend interactions; provider verification as CI gate
+- OpenAPI schema validation: express-openapi-validator (backend), spectral spec linting (CI), openapi-typescript-codegen (frontend typed client), pytest schema checks (OPEA)
 - Configuration validation suite: env template schema validation, docker-compose var coverage
 - Mobile test suite: existing service-layer tests integrated into CI
 - Test instrumentation patterns: structured log assertions, trace context propagation in test fixtures (MELT-ready hooks for Sprint 23)
@@ -288,7 +288,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 **Test Framework Architecture:** 6 independent test ecosystems (Jest, pytest, Vue Test Utils, Flutter test, Patrol, Playwright) orchestrated by a unified CI pipeline. Shared test infrastructure: fixtures, mocks, test data, configuration profiles. MELT-ready instrumentation hooks in all test frameworks. AI-assisted test generation tooling to maximize coverage with limited resources.
 
-**Contract Testing (Pact):** Consumer-driven contract tests between backend and OPEA microservices, and between frontend and backend API. Each consumer publishes its expectations; providers verify against all consumer contracts. Prevents mock-reality drift that silently breaks inter-service communication. Pact JS for Node.js consumers, Pact Python for OPEA providers.
+**Contract Testing (OpenAPI Schema Validation):** Code-first approach — swagger-jsdoc annotations in route files generate the OpenAPI spec. express-openapi-validator reads the generated spec and validates requests/responses at runtime. OPEA FastAPI services auto-generate OpenAPI 3.1 from Pydantic models. Spectral lints the generated spec in CI. openapi-typescript-codegen produces a typed frontend client from the backend spec. No manual yaml maintenance — the spec is always a derived artifact from code annotations.
 
 **Property-Based Testing:** Generative testing for data transformation and validation logic — fast-check (JS) for backend config validators and data mappers, Hypothesis (Python) for dataprep parsers (chunking, extraction, labeling). Catches edge cases that example-based tests miss with zero manual test case authoring.
 
@@ -306,11 +306,11 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 ### Component-Specific Test Requirements
 
-**gov-chat-backend (Node.js/Express, CommonJS):** Jest with `__tests__/*.test.js` convention. Supertest for route handler integration tests (requires `createApp()` export from `index.js`). Mock ArangoDB, Redis, Keycloak, and OPEA service calls via `__tests__/mocks/`. API contract tests validating request/response schemas per route. fast-check for property-based tests on config validators, data mappers, and input sanitizers. Pact consumer tests for backend-to-OPEA service contracts.
+**gov-chat-backend (Node.js/Express, CommonJS):** Jest with `__tests__/*.test.js` convention. Supertest for route handler integration tests (requires `createApp()` export from `index.js`). Mock ArangoDB, Redis, Keycloak, and OPEA service calls via `__tests__/mocks/`. API contract tests validating request/response schemas per route against OpenAPI 3.1 spec. fast-check for property-based tests on config validators, data mappers, and input sanitizers. express-openapi-validator for runtime request/response validation against the swagger-jsdoc generated spec.
 
-**gov-chat-frontend (Vue 3, Options API):** Jest + @vue/test-utils with `src/__tests__/*.test.js` convention. Component tests for critical UI flows (ChatBotComponent, NavBarComponent, UserProfileComponent). Vuex store tests (extend existing coverage). Service tests with mocked HTTP responses. Options API constraints: `mount()` with full store setup, no Composition API patterns. Playwright screenshot comparison for visual regression on critical components. Pact consumer tests for frontend-to-backend API contracts.
+**gov-chat-frontend (Vue 3, Options API):** Jest + @vue/test-utils with `src/__tests__/*.test.js` convention. Component tests for critical UI flows (ChatBotComponent, NavBarComponent, UserProfileComponent). Vuex store tests (extend existing coverage). Service tests with mocked HTTP responses. Options API constraints: `mount()` with full store setup, no Composition API patterns. Playwright screenshot comparison for visual regression on critical components. openapi-typescript-codegen produces a typed HTTP client from the backend OpenAPI spec — type errors caught at build time.
 
-**genie-ai-overlay (Python/FastAPI, OPEA custom overlay):** pytest with `tests/*.py` convention. httpx ASGI test client for FastAPI endpoint testing. Interface tests with mocked dependencies (ArangoDB, Redis, vLLM, TEI). Custom overlay-specific tests: hybrid retrieval logic (vector + graph + labels), custom ingestion pipeline, custom dataprep. Hypothesis for property-based tests on parsers (chunking, extraction, labeling, embedding dimension validation). Golden/master tests for RAG pipeline stage outputs with version-controlled baselines. Pact provider tests verifying backend consumer contracts. Copyright headers required on all test files.
+**genie-ai-overlay (Python/FastAPI, OPEA custom overlay):** pytest with `tests/*.py` convention. httpx ASGI test client for FastAPI endpoint testing. Interface tests with mocked dependencies (ArangoDB, Redis, vLLM, TEI). Custom overlay-specific tests: hybrid retrieval logic (vector + graph + labels), custom ingestion pipeline, custom dataprep. Hypothesis for property-based tests on parsers (chunking, extraction, labeling, embedding dimension validation). Golden/master tests for RAG pipeline stage outputs with version-controlled baselines. OpenAPI schema validation for provider endpoints. Copyright headers required on all test files.
 
 **document-repository (Node.js):** Jest with Supertest for route handler tests. File upload/download/delete endpoint tests. ClamAV integration tests (EICAR test file). Metadata and label service tests (extend existing coverage to route integration).
 
@@ -479,28 +479,29 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 - FR51: The benchmarking suite measures API endpoint latency (p50, p95, p99) and throughput under load using k6 or equivalent, producing baseline reports for regression detection
 
-### Contract Testing (Pact)
+### Contract Testing (OpenAPI Schema Validation)
 
-- FR52: Backend publishes Pact consumer contracts for all OPEA microservice interactions (ChatQnA, Retriever, Dataprep, Reranker); OPEA providers verify against all consumer contracts in CI
-- FR53: Frontend publishes Pact consumer contracts for backend API routes; backend verifies as provider in CI
-- FR54: Contract verification runs as a mandatory CI gate — provider verification failure blocks the merge request
+- FR52: express-openapi-validator validates backend requests and responses against the OpenAPI spec generated by swagger-jsdoc annotations; validation errors return RFC 9457 compliant error responses
+- FR53: Spectral lints the generated OpenAPI spec in CI; spec errors or breaking changes block the merge request
+- FR54: openapi-typescript-codegen generates a typed HTTP client for the frontend from the backend OpenAPI spec; build fails on type mismatches
+- FR55: OPEA provider endpoints validate request/response schemas against their native FastAPI-generated OpenAPI 3.1 spec in pytest
 
 ### Property-Based Testing
 
-- FR55: Backend config validators and data mappers use fast-check property-based tests generating random inputs, catching edge cases beyond manual examples
-- FR56: OPEA dataprep parsers (chunking, extraction, labeling) use Hypothesis property-based tests generating random document formats and content boundaries
+- FR56: Backend config validators and data mappers use fast-check property-based tests generating random inputs, catching edge cases beyond manual examples
+- FR57: OPEA dataprep parsers (chunking, extraction, labeling) use Hypothesis property-based tests generating random document formats and content boundaries
 
 ### Golden/Master Testing (OPEA)
 
-- FR57: RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses) have version-controlled golden files; CI compares pipeline output against golden on every change to the AI layer
+- FR58: RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses) have version-controlled golden files; CI compares pipeline output against golden on every change to the AI layer
 
 ### Visual Regression Testing
 
-- FR58: Critical frontend components (ChatBot, NavBar, UserProfile) have baseline screenshots stored in the repository; Playwright screenshot comparison detects pixel-level changes on every merge request
+- FR59: Critical frontend components (ChatBot, NavBar, UserProfile) have baseline screenshots stored in the repository; Playwright screenshot comparison detects pixel-level changes on every merge request
 
 ### Mutation Testing (Growth)
 
-- FR59: Stryker mutation testing runs on a scheduled basis (weekly), reporting mutation score per component; components below 80% mutation score generate a task for test improvement
+- FR60: Stryker mutation testing runs on a scheduled basis (weekly), reporting mutation score per component; components below 80% mutation score generate a task for test improvement
 
 ## Non-Functional Requirements
 

@@ -171,7 +171,7 @@ The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing f
 - Automated test generation from OpenAPI specs and code changes
 - Chaos engineering tests for deployment resilience
 - SBOM/SLSA compliance test integration
-- Contract testing with Pact for inter-service boundaries
+- Contract testing with OpenAPI for inter-service boundaries
 - MELT-driven continuous quality validation: metrics from test runs feed anomaly detection, alerting on degradation trends, and automated regression detection without explicit test cases
 
 ## User Journeys
@@ -364,7 +364,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - Automated test generation from OpenAPI specs and code changes
 - Chaos engineering tests for deployment resilience
 - SBOM/SLSA compliance test integration
-- Contract testing with Pact for inter-service boundaries
+- Contract testing with OpenAPI for inter-service boundaries
 - MELT-driven continuous quality validation (anomaly detection, degradation trending)
 
 ### Risk Mitigation Strategy
@@ -470,7 +470,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - FR47: The verification suite validates service topology and placement constraints against a Docker Swarm deployment, verifying node labels (`gateway=true`, `gpu=true`, `genieai=true`) and healthcheck behavior
 - FR48: The verification suite validates service discovery, networking, and configuration against a Kubernetes deployment, verifying resource limits, health probes, and ConfigMap/Secret mounting
 
-### E2E Expansion (Growth)
+### E2E Playwright Testing (Sprint 23)
 
 - FR49: The E2E test suite covers chatbot interaction flows (send message, receive RAG response, conversation history) via Playwright against a deployed stack
 - FR50: The E2E test suite covers document upload, processing, and search flows (upload PDF, verify ingestion, search and retrieve) via Playwright against a deployed stack

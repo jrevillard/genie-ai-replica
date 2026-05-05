@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { PlusSignIcon, Search01Icon, SparklesIcon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, PlusSignIcon, Search01Icon, SparklesIcon } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
 import { notify } from '../lib/notify';
 import AiTwinCard from '../components/dashboard/AiTwinCard.vue';
 import CreateAiTwinDialog from '../components/dashboard/CreateAiTwinDialog.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
-import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
+import AiTwinCardSkeleton from '../components/ui/skeletons/AiTwinCardSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
@@ -75,6 +75,16 @@ async function onCreated(payload: { name: string; description: string; avatarFil
               rounded="full"
             >
               <template #leading><Icon :icon="Search01Icon" :size="18" /></template>
+              <template v-if="search" #trailing>
+                <button
+                  type="button"
+                  class="-my-1.5 grid h-7 w-7 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-text"
+                  aria-label="Clear search"
+                  @click="search = ''"
+                >
+                  <Icon :icon="Cancel01Icon" :size="14" />
+                </button>
+              </template>
             </BaseInput>
           </div>
         </div>
@@ -85,7 +95,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
       </header>
 
       <div v-if="loading && !filtered.length" class="grid gap-4 lg:grid-cols-2">
-        <BaseSkeleton v-for="n in 4" :key="n" height="11rem" />
+        <AiTwinCardSkeleton v-for="n in 4" :key="n" />
       </div>
 
       <div v-else-if="filtered.length" class="grid gap-4 lg:grid-cols-2">

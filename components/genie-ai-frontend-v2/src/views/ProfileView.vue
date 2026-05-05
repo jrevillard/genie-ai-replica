@@ -13,7 +13,7 @@ import { sileo } from '../lib/notify';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
-import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
+import ProfileHeaderSkeleton from '../components/ui/skeletons/ProfileHeaderSkeleton.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { useAuthStore } from '../stores/auth';
@@ -131,10 +131,7 @@ async function onSubmit() {
           </div>
 
           <div class="min-w-0 flex-1 pt-2">
-            <div v-if="refreshing && !user" class="space-y-2">
-              <BaseSkeleton height="1.5rem" width="14rem" />
-              <BaseSkeleton height="1rem" width="10rem" />
-            </div>
+            <ProfileHeaderSkeleton v-if="refreshing && !user" />
             <template v-else>
               <h1 class="truncate text-2xl font-semibold text-slate-900">{{ displayName }}</h1>
               <p class="mt-1 flex items-center gap-2 text-sm text-slate-500">

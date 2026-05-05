@@ -13,7 +13,7 @@ import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseBadge from '../components/ui/BaseBadge.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseDialog from '../components/ui/BaseDialog.vue';
-import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
+import AiTwinDetailSkeleton from '../components/ui/skeletons/AiTwinDetailSkeleton.vue';
 import BaseTabs, { type TabItem } from '../components/ui/BaseTabs.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
@@ -285,17 +285,13 @@ async function confirmDelete() {
             />
             <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" />
             <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
-            <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" />
+            <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" :twin="twin" />
             <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
           </div>
         </fieldset>
       </template>
 
-      <div v-else-if="loading" class="space-y-4">
-        <BaseSkeleton height="4rem" />
-        <BaseSkeleton height="3rem" />
-        <BaseSkeleton height="16rem" />
-      </div>
+      <AiTwinDetailSkeleton v-else-if="loading" />
 
       <EmptyState
         v-else-if="store.error"

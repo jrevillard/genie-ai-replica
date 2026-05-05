@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { PauseIcon, PlayIcon, RecordIcon } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../ui/BaseAvatar.vue';
-import BaseSkeleton from '../ui/BaseSkeleton.vue';
+import VoiceListSkeleton from '../ui/skeletons/VoiceListSkeleton.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import Icon from '../ui/Icon.vue';
 import { notify } from '../../lib/notify';
@@ -147,9 +147,7 @@ onBeforeUnmount(stopAudio);
       <h2 class="text-title text-text">Pick a Voice For Your AI Twin</h2>
     </header>
 
-    <div v-if="loading && voices.length === 0" class="space-y-3">
-      <BaseSkeleton v-for="n in 4" :key="n" height="4rem" />
-    </div>
+    <VoiceListSkeleton v-if="loading && voices.length === 0" :rows="4" />
 
     <div
       v-else-if="error"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import {
   ArrowDown01Icon,
@@ -20,7 +20,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
-import BaseSkeleton from '../components/ui/BaseSkeleton.vue';
+import TableRowsSkeleton from '../components/ui/skeletons/TableRowsSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
@@ -74,7 +74,11 @@ const {
   phoneNumberFilter,
   twinIdFilter,
   deleting: deletingChat,
+  sending: sendingChat,
 } = storeToRefs(chatHistory);
+
+const composerDraft = ref('');
+const messagesScrollEl = ref<HTMLElement | null>(null);
 
 const phoneInput = ref('');
 
@@ -384,6 +388,56 @@ function cancelChatDelete(): void {
   chatToDeleteId.value = null;
 }
 
+const composerDisabled = computed(
+  () =>
+    !selectedChatSession.value ||
+    selectedChatSession.value.type === 'whatsapp' ||
+    sendingChat.value,
+);
+
+const composerPlaceholder = computed(() => {
+  if (!selectedChatSession.value) return 'Select a conversation to start typing...';
+  if (selectedChatSession.value.type === 'whatsapp') return 'Replies in WhatsApp sessions are not available here.';
+  return 'Type your message here...';
+});
+
+function scrollMessagesToBottom(): void {
+  nextTick(() => {
+    const el = messagesScrollEl.value;
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+}
+
+async function sendComposerMessage(): Promise<void> {
+  const text = composerDraft.value.trim();
+  if (!text || composerDisabled.value) return;
+  composerDraft.value = '';
+  try {
+    await chatHistory.sendMessage(text);
+  } catch (err) {
+    composerDraft.value = text;
+    const e = err as { response?: { data?: { message?: string } }; message?: string };
+    notify.error('Send failed', e?.response?.data?.message ?? e?.message ?? 'Could not deliver message.');
+  }
+}
+
+function onComposerKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendComposerMessage();
+  }
+}
+
+watch(
+  () => chatMessages.value.length,
+  () => scrollMessagesToBottom(),
+);
+
+watch(selectedSessionId, () => {
+  composerDraft.value = '';
+  scrollMessagesToBottom();
+});
+
 async function confirmChatDelete(): Promise<void> {
   if (!chatToDeleteId.value) return;
   try {
@@ -596,9 +650,12 @@ onMounted(() => {
             </div>
 
             <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              <div v-if="chatsLoading && chatSessions.length === 0" class="space-y-2 p-4">
-                <BaseSkeleton v-for="n in 6" :key="n" height="3rem" />
-              </div>
+              <TableRowsSkeleton
+                v-if="chatsLoading && chatSessions.length === 0"
+                :rows="6"
+                height="3rem"
+                class="p-4"
+              />
 
               <div v-else-if="chatsError" class="flex flex-col items-start gap-2 px-3 py-4 text-xs text-red-600">
                 <span>{{ chatsError }}</span>
@@ -720,9 +777,9 @@ onMounted(() => {
               </button>
             </div>
 
-            <div class="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-7">
+            <div ref="messagesScrollEl" class="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-7">
               <div v-if="loadingMessages" class="space-y-3">
-                <BaseSkeleton v-for="n in 5" :key="n" height="2.5rem" />
+                <TableRowsSkeleton :rows="5" height="2.5rem" />
               </div>
 
               <div
@@ -791,16 +848,29 @@ onMounted(() => {
             <footer class="flex gap-3 border-t border-slate-200 bg-white/80 px-3 py-3 md:px-4 md:pb-4">
               <label class="flex min-w-0 flex-1 items-center gap-2.5 rounded-full bg-slate-100 px-4">
                 <input
+                  v-model="composerDraft"
                   type="text"
-                  placeholder="Type your message here..."
+                  :placeholder="composerPlaceholder"
+                  :disabled="composerDisabled"
                   class="h-11 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
-                  disabled
+                  @keydown="onComposerKeydown"
                 />
-                <button type="button" class="text-slate-500 hover:text-ieee-800 disabled:opacity-40" aria-label="Attach file" disabled>
+                <button
+                  type="button"
+                  class="text-slate-500 hover:text-ieee-800 disabled:opacity-40"
+                  aria-label="Attach file"
+                  disabled
+                >
                   <Icon :icon="Attachment01Icon" :size="18" />
                 </button>
               </label>
-              <button type="button" class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:opacity-40" aria-label="Send message" disabled>
+              <button
+                type="button"
+                class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Send message"
+                :disabled="composerDisabled || !composerDraft.trim()"
+                @click="sendComposerMessage"
+              >
                 <Icon :icon="ArrowRight01Icon" :size="21" />
               </button>
             </footer>
@@ -837,9 +907,12 @@ onMounted(() => {
               <span />
             </div>
             <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
-              <div v-if="callsLoading && callSessions.length === 0" class="space-y-2 p-4">
-                <BaseSkeleton v-for="n in 5" :key="n" height="3rem" />
-              </div>
+              <TableRowsSkeleton
+                v-if="callsLoading && callSessions.length === 0"
+                :rows="5"
+                height="3rem"
+                class="p-4"
+              />
 
               <div
                 v-else-if="callsError"
@@ -976,9 +1049,12 @@ onMounted(() => {
               </button>
             </div>
 
-            <div v-if="loadingDetail" class="space-y-2 py-4">
-              <BaseSkeleton v-for="n in 4" :key="n" height="1.5rem" />
-            </div>
+            <TableRowsSkeleton
+              v-if="loadingDetail"
+              :rows="4"
+              height="1.5rem"
+              class="py-4"
+            />
             <div v-else-if="detailError" class="py-6 text-sm text-red-600">{{ detailError }}</div>
             <template v-else>
               <div v-if="detailMode === 'transcript'" class="min-h-[260px] py-4 text-sm leading-relaxed">

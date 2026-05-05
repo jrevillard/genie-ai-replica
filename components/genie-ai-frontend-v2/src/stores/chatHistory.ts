@@ -19,6 +19,7 @@ interface ChatHistoryState {
   messagesError: string | null;
   messageQuery: string;
   deleting: boolean;
+  sending: boolean;
 
   typeFilter: ChatSessionType | null;
   scopeFilter: 'me' | 'all';
@@ -39,6 +40,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
     messagesError: null,
     messageQuery: '',
     deleting: false,
+    sending: false,
 
     typeFilter: null,
     scopeFilter: 'me',
@@ -118,6 +120,37 @@ export const useChatHistoryStore = defineStore('chatHistory', {
         throw err;
       } finally {
         this.loadingMessages = false;
+      }
+    },
+
+    async sendMessage(text: string): Promise<void> {
+      const trimmed = text.trim();
+      if (!trimmed || this.sending) return;
+      const sessionId = this.selectedSessionId;
+      if (!sessionId) return;
+
+      const now = new Date().toISOString();
+      this.messages.push({ role: 'user', content: trimmed, createdAt: now });
+      this.sending = true;
+      try {
+        const reply = await api.sendChatMessage(sessionId, { text: trimmed });
+        this.messages.push({
+          role: 'assistant',
+          content: reply ?? '',
+          createdAt: new Date().toISOString(),
+        });
+        const idx = this.sessions.findIndex((s) => s._key === sessionId);
+        if (idx !== -1) {
+          this.sessions[idx] = {
+            ...this.sessions[idx],
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      } catch (err) {
+        this.messages.pop();
+        throw err;
+      } finally {
+        this.sending = false;
       }
     },
 

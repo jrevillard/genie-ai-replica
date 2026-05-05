@@ -83,6 +83,16 @@ export async function replaceKbFiles(twinId: string, linkedKbFileIds: string[]):
   return res.data;
 }
 
+export async function unlinkKbFile(twinId: string, fileId: string): Promise<AiTwin> {
+  // The backend supports both `?fileId=` and a JSON body — using the query
+  // param keeps the request simple and avoids DELETE-with-body quirks.
+  const res = await api.delete<AiTwin>(
+    `/ai-twins/${encodeURIComponent(twinId)}/kb-files`,
+    { params: { fileId } }
+  );
+  return res.data;
+}
+
 export interface TwinSettings {
   chatGreeting: string;
   callGreeting: string;

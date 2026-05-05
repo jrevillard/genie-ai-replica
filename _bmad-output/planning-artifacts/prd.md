@@ -292,7 +292,7 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 
 **Property-Based Testing:** Generative testing for data transformation and validation logic — fast-check (JS) for backend config validators and data mappers, Hypothesis (Python) for dataprep parsers (chunking, extraction, labeling). Catches edge cases that example-based tests miss with zero manual test case authoring.
 
-**Golden/Master Testing (OPEA):** Version-controlled golden files for RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses). A golden test runs the pipeline on a fixed input and compares against the stored output — any shape or value change is detected immediately. Complements RAGAS scoring with deterministic output verification.
+**Golden/Master Testing (Growth):** Version-controlled golden files for RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses). A golden test runs the pipeline on a fixed input and compares against the stored output — any shape or value change is detected immediately. Complements RAGAS scoring with deterministic output verification.
 
 **Visual Regression Testing:** Playwright screenshot comparison for critical frontend components (ChatBot, NavBar, UserProfile). Baseline screenshots stored in repository; CI detects pixel-level changes on every MR. Prevents unintended UI drift without manual visual review.
 
@@ -490,17 +490,17 @@ The RAG backend is a custom overlay built on the OPEA framework, deviating signi
 - FR55: Backend config validators and data mappers use fast-check property-based tests generating random inputs, catching edge cases beyond manual examples
 - FR56: OPEA dataprep parsers (chunking, extraction, labeling) use Hypothesis property-based tests generating random document formats and content boundaries
 
-### Golden/Master Testing (OPEA)
-
-- FR57: RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses) have version-controlled golden files; CI compares pipeline output against golden on every change to the AI layer
-
 ### Visual Regression Testing
 
-- FR58: Critical frontend components (ChatBot, NavBar, UserProfile) have baseline screenshots stored in the repository; Playwright screenshot comparison detects pixel-level changes on every merge request
+- FR57: Critical frontend components (ChatBot, NavBar, UserProfile) have baseline screenshots stored in the repository; Playwright screenshot comparison detects pixel-level changes on every merge request
 
 ### Mutation Testing (Growth)
 
-- FR59: Stryker mutation testing runs on a scheduled basis (weekly), reporting mutation score per component; components below 80% mutation score generate a task for test improvement
+- FR58: Stryker mutation testing runs on a scheduled basis (weekly), reporting mutation score per component; components below 80% mutation score generate a task for test improvement
+
+### Golden/Master Testing (Growth)
+
+- FR59: RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses) have version-controlled golden files; CI compares pipeline output against golden on every change to the AI layer
 
 ## Non-Functional Requirements
 

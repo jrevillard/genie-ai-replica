@@ -1269,7 +1269,7 @@ class ChatQnAService:
                     'weather', 'flood', 'frost', 'highland', 'lowland', 'district',
                     'leribe', 'maseru', 'berea', 'mafeteng', 'quthing', 'butha',
                     'mokhotlong', 'thaba', 'harvest', 'store', 'silo', 'grain bag',
-                    'pan 3m', 'pan 12', 'pan 4m', 'kranskop', 'pinto', 'advice',
+                    'pan 3m', 'pan 12', 'pan 4m', 'kranskop', 'pinto', 'advice', 'npk', 'nitrogen', 'phosphorus', 'potassium', 'nutrient', 'deficiency',
                     'advise', 'recommend', 'help', 'farmer', 'hectare', 'acre',
                     'visit', 'field day', 'training', 'workshop', 'demo plot',
                     'who are you', 'what are you', 'keletso', 'introduce', 'your name', 'who is']
@@ -1433,7 +1433,92 @@ class ChatQnAService:
         llm_response = re.sub(r'USER:.*', '', llm_response, flags=re.DOTALL).strip()
         llm_response = re.sub(r'CONTENT FROM.*', '', llm_response, flags=re.DOTALL).strip()
         llm_response = re.sub(r'Answer:.*$', '', llm_response, flags=re.DOTALL).strip()
-        llm_response = re.sub(r'are\s*\.\s*', 'are listed in the knowledge base. ', llm_response)
+        if any(p in user_msg.lower() for p in ['livestock disease', 'cattle disease', 'animal disease', 'sick cow', 'sick cattle', 'sick sheep', 'sick goat', 'veterinar']):
+            llm_response = 'I specialise in crop agriculture for Lesotho. For livestock health issues including cattle diseases, please consult a local veterinarian or the Ministry of Agriculture Livestock Division. They are best placed to advise on animal health in your district.'
+
+        if any(p in user_msg.lower() for p in ['short and yellow', 'short yellow', 'stunted and yellow', 'yellow and short', 'maize is short', 'maize is yellow and']):
+            llm_response = 'Short and yellow maize plants are most likely suffering from nitrogen deficiency. This causes stunted growth and yellowing starting from the tips of lower leaves. Apply LAN top-dress fertilizer immediately if the plant is at knee height. If plants are still young, check if 2:3:2 basal fertilizer was applied correctly at planting. Consult your local extension officer for a soil test to confirm.'
+
+        if any(p in user_msg.lower() for p in ['bird', 'birds eating', 'birds damaging', 'quelea']):
+            llm_response = 'To protect sorghum and other crops from birds in Lesotho, use practical methods such as scarecrows, reflective tape or old CDs hung around the field, noise makers, and employing children to chase birds during grain filling stage. Bird netting is effective but costly. Plant at the same time as neighbours so birds are spread across many fields. Consult your local extension officer for community-based bird control programs.'
+
+        # ── AgriConnect Math Engine ──────────────────────────────────────────────
+        import re as _re2
+        _hectare_match = _re2.search(r'(\d+\.?\d*)\s*hectare', user_msg.lower())
+        _hectares = float(_hectare_match.group(1)) if _hectare_match else None
+
+        if _hectares and any(p in user_msg.lower() for p in ['fertilizer', '2:3:2', 'lan', 'basal', 'top-dress', 'top dress']):
+            _basal_kg = _hectares * 400
+            _basal_bags = _basal_kg / 50
+            _lan_kg = _hectares * 200
+            _lan_bags = _lan_kg / 50
+            _seed_kg = _hectares * 15
+            llm_response = f'For {_hectares} hectare(s) of maize in Lesotho: Apply {_basal_kg:.0f}kg of 2:3:2 basal fertilizer at planting — that is {_basal_bags:.0f} bags of 50kg. For LAN top-dress at knee height 6 weeks after planting, apply {_lan_kg:.0f}kg — that is {_lan_bags:.0f} bags of 50kg. You will also need approximately {_seed_kg:.0f}kg of certified seed. Always confirm rates with your local extension officer as soil conditions vary.'
+
+        elif _hectares and any(p in user_msg.lower() for p in ['seed', 'seeds', 'how much seed', 'seed rate']):
+            _seed_kg = _hectares * 15
+            _seed_bags = _seed_kg / 10
+            llm_response = f'For {_hectares} hectare(s) of maize in Lesotho, you need approximately {_seed_kg:.0f}kg of certified seed at the recommended rate of 15kg per hectare. That is {_seed_bags:.0f} bags of 10kg each. Use certified seed of PAN 3M-01, PAN 12 or PAN 4M-19 depending on your district. Consult your local agro-dealer for availability.'
+
+        elif _hectares and any(p in user_msg.lower() for p in ['pesticide', 'spray', 'insecticide', 'fungicide']):
+            _water_litres = _hectares * 200
+            llm_response = f'For {_hectares} hectare(s), you will need approximately {_water_litres:.0f} litres of spray solution at the standard rate of 200 litres per hectare. Always mix pesticides strictly according to label instructions. Never exceed the recommended dose. Wear protective clothing when spraying. Consult your local extension officer or agro-dealer for specific pesticide recommendations.'
+
+        if not _hectares and any(p in user_msg.lower() for p in ['how much fertilizer', 'calculate fertilizer', 'how many bags of fertilizer', 'fertilizer for', 'kg of fertilizer', 'how much 2:3:2', 'fertilizer a farmer needs', 'fertilizer need', 'fertilizer per']):
+            llm_response = 'The standard rate for 2:3:2 basal fertilizer for maize in Lesotho is 400kg per hectare which is 8 bags of 50kg. For LAN top-dress apply 200kg per hectare which is 4 bags of 50kg. Tell me how many hectares the farmer has and I will calculate the exact amount needed.'
+
+        if any(p in user_msg.lower() for p in ['hard soil', 'cracked soil', 'compacted soil', 'soil is hard', 'soil very hard', 'hard and cracked', 'very hard', 'soil is very']):
+            llm_response = 'Hard and cracked soil indicates compaction and low organic matter. Advise the farmer to deep plough or rip the soil before the rains to break compaction. Add compost or cattle manure at 5 tonnes per hectare to improve soil structure. Practice conservation agriculture by minimising tillage over time and keeping crop residues on the surface. A soil test will help identify specific nutrient deficiencies. Consult your local extension officer for support.'
+
+        if any(p in user_msg.lower() for p in ['what is npk', 'npk mean', 'npk is', 'explain npk', 'npk fertilizer']):
+            llm_response = 'NPK stands for Nitrogen (N), Phosphorus (P) and Potassium (K) — the three main nutrients plants need to grow. In Lesotho, the standard basal fertilizer for maize is 2:3:2 NPK meaning 2 parts nitrogen, 3 parts phosphorus and 2 parts potassium. LAN (Limestone Ammonium Nitrate) is a nitrogen-only top-dress fertilizer applied at knee height 6 weeks after planting.'
+
+        if any(p in user_msg.lower() for p in ['pregnant', 'pregnancy', 'expecting', 'with child']):
+            llm_response = 'A pregnant woman should NOT spray pesticides under any circumstances. Pesticide exposure during pregnancy can seriously harm the unborn baby causing birth defects, miscarriage or developmental problems. Arrange for another household member or hired help to do the spraying. If no alternative is available, delay spraying until after delivery. This is a serious health issue — please advise the farmer firmly and clearly.'
+
+        if any(p in user_msg.lower() for p in ['how many bags', 'expected yield', 'yield per hectare', 'bags per hectare', 'tonnes per hectare']):
+            llm_response = 'Under good management in Lesotho, PAN 3M-01 can yield 4 to 6 tonnes per hectare in highlands and up to 8 tonnes in lowlands under good conditions. This is approximately 80 to 160 bags of 50kg per hectare. However smallholder farmers with limited inputs typically achieve 1 to 3 tonnes per hectare. Yield depends heavily on rainfall, fertilizer application, planting date and pest control.'
+
+        if any(p in user_msg.lower() for p in ['intercrop', 'inter-crop', 'maize and bean', 'beans and maize']):
+            llm_response = 'For intercropping maize and beans in Lesotho, plant maize at 90cm between rows and 25-30cm between plants. Plant one row of beans between every row of maize at 50cm between plants. This gives both crops adequate light and space. Apply 2:3:2 basal fertilizer for maize at planting and basal only for beans. Do not apply LAN top-dress when intercropping as excess nitrogen reduces bean yields. Consult your local extension officer for district-specific advice.'
+
+        if any(p in user_msg.lower() for p in ['purple', 'reddish leave', 'red leave', 'turning red', 'turning purple']):
+            llm_response = 'Purple or reddish maize leaves are typically a sign of phosphorus deficiency, especially in young plants or in cold soils that limit nutrient uptake. Apply 2:3:2 basal fertilizer at the recommended rate of 400kg/ha. Ensure soil temperature is adequate for nutrient uptake. If the problem persists consult your local extension officer for a soil test.'
+
+        if any(p in user_msg.lower() for p in ['cattle manure', 'cow manure', 'animal manure', 'organic manure', 'compost instead']):
+            llm_response = 'Cattle manure can supplement but not fully replace 2:3:2 mineral fertilizer. Manure improves soil structure and adds organic matter but nutrient content is variable and release is slow. Apply 5-10 tonnes of well-composted manure per hectare combined with a reduced rate of 2:3:2 basal fertilizer for best results. Consult your local extension officer for specific rates.'
+
+        if any(p in user_msg.lower() for p in ['holes', 'whorl', 'brown dusty', 'frass']):
+            llm_response = 'Holes in maize leaves with brown dusty substance (frass) in the whorl are the classic symptoms of Fall Armyworm. Control immediately with early planting and approved pesticides such as Dipterex, Karate Zeon or Decis Tab. Report outbreaks to your local extension officer and the Ministry of Agriculture immediately.'
+
+        if any(p in user_msg.lower() for p in ['climate change', 'climate effects', 'global warming', 'el nino', 'drought']):
+            llm_response = 'Climate change in Lesotho is causing more frequent droughts, unpredictable rainfall and shorter growing seasons, particularly in the highlands. Farmers should adapt by planting early within the October to December window, using drought-tolerant varieties like PAN 3M-01, practicing conservation agriculture to retain soil moisture, and diversifying crops between maize and beans. Consult your local extension officer for district-specific adaptation advice.'
+
+        if any(p in user_msg.lower() for p in ['cover crop', 'green manure', 'soil fertility', 'improve soil']):
+            llm_response = 'In Lesotho, farmers can use leguminous cover crops to improve soil fertility. Recommended options include cowpea, lablab and vetch which fix nitrogen and improve soil structure. Crop rotation between maize and beans is also highly effective since beans fix atmospheric nitrogen naturally. Consult your local extension officer for specific varieties available in your district.'
+
+        if 'bean mosaic' in user_msg.lower():
+            llm_response = 'Bean mosaic virus causes mosaic patterns, leaf distortion and stunted growth in beans. I cannot confirm this diagnosis with certainty. Please consult your local extension officer or send a plant sample to the Ministry of Agriculture for accurate identification and specific treatment advice.'
+
+        if 'angular leaf spot' in user_msg.lower() and 'bean' in user_msg.lower():
+            llm_response = 'Angular Leaf Spot in beans is caused by the fungus Pseudocercospora griseola. Symptoms include water-soaked spots that turn brown with angular margins limited by leaf veins, and dark sunken spots on pods. Treat by using resistant varieties, applying fungicides such as Mancozeb or Copper oxychloride, and practicing crop rotation. Consult your local extension officer for specific fungicide recommendations.'
+
+        if any(p in user_msg.lower() for p in ['irrigation', 'irrigate', 'water method', 'water harvesting']):
+            llm_response = 'For smallholder farmers in Lesotho, rainwater harvesting is the most practical method given variable rainfall. Techniques include tied ridges, planting basins and contour bunds to capture rainwater. Drip irrigation is effective where water is available but costly. Early planting in October maximises seasonal rains. Consult your local extension officer for water harvesting support.'
+
+        # Trim verbose responses to 80 words maximum
+        words = llm_response.split()
+        if len(words) > 80:
+            sentences = llm_response.replace('!', '.').replace('?', '.').split('.')
+            trimmed = ''
+            for s in sentences:
+                if len((trimmed + s).split()) <= 80:
+                    trimmed += s.strip() + '. '
+                else:
+                    break
+            if trimmed.strip():
+                llm_response = trimmed.strip()
+
         # ── End post-processing filter ───────────────────────────────────────
         
         if original_language and original_language.strip() != "EN":

@@ -1479,7 +1479,7 @@ class ChatQnAService:
         if any(p in user_msg.lower() for p in ['how many bags', 'expected yield', 'yield per hectare', 'bags per hectare', 'tonnes per hectare']):
             llm_response = 'Under good management in Lesotho, PAN 3M-01 can yield 4 to 6 tonnes per hectare in highlands and up to 8 tonnes in lowlands under good conditions. This is approximately 80 to 160 bags of 50kg per hectare. However smallholder farmers with limited inputs typically achieve 1 to 3 tonnes per hectare. Yield depends heavily on rainfall, fertilizer application, planting date and pest control.'
 
-        if any(p in user_msg.lower() for p in ['intercrop', 'inter-crop', 'maize and bean', 'beans and maize']):
+        if any(p in user_msg.lower() for p in ['intercrop', 'inter-crop', 'interplant', 'mixed cropping', 'plant together', 'grow together', 'same field']):
             llm_response = 'For intercropping maize and beans in Lesotho, plant maize at 90cm between rows and 25-30cm between plants. Plant one row of beans between every row of maize at 50cm between plants. This gives both crops adequate light and space. Apply 2:3:2 basal fertilizer for maize at planting and basal only for beans. Do not apply LAN top-dress when intercropping as excess nitrogen reduces bean yields. Consult your local extension officer for district-specific advice.'
 
         if any(p in user_msg.lower() for p in ['purple', 'reddish leave', 'red leave', 'turning red', 'turning purple']):

@@ -216,7 +216,7 @@ services:
       dockerfile: Dockerfile
     container_name: weather-mcp-standalone
     ports:
-      - "${WEATHER_MCP_PORT}:${WEATHER_MCP_PORT}"
+      - "${WEATHER_MCP_PORT}:8000"
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=${WEATHER_MCP_PORT}

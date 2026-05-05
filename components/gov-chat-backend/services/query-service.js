@@ -462,7 +462,8 @@ class QueryService {
           'weather in 6', 'weather in 7', 'weather forecast', 'current weather',
           'will it rain', 'will it be hot', 'will it be cold', 'how hot will', 'how cold will',
         ];
-        const WEATHER_HARD      = ['rainfall', 'storm', 'flood', 'cyclone', 'monsoon', 'typhoon'];
+        const WEATHER_HARD      = ['rainfall', 'storm', 'flood', 'cyclone', 'monsoon', 'typhoon',
+          'bulletin', 'agrometeorological', 'agromet', 'agri advisory', 'national bulletin', 'advisory bulletin'];
         const AGRO_TERMS        = [
           'soil', 'crop', 'plant', 'pest', 'disease', 'seed', 'harvest', 'fertilizer',
           'worm', 'insect', 'fungus', 'larvae', 'larva', 'bacteria', 'bacterial', 'viral',

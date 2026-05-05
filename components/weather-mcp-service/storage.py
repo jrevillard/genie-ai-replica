@@ -230,3 +230,142 @@ class StorageLayer:
             "channel": channel,
             "sent_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    # ------------------------------------------------------------------
+    # Forecast pair (for crop-specific EWS)
+    # ------------------------------------------------------------------
+
+    def get_latest_forecast_pair(
+        self,
+        location: str,
+        horizon: str = "short",
+        max_age_hours: int = 6,
+    ) -> tuple[dict | None, dict | None]:
+        """
+        Return (open_meteo_doc, bmd_doc) raw dicts for a location.
+        Either may be None if not found or stale.
+        Docs are returned as plain dicts so callers can read any field.
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        ).isoformat()
+
+        aql = """
+            FOR doc IN weather_forecasts
+              FILTER doc.location == @location
+                AND doc.horizon   == @horizon
+                AND doc.ingested_at >= @cutoff
+              SORT doc.ingested_at DESC
+              RETURN doc
+        """
+        cursor = self._db.aql.execute(
+            aql,
+            bind_vars={"location": location, "horizon": horizon, "cutoff": cutoff},
+        )
+        docs = list(cursor)
+
+        om_doc: dict | None = None
+        bmd_doc: dict | None = None
+        for doc in docs:
+            src = doc.get("source", "")
+            if src == "open_meteo" and om_doc is None:
+                om_doc = doc
+            elif src == "bmd" and bmd_doc is None:
+                bmd_doc = doc
+
+        return om_doc, bmd_doc
+
+    # ------------------------------------------------------------------
+    # Crop-aware risk assessments
+    # ------------------------------------------------------------------
+
+    def upsert_crop_assessment(self, assessment: dict, crop: str) -> str:
+        """
+        Upsert a crop-specific risk assessment.
+        Key: {location}__short__{crop}  (e.g. dhaka__short__potato)
+        """
+        key = _norm_key(
+            f"{assessment['location']}__{assessment.get('horizon', 'short')}__{crop}"
+        )
+        col = self._db.collection("risk_assessments")
+        doc = {"_key": key, **assessment}
+
+        try:
+            if col.has(key):
+                col.replace(doc)
+            else:
+                col.insert(doc)
+        except (DocumentInsertError, DocumentReplaceError) as exc:
+            logger.error("[STORAGE] upsert_crop_assessment failed for %s: %s", key, exc)
+            raise
+
+        return key
+
+    def get_latest_crop_risk(
+        self,
+        location: str,
+        crop: str,
+        horizon: str = "short",
+    ) -> dict | None:
+        """Return the stored crop-specific risk assessment dict, or None."""
+        key = _norm_key(f"{location}__{horizon}__{crop}")
+        col = self._db.collection("risk_assessments")
+        if not col.has(key):
+            return None
+        try:
+            return dict(col.get(key))
+        except Exception as exc:
+            logger.warning("[STORAGE] get_latest_crop_risk failed for %s: %s", key, exc)
+            return None
+
+    # ------------------------------------------------------------------
+    # Crop-aware alert deduplication
+    # ------------------------------------------------------------------
+
+    def was_crop_alert_sent(
+        self,
+        location: str,
+        crop: str,
+        tier: int,
+        within_hours: int = 12,
+    ) -> bool:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=within_hours)
+        ).isoformat()
+        aql = """
+            FOR doc IN alerts_sent
+              FILTER doc.location == @location
+                AND  doc.crop     == @crop
+                AND  doc.tier     >= @tier
+                AND  doc.sent_at  >= @cutoff
+              LIMIT 1
+              RETURN 1
+        """
+        cursor = self._db.aql.execute(
+            aql,
+            bind_vars={
+                "location": location,
+                "crop": crop,
+                "tier": tier,
+                "cutoff": cutoff,
+            },
+        )
+        return len(list(cursor)) > 0
+
+    def record_crop_alert_sent(
+        self,
+        location: str,
+        crop: str,
+        tier: int,
+        channel: str,
+        forecast_date: str = "",
+    ) -> None:
+        col = self._db.collection("alerts_sent")
+        col.insert({
+            "location": location,
+            "crop": crop,
+            "tier": tier,
+            "channel": channel,
+            "forecast_date": forecast_date,
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+        })

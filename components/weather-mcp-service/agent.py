@@ -228,6 +228,84 @@ class WeatherAgent:
     # Explanation — Gemma-3-4b-it
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Weather emoji / visual strip helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _weather_condition(params: dict) -> tuple[str, str]:
+        """Return (emoji, label) for the overall sky condition of a single day."""
+        pr       = params.get("precipitation", {}) or {}
+        rain_mm  = float(pr.get("value", 0) or 0)
+        rain_p   = float(pr.get("probability", 0) or 0)
+        humidity = float((params.get("humidity", {}) or {}).get("value", 0) or 0)
+
+        if rain_mm >= 25 or (rain_mm >= 10 and rain_p >= 0.7):
+            return "⛈", "Thunderstorm"
+        if rain_mm >= 10 or rain_p >= 0.6:
+            return "🌧", "Rain"
+        if rain_mm >= 2 or rain_p >= 0.35:
+            return "🌦", "Showers"
+        if humidity >= 80 or rain_p >= 0.2:
+            return "⛅", "Partly Cloudy"
+        if humidity >= 60 or rain_p >= 0.1:
+            return "🌤", "Mostly Clear"
+        return "☀️", "Clear"
+
+    @staticmethod
+    def _wind_emoji(speed_kmh: float) -> str:
+        if speed_kmh >= 62:   return "🌪️"   # storm / cyclone
+        if speed_kmh >= 30:   return "💨"    # strong / windy
+        if speed_kmh >= 15:   return "🌬️"   # breezy
+        return "😌"                           # calm
+
+    @staticmethod
+    def _soil_emoji(sm: float) -> str:
+        """sm is volumetric water content in m³/m³."""
+        if sm >= 0.40:  return "🌊"   # saturated
+        if sm >= 0.25:  return "💧"   # wet / field capacity
+        if sm >= 0.10:  return "🌱"   # moist — good for crops
+        return "🌵"                    # dry / drought risk
+
+    @staticmethod
+    def _build_forecast_strip(days: list) -> str:
+        """Build a compact per-day visual strip in markdown list format."""
+        from datetime import datetime as _dt
+        lines = []
+        for d in days:
+            date_str = d.get("date", "")
+            try:
+                date_label = _dt.strptime(date_str, "%Y-%m-%d").strftime("%a %d %b")
+            except ValueError:
+                date_label = date_str
+
+            p     = d.get("parameters", {})
+            sky_emoji, _ = WeatherAgent._weather_condition(p)
+
+            t    = p.get("temperature", {}) or {}
+            pr   = p.get("precipitation", {}) or {}
+            wind = p.get("wind", {}) or {}
+            sm   = p.get("soil_moisture", {}) or {}
+
+            t_min     = t.get("min", "?")
+            t_max     = t.get("max", "?")
+            rain      = float(pr.get("value", 0) or 0)
+            prob      = int(float(pr.get("probability", 0) or 0) * 100)
+            wind_spd  = float(wind.get("speed", 0) or 0)
+            soil_val  = sm.get("value")
+
+            wind_part = f" · {WeatherAgent._wind_emoji(wind_spd)} {wind_spd:.0f} km/h" if wind_spd else ""
+            soil_part = (
+                f" · {WeatherAgent._soil_emoji(soil_val)} {soil_val:.2f} m³/m³"
+                if soil_val is not None else ""
+            )
+
+            lines.append(
+                f"- {sky_emoji} **{date_label}** — {t_min}–{t_max}°C"
+                f" · 💧 {rain:.0f}mm ({prob}%){wind_part}{soil_part}"
+            )
+        return "---\n\n**Daily outlook:**\n" + "\n".join(lines)
+
     async def _generate_explanation(
         self,
         query: str,
@@ -288,6 +366,9 @@ class WeatherAgent:
 
         header = f"**{location_name} — {n_days}-day forecast**\n\n"
 
+        # Build the visual strip once — deterministic, no LLM needed
+        strip = self._build_forecast_strip(days) if days else ""
+
         logger.debug(
             "[AGENT] Explanation prompt — model=%s  tier=%d  n_days=%d  requested=%d",
             self.model, risk_assessment.tier, n_days, requested,
@@ -302,7 +383,7 @@ class WeatherAgent:
             )
             body = (response.choices[0].message.content or "").strip()
             logger.debug("[AGENT] Explanation call succeeded")
-            return header + availability_note + body
+            return header + availability_note + body + ("\n\n" + strip if strip else "")
 
         except Exception as exc:
             logger.error(
@@ -322,7 +403,7 @@ class WeatherAgent:
                     f"Temperatures between {t_min}°C and {t_max}°C, "
                     f"approximately {rain:.1f} mm of rain expected.{tier_note}"
                 )
-                return header + availability_note + body
+                return header + availability_note + body + ("\n\n" + strip if strip else "")
             except Exception as inner_exc:
                 logger.error("[AGENT] Template fallback also failed: %s", inner_exc)
                 return header + availability_note + "Forecast data retrieved. (Explanation unavailable.)"
@@ -412,7 +493,9 @@ class WeatherAgent:
                             "unit":        "mm",
                             "probability": day.precipitation.probability,
                         },
-                        "humidity": {"value": day.humidity, "unit": "percent"},
+                        "humidity":      {"value": day.humidity, "unit": "percent"},
+                        "wind":          {"speed": day.wind.speed, "unit": "km/h"},
+                        "soil_moisture": {"value": day.soil_moisture, "unit": "m3/m3"},
                     },
                 }
                 for day in stored.forecast

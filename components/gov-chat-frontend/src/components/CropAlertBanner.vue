@@ -26,7 +26,7 @@
 <script>
 import httpService from '@/services/httpService';
 
-const POLL_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
 const DISMISS_KEY = 'crop_alert_dismissed_until';
 
 export default {
@@ -61,13 +61,23 @@ export default {
   mounted() {
     this.poll();
     this.pollTimer = setInterval(this.poll, POLL_INTERVAL_MS);
+    window.addEventListener('focus', this.poll);
+    document.addEventListener('visibilitychange', this.pollWhenVisible);
   },
 
   beforeUnmount() {
     clearInterval(this.pollTimer);
+    window.removeEventListener('focus', this.poll);
+    document.removeEventListener('visibilitychange', this.pollWhenVisible);
   },
 
   methods: {
+    pollWhenVisible() {
+      if (!document.hidden) {
+        this.poll();
+      }
+    },
+
     async poll() {
       // Default to Dhaka for v1; extend to user district preference later
       const location = 'Dhaka';

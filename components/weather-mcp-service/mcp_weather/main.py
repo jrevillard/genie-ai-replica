@@ -7,6 +7,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp_weather.tools.buffer_point import create_buffer
 from mcp_weather.tools.weather_forecast import fetch_forecast_logic
 
+
+
 mcp = FastMCP("Weather Service")
 
 

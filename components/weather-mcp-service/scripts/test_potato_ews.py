@@ -34,11 +34,17 @@ import os
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from urllib.parse import urlparse
+
+from dotenv import load_dotenv
 
 # Allow running from repo root or from the weather-mcp-service directory
 _SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SERVICE_DIR not in sys.path:
     sys.path.insert(0, _SERVICE_DIR)
+
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
 if not os.getenv("ARANGO_URL"):
     os.environ["ARANGO_URL"] = "http://localhost:8529"
@@ -249,22 +255,80 @@ def verify_mcp_api(weather_mcp_url, district):
 # Step 4 — verify via Node.js backend proxy
 # ---------------------------------------------------------------------------
 
+def _running_in_container():
+    return os.path.exists("/.dockerenv")
+
+
+def _backend_url_candidates(backend_url):
+    candidates = []
+
+    def add(url):
+        if not url:
+            return
+        url = url.rstrip("/")
+        if url and url not in candidates:
+            candidates.append(url)
+
+    add(backend_url)
+
+    parsed = urlparse(backend_url)
+    if parsed.scheme and parsed.hostname and not parsed.port and not parsed.path:
+        add(f"{parsed.scheme}://{parsed.hostname}:3000")
+
+    if _running_in_container():
+        add("http://backend:3000")
+        add("http://gov-chat-backend:3000")
+        add("http://kong:8010")
+
+    return candidates
+
+
+def _looks_like_frontend_404(resp):
+    content_type = resp.headers.get("content-type", "")
+    body = resp.text[:200].lstrip().lower()
+    return (
+        resp.status_code == 404
+        and ("text/html" in content_type or body.startswith("<!doctype") or body.startswith("<html") or body.startswith("<!--"))
+    )
+
+
 def verify_backend_api(backend_url, district):
-    try:
-        resp = _http.get(
-            f"{backend_url}/api/weather/potato-risk",
-            params={"location": district},
-            timeout=5,
-        )
-        if resp.ok:
-            return True, resp.json()
-        # 401 means the route exists and the backend is running — auth is
-        # handled by the frontend (sends its own token). Count as reachable.
-        if resp.status_code == 401:
-            return "auth_required", {"status": 401, "note": "route exists, auth required (expected)"}
-        return False, {"status": resp.status_code, "body": resp.text[:200]}
-    except Exception as exc:
-        return False, str(exc)
+    attempts = []
+    for candidate in _backend_url_candidates(backend_url):
+        try:
+            resp = _http.get(
+                f"{candidate}/api/weather/potato-risk",
+                params={"location": district},
+                timeout=5,
+            )
+            attempt = {"url": candidate, "status": resp.status_code}
+            if not resp.ok:
+                attempt["body"] = resp.text[:200]
+            attempts.append(attempt)
+
+            if resp.ok:
+                data = resp.json()
+                data["_backend_url"] = candidate
+                return True, data
+
+            # 401 means the route exists and the backend is running — auth is
+            # handled by the frontend (sends its own token). Count as reachable.
+            if resp.status_code == 401:
+                return "auth_required", {
+                    "status": 401,
+                    "url": candidate,
+                    "note": "route exists, auth required (expected)",
+                }
+
+            # Common docker-exec case: BACKEND_URL points at the public
+            # frontend host, so /api/weather/potato-risk returns the static
+            # app's HTML 404. Keep trying Docker-internal backend names.
+            if _looks_like_frontend_404(resp):
+                attempt["note"] = "looks like frontend/static 404; trying next backend candidate"
+        except Exception as exc:
+            attempts.append({"url": candidate, "error": str(exc)})
+
+    return False, {"attempts": attempts}
 
 
 # ---------------------------------------------------------------------------
@@ -361,10 +425,10 @@ def main():
     be_ok, be_data = verify_backend_api(args.backend_url, args.district)
     if be_ok is True:
         tick(True, "Backend proxy working",
-             f"tier={be_data.get('tier')} — {be_data.get('tier_label')}")
+             f"{be_data.get('_backend_url')} tier={be_data.get('tier')} — {be_data.get('tier_label')}")
     elif be_ok == "auth_required":
         tick(True, "Backend route reachable (401 — auth required)",
-             "frontend sends its own token, this is correct")
+             f"{be_data.get('url')} — frontend sends its own token, this is correct")
     else:
         tick("warn", f"Backend not reachable: {be_data}")
         print("  (frontend calls this endpoint — if backend is down, pop-out won't appear)")

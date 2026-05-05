@@ -128,10 +128,14 @@ _OM_VARS = (
     "relative_humidity_2m_max"
 )
 
+# Open-Meteo hourly variables (soil moisture is hourly-only in the API)
+_OM_HOURLY_VARS = "soil_moisture_0_to_1cm"
+
 _OM_URL = (
     "https://api.open-meteo.com/v1/forecast"
     "?latitude={lat}&longitude={lon}"
     "&daily={vars}"
+    "&hourly={hourly_vars}"
     "&timezone=Asia%2FDhaka"
     "&forecast_days={days}"
 )
@@ -395,12 +399,24 @@ class DataIngestor:
         forecast_days: int,
     ) -> UnifiedForecast:
         lat, lon = coords
-        url = _OM_URL.format(lat=lat, lon=lon, vars=_OM_VARS, days=forecast_days)
+        url = _OM_URL.format(
+            lat=lat, lon=lon, vars=_OM_VARS,
+            hourly_vars=_OM_HOURLY_VARS, days=forecast_days,
+        )
 
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        daily = data["daily"]
+        daily  = data["daily"]
+        hourly = data.get("hourly", {})
+
+        # Pre-compute daily average soil moisture from 24 hourly values per day
+        sm_hourly = hourly.get("soil_moisture_0_to_1cm", [])
+
+        def _daily_soil_moisture(day_index: int) -> float | None:
+            start = day_index * 24
+            vals = [v for v in sm_hourly[start:start + 24] if v is not None]
+            return round(sum(vals) / len(vals), 4) if vals else None
 
         now_utc = datetime.now(timezone.utc).isoformat()
         days_list: list[DayForecast] = []
@@ -413,6 +429,7 @@ class DataIngestor:
             wind    = _safe(daily, "windspeed_10m_max",            i, 0.0)
             wdir    = _safe(daily, "winddirection_10m_dominant",   i, None)
             humidity= _safe(daily, "relative_humidity_2m_max",     i, 70.0)
+            soil_m  = _daily_soil_moisture(i)
 
             days_list.append(DayForecast(
                 date=date,
@@ -420,6 +437,7 @@ class DataIngestor:
                 precipitation=PrecipitationData(value=rain, probability=rain_p),
                 wind=WindData(speed=wind, direction=wdir),
                 humidity=humidity,
+                soil_moisture=soil_m,
                 extreme_flags=ExtremeFlags(
                     heavy_rain=rain  >= 50.0,
                     heatwave=max_t   >= 40.0,

@@ -147,5 +147,21 @@ module.exports = (weatherService) => {
     }
   });
 
+  router.get('/geocode', async (req, res) => {
+    const { location } = req.query;
+    if (!location) return res.status(400).json({ message: 'location query parameter is required' });
+    try {
+      const resp = await axios.get(`${WEATHER_MCP_URL}/geocode`, {
+        params: { location },
+        timeout: 8000,
+      });
+      res.json(resp.data);
+    } catch (err) {
+      if (err.response?.status === 404) return res.status(404).json({ message: `Location '${location}' not found` });
+      logger.error(`[GEOCODE] Proxy error for ${location}: ${err.message}`);
+      res.status(502).json({ message: 'Geocoding service unavailable' });
+    }
+  });
+
   return router;
 };

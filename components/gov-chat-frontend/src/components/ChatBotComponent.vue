@@ -1,5 +1,15 @@
 <template>
   <div class="app-container">
+    <!-- Map overlay — renders on top when mapMode is active -->
+    <MapView
+      v-if="mapMode && mapLocation"
+      :lat="mapLocation.lat"
+      :lon="mapLocation.lon"
+      :name="mapLocation.name"
+      :zoom="mapLocation.zoom"
+      @back="mapMode = false"
+    />
+
     <!-- Main chatbot container -->
     <div class="chatbot-container">
       <!-- New Chat Confirmation Dialog -->
@@ -315,6 +325,8 @@ import ChatResponseFeedbackDialog from "./ChatResponseFeedbackDialog.vue";
 import ModalDialog from "./ModalDialog.vue";
 import RightSideBarComponent from "./RightSideBarComponent.vue";
 import chatbotService from "../services/chatbotService";
+import httpService from "../services/httpService";
+import MapView from "./MapView.vue";
 import serviceTreeService from "../services/serviceTreeService"; // *** NEW: Import serviceTreeService
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import chatHistoryService from "../services/chatHistoryService";
@@ -330,6 +342,7 @@ export default {
     ModalDialog,
     RightSideBarComponent,
     ConfirmDialog,
+    MapView,
   },
 
   data() {
@@ -386,10 +399,12 @@ export default {
         secondaryText: "",
       },
       pendingConversationId: null,
-      isLoading: false, // Loading state for spinner
-      isSaving: false, // Loading state for save operation to prevent double-save
-      relatedDocuments: [], // Holds documents for the right sidebar
-      hiddenPromptForNextMessage: null, // Stores hidden prompt for dual-prompt mechanism
+      isLoading: false,
+      isSaving: false,
+      relatedDocuments: [],
+      hiddenPromptForNextMessage: null,
+      mapMode: false,
+      mapLocation: null,
     };
   },
 
@@ -816,6 +831,38 @@ export default {
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
+
+      // Map intent detection — intercept before backend call
+      const mapMatch = content.match(/^show me the map\s+(.+)$/i);
+      if (mapMatch) {
+        const location = mapMatch[1].trim();
+        this.chatMessages.push({ sender: 'user', content, timestamp: new Date().toISOString(), isSaved: false });
+        this.newMessage = '';
+        this.showQuickHelp = false;
+        this.isLoading = true;
+        try {
+          const resp = await httpService.get('weather/geocode', { location });
+          const geo = resp.data;
+          this.mapLocation = { lat: geo.lat, lon: geo.lon, name: geo.name, zoom: geo.zoom || 12 };
+          this.mapMode = true;
+          this.chatMessages.push({
+            sender: 'bot',
+            content: `Opening map for **${geo.name}**.`,
+            timestamp: new Date().toISOString(),
+            isSaved: false,
+          });
+        } catch {
+          this.chatMessages.push({
+            sender: 'bot',
+            content: `Sorry, I couldn't find the location **${location}**. Please try a more specific name.`,
+            timestamp: new Date().toISOString(),
+            isSaved: false,
+          });
+        } finally {
+          this.isLoading = false;
+        }
+        return;
+      }
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
       const messageForBackend = this.hiddenPromptForNextMessage || content;

@@ -187,7 +187,10 @@ async def health():
     }
 
 
+import urllib.parse
+
 _DATA_DIR = pathlib.Path(__file__).parent / "data"
+_MAPBOX_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
 _BULLETIN_PATH = _DATA_DIR / "bulletin.md"
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 _BULLETIN_KEYWORDS = re.compile(
@@ -222,6 +225,46 @@ async def serve_bulletin_image(filename: str):
     if not img_path.exists() or img_path.suffix.lower() not in _IMAGE_EXTENSIONS:
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(str(img_path))
+
+
+@app.get("/geocode")
+async def geocode_location(location: str = Query(..., description="Free-text location")):
+    """
+    Resolve a location string to lat/lon.
+    Checks Bangladesh DISTRICT_COORDS first; falls back to Mapbox Geocoding API.
+    """
+    from data_ingestor import DISTRICT_COORDS
+
+    # Case-insensitive match against known Bangladesh districts
+    query_lower = location.strip().lower()
+    for district, (lat, lon) in DISTRICT_COORDS.items():
+        if district.lower() == query_lower or district.lower() in query_lower:
+            return {"lat": lat, "lon": lon, "name": district, "zoom": 11}
+
+    # Mapbox Geocoding API fallback
+    if not _MAPBOX_TOKEN:
+        raise HTTPException(status_code=503, detail="Geocoding unavailable — MAPBOX_ACCESS_TOKEN not configured")
+
+    import requests as _requests
+    try:
+        encoded = urllib.parse.quote(location)
+        resp = _requests.get(
+            f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded}.json",
+            params={"access_token": _MAPBOX_TOKEN, "limit": 1},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        features = resp.json().get("features", [])
+        if not features:
+            raise HTTPException(status_code=404, detail=f"Location '{location}' not found")
+        feat = features[0]
+        lon, lat = feat["center"]
+        return {"lat": lat, "lon": lon, "name": feat.get("place_name", location), "zoom": 12}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[GEOCODE] Mapbox API error: %s", exc)
+        raise HTTPException(status_code=502, detail="Geocoding service unavailable")
 
 
 @app.post("/query")

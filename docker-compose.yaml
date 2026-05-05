@@ -99,6 +99,7 @@ services:
         - VUE_APP_API_URL=${VUE_APP_API_URL}
         - VUE_PROXY_HOST=${VUE_PROXY_HOST}
         - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC}
+        - VUE_APP_MAPBOX_TOKEN=${MAPBOX_ACCESS_TOKEN}
     restart: unless-stopped
     env_file:
       - .env

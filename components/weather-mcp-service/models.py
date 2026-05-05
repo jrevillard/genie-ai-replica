@@ -44,6 +44,7 @@ class DayForecast(BaseModel):
     precipitation: PrecipitationData
     wind: WindData
     humidity: float                                        # %
+    soil_moisture: Optional[float] = None                  # m³/m³ volumetric — open_meteo only
     extreme_flags: ExtremeFlags = Field(default_factory=ExtremeFlags)
 
 

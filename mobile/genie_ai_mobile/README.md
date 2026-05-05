@@ -4,7 +4,7 @@
 
 **Author:** ITU (International Telecommunication Union)
 **Framework:** Flutter (Dart)
-**Target Platforms:** Android, iOS, Web, Windows, macOS, Linux
+**Target Platforms:** Android primary target. Web/Linux desktop can be used for UI and API debugging, but voice conversation is intended for Android builds.
 **Version:** 1.0.0+1
 **License:** See project license file
 
@@ -21,8 +21,9 @@ This mobile app serves as a complete, production-ready example showcasing:
 - **Framework Integration** - How to connect a Flutter app to the GENIE.AI RAG backend API
 - **Authentication Flow** - Complete user authentication (login, registration, password reset)
 - **Chat Interface** - Conversational AI chatbot with markdown rendering and document references
+- **Voice Conversation** - Android handsfree mode, speech input, and spoken replies for agriculture/weather conversations
 - **Service Discovery** - Hierarchical service tree navigation and category filtering
-- **Multi-Language Support** - Internationalization (i18n) architecture for 11 languages
+- **Multi-Language Support** - Internationalization (i18n) architecture with Bengali as the default language for the Bangladesh MEWA app
 - **Responsive Design** - Adaptive layouts for mobile, tablet, and desktop
 - **Offline Capabilities** - Online/offline detection with sync preparation
 - **Theme System** - Configuration-driven theming with dark/light mode
@@ -44,7 +45,7 @@ Developers can use this codebase as a foundation to:
 - **Clean Separation** - UI components, services, and utilities are organized for maintainability
 - **Configuration-Driven** - Theme, Quick Help buttons, and app settings are JSON-configurable
 - **Scalable Structure** - Easy to add new languages, services, and features
-- **Platform-Agnostic** - Core business logic works across Android, iOS, Web, and desktop
+- **Android Voice Target** - Core chat logic can run across platforms, but speech-to-text and text-to-speech should be validated on Android devices
 
 Use this app as a starting point for your own GENIE.AI-powered mobile solution!
 
@@ -84,7 +85,8 @@ The app follows a clean architecture with separated concerns for UI components, 
 
 ### Core Functionality
 - **AI Chatbot Interface** - Conversational AI powered by RAG (Retrieval-Augmented Generation)
-- **Multi-Language Support** - 11 languages: English, German, Arabic, Spanish, French, Indonesian, Portuguese, Russian, Swahili, Thai, Chinese
+- **Handsfree Voice Mode** - Full-screen voice overlay on the main page that listens, responds aloud, and saves the conversation to chat history
+- **Multi-Language Support** - Bengali default locale, plus English and other configured app languages
 - **Authentication System** - Login, registration, password reset with email verification
 - **Service Categories** - Browse and filter government services by category
 - **Chat History** - Persistent conversation history with search capabilities
@@ -142,6 +144,8 @@ The app follows a clean architecture with separated concerns for UI components, 
 | `cached_network_image` | ^3.3.1 | Cached image loading |
 | `flutter_svg` | ^2.1.0 | SVG image support |
 | `url_launcher` | ^6.3.1 | Open URLs in browser/apps |
+| `speech_to_text` | ^7.3.0 | Android speech recognition for voice input |
+| `flutter_tts` | ^4.2.5 | Spoken replies and handsfree conversation output |
 
 #### File Handling
 | Package | Version | Purpose |
@@ -406,6 +410,13 @@ For release builds, ensure these permissions are present in [android/app/src/mai
 <manifest ...>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         ...
@@ -456,6 +467,19 @@ flutter run --dart-define=API_BASE_URL=https://164.52.194.143/api
 ```
 
 The app hashes the password before sending it as `encPassword`, matching the MEWA backend contract.
+
+#### Voice and Handsfree Testing
+
+Voice conversation is intended for Android builds. Linux desktop runs are useful for checking login, API calls, layout, and chat behavior, but Linux does not provide implementations for the current `speech_to_text` and `flutter_tts` plugins. If you run on Linux and see `MissingPluginException` for voice channels, that is expected for desktop voice testing.
+
+For Android testing:
+
+```bash
+flutter devices
+flutter run -d <android-device-id> --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
+
+Bengali voice input depends on Android/Google Speech Services having Bengali recognition available on the device. The app requests Bengali with locale `bn_BD`, but if the device has no Bengali recognizer installed or enabled, Android may fall back to another language.
 
 #### Android Debug
 ```bash
@@ -528,10 +552,10 @@ The script:
 flutter clean
 
 # 2. Build APK (for direct installation)
-flutter build apk --no-tree-shake-icons
+flutter build apk --no-tree-shake-icons --dart-define=API_BASE_URL=https://164.52.194.143/api
 
 # 3. Build App Bundle (for Play Store)
-flutter build appbundle --no-tree-shake-icons
+flutter build appbundle --no-tree-shake-icons --dart-define=API_BASE_URL=https://164.52.194.143/api
 ```
 
 **Output locations:**
@@ -674,6 +698,18 @@ Before public release:
 - Run build from external PowerShell terminal
 - Move project out of cloud-sync folders (OneDrive, Dropbox)
 - Use the [build-release.ps1](build-release.ps1) script
+
+### Linux MissingPluginException for speech or TTS
+
+**Context:** Running `flutter run` on Linux shows errors like `No implementation found for method initialize on channel plugin.csdcorp.com/speech_to_text` or `No implementation found for method awaitSpeakCompletion on channel flutter_tts`.
+
+**Cause:** The app is being run as a Linux desktop app. The current voice plugins are meant to be used in the Android build for this project.
+
+**Solution:** Test voice and handsfree mode on a physical Android device. Linux desktop can still be used for UI, login, API, and normal text chat testing.
+
+```bash
+flutter run -d <android-device-id> --dart-define=API_BASE_URL=https://164.52.194.143/api
+```
 
 ### Failed host lookup (errno = 7)
 

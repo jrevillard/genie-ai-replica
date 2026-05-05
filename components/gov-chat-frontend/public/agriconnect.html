@@ -685,7 +685,7 @@ async function sendQueryWithText(txt){
       const rawConf=d.metadata&&d.metadata.confidence_score?d.metadata.confidence_score:0;
       const conf=Math.min(Math.round(rawConf*100),100);
       const hasSrc=!!(d.metadata&&d.metadata.source_documents&&d.metadata.source_documents.length);
-      addBubble(d.response,'ai',hasSrc,conf);
+      addBubble(d.response,'ai',hasSrc,conf,d.queryId||null);
     }else addBubble('Sorry, encountered an error: '+(d.message||'Unknown'),'ai',false,0);
   }catch(e){rmTyping(tid);addBubble('Connection error. Please check your network.','ai');}
   const m=document.getElementById('chat-msgs');if(m)m.scrollTop=m.scrollHeight;
@@ -719,7 +719,7 @@ async function sendMsg(){
       const rawConf=d.metadata&&d.metadata.confidence_score?d.metadata.confidence_score:0;
       const conf=Math.min(Math.round(rawConf*100),100);
       const hasSrc=!!(d.metadata&&d.metadata.source_documents&&d.metadata.source_documents.length);
-      addBubble(d.response,'ai',hasSrc,conf);
+      addBubble(d.response,'ai',hasSrc,conf,d.queryId||null);
     }else if(d.error==='Unauthorized'||(d.message&&d.message.includes('log in'))){
       const su=localStorage.getItem('ac_loginName'),sh=localStorage.getItem('ac_loginHash');
       if(su&&sh){fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginName:su,encPassword:sh})}).then(r=>r.json()).then(dd=>{if(dd.accessToken){token=dd.accessToken;localStorage.setItem('ac_token',token);sendQueryWithText(txt);}else addBubble('Session expired. Please reload.','ai',false,0);}).catch(()=>addBubble('Session expired. Please reload.','ai',false,0));}
@@ -730,7 +730,7 @@ async function sendMsg(){
   saveChatHistory();
 }
 
-function addBubble(txt,sender,src,conf){src=src||false;conf=conf||0;
+function addBubble(txt,sender,src,conf,queryId){src=src||false;conf=conf||0;
   const m=document.getElementById('chat-msgs');if(!m)return;
   const now=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   const d=document.createElement('div');
@@ -744,8 +744,8 @@ function addBubble(txt,sender,src,conf){src=src||false;conf=conf||0;
     const confPct=conf>0?Math.min(Math.round(conf),100):null;
     let confBar='';
     if(confPct!==null){const col=confPct>=60?'#16a34a':confPct>=35?'#d97706':'#ba1a1a';confBar='<div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(193,201,191,.2)"><div style="flex:1;background:var(--surf-highest);border-radius:999px;height:4px"><div style="background:'+col+';height:4px;border-radius:999px;width:'+Math.min(confPct,100)+'%"></div></div><span style="font-size:9px;font-weight:700;color:'+col+'">'+confPct+'% confidence</span></div>';}
-    const fbId='fb'+Date.now();
-    const fb='<div style="margin-top:6px"><div style="display:flex;gap:6px"><button onclick="submitFeedback(this,1,\''+fbId+'\')" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Helpful</button><button onclick="submitFeedback(this,-1,\''+fbId+'\')" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Not helpful</button></div><div id="'+fbId+'" style="display:none;margin-top:8px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.25);border-radius:10px;padding:10px"><div style="font-size:9px;font-weight:700;color:var(--on-sv);margin-bottom:6px">&#9998; How would you improve this answer?</div><textarea placeholder="Type a better answer or correction here..." style="width:100%;min-height:70px;background:var(--surf-lo);border:1px solid rgba(193,201,191,.3);border-radius:7px;padding:7px;font-size:10px;color:var(--on-sv);resize:vertical;box-sizing:border-box;font-family:inherit"></textarea><div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end"><button onclick="cancelImprove(\''+fbId+'\')" style="padding:3px 10px;border-radius:7px;background:transparent;border:1px solid rgba(193,201,191,.3);font-size:9px;color:var(--on-sv);cursor:pointer">Cancel</button><button onclick="submitImprove(\''+fbId+'\')" style="padding:3px 10px;border-radius:7px;background:var(--primary);border:none;font-size:9px;font-weight:700;color:#fff;cursor:pointer">Submit improvement</button></div></div></div>';
+    const fbId='fb'+Date.now(); const qId=queryId||null;
+    const fb='<div style="margin-top:6px"><div style="display:flex;gap:6px"><button onclick="submitFeedback(this,1,\''+fbId+'\',\''+qId+'\')" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Helpful</button><button onclick="submitFeedback(this,-1,\''+fbId+'\',\''+qId+'\')" style="padding:3px 8px;border-radius:7px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.3);font-size:9px;font-weight:700;color:var(--on-sv);cursor:pointer">Not helpful</button></div><div id="'+fbId+'" style="display:none;margin-top:8px;background:var(--surf-mid);border:1px solid rgba(193,201,191,.25);border-radius:10px;padding:10px"><div style="font-size:9px;font-weight:700;color:var(--on-sv);margin-bottom:6px">&#9998; How would you improve this answer?</div><textarea placeholder="Type a better answer or correction here..." style="width:100%;min-height:70px;background:var(--surf-lo);border:1px solid rgba(193,201,191,.3);border-radius:7px;padding:7px;font-size:10px;color:var(--on-sv);resize:vertical;box-sizing:border-box;font-family:inherit"></textarea><div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end"><button onclick="cancelImprove(\''+fbId+'\')" style="padding:3px 10px;border-radius:7px;background:transparent;border:1px solid rgba(193,201,191,.3);font-size:9px;color:var(--on-sv);cursor:pointer">Cancel</button><button onclick="submitImprove(\''+fbId+'\',\''+qId+'\')" style="padding:3px 10px;border-radius:7px;background:var(--primary);border:none;font-size:9px;font-weight:700;color:#fff;cursor:pointer">Submit improvement</button></div></div></div>';
     d.innerHTML='<div class="chat-ai"'+brd+'>'+adv+'<p style="font-size:13px;font-weight:500;line-height:1.6;color:var(--on-surface)">'+fmt(txt)+'</p>'+confBar+fb+'</div><span style="font-size:9px;color:var(--outline);font-weight:700;margin-left:4px">'+now+'</span>';
   }
   m.appendChild(d);m.scrollTop=m.scrollHeight;
@@ -801,18 +801,24 @@ function switchLang(lang){
   }
 }
 
-function submitFeedback(btn,score,formId){
+function submitFeedback(btn,score,formId,queryId){
   btn.parentElement.querySelectorAll('button').forEach(b=>{b.style.background='var(--surf-mid)';b.style.color='var(--on-sv)';});
   const form=document.getElementById(formId);
   if(score===1){
     btn.style.background='var(--primary)';btn.style.color='#fff';
     showToast('Thank you for your feedback');
     if(form) form.style.display='none';
+    if(queryId&&queryId!='null'){
+      fetch(API+'/queries/'+queryId+'/feedback',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({rating:5,comment:'Helpful'})}).catch(e=>console.log('Feedback error:',e));
+    }
   } else {
     btn.style.background='var(--error-c)';btn.style.color='var(--error)';
     if(form){
       form.style.display='block';
       setTimeout(()=>{const ta=form.querySelector('textarea');if(ta)ta.focus();},100);
+    }
+    if(queryId&&queryId!='null'){
+      fetch(API+'/queries/'+queryId+'/feedback',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({rating:1,comment:'Not helpful'})}).catch(e=>console.log('Feedback error:',e));
     }
   }
 }
@@ -820,23 +826,15 @@ function cancelImprove(formId){
   const form=document.getElementById(formId);
   if(form) form.style.display='none';
 }
-function submitImprove(formId){
+function submitImprove(formId,queryId){
   const form=document.getElementById(formId);
   if(!form) return;
   const textarea=form.querySelector('textarea');
   const improvement=textarea.value.trim();
   if(!improvement){ showToast('Please write your improvement first'); return; }
-  const allMsgs=document.getElementById('chat-msgs');
-  let question='';
-  if(allMsgs){
-    const userDivs=[...allMsgs.querySelectorAll('.chat-user')];
-    if(userDivs.length>0) question=userDivs[userDivs.length-1].innerText;
+  if(queryId&&queryId!='null'){
+    fetch(API+'/queries/'+queryId+'/feedback',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({rating:1,comment:improvement})}).catch(e=>console.log('Feedback error:',e));
   }
-  try{
-    const feedbacks=JSON.parse(localStorage.getItem('ac_feedback')||'[]');
-    feedbacks.push({ts:new Date().toISOString(),question:question,improvement:improvement});
-    localStorage.setItem('ac_feedback',JSON.stringify(feedbacks.slice(-100)));
-  }catch(e){}
   form.innerHTML='<div style="font-size:10px;color:var(--primary);font-weight:700;padding:4px 0">&#10003; Thank you! Your improvement has been saved and will help train Keletso.</div>';
   showToast('Improvement submitted — thank you!');
 }

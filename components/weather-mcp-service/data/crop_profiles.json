@@ -1,0 +1,73 @@
+{
+  "potato_dhaka": {
+    "crop_rules": {
+      "temperature_min": { "min": 10, "source_section": "Weather Warning" },
+      "temperature_max": { "max": 30, "source_section": "Weather Warning" },
+      "humidity": { "min": 65, "max": 80, "source_section": "Favorable Weather Conditions" },
+      "rainfall_daily": [
+        { "severity": "medium", "min": 25, "source_section": "Weather Warning" },
+        { "severity": "critical", "min": 100, "source_section": "Weather Warning" }
+      ],
+      "wind_speed_kmh": { "max": 30, "source_section": "Weather Warning" }
+    },
+    "disease_risks": [
+      {
+        "name": "late_blight",
+        "when": {
+          "temperature_mean": { "min": 16, "max": 20 },
+          "humidity": { "min": 90 },
+          "precipitation": { "min": 1 }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "El clima frío y húmedo favorece el tizón tardío."
+      },
+      {
+        "name": "bacterial_wilt",
+        "when": {
+          "temperature_min": { "min": 28, "max": 30 },
+          "humidity": { "min": 80, "max": 90 }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "Alta temperatura nocturna y alta humedad favorecen la marchitez bacteriana."
+      },
+      {
+        "name": "fusarium_wilt",
+        "when": {
+          "temperature_min": { "min": 28, "max": 30 },
+          "humidity": { "min": 80, "max": 90 }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "Alta temperatura nocturna y alta humedad favorecen la marchitez por fusarium."
+      },
+      {
+        "name": "potato_leaf_roll_virus_vector",
+        "when": {
+          "temperature_mean": { "min": 18, "max": 20 },
+          "humidity": { "min": 70 }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "Estas condiciones favorecen el vector del virus del enrollamiento de la hoja de la papa."
+      },
+      {
+        "name": "termite",
+        "when": {
+          "temperature_max": { "min": 30 }
+        },
+        "requires_additional_variables": ["fog", "cloud_cover"],
+        "evaluable_with_current_feeds": false,
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "La niebla, nubosidad y temperatura anormalmente alta favorecen el riesgo de termitas."
+      },
+      {
+        "name": "potato_wire_worm",
+        "when": {
+          "soil_temperature": { "min": 10, "max": 27 }
+        },
+        "requires_additional_variables": ["soil_temperature"],
+        "evaluable_with_current_feeds": false,
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "La temperatura del suelo en este rango favorece el riesgo de gusano de alambre."
+      }
+    ]
+  }
+}

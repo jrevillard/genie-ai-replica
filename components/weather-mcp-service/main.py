@@ -13,11 +13,13 @@ Routes
 import asyncio
 import logging
 import os
+import pathlib
+import re
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from mcp_client import MCPClientManager
@@ -77,6 +79,7 @@ data_ingestor   = None
 risk_engine     = None
 notifier        = None
 scheduler       = None
+potato_ews      = None
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +89,7 @@ scheduler       = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global mcp_manager, weather_agent
-    global storage_layer, data_ingestor, risk_engine, notifier, scheduler
+    global storage_layer, data_ingestor, risk_engine, notifier, scheduler, potato_ews
 
     # ── MCP stdio sessions (Mapbox + BMD) ────────────────────────────────────
     try:
@@ -104,11 +107,14 @@ async def lifespan(app: FastAPI):
         from risk_engine import RiskEngine
         from notifier import Notifier
 
+        from short_term_potato_ews import PotatoShortTermEWS
+
         storage_layer = StorageLayer()
         data_ingestor = DataIngestor()
         risk_engine   = RiskEngine()
         notifier      = Notifier(storage_layer)
-        logger.info("[STARTUP] Early warning infrastructure ready")
+        potato_ews    = PotatoShortTermEWS(storage_layer)
+        logger.info("[STARTUP] Early warning infrastructure ready (potato EWS loaded)")
     except Exception as exc:
         logger.warning(
             "[STARTUP] Early warning infrastructure unavailable: %s — "
@@ -126,7 +132,7 @@ async def lifespan(app: FastAPI):
     if storage_layer and data_ingestor:
         try:
             from scheduler import create_scheduler
-            scheduler = create_scheduler(storage_layer, data_ingestor, risk_engine, notifier)
+            scheduler = create_scheduler(storage_layer, data_ingestor, risk_engine, notifier, potato_ews)
             scheduler.start()
             logger.info("[STARTUP] Scheduler started")
         except Exception as exc:
@@ -181,6 +187,43 @@ async def health():
     }
 
 
+_DATA_DIR = pathlib.Path(__file__).parent / "data"
+_BULLETIN_PATH = _DATA_DIR / "bulletin.md"
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+_BULLETIN_KEYWORDS = re.compile(
+    r"\b(bulletin|advisory bulletin|agro.?met|agromet|agrometeorological|agri.*advisory|national bulletin)\b",
+    re.IGNORECASE,
+)
+_PUBLIC_IMAGE_BASE = os.getenv("PUBLIC_API_BASE", "/api/weather/bulletin-image")
+
+
+def _build_bulletin_answer() -> str:
+    """Return bulletin.md as markdown with image links appended."""
+    text = _BULLETIN_PATH.read_text(encoding="utf-8")
+
+    image_lines: list[str] = []
+    for img_path in sorted(_DATA_DIR.iterdir()):
+        if img_path.suffix.lower() in _IMAGE_EXTENSIONS:
+            label = img_path.stem.replace("_", " ").title()
+            url = f"{_PUBLIC_IMAGE_BASE}/{img_path.name}"
+            image_lines.append(f"![{label}]({url})")
+
+    if image_lines:
+        text += "\n\n---\n\n## Field Visualizations\n\n" + "\n\n".join(image_lines)
+
+    return text
+
+
+@app.get("/bulletin/image/{filename}")
+async def serve_bulletin_image(filename: str):
+    """Serve images from the data directory for bulletin display in chat."""
+    safe_name = pathlib.Path(filename).name
+    img_path = _DATA_DIR / safe_name
+    if not img_path.exists() or img_path.suffix.lower() not in _IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(str(img_path))
+
+
 @app.post("/query")
 async def query(request: QueryRequest):
     """
@@ -196,6 +239,18 @@ async def query(request: QueryRequest):
       location    — display name
       forecast    — raw BMD / stored forecast data
     """
+    if _BULLETIN_KEYWORDS.search(request.query):
+        return {
+            "answer":     _build_bulletin_answer(),
+            "risk_tier":  0,
+            "risk_label": "Normal",
+            "advisory":   "",
+            "triggers":   [],
+            "buffer":     None,
+            "location":   "Bangladesh",
+            "forecast":   {},
+        }
+
     if weather_agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     result = await weather_agent.run(request.query)
@@ -246,6 +301,48 @@ async def get_latest_risk(
     )
 
 
+@app.get("/potato/risk/latest")
+async def get_potato_risk(
+    location: str = Query(..., description="Bangladesh district name (e.g. 'Dhaka')"),
+):
+    """
+    Return the most recent stored potato risk assessment for a district.
+    Returns tier=0 (Normal) if no assessment has been stored yet.
+    """
+    if storage_layer is None:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Storage unavailable"},
+        )
+
+    assessment = storage_layer.get_latest_crop_risk(location, "potato")
+    if assessment is None:
+        return {"location": location, "crop": "potato", "tier": 0, "tier_label": "Normal", "triggers": [], "message": ""}
+
+    # Strip internal ArangoDB fields before returning
+    for field in ("_key", "_id", "_rev"):
+        assessment.pop(field, None)
+    return assessment
+
+
+@app.post("/internal/run-potato-pipeline")
+async def trigger_potato_pipeline(background_tasks: BackgroundTasks):
+    """
+    Manually trigger potato EWS evaluation for all districts.
+    Runs in background — returns immediately.
+    """
+    if storage_layer is None or potato_ews is None:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Potato EWS not initialised"},
+        )
+
+    from scheduler import run_potato_ews_pipeline
+
+    background_tasks.add_task(run_potato_ews_pipeline, storage_layer, potato_ews)
+    return {"status": "potato_pipeline_started"}
+
+
 @app.post("/internal/run-pipeline")
 async def trigger_pipeline(background_tasks: BackgroundTasks):
     """
@@ -267,6 +364,7 @@ async def trigger_pipeline(background_tasks: BackgroundTasks):
         data_ingestor,
         risk_engine,
         notifier,
+        potato_ews,
     )
     return {"status": "pipeline_started", "message": "Hourly pipeline running in background"}
 

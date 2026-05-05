@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from data_ingestor import DataIngestor
     from notifier import Notifier
     from risk_engine import RiskEngine
+    from short_term_potato_ews import PotatoShortTermEWS
     from storage import StorageLayer
 
 logger = logging.getLogger(__name__)
@@ -28,11 +29,53 @@ logger = logging.getLogger(__name__)
 # Pipeline function
 # ---------------------------------------------------------------------------
 
+async def run_potato_ews_pipeline(
+    storage:    "StorageLayer",
+    potato_ews: "PotatoShortTermEWS",
+) -> dict:
+    """
+    Run the potato EWS for all districts that have a stored forecast.
+    Called after the main ingestion pipeline so weather_forecasts is fresh.
+    """
+    import asyncio
+    from data_ingestor import DISTRICT_COORDS
+
+    logger.info("[POTATO_PIPELINE] Potato EWS run started")
+    evaluated = 0
+    alerted = 0
+    errors = 0
+
+    for location in DISTRICT_COORDS:
+        try:
+            assessment = await asyncio.get_running_loop().run_in_executor(
+                None, lambda loc=location: potato_ews.evaluate(loc)
+            )
+            if assessment:
+                evaluated += 1
+                if potato_ews.should_alert(assessment):
+                    await asyncio.get_running_loop().run_in_executor(
+                        None, lambda a=assessment: potato_ews.record_alert(a)
+                    )
+                    alerted += 1
+        except Exception as exc:
+            logger.error("[POTATO_PIPELINE] Failed for %s: %s", location, exc)
+            errors += 1
+
+    result = {
+        "evaluated": evaluated,
+        "alerted": alerted,
+        "errors": errors,
+    }
+    logger.info("[POTATO_PIPELINE] Done: %s", result)
+    return result
+
+
 async def run_hourly_pipeline(
     storage:    "StorageLayer",
     ingestor:   "DataIngestor",
     risk_engine:"RiskEngine",
     notifier:   "Notifier",
+    potato_ews: "PotatoShortTermEWS | None" = None,
 ) -> dict:
     """
     Hourly pipeline:
@@ -99,6 +142,14 @@ async def run_hourly_pipeline(
         "alerts_dispatched":    notified,
     }
     logger.info("[PIPELINE] Hourly pipeline complete: %s", result)
+
+    # Run potato EWS after forecasts are fresh
+    if potato_ews is not None:
+        try:
+            await run_potato_ews_pipeline(storage, potato_ews)
+        except Exception as exc:
+            logger.error("[PIPELINE] Potato EWS pipeline failed: %s", exc)
+
     return result
 
 
@@ -111,6 +162,7 @@ def create_scheduler(
     ingestor:   "DataIngestor",
     risk_engine:"RiskEngine",
     notifier:   "Notifier",
+    potato_ews: "PotatoShortTermEWS | None" = None,
 ) -> AsyncIOScheduler:
     """
     Build and return a configured APScheduler instance.
@@ -121,7 +173,7 @@ def create_scheduler(
     scheduler.add_job(
         run_hourly_pipeline,
         trigger=IntervalTrigger(hours=1),
-        args=[storage, ingestor, risk_engine, notifier],
+        args=[storage, ingestor, risk_engine, notifier, potato_ews],
         id="hourly_pipeline",
         name="Hourly weather pipeline",
         replace_existing=True,

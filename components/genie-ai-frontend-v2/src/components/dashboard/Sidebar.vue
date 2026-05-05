@@ -322,7 +322,7 @@ function isNavActive(to: string): boolean {
 
           <button
             type="button"
-            class="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-subtle transition hover:bg-danger/10 hover:text-danger focus-visible:bg-danger/10 focus-visible:text-danger focus-visible:outline-none"
+            class="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-danger transition hover:bg-danger/10 hover:text-danger focus-visible:bg-danger/10 focus-visible:text-danger focus-visible:outline-none"
             :title="t('nav.logout', 'Log Out')"
             :aria-label="t('nav.logout', 'Log Out')"
             @click="logoutDialogOpen = true"
@@ -419,7 +419,7 @@ function isNavActive(to: string): boolean {
 
         <button
           type="button"
-          class="grid h-10 w-10 place-items-center rounded-full text-text-subtle transition hover:bg-danger/10 hover:text-danger"
+          class="grid h-10 w-10 place-items-center rounded-full text-danger transition hover:bg-danger/10 hover:text-danger"
           :title="t('nav.logout', 'Log Out')"
           :aria-label="t('nav.logout', 'Log Out')"
           @click="logoutDialogOpen = true"

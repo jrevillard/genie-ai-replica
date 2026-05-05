@@ -10,7 +10,9 @@ import BaseInput from '../components/ui/BaseInput.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
 import { signUpSchema, type SignUpInput } from '../lib/validation/schemas';
+import { useT } from '../i18n/composables';
 
+const { t } = useT();
 const router = useRouter();
 const auth = useAuthStore();
 
@@ -39,10 +41,10 @@ async function onSubmit() {
       password: form.password,
       fullName: `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
     });
-    sileo.success({ title: 'Account created. Check your email to verify.' });
+    sileo.success({ title: t('auth.signUp.success', 'Account created. Check your email to verify.') });
     router.push({ name: 'verify-email', query: { email: form.email } });
   } catch {
-    sileo.error({ title: auth.error ?? 'Registration failed' });
+    sileo.error({ title: auth.error ?? t('auth.signUp.failed', 'Registration failed') });
   }
 }
 </script>
@@ -54,15 +56,15 @@ async function onSubmit() {
 
       <div class="flex flex-1 flex-col justify-center">
         <div class="mx-auto w-full max-w-md">
-          <h1 class="text-3xl font-semibold text-slate-900">Create your AI Twins Today</h1>
-          <p class="mt-1 text-sm text-slate-500">Enter your email to sign up</p>
+          <h1 class="text-3xl font-semibold text-slate-900">{{ t('auth.signUp.title', 'Create your AI Twins Today') }}</h1>
+          <p class="mt-1 text-sm text-slate-500">{{ t('auth.signUp.subtitle', 'Enter your email to sign up') }}</p>
 
           <form class="mt-8 space-y-4" novalidate @submit.prevent="onSubmit">
             <BaseInput
               id="firstName"
               v-model="form.firstName"
-              label="First Name"
-              placeholder="Enter your first name"
+              :label="t('auth.signUp.firstNameLabel', 'First Name')"
+              :placeholder="t('auth.signUp.firstNamePlaceholder', 'Enter your first name')"
               autocomplete="given-name"
               required
               rounded="full"
@@ -71,8 +73,8 @@ async function onSubmit() {
             <BaseInput
               id="lastName"
               v-model="form.lastName"
-              label="Last Name"
-              placeholder="Enter your last name"
+              :label="t('auth.signUp.lastNameLabel', 'Last Name')"
+              :placeholder="t('auth.signUp.lastNamePlaceholder', 'Enter your last name')"
               autocomplete="family-name"
               required
               rounded="full"
@@ -82,8 +84,8 @@ async function onSubmit() {
               id="email"
               v-model="form.email"
               type="email"
-              label="Email Address"
-              placeholder="Enter your email address"
+              :label="t('auth.signUp.emailLabel', 'Email Address')"
+              :placeholder="t('auth.signUp.emailPlaceholder', 'Enter your email address')"
               autocomplete="email"
               required
               rounded="full"
@@ -93,8 +95,8 @@ async function onSubmit() {
               id="password"
               v-model="form.password"
               :type="passwordVisible ? 'text' : 'password'"
-              label="Password"
-              placeholder="Enter your password"
+              :label="t('auth.signUp.passwordLabel', 'Password')"
+              :placeholder="t('auth.signUp.passwordPlaceholder', 'Enter your password')"
               autocomplete="new-password"
               required
               rounded="full"
@@ -113,21 +115,25 @@ async function onSubmit() {
               </template>
             </BaseInput>
 
-            <BaseButton type="submit" variant="primary" block :loading="auth.loading">Sign up</BaseButton>
+            <BaseButton type="submit" variant="primary" block :loading="auth.loading">
+              {{ t('auth.signUp.submit', 'Sign up') }}
+            </BaseButton>
 
             <p class="pt-1 text-center text-body text-text-muted">
-              Already have an account?
-              <RouterLink to="/signin" class="font-semibold text-accent hover:underline">Sign in</RouterLink>
+              {{ t('auth.signUp.haveAccount', 'Already have an account?') }}
+              <RouterLink to="/signin" class="font-semibold text-accent hover:underline">
+                {{ t('auth.signUp.signin', 'Sign in') }}
+              </RouterLink>
             </p>
           </form>
         </div>
       </div>
 
       <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
-        By signing up, you agree to our
-        <a href="#" class="text-ieee-700 hover:underline">terms of service</a>
-        and
-        <a href="#" class="text-ieee-700 hover:underline">privacy policy</a>.
+        {{ t('auth.legal.prefix', 'By signing up, you agree to our') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.terms', 'terms of service') }}</a>
+        {{ t('auth.legal.and', 'and') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.privacy', 'privacy policy') }}</a>.
       </p>
     </section>
 

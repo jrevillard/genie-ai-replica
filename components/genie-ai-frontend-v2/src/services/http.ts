@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
+import { i18n } from '../i18n';
 
 const STORAGE_KEY = 'user';
 
@@ -45,6 +46,18 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (session?.accessToken) {
     config.headers.set('Authorization', `Bearer ${session.accessToken}`);
   }
+  // For FormData bodies, drop the default JSON content-type so the browser
+  // can set `multipart/form-data; boundary=...` itself. Otherwise the server
+  // can't parse the upload and rejects it as "No file uploaded".
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.delete('Content-Type');
+  }
+  // Tell the backend which UI language is active so any localized response
+  // strings (errors, emails) match what the user sees.
+  const locale = i18n.global.locale.value;
+  if (locale && !config.headers.has('Accept-Language')) {
+    config.headers.set('Accept-Language', locale);
+  }
   return config;
 });
 
@@ -72,7 +85,13 @@ api.interceptors.response.use(
     }
 
     const session = readSession();
-    if (!session?.refreshToken) {
+    if (!session) {
+      // No session at all — caller is browsing as a guest on a public page.
+      // Don't redirect; let the caller handle the 401 (e.g. fall back to a
+      // public surface, or show its own error state).
+      return Promise.reject(error);
+    }
+    if (!session.refreshToken) {
       clearSession();
       redirectToSignIn();
       return Promise.reject(error);

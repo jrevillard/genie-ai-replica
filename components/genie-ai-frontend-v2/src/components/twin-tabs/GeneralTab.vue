@@ -12,6 +12,10 @@ import {
 } from '../../services/aiTwins';
 import { useZodForm } from '../../composables/useZodForm';
 import { updateAiTwinSchema, type UpdateAiTwinInput } from '../../lib/validation/schemas';
+import { useT } from '../../i18n/composables';
+import { useTranslated } from '../../composables/useTranslated';
+
+const { t } = useT();
 
 const props = withDefaults(
   defineProps<{ twin: AiTwin; editing?: boolean }>(),
@@ -105,7 +109,7 @@ async function save(): Promise<boolean> {
     );
   }
   if (tasks.length === 0) {
-    notify.success('No changes to save');
+    notify.success(t('twins.general.noChangesToast', 'No changes to save'));
     return true;
   }
   try {
@@ -118,80 +122,92 @@ async function save(): Promise<boolean> {
       callGreeting: form.callGreeting,
       twinNumber: form.twinNumber.trim(),
     });
-    notify.success('Changes saved');
+    notify.success(t('twins.general.savedToast', 'Changes saved'));
     return true;
   } catch {
-    notify.error(store.error ?? 'Failed to save changes');
+    notify.error(store.error ?? t('twins.general.saveFailedToast', 'Failed to save changes'));
     return false;
   }
 }
 
 defineExpose({ save, discard });
+
+// Read-mode display values: translated to the active UI locale. When the user
+// clicks Update, the inputs flip back to the source `form.*` values so a save
+// can never overwrite the original with a translation.
+const { value: tName } = useTranslated(() => form.name ?? '', 'en');
+const { value: tDescription } = useTranslated(() => form.description ?? '', 'en');
+const { value: tChatGreeting } = useTranslated(() => form.chatGreeting, 'en');
+const { value: tCallGreeting } = useTranslated(() => form.callGreeting, 'en');
 </script>
 
 <template>
   <div class="space-y-8">
     <section>
-      <h2 class="text-title text-text">Change Your General Information</h2>
+      <h2 class="text-title text-text">{{ t('twins.general.sectionTitle', 'Change Your General Information') }}</h2>
       <div class="mt-4 space-y-5">
         <BaseInput
-          v-model="form.name"
-          label="AI Twin Name"
-          placeholder="Enter the twin's name"
+          :model-value="editing ? form.name : tName"
+          :label="t('twins.general.nameLabel', 'AI Twin Name')"
+          :placeholder="t('twins.general.namePlaceholder', `Enter the twin's name`)"
           :disabled="!editing"
           :error="errors.name"
+          @update:model-value="(v) => (form.name = v)"
         />
         <BaseTextarea
-          v-model="form.description"
-          label="Description"
+          :model-value="editing ? form.description : tDescription"
+          :label="t('twins.general.descLabel', 'Description')"
           :rows="6"
           :disabled="!editing"
           :error="errors.description"
+          @update:model-value="(v) => (form.description = v)"
         />
       </div>
     </section>
 
     <section>
-      <h2 class="text-title text-text">AI Twin Number</h2>
+      <h2 class="text-title text-text">{{ t('twins.general.numberTitle', 'AI Twin Number') }}</h2>
       <p class="mt-1 text-caption text-text-muted">
-        The phone number callers can use to reach this AI Twin.
+        {{ t('twins.general.numberSubtitle', 'The phone number callers can use to reach this AI Twin.') }}
       </p>
       <div class="mt-3">
         <BaseInput
           v-model="form.twinNumber"
           type="tel"
-          placeholder="+1 234 567 8900"
-          :disabled="!editing"
+          :placeholder="t('twins.general.numberPlaceholder', '+1 234 567 8900')"
+          disabled
         />
       </div>
     </section>
 
     <section>
-      <h2 class="text-title text-text">Chat Greeting</h2>
+      <h2 class="text-title text-text">{{ t('twins.general.chatGreetingTitle', 'Chat Greeting') }}</h2>
       <p class="mt-1 text-caption text-text-muted">
-        First message the AI sends when a chat opens.
+        {{ t('twins.general.chatGreetingSubtitle', 'First message the AI sends when a chat opens.') }}
       </p>
       <div class="mt-3">
         <BaseTextarea
-          v-model="form.chatGreeting"
+          :model-value="editing ? form.chatGreeting : tChatGreeting"
           :rows="4"
-          placeholder="Hey, how can I help you today?"
+          :placeholder="t('twins.general.greetingPlaceholder', 'Hey, how can I help you today?')"
           :disabled="!editing"
+          @update:model-value="(v) => (form.chatGreeting = v)"
         />
       </div>
     </section>
 
     <section>
-      <h2 class="text-title text-text">Call Greeting</h2>
+      <h2 class="text-title text-text">{{ t('twins.general.callGreetingTitle', 'Call Greeting') }}</h2>
       <p class="mt-1 text-caption text-text-muted">
-        First thing the AI says when a voice call connects.
+        {{ t('twins.general.callGreetingSubtitle', 'First thing the AI says when a voice call connects.') }}
       </p>
       <div class="mt-3">
         <BaseTextarea
-          v-model="form.callGreeting"
+          :model-value="editing ? form.callGreeting : tCallGreeting"
           :rows="4"
-          placeholder="Hey, how can I help you today?"
+          :placeholder="t('twins.general.greetingPlaceholder', 'Hey, how can I help you today?')"
           :disabled="!editing"
+          @update:model-value="(v) => (form.callGreeting = v)"
         />
       </div>
     </section>

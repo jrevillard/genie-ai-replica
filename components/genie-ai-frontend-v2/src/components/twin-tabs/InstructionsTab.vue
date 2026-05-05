@@ -5,6 +5,9 @@ import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import Icon from '../ui/Icon.vue';
+import { useT } from '../../i18n/composables';
+
+const { t } = useT();
 
 interface Instruction {
   id: string;
@@ -31,16 +34,16 @@ function add() {
 <template>
   <div class="space-y-5">
     <header>
-      <h2 class="text-title text-text">Instructions</h2>
-      <p class="text-caption text-text-muted">Add specific dos and don'ts for your AI Twin to follow.</p>
+      <h2 class="text-title text-text">{{ t('twins.instructions.title', 'Instructions') }}</h2>
+      <p class="text-caption text-text-muted">{{ t('twins.instructions.subtitle', "Add specific dos and don'ts for your AI Twin to follow.") }}</p>
     </header>
 
     <div class="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card">
-      <BaseInput v-model="draftTitle" placeholder="Title (e.g. Tone of voice)" />
-      <BaseInput v-model="draftBody" placeholder="Detail the instruction…" />
+      <BaseInput v-model="draftTitle" :placeholder="t('twins.instructions.titlePlaceholder', 'Title (e.g. Tone of voice)')" />
+      <BaseInput v-model="draftBody" :placeholder="t('twins.instructions.bodyPlaceholder', 'Detail the instruction…')" />
       <div class="flex justify-end">
         <BaseButton variant="primary" size="sm" rounded="full" :disabled="!draftTitle.trim()" @click="add">
-          <Icon :icon="PlusSignIcon" :size="14" /> Add instruction
+          <Icon :icon="PlusSignIcon" :size="14" /> {{ t('twins.instructions.add', 'Add instruction') }}
         </BaseButton>
       </div>
     </div>
@@ -54,8 +57,8 @@ function add() {
     <EmptyState
       v-else
       :icon="Tag01Icon"
-      title="No instructions yet"
-      description="Each instruction is a rule the AI Twin will follow during conversations."
+      :title="t('twins.instructions.emptyTitle', 'No instructions yet')"
+      :description="t('twins.instructions.emptyBody', 'Each instruction is a rule the AI Twin will follow during conversations.')"
     />
   </div>
 </template>

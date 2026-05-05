@@ -11,7 +11,9 @@ import BaseInput from '../components/ui/BaseInput.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
 import { signInSchema, type SignInInput } from '../lib/validation/schemas';
+import { useT } from '../i18n/composables';
 
+const { t } = useT();
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
@@ -28,7 +30,7 @@ const passwordVisible = ref(false);
 
 onMounted(() => {
   if (route.query.error === 'session_expired') {
-    sileo.warning({ title: 'Your session expired. Please sign in again.' });
+    sileo.warning({ title: t('auth.signIn.sessionExpired', 'Your session expired. Please sign in again.') });
   }
 });
 
@@ -36,11 +38,11 @@ async function onSubmit() {
   if (!validate(form)) return;
   try {
     await auth.signIn({ loginName: form.loginName.trim(), password: form.password });
-    sileo.success({ title: 'Welcome back!' });
+    sileo.success({ title: t('auth.signIn.welcomeBack', 'Welcome back!') });
     const redirect = (route.query.redirect as string) || '/dashboard';
     router.push(redirect);
   } catch {
-    sileo.error({ title: auth.error ?? 'Sign-in failed' });
+    sileo.error({ title: auth.error ?? t('auth.signIn.failed', 'Sign-in failed') });
   }
 }
 </script>
@@ -52,16 +54,16 @@ async function onSubmit() {
 
       <div class="flex flex-1 flex-col justify-center">
         <div class="mx-auto w-full max-w-md">
-          <h1 class="text-3xl font-semibold text-slate-900">Welcome back!</h1>
-          <p class="mt-1 text-sm text-slate-500">Login to access all your data</p>
+          <h1 class="text-3xl font-semibold text-slate-900">{{ t('auth.signIn.title', 'Welcome back!') }}</h1>
+          <p class="mt-1 text-sm text-slate-500">{{ t('auth.signIn.subtitle', 'Login to access all your data') }}</p>
 
           <form class="mt-8 space-y-4" novalidate @submit.prevent="onSubmit">
             <BaseInput
               id="loginName"
               v-model="form.loginName"
               type="text"
-              label="Username or email"
-              placeholder="Enter your username or email"
+              :label="t('auth.signIn.usernameLabel', 'Username or email')"
+              :placeholder="t('auth.signIn.usernamePlaceholder', 'Enter your username or email')"
               autocomplete="username"
               required
               rounded="full"
@@ -72,8 +74,8 @@ async function onSubmit() {
               id="password"
               v-model="form.password"
               :type="passwordVisible ? 'text' : 'password'"
-              label="Password"
-              placeholder="Enter your password"
+              :label="t('auth.signIn.passwordLabel', 'Password')"
+              :placeholder="t('auth.signIn.passwordPlaceholder', 'Enter your password')"
               autocomplete="current-password"
               required
               rounded="full"
@@ -93,30 +95,34 @@ async function onSubmit() {
             </BaseInput>
 
             <div class="flex items-center justify-between">
-              <BaseCheckbox v-model="form.remember" label="Remember me" size="sm" />
+              <BaseCheckbox v-model="form.remember" :label="t('auth.signIn.remember', 'Remember me')" size="sm" />
               <RouterLink
                 to="/forgot-password"
                 class="text-meta font-semibold text-accent hover:underline"
               >
-                Forgot your password?
+                {{ t('auth.signIn.forgot', 'Forgot your password?') }}
               </RouterLink>
             </div>
 
-            <BaseButton type="submit" variant="primary" block :loading="auth.loading">Login</BaseButton>
+            <BaseButton type="submit" variant="primary" block :loading="auth.loading">
+              {{ t('auth.signIn.submit', 'Login') }}
+            </BaseButton>
 
             <p class="pt-1 text-center text-body text-text-muted">
-              Don't have an account?
-              <RouterLink to="/signup" class="font-semibold text-accent hover:underline">Register</RouterLink>
+              {{ t('auth.signIn.noAccount', "Don't have an account?") }}
+              <RouterLink to="/signup" class="font-semibold text-accent hover:underline">
+                {{ t('auth.signIn.register', 'Register') }}
+              </RouterLink>
             </p>
           </form>
         </div>
       </div>
 
       <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
-        By signing up, you agree to our
-        <a href="#" class="text-ieee-700 hover:underline">terms of service</a>
-        and
-        <a href="#" class="text-ieee-700 hover:underline">privacy policy</a>.
+        {{ t('auth.legal.prefix', 'By signing up, you agree to our') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.terms', 'terms of service') }}</a>
+        {{ t('auth.legal.and', 'and') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.privacy', 'privacy policy') }}</a>.
       </p>
     </section>
 

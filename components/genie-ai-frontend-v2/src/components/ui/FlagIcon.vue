@@ -7,13 +7,15 @@ const props = withDefaults(
     // without a flag (e.g. Mandinka 'mnk') pass the closest country code.
     code: string;
     width?: number | string;
-    rounded?: boolean;
+    // 'sm' = subtle rounded rectangle (default), 'circle' = fully round badge.
+    shape?: 'sm' | 'circle';
     alt?: string;
   }>(),
-  { width: 20, rounded: true, alt: '' }
+  { width: 20, shape: 'sm', alt: '' }
 );
 
 const src = computed(() => `https://flagcdn.com/${props.code.toLowerCase()}.svg`);
+const isCircle = computed(() => props.shape === 'circle');
 </script>
 
 <template>
@@ -21,11 +23,12 @@ const src = computed(() => `https://flagcdn.com/${props.code.toLowerCase()}.svg`
     :src="src"
     :alt="alt"
     :width="width"
+    :height="width"
     :class="[
       'inline-block shrink-0 object-cover ring-1 ring-black/5',
-      rounded ? 'rounded-sm' : '',
+      isCircle ? 'rounded-full' : 'rounded-sm',
     ]"
-    :style="{ aspectRatio: '4 / 3' }"
+    :style="{ aspectRatio: isCircle ? '1 / 1' : '4 / 3' }"
     aria-hidden="true"
     loading="lazy"
   />

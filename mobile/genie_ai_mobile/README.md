@@ -382,6 +382,21 @@ flutter build apk --release --dart-define=API_BASE_URL=https://164.52.194.143/ap
 }
 ```
 
+### Bengali Service Tree Data
+
+The app default locale is Bengali (`bn`) for the Bangladesh MEWA build. The side service tree requests categories from the backend with `locale=bn`:
+
+```text
+GET /api/services/categories?locale=bn
+```
+
+The backend must have Bengali translation rows for service categories and services. If those BN rows are missing, the backend can return `name: null` or `children: [null, ...]`. The mobile app now falls back to English labels so the UI does not show `null`, but the recommended production fix is to populate Bengali entries in the backend translation collections:
+
+- `serviceCategoryTranslations` for category names
+- `serviceTranslations` for child service names
+
+After adding translations, restart or refresh the app so `ServiceTreePanel` reloads categories for the current locale.
+
 ### Assets (pubspec.yaml)
 
 All assets must be declared in [pubspec.yaml](pubspec.yaml):
@@ -710,6 +725,19 @@ Before public release:
 ```bash
 flutter run -d <android-device-id> --dart-define=API_BASE_URL=https://164.52.194.143/api
 ```
+
+### Bengali service categories display as null
+
+**Context:** After switching the app to Bengali, the service tree shows `Unknown Category` or service rows named `null`.
+
+**Cause:** The backend response for `GET /api/services/categories?locale=bn` is missing Bengali translations for one or more categories/services.
+
+**Solution:** Populate Bengali translation rows in the backend collections:
+
+- `serviceCategoryTranslations`
+- `serviceTranslations`
+
+The mobile app has an English fallback to avoid rendering `null`, but complete Bengali labels require backend BN translation data.
 
 ### Failed host lookup (errno = 7)
 

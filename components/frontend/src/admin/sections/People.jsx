@@ -15,11 +15,11 @@
  * Patient row click opens the Patient 360 side-sheet.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Users, UserCheck, UserPlus, BookOpen, ArrowLeftRight,
   Phone, MapPin, ShieldCheck, Plus, Download, Filter,
-  Search, ChevronDown, Eye, MoreHorizontal,
+  Search, ChevronDown, ChevronLeft, ChevronRight, Eye, MoreHorizontal,
   ArrowUpRight, ArrowDownRight, Calendar, Mic,
   Check, X, ChevronUp, FileText, ClipboardList,
 } from "lucide-react";
@@ -268,14 +268,37 @@ function Toolbar({ tab, filters, setFilters, search, setSearch }) {
 
 // ── Patients table ────────────────────────────────────────
 
-function PatientsTable({ rows, onRowClick }) {
+function PatientsTable({
+  rows, onRowClick,
+  // Server-side paging props (added 2026-05-06). All optional so the
+  // table degrades gracefully when paging info isn't threaded.
+  serverTotal = null,        // total rows matching current search across the whole DB
+  pageOffset  = 0,
+  pageSize    = 100,
+  onPrevPage,
+  onNextPage,
+  isFiltered  = false,       // true when search query is active
+  searchQuery = "",
+}) {
   if (rows.length === 0) {
     return (
       <div className="cr-table-wrap">
-        <div className="cr-empty">No patients match your filters.</div>
+        <div className="cr-empty">
+          {isFiltered
+            ? `No patients matched "${searchQuery}".`
+            : "No patients match your filters."}
+        </div>
       </div>
     );
   }
+  // Paging window math. `serverTotal` is authoritative when present; otherwise
+  // we degrade to the legacy "Showing N" label.
+  const haveServerPaging = typeof serverTotal === "number" && serverTotal >= 0;
+  const firstIdx = pageOffset + 1;
+  const lastIdx  = pageOffset + rows.length;
+  const totalLbl = haveServerPaging ? serverTotal : rows.length;
+  const canPrev  = haveServerPaging && pageOffset > 0;
+  const canNext  = haveServerPaging && lastIdx < serverTotal;
   return (
     <div className="cr-table-wrap">
       <table className="cr-table" aria-label="Patients">
@@ -361,8 +384,50 @@ function PatientsTable({ rows, onRowClick }) {
           })}
         </tbody>
       </table>
-      <div className="cr-table-foot">
-        <span>Showing {rows.length} patient{rows.length === 1 ? "" : "s"}</span>
+      <div className="cr-table-foot" style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+      }}>
+        <span>
+          {haveServerPaging
+            ? <>Showing <strong>{firstIdx}–{lastIdx}</strong> of <strong>{totalLbl.toLocaleString()}</strong> patient{totalLbl === 1 ? "" : "s"}{isFiltered ? <> matching <em>"{searchQuery}"</em></> : null}</>
+            : <>Showing {rows.length} patient{rows.length === 1 ? "" : "s"}</>}
+        </span>
+        {haveServerPaging && (onPrevPage || onNextPage) && (
+          <div style={{ display: "inline-flex", gap: 6 }}>
+            <button type="button"
+                    onClick={onPrevPage}
+                    disabled={!canPrev}
+                    aria-label="Previous page"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "5px 10px", border: "1px solid var(--ops-rule, #d1d5db)",
+                      borderRadius: 6,
+                      background: canPrev ? "#fff" : "#f3f4f6",
+                      color: canPrev ? "var(--ops-ink, #111827)" : "#9ca3af",
+                      cursor: canPrev ? "pointer" : "not-allowed",
+                      fontSize: 12, fontFamily: "inherit", fontWeight: 600,
+                    }}>
+              <ChevronLeft size={12} strokeWidth={2} />
+              Prev
+            </button>
+            <button type="button"
+                    onClick={onNextPage}
+                    disabled={!canNext}
+                    aria-label="Next page"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "5px 10px", border: "1px solid var(--ops-rule, #d1d5db)",
+                      borderRadius: 6,
+                      background: canNext ? "#fff" : "#f3f4f6",
+                      color: canNext ? "var(--ops-ink, #111827)" : "#9ca3af",
+                      cursor: canNext ? "pointer" : "not-allowed",
+                      fontSize: 12, fontFamily: "inherit", fontWeight: 600,
+                    }}>
+              Next
+              <ChevronRight size={12} strokeWidth={2} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1558,7 +1623,33 @@ export default function People() {
   const [search, setSearch]   = useState("");
   const [selectedPatientId, setSelectedPatientId] = useState(null);
 
-  const { data: pRes } = useAdminApi("/api/v1/admin/patients?limit=100",    { refreshMs: 60000 });
+  // ── Server-side patients pagination (added 2026-05-06) ─────────
+  // PATIENT_PAGE_SIZE controls one page; we ask the server for that
+  // many rows + a total count, render the page, and offer Prev/Next.
+  // The client-side `search` box is debounced and pushed into the URL
+  // as &search=, so a query searches the WHOLE DB rather than just
+  // the current page. Other client filters (voiceFirst / needsVerify
+  // / seenThisWeek) still operate on the current page — they're
+  // labelled accordingly in the toolbar.
+  const PATIENT_PAGE_SIZE = 100;
+  const [patientOffset, setPatientOffset] = useState(0);
+  const [patientServerSearch, setPatientServerSearch] = useState("");
+  // Debounce the search input so typing doesn't fire an HTTP request
+  // per keystroke. Resets the page offset whenever the query changes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const trimmed = (search || "").trim();
+      setPatientServerSearch((prev) => (prev === trimmed ? prev : trimmed));
+      // reset offset on any query change so the user always lands on page 1.
+      setPatientOffset((cur) => (trimmed === patientServerSearch ? cur : 0));
+    }, 280);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+  const patientsUrl =
+    `/api/v1/admin/patients?limit=${PATIENT_PAGE_SIZE}&offset=${patientOffset}` +
+    (patientServerSearch ? `&search=${encodeURIComponent(patientServerSearch)}` : "");
+  const { data: pRes } = useAdminApi(patientsUrl, { refreshMs: 60000 });
   const { data: cRes } = useAdminApi("/api/v1/admin/caregivers-directory", { refreshMs: 60000 });
   // Phase 10 v1.3 — privacy-acceptance status keyed by caregiver_id.
   // Same admin endpoint the Governance card consumes; safe-fields-only
@@ -1571,8 +1662,12 @@ export default function People() {
   const { data: tRes, refresh: refreshTransfers } = useAdminApi("/api/v1/admin/transfer-requests",    { refreshMs: 30000 });
   const { data: aRes, refresh: refreshApprovals } = useAdminApi("/api/v1/caregiver-v2/admin/applications", { refreshMs: 30000 });
 
-  const patients   = pRes?.patients   || [];
-  const caregivers = cRes?.caregivers || [];
+  const patients     = pRes?.patients   || [];
+  // Total count over the current server-side query (server WHERE filter
+  // applied, ignoring limit/offset). Fall back to the page length if a
+  // legacy backend response doesn't include `total`.
+  const patientsTotal = (typeof pRes?.total === "number") ? pRes.total : patients.length;
+  const caregivers   = cRes?.caregivers || [];
   // Build a lookup of caregiver_id → safe acceptance row so the
   // CaregiversTable can render a Privacy column without making a
   // per-row request.
@@ -1592,7 +1687,13 @@ export default function People() {
   const approvalsPending = aRes?.status_counts?.pending ?? cgApps.filter((a) =>
     (a.status || "").toLowerCase() === "pending").length;
 
-  // Filter patients
+  // Filter patients.
+  // The free-text `search` is now performed server-side (via the URL
+  // query param), so we no longer match it client-side here — that
+  // would double-filter the current page and confuse the row count.
+  // The flag-style filters (voiceFirst, needsVerify, seenThisWeek)
+  // still apply client-side and only narrow the current page; the
+  // toolbar surfaces this scope explicitly.
   const filteredPatients = useMemo(() => {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
@@ -1609,15 +1710,9 @@ export default function People() {
         const last = p.last_visit_at || p.updated_at || p.created_at;
         if (!last || new Date(last) < weekAgo) return false;
       }
-      if (search) {
-        const q = search.toLowerCase();
-        const hay = [p.id, p.name, p.phone, p.email, p.region,
-                     (p.conditions || []).join(" ")].filter(Boolean).join(" ").toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
       return true;
     });
-  }, [patients, filters, search]);
+  }, [patients, filters]);
 
   const filteredCaregivers = useMemo(() => {
     return caregivers.filter((c) => {
@@ -1693,7 +1788,9 @@ export default function People() {
   }, [patients, caregivers]);
 
   const counts = {
-    patients:   patients.length,
+    // Show the server-side total in the section-tab badge so an admin
+    // immediately sees "Patients · 1,053" rather than the page size.
+    patients:   patientsTotal,
     caregivers: caregivers.length,
     approvals:  approvalsPending,
     literacy:   litQueue.filter((r) => (r.status || "pending").toLowerCase() === "pending").length,
@@ -1731,9 +1828,13 @@ export default function People() {
         <StatCard
           label="Patients registered"
           icon={Users}
-          value={patients.length}
-          delta={patients.length > 0 ? "live directory" : "no records yet"}
-          up={patients.length > 0}
+          value={patientsTotal}
+          delta={
+            patientServerSearch
+              ? `${patientsTotal} match "${patientServerSearch}"`
+              : (patientsTotal > 0 ? "live directory" : "no records yet")
+          }
+          up={patientsTotal > 0}
           accent="rgba(129, 140, 248, 0.85)"
           spark={stats.spark}
         />
@@ -1774,7 +1875,19 @@ export default function People() {
                search={search} setSearch={setSearch} />
 
       {/* Body */}
-      {tab === "patients"   && <PatientsTable   rows={filteredPatients}   onRowClick={setSelectedPatientId} />}
+      {tab === "patients" && (
+        <PatientsTable
+          rows={filteredPatients}
+          onRowClick={setSelectedPatientId}
+          serverTotal={patientsTotal}
+          pageOffset={patientOffset}
+          pageSize={PATIENT_PAGE_SIZE}
+          onPrevPage={() => setPatientOffset((o) => Math.max(0, o - PATIENT_PAGE_SIZE))}
+          onNextPage={() => setPatientOffset((o) => o + PATIENT_PAGE_SIZE)}
+          isFiltered={!!patientServerSearch}
+          searchQuery={patientServerSearch}
+        />
+      )}
       {tab === "caregivers" && (
         <CaregiversTable
           rows={filteredCaregivers}

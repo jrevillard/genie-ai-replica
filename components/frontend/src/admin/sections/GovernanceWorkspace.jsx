@@ -24,6 +24,7 @@ import {
 import "../../styles/integrations.css";
 import "../../styles/governance.css";
 import { useAdminApi } from "../hooks/useAdminApi.js";
+import AbuseDefensePanel from "../AbuseDefensePanel.jsx";
 
 
 // ── Helpers ─────────────────────────────────────────────
@@ -790,6 +791,7 @@ function CostTab() {
 const TABS = [
   { id: "audit",     label: "Audit log" },
   { id: "rbac",      label: "Roles & access" },
+  { id: "abuse",     label: "Abuse defense" },
   { id: "broadcast", label: "Broadcast" },
   { id: "cost",      label: "Cost & usage" },
 ];
@@ -805,6 +807,7 @@ export default function GovernanceWorkspace() {
   const counts = {
     audit:     auditCount,
     rbac:      25,
+    abuse:     null,
     broadcast: 46,
     cost:      null,
   };
@@ -918,6 +921,7 @@ export default function GovernanceWorkspace() {
         <div className="ops-section">
           {tab === "audit"     && <AuditTab />}
           {tab === "rbac"      && <RbacTab />}
+          {tab === "abuse"     && <AbuseDefensePanel />}
           {tab === "broadcast" && <BroadcastTab />}
           {tab === "cost"      && <CostTab />}
         </div>

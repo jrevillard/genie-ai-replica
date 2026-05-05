@@ -142,12 +142,24 @@ async def admin_stats(request: Request):
 async def admin_list_patients(request: Request, limit: int = 50, offset: int = 0, search: str = ""):
     _verify_admin(request)
     if search:
+        # ArcadeDB SQL: LIKE is case-sensitive; use the OrientDB-style
+        # `.toLowerCase()` method on the column so a search for "lamin"
+        # also matches "Lamin Jallow". The bound parameter is lowercased
+        # in Python before binding.
+        q = f"%{search.lower()}%"
         r = _sql(
             "SELECT id, name, phone, email, age, gender, region, conditions, medications, "
             "consultation_count, preferred_language, created_at, updated_at "
-            "FROM PatientVertex WHERE name LIKE :q OR phone LIKE :q2 OR id LIKE :q3 "
+            "FROM PatientVertex WHERE name.toLowerCase() LIKE :q "
+            "OR phone.toLowerCase() LIKE :q OR id.toLowerCase() LIKE :q "
             "ORDER BY updated_at DESC LIMIT :lim SKIP :off",
-            {"q": f"%{search}%", "q2": f"%{search}%", "q3": f"%{search}%", "lim": limit, "off": offset},
+            {"q": q, "lim": limit, "off": offset},
+        )
+        rc = _sql(
+            "SELECT count(*) AS n FROM PatientVertex "
+            "WHERE name.toLowerCase() LIKE :q OR phone.toLowerCase() LIKE :q "
+            "OR id.toLowerCase() LIKE :q",
+            {"q": q},
         )
     else:
         r = _sql(
@@ -156,6 +168,7 @@ async def admin_list_patients(request: Request, limit: int = 50, offset: int = 0
             "FROM PatientVertex ORDER BY updated_at DESC LIMIT :lim SKIP :off",
             {"lim": limit, "off": offset},
         )
+        rc = _sql("SELECT count(*) AS n FROM PatientVertex", {})
     patients = []
     for p in _rows(r):
         for f in ("conditions", "medications"):
@@ -164,7 +177,23 @@ async def admin_list_patients(request: Request, limit: int = 50, offset: int = 0
                 try: p[f] = json.loads(v)
                 except: p[f] = []
         patients.append(p)
-    return {"patients": patients, "count": len(patients)}
+    # ``total`` is the count over the same WHERE filter (for paging UI),
+    # while ``count`` is the page size that was actually returned.
+    total = 0
+    try:
+        rows = _rows(rc)
+        if rows:
+            total = int(rows[0].get("n") or rows[0].get("count(*)") or 0)
+    except Exception:
+        total = 0
+    return {
+        "patients": patients,
+        "count":    len(patients),
+        "total":    total,
+        "limit":    int(limit),
+        "offset":   int(offset),
+        "search":   search,
+    }
 
 
 class PatientUpdateRequest(BaseModel):

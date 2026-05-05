@@ -4,6 +4,12 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.example.genie_ai_mobile"
     ndkVersion = "27.0.12077973"
@@ -26,15 +32,79 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "pl.leancode.patrol.PatrolJUnitRunner"
+    }
+
+    testOptions {
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
+    }
+
+    flavorDimensions "environment"
+
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai.dev",
+                nginxPublicDomain: "genieai.itu.int"
+            ]
+        }
+        staging {
+            dimension "environment"
+            applicationIdSuffix ".staging"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai.staging",
+                nginxPublicDomain: "genieai.itu.int"
+            ]
+        }
+        e2e {
+            dimension "environment"
+            applicationIdSuffix ".e2e"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai.e2e",
+                nginxPublicDomain: "genieai.itu.int"
+            ]
+        }
+        itu {
+            dimension "environment"
+            manifestPlaceholders = [
+                appAuthRedirectScheme: "com.itu.genieai",
+                nginxPublicDomain: "genieai.itu.int"
+            ]
+        }
+    }
+
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.debug
+            signingConfig = keystorePropertiesFile.exists()
+                ? signingConfigs.release
+                : signingConfigs.debug
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // PatrolJUnitRunner is added to main APK by Flutter via debugApi.
+    // We need it in the androidTest APK too — reference the Gradle subproject directly.
+    androidTestImplementation(project(":patrol"))
+
+    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test:rules:1.2.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.services:test-services:1.4.2")
+    androidTestUtil("androidx.test:orchestrator:1.5.1")
 }

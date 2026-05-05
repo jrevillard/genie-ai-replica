@@ -1,39 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
-import 'dart:convert';
 
 // Service Imports
 import 'package:genie_ai_mobile/services/user_service.dart';
-import 'package:genie_ai_mobile/services/password_proxy.dart';
+import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
-import 'package:genie_ai_mobile/services/connectivity_service.dart'; // IMPORTED CONNECTIVITY
+import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/services/connectivity_service.dart';
+import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Component Imports
-import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.dart';
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 
-class SettingsComponent extends StatefulWidget {
+class SettingsComponent extends ConsumerStatefulWidget {
   final Map<String, dynamic> user;
   const SettingsComponent({super.key, required this.user});
 
   @override
-  State<SettingsComponent> createState() => _SettingsComponentState();
+  ConsumerState<SettingsComponent> createState() => _SettingsComponentState();
 }
 
-class _SettingsComponentState extends State<SettingsComponent> {
-  final UserService _userService = UserService();
-  // RESTORED: Field now used in account management validation logic
-  final PasswordProxy _passwordProxy = PasswordProxy();
+class _SettingsComponentState extends ConsumerState<SettingsComponent> {
+  late UserService _userService;
 
   // ===========================================================================
   // COMPONENT STATE - Mirrored exactly from Vue data()
   // ===========================================================================
   bool _isLoading = true;
   String? _errorMessage;
-  bool _isThemeReady = false; // RESTORED
-  String _currentUserId = "";
-  // Timer? _themeEnforcementTimer; // REMOVED: Conflicts with "Preview" feature
+  bool _isThemeReady = false;
 
   // Settings Object - Logic from settings initialization
   late String _selectedLanguage;
@@ -51,41 +48,14 @@ class _SettingsComponentState extends State<SettingsComponent> {
     "createdAt": "",
   };
 
-  bool _isEditingEmail = false;
-  // RESTORED: Field used to display error messages below the email field
-  String? _emailError;
-  // RESTORED: Field used to track changes during edit mode transitions
-  String _newEmail = "";
-  // RESTORED: Field used to disable buttons during API calls
-  bool _isEmailUpdating = false;
-  // RESTORED: Field used to track confirmation modal visibility
-  bool _showEmailConfirmModal = false;
-  late TextEditingController _emailController;
-  final _emailChangePasswordController = TextEditingController();
-  // RESTORED: Field used for specific email error feedback in modals
-  String? _emailChangeError;
-
-  // RESTORED: Field used to control password modal state
-  bool _showPasswordReset = false;
-  // RESTORED: Field used to track deletion modal lifecycle
-  bool _showDeleteAccountModal = false;
-  final _deleteAccountPasswordController = TextEditingController();
-  final _deleteAccountReasonController = TextEditingController();
-  // RESTORED: Field used for account deletion error display
-  String? _deleteAccountError;
-  // RESTORED: Field used to prevent duplicate deletion requests
   bool _isDeletingAccount = false;
-
-  // Confirmation flags
-  bool _showResetDataConfirm = false;
-  bool _showDeleteAccountConfirm = false;
 
   @override
   void initState() {
     super.initState();
     debugPrint("[SETTINGS] Component created, initializing state...");
 
-    _emailController = TextEditingController();
+    _userService = UserService(api: ref.read(apiServiceProvider));
 
     // Initialize from Global State (ThemeManager)
     _selectedTheme = ThemeManager().userPreference;
@@ -94,7 +64,6 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
     // Logic branch mirroring Vue created() hooks
     _fetchUserData();
-    // _startThemeEnforcement(); // DISABLED: We use reactive state now
 
     // Handling layout readiness delay
     Future.delayed(Duration.zero, () {
@@ -108,11 +77,6 @@ class _SettingsComponentState extends State<SettingsComponent> {
   @override
   void dispose() {
     debugPrint("[SETTINGS] Component destroying, cleaning up resources...");
-    // _themeEnforcementTimer?.cancel();
-    _emailController.dispose();
-    _emailChangePasswordController.dispose();
-    _deleteAccountPasswordController.dispose();
-    _deleteAccountReasonController.dispose();
     super.dispose();
   }
 
@@ -132,13 +96,6 @@ class _SettingsComponentState extends State<SettingsComponent> {
     });
   }
   */
-
-  /// FIXED: Connected to I18nService
-  String translate(String key, String fallback) {
-    final String val = tr(key);
-    // If tr() returns the key itself (missing translation), use fallback
-    return val == key ? fallback : val;
-  }
 
   /// Exhaustive implementation of fetchUserData()
   Future<void> _fetchUserData() async {
@@ -162,19 +119,15 @@ class _SettingsComponentState extends State<SettingsComponent> {
           "name":
               userMap['fullName'] ??
               userMap['name'] ??
-              translate("settings.userName", "User"),
+              tr("settings.userName"),
           "email": userMap['email'] ?? "",
           "accountType":
               userMap['accountType'] ??
               userMap['role'] ??
-              translate("settings.standardAccount", "Standard Account"),
+              tr("settings.standardAccount"),
           "userId": (userMap['id'] ?? userMap['_key'] ?? "").toString(),
           "createdAt": userMap['createdAt'] ?? "",
         };
-        _currentUserId = _userData['userId'];
-
-        // BUG FIX: Explicitly populating controller to fix empty box bug
-        _emailController.text = _userData['email'];
 
         _selectedLanguage = userMap['language'] ?? 'English';
         if (userMap['fontSize'] != null) {
@@ -184,17 +137,11 @@ class _SettingsComponentState extends State<SettingsComponent> {
         _soundNotifications = userMap['soundNotifications'] ?? true;
         _isLoading = false;
       });
-      debugPrint(
-        "[SETTINGS] State update complete. Current email: ${_emailController.text}",
-      );
     } catch (e) {
       debugPrint("[SETTINGS] API Error in fetchUserData: $e");
       if (mounted) {
         setState(() {
-          _errorMessage = translate(
-            "settings.unableToLoadUser",
-            "Unable to load user information",
-          );
+          _errorMessage = tr("settings.unableToLoadUser");
           _isLoading = false;
         });
       }
@@ -211,8 +158,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
       if (isOnline) {
         debugPrint("[SETTINGS] Syncing settings object to API...");
-        // FIX: Passing _currentUserId to resolve 500 greedy route collision
-        await _userService.updateAccountSettings(_currentUserId, {
+        await _userService.updateAccountSettings({
           'theme': _selectedTheme,
           'language': _selectedLanguage,
           'fontSize': _fontSize.toInt(),
@@ -234,14 +180,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
         SnackBar(
           content: Text(
             isOnline
-                ? translate(
-                    "settings.settingsSaved",
-                    "Settings saved successfully!",
-                  )
-                : translate(
-                    "settings.settingsSavedOffline",
-                    "Settings saved locally (Offline Mode)",
-                  ),
+                ? tr("settings.settingsSaved")
+                : tr("settings.settingsSavedOffline"),
           ),
         ),
       );
@@ -252,120 +192,22 @@ class _SettingsComponentState extends State<SettingsComponent> {
   }
 
   // ===========================================================================
-  // ACCOUNT MANAGEMENT
+  // ACCOUNT MANAGEMENT — mirrors web SettingsComponent pattern
   // ===========================================================================
 
-  void _handleEmailToggle() {
-    debugPrint("[SETTINGS] toggleEmailEdit() triggered.");
-    if (_isEditingEmail) {
-      _validateAndPrepareEmailChange();
+  Future<void> _openAccountConsole() async {
+    final uri = Uri.parse('${getConfig().realmUrl}/account/');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
-      setState(() {
-        _isEditingEmail = true;
-        _newEmail = _emailController.text; // USING _newEmail
-        _emailError = null; // RESET _emailError
-      });
-      debugPrint("[SETTINGS] Email field unlocked for editing.");
-    }
-  }
-
-  Future<void> _validateAndPrepareEmailChange() async {
-    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
-    if (!emailRegex.hasMatch(_emailController.text)) {
-      debugPrint("[SETTINGS] Email validation failed for format.");
-      setState(
-        () => _emailError = translate(
-          "settings.enterValidEmail",
-          "Enter valid email",
-        ),
-      ); // USING _emailError
-      return;
-    }
-
-    if (_emailController.text == _userData['email']) {
-      setState(() => _isEditingEmail = false);
-      return;
-    }
-
-    setState(
-      () => _showEmailConfirmModal = true,
-    ); // USING _showEmailConfirmModal
-    _renderEmailConfirmModalUI();
-  }
-
-  void _renderEmailConfirmModalUI() {
-    debugPrint("[SETTINGS] Rendering showEmailConfirmModal overlay...");
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          translate("settings.confirmEmailChange", "Confirm Email Change"),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_emailChangeError != null) // USING _emailChangeError
-              Text(
-                _emailChangeError!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            Text(
-              "${translate("settings.changingEmailTo", "Changing email to")} ${_emailController.text} will log you out.",
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _emailChangePasswordController,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: translate(
-                  "settings.enterPasswordConfirm",
-                  "Enter password to confirm",
-                ),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() => _showEmailConfirmModal = false);
-              Navigator.pop(ctx);
-            },
-            child: Text(translate("settings.cancel", "Cancel")),
-          ),
-          ElevatedButton(
-            onPressed: () => _finalizeEmailChange(ctx),
-            child: Text(translate("settings.confirmChange", "Confirm Change")),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _finalizeEmailChange(BuildContext dialogCtx) async {
-    setState(() => _isEmailUpdating = true); // USING _isEmailUpdating
-    try {
-      await _userService.updateEmail(
-        _emailController.text,
-        _emailChangePasswordController.text,
-        _currentUserId,
-      );
-      await _userService.logout();
-      if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
-    } catch (e) {
-      debugPrint("[SETTINGS] Emailfinalize error: $e");
       if (mounted) {
-        setState(() {
-          _isEmailUpdating = false;
-          _emailChangeError = translate(
-            "settings.updateFailed",
-            "Update failed. Please verify your password.",
-          );
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              tr("settings.cannotOpenAccountConsole"),
+            ),
+          ),
+        );
       }
     }
   }
@@ -375,122 +217,50 @@ class _SettingsComponentState extends State<SettingsComponent> {
   // ===========================================================================
 
   void _initiateAccountDeletionFlow() {
-    setState(
-      () => _showDeleteAccountConfirm = true,
-    ); // USING _showDeleteAccountConfirm
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(translate("settings.deleteAccountTitle", "Delete Account")),
+        title: Text(tr("settings.deleteAccountTitle")),
         content: Text(
-          translate(
-            "settings.deleteAccountConfirmation",
-            "Are you sure you want to delete your account? This action is permanent.",
-          ),
+          tr("settings.confirmDeleteAccount"),
         ),
         actions: [
           TextButton(
+            key: const Key('settings_delete_cancel_button'),
             onPressed: () => Navigator.pop(ctx),
-            child: Text(translate("settings.cancel", "Cancel")),
+            child: Text(tr("settings.cancel")),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(
-                () => _showDeleteAccountModal = true,
-              ); // USING _showDeleteAccountModal
-              _renderDeletionPasswordUI();
-            },
-            child: Text(translate("common.continue", "Continue")),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _renderDeletionPasswordUI() {
-    debugPrint("[SETTINGS] Step 2: Security password collection modal.");
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          translate("settings.confirmAccountDeletion", "Final Security Check"),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_deleteAccountError != null) // USING _deleteAccountError
-              Text(
-                _deleteAccountError!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            Text(
-              translate(
-                "settings.accountDeletionWarning",
-                "Warning: All data will be wiped permanently.",
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _deleteAccountReasonController,
-              decoration: InputDecoration(
-                labelText: translate(
-                  "settings.deletionReason",
-                  "Reason (optional)",
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _deleteAccountPasswordController,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: translate(
-                  "settings.enterPasswordConfirm",
-                  "Enter Password to Confirm",
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() => _showDeleteAccountModal = false);
-              Navigator.pop(ctx);
-            },
-            child: Text(translate("settings.cancel", "Cancel")),
-          ),
-          ElevatedButton(
+            key: const Key('settings_delete_confirm_button'),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              setState(
-                () => _isDeletingAccount = true,
-              ); // USING _isDeletingAccount
+              Navigator.pop(ctx);
+              setState(() => _isDeletingAccount = true);
               try {
-                await _userService.deleteAccount(
-                  _deleteAccountPasswordController.text,
-                  reason: _deleteAccountReasonController.text,
-                );
-                if (mounted)
+                await _userService.deleteAccount();
+                await ref.read(authProvider.notifier).logout();
+                if (mounted) {
                   Navigator.pushNamedAndRemoveUntil(
                     context,
                     '/login',
                     (r) => false,
                   );
+                }
               } catch (e) {
-                setState(() {
-                  _isDeletingAccount = false;
-                  _deleteAccountError = translate(
-                    "settings.deletionFailed",
-                    "Deletion failed. Incorrect password.",
+                if (mounted) {
+                  setState(() => _isDeletingAccount = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        tr("accountDeletionFailed"),
+                      ),
+                    ),
                   );
-                });
+                }
               }
             },
             child: Text(
-              translate("settings.permanentlyDeleteAccount", "Delete Account"),
+              tr("settings.permanentlyDeleteAccount"),
             ),
           ),
         ],
@@ -504,30 +274,26 @@ class _SettingsComponentState extends State<SettingsComponent> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          translate("settings.resetUserDataTitle", "Reset User Data"),
+          tr("settings.resetUserDataTitle"),
         ),
         content: Text(
-          translate(
-            "settings.confirmResetUserData",
-            "This will clear all profile information and chat history. Continue?",
-          ),
+          tr("settings.confirmResetUserData"),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(translate("settings.cancel", "Cancel")),
+            child: Text(tr("settings.cancel")),
           ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
               setState(() {
                 _isLoading = true;
-                _showResetDataConfirm = true; // USING _showResetDataConfirm
               });
               await _userService.resetUserData();
               _fetchUserData();
             },
-            child: Text(translate("settings.reset", "Reset")),
+            child: Text(tr("settings.reset")),
           ),
         ],
       ),
@@ -652,7 +418,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
           // UPDATED: Wrapped title in Flexible to prevent overflow on long translations
           Flexible(
             child: Text(
-              translate("settings.title", "Settings"),
+              tr("settings.title"),
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 22,
@@ -670,7 +436,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
                 // ADDED: Link to About Screen
                 IconButton(
                   icon: Icon(Icons.info_outline, color: titleColor),
-                  tooltip: translate("about.title", "About"),
+                  tooltip: tr("about.title"),
                   onPressed: () => Navigator.pushNamed(context, '/about'),
                   padding: const EdgeInsets.all(8),
                   constraints: const BoxConstraints(),
@@ -681,7 +447,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: Text(
-                      translate("settings.close", "Close"),
+                      tr("settings.close"),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     ),
@@ -702,7 +468,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
                     ),
                     onPressed: _handleSave,
                     child: Text(
-                      translate("settings.saveSettings", "Save"),
+                      tr("settings.saveSettings"),
                       style: const TextStyle(color: Colors.white),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -719,9 +485,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
   Widget _buildIdentitySection(Color accent, Color titleColor) {
     final String rawName =
-        _userData['name'] ?? translate("settings.userName", "User");
+        _userData['name'] ?? tr("settings.userName");
     final String name = rawName.isEmpty
-        ? translate("settings.userName", "User")
+        ? tr("settings.userName")
         : rawName;
 
     // FIX: Robust type-safe initials logic to resolve dynamic mapping TypeError on Web
@@ -795,34 +561,34 @@ class _SettingsComponentState extends State<SettingsComponent> {
     return Column(
       children: [
         _buildThemedGroupBox(
-          translate("settings.display", "Display"),
+          tr("settings.display"),
           boxBg,
           titleColor,
           [
             _buildItemLabel(
-              translate("settings.displayLanguage", "Display Language"),
+              tr("settings.displayLanguage"),
             ),
             // UPDATED: Passing titleColor ensures text is visible.
             // UPDATED: Passing dropdownBg ensures menu background matches dialog theme.
             LanguageSelector(textColor: titleColor, dropdownColor: dropdownBg),
             const SizedBox(height: 20),
-            _buildItemLabel(translate("settings.theme", "Theme")),
+            _buildItemLabel(tr("settings.theme")),
             _buildThemeButtonRow(accent),
             const SizedBox(height: 20),
-            _buildItemLabel(translate("settings.fontSize", "Font Size")),
+            _buildItemLabel(tr("settings.fontSize")),
             _buildFontSizeSliderControl(accent, titleColor),
           ],
         ),
         const SizedBox(height: 16),
         _buildThemedGroupBox(
-          translate("settings.notifications", "Notifications"),
+          tr("settings.notifications"),
           boxBg,
           titleColor,
           [
             // FIX: Passing accent color for switch
             // UPDATED: Disabled if OFFLINE
             _buildToggleRow(
-              translate("settings.emailUpdates", "Email Updates"),
+              tr("settings.emailUpdates"),
               _emailUpdates,
               isOnline ? (v) => setState(() => _emailUpdates = v) : null,
               accent,
@@ -830,7 +596,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
             const SizedBox(height: 16),
             // FIX: Passing accent color for switch
             _buildToggleRow(
-              translate("settings.soundNotifications", "Sound Notifications"),
+              tr("settings.soundNotifications"),
               _soundNotifications,
               (v) => setState(() => _soundNotifications = v),
               accent,
@@ -852,7 +618,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          translate("settings.accountManagement", "Account Management"),
+          tr("settings.accountManagement"),
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -866,162 +632,41 @@ class _SettingsComponentState extends State<SettingsComponent> {
             color: boxBg,
             borderRadius: BorderRadius.circular(10),
           ),
-          // UPDATED: Changed Row to Column to stack Email and Password sections vertically on handset
           child: Column(
             children: [
-              // 1. Email Section
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    translate("settings.emailAddress", "Email Address"),
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  if (_emailError != null) // USING _emailError
-                    Text(
-                      _emailError!,
-                      style: const TextStyle(color: Colors.red, fontSize: 11),
-                    ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _emailController,
-                          enabled:
-                              _isEditingEmail &&
-                              isOnline, // Wired to toggle state & ONLINE
-                          style: TextStyle(
-                            color: titleColor,
-                          ), // Dynamic text color
-                          decoration: InputDecoration(
-                            filled: true,
-                            // FIX: Logic to blend background when not editing
-                            fillColor: _isEditingEmail
-                                ? (isDark
-                                      ? Colors.white.withOpacity(0.1)
-                                      : Colors.white)
-                                : Colors.transparent,
-                            border: const OutlineInputBorder(
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accent, // Primary Color
-                          foregroundColor: Colors.white, // White Text
-                          // DISABLED VISUALLY IF OFFLINE
-                          disabledBackgroundColor: Colors.grey.withOpacity(0.3),
-                        ),
-                        // UPDATED: Disable edit button if offline
-                        onPressed: isOnline ? _handleEmailToggle : null,
-                        child: Text(
-                          _isEditingEmail
-                              ? translate("common.save", "Save")
-                              : translate("common.edit", "Edit"),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              // 1. Manage My Account — opens Keycloak account console
+              _buildActionBtnCard(
+                "${tr("settings.manageMyAccount")} →",
+                tr("settings.manageMyAccountDesc"),
+                isOnline ? _openAccountConsole : null,
+                isDark,
+                key: const Key('settings_manage_account_button'),
               ),
-              const SizedBox(height: 24), // Vertical spacing between sections
-              // 2. Password Section
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    translate("settings.password", "Password"),
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                      backgroundColor: accent, // Primary Color
-                      foregroundColor: Colors.white, // White Text
-                      // DISABLED VISUALLY IF OFFLINE
-                      disabledBackgroundColor: Colors.grey.withOpacity(0.3),
-                    ),
-                    // UPDATED: Disable password change if offline
-                    onPressed: isOnline ? _renderPasswordResetOverlay : null,
-                    child: Text(
-                      translate("settings.changePassword", "Change Password"),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              // 2. Reset User Data
+              _buildActionBtnCard(
+                tr("settings.resetUserData"),
+                tr("settings.resetUserDataDesc"),
+                isOnline ? _showResetDataWorkflow : null,
+                isDark,
+                key: const Key('settings_reset_data_button'),
+                overrideColor: Colors.red[800],
               ),
-
-              const SizedBox(height: 32),
-
-              // 3. Danger Zone (Stacked Vertically for Mobile Safety)
-              Column(
-                children: [
-                  _buildActionBtnCard(
-                    translate("settings.resetUserData", "Reset User Data"),
-                    translate(
-                      "settings.resetUserDataDesc",
-                      "Wipe chat history.",
-                    ),
-                    // UPDATED: Disable if offline
-                    isOnline ? _showResetDataWorkflow : null,
-                    isDark,
-                    // Custom Override: Darker red than delete button
-                    overrideColor: Colors.red[800],
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionBtnCard(
-                    translate("settings.deleteAccount", "Delete Account"),
-                    translate(
-                      "settings.deleteAccountDesc",
-                      "Permanent deletion.",
-                    ),
-                    // UPDATED: Disable if offline
-                    isOnline ? _initiateAccountDeletionFlow : null,
-                    isDark,
-                    isDanger: true,
-                  ),
-                ],
+              const SizedBox(height: 12),
+              // 3. Delete My Account — real GDPR deletion
+              _buildActionBtnCard(
+                tr("settings.deleteAccount"),
+                tr("settings.deleteAccountDesc"),
+                isOnline ? _initiateAccountDeletionFlow : null,
+                isDark,
+                key: const Key('settings_delete_account_button'),
+                isDanger: true,
               ),
             ],
           ),
         ),
       ],
     );
-  }
-
-  // ===========================================================================
-  // MODAL OVERLAY WRAPPERS -
-  // ===========================================================================
-
-  void _renderPasswordResetOverlay() {
-    debugPrint(
-      "[SETTINGS] initiatePasswordChange() logic triggered. Constructing Modal...",
-    );
-    setState(() => _showPasswordReset = true); // USING _showPasswordReset
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.white, // FIX: Transparency issues resolved
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Material(
-              color: Colors.white,
-              child: PasswordResetInitiateScreen(
-                isEmbedded: true,
-                prefilledEmail: _userData['email'],
-              ),
-            ),
-          ),
-        ),
-      ),
-    ).then((_) => setState(() => _showPasswordReset = false));
   }
 
   // ===========================================================================
@@ -1063,7 +708,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
       children: [
         Expanded(
           child: _buildThemeToggleBtn(
-            translate("settings.themeLight", "Light"),
+            tr("settings.themeLight"),
             _selectedTheme == 'light',
             accent,
             () => setState(() => _selectedTheme = 'light'),
@@ -1072,7 +717,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
         const SizedBox(width: 10),
         Expanded(
           child: _buildThemeToggleBtn(
-            translate("settings.themeDark", "Dark"),
+            tr("settings.themeDark"),
             _selectedTheme == 'dark',
             accent,
             () => setState(() => _selectedTheme = 'dark'),
@@ -1159,6 +804,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
     String desc,
     VoidCallback? onTap,
     bool isDark, {
+    Key? key,
     bool isDanger = false,
     Color? overrideColor,
   }) {
@@ -1178,6 +824,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
     return Column(
       children: [
         ElevatedButton(
+          key: key,
           style: ElevatedButton.styleFrom(
             backgroundColor: bgColor,
             minimumSize: const Size(double.infinity, 50),
@@ -1208,15 +855,6 @@ class _SettingsComponentState extends State<SettingsComponent> {
     child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.grey)),
   );
 
-  // RESTORED: unused but kept for original parity
-  Widget _buildBulletPoint(String text) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(" • "),
-      Expanded(child: Text(text, style: const TextStyle(fontSize: 13.5))),
-    ],
-  );
-
   Widget _buildErrorState(Color accent) => Center(
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -1225,7 +863,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
         const SizedBox(height: 16),
         ElevatedButton(
           onPressed: _fetchUserData,
-          child: Text(translate("common.retry", "Retry Connection")),
+          child: Text(tr("settings.retry")),
         ),
       ],
     ),

@@ -168,6 +168,10 @@ services:
       - KONG_DNS_ORDER=${KONG_DNS_ORDER:-LAST,A,AAAA,CNAME}
       - KONG_DNS_STALE_TTL=${KONG_DNS_STALE_TTL:-5}
       - KONG_NGINX_DAEMON=off
+      # Trust nginx (Docker network) to send correct X-Forwarded-* headers.
+      # Kong is internal-only; nginx on the same network is the TLS termination layer.
+      # Restrict to Docker bridge subnet to prevent header spoofing from outside.
+      - KONG_TRUSTED_IPS=${KONG_TRUSTED_IPS:-172.16.0.0/12}
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s
@@ -216,6 +220,7 @@ services:
         mode: host
     environment:
       - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
+      - NGINX_HTTPS_PORT=${NGINX_HTTPS_PORT:-443}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
       - KONG_PROXY_HOST=${KONG_PROXY_HOST:-kong}
       - NGINX_FRONTEND_HOST=${NGINX_FRONTEND_HOST:-frontend}
@@ -404,7 +409,7 @@ services:
       - ARANGO_USER=${ARANGO_USER:-root}
       # Keycloak OIDC discovery — must use the public URL (via NGINX proxy),
       # not the internal Docker URL, so the issuer matches the JWT's iss claim.
-      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       # Additional Keycloak realms for multi-realm token validation (JSON map: {"realm":"client-id"})
@@ -467,7 +472,7 @@ services:
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_URL=http://arango-vector-db:8529
-      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -890,7 +895,7 @@ services:
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
-      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_DATAPREP_CLIENT_ID: ${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
       KC_DATAPREP_CLIENT_SECRET: ${KC_DATAPREP_CLIENT_SECRET:-}
@@ -1023,7 +1028,7 @@ services:
       TRANSLATION_SERVICE_PORT: 9031
       DOC_REPO_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
-      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
@@ -1143,8 +1148,12 @@ services:
       - KC_DB_URL=${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak}
       - KC_DB_USERNAME=${KC_DB_USERNAME:-keycloak}
       - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      # Keycloak behind reverse proxy with /auth path prefix (docs option 1).
+      # Partially dynamic URLs: simple hostname (no scheme/port/path),
+      # proxy-headers: xforwarded, Kong sends X-Forwarded-Prefix: /auth
+      # via request-transformer plugin → Keycloak resolves context-path dynamically.
       - KC_PROXY_HEADERS=xforwarded
-      - KC_HOSTNAME=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
+      - KC_HOSTNAME=${NGINX_PUBLIC_DOMAIN:-localhost}
       # Enable HTTP — NGINX handles TLS termination, Keycloak only needs HTTP internally
       - KC_HTTP_ENABLED=true
       # SMTP (reuses EMAIL_* from Section 2)
@@ -1199,6 +1208,8 @@ services:
       - GENIE_ADMIN_EMAIL=${GENIE_ADMIN_EMAIL}
       - KC_PROXY_CLIENT_SECRET=${KEYCLOAK_PROXY_CLIENT_SECRET}
       - KC_DATAPREP_CLIENT_SECRET=${KC_DATAPREP_CLIENT_SECRET}
+      - KC_MOBILE_CLIENT_ID=${KC_MOBILE_CLIENT_ID}
+      - KC_MOBILE_REDIRECT_SCHEME=${KC_MOBILE_REDIRECT_SCHEME}
       - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
       # Realm properties (registration, email, security, localization, tokens)
       - KEYCLOAK_REGISTRATION_ENABLED=${KEYCLOAK_REGISTRATION_ENABLED:-true}

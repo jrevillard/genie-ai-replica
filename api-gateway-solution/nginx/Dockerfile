@@ -5,6 +5,8 @@ RUN apk add --no-cache openssl gettext
 # Copy nginx configuration
 COPY conf/default.conf.template /etc/nginx/conf.d/default.conf.template
 COPY conf/security-headers.inc /etc/nginx/conf.d/security-headers.inc
+COPY conf/apple-app-site-association /etc/nginx/conf.d/apple-app-site-association
+COPY conf/assetlinks.json /etc/nginx/conf.d/assetlinks.json
 
 # Copy ModSecurity configs
 COPY modsec/ /etc/nginx/modsec/

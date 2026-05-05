@@ -4,8 +4,6 @@ import 'package:genie_ai_mobile/services/api_service.dart';
 class ChatHistoryProxy {
   final ApiService _api = ApiService();
 
-  String? get accessToken => _api.accessToken;
-
   Future<Map<String, dynamic>> getUserConversations(
     String userId,
     Map<String, Object> map, {

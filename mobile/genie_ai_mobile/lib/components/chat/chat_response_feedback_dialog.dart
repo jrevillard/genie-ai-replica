@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 class ChatResponseFeedbackDialog extends StatefulWidget {
   final Map<String, dynamic> message;
-  final Function(String, [String]) translate;
   final Function(Map<String, dynamic>) onSubmit;
 
   const ChatResponseFeedbackDialog({
     super.key,
     required this.message,
-    required this.translate,
     required this.onSubmit,
   });
 
@@ -85,7 +84,7 @@ class _ChatResponseFeedbackDialogState
               children: [
                 // Header
                 Text(
-                  widget.translate("responseRating.title", "Rate Response"),
+                  tr("responseRating.title"),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -94,10 +93,7 @@ class _ChatResponseFeedbackDialogState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  widget.translate(
-                    "responseRating.note",
-                    "Your feedback helps improve our responses.",
-                  ),
+                  tr("responseRating.note"),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
@@ -132,10 +128,7 @@ class _ChatResponseFeedbackDialogState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.translate(
-                                  "responseRating.chatbotResponse",
-                                  "Chatbot Response",
-                                ),
+                                tr("responseRating.chatbotResponse"),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
@@ -162,10 +155,7 @@ class _ChatResponseFeedbackDialogState
                             Expanded(
                               child: _buildThumbButton(
                                 type: 'up',
-                                label: widget.translate(
-                                  "feedback.positive",
-                                  "Helpful",
-                                ),
+                                label: tr("feedback.positive"),
                                 isActive: _thumbFeedback == 'up',
                                 colors: colors,
                                 isDark: isDark,
@@ -175,10 +165,7 @@ class _ChatResponseFeedbackDialogState
                             Expanded(
                               child: _buildThumbButton(
                                 type: 'down',
-                                label: widget.translate(
-                                  "feedback.negative",
-                                  "Not Helpful",
-                                ),
+                                label: tr("feedback.negative"),
                                 isActive: _thumbFeedback == 'down',
                                 colors: colors,
                                 isDark: isDark,
@@ -194,10 +181,7 @@ class _ChatResponseFeedbackDialogState
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            widget.translate(
-                              "feedback.promptText",
-                              "How would you rate this?",
-                            ),
+                            tr("feedback.promptText"),
                             style: TextStyle(
                               fontWeight: FontWeight.w500,
                               color: colors['text'].withOpacity(0.7),
@@ -214,10 +198,7 @@ class _ChatResponseFeedbackDialogState
                           maxLines: 3,
                           style: TextStyle(color: colors['text'], fontSize: 14),
                           decoration: InputDecoration(
-                            hintText: widget.translate(
-                              "responseRating.additionalComments",
-                              "Additional comments...",
-                            ),
+                            hintText: tr("responseRating.additionalComments"),
                             hintStyle: TextStyle(
                               color: colors['text'].withOpacity(0.5),
                             ),
@@ -249,7 +230,7 @@ class _ChatResponseFeedbackDialogState
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
                       child: Text(
-                        widget.translate("responseRating.cancel", "Cancel"),
+                        tr("responseRating.cancel"),
                         style: TextStyle(color: colors['text']),
                       ),
                     ),
@@ -270,7 +251,7 @@ class _ChatResponseFeedbackDialogState
                           ? _submit
                           : null,
                       child: Text(
-                        widget.translate("responseRating.submit", "Submit"),
+                        tr("responseRating.submit"),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,

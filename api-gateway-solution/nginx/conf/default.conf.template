@@ -107,6 +107,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port ${NGINX_HTTPS_PORT};
         proxy_connect_timeout 300s;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
@@ -175,6 +176,20 @@ server {
         proxy_connect_timeout 300s;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+    }
+
+    # Android App Links verification
+    location = /.well-known/assetlinks.json {
+        default_type application/json;
+        alias /etc/nginx/conf.d/assetlinks.json;
+        add_header Cache-Control "public, max-age=3600" always;
+    }
+
+    # iOS Universal Links verification
+    location = /.well-known/apple-app-site-association {
+        default_type text/plain;
+        alias /etc/nginx/conf.d/apple-app-site-association;
+        add_header Cache-Control "public, max-age=3600" always;
     }
 
     # Frontend Vue.js application

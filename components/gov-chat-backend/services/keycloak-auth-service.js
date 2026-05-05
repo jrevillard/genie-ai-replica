@@ -10,15 +10,15 @@ const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID;
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
 const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 
-// Additional realms for backend token validation (JSON map: realm-name -> client-id)
-// e.g. {"partner":"partner-app","contractor":"contractor-app"}
-let additionalRealms = {};
+// Additional realms for backend token validation (JSON array of realm names).
+// e.g. ["partner","contractor"]
+let additionalRealms = [];
 try {
-  const parsed = JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || '{}');
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+  const parsed = JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || '[]');
+  if (Array.isArray(parsed)) {
     additionalRealms = parsed;
   } else {
-    logger.warn('[KeycloakAuth] KEYCLOAK_ADDITIONAL_REALMS must be a JSON object, ignoring');
+    logger.warn('[KeycloakAuth] KEYCLOAK_ADDITIONAL_REALMS must be a JSON array, ignoring');
   }
 } catch {
   logger.warn('[KeycloakAuth] Invalid JSON in KEYCLOAK_ADDITIONAL_REALMS, ignoring');
@@ -103,12 +103,6 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
 const issuerMap = new Map();
 
 /**
- * Issuer → expected client_id (azp) map for per-realm audience validation.
- * Populated by init() alongside issuerMap.
- */
-const audienceMap = new Map();
-
-/**
  * Init state for lazy singleton with retry cooldown
  */
 let initPromise = null;
@@ -116,15 +110,13 @@ let initFailedAt = 0;
 let initialized = false;
 
 /**
- * Fetch OIDC discovery document and populate issuer and audience maps.
+ * Fetch OIDC discovery document and populate issuer map.
  *
  * @param {string} [idpUrl] - Base URL of the IdP (default: KEYCLOAK_URL/realms/KEYCLOAK_REALM).
- * @param {string} [clientId] - Expected client_id (azp) for this realm (default: KEYCLOAK_CLIENT_ID).
  * @throws {Error} If discovery fetch fails
  */
-async function init(idpUrl, clientId) {
+async function init(idpUrl) {
   const baseUrl = idpUrl || `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
-  const expectedClientId = clientId || KEYCLOAK_CLIENT_ID;
   if (!baseUrl) {
     throw new Error('KEYCLOAK_URL environment variable is required for OIDC discovery');
   }
@@ -145,7 +137,6 @@ async function init(idpUrl, clientId) {
 
   const jwks = createJwksCache(doc.jwks_uri);
   issuerMap.set(doc.issuer, jwks);
-  audienceMap.set(doc.issuer, expectedClientId);
   initialized = true;
   initFailedAt = 0;
 
@@ -163,16 +154,14 @@ async function init(idpUrl, clientId) {
  * @throws {Error} If primary realm initialization fails
  */
 async function initAllRealms() {
-  // Initialize primary realm (uses KEYCLOAK_REALM + KEYCLOAK_CLIENT_ID)
   await init();
 
-  const realmEntries = Object.entries(additionalRealms);
-  if (realmEntries.length === 0) return;
+  if (additionalRealms.length === 0) return;
 
-  for (const [realmName, clientId] of realmEntries) {
+  for (const realmName of additionalRealms) {
     const realmUrl = `${KEYCLOAK_URL}/realms/${realmName}`;
     try {
-      await init(realmUrl, clientId);
+      await init(realmUrl);
       logger.info(`[KeycloakAuth] Additional realm initialized: ${realmName}`);
     } catch (err) {
       logger.warn(`[KeycloakAuth] Failed to initialize additional realm '${realmName}': ${err.message}`);
@@ -270,13 +259,10 @@ const keycloakAuthService = {
         requiredClaims: ['iss', 'exp']
       });
 
-      // Validate azp (authorized party) — the client that requested the token.
-      // Keycloak 26+ sets aud=account for access tokens; azp holds the
-      // actual client ID. Uses per-realm mapping from audienceMap.
-      const expectedAudience = audienceMap.get(unverifiedIss);
-      if (verifiedPayload.azp && verifiedPayload.azp !== expectedAudience) {
-        throw new TokenVerificationError('TOKEN_INVALID', 'Token audience validation failed');
-      }
+      // Note: we do NOT validate azp (authorized party). Any client within
+      // the trusted realm that obtains a valid token should be accepted by
+      // this resource server — this is standard OIDC Resource Server behavior.
+      // The token's signature, issuer, and expiration are already verified above.
 
       return verifiedPayload;
     };
@@ -379,23 +365,6 @@ const keycloakAuthService = {
   },
 
   /**
-   * Get configured client ID
-   * @returns {string} Client ID
-   */
-  getClientId() {
-    return KEYCLOAK_CLIENT_ID;
-  },
-
-  /**
-   * Get expected client_id (azp) for a specific issuer
-   * @param {string} issuer - The issuer URL
-   * @returns {string|undefined} The expected client_id or undefined
-   */
-  getAudienceForIssuer(issuer) {
-    return audienceMap.get(issuer);
-  },
-
-  /**
    * Check user status in Keycloak via UserInfo endpoint
    * Called when token validation fails with 401 to determine if user was disabled/deleted
    * @param {string} token - The rejected access/refresh token
@@ -451,7 +420,6 @@ const keycloakAuthService = {
    */
   _resetForTesting() {
     issuerMap.clear();
-    audienceMap.clear();
     initPromise = null;
     initFailedAt = 0;
     initialized = false;
@@ -464,14 +432,6 @@ const keycloakAuthService = {
    */
   _getJwksCache(issuer) {
     return issuerMap.get(issuer);
-  },
-
-  /**
-   * Get audience map. Only for testing.
-   * @returns {Map} The audience map (issuer -> client_id)
-   */
-  _getAudienceMap() {
-    return audienceMap;
   }
 };
 

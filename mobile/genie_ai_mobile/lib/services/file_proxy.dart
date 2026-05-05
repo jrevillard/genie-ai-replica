@@ -1,9 +1,15 @@
 import 'dart:convert';
 import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:genie_ai_mobile/services/auth/token_storage.dart';
 import 'package:http/http.dart' as http;
 
 class FileProxy {
-  final ApiService _api = ApiService();
+  final ApiService _api;
+  final TokenStorage _tokenStorage;
+
+  FileProxy({ApiService? api, required TokenStorage tokenStorage})
+      : _api = api ?? ApiService(),
+        _tokenStorage = tokenStorage;
 
   Future<Map<String, dynamic>> uploadFile(
     List<int> bytes,
@@ -15,7 +21,14 @@ class FileProxy {
       'POST',
       Uri.parse('${_api.baseUrl}/files/upload'),
     );
-    request.headers.addAll(_api.getHeaders());
+    // Do NOT set Content-Type manually — http.MultipartRequest auto-generates
+    // the boundary parameter. Setting it manually without boundary breaks uploads.
+
+    final token = await _tokenStorage.getAccessToken();
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
     request.fields['context'] = context;
     request.fields['entityId'] = entityId;
     request.files.add(

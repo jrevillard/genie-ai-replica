@@ -3,8 +3,13 @@ import type { ChatLang } from '../lib/chatStrings';
 import {
   createChatSession,
   createPublicChatSession,
+  fetchMessageAudio,
+  fetchPublicMessageAudio,
   sendChatMessage,
   sendPublicChatMessage,
+  sendPublicVoiceMessage,
+  sendVoiceMessage,
+  type SendVoiceMessageOptions,
 } from '../services/chatSessions';
 import { readSession } from '../services/http';
 import { i18n, setLocale, type LocaleCode } from '../i18n';
@@ -13,8 +18,10 @@ export type ChatRole = 'user' | 'assistant';
 
 export interface ChatMessage {
   id: string;
+  serverId?: string;
   role: ChatRole;
   text: string;
+  audioUrl?: string | null;
   createdAt: Date;
   streaming?: boolean;
   errored?: boolean;
@@ -136,6 +143,41 @@ export const useChatStore = defineStore('chat', {
       } finally {
         this.sending = false;
       }
+    },
+
+    async sendVoice(audio: Blob, opts: SendVoiceMessageOptions = {}): Promise<void> {
+      if (this.sending) return;
+      this.sending = true;
+      try {
+        const sessionId = await this.ensureSession();
+        if (!sessionId) throw new Error('No twin selected');
+        const send = readSession() ? sendVoiceMessage : sendPublicVoiceMessage;
+        const res = await send(sessionId, audio, { language: this.lang, ...opts });
+        const now = new Date();
+        this.messages.push({
+          id: makeId(),
+          serverId: res.userMessage.id,
+          role: 'user',
+          text: res.userMessage.text,
+          audioUrl: res.userMessage.audioUrl ?? null,
+          createdAt: now,
+        });
+        this.messages.push({
+          id: makeId(),
+          serverId: res.assistantMessage.id,
+          role: 'assistant',
+          text: res.assistantMessage.text,
+          createdAt: new Date(),
+        });
+      } finally {
+        this.sending = false;
+      }
+    },
+
+    async loadMessageAudio(messageId: string): Promise<Blob> {
+      if (!this.sessionId) throw new Error('No active session');
+      const fetcher = readSession() ? fetchMessageAudio : fetchPublicMessageAudio;
+      return fetcher(this.sessionId, messageId);
     },
 
     async regenerateLast(): Promise<void> {

@@ -20,6 +20,8 @@ const LANGUAGE_LABELS: Record<string, string> = {
   sw: 'Swahili',
 };
 
+const props = withDefaults(defineProps<{ editing?: boolean }>(), { editing: false });
+
 const aiTwinsStore = useAiTwinsStore();
 const { current: twin } = storeToRefs(aiTwinsStore);
 
@@ -38,8 +40,7 @@ watch(
 
 const playingVoiceId = ref<string | null>(null);
 const previewLoadingId = ref<string | null>(null);
-let currentAudio: HTMLAudioElement | null = null;
-let currentAudioUrl: string | null = null;
+const audioCache = new Map<string, { audio: HTMLAudioElement; url: string }>();
 
 const enabledVoices = computed(() => voices.value.filter((v) => v.enabled !== false));
 
@@ -66,59 +67,83 @@ function voiceCaption(v: Voice): string {
   return [lang, gender].filter(Boolean).join(' · ');
 }
 
+function onVoiceRowActivate(id: string): void {
+  if (!props.editing) return;
+  selectedVoiceId.value = id;
+}
+
 const itemClass = (id: string) => [
-  'flex items-center gap-3 rounded-2xl border bg-surface p-3 shadow-card transition cursor-pointer',
+  'flex items-center gap-3 rounded-2xl border bg-surface p-3 shadow-card transition',
+  props.editing ? 'cursor-pointer' : 'cursor-default',
   selectedVoiceId.value === id
     ? 'border-accent bg-accent-soft/40 ring-1 ring-accent/20'
-    : 'border-border hover:bg-surface-muted',
+    : 'border-border',
+  props.editing && selectedVoiceId.value !== id && 'hover:bg-surface-muted',
 ];
 
-function stopAudio(): void {
-  if (currentAudio) {
-    // Detach handlers BEFORE tearing down so the teardown itself doesn't
-    // fire an `error`/`ended` event back into the listeners we just left.
-    currentAudio.onended = null;
-    currentAudio.onerror = null;
-    currentAudio.pause();
-    currentAudio = null;
-  }
-  if (currentAudioUrl) {
-    URL.revokeObjectURL(currentAudioUrl);
-    currentAudioUrl = null;
-  }
+function pausePlaying(): void {
+  if (!playingVoiceId.value) return;
+  const entry = audioCache.get(playingVoiceId.value);
+  if (entry && !entry.audio.paused) entry.audio.pause();
+  playingVoiceId.value = null;
+}
+
+function disposeAllPreviews(): void {
+  audioCache.forEach((entry) => {
+    entry.audio.onended = null;
+    entry.audio.onerror = null;
+    entry.audio.pause();
+    entry.audio.src = '';
+    URL.revokeObjectURL(entry.url);
+  });
+  audioCache.clear();
   playingVoiceId.value = null;
 }
 
 async function togglePreview(voice: Voice): Promise<void> {
+  // Currently playing this voice → pause (allows resume on next click).
   if (playingVoiceId.value === voice._key) {
-    stopAudio();
+    pausePlaying();
     return;
   }
-  stopAudio();
 
-  previewLoadingId.value = voice._key;
+  // Switching to a different voice → pause whatever is playing, but keep
+  // the cached audio so users can resume it later from where it left off.
+  pausePlaying();
+
+  let entry = audioCache.get(voice._key);
+  if (!entry) {
+    previewLoadingId.value = voice._key;
+    try {
+      const blob = await previewVoice(voice._key, PREVIEW_TEXT);
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => {
+        if (playingVoiceId.value === voice._key) playingVoiceId.value = null;
+        // Reset so a future click starts from the beginning of the preview.
+        audio.currentTime = 0;
+      };
+      audio.onerror = () => {
+        if (playingVoiceId.value === voice._key) playingVoiceId.value = null;
+        notify.error('Failed to play voice preview');
+      };
+      entry = { audio, url };
+      audioCache.set(voice._key, entry);
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } }; message?: string })
+        ?.response?.data?.message ?? (err as Error)?.message ?? 'Failed to load voice preview';
+      notify.error(message);
+      return;
+    } finally {
+      previewLoadingId.value = null;
+    }
+  }
+
+  playingVoiceId.value = voice._key;
   try {
-    const blob = await previewVoice(voice._key, PREVIEW_TEXT);
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    currentAudio = audio;
-    currentAudioUrl = url;
-    audio.onended = stopAudio;
-    audio.onerror = () => {
-      // Ignore stale errors from an audio that has already been replaced.
-      if (currentAudio !== audio) return;
-      stopAudio();
-      notify.error('Failed to play voice preview');
-    };
-    playingVoiceId.value = voice._key;
-    await audio.play();
-  } catch (err) {
-    const message = (err as { response?: { data?: { message?: string } }; message?: string })
-      ?.response?.data?.message ?? (err as Error)?.message ?? 'Failed to load voice preview';
-    notify.error(message);
-    stopAudio();
-  } finally {
-    previewLoadingId.value = null;
+    await entry.audio.play();
+  } catch {
+    if (playingVoiceId.value === voice._key) playingVoiceId.value = null;
   }
 }
 
@@ -160,7 +185,7 @@ function discard(): void {
 defineExpose({ save, discard });
 
 onMounted(loadVoices);
-onBeforeUnmount(stopAudio);
+onBeforeUnmount(disposeAllPreviews);
 </script>
 
 <template>
@@ -199,13 +224,23 @@ onBeforeUnmount(stopAudio);
           <legend class="sr-only">{{ group.label }}</legend>
           <ul class="space-y-3">
             <li v-for="v in group.voices" :key="v._key">
-              <label :class="itemClass(v._key)">
+              <div
+                :class="itemClass(v._key)"
+                role="radio"
+                :tabindex="editing ? 0 : -1"
+                :aria-checked="selectedVoiceId === v._key"
+                :aria-label="editing ? `Select ${v.name}` : `${v.name} (preview available with play button)`"
+                @click="onVoiceRowActivate(v._key)"
+                @keydown.enter.prevent="onVoiceRowActivate(v._key)"
+                @keydown.space.prevent="onVoiceRowActivate(v._key)"
+              >
                 <button
                   type="button"
                   class="rounded-full bg-accent-soft p-2 text-accent transition hover:bg-ieee-100 disabled:opacity-50"
-                  :aria-label="playingVoiceId === v._key ? `Stop preview of ${v.name}` : `Play preview of ${v.name}`"
+                  :aria-label="playingVoiceId === v._key ? `Pause preview of ${v.name}` : `Play preview of ${v.name}`"
                   :disabled="previewLoadingId === v._key"
-                  @click.stop.prevent="togglePreview(v)"
+                  @click.stop="togglePreview(v)"
+                  @keydown.stop
                 >
                   <span
                     v-if="previewLoadingId === v._key"
@@ -224,10 +259,14 @@ onBeforeUnmount(stopAudio);
                   name="twin-voice"
                   :value="v._key"
                   :checked="selectedVoiceId === v._key"
-                  class="h-4 w-4 cursor-pointer accent-accent"
-                  @change="selectedVoiceId = v._key"
+                  class="h-4 w-4 accent-accent"
+                  :class="editing ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'"
+                  tabindex="-1"
+                  :disabled="!editing"
+                  @click.stop
+                  @change="onVoiceRowActivate(v._key)"
                 />
-              </label>
+              </div>
             </li>
           </ul>
         </fieldset>

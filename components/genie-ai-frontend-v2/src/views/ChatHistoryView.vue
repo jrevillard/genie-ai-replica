@@ -23,10 +23,12 @@ import {
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
+import ConfirmDialog from '../components/ui/ConfirmDialog.vue';
 import TableRowsSkeleton from '../components/ui/skeletons/TableRowsSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
+import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useAuthStore } from '../stores/auth';
@@ -85,6 +87,7 @@ const messagesScrollEl = ref<HTMLElement | null>(null);
 
 const isRecording = ref(false);
 const recordingSeconds = ref(0);
+const processingVoice = ref(false);
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: Blob[] = [];
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
@@ -299,7 +302,13 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
 const sessionListDateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const messageTimeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-
+const fullDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
 function formatSessionDate(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -340,10 +349,30 @@ function formatSessionListDate(iso?: string | null): string {
   return sessionListDateFormatter.format(d);
 }
 
-function formatMessageTime(iso?: string | null): string {
+/** Clock time for sent-at; adds a short date when the message is not from today. */
+function formatMessageSentAt(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : messageTimeFormatter.format(d);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return messageTimeFormatter.format(d);
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
+  }).format(d);
+}
+
+function formatFullDateTime(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : fullDateTimeFormatter.format(d);
 }
 
 function formatDuration(seconds: number): string {
@@ -545,6 +574,7 @@ async function startRecording(): Promise<void> {
   mediaRecorder.start();
   isRecording.value = true;
   recordingSeconds.value = 0;
+  playRecordStartChime();
   recordingTimer = setInterval(() => {
     recordingSeconds.value += 1;
     if (recordingSeconds.value >= 600) stopRecording();
@@ -553,6 +583,7 @@ async function startRecording(): Promise<void> {
 
 function stopRecording(): void {
   if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  playRecordStopChime();
   try {
     mediaRecorder.stop();
   } catch {
@@ -564,6 +595,7 @@ function stopRecording(): void {
 function cancelRecording(): void {
   if (!mediaRecorder) return;
   recordingCancelled = true;
+  playRecordStopChime();
   try {
     mediaRecorder.stop();
   } catch {
@@ -575,6 +607,7 @@ function cancelRecording(): void {
 
 async function submitVoiceMessage(blob: Blob): Promise<void> {
   if (!selectedSessionId.value) return;
+  processingVoice.value = true;
   try {
     await chatHistory.sendVoice(blob);
   } catch (err) {
@@ -588,6 +621,8 @@ async function submitVoiceMessage(blob: Blob): Promise<void> {
           ? 'Voice transcription service is temporarily unavailable.'
           : e?.message ?? 'Could not send voice message.');
     notify.error('Voice message failed', message);
+  } finally {
+    processingVoice.value = false;
   }
 }
 
@@ -1115,6 +1150,7 @@ onBeforeUnmount(() => {
                     <div
                       v-if="message.role === 'user' && message.audioUrl && message._key"
                       class="flex items-center gap-3 rounded-2xl rounded-tr-md bg-ieee-700 px-3 py-2.5 text-white shadow-sm"
+                      :title="message.createdAt ? formatFullDateTime(message.createdAt) : undefined"
                     >
                       <button
                         type="button"
@@ -1151,11 +1187,22 @@ onBeforeUnmount(() => {
                           ? 'rounded-tr-md bg-ieee-700 text-white shadow-sm'
                           : 'rounded-tl-md bg-white text-slate-600 shadow-sm',
                       ]"
+                      :title="message.createdAt ? formatFullDateTime(message.createdAt) : undefined"
                     >
                       <p>{{ message.content }}</p>
                     </div>
-                    <div class="flex items-center gap-2">
-                      <time v-if="message.createdAt" class="text-[11px] text-slate-400">{{ formatMessageTime(message.createdAt) }}</time>
+                    <div
+                      :class="[
+                        'flex items-center gap-2',
+                        message.role === 'user' && 'justify-end',
+                      ]"
+                    >
+                      <time
+                        v-if="message.createdAt"
+                        class="text-[11px] tabular-nums text-slate-500"
+                        :datetime="message.createdAt"
+                        :title="formatFullDateTime(message.createdAt)"
+                      >{{ formatMessageSentAt(message.createdAt) }}</time>
                       <button
                         v-if="message.role === 'assistant' && message._key"
                         type="button"
@@ -1197,7 +1244,9 @@ onBeforeUnmount(() => {
                         <span />
                       </span>
                     </div>
-                    <span class="text-[11px] text-slate-400">{{ sessionTitle(selectedChatSession) }} is typing…</span>
+                    <span class="text-[11px] text-slate-400">
+                      {{ processingVoice ? 'Transcribing your voice…' : `${sessionTitle(selectedChatSession)} is typing…` }}
+                    </span>
                   </div>
                 </div>
               </template>
@@ -1494,52 +1543,15 @@ onBeforeUnmount(() => {
         </div>
       </Teleport>
 
-      <Teleport to="body">
-        <div
-          v-if="chatDeleteDialogOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center p-6"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            class="absolute inset-0 bg-neutral-900/35 backdrop-blur-sm"
-            @click="cancelChatDelete"
-          />
-          <section class="relative z-10 w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
-            <button
-              type="button"
-              class="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950 disabled:opacity-40"
-              aria-label="Close delete dialog"
-              :disabled="deletingChat"
-              @click="cancelChatDelete"
-            >
-              <span class="text-2xl leading-none">&times;</span>
-            </button>
-            <h2 class="text-lg font-bold text-slate-950">Delete this conversation?</h2>
-            <p class="mt-4 text-sm leading-relaxed text-red-500">
-              The chat session and all of its messages will be permanently removed. This action cannot be undone.
-            </p>
-            <footer class="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                class="h-10 rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                :disabled="deletingChat"
-                @click="cancelChatDelete"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                class="h-10 rounded-full bg-red-500 px-5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-40"
-                :disabled="deletingChat"
-                @click="confirmChatDelete"
-              >
-                {{ deletingChat ? 'Deleting...' : 'Delete' }}
-              </button>
-            </footer>
-          </section>
-        </div>
-      </Teleport>
+      <ConfirmDialog
+        v-model:open="chatDeleteDialogOpen"
+        title="Delete this conversation?"
+        description="The chat session and all of its messages will be permanently removed. This action cannot be undone."
+        confirm-label="Delete"
+        :loading="deletingChat"
+        @confirm="confirmChatDelete"
+        @cancel="cancelChatDelete"
+      />
     </section>
   </DashboardLayout>
 </template>

@@ -12,7 +12,7 @@ import { notify } from '../lib/notify';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseBadge from '../components/ui/BaseBadge.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
-import BaseDialog from '../components/ui/BaseDialog.vue';
+import ConfirmDialog from '../components/ui/ConfirmDialog.vue';
 import AiTwinDetailSkeleton from '../components/ui/skeletons/AiTwinDetailSkeleton.vue';
 import BaseTabs, { type TabItem } from '../components/ui/BaseTabs.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
@@ -43,6 +43,7 @@ const editing = ref(false);
 const activeTab = ref<EditableTab | null>(null);
 const imageInput = ref<HTMLInputElement | null>(null);
 const uploadingImage = ref(false);
+const imagePreviewOpen = ref(false);
 
 const tabs: TabItem[] = [
   { value: 'general', label: 'General' },
@@ -100,6 +101,15 @@ async function saveChanges() {
 function pickImage() {
   if (uploadingImage.value) return;
   imageInput.value?.click();
+}
+
+function openImagePreview() {
+  if (!twin.value?.profilePicUrl) return;
+  imagePreviewOpen.value = true;
+}
+
+function closeImagePreview() {
+  imagePreviewOpen.value = false;
 }
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
@@ -186,27 +196,38 @@ async function confirmDelete() {
         <header class="flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-4">
             <div class="relative shrink-0">
-              <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="xl" />
+              <button
+                type="button"
+                :class="[
+                  'block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ieee-700/50',
+                  twin.profilePicUrl ? 'cursor-zoom-in' : 'cursor-default',
+                ]"
+                :aria-label="twin.profilePicUrl ? 'Preview profile picture' : 'Profile picture'"
+                :disabled="!twin.profilePicUrl"
+                @click="openImagePreview"
+              >
+                <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="xl" />
+              </button>
 
               <button
                 v-if="twin.profilePicUrl"
                 type="button"
-                class="absolute -right-1 -top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ieee-700 text-white shadow-md ring-2 ring-white transition hover:bg-ieee-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+                class="absolute -right-1 -top-1 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white transition hover:bg-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="uploadingImage"
                 aria-label="Remove profile picture"
                 title="Remove profile picture"
-                @click="askRemoveImage"
+                @click.stop="askRemoveImage"
               >
                 <Icon :icon="Cancel01Icon" :size="12" />
               </button>
 
               <button
                 type="button"
-                class="absolute -bottom-1 left-1/2 inline-flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-white text-ieee-700 shadow-md ring-1 ring-slate-200 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+                class="absolute -bottom-1 left-1/2 z-10 inline-flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-white text-ieee-700 shadow-md ring-1 ring-slate-200 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="uploadingImage"
                 :aria-label="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
                 :title="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
-                @click="pickImage"
+                @click.stop="pickImage"
               >
                 <Icon :icon="Camera01Icon" :size="14" />
               </button>
@@ -269,21 +290,21 @@ async function confirmDelete() {
         </div>
 
         <fieldset
-          :disabled="!editing"
+          :disabled="!editing && tab !== 'voice'"
           :class="[
             'rounded-2xl border bg-surface p-6 shadow-card transition-colors',
             editing ? 'border-accent/30 ring-1 ring-accent/10' : 'border-border',
-            !editing && 'opacity-70',
+            !editing && tab !== 'voice' && 'opacity-70',
           ]"
         >
-          <div :class="!editing && 'pointer-events-none select-none'">
+          <div :class="!editing && tab !== 'voice' && 'pointer-events-none select-none'">
             <GeneralTab
               v-if="tab === 'general'"
               ref="activeTab"
               :twin="twin"
               :editing="editing"
             />
-            <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" />
+            <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" :editing="editing" />
             <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
             <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" :twin="twin" />
             <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
@@ -311,48 +332,50 @@ async function confirmDelete() {
         <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">Back to list</BaseButton>
       </EmptyState>
 
-      <BaseDialog
+      <ConfirmDialog
         v-model:open="deleteDialog"
-        size="sm"
-      >
-        <div class="pr-10">
-          <h2 class="text-title text-text">Delete AI Twin</h2>
-          <p class="mt-2 text-body leading-6 text-text-muted">
-            This action can't be undone. All chats and call history attached to this twin will be removed.
-          </p>
-        </div>
-        <div class="mt-7 flex justify-end">
-          <BaseButton variant="danger" :loading="deleting" @click="confirmDelete">Yes, delete</BaseButton>
-        </div>
-      </BaseDialog>
+        title="Delete AI Twin?"
+        description="This action can't be undone. All chats and call history attached to this twin will be removed."
+        confirm-label="Delete"
+        :loading="deleting"
+        @confirm="confirmDelete"
+      />
 
-      <BaseDialog
+      <ConfirmDialog
         v-model:open="removeImageDialog"
-        size="sm"
-      >
-        <div class="pr-10">
-          <h2 class="text-title text-text">Remove profile picture?</h2>
-          <p class="mt-2 text-body leading-6 text-text-muted">
-            The current profile picture will be removed and the twin will fall back to its initials.
-          </p>
-        </div>
-        <div class="mt-7 flex justify-end gap-3">
-          <BaseButton
-            variant="ghost"
-            :disabled="uploadingImage"
-            @click="removeImageDialog = false"
+        title="Remove profile picture?"
+        description="The current profile picture will be removed and the twin will fall back to its initials."
+        confirm-label="Remove"
+        :loading="uploadingImage"
+        @confirm="confirmRemoveImage"
+      />
+
+      <Teleport to="body">
+        <div
+          v-if="imagePreviewOpen && twin?.profilePicUrl"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profile picture preview"
+          @click.self="closeImagePreview"
+          @keydown.esc="closeImagePreview"
+        >
+          <button
+            type="button"
+            class="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            aria-label="Close preview"
+            @click="closeImagePreview"
           >
-            Cancel
-          </BaseButton>
-          <BaseButton
-            variant="danger"
-            :loading="uploadingImage"
-            @click="confirmRemoveImage"
-          >
-            Remove
-          </BaseButton>
+            <Icon :icon="Cancel01Icon" :size="20" />
+          </button>
+          <img
+            :src="twin.profilePicUrl"
+            :alt="twin.name"
+            class="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl"
+            @click.stop
+          />
         </div>
-      </BaseDialog>
+      </Teleport>
     </section>
   </DashboardLayout>
 </template>

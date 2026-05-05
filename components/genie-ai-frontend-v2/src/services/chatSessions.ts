@@ -54,6 +54,44 @@ export interface ChatHistoryMessage {
   createdAt?: string;
 }
 
+function normalizeChatHistoryMessage(raw: unknown): ChatHistoryMessage {
+  if (!raw || typeof raw !== 'object') {
+    return { role: 'assistant', content: '' };
+  }
+  const r = raw as Record<string, unknown>;
+  const createdCandidate = r.createdAt ?? r.created_at ?? r.sentAt ?? r.timestamp ?? r.time;
+  let createdAt: string | undefined;
+  if (typeof createdCandidate === 'string' && createdCandidate.trim()) {
+    createdAt = createdCandidate.trim();
+  } else if (typeof createdCandidate === 'number' && Number.isFinite(createdCandidate)) {
+    createdAt = new Date(createdCandidate).toISOString();
+  }
+
+  let role: ChatHistoryMessage['role'] = 'assistant';
+  if (r.role === 'user' || r.role === 'assistant') {
+    role = r.role;
+  } else if (r.sender === 'user' || r.sender === 'assistant') {
+    role = r.sender;
+  } else if (r.sender === 'human') {
+    role = 'user';
+  }
+
+  const _key =
+    typeof r._key === 'string'
+      ? r._key
+      : typeof r.id === 'string'
+        ? r.id
+        : typeof r.messageId === 'string'
+          ? r.messageId
+          : undefined;
+
+  const content = typeof r.content === 'string' ? r.content : String(r.content ?? '');
+  const audioUrl =
+    r.audioUrl === null || typeof r.audioUrl === 'string' ? (r.audioUrl as string | null) : null;
+
+  return { _key, role, content, audioUrl, createdAt };
+}
+
 export interface SendVoiceMessageOptions {
   language?: string;
   categoryLabel?: string;
@@ -123,7 +161,11 @@ export async function getChatSessionMessages(
     `/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
     { params: query }
   );
-  return res.data;
+  const data = res.data;
+  return {
+    session: data.session,
+    messages: (data.messages ?? []).map(normalizeChatHistoryMessage),
+  };
 }
 
 export async function deleteChatSession(sessionId: string): Promise<DeleteChatSessionResponse> {
@@ -213,7 +255,11 @@ export async function getPublicChatSessionMessages(
     `/public/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
     { params: query }
   );
-  return res.data;
+  const data = res.data;
+  return {
+    session: data.session,
+    messages: (data.messages ?? []).map(normalizeChatHistoryMessage),
+  };
 }
 
 export async function sendPublicVoiceMessage(

@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import {
   AiBrain01Icon,
   Logout01Icon,
   MessageMultiple01Icon,
+  Search01Icon,
   SidebarLeftIcon,
   SparklesIcon,
-  UserIcon,
 } from '@hugeicons/core-free-icons';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
 import { notify } from '../../lib/notify';
-import BaseButton from '../ui/BaseButton.vue';
-import BaseDialog from '../ui/BaseDialog.vue';
+import ConfirmDialog from '../ui/ConfirmDialog.vue';
 import Icon from '../ui/Icon.vue';
+import CommandPalette from './CommandPalette.vue';
 
 defineProps<{
   collapsed: boolean;
@@ -27,6 +27,7 @@ const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 const logoutDialogOpen = ref(false);
+const paletteOpen = ref(false);
 
 interface NavItem {
   label: string;
@@ -39,6 +40,15 @@ const items: NavItem[] = [
   { label: 'Chat/Call History', icon: MessageMultiple01Icon, to: '/chat-history' },
   { label: 'Knowledge Set', icon: AiBrain01Icon, to: '/knowledge-set' },
 ];
+
+const userInitials = computed(() => {
+  const source = auth.displayName || auth.email || '';
+  const parts = source.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const second = parts[1]?.[0] ?? '';
+  return (first + second).toUpperCase() || '?';
+});
 
 async function onLogout() {
   logoutDialogOpen.value = false;
@@ -68,15 +78,26 @@ function isNavActive(to: string): boolean {
     >
       <img v-if="!collapsed" src="/images/logo.svg" alt="IEEE" class="h-7" />
       <img v-else src="/images/logo.svg" alt="IEEE" class="h-7 w-full object-contain" />
-      <button
-        type="button"
-        class="rounded-lg p-1.5 text-text-subtle transition hover:bg-surface-subtle hover:text-text"
-        :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-        :aria-label="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-        @click="$emit('toggle')"
-      >
-        <Icon :icon="SidebarLeftIcon" :size="18" />
-      </button>
+      <div :class="collapsed ? 'flex flex-col items-center gap-1' : 'flex items-center gap-1'">
+        <button
+          type="button"
+          class="rounded-lg p-1.5 text-text-subtle transition hover:bg-surface-subtle hover:text-text"
+          title="Search"
+          aria-label="Search"
+          @click="paletteOpen = true"
+        >
+          <Icon :icon="Search01Icon" :size="18" />
+        </button>
+        <button
+          type="button"
+          class="rounded-lg p-1.5 text-text-subtle transition hover:bg-surface-subtle hover:text-text"
+          :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          :aria-label="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          @click="$emit('toggle')"
+        >
+          <Icon :icon="SidebarLeftIcon" :size="18" />
+        </button>
+      </div>
     </header>
 
     <nav class="flex-1 space-y-1 p-3">
@@ -107,15 +128,23 @@ function isNavActive(to: string): boolean {
         <button
           type="button"
           :class="[
-            'dash-nav-item w-full',
-            isNavActive('/profile') && 'dash-nav-item--active',
-            collapsed && 'justify-center',
+            'flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-surface-subtle',
+            isNavActive('/profile') && 'bg-surface-subtle',
+            collapsed && 'justify-center px-0',
           ]"
           :aria-label="collapsed ? 'Profile' : undefined"
           @click="navigate"
         >
-          <Icon :icon="UserIcon" :size="20" />
-          <span v-if="!collapsed" class="truncate">Profile</span>
+          <span
+            class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ieee-50 text-xs font-semibold uppercase text-ieee-700"
+            aria-hidden="true"
+          >
+            {{ userInitials }}
+          </span>
+          <span v-if="!collapsed" class="flex min-w-0 flex-1 flex-col leading-tight">
+            <span class="truncate text-sm font-semibold text-text">{{ auth.displayName }}</span>
+            <span v-if="auth.email" class="truncate text-[11px] text-text-subtle">{{ auth.email }}</span>
+          </span>
         </button>
       </RouterLink>
 
@@ -133,19 +162,14 @@ function isNavActive(to: string): boolean {
       </button>
     </footer>
 
-    <BaseDialog
+    <ConfirmDialog
       v-model:open="logoutDialogOpen"
-      size="sm"
-    >
-      <div class="pr-10">
-        <h2 class="text-title text-text">Log out?</h2>
-        <p class="mt-2 text-body leading-6 text-text-muted">
-          You will be signed out of this admin workspace.
-        </p>
-      </div>
-      <div class="mt-7 flex justify-end">
-        <BaseButton variant="danger" @click="onLogout">Log Out</BaseButton>
-      </div>
-    </BaseDialog>
+      title="Log out?"
+      description="You will be signed out of this admin workspace."
+      confirm-label="Log Out"
+      @confirm="onLogout"
+    />
+
+    <CommandPalette v-model:open="paletteOpen" />
   </aside>
 </template>

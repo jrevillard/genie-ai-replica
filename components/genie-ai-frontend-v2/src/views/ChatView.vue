@@ -7,14 +7,15 @@ import {
   BloodPressureIcon,
   BubbleChatIcon,
   CallIcon,
+  Cancel01Icon,
   Copy01Icon,
   Mic01Icon,
+  PauseIcon,
   PlateIcon,
-  RefreshIcon,
+  PlayIcon,
   SentIcon,
   StethoscopeIcon,
-  ThumbsDownIcon,
-  ThumbsUpIcon,
+  VolumeHighIcon,
   WellnessIcon,
 } from '@hugeicons/core-free-icons';
 
@@ -23,6 +24,7 @@ import BaseButton from '../components/ui/BaseButton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
+import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore, type ChatMessage } from '../stores/chat';
@@ -132,13 +134,252 @@ async function copyMessage(m: ChatMessage): Promise<void> {
   }
 }
 
-function regenerate(): void {
-  void chatStore.regenerateLast();
+// ─── Voice recording ────────────────────────────────────────────────────────
+const isRecording = ref(false);
+const recordingSeconds = ref(0);
+const processingVoice = ref(false);
+let mediaRecorder: MediaRecorder | null = null;
+let recordedChunks: Blob[] = [];
+let recordingStream: MediaStream | null = null;
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let recordingCancelled = false;
+
+function pickRecorderMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  return candidates.find((tp) => MediaRecorder.isTypeSupported(tp)) ?? '';
 }
 
-function micPlaceholder(): void {
-  notify.info(t.micSoon);
+function formatRecordingClock(seconds: number): string {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
 }
+
+function stopRecordingStream(): void {
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+  if (recordingStream) {
+    recordingStream.getTracks().forEach((track) => track.stop());
+    recordingStream = null;
+  }
+}
+
+async function startRecording(): Promise<void> {
+  if (isRecording.value || sending.value) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    notify.error('Recording not supported', 'Your browser cannot record audio.');
+    return;
+  }
+  try {
+    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    const e = err as { name?: string; message?: string };
+    notify.error(
+      'Microphone unavailable',
+      e?.name === 'NotAllowedError'
+        ? 'Permission denied. Allow microphone access and try again.'
+        : e?.message ?? 'Could not access the microphone.',
+    );
+    return;
+  }
+
+  const mimeType = pickRecorderMimeType();
+  recordedChunks = [];
+  recordingCancelled = false;
+  try {
+    mediaRecorder = mimeType
+      ? new MediaRecorder(recordingStream, { mimeType })
+      : new MediaRecorder(recordingStream);
+  } catch {
+    stopRecordingStream();
+    notify.error('Recording failed', 'Could not initialize the recorder.');
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (event: BlobEvent) => {
+    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+  };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
+    stopRecordingStream();
+    mediaRecorder = null;
+    isRecording.value = false;
+    if (recordingCancelled || blob.size === 0) {
+      recordingSeconds.value = 0;
+      return;
+    }
+    submitVoiceMessage(blob).finally(() => {
+      recordingSeconds.value = 0;
+    });
+  };
+
+  mediaRecorder.start();
+  isRecording.value = true;
+  recordingSeconds.value = 0;
+  playRecordStartChime();
+  recordingTimer = setInterval(() => {
+    recordingSeconds.value += 1;
+    if (recordingSeconds.value >= 600) stopRecording();
+  }, 1000);
+}
+
+function stopRecording(): void {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  playRecordStopChime();
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+  }
+}
+
+function cancelRecording(): void {
+  if (!mediaRecorder) return;
+  recordingCancelled = true;
+  playRecordStopChime();
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+    recordingSeconds.value = 0;
+  }
+}
+
+async function submitVoiceMessage(blob: Blob): Promise<void> {
+  processingVoice.value = true;
+  try {
+    await chatStore.sendVoice(blob);
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const message =
+      e?.response?.data?.message ??
+      (status === 413
+        ? 'Recording is too large (max 10 MB).'
+        : status === 502
+          ? 'Voice transcription service is temporarily unavailable.'
+          : e?.message ?? 'Could not send voice message.');
+    notify.error('Voice message failed', message);
+  } finally {
+    processingVoice.value = false;
+  }
+}
+
+// ─── Audio playback (TTS for assistant + user voice notes) ─────────────────
+interface MessageAudioState {
+  loading: boolean;
+  playing: boolean;
+  url: string | null;
+  audio: HTMLAudioElement | null;
+  duration: number;
+  currentTime: number;
+}
+const messageAudio = ref<Record<string, MessageAudioState>>({});
+
+function ensureAudioState(id: string): MessageAudioState {
+  if (!messageAudio.value[id]) {
+    messageAudio.value[id] = {
+      loading: false,
+      playing: false,
+      url: null,
+      audio: null,
+      duration: 0,
+      currentTime: 0,
+    };
+  }
+  return messageAudio.value[id];
+}
+
+function stopAllAudio(): void {
+  Object.values(messageAudio.value).forEach((state) => {
+    if (state.audio && state.playing) {
+      state.audio.pause();
+      state.playing = false;
+    }
+  });
+}
+
+function attachAudioListeners(state: MessageAudioState): void {
+  const audio = state.audio;
+  if (!audio) return;
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+  });
+  audio.addEventListener('timeupdate', () => {
+    state.currentTime = audio.currentTime;
+  });
+  audio.addEventListener('ended', () => {
+    state.playing = false;
+    state.currentTime = 0;
+  });
+  audio.addEventListener('pause', () => {
+    if (audio.currentTime >= audio.duration) state.playing = false;
+  });
+}
+
+function formatAudioClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+async function toggleMessageAudio(message: ChatMessage): Promise<void> {
+  if (!message.serverId) return;
+  const state = ensureAudioState(message.serverId);
+  if (state.playing && state.audio) {
+    state.audio.pause();
+    state.playing = false;
+    return;
+  }
+  stopAllAudio();
+  try {
+    if (!state.url) {
+      state.loading = true;
+      const blob = await chatStore.loadMessageAudio(message.serverId);
+      state.url = URL.createObjectURL(blob);
+    }
+    if (!state.audio) {
+      state.audio = new Audio(state.url);
+      attachAudioListeners(state);
+    }
+    await state.audio.play();
+    state.playing = true;
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const fallback =
+      status === 404
+        ? 'Audio for this message could not be found.'
+        : status === 502
+          ? 'Voice synthesis is temporarily unavailable.'
+          : e?.message ?? 'Could not play audio.';
+    notify.error('Playback failed', e?.response?.data?.message ?? fallback);
+  } finally {
+    state.loading = false;
+  }
+}
+
+function disposeAllAudio(): void {
+  Object.values(messageAudio.value).forEach((state) => {
+    if (state.audio) {
+      state.audio.pause();
+      state.audio.src = '';
+    }
+    if (state.url) URL.revokeObjectURL(state.url);
+  });
+  messageAudio.value = {};
+}
+
+watch(twinId, () => {
+  disposeAllAudio();
+  if (isRecording.value) cancelRecording();
+});
 
 function startVoiceCall(): void {
   if (!twinId.value) return;
@@ -175,6 +416,9 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick);
+  disposeAllAudio();
+  if (isRecording.value) cancelRecording();
+  stopRecordingStream();
 });
 
 const currentLang = computed(
@@ -408,6 +652,42 @@ function formatTime(d: Date): string {
                   ]"
                 >
                   <div
+                    v-if="m.role === 'user' && m.audioUrl && m.serverId"
+                    class="flex items-center gap-3 rounded-2xl bg-accent px-3 py-2.5 text-text-inverse shadow-card"
+                  >
+                    <button
+                      type="button"
+                      class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
+                      :aria-label="messageAudio[m.serverId]?.playing ? 'Pause voice note' : 'Play voice note'"
+                      :disabled="messageAudio[m.serverId]?.loading"
+                      @click="toggleMessageAudio(m)"
+                    >
+                      <span
+                        v-if="messageAudio[m.serverId]?.loading"
+                        class="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                        aria-hidden="true"
+                      />
+                      <Icon
+                        v-else-if="messageAudio[m.serverId]?.playing"
+                        :icon="PauseIcon"
+                        :size="16"
+                      />
+                      <Icon v-else :icon="PlayIcon" :size="16" />
+                    </button>
+                    <span class="flex h-7 flex-1 items-end gap-0.5" aria-hidden="true">
+                      <span
+                        v-for="bar in 28"
+                        :key="bar"
+                        class="w-0.5 rounded-full bg-white/60"
+                        :style="{ height: `${30 + ((bar * 13) % 65)}%` }"
+                      />
+                    </span>
+                    <span class="shrink-0 text-[11px] font-semibold tabular-nums text-white/80">
+                      {{ formatAudioClock(messageAudio[m.serverId]?.duration ?? 0) }}
+                    </span>
+                  </div>
+                  <div
+                    v-else
                     :class="[
                       'rounded-2xl px-5 py-3 text-body shadow-card',
                       m.role === 'user'
@@ -440,36 +720,59 @@ function formatTime(d: Date): string {
                       >
                         <Icon :icon="Copy01Icon" :size="14" />
                       </button>
-                      <button
-                        type="button"
-                        class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
-                        :aria-label="t.regenerate"
-                        :title="t.regenerate"
-                        @click="regenerate"
-                      >
-                        <Icon :icon="RefreshIcon" :size="14" />
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
-                        :aria-label="t.helpful"
-                        :title="t.helpful"
-                      >
-                        <Icon :icon="ThumbsUpIcon" :size="14" />
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
-                        :aria-label="t.notHelpful"
-                        :title="t.notHelpful"
-                      >
-                        <Icon :icon="ThumbsDownIcon" :size="14" />
-                      </button>
+                      <template v-if="m.serverId">
+                        <span aria-hidden="true">·</span>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 rounded p-1 text-text-subtle transition hover:bg-surface-muted hover:text-text disabled:opacity-50"
+                          :aria-label="messageAudio[m.serverId]?.playing ? 'Pause audio' : 'Listen to message'"
+                          :disabled="messageAudio[m.serverId]?.loading"
+                          @click="toggleMessageAudio(m)"
+                        >
+                          <span
+                            v-if="messageAudio[m.serverId]?.loading"
+                            class="block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                            aria-hidden="true"
+                          />
+                          <Icon
+                            v-else-if="messageAudio[m.serverId]?.playing"
+                            :icon="PauseIcon"
+                            :size="13"
+                          />
+                          <Icon v-else :icon="VolumeHighIcon" :size="13" />
+                          <span>{{ messageAudio[m.serverId]?.playing ? 'Playing' : 'Listen' }}</span>
+                        </button>
+                      </template>
                     </template>
                   </div>
                 </div>
               </div>
             </template>
+
+            <div
+              v-if="processingVoice"
+              class="flex items-start gap-3"
+              role="status"
+              aria-live="polite"
+              aria-label="Sending voice and waiting for a reply"
+            >
+              <BaseAvatar
+                :src="twin?.profilePicUrl ?? ''"
+                :name="twin?.name ?? 'AI Twin'"
+                size="sm"
+              />
+              <div class="flex flex-col gap-1">
+                <div class="rounded-2xl bg-surface-muted px-5 py-3 shadow-card">
+                  <span class="inline-flex items-center gap-1">
+                    <span class="dot" />
+                    <span class="dot" style="animation-delay: 0.15s" />
+                    <span class="dot" style="animation-delay: 0.3s" />
+                  </span>
+                </div>
+                <span class="text-meta text-text-subtle">Transcribing your voice…</span>
+              </div>
+            </div>
+
             <div ref="messagesEnd" />
           </div>
         </div>
@@ -482,6 +785,7 @@ function formatTime(d: Date): string {
       >
         <div class="mx-auto w-full max-w-3xl">
           <div
+            v-if="!isRecording"
             class="flex items-end gap-2 rounded-3xl border border-border bg-surface px-3 py-2 shadow-card transition focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/20"
           >
             <textarea
@@ -496,11 +800,11 @@ function formatTime(d: Date): string {
             />
             <button
               type="button"
-              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-muted hover:text-text"
+              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
               :aria-label="t.micAria"
               :title="t.micAria"
               :disabled="sending"
-              @click="micPlaceholder"
+              @click="startRecording"
             >
               <Icon :icon="Mic01Icon" :size="22" />
             </button>
@@ -515,6 +819,49 @@ function formatTime(d: Date): string {
               <Icon :icon="SentIcon" :size="20" />
             </button>
           </div>
+
+          <div
+            v-else
+            class="recorder-bar flex items-center gap-3 rounded-3xl px-3 py-2 ring-1 ring-red-200/70"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="recorder-led" aria-hidden="true">
+              <span class="recorder-led__core" />
+              <span class="recorder-led__halo" />
+            </span>
+
+            <span class="flex shrink-0 flex-col leading-tight">
+              <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600/80">REC</span>
+              <span class="text-body font-semibold tabular-nums text-red-700">
+                {{ formatRecordingClock(recordingSeconds) }}
+              </span>
+            </span>
+
+            <span class="recorder-wave flex h-9 flex-1 items-center gap-[3px] px-1" aria-hidden="true">
+              <span v-for="i in 22" :key="i" class="recorder-wave__bar" :style="{ animationDelay: `${(i % 6) * 80}ms` }" />
+            </span>
+
+            <button
+              type="button"
+              class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-caption font-semibold text-red-600 transition hover:bg-white/70"
+              aria-label="Cancel recording"
+              @click="cancelRecording"
+            >
+              <Icon :icon="Cancel01Icon" :size="14" />
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="group inline-flex h-11 items-center gap-2 rounded-full bg-red-500 px-4 text-body font-semibold text-white shadow-md transition hover:bg-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+              aria-label="Stop and send recording"
+              @click="stopRecording"
+            >
+              <Icon :icon="SentIcon" :size="16" />
+              Send
+            </button>
+          </div>
+
           <p class="mt-2 text-center text-caption text-text-subtle">
             {{ t.disclaimer }}
           </p>
@@ -545,6 +892,77 @@ function formatTime(d: Date): string {
   40% {
     transform: scale(1);
     opacity: 0.95;
+  }
+}
+
+/* ===== Voice recorder ===== */
+.recorder-bar {
+  background:
+    radial-gradient(120% 120% at 0% 50%, rgba(254, 226, 226, 0.85) 0%, rgba(254, 242, 242, 0.6) 60%, rgba(255, 255, 255, 0.4) 100%);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 24px -16px rgba(239, 68, 68, 0.4);
+}
+.recorder-led {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.recorder-led__core {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  animation: recorder-led-pulse 1.4s ease-in-out infinite;
+}
+.recorder-led__halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.55);
+  animation: recorder-led-halo 1.4s ease-out infinite;
+}
+@keyframes recorder-led-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.8); }
+}
+@keyframes recorder-led-halo {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.recorder-wave {
+  min-width: 0;
+  overflow: hidden;
+}
+.recorder-wave__bar {
+  display: inline-block;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #f87171, #ef4444);
+  animation: recorder-wave-bar 0.9s ease-in-out infinite;
+  height: 30%;
+}
+@keyframes recorder-wave-bar {
+  0%, 100% { height: 18%; opacity: 0.55; }
+  20%      { height: 80%; opacity: 1; }
+  40%      { height: 35%; opacity: 0.7; }
+  60%      { height: 95%; opacity: 1; }
+  80%      { height: 50%; opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recorder-led__core,
+  .recorder-led__halo,
+  .recorder-wave__bar {
+    animation: none;
+  }
+  .recorder-wave__bar {
+    height: 50%;
+    opacity: 0.7;
   }
 }
 </style>

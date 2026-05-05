@@ -7,6 +7,7 @@ import {
   type LocaleCode,
   type LocaleOption,
 } from '../i18n';
+import FlagIcon from './ui/FlagIcon.vue';
 
 withDefaults(
   defineProps<{
@@ -57,15 +58,12 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
     <div v-if="showLanguage" ref="wrapperRef" class="relative ml-auto">
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+        class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
         :aria-expanded="open"
         aria-haspopup="listbox"
         @click="toggle"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-        </svg>
+        <FlagIcon :code="selected.flag" :width="18" shape="circle" />
         <span class="uppercase">{{ selected.code }}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3 transition-transform" :class="open && 'rotate-180'" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
@@ -89,16 +87,28 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
             <button
               type="button"
               :class="[
-                'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
+                'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition',
                 selected.code === option.code
                   ? 'bg-ieee-50 text-ieee-800 font-semibold'
                   : 'text-slate-700 hover:bg-slate-50',
               ]"
               @click="pick(option.code)"
             >
-              <span>{{ option.label }}</span>
-              <span class="rounded-md bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-ieee-700">
-                {{ option.code }}
+              <FlagIcon :code="option.flag" :width="24" shape="circle" />
+              <span class="flex-1 truncate">{{ option.label }}</span>
+              <span
+                :class="[
+                  'grid h-4 w-4 shrink-0 place-items-center rounded-full border transition',
+                  selected.code === option.code
+                    ? 'border-ieee-700 bg-ieee-700'
+                    : 'border-slate-300 bg-white',
+                ]"
+                aria-hidden="true"
+              >
+                <span
+                  v-if="selected.code === option.code"
+                  class="h-1.5 w-1.5 rounded-full bg-white"
+                />
               </span>
             </button>
           </li>

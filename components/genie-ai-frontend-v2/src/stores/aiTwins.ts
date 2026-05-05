@@ -1,13 +1,20 @@
 import { defineStore } from 'pinia';
 import * as api from '../services/aiTwins';
-import type { AiTwin, CreateAiTwinPayload, UpdateAiTwinPayload } from '../services/aiTwins';
-import { readSession } from '../services/http';
+import type {
+  AiTwin,
+  CreateAiTwinPayload,
+  PublicAiTwin,
+  UpdateAiTwinPayload,
+} from '../services/aiTwins';
+import { useAuthStore } from './auth';
 
 interface AiTwinsState {
   twins: AiTwin[];
   total: number;
   offset: number;
   limit: number;
+  publicTwins: PublicAiTwin[];
+  publicTotal: number;
   current: AiTwin | null;
   loading: boolean;
   saving: boolean;
@@ -20,6 +27,8 @@ export const useAiTwinsStore = defineStore('aiTwins', {
     total: 0,
     offset: 0,
     limit: 50,
+    publicTwins: [],
+    publicTotal: 0,
     current: null,
     loading: false,
     saving: false,
@@ -47,6 +56,24 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       }
     },
 
+    async fetchAllPublic(params?: { offset?: number; limit?: number }): Promise<void> {
+      this.loading = true;
+      this.error = null;
+      try {
+        const res = await api.listPublicAiTwins({
+          offset: params?.offset ?? 0,
+          limit: params?.limit ?? this.limit,
+        });
+        this.publicTwins = res.twins;
+        this.publicTotal = res.total;
+      } catch (err) {
+        this.error = extractError(err, 'Failed to load AI Twins');
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
+
     async fetchOne(twinId: string): Promise<AiTwin> {
       // Clear stale `current` so the view shows its loading skeleton instead
       // of the previously-opened twin while the new request is in flight.
@@ -56,9 +83,12 @@ export const useAiTwinsStore = defineStore('aiTwins', {
       this.loading = true;
       this.error = null;
       try {
-        // Guests use the public read; the backend only exposes the default
-        // twin there, but it's enough to render a shareable chat surface.
-        const twin = readSession()
+        // Only admins hit the privileged read; everyone else (guests + normal
+        // users) gets the sanitized public payload. The backend only exposes
+        // the default twin via /public/ai-twins/:id, but that's enough for a
+        // read-only profile + chat surface.
+        const isAdmin = useAuthStore().isAdmin;
+        const twin = isAdmin
           ? await api.getAiTwin(twinId)
           : await api.getPublicAiTwin(twinId);
         this.current = twin;

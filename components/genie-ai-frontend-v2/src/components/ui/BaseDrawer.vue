@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, useSlots, watch } from 'vue';
-import {
-  ArrowExpand01Icon,
-  Cancel01Icon,
-  MoreHorizontalIcon,
-} from '@hugeicons/core-free-icons';
+import { Cancel01Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons';
 import Icon from './Icon.vue';
 
 const props = withDefaults(
@@ -14,14 +10,12 @@ const props = withDefaults(
     badge?: string;
     icon?: unknown;
     width?: 'sm' | 'md' | 'lg';
-    expandable?: boolean;
     showMore?: boolean;
     closeOnBackdrop?: boolean;
     initialFocus?: string;
   }>(),
   {
     width: 'md',
-    expandable: true,
     showMore: false,
     closeOnBackdrop: true,
   }
@@ -34,7 +28,6 @@ const emit = defineEmits<{
 }>();
 
 const slots = useSlots();
-const expanded = ref(false);
 const panel = ref<HTMLElement | null>(null);
 const previouslyFocused = ref<HTMLElement | null>(null);
 
@@ -96,7 +89,6 @@ watch(
           );
       target?.focus();
     } else {
-      expanded.value = false;
       previouslyFocused.value?.focus?.();
     }
   }
@@ -130,7 +122,7 @@ const widthClass = {
             ref="panel"
             :class="[
               'absolute right-3 top-3 bottom-3 z-10 flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-surface shadow-drawer transition-all duration-300',
-              expanded ? 'left-3 sm:left-auto sm:w-[min(96vw,1080px)]' : widthClass[width],
+              widthClass[width],
             ]"
           >
             <header
@@ -156,18 +148,9 @@ const widthClass = {
               </slot>
               <div class="flex items-center gap-1 text-text-muted">
                 <button
-                  v-if="expandable"
-                  type="button"
-                  class="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-surface-subtle hover:text-text"
-                  :aria-label="expanded ? 'Collapse drawer' : 'Expand drawer'"
-                  @click="expanded = !expanded"
-                >
-                  <Icon :icon="ArrowExpand01Icon" :size="18" />
-                </button>
-                <button
                   v-if="showMore"
                   type="button"
-                  class="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-surface-subtle hover:text-text"
+                  class="flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-surface-subtle hover:text-text"
                   aria-label="More options"
                   @click="emit('more')"
                 >
@@ -175,7 +158,7 @@ const widthClass = {
                 </button>
                 <button
                   type="button"
-                  class="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-surface-subtle hover:text-text"
+                  class="flex h-9 w-9 items-center justify-center rounded-full ring-1 ring-inset ring-border transition hover:bg-surface-subtle hover:text-text"
                   aria-label="Close drawer"
                   @click="close"
                 >

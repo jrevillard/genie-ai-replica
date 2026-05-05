@@ -7,38 +7,10 @@
 // Languages the chat backend can respond in. The picker on the chat surface
 // switches what `language` field is sent with each request — it does NOT
 // retranslate the surrounding UI (UI strings are owned by vue-i18n with a
-// smaller en/fr/mnk set).
-export type ChatLang =
-  | 'en'
-  | 'es'
-  | 'pt'
-  | 'fr'
-  | 'ar'
-  | 'hi'
-  | 'zh'
-  | 'de'
-  | 'ja'
-  | 'ru'
-  | 'ko'
-  | 'id'
-  | 'it'
-  | 'nl'
-  | 'tr'
-  | 'pl'
-  | 'sv'
-  | 'tl'
-  | 'ms'
-  | 'ro'
-  | 'uk'
-  | 'el'
-  | 'cs'
-  | 'da'
-  | 'fi'
-  | 'bg'
-  | 'hr'
-  | 'sk'
-  | 'ta'
-  | 'mnk';
+// smaller en/fr/mnk set). The authoritative list is supplied by the API
+// (`GET /public/chat-sessions/languages`); this alias is intentionally wide so
+// new server-side languages light up without a frontend change.
+export type ChatLang = string;
 
 export const DEFAULT_CHAT_LANG: ChatLang = 'fr';
 
@@ -80,7 +52,23 @@ export const CHAT_LANGS: LangOption[] = [
   { code: 'sk', label: 'Slovak', flag: 'sk' },
   { code: 'ta', label: 'Tamil', flag: 'in' },
   { code: 'mnk', label: 'Mandinka', flag: 'gm' },
+  { code: 'th', label: 'Thai', flag: 'th' },
+  { code: 'sw', label: 'Swahili', flag: 'ke' },
+  { code: 'st', label: 'Sesotho', flag: 'ls' },
+  { code: 'bn', label: 'Bengali', flag: 'bd' },
+  { code: 'man', label: 'Mandinka', flag: 'gm' },
 ];
+
+// API codes (`code`) → ISO 3166-1 alpha-2 country flag. Falls back to using
+// the language code itself as a flag (most flagcdn entries match the lang
+// code), then to a globe placeholder if even that is missing.
+const FLAG_BY_CODE: Record<string, string> = Object.fromEntries(
+  CHAT_LANGS.map((opt) => [opt.code, opt.flag]),
+);
+
+export function flagForLang(code: string): string {
+  return FLAG_BY_CODE[code] ?? code;
+}
 
 export function flagUrl(code: string): string {
   return `https://flagcdn.com/w40/${code.toLowerCase()}.png`;

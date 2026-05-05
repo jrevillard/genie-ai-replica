@@ -13,6 +13,7 @@ import {
 import { useZodForm } from '../../composables/useZodForm';
 import { updateAiTwinSchema, type UpdateAiTwinInput } from '../../lib/validation/schemas';
 import { useT } from '../../i18n/composables';
+import { useTranslated } from '../../composables/useTranslated';
 
 const { t } = useT();
 
@@ -130,6 +131,14 @@ async function save(): Promise<boolean> {
 }
 
 defineExpose({ save, discard });
+
+// Read-mode display values: translated to the active UI locale. When the user
+// clicks Update, the inputs flip back to the source `form.*` values so a save
+// can never overwrite the original with a translation.
+const { value: tName } = useTranslated(() => form.name ?? '', 'en');
+const { value: tDescription } = useTranslated(() => form.description ?? '', 'en');
+const { value: tChatGreeting } = useTranslated(() => form.chatGreeting, 'en');
+const { value: tCallGreeting } = useTranslated(() => form.callGreeting, 'en');
 </script>
 
 <template>
@@ -138,18 +147,20 @@ defineExpose({ save, discard });
       <h2 class="text-title text-text">{{ t('twins.general.sectionTitle', 'Change Your General Information') }}</h2>
       <div class="mt-4 space-y-5">
         <BaseInput
-          v-model="form.name"
+          :model-value="editing ? form.name : tName"
           :label="t('twins.general.nameLabel', 'AI Twin Name')"
           :placeholder="t('twins.general.namePlaceholder', `Enter the twin's name`)"
           :disabled="!editing"
           :error="errors.name"
+          @update:model-value="(v) => (form.name = v)"
         />
         <BaseTextarea
-          v-model="form.description"
+          :model-value="editing ? form.description : tDescription"
           :label="t('twins.general.descLabel', 'Description')"
           :rows="6"
           :disabled="!editing"
           :error="errors.description"
+          @update:model-value="(v) => (form.description = v)"
         />
       </div>
     </section>
@@ -164,7 +175,7 @@ defineExpose({ save, discard });
           v-model="form.twinNumber"
           type="tel"
           :placeholder="t('twins.general.numberPlaceholder', '+1 234 567 8900')"
-          :disabled="!editing"
+          disabled
         />
       </div>
     </section>
@@ -176,10 +187,11 @@ defineExpose({ save, discard });
       </p>
       <div class="mt-3">
         <BaseTextarea
-          v-model="form.chatGreeting"
+          :model-value="editing ? form.chatGreeting : tChatGreeting"
           :rows="4"
           :placeholder="t('twins.general.greetingPlaceholder', 'Hey, how can I help you today?')"
           :disabled="!editing"
+          @update:model-value="(v) => (form.chatGreeting = v)"
         />
       </div>
     </section>
@@ -191,10 +203,11 @@ defineExpose({ save, discard });
       </p>
       <div class="mt-3">
         <BaseTextarea
-          v-model="form.callGreeting"
+          :model-value="editing ? form.callGreeting : tCallGreeting"
           :rows="4"
           :placeholder="t('twins.general.greetingPlaceholder', 'Hey, how can I help you today?')"
           :disabled="!editing"
+          @update:model-value="(v) => (form.callGreeting = v)"
         />
       </div>
     </section>

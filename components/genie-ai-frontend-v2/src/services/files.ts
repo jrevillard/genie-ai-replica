@@ -216,6 +216,147 @@ function getPreviewUrl(fileId: string, options: FilePreviewOptions = {}): string
   return url;
 }
 
+// ─── Ingestion / retraction ────────────────────────────────────────────────
+
+export interface BulkFileOpResult {
+  fileId: string;
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
+export interface BulkFileOpResponse {
+  success: boolean;
+  results: BulkFileOpResult[];
+  message?: string;
+}
+
+async function ingestFile(fileId: string): Promise<unknown> {
+  const { data } = await api.post<{ success?: boolean; data?: unknown; message?: string; error?: string }>(
+    `files/${encodeURIComponent(fileId)}/ingest`
+  );
+  // The single-file endpoint also wraps per-file failure in a 200 envelope.
+  if (data?.success === false) {
+    throw new Error(data?.message || data?.error || 'Ingestion failed');
+  }
+  return data?.data ?? data;
+}
+
+async function ingestMultipleFiles(fileIds: string[]): Promise<BulkFileOpResponse> {
+  const { data } = await api.post<BulkFileOpResponse>('files/ingest', { fileIds });
+  return {
+    success: !!data?.success,
+    results: Array.isArray(data?.results) ? data.results : [],
+    message: data?.message,
+  };
+}
+
+async function retractMultipleFiles(fileIds: string[]): Promise<BulkFileOpResponse> {
+  const { data } = await api.post<BulkFileOpResponse>('files/retract', { fileIds });
+  return {
+    success: !!data?.success,
+    results: Array.isArray(data?.results) ? data.results : [],
+    message: data?.message,
+  };
+}
+
+// ─── Update metadata ───────────────────────────────────────────────────────
+
+export interface UpdateFilePayload {
+  file_name?: string;
+  language?: string;
+  labels?: string[];
+  author?: string;
+}
+
+async function updateFile(fileId: string, patch: UpdateFilePayload): Promise<unknown> {
+  const { data } = await api.patch<{ success?: boolean; data?: unknown }>(
+    `files/${encodeURIComponent(fileId)}`,
+    patch
+  );
+  return data?.data ?? data;
+}
+
+// ─── Add from link / crawl ─────────────────────────────────────────────────
+
+export interface UploadLinkPayload {
+  url: string;
+  language?: string;
+  labels?: string[];
+  author?: string;
+}
+
+async function uploadLink(payload: UploadLinkPayload): Promise<UploadedFileRecord> {
+  const { data } = await api.post<{
+    success?: boolean;
+    data?: UploadedFileRecord;
+    message?: string;
+  }>('files/upload-link', payload);
+  if (!data?.data?.file_id) {
+    throw new Error(data?.message || 'Link upload failed');
+  }
+  return data.data;
+}
+
+export interface SiteCrawlPayload {
+  url: string;
+  maxDepth?: number;
+  maxPages?: number;
+  language?: string;
+  labels?: string[];
+}
+
+async function scheduleSiteCrawl(payload: SiteCrawlPayload): Promise<unknown> {
+  const { data } = await api.post<{ success?: boolean; data?: unknown; message?: string }>(
+    'files/crawl/schedule',
+    payload
+  );
+  if (data?.success === false) {
+    throw new Error(data?.message || 'Crawl scheduling failed');
+  }
+  return data?.data ?? data;
+}
+
+// ─── Per-file crawl observability ──────────────────────────────────────────
+
+async function getCrawlJob(fileId: string): Promise<unknown> {
+  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
+    `files/${encodeURIComponent(fileId)}/crawl`
+  );
+  return data?.data ?? data;
+}
+
+async function getCrawlMetrics(fileId: string): Promise<unknown> {
+  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
+    `files/${encodeURIComponent(fileId)}/crawl/metrics`
+  );
+  return data?.data ?? data;
+}
+
+async function getCrawlLogs(fileId: string): Promise<unknown> {
+  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
+    `files/${encodeURIComponent(fileId)}/crawl/logs`
+  );
+  return data?.data ?? data;
+}
+
+async function killCrawl(fileId: string): Promise<void> {
+  await api.post(`files/${encodeURIComponent(fileId)}/crawl/kill`);
+}
+
+// ─── Per-file ingestion observability ──────────────────────────────────────
+
+async function getIngestionLogs(fileId: string): Promise<unknown> {
+  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
+    `files/${encodeURIComponent(fileId)}/ingestion-log`
+  );
+  return data?.data ?? data;
+}
+
+async function killIngestion(fileId: string): Promise<void> {
+  await api.post(`files/${encodeURIComponent(fileId)}/kill-ingest`);
+}
+
 const fileService = {
   listFiles,
   uploadFile,
@@ -225,6 +366,18 @@ const fileService = {
   deleteFile,
   getFileMetadata,
   getPreviewUrl,
+  ingestFile,
+  ingestMultipleFiles,
+  retractMultipleFiles,
+  updateFile,
+  uploadLink,
+  scheduleSiteCrawl,
+  getCrawlJob,
+  getCrawlMetrics,
+  getCrawlLogs,
+  killCrawl,
+  getIngestionLogs,
+  killIngestion,
 };
 
 export default fileService;
@@ -238,4 +391,16 @@ export {
   deleteFile,
   getFileMetadata,
   getPreviewUrl,
+  ingestFile,
+  ingestMultipleFiles,
+  retractMultipleFiles,
+  updateFile,
+  uploadLink,
+  scheduleSiteCrawl,
+  getCrawlJob,
+  getCrawlMetrics,
+  getCrawlLogs,
+  killCrawl,
+  getIngestionLogs,
+  killIngestion,
 };

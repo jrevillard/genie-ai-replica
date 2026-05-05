@@ -46,6 +46,12 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (session?.accessToken) {
     config.headers.set('Authorization', `Bearer ${session.accessToken}`);
   }
+  // For FormData bodies, drop the default JSON content-type so the browser
+  // can set `multipart/form-data; boundary=...` itself. Otherwise the server
+  // can't parse the upload and rejects it as "No file uploaded".
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.delete('Content-Type');
+  }
   // Tell the backend which UI language is active so any localized response
   // strings (errors, emails) match what the user sees.
   const locale = i18n.global.locale.value;

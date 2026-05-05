@@ -7,12 +7,15 @@ import BaseButton from '../ui/BaseButton.vue';
 import Icon from '../ui/Icon.vue';
 import type { AiTwin } from '../../services/aiTwins';
 import { useT } from '../../i18n/composables';
+import { useTranslated } from '../../composables/useTranslated';
 
 const { t } = useT();
 
 const props = defineProps<{
   twin: AiTwin;
 }>();
+
+const { value: translatedName } = useTranslated(() => props.twin.name, 'en');
 
 const router = useRouter();
 
@@ -69,7 +72,7 @@ function closeImagePreview() {
       >
         <BaseAvatar :src="twin.profilePicUrl ?? ''" :name="twin.name" size="lg" />
       </button>
-      <h3 class="truncate text-base font-semibold text-slate-900">{{ twin.name }}</h3>
+      <h3 class="truncate text-base font-semibold text-slate-900">{{ translatedName }}</h3>
     </header>
 
     <div class="grid grid-cols-2 items-center gap-x-6 rounded-2xl bg-neutral-50 px-4 py-3 text-xs">

@@ -209,6 +209,7 @@ const fr: MessageSchema = {
     },
     detail: {
       ieeePage: 'Page IEEE',
+      chatWithTwin: 'Discuter avec le Twin',
       delete: 'Supprimer le AI Twin',
       editing: 'Édition',
       deleteDialog: {
@@ -247,6 +248,12 @@ const fr: MessageSchema = {
       personality: 'Personnalité IA',
       knowledge: 'Base de connaissances',
       instructions: 'Instructions',
+    },
+    stats: {
+      chats: 'Nombre de discussions',
+      whatsapp: 'Discussions WhatsApp',
+      calls: "Nombre d'appels",
+      ariaLabel: "Vue d'ensemble de l'activité du twin",
     },
     general: {
       sectionTitle: 'Modifier vos informations générales',
@@ -325,6 +332,7 @@ const fr: MessageSchema = {
       toasts: {
         duplicate: 'Ce fichier est déjà lié à ce twin',
         linked: 'Fichier lié',
+        linkedMany: '{count} fichiers liés',
         linkFailed: 'Échec de la liaison',
         unlinked: 'Fichier délié',
         unlinkFailed: 'Échec du déliement',
@@ -343,7 +351,7 @@ const fr: MessageSchema = {
     },
   },
   knowledgeSet: {
-    title: 'Gestion des documents',
+    title: 'Base de connaissances',
     searchPlaceholder: 'Rechercher par nom de fichier',
     selectHint: 'Sélectionnez les fichiers à lier à un AI Twin',
     cancel: 'Annuler',
@@ -454,6 +462,8 @@ const fr: MessageSchema = {
     play: 'Lire',
     deleteCallTitle: 'Êtes-vous sûr de vouloir supprimer cet enregistrement ?',
     deleteCallBody: "En supprimant, toutes les données liées à cet appel seront perdues. Cette action est irréversible.",
+    showOriginal: "Voir l'original",
+    showTranslation: 'Voir la traduction',
   },
 };
 

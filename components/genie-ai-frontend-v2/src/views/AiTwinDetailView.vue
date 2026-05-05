@@ -5,6 +5,7 @@ import {
   ArrowLeft01Icon,
   Camera01Icon,
   Cancel01Icon,
+  Delete02Icon,
   Edit02Icon,
 } from '@hugeicons/core-free-icons';
 import { storeToRefs } from 'pinia';
@@ -23,7 +24,6 @@ import TwinStatsGrid from '../components/twin-tabs/TwinStatsGrid.vue';
 import VoiceTab from '../components/twin-tabs/VoiceTab.vue';
 import PersonalityTab from '../components/twin-tabs/PersonalityTab.vue';
 import KnowledgeSetTab from '../components/twin-tabs/KnowledgeSetTab.vue';
-import InstructionsTab from '../components/twin-tabs/InstructionsTab.vue';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useT } from '../i18n/composables';
 
@@ -54,7 +54,6 @@ const tabs = computed<TabItem[]>(() => [
   { value: 'voice', label: t('twins.tabs.voice', 'Voice') },
   { value: 'personality', label: t('twins.tabs.personality', 'AI Personality') },
   { value: 'knowledge', label: t('twins.tabs.knowledge', 'Knowledge Set') },
-  { value: 'instructions', label: t('twins.tabs.instructions', 'Instructions') },
 ]);
 
 const twinId = computed(() => String(route.params.id ?? ''));
@@ -97,9 +96,16 @@ function cancelEditing() {
   editing.value = false;
 }
 
+const savingTab = ref(false);
+
 async function saveChanges() {
-  const ok = await Promise.resolve(activeTab.value?.save?.() ?? true);
-  if (ok) editing.value = false;
+  savingTab.value = true;
+  try {
+    const ok = await Promise.resolve(activeTab.value?.save?.() ?? true);
+    if (ok) editing.value = false;
+  } finally {
+    savingTab.value = false;
+  }
 }
 
 function pickImage() {
@@ -255,9 +261,23 @@ async function confirmDelete() {
               Chat With Twin
             </BaseButton>
           </div>
-          <BaseButton variant="danger" size="md" :loading="deleting" @click="deleteDialog = true">
-            {{ t('twins.detail.delete', 'Delete AI Twin') }}
-          </BaseButton>
+
+          <button
+            type="button"
+            class="inline-flex h-10 items-center gap-2 rounded-full border border-danger/30 bg-danger/5 px-4 text-sm font-semibold text-danger transition duration-200 hover:-translate-y-0.5 hover:border-danger/60 hover:bg-danger/10 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger/50 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="deleting"
+            :aria-label="t('twins.detail.delete', 'Delete AI Twin')"
+            :title="t('twins.detail.delete', 'Delete AI Twin')"
+            @click="deleteDialog = true"
+          >
+              <span
+                v-if="deleting"
+                class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                aria-hidden="true"
+              />
+              <Icon v-else :icon="Delete02Icon" :size="16" />
+              <span class="hidden sm:inline">{{ t('twins.detail.delete', 'Delete AI Twin') }}</span>
+            </button>
         </header>
 
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -276,7 +296,7 @@ async function confirmDelete() {
                 variant="ghost"
                 size="md"
                 rounded="full"
-                :disabled="saving"
+                :disabled="saving || savingTab"
                 @click="cancelEditing"
               >
                 {{ t('common.cancel', 'Cancel') }}
@@ -285,7 +305,7 @@ async function confirmDelete() {
                 variant="primary"
                 size="md"
                 rounded="full"
-                :loading="saving"
+                :loading="saving || savingTab"
                 @click="saveChanges"
               >
                 {{ t('common.saveChanges', 'Save Changes') }}
@@ -312,9 +332,13 @@ async function confirmDelete() {
               :editing="editing"
             />
             <VoiceTab v-else-if="tab === 'voice'" ref="activeTab" :editing="editing" />
-            <PersonalityTab v-else-if="tab === 'personality'" ref="activeTab" />
+            <PersonalityTab
+              v-else-if="tab === 'personality'"
+              ref="activeTab"
+              :twin="twin"
+              :editing="editing"
+            />
             <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" :twin="twin" />
-            <InstructionsTab v-else-if="tab === 'instructions'" ref="activeTab" />
           </div>
         </fieldset>
       </template>

@@ -27,6 +27,7 @@ export const useAuthStore = defineStore('auth', {
       'User',
     email: (state): string => state.user?.email ?? '',
     role: (state): string => state.user?.role ?? '',
+    isAdmin: (state): boolean => state.user?.role === 'Admin',
   },
   actions: {
     // Called once at boot. If we have a stored token, validate it via /auth/me.

@@ -239,6 +239,10 @@ function sessionTitle(session: ChatSessionRecord | null | undefined): string {
 }
 
 function sessionPreview(session: ChatSessionRecord): string {
+  const last = session.lastMessage?.content?.replace(/\s+/g, ' ').trim();
+  if (last) {
+    return session.lastMessage?.role === 'user' ? `You: ${last}` : last;
+  }
   if (session.type === 'whatsapp') {
     return session.phoneNumber ? `WhatsApp · ${session.phoneNumber}` : 'WhatsApp';
   }

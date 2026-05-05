@@ -20,7 +20,18 @@ export function useT() {
     const params = hasParams ? (fallbackOrParams as Record<string, unknown>) : undefined;
     const fallback = hasParams ? fallbackArg : (fallbackOrParams as string | undefined);
     const out = params ? rawT(key, params) : rawT(key);
-    if (out === key && fallback !== undefined) return fallback;
+    if (out === key && fallback !== undefined) {
+      // Manually interpolate the fallback so callers can write
+      // `t('foo', { count: 3 }, '{count} items')` and have it render correctly
+      // when the catalog hasn't been populated yet.
+      if (params) {
+        return fallback.replace(/\{(\w+)\}/g, (_, name: string) => {
+          const v = (params as Record<string, unknown>)[name];
+          return v == null ? `{${name}}` : String(v);
+        });
+      }
+      return fallback;
+    }
     return out;
   }
 

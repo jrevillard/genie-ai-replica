@@ -28,6 +28,14 @@ export interface SendChatMessageResponse {
 
 export type ChatSessionType = 'chat' | 'whatsapp';
 
+export interface ChatSessionLastMessage {
+  _key?: string;
+  role: 'user' | 'assistant' | string;
+  content: string;
+  audioUrl?: string | null;
+  createdAt?: string;
+}
+
 export interface ChatSessionRecord {
   _key: string;
   userId: string;
@@ -36,6 +44,7 @@ export interface ChatSessionRecord {
   twinId?: string | null;
   createdAt: string;
   updatedAt: string;
+  lastMessage?: ChatSessionLastMessage | null;
 }
 
 export interface ListChatSessionsParams {
@@ -227,6 +236,16 @@ function inferAudioFileName(blob: Blob): string {
   if (type.includes('mp3') || type.includes('mpeg')) return 'recording.mp3';
   if (type.includes('mp4') || type.includes('m4a')) return 'recording.m4a';
   return 'recording.webm';
+}
+
+export interface ChatLanguage {
+  code: string;
+  name: string;
+}
+
+export async function getChatLanguages(): Promise<ChatLanguage[]> {
+  const res = await api.get<ChatLanguage[]>('/public/chat-sessions/languages');
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 // ============================================================================

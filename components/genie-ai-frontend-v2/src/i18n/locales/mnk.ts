@@ -214,6 +214,7 @@ const mnk: MessageSchema = {
     },
     detail: {
       ieeePage: 'IEEE Page',
+      chatWithTwin: 'Diyaamoo ke Twin niŋ',
       delete: 'AI Twin bondi',
       editing: 'A be faliŋ kaŋ',
       deleteDialog: {
@@ -252,6 +253,12 @@ const mnk: MessageSchema = {
       personality: 'AI sondomoo',
       knowledge: 'Lonoo Kafoo',
       instructions: 'Yaamaroolu',
+    },
+    stats: {
+      chats: 'Diyaamoo yaatewo',
+      whatsapp: 'WhatsApp diyaamoolu',
+      calls: 'Kumandiri yaatewo',
+      ariaLabel: 'Twin la kuwolu juubeeroo',
     },
     general: {
       sectionTitle: 'I la kuu beelu faliŋ',
@@ -330,6 +337,7 @@ const mnk: MessageSchema = {
       toasts: {
         duplicate: 'Fayiloo wo siti ta le fokabaŋ twin ñiŋ to',
         linked: 'Fayiloo siti ta',
+        linkedMany: 'Fayiloo {count} siti ta',
         linkFailed: 'Fayiloo maŋ noo siti',
         unlinked: 'Fayiloo firiŋ ta',
         unlinkFailed: 'Fayiloo maŋ noo firiŋ',
@@ -348,7 +356,7 @@ const mnk: MessageSchema = {
     },
   },
   knowledgeSet: {
-    title: 'Document Topatooroo',
+    title: 'Lonoo Kafoo',
     searchPlaceholder: 'Fayiloo too la ñini',
     selectHint: 'Fayiloolu tomboŋ ka ì siti AI Twin la',
     cancel: 'Bayi',
@@ -459,6 +467,8 @@ const mnk: MessageSchema = {
     play: 'Taamandi',
     deleteCallTitle: 'I lafita kumandiri ñiŋ bondi la baŋ?',
     deleteCallBody: 'Niŋ i ye a bondi, i be foo la a la kuwolu bee la. I te ì soto noo la kotenke niŋ ì bondi ta.',
+    showOriginal: 'Foloo juubee',
+    showTranslation: 'Faliŋo juubee',
   },
 };
 

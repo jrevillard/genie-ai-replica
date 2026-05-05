@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { CHAT_LANGS, DEFAULT_CHAT_LANG, type ChatLang } from '../lib/chatStrings';
+import { DEFAULT_CHAT_LANG, type ChatLang } from '../lib/chatStrings';
 import {
   createChatSession,
   createPublicChatSession,
@@ -20,6 +20,8 @@ export interface ChatMessage {
   serverId?: string;
   role: ChatRole;
   text: string;
+  /** ISO-639-1 language tag for the message body. Drives dynamic translation. */
+  lang?: string;
   audioUrl?: string | null;
   createdAt: Date;
   streaming?: boolean;
@@ -35,12 +37,11 @@ interface ChatState {
 }
 
 const CHAT_LANG_STORAGE_KEY = 'chat.lang.v2';
-const VALID_CHAT_LANG_CODES = new Set<ChatLang>(CHAT_LANGS.map((l) => l.code));
 
 function readPersistedChatLang(): ChatLang {
   if (typeof window === 'undefined') return DEFAULT_CHAT_LANG;
   const stored = window.localStorage.getItem(CHAT_LANG_STORAGE_KEY);
-  if (stored && VALID_CHAT_LANG_CODES.has(stored as ChatLang)) {
+  if (stored && /^[a-z]{2,8}(-[A-Za-z0-9]+)?$/.test(stored)) {
     return stored as ChatLang;
   }
   return DEFAULT_CHAT_LANG;
@@ -73,7 +74,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     setLanguage(lang: ChatLang): void {
-      if (!VALID_CHAT_LANG_CODES.has(lang)) return;
+      if (!lang) return;
       this.lang = lang;
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(CHAT_LANG_STORAGE_KEY, lang);
@@ -108,6 +109,7 @@ export const useChatStore = defineStore('chat', {
         id: makeId(),
         role: 'user',
         text: trimmed,
+        lang: this.lang,
         createdAt: new Date(),
       });
 
@@ -115,6 +117,7 @@ export const useChatStore = defineStore('chat', {
         id: makeId(),
         role: 'assistant',
         text: '',
+        lang: this.lang,
         createdAt: new Date(),
         streaming: true,
       };
@@ -160,6 +163,7 @@ export const useChatStore = defineStore('chat', {
           serverId: res.userMessage.id,
           role: 'user',
           text: res.userMessage.text,
+          lang: this.lang,
           audioUrl: res.userMessage.audioUrl ?? null,
           createdAt: now,
         });
@@ -168,6 +172,7 @@ export const useChatStore = defineStore('chat', {
           serverId: res.assistantMessage.id,
           role: 'assistant',
           text: res.assistantMessage.text,
+          lang: this.lang,
           createdAt: new Date(),
         });
       } finally {

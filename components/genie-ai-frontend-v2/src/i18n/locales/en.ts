@@ -211,6 +211,7 @@ export default {
     },
     detail: {
       ieeePage: 'IEEE Page',
+      chatWithTwin: 'Chat With Twin',
       delete: 'Delete AI Twin',
       editing: 'Editing',
       deleteDialog: {
@@ -249,6 +250,12 @@ export default {
       personality: 'AI Personality',
       knowledge: 'Knowledge Set',
       instructions: 'Instructions',
+    },
+    stats: {
+      chats: 'Number of Chats',
+      whatsapp: 'WhatsApp Chats',
+      calls: 'Number of Calls',
+      ariaLabel: 'Twin activity overview',
     },
     general: {
       sectionTitle: 'Change Your General Information',
@@ -327,6 +334,7 @@ export default {
       toasts: {
         duplicate: 'That file is already linked to this twin',
         linked: 'File linked',
+        linkedMany: '{count} files linked',
         linkFailed: 'Failed to link file',
         unlinked: 'File unlinked',
         unlinkFailed: 'Failed to unlink file',
@@ -345,7 +353,7 @@ export default {
     },
   },
   knowledgeSet: {
-    title: 'Document Management',
+    title: 'Knowledge Set',
     searchPlaceholder: 'Search by file name',
     selectHint: 'Select files to link them to an AI Twin',
     cancel: 'Cancel',
@@ -456,5 +464,7 @@ export default {
     play: 'Play',
     deleteCallTitle: 'Are you sure you want to delete this call recording?',
     deleteCallBody: "If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.",
+    showOriginal: 'Show original',
+    showTranslation: 'Show translation',
   },
 } as const;

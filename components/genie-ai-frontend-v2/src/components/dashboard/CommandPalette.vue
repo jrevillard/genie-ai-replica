@@ -10,6 +10,9 @@ import {
   UserIcon,
 } from '@hugeicons/core-free-icons';
 import Icon from '../ui/Icon.vue';
+import { useT } from '../../i18n/composables';
+
+const { t } = useT();
 
 const props = defineProps<{
   open: boolean;
@@ -30,17 +33,41 @@ interface PaletteItem {
   icon: unknown;
 }
 
-const items: PaletteItem[] = [
-  { group: 'Pages', label: 'AI Twins', description: 'Create and manage AI Twins', to: '/ai-twins', icon: SparklesIcon },
-  { group: 'Pages', label: 'Chat/Call History', description: 'Review chats, calls, transcripts, and summaries', to: '/chat-history', icon: MessageMultiple01Icon },
-  { group: 'Pages', label: 'Knowledge Set', description: 'Upload and ingest files for AI Twins', to: '/knowledge-set', icon: AiBrain01Icon },
-  { group: 'Useful routes', label: 'Profile', description: 'User profile area', to: '/profile', icon: UserIcon },
-];
+const items = computed<PaletteItem[]>(() => [
+  {
+    group: t('topbar.cmdPalette.pages', 'Pages'),
+    label: t('nav.aiTwins', 'AI Twins'),
+    description: t('topbar.cmdPalette.descriptions.aiTwins', 'Create and manage AI Twins'),
+    to: '/ai-twins',
+    icon: SparklesIcon,
+  },
+  {
+    group: t('topbar.cmdPalette.pages', 'Pages'),
+    label: t('nav.chatCallHistory', 'Chat/Call History'),
+    description: t('topbar.cmdPalette.descriptions.chatCallHistory', 'Review chats, calls, transcripts, and summaries'),
+    to: '/chat-history',
+    icon: MessageMultiple01Icon,
+  },
+  {
+    group: t('topbar.cmdPalette.pages', 'Pages'),
+    label: t('nav.knowledgeSet', 'Knowledge Set'),
+    description: t('topbar.cmdPalette.descriptions.knowledgeSet', 'Upload and ingest files for AI Twins'),
+    to: '/knowledge-set',
+    icon: AiBrain01Icon,
+  },
+  {
+    group: t('topbar.cmdPalette.usefulRoutes', 'Useful routes'),
+    label: t('nav.profile', 'Profile'),
+    description: t('topbar.cmdPalette.descriptions.profile', 'User profile area'),
+    to: '/profile',
+    icon: UserIcon,
+  },
+]);
 
 const filteredItems = computed(() => {
   const q = search.value.trim().toLowerCase();
-  if (!q) return items;
-  return items.filter((item) =>
+  if (!q) return items.value;
+  return items.value.filter((item) =>
     `${item.label} ${item.description} ${item.group}`.toLowerCase().includes(q)
   );
 });
@@ -83,7 +110,7 @@ function navigate(to: string) {
             <input
               v-model="search"
               type="text"
-              placeholder="Search documentation..."
+              :placeholder="t('topbar.cmdPalette.placeholder', 'Search documentation...')"
               class="w-full bg-transparent text-base text-neutral-950 outline-none placeholder:text-neutral-500"
               autofocus
               @keydown.esc="close"
@@ -115,7 +142,7 @@ function navigate(to: string) {
               </div>
             </section>
           </div>
-          <p v-else class="px-3 py-10 text-center text-sm text-neutral-500">No routes found.</p>
+          <p v-else class="px-3 py-10 text-center text-sm text-neutral-500">{{ t('topbar.cmdPalette.noResults', 'No routes found.') }}</p>
         </div>
       </section>
     </div>

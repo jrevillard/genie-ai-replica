@@ -16,6 +16,7 @@ interface ChatHistoryState {
   currentSession: ChatSessionRecord | null;
   messages: ChatHistoryMessage[];
   loadingMessages: boolean;
+  searchingMessages: boolean;
   messagesError: string | null;
   messageQuery: string;
   deleting: boolean;
@@ -37,6 +38,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
     currentSession: null,
     messages: [],
     loadingMessages: false,
+    searchingMessages: false,
     messagesError: null,
     messageQuery: '',
     deleting: false,
@@ -105,7 +107,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
     async searchMessages(q: string): Promise<void> {
       this.messageQuery = q;
       if (!this.selectedSessionId) return;
-      this.loadingMessages = true;
+      this.searchingMessages = true;
       this.messagesError = null;
       try {
         const trimmed = q.trim();
@@ -119,7 +121,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
         this.messagesError = extractError(err, 'Failed to search messages');
         throw err;
       } finally {
-        this.loadingMessages = false;
+        this.searchingMessages = false;
       }
     },
 

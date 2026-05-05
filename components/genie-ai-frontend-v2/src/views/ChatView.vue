@@ -4,30 +4,29 @@ import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
   ArrowLeft01Icon,
-  BloodPressureIcon,
   BubbleChatIcon,
   CallIcon,
   Cancel01Icon,
   Copy01Icon,
   Mic01Icon,
   PauseIcon,
-  PlateIcon,
   PlayIcon,
   SentIcon,
-  StethoscopeIcon,
   VolumeHighIcon,
-  WellnessIcon,
 } from '@hugeicons/core-free-icons';
 
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
-import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
+import { CHAT_LANGS, chatStrings, flagUrl, type ChatLang } from '../lib/chatStrings';
 import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore, type ChatMessage } from '../stores/chat';
+import { useT } from '../i18n/composables';
+
+const { t: tt } = useT();
 
 const route = useRoute();
 const router = useRouter();
@@ -50,13 +49,6 @@ const composer = ref<HTMLTextAreaElement | null>(null);
 const messagesEnd = ref<HTMLDivElement | null>(null);
 const langOpen = ref(false);
 const langButton = ref<HTMLButtonElement | null>(null);
-
-const suggestionIcons = [
-  BloodPressureIcon,
-  PlateIcon,
-  StethoscopeIcon,
-  WellnessIcon,
-];
 
 async function loadTwin(): Promise<void> {
   if (!twinId.value) return;
@@ -480,7 +472,7 @@ function formatTime(d: Date): string {
           <button
             type="button"
             class="inline-flex items-center justify-center rounded-full bg-surface-muted p-2 text-text-muted transition hover:bg-surface-subtle hover:text-text"
-            aria-label="Go back"
+            :aria-label="tt('common.goBack', 'Go back')"
             @click="goBack"
           >
             <Icon :icon="ArrowLeft01Icon" :size="18" />
@@ -510,18 +502,20 @@ function formatTime(d: Date): string {
             <button
               ref="langButton"
               type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-body font-medium text-text transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              class="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-2 py-1.5 text-body font-medium text-text transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               :aria-label="t.langLabel"
               :aria-expanded="langOpen"
               aria-haspopup="listbox"
               @click="langOpen = !langOpen"
               @blur="onLangButtonBlur"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-              </svg>
-              <span class="uppercase">{{ currentLang.code }}</span>
+              <img
+                :src="flagUrl(currentLang.flag)"
+                :alt="currentLang.label"
+                class="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-border"
+                loading="lazy"
+              />
+              <span class="px-1 text-meta uppercase tracking-wide text-text-muted">{{ currentLang.code }}</span>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3 transition-transform" :class="langOpen && 'rotate-180'" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
               </svg>
@@ -529,17 +523,34 @@ function formatTime(d: Date): string {
             <ul
               v-if="langOpen"
               role="listbox"
-              class="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+              class="absolute right-0 top-full z-20 mt-2 max-h-80 w-60 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
             >
               <li v-for="opt in CHAT_LANGS" :key="opt.code" role="option" :aria-selected="opt.code === lang">
                 <button
                   type="button"
-                  class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                  :class="[
+                    'flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left text-sm transition',
+                    opt.code === lang ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50',
+                  ]"
                   @click="setLanguage(opt.code)"
                 >
-                  <span class="font-medium">{{ opt.label }}</span>
-                  <span class="rounded-md bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold text-ieee-700">
-                    {{ opt.code }}
+                  <span class="flex min-w-0 items-center gap-2.5">
+                    <img
+                      :src="flagUrl(opt.flag)"
+                      :alt="opt.label"
+                      class="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                      loading="lazy"
+                    />
+                    <span class="truncate font-medium">{{ opt.label }}</span>
+                  </span>
+                  <span
+                    :class="[
+                      'grid h-4 w-4 shrink-0 place-items-center rounded-full border',
+                      opt.code === lang ? 'border-accent bg-accent text-white' : 'border-slate-300',
+                    ]"
+                    aria-hidden="true"
+                  >
+                    <span v-if="opt.code === lang" class="block h-1.5 w-1.5 rounded-full bg-white" />
                   </span>
                 </button>
               </li>
@@ -560,12 +571,13 @@ function formatTime(d: Date): string {
           <button
             v-if="twin"
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-inverse text-text-inverse transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            class="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-surface-inverse px-4 text-sm font-semibold text-text-inverse transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             :aria-label="t.call.startCall"
             :title="t.call.startCall"
             @click="startVoiceCall"
           >
-            <Icon :icon="CallIcon" :size="18" />
+            <Icon :icon="CallIcon" :size="16" />
+            <span>{{ t.call.startCall }}</span>
           </button>
         </div>
       </header>
@@ -584,36 +596,26 @@ function formatTime(d: Date): string {
           </BaseButton>
         </EmptyState>
 
-        <!-- Empty hero (twin selected, no messages yet) -->
+        <!-- Greeting (twin selected, no messages yet) -->
         <div
           v-else-if="messages.length === 0"
-          class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10 text-center"
+          class="flex min-h-0 flex-1 flex-col px-6 py-6"
         >
-          <h1 class="text-display text-text">{{ t.greeting }}</h1>
-          <p class="mt-2 max-w-xl text-lead text-text-muted">{{ t.subgreeting }}</p>
-
-          <p class="mt-8 text-meta uppercase tracking-wide text-text-subtle">
-            {{ t.suggestionsTitle }}
-          </p>
-          <div class="mt-3 grid w-full max-w-3xl gap-3 sm:grid-cols-2">
-            <button
-              v-for="(card, idx) in t.suggestionCards"
-              :key="card.topic"
-              type="button"
-              :disabled="sending"
-              class="group flex items-start gap-3 rounded-2xl border border-border bg-surface p-4 text-left shadow-card transition hover:border-accent/40 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-              @click="send(card.prompt)"
-            >
-              <span
-                class="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent transition group-hover:bg-accent group-hover:text-text-inverse"
-              >
-                <Icon :icon="suggestionIcons[idx]" :size="22" />
-              </span>
-              <span class="min-w-0">
-                <span class="block text-body font-semibold text-text">{{ card.topic }}</span>
-                <span class="mt-0.5 block text-meta text-text-muted">{{ card.prompt }}</span>
-              </span>
-            </button>
+          <div class="mx-auto flex w-full max-w-3xl">
+            <div class="flex gap-3">
+              <BaseAvatar
+                :src="twin?.profilePicUrl ?? ''"
+                :name="twin?.name ?? 'AI Twin'"
+                size="sm"
+              />
+              <div class="flex max-w-[80%] flex-col items-start">
+                <div class="rounded-2xl bg-surface-muted px-5 py-3 text-body text-text shadow-card">
+                  <p class="whitespace-pre-wrap leading-relaxed">
+                    {{ twin?.chatGreeting?.trim() || t.greeting }}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { ChatLang } from '../lib/chatStrings';
+import { CHAT_LANGS, DEFAULT_CHAT_LANG, type ChatLang } from '../lib/chatStrings';
 import {
   createChatSession,
   createPublicChatSession,
@@ -12,7 +12,6 @@ import {
   type SendVoiceMessageOptions,
 } from '../services/chatSessions';
 import { readSession } from '../services/http';
-import { i18n, setLocale, type LocaleCode } from '../i18n';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -32,6 +31,19 @@ interface ChatState {
   sessionId: string | null;
   messages: ChatMessage[];
   sending: boolean;
+  lang: ChatLang;
+}
+
+const CHAT_LANG_STORAGE_KEY = 'chat.lang.v2';
+const VALID_CHAT_LANG_CODES = new Set<ChatLang>(CHAT_LANGS.map((l) => l.code));
+
+function readPersistedChatLang(): ChatLang {
+  if (typeof window === 'undefined') return DEFAULT_CHAT_LANG;
+  const stored = window.localStorage.getItem(CHAT_LANG_STORAGE_KEY);
+  if (stored && VALID_CHAT_LANG_CODES.has(stored as ChatLang)) {
+    return stored as ChatLang;
+  }
+  return DEFAULT_CHAT_LANG;
 }
 
 function makeId(): string {
@@ -43,27 +55,14 @@ function extractError(err: unknown, fallback: string): string {
   return e?.response?.data?.message ?? e?.message ?? fallback;
 }
 
-const VALID_CHAT_LANGS: ChatLang[] = ['en', 'fr', 'mnk'];
-
-function currentLang(): ChatLang {
-  const code = i18n.global.locale.value;
-  return VALID_CHAT_LANGS.includes(code as ChatLang) ? (code as ChatLang) : 'en';
-}
-
 export const useChatStore = defineStore('chat', {
   state: (): ChatState => ({
     currentTwinId: null,
     sessionId: null,
     messages: [],
     sending: false,
+    lang: readPersistedChatLang(),
   }),
-
-  getters: {
-    // Always reflects the global UI locale — there is no separate chat-only
-    // language any more. Existing callers (`storeToRefs(chat).lang`) keep
-    // working because Pinia exposes getters as refs.
-    lang: (): ChatLang => currentLang(),
-  },
 
   actions: {
     setTwinContext(twinId: string | null): void {
@@ -73,10 +72,12 @@ export const useChatStore = defineStore('chat', {
       this.messages = [];
     },
 
-    async setLanguage(lang: ChatLang): Promise<void> {
-      // Delegate to the i18n module so localStorage + <html lang> + the active
-      // i18n locale all stay in lockstep.
-      await setLocale(lang as LocaleCode);
+    setLanguage(lang: ChatLang): void {
+      if (!VALID_CHAT_LANG_CODES.has(lang)) return;
+      this.lang = lang;
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(CHAT_LANG_STORAGE_KEY, lang);
+      }
     },
 
     resetConversation(): void {

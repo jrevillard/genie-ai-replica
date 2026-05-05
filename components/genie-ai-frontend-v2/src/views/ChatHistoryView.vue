@@ -42,15 +42,25 @@ import type { AiTwin } from '../services/aiTwins';
 import * as chatSessionsApi from '../services/chatSessions';
 import type { ChatSessionRecord } from '../services/chatSessions';
 import type { VoiceSession } from '../services/voice';
+import { useT } from '../i18n/composables';
 
-const dateOptions = ['Today', 'Yesterday', 'Last 7 days', 'Last 30 days', 'Last month', 'Custom Date'];
+const { t } = useT();
+
+const dateOptions = computed(() => [
+  t('history.dateOptions.today', 'Today'),
+  t('history.dateOptions.yesterday', 'Yesterday'),
+  t('history.dateOptions.last7', 'Last 7 days'),
+  t('history.dateOptions.last30', 'Last 30 days'),
+  t('history.dateOptions.lastMonth', 'Last month'),
+  t('history.dateOptions.custom', 'Custom Date'),
+]);
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const leftCalendar = [28, 29, 30, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const rightCalendar = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const detailWaveformBars = [54, 72, 88, 64, 92, 46, 76, 82, 60, 78, 70, 92, 98, 74, 50, 66, 86, 44, 72, 82, 58, 74, 88, 54, 68, 38, 82, 76, 90, 48, 72, 60, 80, 44, 76, 62, 88, 54, 74, 92, 46, 66, 84, 58, 78, 52, 90, 64];
 
 const activeTab = ref<'Chats' | 'Calls'>('Chats');
-const selectedDate = ref('Today');
+const selectedDate = ref(t('history.dateOptions.today', 'Today'));
 const dateMenuOpen = ref(false);
 const filterPanelOpen = ref(false);
 const callDetailOpen = ref(false);
@@ -62,6 +72,7 @@ const chatSearchOpen = ref(false);
 const chatSearchInput = ref('');
 const chatDeleteDialogOpen = ref(false);
 const chatToDeleteId = ref<string | null>(null);
+const mobileShowChatDetail = ref(false);
 
 const auth = useAuthStore();
 const voice = useVoiceStore();
@@ -77,6 +88,7 @@ const {
   selectedSessionId,
   messages: chatMessages,
   loadingMessages,
+  searchingMessages,
   messagesError,
   typeFilter,
   scopeFilter,
@@ -113,7 +125,7 @@ const phoneInput = ref('');
 const pageSizes = [10, 25, 50] as const;
 const callerName = computed(() => auth.displayName);
 
-const showCalendar = computed(() => selectedDate.value === 'Custom Date');
+const showCalendar = computed(() => selectedDate.value === t('history.dateOptions.custom', 'Custom Date'));
 
 function chooseDate(option: string) {
   selectedDate.value = option;
@@ -123,31 +135,33 @@ const callDateFilter = ref('all');
 const callSort = ref('newest');
 const callLanguageFilter = ref('all');
 
-const dateFilterOptions = [
-  { value: 'all', label: 'All dates' },
-  { value: 'today', label: 'Today' },
-  { value: 'last7', label: 'Last 7 days' },
-  { value: 'last30', label: 'Last 30 days' },
-];
+const dateFilterOptions = computed(() => [
+  { value: 'all', label: t('history.filters.allDates', 'All dates') },
+  { value: 'today', label: t('history.dateOptions.today', 'Today') },
+  { value: 'last7', label: t('history.dateOptions.last7', 'Last 7 days') },
+  { value: 'last30', label: t('history.dateOptions.last30', 'Last 30 days') },
+]);
 
-const sortOptions = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'longest', label: 'Longest' },
-  { value: 'shortest', label: 'Shortest' },
-];
+const sortOptions = computed(() => [
+  { value: 'newest', label: t('history.filters.newest', 'Newest first') },
+  { value: 'oldest', label: t('history.filters.oldest', 'Oldest first') },
+  { value: 'longest', label: t('history.filters.longest', 'Longest') },
+  { value: 'shortest', label: t('history.filters.shortest', 'Shortest') },
+]);
 
-const chatSortOptions = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-];
+const chatSortOptions = computed(() => [
+  { value: 'newest', label: t('history.sortOptions.newestFirst', 'Newest first') },
+  { value: 'oldest', label: t('history.filters.oldest', 'Oldest first') },
+]);
 
+// TODO i18n: missing keys for channel filter labels (All channels, Chat, WhatsApp)
 const typeOptions = [
   { value: '', label: 'All channels' },
   { value: 'chat', label: 'Chat' },
   { value: 'whatsapp', label: 'WhatsApp' },
 ];
 
+// TODO i18n: missing keys for scope filter labels (My sessions, All users)
 const scopeOptions = [
   { value: 'me', label: 'My sessions' },
   { value: 'all', label: 'All users' },
@@ -197,7 +211,7 @@ const languageOptions = computed(() => {
     new Set(callSessions.value.map((s) => s.language).filter(Boolean))
   ).sort();
   return [
-    { value: 'all', label: 'All languages' },
+    { value: 'all', label: t('history.filters.allLanguages', 'All languages') },
     ...langs.map((l) => ({ value: l, label: l.toUpperCase() })),
   ];
 });
@@ -414,6 +428,7 @@ async function loadChats(): Promise<void> {
 }
 
 async function selectChatSession(sessionId: string): Promise<void> {
+  mobileShowChatDetail.value = true;
   if (selectedSessionId.value === sessionId) return;
   chatSearchOpen.value = false;
   chatSearchInput.value = '';
@@ -422,6 +437,12 @@ async function selectChatSession(sessionId: string): Promise<void> {
   } catch {
     // messagesError renders in the chat pane
   }
+}
+
+function backToChatList(): void {
+  mobileShowChatDetail.value = false;
+  chatSearchOpen.value = false;
+  chatSearchInput.value = '';
 }
 
 let messageSearchDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -449,6 +470,28 @@ function clearChatSearch(): void {
   chatHistory.searchMessages('').catch(() => {});
 }
 
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightMessage(content: string): string {
+  const safe = escapeHtml(content ?? '');
+  const term = chatSearchInput.value.trim();
+  if (!term) return safe;
+  const re = new RegExp(`(${escapeRegex(term)})`, 'gi');
+  const style = 'background-color:#bbf7d0;color:#166534;border-radius:3px;padding:0 2px;font-weight:600;';
+  return safe.replace(re, `<mark style="${style}">$1</mark>`);
+}
+
 function openChatDeleteDialog(): void {
   if (!selectedChatSession.value || !selectedSessionId.value) return;
   chatToDeleteId.value = selectedSessionId.value;
@@ -469,9 +512,10 @@ const composerDisabled = computed(
 );
 
 const composerPlaceholder = computed(() => {
+  // TODO i18n: missing keys for these composer placeholders
   if (!selectedChatSession.value) return 'Select a conversation to start typing...';
   if (selectedChatSession.value.type === 'whatsapp') return 'Replies in WhatsApp sessions are not available here.';
-  return 'Type your message here...';
+  return t('history.typeMessage', 'Type your message here...');
 });
 
 function scrollMessagesToBottom(): void {
@@ -642,6 +686,17 @@ function ensureAudioState(messageId: string): MessageAudioState {
   return assistantAudio.value[messageId];
 }
 
+function preloadAudioDuration(messageId: string, audioUrl: string): void {
+  const state = ensureAudioState(messageId);
+  if (state.duration > 0 || state.audio) return;
+  const audio = new Audio();
+  audio.preload = 'metadata';
+  audio.src = audioUrl;
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+  });
+}
+
 function stopAllMessageAudio(): void {
   Object.values(assistantAudio.value).forEach((state) => {
     if (state.audio && state.playing) {
@@ -689,7 +744,13 @@ async function toggleMessageAudio(message: { _key?: string; role: string; audioU
   try {
     if (!state.url) {
       const direct = message.audioUrl;
-      if (direct && (direct.startsWith('blob:') || direct.startsWith('http') || direct.startsWith('data:'))) {
+      if (
+        direct &&
+        (direct.startsWith('blob:') ||
+          direct.startsWith('http') ||
+          direct.startsWith('data:') ||
+          direct.startsWith('/'))
+      ) {
         state.url = direct;
       } else {
         state.loading = true;
@@ -720,7 +781,15 @@ async function toggleMessageAudio(message: { _key?: string; role: string; audioU
 
 watch(
   () => chatMessages.value.length,
-  () => scrollMessagesToBottom(),
+  () => {
+    scrollMessagesToBottom();
+    for (const message of chatMessages.value) {
+      if (message.role === 'user' && message._key && message.audioUrl) {
+        preloadAudioDuration(message._key, message.audioUrl);
+      }
+    }
+  },
+  { immediate: true },
 );
 
 watch(sortedChatSessions, (sessions) => {
@@ -821,7 +890,7 @@ onBeforeUnmount(() => {
     <section class="h-full min-h-0 bg-white p-4 md:p-6">
       <div class="flex h-full min-h-[760px] flex-col gap-4 lg:min-h-[640px]">
         <header class="flex flex-col gap-4">
-          <h1 class="text-lg font-bold text-slate-900">Chat/Call History</h1>
+          <h1 class="text-lg font-bold text-slate-900">{{ t('history.title', 'Chat/Call History') }}</h1>
           <div class="inline-flex w-fit gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="History type">
             <button
               v-for="tab in ['Chats', 'Calls']"
@@ -833,18 +902,23 @@ onBeforeUnmount(() => {
               ]"
               @click="activeTab = tab as 'Chats' | 'Calls'"
             >
-              {{ tab }}
+              {{ tab === 'Chats' ? t('history.tabs.chats', 'Chats') : t('history.tabs.calls', 'Calls') }}
             </button>
           </div>
         </header>
 
         <div v-if="activeTab === 'Chats'" class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm lg:grid-cols-[minmax(250px,330px)_minmax(0,1fr)]">
-          <aside class="relative z-10 flex max-h-[330px] min-h-0 flex-col overflow-hidden border-b border-slate-200 bg-white lg:max-h-none lg:border-b-0 lg:border-r">
+          <aside
+            :class="[
+              'relative z-10 min-h-0 flex-col overflow-hidden bg-white lg:flex lg:max-h-none lg:border-b-0 lg:border-r',
+              mobileShowChatDetail ? 'hidden' : 'flex',
+            ]"
+          >
             <div class="relative z-20 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] gap-2 border-b border-slate-100 px-3 py-4">
               <BaseDropdown
                 v-model="twinFilterValue"
                 :options="twinFilterOptions"
-                placeholder="AI Twin"
+                :placeholder="t('history.aiTwin', 'AI Twin')"
                 width="w-full"
               />
               <BaseDropdown
@@ -940,7 +1014,7 @@ onBeforeUnmount(() => {
               <BaseDropdown
                 v-model="chatSort"
                 :options="chatSortOptions"
-                placeholder="Sort By"
+                :placeholder="t('history.sortBy', 'Sort By')"
                 width="w-full"
               />
               <BaseDropdown
@@ -963,7 +1037,7 @@ onBeforeUnmount(() => {
                 <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
                   <Icon :icon="Calendar03Icon" :size="15" /> {{ selectedDate }}
                 </span>
-                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">Unread only</span>
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">{{ t('history.unreadOnly', 'Unread only') }}</span>
               </div>
             </div>
 
@@ -980,17 +1054,18 @@ onBeforeUnmount(() => {
                   class="rounded-full border border-red-200 px-3 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
                   @click="loadChats"
                 >
-                  Retry
+                  {{ t('common.retry', 'Retry') }}
                 </button>
               </div>
 
               <div v-else-if="sortedChatSessions.length === 0" class="grid flex-1 place-items-center px-3 py-8">
+                <!-- TODO i18n: missing keys for 'No chats yet' and its description -->
                 <EmptyState
                   :icon="BubbleChatIcon"
-                  :title="chatSessions.length === 0 ? 'No chats yet' : 'No matches'"
+                  :title="chatSessions.length === 0 ? 'No chats yet' : t('history.noMatchesTitle', 'No matches')"
                   :description="chatSessions.length === 0
                     ? 'Conversations with your AI Twins will appear here.'
-                    : 'No conversations match the current filters.'"
+                    : t('history.noMatchesBody', 'No calls match the current filters.')"
                 />
               </div>
 
@@ -1042,12 +1117,25 @@ onBeforeUnmount(() => {
             </div>
           </aside>
 
-          <article class="flex min-h-0 min-w-0 flex-col bg-white">
+          <article
+            :class="[
+              'min-h-0 min-w-0 flex-col bg-white lg:flex',
+              mobileShowChatDetail ? 'flex' : 'hidden',
+            ]"
+          >
             <header v-if="selectedChatSession" class="relative flex items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-4 py-3">
-              <div class="flex items-center gap-3">
+              <div class="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  class="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-ieee-800 lg:hidden"
+                  aria-label="Back to conversations"
+                  @click="backToChatList"
+                >
+                  <Icon :icon="ArrowLeft01Icon" :size="18" />
+                </button>
                 <BaseAvatar :src="sessionAvatar(selectedChatSession)" :name="sessionTitle(selectedChatSession)" size="sm" badge="online" />
-                <div>
-                  <h2 class="text-sm font-bold text-slate-700">{{ sessionTitle(selectedChatSession) }}</h2>
+                <div class="min-w-0">
+                  <h2 class="truncate text-sm font-bold text-slate-700">{{ sessionTitle(selectedChatSession) }}</h2>
                   <p class="mt-0.5 text-[11px] text-slate-400">
                     {{ selectedChatSession.type === 'whatsapp' ? 'WhatsApp conversation' : 'AI Twin conversation' }}
                   </p>
@@ -1088,8 +1176,9 @@ onBeforeUnmount(() => {
                   class="h-9 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
                   @input="onChatSearchInput"
                 />
+                <span v-if="searchingMessages" class="search-spinner" aria-hidden="true" />
                 <button
-                  v-if="chatSearchInput"
+                  v-if="chatSearchInput && !searchingMessages"
                   type="button"
                   class="text-slate-400 transition hover:text-slate-700"
                   aria-label="Clear search"
@@ -1121,7 +1210,7 @@ onBeforeUnmount(() => {
                   class="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
                   @click="selectChatSession(selectedSessionId)"
                 >
-                  Retry
+                  {{ t('common.retry', 'Retry') }}
                 </button>
               </div>
 
@@ -1198,7 +1287,7 @@ onBeforeUnmount(() => {
                       ]"
                       :title="message.createdAt ? formatFullDateTime(message.createdAt) : undefined"
                     >
-                      <p>{{ message.content }}</p>
+                      <p v-html="highlightMessage(message.content)" />
                     </div>
                     <div
                       :class="[
@@ -1364,28 +1453,28 @@ onBeforeUnmount(() => {
             <BaseDropdown
               v-model="callDateFilter"
               :options="dateFilterOptions"
-              placeholder="Select Date"
+              :placeholder="t('history.selectDate', 'Select Date')"
             />
             <BaseDropdown
               v-model="callSort"
               :options="sortOptions"
-              placeholder="Sort By"
+              :placeholder="t('history.sortBy', 'Sort By')"
             />
             <BaseDropdown
               v-model="callLanguageFilter"
               :options="languageOptions"
-              placeholder="Language"
+              :placeholder="t('history.columns.language', 'Language')"
             />
           </div>
 
           <div class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             <div class="grid grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_1.1fr_40px] border-b border-neutral-100 bg-neutral-50 px-5 py-3 text-xs font-semibold text-slate-500">
-              <span>Language</span>
-              <span>Date</span>
-              <span>Start Time</span>
-              <span>End Time</span>
-              <span>Duration</span>
-              <span>Caller Name</span>
+              <span>{{ t('history.columns.language', 'Language') }}</span>
+              <span>{{ t('history.columns.date', 'Date') }}</span>
+              <span>{{ t('history.columns.startTime', 'Start Time') }}</span>
+              <span>{{ t('history.columns.endTime', 'End Time') }}</span>
+              <span>{{ t('history.columns.duration', 'Duration') }}</span>
+              <span>{{ t('history.columns.callerName', 'Caller Name') }}</span>
               <span />
             </div>
             <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
@@ -1404,17 +1493,17 @@ onBeforeUnmount(() => {
                   class="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
                   @click="loadCalls"
                 >
-                  Retry
+                  {{ t('common.retry', 'Retry') }}
                 </button>
               </div>
 
               <div v-else-if="displayedSessions.length === 0" class="px-5 py-12">
                 <EmptyState
                   :icon="CallEnd01Icon"
-                  :title="callSessions.length === 0 ? 'No calls yet' : 'No matches'"
+                  :title="callSessions.length === 0 ? t('history.noCallsTitle', 'No calls yet') : t('history.noMatchesTitle', 'No matches')"
                   :description="callSessions.length === 0
-                    ? 'Voice calls you make will appear here once they finish.'
-                    : 'No calls match the current filters.'"
+                    ? t('history.noCallsBody', 'Voice calls you make will appear here once they finish.')
+                    : t('history.noMatchesBody', 'No calls match the current filters.')"
                 />
               </div>
 
@@ -1444,7 +1533,7 @@ onBeforeUnmount(() => {
             </div>
             <footer class="flex items-center justify-end gap-6 border-t border-neutral-100 px-5 py-3 text-sm text-slate-500">
               <label class="inline-flex items-center gap-2">
-                <span>Rows per page:</span>
+                <span>{{ t('history.rowsPerPage', 'Rows per page:') }}</span>
                 <select
                   :value="callsLimit"
                   class="rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm font-medium text-slate-700 outline-none transition hover:border-neutral-300 focus:border-ieee-700"
@@ -1489,7 +1578,7 @@ onBeforeUnmount(() => {
               <span class="text-2xl leading-none">&times;</span>
             </button>
             <header>
-              <h2 class="text-base font-semibold text-slate-950">Call Details</h2>
+              <h2 class="text-base font-semibold text-slate-950">{{ t('history.callDetails', 'Call Details') }}</h2>
               <div class="mt-4 flex items-center gap-2">
                 <div class="flex h-12 flex-1 items-center gap-1" aria-hidden="true">
                   <span
@@ -1504,7 +1593,7 @@ onBeforeUnmount(() => {
               <div class="mt-3 flex items-center justify-between">
                 <button type="button" class="inline-flex h-7 items-center gap-2 rounded-full bg-ieee-700 px-3 text-xs font-semibold text-white">
                   <Icon :icon="PlayIcon" :size="11" />
-                  Play
+                  {{ t('history.play', 'Play') }}
                 </button>
                 <button type="button" class="grid h-7 w-7 place-items-center rounded-full bg-ieee-700 text-white" aria-label="Download recording">
                   <Icon :icon="Download04Icon" :size="14" />
@@ -1518,14 +1607,14 @@ onBeforeUnmount(() => {
                 :class="['border-b-2 py-2', detailMode === 'transcript' ? 'border-ieee-700 text-slate-950' : 'border-transparent text-slate-500']"
                 @click="detailMode = 'transcript'"
               >
-                Transcript
+                {{ t('history.transcript', 'Transcript') }}
               </button>
               <button
                 type="button"
                 :class="['border-b-2 py-2', detailMode === 'summary' ? 'border-ieee-700 text-slate-950' : 'border-transparent text-slate-500']"
                 @click="detailMode = 'summary'"
               >
-                Summary
+                {{ t('history.summary', 'Summary') }}
               </button>
             </div>
 
@@ -1564,24 +1653,25 @@ onBeforeUnmount(() => {
             >
               <span class="text-2xl leading-none">&times;</span>
             </button>
-            <h2 class="text-lg font-bold text-slate-950">Are you sure you want to delete this call recording?</h2>
+            <h2 class="text-lg font-bold text-slate-950">{{ t('history.deleteCallTitle', 'Are you sure you want to delete this call recording?') }}</h2>
             <p class="mt-4 text-sm leading-relaxed text-red-500">
-              If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.
+              {{ t('history.deleteCallBody', `If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.`) }}
             </p>
             <footer class="mt-6 flex justify-end gap-3">
               <button type="button" class="h-10 rounded-full bg-red-500 px-5 text-sm font-semibold text-white hover:bg-red-600" @click="deleteDialogOpen = false">
-                Delete
+                {{ t('common.delete', 'Delete') }}
               </button>
             </footer>
           </section>
         </div>
       </Teleport>
 
+      <!-- TODO i18n: missing keys for "Delete this conversation?" and its description -->
       <ConfirmDialog
         v-model:open="chatDeleteDialogOpen"
         title="Delete this conversation?"
         description="The chat session and all of its messages will be permanently removed. This action cannot be undone."
-        confirm-label="Delete"
+        :confirm-label="t('common.delete', 'Delete')"
         :loading="deletingChat"
         @confirm="confirmChatDelete"
         @cancel="cancelChatDelete"
@@ -1673,10 +1763,25 @@ onBeforeUnmount(() => {
   75%      { height: 55%; opacity: 0.8; }
 }
 
+.search-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #1d4ed8;
+  animation: search-spinner-rotate 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes search-spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .recorder-led__core,
   .recorder-led__halo,
-  .recorder-wave__bar {
+  .recorder-wave__bar,
+  .search-spinner {
     animation: none;
   }
   .recorder-wave__bar {

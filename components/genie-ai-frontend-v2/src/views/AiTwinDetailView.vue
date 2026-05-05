@@ -19,11 +19,15 @@ import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
 import GeneralTab from '../components/twin-tabs/GeneralTab.vue';
+import TwinStatsGrid from '../components/twin-tabs/TwinStatsGrid.vue';
 import VoiceTab from '../components/twin-tabs/VoiceTab.vue';
 import PersonalityTab from '../components/twin-tabs/PersonalityTab.vue';
 import KnowledgeSetTab from '../components/twin-tabs/KnowledgeSetTab.vue';
 import InstructionsTab from '../components/twin-tabs/InstructionsTab.vue';
 import { useAiTwinsStore } from '../stores/aiTwins';
+import { useT } from '../i18n/composables';
+
+const { t } = useT();
 
 interface EditableTab {
   save?: () => Promise<boolean> | boolean;
@@ -45,13 +49,13 @@ const imageInput = ref<HTMLInputElement | null>(null);
 const uploadingImage = ref(false);
 const imagePreviewOpen = ref(false);
 
-const tabs: TabItem[] = [
-  { value: 'general', label: 'General' },
-  { value: 'voice', label: 'Voice' },
-  { value: 'personality', label: 'AI Personality' },
-  { value: 'knowledge', label: 'Knowledge Set' },
-  { value: 'instructions', label: 'Instructions' },
-];
+const tabs = computed<TabItem[]>(() => [
+  { value: 'general', label: t('twins.tabs.general', 'General') },
+  { value: 'voice', label: t('twins.tabs.voice', 'Voice') },
+  { value: 'personality', label: t('twins.tabs.personality', 'AI Personality') },
+  { value: 'knowledge', label: t('twins.tabs.knowledge', 'Knowledge Set') },
+  { value: 'instructions', label: t('twins.tabs.instructions', 'Instructions') },
+]);
 
 const twinId = computed(() => String(route.params.id ?? ''));
 
@@ -125,10 +129,10 @@ async function confirmRemoveImage() {
   uploadingImage.value = true;
   try {
     await store.update(twin.value._key, { profilePicUrl: '' });
-    notify.success('Profile picture removed');
+    notify.success(t('twins.detail.toasts.avatarRemoved', 'Profile picture removed'));
     removeImageDialog.value = false;
   } catch {
-    notify.error(store.error ?? 'Failed to remove profile picture');
+    notify.error(store.error ?? t('twins.detail.toasts.avatarRemoveFailed', 'Failed to remove profile picture'));
   } finally {
     uploadingImage.value = false;
   }
@@ -142,12 +146,12 @@ async function onImageChange(e: Event) {
     return;
   }
   if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
-    notify.error('Image must be JPEG, PNG, WebP, or GIF');
+    notify.error(t('twins.detail.toasts.imageType', 'Image must be JPEG, PNG, WebP, or GIF'));
     input.value = '';
     return;
   }
   if (file.size > MAX_AVATAR_BYTES) {
-    notify.error('Image must be 5 MB or smaller');
+    notify.error(t('twins.detail.toasts.imageSize', 'Image must be 5 MB or smaller'));
     input.value = '';
     return;
   }
@@ -155,9 +159,9 @@ async function onImageChange(e: Event) {
   uploadingImage.value = true;
   try {
     await store.uploadAvatar(twin.value._key, file);
-    notify.success('Profile picture updated');
+    notify.success(t('twins.detail.toasts.avatarUpdated', 'Profile picture updated'));
   } catch {
-    notify.error(store.error ?? 'Failed to update profile picture');
+    notify.error(store.error ?? t('twins.detail.toasts.avatarUpdateFailed', 'Failed to update profile picture'));
   } finally {
     uploadingImage.value = false;
     input.value = '';
@@ -170,10 +174,10 @@ async function confirmDelete() {
   try {
     await store.remove(twin.value._key);
     deleteDialog.value = false;
-    notify.success('AI Twin deleted');
+    notify.success(t('twins.detail.toasts.twinDeleted', 'AI Twin deleted'));
     router.push({ name: 'ai-twins' });
   } catch {
-    notify.error(store.error ?? 'Failed to delete AI Twin');
+    notify.error(store.error ?? t('twins.detail.toasts.deleteFailed', 'Failed to delete AI Twin'));
   } finally {
     deleting.value = false;
   }
@@ -186,7 +190,7 @@ async function confirmDelete() {
       <button
         type="button"
         class="inline-flex items-center gap-1 rounded-full bg-surface-muted p-2 text-text-muted transition hover:bg-surface-subtle hover:text-text"
-        aria-label="Go back"
+        :aria-label="t('common.goBack', 'Go back')"
         @click="goBack"
       >
         <Icon :icon="ArrowLeft01Icon" :size="18" />
@@ -214,8 +218,8 @@ async function confirmDelete() {
                 type="button"
                 class="absolute -right-1 -top-1 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md ring-2 ring-white transition hover:bg-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="uploadingImage"
-                aria-label="Remove profile picture"
-                title="Remove profile picture"
+                :aria-label="t('twins.detail.avatar.remove', 'Remove profile picture')"
+                :title="t('twins.detail.avatar.remove', 'Remove profile picture')"
                 @click.stop="askRemoveImage"
               >
                 <Icon :icon="Cancel01Icon" :size="12" />
@@ -225,8 +229,8 @@ async function confirmDelete() {
                 type="button"
                 class="absolute -bottom-1 left-1/2 z-10 inline-flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-white text-ieee-700 shadow-md ring-1 ring-slate-200 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="uploadingImage"
-                :aria-label="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
-                :title="twin.profilePicUrl ? 'Change profile picture' : 'Upload profile picture'"
+                :aria-label="twin.profilePicUrl ? t('twins.detail.avatar.change', 'Change profile picture') : t('twins.detail.avatar.upload', 'Upload profile picture')"
+                :title="twin.profilePicUrl ? t('twins.detail.avatar.change', 'Change profile picture') : t('twins.detail.avatar.upload', 'Upload profile picture')"
                 @click.stop="pickImage"
               >
                 <Icon :icon="Camera01Icon" :size="14" />
@@ -247,11 +251,12 @@ async function confirmDelete() {
               @change="onImageChange"
             />
             <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
+              <!-- TODO i18n: missing key for 'Chat With Twin' button -->
               Chat With Twin
             </BaseButton>
           </div>
           <BaseButton variant="danger" size="md" :loading="deleting" @click="deleteDialog = true">
-            Delete AI Twin
+            {{ t('twins.detail.delete', 'Delete AI Twin') }}
           </BaseButton>
         </header>
 
@@ -262,11 +267,11 @@ async function confirmDelete() {
             <div v-if="!editing" key="view" class="flex items-center gap-2">
               <BaseButton variant="outline" size="md" rounded="full" @click="startEditing">
                 <Icon :icon="Edit02Icon" :size="16" />
-                Update
+                {{ t('common.update', 'Update') }}
               </BaseButton>
             </div>
             <div v-else key="edit" class="flex items-center gap-2">
-              <BaseBadge tone="warning" dot class="hidden sm:inline-flex">Editing</BaseBadge>
+              <BaseBadge tone="warning" dot class="hidden sm:inline-flex">{{ t('twins.detail.editing', 'Editing') }}</BaseBadge>
               <BaseButton
                 variant="ghost"
                 size="md"
@@ -274,7 +279,7 @@ async function confirmDelete() {
                 :disabled="saving"
                 @click="cancelEditing"
               >
-                Cancel
+                {{ t('common.cancel', 'Cancel') }}
               </BaseButton>
               <BaseButton
                 variant="primary"
@@ -283,11 +288,13 @@ async function confirmDelete() {
                 :loading="saving"
                 @click="saveChanges"
               >
-                Save Changes
+                {{ t('common.saveChanges', 'Save Changes') }}
               </BaseButton>
             </div>
           </Transition>
         </div>
+
+        <TwinStatsGrid v-if="tab === 'general'" :twin="twin" />
 
         <fieldset
           :disabled="!editing && tab !== 'voice'"
@@ -317,35 +324,35 @@ async function confirmDelete() {
       <EmptyState
         v-else-if="store.error"
         :icon="Cancel01Icon"
-        title="Couldn't load AI Twin"
+        :title="t('twins.detail.loadFailedTitle', `Couldn't load AI Twin`)"
         :description="store.error"
       >
-        <BaseButton variant="primary" @click="loadTwin">Retry</BaseButton>
+        <BaseButton variant="primary" @click="loadTwin">{{ t('common.retry', 'Retry') }}</BaseButton>
       </EmptyState>
 
       <EmptyState
         v-else
         :icon="Cancel01Icon"
-        title="Twin not found"
-        description="This AI Twin doesn't exist or has been deleted."
+        :title="t('twins.detail.notFoundTitle', 'Twin not found')"
+        :description="t('twins.detail.notFoundBody', `This AI Twin doesn't exist or has been deleted.`)"
       >
-        <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">Back to list</BaseButton>
+        <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">{{ t('twins.detail.backToList', 'Back to list') }}</BaseButton>
       </EmptyState>
 
       <ConfirmDialog
         v-model:open="deleteDialog"
-        title="Delete AI Twin?"
-        description="This action can't be undone. All chats and call history attached to this twin will be removed."
-        confirm-label="Delete"
+        :title="t('twins.detail.deleteDialog.title', 'Delete AI Twin')"
+        :description="t('twins.detail.deleteDialog.body', `This action can't be undone. All chats and call history attached to this twin will be removed.`)"
+        :confirm-label="t('common.delete', 'Delete')"
         :loading="deleting"
         @confirm="confirmDelete"
       />
 
       <ConfirmDialog
         v-model:open="removeImageDialog"
-        title="Remove profile picture?"
-        description="The current profile picture will be removed and the twin will fall back to its initials."
-        confirm-label="Remove"
+        :title="t('twins.detail.removeImageDialog.title', 'Remove profile picture?')"
+        :description="t('twins.detail.removeImageDialog.body', 'The current profile picture will be removed and the twin will fall back to its initials.')"
+        :confirm-label="t('twins.detail.removeImageDialog.confirm', 'Remove')"
         :loading="uploadingImage"
         @confirm="confirmRemoveImage"
       />
@@ -363,7 +370,7 @@ async function confirmDelete() {
           <button
             type="button"
             class="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-            aria-label="Close preview"
+            :aria-label="t('common.close', 'Close')"
             @click="closeImagePreview"
           >
             <Icon :icon="Cancel01Icon" :size="20" />

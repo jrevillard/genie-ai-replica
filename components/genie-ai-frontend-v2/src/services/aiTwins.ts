@@ -15,6 +15,9 @@ export interface AiTwin {
   linkedKbFileIds: string[];
   createdAt: string;
   updatedAt: string;
+  numChats?: number;
+  numWhatsappChats?: number;
+  numCalls?: number;
 }
 
 export interface ListAiTwinsParams {

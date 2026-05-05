@@ -9,6 +9,9 @@ import Icon from '../ui/Icon.vue';
 import { notify } from '../../lib/notify';
 import { useAiTwinsStore } from '../../stores/aiTwins';
 import { listVoices, previewVoice, type Voice } from '../../services/voices';
+import { useT } from '../../i18n/composables';
+
+const { t } = useT();
 
 const PREVIEW_TEXT = 'Hello, this is a preview of my voice.';
 const LANGUAGE_LABELS: Record<string, string> = {
@@ -17,6 +20,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
   mnk: 'Mandinka',
   es: 'Spanish',
   ar: 'Arabic',
+  // TODO i18n: missing key for Swahili in twins.voice.languages
   sw: 'Swahili',
 };
 
@@ -44,6 +48,21 @@ const audioCache = new Map<string, { audio: HTMLAudioElement; url: string }>();
 
 const enabledVoices = computed(() => voices.value.filter((v) => v.enabled !== false));
 
+function languageLabel(code: string): string {
+  if (['en', 'fr', 'mnk', 'es', 'ar'].includes(code)) {
+    return t(`twins.voice.languages.${code}`, LANGUAGE_LABELS[code] ?? code.toUpperCase());
+  }
+  return LANGUAGE_LABELS[code] ?? code.toUpperCase();
+}
+
+function genderLabel(g: string | undefined | null): string {
+  if (!g) return '';
+  const lower = g.toLowerCase();
+  if (lower === 'male') return t('twins.voice.genderMale', 'Male');
+  if (lower === 'female') return t('twins.voice.genderFemale', 'Female');
+  return g.charAt(0).toUpperCase() + g.slice(1);
+}
+
 const groupedByLanguage = computed<Array<{ language: string; label: string; voices: Voice[] }>>(() => {
   const map = new Map<string, Voice[]>();
   for (const v of enabledVoices.value) {
@@ -56,14 +75,14 @@ const groupedByLanguage = computed<Array<{ language: string; label: string; voic
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([language, list]) => ({
       language,
-      label: LANGUAGE_LABELS[language] ?? language.toUpperCase(),
+      label: languageLabel(language),
       voices: list,
     }));
 });
 
 function voiceCaption(v: Voice): string {
-  const gender = v.gender ? v.gender.charAt(0).toUpperCase() + v.gender.slice(1) : '';
-  const lang = LANGUAGE_LABELS[v.language] ?? v.language?.toUpperCase() ?? '';
+  const gender = genderLabel(v.gender);
+  const lang = languageLabel(v.language ?? '');
   return [lang, gender].filter(Boolean).join(' · ');
 }
 
@@ -125,13 +144,13 @@ async function togglePreview(voice: Voice): Promise<void> {
       };
       audio.onerror = () => {
         if (playingVoiceId.value === voice._key) playingVoiceId.value = null;
-        notify.error('Failed to play voice preview');
+        notify.error(t('twins.voice.previewFailToast', 'Failed to play voice preview'));
       };
       entry = { audio, url };
       audioCache.set(voice._key, entry);
     } catch (err) {
       const message = (err as { response?: { data?: { message?: string } }; message?: string })
-        ?.response?.data?.message ?? (err as Error)?.message ?? 'Failed to load voice preview';
+        ?.response?.data?.message ?? (err as Error)?.message ?? t('twins.voice.previewFailDefault', 'Failed to load voice preview');
       notify.error(message);
       return;
     } finally {
@@ -159,7 +178,7 @@ async function loadVoices(): Promise<void> {
   } catch (err) {
     error.value =
       (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
-        ?.message ?? (err as Error)?.message ?? 'Failed to load voices';
+        ?.message ?? (err as Error)?.message ?? t('twins.voice.loadFailedDefault', 'Failed to load voices');
   } finally {
     loading.value = false;
   }
@@ -170,9 +189,11 @@ async function save(): Promise<boolean> {
   if (selectedVoiceId.value === (twin.value.voiceId ?? null)) return true;
   try {
     await aiTwinsStore.update(twin.value._key, { voiceId: selectedVoiceId.value });
+    // TODO i18n: missing key for "Voice updated" toast
     notify.success('Voice updated');
     return true;
   } catch {
+    // TODO i18n: missing key for "Failed to save voice" toast
     notify.error(aiTwinsStore.error ?? 'Failed to save voice');
     return false;
   }
@@ -191,7 +212,7 @@ onBeforeUnmount(disposeAllPreviews);
 <template>
   <div class="space-y-5">
     <header class="flex items-center justify-between">
-      <h2 class="text-title text-text">Pick a Voice For Your AI Twin</h2>
+      <h2 class="text-title text-text">{{ t('twins.voice.title', 'Pick a Voice For Your AI Twin') }}</h2>
     </header>
 
     <VoiceListSkeleton v-if="loading && voices.length === 0" :rows="4" />
@@ -206,15 +227,15 @@ onBeforeUnmount(disposeAllPreviews);
         class="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
         @click="loadVoices"
       >
-        Retry
+        {{ t('common.retry', 'Retry') }}
       </button>
     </div>
 
     <EmptyState
       v-else-if="enabledVoices.length === 0"
       :icon="RecordIcon"
-      title="No voices available"
-      description="No voices have been enabled yet. Check back once your administrator has added some."
+      :title="t('twins.voice.noVoicesTitle', 'No voices available')"
+      :description="t('twins.voice.noVoicesBody', 'No voices have been enabled yet. Check back once your administrator has added some.')"
     />
 
     <div v-else class="space-y-6">

@@ -86,8 +86,19 @@ function normalizeChatHistoryMessage(raw: unknown): ChatHistoryMessage {
           : undefined;
 
   const content = typeof r.content === 'string' ? r.content : String(r.content ?? '');
-  const audioUrl =
-    r.audioUrl === null || typeof r.audioUrl === 'string' ? (r.audioUrl as string | null) : null;
+
+  // The backend has several possible field names for the recorded user-voice
+  // playback URL across endpoints (POST returns `audioUrl`; some persistence
+  // layers use snake_case or `voiceUrl`). Accept any of them so reloaded chat
+  // history still renders voice bubbles instead of falling back to transcripts.
+  const audioCandidates = [r.audioUrl, r.audio_url, r.voiceUrl, r.voice_url, r.audioPath];
+  let audioUrl: string | null = null;
+  for (const candidate of audioCandidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      audioUrl = candidate.trim();
+      break;
+    }
+  }
 
   return { _key, role, content, audioUrl, createdAt };
 }

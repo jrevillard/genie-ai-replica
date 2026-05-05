@@ -198,152 +198,11 @@ const Map<String, dynamic> bnLocale = {
     "ZM": "জাম্বিয়া",
     "ZW": "জিম্বাবুয়ে",
   },
-  "verification": {
-    "verifying": "আপনার ইমেইল যাচাই করা হচ্ছে...",
-    "success": "সফলভাবে ইমেইল যাচাই করা হয়েছে!",
-    "failed": "যাচাইকরণ ব্যর্থ হয়েছে",
-    "accountVerified":
-        "আপনার অ্যাকাউন্ট সফলভাবে যাচাই করা হয়েছে। আপনি এখন আপনার অ্যাকাউন্টে লগইন করতে পারেন।",
-    "invalidLink": "যাচাইকরণ লিঙ্কটি অবৈধ বা মেয়াদোত্তীর্ণ হয়ে গেছে।",
-    "missingToken": "যাচাইকরণ টোকেন অনুপস্থিত।",
-    "generalError":
-        "যাচাই করার সময় একটি ত্রুটি ঘটেছে। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।",
-    "proceedToLogin": "লগইন করতে এগিয়ে যান",
-    "backToLogin": "লগইনে ফিরে যান",
-  },
-  "passwordResetConfirm": {
-    "appTitle": "জিনি এআই (Genie AI)",
-    "resetPassword": "নতুন পাসওয়ার্ড তৈরি করুন",
-    "tokenLabel": "রিসেট টোকেন",
-    "tokenPlaceholder": "রিসেট টোকেন লিখুন",
-    "validateButton": "টোকেন যাচাই করুন",
-    "newPasswordLabel": "নতুন পাসওয়ার্ড",
-    "newPasswordPlaceholder": "একটি নতুন পাসওয়ার্ড তৈরি করুন",
-    "confirmNewPasswordLabel": "নতুন পাসওয়ার্ড নিশ্চিত করুন",
-    "confirmNewPasswordPlaceholder": "আপনার নতুন পাসওয়ার্ড নিশ্চিত করুন",
-    "resetButton": "পাসওয়ার্ড রিসেট করুন",
-    "processing": "রিসেট করা হচ্ছে...",
-    "rememberedPassword": "পাসওয়ার্ড মনে পড়েছে?",
-    "backToLogin": "লগইনে ফিরে যান",
-    "supportMessage":
-        "সাহায্য প্রয়োজন? আমাদের সাপোর্ট টিমের সাথে যোগাযোগ করুন",
-    "passwordRequirements":
-        "পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে এবং এতে কমপক্ষে ১টি সংখ্যা, ১টি বড় হাতের অক্ষর এবং ১টি বিশেষ অক্ষর থাকতে হবে",
-    "passwordsDoNotMatch": "পাসওয়ার্ড মিলছে না",
-    "resetSuccess": "আপনার পাসওয়ার্ড সফলভাবে রিসেট করা হয়েছে",
-    "resetFailed":
-        "পাসওয়ার্ড রিসেট করা যাচ্ছে না। অনুগ্রহ করে আবার চেষ্টা করুন।",
-    "noTokenProvided": "অনুগ্রহ করে একটি রিসেট টোকেন প্রদান করুন",
-    "expiredToken":
-        "এই রিসেট টোকেনের মেয়াদ শেষ। অনুগ্রহ করে নতুন একটির জন্য অনুরোধ করুন।",
-    "invalidToken": "অবৈধ বা অপরিচিত রিসেট টোকেন",
-    "validatingToken": "টোকেন যাচাই করা হচ্ছে...",
-    "redirecting": "লগইন পৃষ্ঠায় নিয়ে যাওয়া হচ্ছে...",
-    "passwordStrength": "পাসওয়ার্ডের শক্তি",
-    "strengthLabels": {
-      "veryWeak": "খুবই দুর্বল",
-      "weak": "দুর্বল",
-      "fair": "মোটামুটি",
-      "good": "ভালো",
-      "strong": "শক্তিশালী",
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "কমপক্ষে ৮টি অক্ষর ব্যবহার করুন",
-      "addUppercase": "বড় হাতের অক্ষর যোগ করুন",
-      "addLowercase": "ছোট হাতের অক্ষর যোগ করুন",
-      "addNumbers": "সংখ্যা যোগ করুন",
-      "addSpecialChars": "বিশেষ অক্ষর যোগ করুন",
-    },
-  },
-  "passwordReset": {
-    "appTitle": "জিনি এআই (Genie AI)",
-    "resetPassword": "আপনার পাসওয়ার্ড রিসেট করুন",
-    "emailLabel": "ইমেইল ঠিকানা",
-    "emailPlaceholder": "আপনার ইমেইল লিখুন",
-    "resetButton": "রিসেট লিঙ্ক পাঠান",
-    "processing": "পাঠানো হচ্ছে...",
-    "rememberPassword": "পাসওয়ার্ড মনে পড়েছে?",
-    "backToLogin": "লগইনে ফিরে যান",
-    "supportMessage":
-        "সাহায্য প্রয়োজন? আমাদের সাপোর্ট টিমের সাথে যোগাযোগ করুন",
-    "invalidEmail": "অনুগ্রহ করে একটি বৈধ ইমেইল ঠিকানা লিখুন",
-    "resetRequestSuccess": "আপনার ইমেইলে পাসওয়ার্ড রিসেট লিঙ্ক পাঠানো হয়েছে",
-    "resetRequestFailed":
-        "পাসওয়ার্ড রিসেট লিঙ্ক পাঠানো যাচ্ছে না। অনুগ্রহ করে আবার চেষ্টা করুন।",
-    "checkEmail": "পরবর্তী নির্দেশাবলীর জন্য অনুগ্রহ করে আপনার ইমেইল চেক করুন।",
-  },
-  "register": {
-    "appTitle": "জিনি এআই (Genie AI)",
-    "createAccount": "নতুন অ্যাকাউন্ট তৈরি করুন",
-    "username": "ইউজারনেম",
-    "usernamePlaceholder": "একটি ইউজারনেম লিখুন",
-    "email": "ইমেইল",
-    "emailPlaceholder": "আপনার ইমেইল লিখুন",
-    "password": "পাসওয়ার্ড",
-    "passwordPlaceholder": "একটি পাসওয়ার্ড তৈরি করুন",
-    "confirmPassword": "পাসওয়ার্ড নিশ্চিত করুন",
-    "confirmPasswordPlaceholder": "আপনার পাসওয়ার্ড নিশ্চিত করুন",
-    "acceptTerms": "আমি স্বীকার করছি",
-    "termsOfService": "পরিষেবার শর্তাবলী",
-    "registerButton": "অ্যাকাউন্ট তৈরি করুন",
-    "processing": "প্রক্রিয়াধীন...",
-    "alreadyHaveAccount": "ইতিমধ্যেই একটি অ্যাকাউন্ট আছে?",
-    "loginNow": "লগইন করুন",
-    "privacyNotice":
-        "নিবন্ধন করার মাধ্যমে, আপনি আমাদের পরিষেবার শর্তাবলী এবং গোপনীয়তা নীতির সাথে সম্মত হচ্ছেন",
-    "usernameMinLength": "ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে",
-    "invalidEmail": "অনুগ্রহ করে একটি বৈধ ইমেইল ঠিকানা লিখুন",
-    "passwordRequirements":
-        "পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে এবং এতে কমপক্ষে ১টি সংখ্যা এবং ১টি বড় হাতের অক্ষর থাকতে হবে",
-    "passwordsDoNotMatch": "পাসওয়ার্ড মিলছে না",
-    "mustAcceptTerms": "আপনাকে অবশ্যই পরিষেবার শর্তাবলী মেনে নিতে হবে",
-    "registrationFailed":
-        "নিবন্ধন ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
-    "usernameExists": "ইউজারনেমটি ইতিমধ্যেই বিদ্যমান",
-    "emailExists": "ইমেইলটি ইতিমধ্যেই বিদ্যমান",
-    "registrationSuccess": "নিবন্ধন সফল হয়েছে!",
-    "verificationEmailSent": "{email}-এ একটি যাচাইকরণ ইমেইল পাঠানো হয়েছে",
-    "checkEmailInstructions":
-        "অনুগ্রহ করে আপনার ইমেইল চেক করুন এবং লগইন করার আগে আপনার অ্যাকাউন্ট যাচাই করতে নির্দেশাবলী অনুসরণ করুন।",
-    "backToLogin": "লগইনে ফিরে যান",
-    "noEmailReceived": "ইমেইল পাননি?",
-    "resendVerification": "যাচাইকরণ ইমেইল পুনরায় পাঠান",
-    "verificationResent": "যাচাইকরণ ইমেইল পুনরায় পাঠানো হয়েছে",
-    "verificationResendFailed":
-        "যাচাইকরণ ইমেইল পুনরায় পাঠাতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
-    "usernameInvalidChars":
-        "ইউজারনেমে শুধুমাত্র অক্ষর, সংখ্যা, আন্ডারস্কোর, ডট এবং হাইফেন থাকতে পারে",
-    "networkError":
-        "নেটওয়ার্ক ত্রুটি। অনুগ্রহ করে আপনার সংযোগ পরীক্ষা করুন এবং আবার চেষ্টা করুন।",
-  },
-  "login": {
-    "appTitle": "জিনি এআই (Genie AI)",
-    "username": "ইউজারনেম",
-    "password": "পাসওয়ার্ড",
-    "loginButton": "লগইন",
-    "or": "অথবা",
-    "savedAccounts": "সংরক্ষিত অ্যাকাউন্টগুলো",
-    "loginSuccess": "লগইন সফল হয়েছে",
-    "loginError":
-        "লগইন ব্যর্থ হয়েছে। অনুগ্রহ করে আপনার তথ্যগুলো পরীক্ষা করুন।",
-    "googleLogin": "Google দিয়ে চালিয়ে যান",
-    "facebookLogin": "Facebook দিয়ে চালিয়ে যান",
-    "rememberMe": "আমাকে মনে রাখুন",
-    "forgotPassword": "পাসওয়ার্ড ভুলে গেছেন?",
-    "noAccount": "অ্যাকাউন্ট নেই?",
-    "createAccount": "অ্যাকাউন্ট তৈরি করুন",
-    "registerNow": "এখনই নিবন্ধন করুন",
-    "termsAndPolicy":
-        "লগইন করার মাধ্যমে, আপনি আমাদের পরিষেবার শর্তাবলী এবং গোপনীয়তা নীতির সাথে সম্মত হচ্ছেন",
-    "loggingIn": "লগইন করা হচ্ছে...",
-    "fieldsRequired": "ইউজারনেম এবং পাসওয়ার্ড আবশ্যক",
-    "invalidCredentials": "অবৈধ ইউজারনেম বা পাসওয়ার্ড",
-    "tooManyAttempts":
-        "অনেক বেশি লগইন প্রচেষ্টা। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।",
-    "loginFailed": "লগইন ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
-    "oauthNotImplemented": "সামাজিক লগইন এখনও বাস্তবায়িত হয়নি",
-    "savedLoginNotImplemented":
-        "সংরক্ষিত অ্যাকাউন্ট লগইন এখনও বাস্তবায়িত হয়নি",
+  "auth": {
+    "noInternetConnection": "ইন্টারনেট সংযোগ নেই",
+    "networkUnreachable": "নেটওয়ার্ক পৌঁছাযোগ্য নয়",
+    "authenticationFailed": "প্রমাণীকরণ ব্যর্থ হয়েছে",
+    "sessionExpired": "আপনার সেশনের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে আবার সাইন ইন করুন।",
   },
   "brandName": "জিনি এআই",
   "nav": {
@@ -648,10 +507,12 @@ const Map<String, dynamic> bnLocale = {
     "emailAddress": "ইমেইল ঠিকানা",
     "emailAddressPlaceholder": "আপনার ইমেইল ঠিকানা",
     "password": "পাসওয়ার্ড",
-    "changePassword": "পাসওয়ার্ড পরিবর্তন করুন",
     "resetUserData": "ব্যবহারকারীর ডেটা রিসেট করুন",
     "resetUserDataDesc":
         "এটি আপনার সমস্ত প্রোফাইল ডেটা এবং চ্যাটের ইতিহাস মুছে ফেলবে।",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "অ্যাকাউন্ট মুছে ফেলুন",
     "deleteAccountDesc":
         "এটি আপনার অ্যাকাউন্ট এবং সম্পর্কিত সমস্ত ডেটা স্থায়ীভাবে মুছে ফেলবে।",
@@ -709,8 +570,6 @@ const Map<String, dynamic> bnLocale = {
     "enterValidEmail": "অনুগ্রহ করে একটি বৈধ ইমেইল ঠিকানা লিখুন",
     "failedToUpdateEmail":
         "ইমেইল আপডেট করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
-    "passwordResetInitiated":
-        "আপনার ইমেইল ঠিকানায় একটি পাসওয়ার্ড রিসেট লিঙ্ক পাঠানো হয়েছে।",
     "unableToLoadUser":
         "ব্যবহারকারীর তথ্য লোড করা যাচ্ছে না। অনুগ্রহ করে আবার চেষ্টা করুন।",
     "retry": "পুনরায় চেষ্টা করুন",

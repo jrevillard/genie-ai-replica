@@ -199,152 +199,11 @@ const Map<String, dynamic> deLocale = {
     "ZM": "Sambia",
     "ZW": "Simbabwe",
   },
-  "verification": {
-    "verifying": "Verifiziere deine E-Mail...",
-    "success": "E-Mail erfolgreich verifiziert!",
-    "failed": "Verifizierung fehlgeschlagen",
-    "accountVerified":
-        "Dein Konto wurde erfolgreich verifiziert. Du kannst dich jetzt anmelden.",
-    "invalidLink": "Der Verifizierungslink ist ungültig oder abgelaufen.",
-    "missingToken": "Verifizierungstoken fehlt.",
-    "generalError":
-        "Ein Fehler ist während der Verifizierung aufgetreten. Bitte versuche es später erneut.",
-    "proceedToLogin": "Weiter zur Anmeldung",
-    "backToLogin": "Zurück zur Anmeldung",
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Neues Passwort erstellen",
-    "tokenLabel": "Reset-Token",
-    "tokenPlaceholder": "Reset-Token eingeben",
-    "validateButton": "Token validieren",
-    "newPasswordLabel": "Neues Passwort",
-    "newPasswordPlaceholder": "Erstelle ein neues Passwort",
-    "confirmNewPasswordLabel": "Neues Passwort bestätigen",
-    "confirmNewPasswordPlaceholder": "Bestätige dein neues Passwort",
-    "resetButton": "Passwort zurücksetzen",
-    "processing": "Wird zurückgesetzt...",
-    "rememberedPassword": "Passwort eingefallen?",
-    "backToLogin": "Zurück zur Anmeldung",
-    "supportMessage": "Brauchst du Hilfe? Kontaktiere unseren Support",
-    "passwordRequirements":
-        "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl, 1 Großbuchstaben und 1 Sonderzeichen",
-    "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
-    "resetSuccess": "Dein Passwort wurde erfolgreich zurückgesetzt",
-    "resetFailed":
-        "Passwort konnte nicht zurückgesetzt werden. Bitte versuche es erneut.",
-    "noTokenProvided": "Bitte gib ein Reset-Token an",
-    "expiredToken":
-        "Dieses Reset-Token ist abgelaufen. Bitte fordere ein neues an.",
-    "invalidToken": "Ungültiges oder unbekanntes Reset-Token",
-    "validatingToken": "Validiere Token...",
-    "redirecting": "Leite zur Anmeldeseite weiter...",
-    "passwordStrength": "Passwortstärke",
-    "strengthLabels": {
-      "veryWeak": "Sehr schwach",
-      "weak": "Schwach",
-      "fair": "Mittel",
-      "good": "Gut",
-      "strong": "Stark",
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Verwende mindestens 8 Zeichen",
-      "addUppercase": "Füge Großbuchstaben hinzu",
-      "addLowercase": "Füge Kleinbuchstaben hinzu",
-      "addNumbers": "Füge Zahlen hinzu",
-      "addSpecialChars": "Füge Sonderzeichen hinzu",
-    },
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Passwort zurücksetzen",
-    "emailLabel": "E-Mail-Adresse",
-    "emailPlaceholder": "Gib deine E-Mail ein",
-    "resetButton": "Reset-Link senden",
-    "processing": "Sende...",
-    "rememberPassword": "Passwort eingefallen?",
-    "backToLogin": "Zurück zur Anmeldung",
-    "supportMessage": "Brauchst du Hilfe? Kontaktiere unseren Support",
-    "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
-    "resetRequestSuccess":
-        "Link zum Zurücksetzen des Passworts wurde an deine E-Mail gesendet",
-    "resetRequestFailed":
-        "Link konnte nicht gesendet werden. Bitte versuche es erneut.",
-    "checkEmail": "Bitte überprüfe deine E-Mails für weitere Anweisungen.",
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Neues Konto erstellen",
-    "username": "Benutzername",
-    "usernamePlaceholder": "Gib einen Benutzernamen ein",
-    "email": "E-Mail",
-    "emailPlaceholder": "Gib deine E-Mail ein",
-    "password": "Passwort",
-    "passwordPlaceholder": "Erstelle ein Passwort",
-    "confirmPassword": "Passwort bestätigen",
-    "confirmPasswordPlaceholder": "Bestätige dein Passwort",
-    "acceptTerms": "Ich akzeptiere die",
-    "termsOfService": "Nutzungsbedingungen",
-    "registerButton": "Konto erstellen",
-    "processing": "Verarbeite...",
-    "alreadyHaveAccount": "Hast du schon ein Konto?",
-    "loginNow": "Anmelden",
-    "privacyNotice":
-        "Durch die Registrierung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
-    "usernameMinLength": "Benutzername muss mindestens 3 Zeichen lang sein",
-    "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
-    "passwordRequirements":
-        "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl und 1 Großbuchstaben",
-    "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
-    "mustAcceptTerms": "Du musst die Nutzungsbedingungen akzeptieren",
-    "registrationFailed":
-        "Registrierung fehlgeschlagen. Bitte versuche es erneut.",
-    "usernameExists": "Benutzername existiert bereits",
-    "emailExists": "E-Mail existiert bereits",
-    "registrationSuccess": "Registrierung erfolgreich!",
-    "verificationEmailSent":
-        "Eine Verifizierungs-E-Mail wurde an {email} gesendet",
-    "checkEmailInstructions":
-        "Bitte überprüfe deine E-Mails und befolge die Anweisungen zur Verifizierung deines Kontos vor der Anmeldung.",
-    "backToLogin": "Zurück zur Anmeldung",
-    "noEmailReceived": "Keine E-Mail erhalten?",
-    "resendVerification": "Verifizierungs-E-Mail erneut senden",
-    "verificationResent": "Verifizierungs-E-Mail wurde erneut gesendet",
-    "verificationResendFailed":
-        "Konnte Verifizierungs-E-Mail nicht erneut senden. Bitte versuche es erneut.",
-    "usernameInvalidChars":
-        "Benutzername darf nur Buchstaben, Zahlen, Unterstriche, Punkte und Bindestriche enthalten",
-    "networkError":
-        "Netzwerkfehler. Bitte überprüfe deine Verbindung und versuche es erneut.",
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Benutzername",
-    "password": "Passwort",
-    "loginButton": "Anmelden",
-    "or": "oder",
-    "savedAccounts": "Gespeicherte Konten",
-    "loginSuccess": "Anmeldung erfolgreich",
-    "loginError":
-        "Anmeldung fehlgeschlagen. Bitte überprüfe deine Anmeldedaten.",
-    "googleLogin": "Weiter mit Google",
-    "facebookLogin": "Weiter mit Facebook",
-    "rememberMe": "Angemeldet bleiben",
-    "forgotPassword": "Passwort vergessen?",
-    "noAccount": "Kein Konto?",
-    "createAccount": "Konto erstellen",
-    "registerNow": "Jetzt registrieren",
-    "termsAndPolicy":
-        "Durch die Anmeldung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
-    "loggingIn": "Melde an...",
-    "fieldsRequired": "Benutzername und Passwort sind erforderlich",
-    "invalidCredentials": "Ungültiger Benutzername oder Passwort",
-    "tooManyAttempts":
-        "Zu viele Anmeldeversuche. Bitte versuche es später erneut.",
-    "loginFailed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
-    "oauthNotImplemented": "Social Login ist noch nicht implementiert",
-    "savedLoginNotImplemented":
-        "Anmeldung mit gespeichertem Konto ist noch nicht implementiert",
+  "auth": {
+    "noInternetConnection": "Keine Internetverbindung",
+    "networkUnreachable": "Netzwerk nicht erreichbar",
+    "authenticationFailed": "Authentifizierung fehlgeschlagen",
+    "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -649,10 +508,12 @@ const Map<String, dynamic> deLocale = {
     "emailAddress": "E-Mail-Adresse",
     "emailAddressPlaceholder": "Deine E-Mail-Adresse",
     "password": "Passwort",
-    "changePassword": "Passwort ändern",
     "resetUserData": "Benutzerdaten zurücksetzen",
     "resetUserDataDesc":
         "Dies löscht alle deine Profildaten und den Chatverlauf.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Konto löschen",
     "deleteAccountDesc":
         "Dies löscht dein Konto und alle zugehörigen Daten dauerhaft.",
@@ -712,8 +573,6 @@ const Map<String, dynamic> deLocale = {
     "enterValidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
     "failedToUpdateEmail":
         "Aktualisieren der E-Mail fehlgeschlagen. Bitte versuche es erneut.",
-    "passwordResetInitiated":
-        "Ein Link zum Zurücksetzen des Passworts wurde an deine E-Mail-Adresse gesendet.",
     "unableToLoadUser":
         "Benutzerinformationen konnten nicht geladen werden. Bitte versuche es erneut.",
     "retry": "Wiederholen",

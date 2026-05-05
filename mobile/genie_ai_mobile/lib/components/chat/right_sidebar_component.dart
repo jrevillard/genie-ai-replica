@@ -292,7 +292,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       return;
     }
 
-    final String? token = widget.accessToken ?? _api.accessToken;
+    final String? token = widget.accessToken;
     if (token == null || token.isEmpty) {
       ScaffoldMessenger.of(
         context,

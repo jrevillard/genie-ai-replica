@@ -114,6 +114,7 @@ class NavBarComponent extends StatelessWidget {
 
               // 4. LOGOUT
               IconButton(
+                key: const Key('navbar_logout_button'),
                 icon: Icon(Icons.logout, color: contentColor),
                 tooltip: tr('nav.logout'),
                 onPressed: onLogout,
@@ -128,6 +129,7 @@ class NavBarComponent extends StatelessWidget {
                   final bool isOnline = snapshot.data ?? false;
 
                   return PopupMenuButton<String>(
+                    key: const Key('navbar_more_button'),
                     icon: Icon(Icons.more_vert, color: contentColor),
                     tooltip: "More",
                     onSelected: (value) {

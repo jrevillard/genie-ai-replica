@@ -1,14 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Genie AI Mobile"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -21,9 +22,29 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- E2E test deep link — dedicated scheme to avoid conflict with
+                 flutter_appauth's RedirectUriReceiverActivity (which owns the
+                 appAuthRedirectScheme). Handler in main.dart is gated by
+                 kDebugMode (tree-shaken in release). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="genie-e2e-test" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="${nginxPublicDomain}" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
@@ -31,6 +52,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Force RedirectUriReceiverActivity into the same task as the main app
+             to prevent "No stored state" error on Android 12+ -->
+        <activity android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:exported="true"
+            android:taskAffinity="${applicationId}"
+            tools:replace="android:taskAffinity" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

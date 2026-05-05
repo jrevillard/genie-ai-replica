@@ -463,11 +463,42 @@ For configuration details, see the [External IdP Integration Guide](external-idp
 
 The API gateway consists of two layers:
 
-**NGINX** -- The outermost layer. Terminates TLS on port 443 and applies security headers. Proxies all requests to Kong.
+**NGINX** -- The outermost layer. Terminates TLS on port 443 and applies security headers. Proxies all requests to Kong. For Keycloak traffic (`/auth/`), NGINX sets `X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-Port` so Keycloak can resolve its public URL dynamically.
 
 **Kong** -- Sits behind NGINX and acts as a pure reverse proxy. Provides CORS configuration and rate limiting. Routes requests to backend services. No JWT validation is performed at the gateway level -- authentication is enforced at each service boundary.
 
 Request path: `Browser -> NGINX (TLS) -> Kong (CORS, rate limit) -> Backend (JWT validation) -> Upstream services`
+
+### 12.1 Reverse Proxy Header Chain for Keycloak
+
+Keycloak runs behind the NGINX → Kong proxy chain with the `/auth` path prefix. The following headers are used to tell Keycloak its public URL:
+
+```
+Client → NGINX → Kong → Keycloak
+            │         │       │
+            │    X-Forwarded-Prefix: /auth
+            │    (strip_path removes /auth)
+            │         │
+     X-Forwarded-Proto: https
+     X-Forwarded-Host: <NGINX_PUBLIC_DOMAIN>
+     X-Forwarded-Port: <NGINX_HTTPS_PORT>
+```
+
+| Header | Set by | Value | Purpose |
+|--------|--------|-------|---------|
+| `X-Forwarded-Proto` | NGINX | `https` | Keycloak uses HTTPS in issuer URLs |
+| `X-Forwarded-Host` | NGINX | `NGINX_PUBLIC_DOMAIN` | Keycloak uses the public hostname in issuer URLs |
+| `X-Forwarded-Port` | NGINX | `NGINX_HTTPS_PORT` | Keycloak uses the public port (not internal 443) |
+| `X-Forwarded-Prefix` | Kong (request-transformer plugin) | `/auth` | Keycloak resolves context path dynamically |
+
+**Kong trusted_ips**: Kong must trust NGINX to preserve the `X-Forwarded-*` headers set by NGINX. Without `KONG_TRUSTED_IPS`, Kong overwrites them with its own values (http/port 8000). Default: `172.16.0.0/12` (Docker bridge subnets).
+
+**Keycloak configuration**:
+- `KC_PROXY_HEADERS=xforwarded` -- tells Keycloak to read proxy headers
+- `KC_HOSTNAME=<hostname>` -- simple hostname (no scheme/port/path), Keycloak resolves the full URL from headers
+- Keycloak 26.6.1+ required for `X-Forwarded-Prefix` support (bug #35298 in earlier versions)
+
+This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL in `KC_HOSTNAME`, making the deployment portable across environments without rebuilding the Keycloak image.
 
 ---
 

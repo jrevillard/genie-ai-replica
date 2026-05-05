@@ -56,6 +56,31 @@ docker service logs <service-name> --since 5m # Logs
 docker exec <container> curl ...               # Curl from inside the network
 ```
 
+## ROPC User Creation Requirements
+
+When creating Keycloak users for ROPC (`grant_type=password`), the **User Profile** requires:
+
+- `firstName` — Keycloak's default profile marks this as required; omitting it causes `"Account is not fully set up"` on login
+- `lastName` — same as `firstName`
+- `emailVerified: true` — required for ROPC to succeed (otherwise `"Account is not fully set up"`)
+- `credentials` with `"temporary": false` — temporary passwords cannot be used via ROPC
+
+```bash
+curl -sk -X POST "<KEYCLOAK_URL>/admin/realms/<REALM>/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "username": "<user>",
+    "email": "<email>",
+    "emailVerified": true,
+    "firstName": "<first>",
+    "lastName": "<last>",
+    "enabled": true,
+    "credentials": [{"type": "password", "value": "<password>", "temporary": false}]
+  }'
+```
+
+**WARNING:** Never use `PUT` on a user to update individual fields (e.g., `emailVerified`) — it **overwrites** the `credentials` array, deleting the password. Always include the full user payload in creation.
+
 ## Key Pitfalls
 
 - **Master token ≠ realm token** — master token has issuer `.../realms/master`, realm services validate against `.../realms/<REALM>`. Use master token only for Keycloak Admin API calls.

@@ -93,10 +93,6 @@ class UserProfileProxy {
 
     request.fields['data'] = jsonEncode(dataToSend);
 
-    if (_api.accessToken != null) {
-      request.headers['Authorization'] = 'Bearer ${_api.accessToken}';
-    }
-
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
 

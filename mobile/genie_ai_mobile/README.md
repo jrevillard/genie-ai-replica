@@ -408,7 +408,7 @@ final String assetPath = kIsWeb
 ```
 
 **SSL Override (Development Only):**
-The app includes `MyHttpOverrides` in [main.dart](lib/main.dart:36-44) to bypass SSL certificate issues in development. This should be disabled for production.
+In debug builds, the app uses a `_DebugHttpOverrides` class in [main.dart](lib/main.dart) to bypass TLS certificate validation for local development with self-signed certificates. This is guarded by `kDebugMode`, a compile-time constant — the entire bypass is tree-shaken from release builds.
 
 ---
 
@@ -663,7 +663,7 @@ Before public release:
 **Solutions:**
 1. Always use full domain name in [api_service.dart](lib/services/api_service.dart)
 2. Ensure Nginx/Apache serves full certificate chain
-3. Development: `MyHttpOverrides` in [main.dart](lib/main.dart) bypasses this
+3. Development: `_DebugHttpOverrides` in [main.dart](lib/main.dart) (debug builds only, tree-shaken from release) bypasses this
 
 ### Cleartext HTTP traffic not permitted
 

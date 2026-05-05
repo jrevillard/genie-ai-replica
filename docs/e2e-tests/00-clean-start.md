@@ -123,19 +123,21 @@ TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-c
   -d "grant_type=password" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Create additional realms from KEYCLOAK_ADDITIONAL_REALMS env var
-# Format: {"realm-name":"client-id","realm2-name":"client2-id"}
+# Format: ["realm-name","realm2-name"] (JSON array of realm names)
+# Each realm gets a default "genie-app" client for OIDC authentication.
 python3 -c "
 import json, os, subprocess, sys
 
 raw = os.environ.get('KEYCLOAK_ADDITIONAL_REALMS', '')
-if not raw or raw == '{}':
+if not raw or raw == '[]':
     print('KEYCLOAK_ADDITIONAL_REALMS not set — skipping additional realm setup')
     sys.exit(0)
 
 realms = json.loads(raw)
 token = '$TOKEN'
+default_client = 'genie-app'
 
-for realm_name, client_id in realms.items():
+for realm_name in realms:
     # Check if realm already exists
     check = subprocess.run([
         'curl', '-sk', '-f', f'https://localhost/auth/admin/realms/{realm_name}',
@@ -165,14 +167,14 @@ for realm_name, client_id in realms.items():
     ], capture_output=True, text=True)
     print(f'Realm {realm_name}: {result.stdout.strip()} (HTTP {result.returncode})')
 
-    # Create client
+    # Create default OIDC client in the realm
     result = subprocess.run([
         'curl', '-sk', '-X', 'POST',
         f'https://localhost/auth/admin/realms/{realm_name}/clients',
         '-H', f'Authorization: Bearer {token}',
         '-H', 'Content-Type: application/json',
         '-d', json.dumps({
-            'clientId': client_id,
+            'clientId': default_client,
             'enabled': True,
             'publicClient': True,
             'directAccessGrantsEnabled': True,
@@ -181,7 +183,7 @@ for realm_name, client_id in realms.items():
             'webOrigins': ['https://localhost']
         })
     ], capture_output=True, text=True)
-    print(f'Client {client_id} in {realm_name}: HTTP {result.returncode}')
+    print(f'Client {default_client} in {realm_name}: HTTP {result.returncode}')
 
 print('Additional realms setup complete')
 "

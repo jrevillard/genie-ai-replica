@@ -439,6 +439,8 @@ services:
       # Voice bridge — used by /api/voice/token to hand the browser the
       # public WebSocket URL for the WebSocket-based voice call.
       - VOICE_BRIDGE_WS_URL=${VOICE_BRIDGE_WS_URL:-wss://localhost/voice/v1/voice/stream}
+      # Shared secret with voice-bridge — used to sign the short-lived voice JWT.
+      - JWT_SECRET=${JWT_SECRET}
     networks:
       - genieai_network
     deploy:
@@ -477,7 +479,9 @@ services:
       - WHATSAPP_MESSAGE_MAX_LENGTH=${WHATSAPP_MESSAGE_MAX_LENGTH:-4000}
       # ArangoDB — whatsapp-service writes chatSessions/chatSessionMessages
       # directly so every WhatsApp conversation is persisted alongside web chats.
-      - ARANGO_URL=${ARANGO_URL:-http://arangodb:8529}
+      # URL is hardcoded to the in-cluster service name (host-side ARANGO_URL
+      # in .env points to 127.0.0.1 and would never reach Arango from here).
+      - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_USERNAME=${ARANGO_USERNAME:-root}
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
@@ -1562,9 +1566,11 @@ services:
       # JWT shared secret with the backend — verifies the voice token in the
       # WS start message and binds each call to a userId.
       JWT_SECRET: ${JWT_SECRET}
-      # ArangoDB — voice-bridge writes call_sessions/call_messages directly,
-      # so the frontend never gets write access to the call APIs.
-      ARANGO_URL: ${ARANGO_URL:-http://arangodb:8529}
+      # ArangoDB — voice-bridge writes call_sessions/call_messages and reads
+      # the aiTwins / voices catalogs to resolve twin info per call. URL is
+      # hardcoded to the in-cluster service name; host-side ARANGO_URL in .env
+      # (e.g. http://127.0.0.1:8529) doesn't apply inside the container.
+      ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
       ARANGO_USERNAME: ${ARANGO_USERNAME:-root}
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}

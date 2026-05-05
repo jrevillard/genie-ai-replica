@@ -81,6 +81,8 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 CALL_SESSIONS_COLLECTION = "call_sessions"
 CALL_MESSAGES_COLLECTION = "call_messages"
+TWINS_COLLECTION = "aiTwins"
+VOICES_COLLECTION = "voices"
 
 VAD_AGGRESSIVENESS = int(os.getenv("VAD_AGGRESSIVENESS", "2"))
 SILENCE_FRAMES_TO_END = int(os.getenv("SILENCE_FRAMES", "25"))     # ~500 ms
@@ -395,9 +397,10 @@ def get_arango_db():
         return None
 
 
-def verify_voice_token(token: str) -> Optional[str]:
-    """Verify the short-lived voice JWT minted by the backend. Returns
-    the userId on success, None on failure."""
+def verify_voice_token(token: str) -> Optional[dict]:
+    """Verify the short-lived voice JWT. Returns a {'user_id', 'twin_id'} dict
+    on success or None on failure. twin_id may be None if the token was minted
+    without a twin (e.g. legacy clients)."""
     if not token or not JWT_SECRET:
         return None
     try:
@@ -409,14 +412,49 @@ def verify_voice_token(token: str) -> Optional[str]:
     if not user_id:
         logger.warning("[AUTH] voice token missing userId/sub")
         return None
-    return str(user_id)
+    twin_id = claims.get("twinId")
+    return {"user_id": str(user_id), "twin_id": str(twin_id) if twin_id else None}
+
+
+def _load_twin_settings_sync(twin_id: Optional[str]) -> Optional[dict]:
+    """Resolve a twin to a tuple of overrides for the voice call. Returns:
+        { 'name', 'callGreeting', 'modelVoiceId' (Piper id), 'language' }
+    or None if the twin / its voice is not in the catalog. modelVoiceId may
+    be None if the twin has no voice assigned — caller falls back to gender."""
+    if not twin_id:
+        return None
+    db = get_arango_db()
+    if db is None:
+        return None
+    try:
+        twin = db.collection(TWINS_COLLECTION).get(twin_id)
+        if not twin:
+            logger.warning("[TWIN] not found: %s", twin_id)
+            return None
+        voice_doc = None
+        if twin.get("voiceId"):
+            voice_doc = db.collection(VOICES_COLLECTION).get(twin["voiceId"])
+        return {
+            "name": twin.get("name") or "",
+            "callGreeting": (twin.get("callGreeting") or "").strip(),
+            "modelVoiceId": (voice_doc or {}).get("modelVoiceId") if voice_doc else None,
+            "language": (voice_doc or {}).get("language") if voice_doc else None,
+        }
+    except Exception as exc:
+        logger.warning("[TWIN] load failed for %s: %s", twin_id, exc)
+        return None
 
 
 def _now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _create_call_session_sync(user_id: str, language: str, gender: str) -> Optional[str]:
+def _create_call_session_sync(
+    user_id: str,
+    language: str,
+    gender: str,
+    twin_id: Optional[str] = None,
+) -> Optional[str]:
     db = get_arango_db()
     if db is None:
         return None
@@ -425,6 +463,7 @@ def _create_call_session_sync(user_id: str, language: str, gender: str) -> Optio
         "userId": str(user_id),
         "language": language,
         "gender": gender or "female",
+        "twinId": twin_id,
         "startAt": now,
         "endAt": None,
         "durationSeconds": None,
@@ -481,8 +520,17 @@ def _end_call_session_sync(session_id: str) -> None:
         logger.warning("[ARANGO] failed to end call session: %s", exc)
 
 
-async def create_call_session(user_id: str, language: str, gender: str) -> Optional[str]:
-    return await asyncio.to_thread(_create_call_session_sync, user_id, language, gender)
+async def create_call_session(
+    user_id: str,
+    language: str,
+    gender: str,
+    twin_id: Optional[str] = None,
+) -> Optional[str]:
+    return await asyncio.to_thread(_create_call_session_sync, user_id, language, gender, twin_id)
+
+
+async def load_twin_settings(twin_id: Optional[str]) -> Optional[dict]:
+    return await asyncio.to_thread(_load_twin_settings_sync, twin_id)
 
 
 async def log_call_message(session_id: Optional[str], content: str, is_assistant: bool) -> None:
@@ -757,27 +805,47 @@ async def voice_stream(ws: WebSocket) -> None:
     # when JWT_SECRET is configured — otherwise we run unauthenticated (dev).
     voice_token = cfg.get("voiceToken") or cfg.get("voice_token") or ""
     user_id: Optional[str] = None
+    twin_id: Optional[str] = None
     if JWT_SECRET:
-        user_id = verify_voice_token(voice_token)
-        if not user_id:
+        claims = verify_voice_token(voice_token)
+        if not claims:
             await ws.send_text(json.dumps({"type": "error", "message": "auth_failed"}))
             await ws.close(code=4401, reason="invalid voice token")
             return
+        user_id = claims["user_id"]
+        twin_id = claims["twin_id"]
     else:
         logger.warning("[AUTH] JWT_SECRET not set — accepting WS without verification")
 
+    # Look up the AI twin (voice + greeting + language). Falls back gracefully
+    # when twin_id is missing or the twin can't be resolved.
+    twin_settings = await load_twin_settings(twin_id) if twin_id else None
+    if twin_settings:
+        if twin_settings.get("language") and twin_settings["language"] in GREETINGS:
+            language = twin_settings["language"]
+        if twin_settings.get("modelVoiceId"):
+            voice = twin_settings["modelVoiceId"]   # explicit Piper id beats gender
+        logger.info("[TWIN] loaded twin=%s name=%r voice=%s lang=%s",
+                    twin_id, twin_settings.get("name"), voice, language)
+
     session_id: Optional[str] = None
     if user_id:
-        session_id = await create_call_session(user_id, language, gender or "female")
-        logger.info("[SESSION] arango session_id=%s user=%s", session_id, user_id)
+        session_id = await create_call_session(user_id, language, gender or "female", twin_id)
+        logger.info("[SESSION] arango session_id=%s user=%s twin=%s", session_id, user_id, twin_id)
 
-    logger.info("[SESSION] open lang=%s gender=%s peer=%s session=%s user=%s "
+    logger.info("[SESSION] open lang=%s voice=%s twin=%s peer=%s session=%s user=%s "
                 "vad_aggr=%d silence_frames=%d min_utt=%d",
-                language, gender or "(default)", peer, session_id, user_id,
+                language, voice or "(default)", twin_id or "-", peer, session_id, user_id,
                 VAD_AGGRESSIVENESS, SILENCE_FRAMES_TO_END, MIN_UTTERANCE_FRAMES)
 
     history = [{"role": "system", "content": SYSTEM_PROMPTS[language]}]
-    greeting = GREETINGS[language]
+    # Twin's callGreeting overrides the default per-language greeting. The
+    # default voice prompt is in English; if the twin uses another language,
+    # operators are responsible for setting a matching callGreeting.
+    if twin_settings and twin_settings.get("callGreeting"):
+        greeting = twin_settings["callGreeting"]
+    else:
+        greeting = GREETINGS[language]
     history.append({"role": "assistant", "content": greeting})
     logger.info("[GREETING] sending greeting")
     await speak(ws, greeting, language, voice=voice, session_id=session_id)

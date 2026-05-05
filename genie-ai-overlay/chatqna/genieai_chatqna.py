@@ -31,6 +31,14 @@ from langdetect import detect
 from datetime import date, datetime, timedelta
 from transformers import AutoTokenizer
 
+from context_auto_router import (
+    CHATQNA_AUTO_ROUTE,
+    build_retrieval_from_route,
+    classify_route_for_query,
+    last_user_plain_text,
+    strip_non_retrieval_keys,
+    taxonomy_prompt_lines,
+)
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 logflag = os.getenv("LOGFLAG", True)
@@ -396,7 +404,32 @@ class GenieUserProfileClient:
             logger.error(f"Error connecting to Backend Service for profile: {e}")
             return None
 
-
+    async def fetch_service_taxonomy(self, locale: str) -> list | None:
+        """GET /api/service-categories/categories (JWT from internal token service)."""
+        token = await self._get_auth_token()
+        if not token:
+            logger.warning("fetch_service_taxonomy: no auth token")
+            return None
+        loc = (locale or "en").strip().lower()
+        if len(loc) > 8:
+            loc = "en"
+        url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories?locale={loc}"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status != 200:
+                        logger.warning(
+                            "fetch_service_taxonomy: status %s", response.status
+                        )
+                        return None
+                    data = await response.json()
+                    if isinstance(data, list):
+                        return data
+                    return None
+        except Exception as e:
+            logger.error("fetch_service_taxonomy: %s", e)
+            return None
 
 
 class UserContextBuilder:
@@ -592,6 +625,9 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): context in inputs={inputs.get('context')}, kwargs retrieval_context={retrieval_context}")
         if retrieval_context:
             inputs['context'] = retrieval_context
+        rfs = kwargs.get("retrieval_filter_strategy")
+        if rfs:
+            inputs["filter_strategy"] = rfs
         logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): final inputs[context]={inputs.get('context')}")
         
     
@@ -1525,19 +1561,75 @@ class ChatQnAService:
         if logflag:
             logger.debug(f'Last_translated_message_content: {last_translated_message_content}')
 
-        # Extract the retrieval context if it is provided in the request.
-        # Set to empty dict as a default if it is missing.
-        retrieval_context = {}
+        raw_ctx: dict = {}
         if chat_request.context:
             try:
-                # If Pydantic is v2+
-                retrieval_context = chat_request.context.model_dump(exclude_unset=True)
+                raw_ctx = chat_request.context.model_dump(exclude_unset=True)
             except Exception:
-                # Backup - can be removed later
                 logger.warning(".model_dump method not supported")
-                retrieval_context = chat_request.context.dict(exclude_unset=True)
+                raw_ctx = chat_request.context.dict(exclude_unset=True)
+
+        skip_ar = bool(raw_ctx.get("skipAutoRoute"))
+        client_svcs = raw_ctx.get("serviceLabels") or []
+        if not isinstance(client_svcs, list):
+            client_svcs = []
+        manual = skip_ar or len(client_svcs) > 0
+
+        routing_filter_strategy = None
+        routing_meta: dict = {"mode": "pass_through"}
+        lang_for_ctx = (original_language or raw_ctx.get("language") or "EN").strip().upper()
+
+        if manual:
+            rc = dict(raw_ctx)
+            rc.pop("skipAutoRoute", None)
+            retrieval_context = strip_non_retrieval_keys(rc)
+            if not retrieval_context.get("categoryLabel"):
+                retrieval_context["categoryLabel"] = "General"
+            retrieval_context.setdefault("language", lang_for_ctx)
+            retrieval_context.setdefault("serviceLabels", [])
+            routing_meta = {
+                "mode": "manual",
+                "categoryLabel": retrieval_context.get("categoryLabel"),
+                "serviceLabels": retrieval_context.get("serviceLabels") or [],
+            }
+        elif CHATQNA_AUTO_ROUTE:
+            tax = await self.user_profile_client.fetch_service_taxonomy(lang_for_ctx)
+            qtext = last_user_plain_text(full_chat_history) or last_translated_message_content
+            tlines = taxonomy_prompt_lines(tax) if tax else ""
+            if tax and tlines.strip() and qtext.strip():
+                route = await classify_route_for_query(
+                    question=qtext,
+                    taxonomy_lines=tlines,
+                    llm_host=LLM_SERVER_HOST_IP,
+                    llm_port=LLM_SERVER_PORT,
+                    api_key=OPENAI_API_KEY,
+                )
+                base_ctx = {
+                    "categoryLabel": raw_ctx.get("categoryLabel") or "General",
+                    "serviceLabels": [],
+                    "language": lang_for_ctx,
+                }
+                retrieval_context, routing_meta, routing_filter_strategy = build_retrieval_from_route(
+                    base_context=base_ctx, route=route
+                )
+                routing_meta["question_excerpt"] = qtext[:200]
+                logger.info(f"TRACE_CTX chatqna:auto_route routing_meta={routing_meta}")
+            else:
+                retrieval_context = strip_non_retrieval_keys({**raw_ctx, "language": lang_for_ctx})
+                if not retrieval_context.get("categoryLabel"):
+                    retrieval_context["categoryLabel"] = "General"
+                retrieval_context.setdefault("serviceLabels", [])
+                routing_meta = {"mode": "auto_skipped", "reason": "no_taxonomy_or_question"}
+        else:
+            retrieval_context = strip_non_retrieval_keys({**raw_ctx, "language": lang_for_ctx})
+            if not retrieval_context.get("categoryLabel"):
+                retrieval_context["categoryLabel"] = "General"
+            retrieval_context.setdefault("serviceLabels", [])
+            routing_meta = {"mode": "auto_route_disabled"}
+
+        logger.info(f"TRACE_CTX [3/7] chatqna:handle_request: retrieval_context={retrieval_context}")
         if logflag:
-            logger.debug(f'Retrieval Context: {retrieval_context}')
+            logger.debug(f"Retrieval Context (final): {retrieval_context}")
 
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
@@ -1589,8 +1681,9 @@ class ChatQnAService:
             reranker_parameters=reranker_parameters,
             full_chat_history_string=translated_history_string,
             retrieval_context=retrieval_context,
+            retrieval_filter_strategy=routing_filter_strategy,
             original_language=original_language,
-            user_details = user_details,
+            user_details=user_details,
         )
 
         if logflag:
@@ -1739,8 +1832,9 @@ class ChatQnAService:
             "metadata": {
                 "source_documents": source_documents_formatted,
                 "confidence_score": round(confidence_score, 2),
-                }
-            }
+                "routing": routing_meta,
+            },
+        }
 
         # Return as a JSONResponse
         if logflag:

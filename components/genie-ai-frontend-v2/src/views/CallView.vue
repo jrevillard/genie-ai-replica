@@ -16,17 +16,26 @@ import Icon from '../components/ui/Icon.vue';
 import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore } from '../stores/chat';
+import { useVoiceCallStore } from '../stores/voiceCall';
+import type { VoiceLanguage } from '../services/voiceCall';
 
-// UI-only state. The voice API will be wired in later by the backend team;
-// nothing here calls the network or simulates a conversation.
+// Live voice call wired through useVoiceCallStore. UI bindings (state, muted,
+// langOpen) are unchanged — they're just driven by the store now instead of
+// local refs.
 type CallState = 'idle' | 'ended';
 
 const route = useRoute();
 const router = useRouter();
 const aiTwinsStore = useAiTwinsStore();
 const chatStore = useChatStore();
+const voiceCall = useVoiceCallStore();
 const { current: twin } = storeToRefs(aiTwinsStore);
 const { lang } = storeToRefs(chatStore);
+const {
+  status: callStatus,
+  muted: callMuted,
+  agentSpeaking,
+} = storeToRefs(voiceCall);
 
 const t = chatStrings;
 const c = chatStrings.call;
@@ -36,8 +45,15 @@ const twinId = computed(() => {
   return Array.isArray(raw) ? raw[0] : (raw ?? '');
 });
 
-const state = ref<CallState>('idle');
-const muted = ref(false);
+// `state` shapes what the orb / footer render. We map the live status to the
+// existing 'idle' | 'ended' values the template already expects.
+const state = computed<CallState>(() => (callStatus.value === 'ended' ? 'ended' : 'idle'));
+const muted = computed<boolean>({
+  get: () => callMuted.value,
+  set: (v) => {
+    if (v !== callMuted.value) voiceCall.toggleMute();
+  },
+});
 const langOpen = ref(false);
 
 async function loadTwin(): Promise<void> {
@@ -50,25 +66,52 @@ async function loadTwin(): Promise<void> {
   }
 }
 
+const SUPPORTED_VOICE_LANGS: readonly VoiceLanguage[] = ['en', 'fr', 'es', 'sw'];
+function toVoiceLang(code: string): VoiceLanguage {
+  return (SUPPORTED_VOICE_LANGS as readonly string[]).includes(code)
+    ? (code as VoiceLanguage)
+    : 'en';
+}
+
+async function startVoiceCall(): Promise<void> {
+  if (!twinId.value) return;
+  if (voiceCall.isActive) return;
+  try {
+    await voiceCall.startCall({
+      language: toVoiceLang(lang.value),
+      twinId: twinId.value,
+    });
+  } catch {
+    // store.error already populated; UI stays on the idle shell.
+  }
+}
+
 onMounted(() => {
   void loadTwin();
   document.addEventListener('click', onDocumentClick);
+  void startVoiceCall();
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick);
+  void voiceCall.endCall();
 });
 
-watch(twinId, () => loadTwin());
+watch(twinId, () => {
+  void loadTwin();
+  void startVoiceCall();
+});
 
 const statusLabel = computed(() => {
   if (state.value === 'ended') return c.ended;
+  if (callStatus.value === 'connecting') return c.connecting;
   if (muted.value) return c.muted;
+  if (agentSpeaking.value) return c.aiSpeaking;
   return c.listening;
 });
 
 function endCall(): void {
-  state.value = 'ended';
+  void voiceCall.endCall();
 }
 
 function returnToTwin(): void {
@@ -89,7 +132,7 @@ function switchToChat(): void {
 }
 
 function toggleMute(): void {
-  muted.value = !muted.value;
+  voiceCall.toggleMute();
 }
 
 function setLanguage(next: ChatLang): void {
@@ -109,7 +152,9 @@ const currentLang = computed(
 
 const orbStateClass = computed(() => {
   if (state.value === 'ended') return 'orb--ended';
+  if (callStatus.value === 'connecting') return 'orb--connecting';
   if (muted.value) return 'orb--muted';
+  if (agentSpeaking.value) return 'orb--speaking';
   return 'orb--listening';
 });
 </script>

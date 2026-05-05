@@ -580,6 +580,7 @@ class QueryService {
           categoryLabel: ctx.categoryLabel,
           serviceLabels: ctx.serviceLabels,
           language: ctx.language || 'EN',
+          ...(ctx.skipAutoRoute !== undefined && { skipAutoRoute: ctx.skipAutoRoute }),
         },
         user_id: userId,
         stream: false,

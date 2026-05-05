@@ -7,7 +7,10 @@ const { logger } = require('../shared-lib');
 const SUPPORTED_LANGUAGES = ['fr', 'en', 'es', 'sw'];
 
 const tokenSchema = Joi.object({
-  language: Joi.string().valid(...SUPPORTED_LANGUAGES).default('en')
+  language: Joi.string().valid(...SUPPORTED_LANGUAGES).default('en'),
+  // Optional. When set, voice-bridge looks up this twin in ArangoDB and uses
+  // its voiceId, callGreeting and persona for the live call.
+  twinId: Joi.string().trim().max(200).optional()
 });
 
 const listSessionsSchema = Joi.object({
@@ -106,7 +109,12 @@ module.exports = (voiceTokenService, voiceSessionService) => {
     try {
       const userId = getUserId(req);
       const fullName = req.user.personalIdentification?.fullName || req.user.loginName || userId;
-      const result = await voiceTokenService.mintToken({ userId, fullName, language: value.language });
+      const result = await voiceTokenService.mintToken({
+        userId,
+        fullName,
+        language: value.language,
+        twinId: value.twinId,
+      });
       return res.json(result);
     } catch (err) {
       logger.error(`voice/token error: ${err.message}`, { stack: err.stack });

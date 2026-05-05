@@ -17,22 +17,27 @@ class VoiceTokenService {
     }
   }
 
-  async mintToken({ userId, fullName, language }) {
+  async mintToken({ userId, fullName, language, twinId }) {
     if (!this.initialized) {
       throw new Error('Voice service unavailable: VOICE_BRIDGE_WS_URL or JWT_SECRET not configured');
     }
     const lang = SUPPORTED_LANGUAGES.includes(language) ? language : 'en';
+    const claims = { userId: String(userId), purpose: 'voice' };
+    if (twinId && typeof twinId === 'string') {
+      claims.twinId = twinId;
+    }
     const voiceToken = jwt.sign(
-      { userId: String(userId), purpose: 'voice' },
+      claims,
       this.jwtSecret,
       { algorithm: 'HS256', expiresIn: VOICE_TOKEN_TTL_SECONDS }
     );
-    logger.info(`Voice token minted user=${userId} lang=${lang} ttl=${VOICE_TOKEN_TTL_SECONDS}s`);
+    logger.info(`Voice token minted user=${userId} lang=${lang} twin=${twinId || '-'} ttl=${VOICE_TOKEN_TTL_SECONDS}s`);
     return {
       wsUrl: this.wsUrl,
       voiceToken,
       expiresIn: VOICE_TOKEN_TTL_SECONDS,
       language: lang,
+      twinId: twinId || null,
       identity: `user-${userId}`,
       fullName: fullName || `user-${userId}`
     };

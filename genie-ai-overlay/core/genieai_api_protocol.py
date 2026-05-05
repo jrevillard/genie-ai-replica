@@ -37,6 +37,8 @@ class RequestContext(BaseModel):
     categoryLabel: str | None = None
     serviceLabels: list[str] | None = None
     language: str | None = None
+    # True: use client category/service as-is (sidebar). False/omit: allow ChatQnA auto-routing.
+    skipAutoRoute: bool | None = None
 
 
 class ChatCompletionRequest(BaseModel):

@@ -1152,6 +1152,20 @@ async function startApp() {
     }
   }
 
+  // Public guest routes — unauthenticated, default-twin only. Mounted
+  // here (outside the auth-bearing route table) so the regular routes are
+  // never affected. See routes/public-routes.js for the per-endpoint guard.
+  try {
+    const publicRouter = require('./routes/public-routes');
+    app.use('/api/public', publicRouter);
+    logger.info('Public Guest Routes Module: LOADED at /api/public');
+  } catch (error) {
+    logger.error('Failed to mount public-routes:', {
+      error: error.message,
+      stack: error.stack,
+    });
+  }
+
   // Root route
   app.get('/', (req, res) => {
     try {

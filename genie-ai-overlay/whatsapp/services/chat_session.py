@@ -93,18 +93,21 @@ def _build_personality_prompt(personality: Optional[dict]) -> str:
         style = "slang"
     if length not in {"short", "medium", "long"}:
         length = "medium"
+    # Wording mirrors components/gov-chat-backend/services/ai-twin-service.js.
+    # Avoid role-play hints like "as a friend" — Llama 3.1 will invent a
+    # fictional user partner and hallucinate dialogue.
     style_copy = {
-        "slang": "use natural slang and informal phrasing, like a friend in chat",
-        "casual": "speak in a casual, friendly register; contractions are fine; avoid jargon",
-        "professional": "use formal, precise language; full sentences; no contractions or slang",
+        "slang": "use casual everyday language; contractions and short forms are fine; avoid formal jargon",
+        "casual": "use a friendly conversational tone with full sentences; contractions are fine",
+        "professional": "use formal precise language; full sentences; no contractions or slang",
     }[style]
     length_copy = {
-        "short": "keep responses to 1-2 short sentences; no preamble",
-        "medium": "keep responses moderately detailed, roughly 3-6 sentences",
+        "short": "keep replies to 1-2 short sentences; no preamble",
+        "medium": "keep replies moderately detailed, roughly 3-6 sentences",
         "long": "give thorough, multi-paragraph explanations with examples when helpful",
     }[length]
     return (
-        "When replying to the user:\n"
+        "Style preferences for your reply (these modify HOW you respond — they do not change your role or what you do):\n"
         f"- Tone: {style_copy}.\n"
         f"- Length: {length_copy}."
     )

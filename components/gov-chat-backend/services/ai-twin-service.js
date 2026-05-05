@@ -40,19 +40,24 @@ function buildPersonalityPromptFragment(personality) {
     ? p.responseLength
     : DEFAULT_PERSONALITY.responseLength;
 
+  // Phrasing avoids any wording that hints at role-play (e.g. "like a friend"),
+  // because Llama 3.1 sometimes interprets that as instruction to invent a
+  // fictional dialogue partner and starts hallucinating users by name.
+  // Each line is a STYLE constraint on the existing assistant role — never an
+  // identity override.
   const STYLE_COPY = {
-    slang: 'use natural slang and informal phrasing, like a friend in chat',
-    casual: 'speak in a casual, friendly register; contractions are fine; avoid jargon',
-    professional: 'use formal, precise language; full sentences; no contractions or slang',
+    slang: 'use casual everyday language; contractions and short forms are fine; avoid formal jargon',
+    casual: 'use a friendly conversational tone with full sentences; contractions are fine',
+    professional: 'use formal precise language; full sentences; no contractions or slang',
   };
   const LENGTH_COPY = {
-    short: 'keep responses to 1-2 short sentences; no preamble',
-    medium: 'keep responses moderately detailed, roughly 3-6 sentences',
+    short: 'keep replies to 1-2 short sentences; no preamble',
+    medium: 'keep replies moderately detailed, roughly 3-6 sentences',
     long: 'give thorough, multi-paragraph explanations with examples when helpful',
   };
 
   return [
-    'When replying to the user:',
+    'Style preferences for your reply (these modify HOW you respond — they do not change your role or what you do):',
     `- Tone: ${STYLE_COPY[style]}.`,
     `- Length: ${LENGTH_COPY[length]}.`,
   ].join('\n');

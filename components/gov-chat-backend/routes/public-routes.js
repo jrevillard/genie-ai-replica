@@ -210,9 +210,10 @@ router.get('/chat-sessions/languages', (req, res) => {
  *                   items:
  *                     type: object
  *                     properties:
- *                       _key:        { type: string }
- *                       name:        { type: string }
- *                       description: { type: string }
+ *                       _key:          { type: string }
+ *                       name:          { type: string }
+ *                       description:   { type: string }
+ *                       profilePicUrl: { type: string, nullable: true }
  */
 router.get('/ai-twins', async (req, res) => {
   try {
@@ -227,6 +228,7 @@ router.get('/ai-twins', async (req, res) => {
         _key: t._key,
         name: t.name,
         description: t.description,
+        profilePicUrl: t.profilePicUrl,
       })),
     });
   } catch (error) {
@@ -257,9 +259,10 @@ router.get('/ai-twins', async (req, res) => {
  *             schema:
  *               type: object
  *               properties:
- *                 _key:        { type: string }
- *                 name:        { type: string }
- *                 description: { type: string }
+ *                 _key:          { type: string }
+ *                 name:          { type: string }
+ *                 description:   { type: string }
+ *                 profilePicUrl: { type: string, nullable: true }
  *       404: { description: Twin not found }
  */
 router.get('/ai-twins/:id', async (req, res) => {
@@ -269,6 +272,7 @@ router.get('/ai-twins/:id', async (req, res) => {
       _key: twin._key,
       name: twin.name,
       description: twin.description,
+      profilePicUrl: twin.profilePicUrl,
     });
   } catch (error) {
     const status = error.statusCode || 500;

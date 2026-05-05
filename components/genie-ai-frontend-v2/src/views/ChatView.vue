@@ -4,39 +4,59 @@ import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
   ArrowLeft01Icon,
-  BloodPressureIcon,
   BubbleChatIcon,
   CallIcon,
+  Cancel01Icon,
   Copy01Icon,
   Mic01Icon,
-  PlateIcon,
-  RefreshIcon,
+  PauseIcon,
+  PlayIcon,
   SentIcon,
-  StethoscopeIcon,
-  ThumbsDownIcon,
-  ThumbsUpIcon,
-  WellnessIcon,
+  VolumeHighIcon,
 } from '@hugeicons/core-free-icons';
 
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import ChatMessageBody from '../components/chat/ChatMessageBody.vue';
+import ChatPageSkeleton from '../components/ui/skeletons/ChatPageSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
-import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
+import { CHAT_LANGS, chatStrings, flagForLang, flagUrl, type ChatLang } from '../lib/chatStrings';
+import { getChatLanguages, type ChatLanguage } from '../services/chatSessions';
+import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore, type ChatMessage } from '../stores/chat';
+import { useT } from '../i18n/composables';
+
+const { t: tt } = useT();
 
 const route = useRoute();
 const router = useRouter();
 
 const aiTwinsStore = useAiTwinsStore();
 const chatStore = useChatStore();
-const { current: twin } = storeToRefs(aiTwinsStore);
+const { current: twin, loading: twinLoading, error: twinError } = storeToRefs(aiTwinsStore);
 const { messages, sending, lang } = storeToRefs(chatStore);
+
+const showTwinSkeleton = computed(
+  () => Boolean(twinId.value) && twinLoading.value && !twin.value
+);
+const showTwinError = computed(
+  () => Boolean(twinId.value) && !twinLoading.value && !twin.value && Boolean(twinError.value)
+);
 
 // Single English source — the API will return localised strings later.
 const t = chatStrings;
+
+// Static waveform shape for the user's voice-note bubble. A precomputed
+// peaks-and-valleys pattern reads like a real recorded snippet without
+// recomputing pseudo-random heights on every render.
+const VOICE_WAVE_HEIGHTS = [
+  30, 50, 70, 60, 45, 60, 80, 55, 35, 50, 75, 95, 70, 55, 40, 60,
+  85, 65, 45, 30, 55, 80, 70, 50, 35, 50, 70, 90, 65, 45, 55, 75,
+  60, 40, 25, 45,
+] as const;
 
 const twinId = computed(() => {
   const raw = route.params.twinId;
@@ -49,12 +69,41 @@ const messagesEnd = ref<HTMLDivElement | null>(null);
 const langOpen = ref(false);
 const langButton = ref<HTMLButtonElement | null>(null);
 
-const suggestionIcons = [
-  BloodPressureIcon,
-  PlateIcon,
-  StethoscopeIcon,
-  WellnessIcon,
-];
+interface LangPickerOption {
+  code: ChatLang;
+  label: string;
+  flag: string;
+}
+
+// Local table is used only as a fallback if the languages API is unavailable
+// (e.g. brief network failure on first load). The API is the source of truth.
+const FALLBACK_LANG_OPTIONS: LangPickerOption[] = CHAT_LANGS.map((opt) => ({
+  code: opt.code,
+  label: opt.label,
+  flag: opt.flag,
+}));
+
+const languageOptions = ref<LangPickerOption[]>(FALLBACK_LANG_OPTIONS);
+const languagesLoading = ref(false);
+
+async function loadLanguages(): Promise<void> {
+  languagesLoading.value = true;
+  try {
+    const list: ChatLanguage[] = await getChatLanguages();
+    if (list.length > 0) {
+      languageOptions.value = list.map((l) => ({
+        code: l.code,
+        label: l.name,
+        flag: flagForLang(l.code),
+      }));
+    }
+  } catch {
+    // Keep the fallback list — the picker stays usable even if the API is
+    // briefly unreachable.
+  } finally {
+    languagesLoading.value = false;
+  }
+}
 
 async function loadTwin(): Promise<void> {
   if (!twinId.value) return;
@@ -66,7 +115,6 @@ async function loadTwin(): Promise<void> {
   }
 }
 
-onMounted(loadTwin);
 watch(twinId, loadTwin);
 
 function autoSize(): void {
@@ -86,7 +134,16 @@ function scrollToBottom(): void {
 
 watch(
   () => messages.value.length,
-  () => scrollToBottom()
+  () => {
+    scrollToBottom();
+    // Preload duration for any user voice notes so their bubble shows the
+    // real length without forcing the listener to hit play first.
+    for (const m of messages.value) {
+      if (m.role === 'user' && m.serverId && isDirectAudioUrl(m.audioUrl)) {
+        preloadAudioDuration(m.serverId, m.audioUrl);
+      }
+    }
+  },
 );
 
 watch(
@@ -132,13 +189,279 @@ async function copyMessage(m: ChatMessage): Promise<void> {
   }
 }
 
-function regenerate(): void {
-  void chatStore.regenerateLast();
+// ─── Voice recording ────────────────────────────────────────────────────────
+const isRecording = ref(false);
+const recordingSeconds = ref(0);
+const processingVoice = ref(false);
+let mediaRecorder: MediaRecorder | null = null;
+let recordedChunks: Blob[] = [];
+let recordingStream: MediaStream | null = null;
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let recordingCancelled = false;
+
+function pickRecorderMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  return candidates.find((tp) => MediaRecorder.isTypeSupported(tp)) ?? '';
 }
 
-function micPlaceholder(): void {
-  notify.info(t.micSoon);
+function formatRecordingClock(seconds: number): string {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
 }
+
+function stopRecordingStream(): void {
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+  if (recordingStream) {
+    recordingStream.getTracks().forEach((track) => track.stop());
+    recordingStream = null;
+  }
+}
+
+async function startRecording(): Promise<void> {
+  if (isRecording.value || sending.value) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    notify.error('Recording not supported', 'Your browser cannot record audio.');
+    return;
+  }
+  try {
+    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    const e = err as { name?: string; message?: string };
+    notify.error(
+      'Microphone unavailable',
+      e?.name === 'NotAllowedError'
+        ? 'Permission denied. Allow microphone access and try again.'
+        : e?.message ?? 'Could not access the microphone.',
+    );
+    return;
+  }
+
+  const mimeType = pickRecorderMimeType();
+  recordedChunks = [];
+  recordingCancelled = false;
+  try {
+    mediaRecorder = mimeType
+      ? new MediaRecorder(recordingStream, { mimeType })
+      : new MediaRecorder(recordingStream);
+  } catch {
+    stopRecordingStream();
+    notify.error('Recording failed', 'Could not initialize the recorder.');
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (event: BlobEvent) => {
+    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+  };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
+    stopRecordingStream();
+    mediaRecorder = null;
+    isRecording.value = false;
+    if (recordingCancelled || blob.size === 0) {
+      recordingSeconds.value = 0;
+      return;
+    }
+    submitVoiceMessage(blob).finally(() => {
+      recordingSeconds.value = 0;
+    });
+  };
+
+  mediaRecorder.start();
+  isRecording.value = true;
+  recordingSeconds.value = 0;
+  playRecordStartChime();
+  recordingTimer = setInterval(() => {
+    recordingSeconds.value += 1;
+    if (recordingSeconds.value >= 600) stopRecording();
+  }, 1000);
+}
+
+function stopRecording(): void {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  playRecordStopChime();
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+  }
+}
+
+function cancelRecording(): void {
+  if (!mediaRecorder) return;
+  recordingCancelled = true;
+  playRecordStopChime();
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+    recordingSeconds.value = 0;
+  }
+}
+
+async function submitVoiceMessage(blob: Blob): Promise<void> {
+  processingVoice.value = true;
+  try {
+    await chatStore.sendVoice(blob);
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const message =
+      e?.response?.data?.message ??
+      (status === 413
+        ? 'Recording is too large (max 10 MB).'
+        : status === 502
+          ? 'Voice transcription service is temporarily unavailable.'
+          : e?.message ?? 'Could not send voice message.');
+    notify.error('Voice message failed', message);
+  } finally {
+    processingVoice.value = false;
+  }
+}
+
+// ─── Audio playback (TTS for assistant + user voice notes) ─────────────────
+interface MessageAudioState {
+  loading: boolean;
+  playing: boolean;
+  url: string | null;
+  audio: HTMLAudioElement | null;
+  duration: number;
+  currentTime: number;
+}
+const messageAudio = ref<Record<string, MessageAudioState>>({});
+
+function ensureAudioState(id: string): MessageAudioState {
+  if (!messageAudio.value[id]) {
+    messageAudio.value[id] = {
+      loading: false,
+      playing: false,
+      url: null,
+      audio: null,
+      duration: 0,
+      currentTime: 0,
+    };
+  }
+  return messageAudio.value[id];
+}
+
+function isDirectAudioUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  return (
+    url.startsWith('blob:') ||
+    url.startsWith('http') ||
+    url.startsWith('data:') ||
+    url.startsWith('/')
+  );
+}
+
+// Probe metadata only — keeps the bubble's duration accurate before the user
+// hits play, matching the chat-history view.
+function preloadAudioDuration(id: string, url: string): void {
+  const state = ensureAudioState(id);
+  if (state.duration > 0 || state.audio) return;
+  const probe = new Audio();
+  probe.preload = 'metadata';
+  probe.src = url;
+  probe.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(probe.duration)) state.duration = probe.duration;
+  });
+}
+
+function stopAllAudio(): void {
+  Object.values(messageAudio.value).forEach((state) => {
+    if (state.audio && state.playing) {
+      state.audio.pause();
+      state.playing = false;
+    }
+  });
+}
+
+function attachAudioListeners(state: MessageAudioState): void {
+  const audio = state.audio;
+  if (!audio) return;
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+  });
+  audio.addEventListener('timeupdate', () => {
+    state.currentTime = audio.currentTime;
+  });
+  audio.addEventListener('ended', () => {
+    state.playing = false;
+    state.currentTime = 0;
+  });
+  audio.addEventListener('pause', () => {
+    if (audio.currentTime >= audio.duration) state.playing = false;
+  });
+}
+
+function formatAudioClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+async function toggleMessageAudio(message: ChatMessage): Promise<void> {
+  if (!message.serverId) return;
+  const state = ensureAudioState(message.serverId);
+  if (state.playing && state.audio) {
+    state.audio.pause();
+    state.playing = false;
+    return;
+  }
+  stopAllAudio();
+  try {
+    if (!state.url) {
+      if (isDirectAudioUrl(message.audioUrl)) {
+        state.url = message.audioUrl;
+      } else {
+        state.loading = true;
+        const blob = await chatStore.loadMessageAudio(message.serverId);
+        state.url = URL.createObjectURL(blob);
+      }
+    }
+    if (!state.audio) {
+      state.audio = new Audio(state.url);
+      attachAudioListeners(state);
+    }
+    await state.audio.play();
+    state.playing = true;
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const fallback =
+      status === 404
+        ? 'Audio for this message could not be found.'
+        : status === 502
+          ? 'Voice synthesis is temporarily unavailable.'
+          : e?.message ?? 'Could not play audio.';
+    notify.error('Playback failed', e?.response?.data?.message ?? fallback);
+  } finally {
+    state.loading = false;
+  }
+}
+
+function disposeAllAudio(): void {
+  Object.values(messageAudio.value).forEach((state) => {
+    if (state.audio) {
+      state.audio.pause();
+      state.audio.src = '';
+    }
+    if (state.url) URL.revokeObjectURL(state.url);
+  });
+  messageAudio.value = {};
+}
+
+watch(twinId, () => {
+  disposeAllAudio();
+  if (isRecording.value) cancelRecording();
+});
 
 function startVoiceCall(): void {
   if (!twinId.value) return;
@@ -172,14 +495,25 @@ function onDocumentClick(e: MouseEvent): void {
 onMounted(() => {
   document.addEventListener('click', onDocumentClick);
   autoSize();
+  loadTwin();
+  loadLanguages();
 });
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick);
+  disposeAllAudio();
+  if (isRecording.value) cancelRecording();
+  stopRecordingStream();
 });
 
-const currentLang = computed(
-  () => CHAT_LANGS.find((l) => l.code === lang.value) ?? CHAT_LANGS[0]
-);
+const currentLang = computed<LangPickerOption>(() => {
+  const list = languageOptions.value;
+  return (
+    list.find((l) => l.code === lang.value) ??
+    FALLBACK_LANG_OPTIONS.find((l) => l.code === lang.value) ??
+    list[0] ??
+    FALLBACK_LANG_OPTIONS[0]
+  );
+});
 
 interface Group {
   label: string;
@@ -227,7 +561,26 @@ function formatTime(d: Date): string {
 
 <template>
   <div class="chat-shell flex h-[100dvh] min-h-0 w-full flex-col bg-surface">
-    <section class="flex h-full min-h-0 flex-col bg-surface">
+    <ChatPageSkeleton v-if="showTwinSkeleton" />
+
+    <section v-else-if="showTwinError" class="flex h-full min-h-0 flex-col items-center justify-center bg-surface px-6">
+      <EmptyState
+        :icon="BubbleChatIcon"
+        :title="tt('chat.twinLoadError', 'Could not load this AI Twin')"
+        :description="twinError ?? tt('common.tryAgain', 'Please try again.')"
+      >
+        <div class="flex items-center gap-2">
+          <BaseButton variant="outline" @click="goBack">
+            {{ tt('common.back', 'Back') }}
+          </BaseButton>
+          <BaseButton variant="primary" :loading="twinLoading" @click="loadTwin">
+            {{ tt('common.retry', 'Retry') }}
+          </BaseButton>
+        </div>
+      </EmptyState>
+    </section>
+
+    <section v-else class="flex h-full min-h-0 flex-col bg-surface">
       <!-- Top bar -->
       <header
         class="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle bg-surface px-6 py-4"
@@ -236,20 +589,20 @@ function formatTime(d: Date): string {
           <button
             type="button"
             class="inline-flex items-center justify-center rounded-full bg-surface-muted p-2 text-text-muted transition hover:bg-surface-subtle hover:text-text"
-            aria-label="Go back"
+            :aria-label="tt('common.goBack', 'Go back')"
             @click="goBack"
           >
             <Icon :icon="ArrowLeft01Icon" :size="18" />
           </button>
-          <template v-if="twin">
+          <template v-if="twinId">
             <BaseAvatar
-              :src="twin.profilePicUrl ?? ''"
-              :name="twin.name"
+              :src="twin?.profilePicUrl ?? ''"
+              :name="twin?.name ?? 'AI Twin'"
               size="md"
               badge="online"
             />
             <div class="min-w-0">
-              <p class="truncate text-title text-text">{{ twin.name }}</p>
+              <p class="truncate text-title text-text">{{ twin?.name ?? 'AI Twin' }}</p>
               <p class="truncate text-meta text-text-muted">
                 {{ t.subgreeting.split('.')[0] }}
               </p>
@@ -266,18 +619,20 @@ function formatTime(d: Date): string {
             <button
               ref="langButton"
               type="button"
-              class="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-body font-medium text-text transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              class="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-2 py-1.5 text-body font-medium text-text transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               :aria-label="t.langLabel"
               :aria-expanded="langOpen"
               aria-haspopup="listbox"
               @click="langOpen = !langOpen"
               @blur="onLangButtonBlur"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-              </svg>
-              <span class="uppercase">{{ currentLang.code }}</span>
+              <img
+                :src="flagUrl(currentLang.flag)"
+                :alt="currentLang.label"
+                class="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-border"
+                loading="lazy"
+              />
+              <span class="px-1 text-meta uppercase tracking-wide text-text-muted">{{ currentLang.code }}</span>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3 transition-transform" :class="langOpen && 'rotate-180'" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
               </svg>
@@ -285,17 +640,37 @@ function formatTime(d: Date): string {
             <ul
               v-if="langOpen"
               role="listbox"
-              class="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+              class="absolute right-0 top-full z-20 mt-2 max-h-80 w-60 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
             >
-              <li v-for="opt in CHAT_LANGS" :key="opt.code" role="option" :aria-selected="opt.code === lang">
+              <li v-if="languagesLoading && languageOptions.length === 0" class="px-3 py-2 text-sm text-text-subtle">
+                Loading languages…
+              </li>
+              <li v-for="opt in languageOptions" :key="opt.code" role="option" :aria-selected="opt.code === lang">
                 <button
                   type="button"
-                  class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
+                  :class="[
+                    'flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left text-sm transition',
+                    opt.code === lang ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-50',
+                  ]"
                   @click="setLanguage(opt.code)"
                 >
-                  <span class="font-medium">{{ opt.label }}</span>
-                  <span class="rounded-md bg-ieee-50 px-2 py-0.5 text-[11px] font-semibold text-ieee-700">
-                    {{ opt.code }}
+                  <span class="flex min-w-0 items-center gap-2.5">
+                    <img
+                      :src="flagUrl(opt.flag)"
+                      :alt="opt.label"
+                      class="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                      loading="lazy"
+                    />
+                    <span class="truncate font-medium">{{ opt.label }}</span>
+                  </span>
+                  <span
+                    :class="[
+                      'grid h-4 w-4 shrink-0 place-items-center rounded-full border',
+                      opt.code === lang ? 'border-accent bg-accent text-white' : 'border-slate-300',
+                    ]"
+                    aria-hidden="true"
+                  >
+                    <span v-if="opt.code === lang" class="block h-1.5 w-1.5 rounded-full bg-white" />
                   </span>
                 </button>
               </li>
@@ -316,12 +691,13 @@ function formatTime(d: Date): string {
           <button
             v-if="twin"
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-inverse text-text-inverse transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            class="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-surface-inverse px-4 text-sm font-semibold text-text-inverse transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             :aria-label="t.call.startCall"
             :title="t.call.startCall"
             @click="startVoiceCall"
           >
-            <Icon :icon="CallIcon" :size="18" />
+            <Icon :icon="CallIcon" :size="16" />
+            <span>{{ t.call.startCall }}</span>
           </button>
         </div>
       </header>
@@ -340,42 +716,32 @@ function formatTime(d: Date): string {
           </BaseButton>
         </EmptyState>
 
-        <!-- Empty hero (twin loaded, no messages) -->
+        <!-- Greeting (twin selected, no messages yet) -->
         <div
-          v-else-if="twin && messages.length === 0"
-          class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10 text-center"
+          v-else-if="messages.length === 0"
+          class="flex min-h-0 flex-1 flex-col px-6 py-6"
         >
-          <h1 class="text-display text-text">{{ t.greeting }}</h1>
-          <p class="mt-2 max-w-xl text-lead text-text-muted">{{ t.subgreeting }}</p>
-
-          <p class="mt-8 text-meta uppercase tracking-wide text-text-subtle">
-            {{ t.suggestionsTitle }}
-          </p>
-          <div class="mt-3 grid w-full max-w-3xl gap-3 sm:grid-cols-2">
-            <button
-              v-for="(card, idx) in t.suggestionCards"
-              :key="card.topic"
-              type="button"
-              :disabled="sending"
-              class="group flex items-start gap-3 rounded-2xl border border-border bg-surface p-4 text-left shadow-card transition hover:border-accent/40 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-              @click="send(card.prompt)"
-            >
-              <span
-                class="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent transition group-hover:bg-accent group-hover:text-text-inverse"
-              >
-                <Icon :icon="suggestionIcons[idx]" :size="22" />
-              </span>
-              <span class="min-w-0">
-                <span class="block text-body font-semibold text-text">{{ card.topic }}</span>
-                <span class="mt-0.5 block text-meta text-text-muted">{{ card.prompt }}</span>
-              </span>
-            </button>
+          <div class="mx-auto flex w-full max-w-3xl">
+            <div class="flex gap-3">
+              <BaseAvatar
+                :src="twin?.profilePicUrl ?? ''"
+                :name="twin?.name ?? 'AI Twin'"
+                size="sm"
+              />
+              <div class="flex max-w-[80%] flex-col items-start">
+                <div class="rounded-2xl bg-surface-muted px-5 py-3 text-body text-text shadow-card">
+                  <p class="whitespace-pre-wrap leading-relaxed">
+                    {{ twin?.chatGreeting?.trim() || t.greeting }}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Active conversation -->
         <div
-          v-else-if="twin"
+          v-else
           class="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6 scrollbar-thin"
         >
           <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
@@ -397,8 +763,8 @@ function formatTime(d: Date): string {
               >
                 <BaseAvatar
                   v-if="m.role === 'assistant'"
-                  :src="twin.profilePicUrl ?? ''"
-                  :name="twin.name"
+                  :src="twin?.profilePicUrl ?? ''"
+                  :name="twin?.name ?? 'AI Twin'"
                   size="sm"
                 />
                 <div
@@ -408,6 +774,42 @@ function formatTime(d: Date): string {
                   ]"
                 >
                   <div
+                    v-if="m.role === 'user' && m.audioUrl && m.serverId"
+                    class="flex min-w-[16rem] items-center gap-3 rounded-full bg-accent px-3 py-2.5 text-text-inverse shadow-card"
+                  >
+                    <button
+                      type="button"
+                      class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
+                      :aria-label="messageAudio[m.serverId]?.playing ? 'Pause voice note' : 'Play voice note'"
+                      :disabled="messageAudio[m.serverId]?.loading"
+                      @click="toggleMessageAudio(m)"
+                    >
+                      <span
+                        v-if="messageAudio[m.serverId]?.loading"
+                        class="block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                        aria-hidden="true"
+                      />
+                      <Icon
+                        v-else-if="messageAudio[m.serverId]?.playing"
+                        :icon="PauseIcon"
+                        :size="18"
+                      />
+                      <Icon v-else :icon="PlayIcon" :size="18" />
+                    </button>
+                    <span class="flex h-9 flex-1 items-center gap-[3px]" aria-hidden="true">
+                      <span
+                        v-for="(h, i) in VOICE_WAVE_HEIGHTS"
+                        :key="i"
+                        class="w-[3px] rounded-full bg-white/85"
+                        :style="{ height: `${h}%` }"
+                      />
+                    </span>
+                    <span class="shrink-0 text-sm font-bold tabular-nums text-white">
+                      {{ formatAudioClock(messageAudio[m.serverId]?.duration ?? 0) }}
+                    </span>
+                  </div>
+                  <div
+                    v-else
                     :class="[
                       'rounded-2xl px-5 py-3 text-body shadow-card',
                       m.role === 'user'
@@ -420,7 +822,7 @@ function formatTime(d: Date): string {
                       <span class="dot" style="animation-delay: 0.15s" />
                       <span class="dot" style="animation-delay: 0.3s" />
                     </span>
-                    <p v-else class="whitespace-pre-wrap leading-relaxed">{{ m.text }}</p>
+                    <ChatMessageBody v-else :text="m.text" :lang="m.lang" :role="m.role" />
                   </div>
                   <div
                     :class="[
@@ -440,36 +842,54 @@ function formatTime(d: Date): string {
                       >
                         <Icon :icon="Copy01Icon" :size="14" />
                       </button>
-                      <button
-                        type="button"
-                        class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
-                        :aria-label="t.regenerate"
-                        :title="t.regenerate"
-                        @click="regenerate"
-                      >
-                        <Icon :icon="RefreshIcon" :size="14" />
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
-                        :aria-label="t.helpful"
-                        :title="t.helpful"
-                      >
-                        <Icon :icon="ThumbsUpIcon" :size="14" />
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
-                        :aria-label="t.notHelpful"
-                        :title="t.notHelpful"
-                      >
-                        <Icon :icon="ThumbsDownIcon" :size="14" />
-                      </button>
+                      <template v-if="m.serverId">
+                        <span aria-hidden="true">·</span>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 rounded p-1 text-text-subtle transition hover:bg-surface-muted hover:text-text disabled:opacity-50"
+                          :aria-label="messageAudio[m.serverId]?.playing ? 'Pause audio' : 'Listen to message'"
+                          :disabled="messageAudio[m.serverId]?.loading"
+                          @click="toggleMessageAudio(m)"
+                        >
+                          <span
+                            v-if="messageAudio[m.serverId]?.loading"
+                            class="block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                            aria-hidden="true"
+                          />
+                          <Icon
+                            v-else-if="messageAudio[m.serverId]?.playing"
+                            :icon="PauseIcon"
+                            :size="13"
+                          />
+                          <Icon v-else :icon="VolumeHighIcon" :size="13" />
+                          <span>{{ messageAudio[m.serverId]?.playing ? 'Playing' : 'Listen' }}</span>
+                        </button>
+                      </template>
                     </template>
                   </div>
                 </div>
               </div>
             </template>
+
+            <div
+              v-if="processingVoice"
+              class="flex items-start justify-end gap-3"
+              role="status"
+              aria-live="polite"
+              aria-label="Sending voice and waiting for a reply"
+            >
+              <div class="flex flex-col items-end gap-1">
+                <div class="rounded-2xl bg-accent px-5 py-3 text-text-inverse shadow-card">
+                  <span class="inline-flex items-center gap-1">
+                    <span class="dot" />
+                    <span class="dot" style="animation-delay: 0.15s" />
+                    <span class="dot" style="animation-delay: 0.3s" />
+                  </span>
+                </div>
+                <span class="text-meta text-text-subtle">Sending your voice note…</span>
+              </div>
+            </div>
+
             <div ref="messagesEnd" />
           </div>
         </div>
@@ -482,6 +902,7 @@ function formatTime(d: Date): string {
       >
         <div class="mx-auto w-full max-w-3xl">
           <div
+            v-if="!isRecording"
             class="flex items-end gap-2 rounded-3xl border border-border bg-surface px-3 py-2 shadow-card transition focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/20"
           >
             <textarea
@@ -496,11 +917,11 @@ function formatTime(d: Date): string {
             />
             <button
               type="button"
-              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-muted hover:text-text"
+              class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
               :aria-label="t.micAria"
               :title="t.micAria"
               :disabled="sending"
-              @click="micPlaceholder"
+              @click="startRecording"
             >
               <Icon :icon="Mic01Icon" :size="22" />
             </button>
@@ -515,6 +936,51 @@ function formatTime(d: Date): string {
               <Icon :icon="SentIcon" :size="20" />
             </button>
           </div>
+
+          <div
+            v-else
+            class="recorder-bar flex items-center gap-3 rounded-3xl border border-border bg-surface px-3 py-2 shadow-card"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="recorder-led" aria-hidden="true">
+              <span class="recorder-led__core" />
+              <span class="recorder-led__halo" />
+            </span>
+
+            <span class="shrink-0 text-body font-semibold tabular-nums text-text">
+              {{ formatRecordingClock(recordingSeconds) }}
+            </span>
+
+            <span class="recorder-wave flex h-7 flex-1 items-center justify-center gap-[3px]" aria-hidden="true">
+              <span
+                v-for="i in 48"
+                :key="i"
+                class="recorder-wave__bar"
+                :style="{ animationDelay: `${(i % 8) * 140}ms` }"
+              />
+            </span>
+
+            <button
+              type="button"
+              class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-caption font-semibold text-text-muted transition hover:bg-surface-muted hover:text-text"
+              aria-label="Cancel recording"
+              @click="cancelRecording"
+            >
+              <Icon :icon="Cancel01Icon" :size="14" />
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="group inline-flex h-11 items-center gap-2 rounded-full bg-accent px-4 text-body font-semibold text-text-inverse shadow-md transition hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              aria-label="Stop and send recording"
+              @click="stopRecording"
+            >
+              <Icon :icon="SentIcon" :size="16" />
+              Send
+            </button>
+          </div>
+
           <p class="mt-2 text-center text-caption text-text-subtle">
             {{ t.disclaimer }}
           </p>
@@ -545,6 +1011,72 @@ function formatTime(d: Date): string {
   40% {
     transform: scale(1);
     opacity: 0.95;
+  }
+}
+
+/* ===== Voice recorder ===== */
+.recorder-led {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.recorder-led__core {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+  animation: recorder-led-pulse 1.4s ease-in-out infinite;
+}
+.recorder-led__halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.45);
+  animation: recorder-led-halo 1.8s ease-out infinite;
+}
+@keyframes recorder-led-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.8); }
+}
+@keyframes recorder-led-halo {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.recorder-wave {
+  min-width: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+.recorder-wave__bar {
+  flex: 0 0 auto;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-text-muted, #9ca3af);
+  opacity: 0.55;
+  animation: recorder-wave-bar 1.8s ease-in-out infinite;
+  height: 22%;
+}
+@keyframes recorder-wave-bar {
+  0%, 100% { height: 18%; opacity: 0.4; }
+  25%      { height: 45%; opacity: 0.7; }
+  50%      { height: 28%; opacity: 0.55; }
+  75%      { height: 55%; opacity: 0.8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recorder-led__core,
+  .recorder-led__halo,
+  .recorder-wave__bar {
+    animation: none;
+  }
+  .recorder-wave__bar {
+    height: 50%;
+    opacity: 0.7;
   }
 }
 </style>

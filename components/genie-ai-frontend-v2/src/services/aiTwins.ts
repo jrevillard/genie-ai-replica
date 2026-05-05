@@ -15,6 +15,9 @@ export interface AiTwin {
   linkedKbFileIds: string[];
   createdAt: string;
   updatedAt: string;
+  numChats?: number;
+  numWhatsappChats?: number;
+  numCalls?: number;
 }
 
 export interface ListAiTwinsParams {
@@ -24,6 +27,20 @@ export interface ListAiTwinsParams {
 
 export interface ListAiTwinsResponse {
   twins: AiTwin[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+// Public directory shape — backend strips admin-only fields.
+export interface PublicAiTwin {
+  _key: string;
+  name: string;
+  description: string;
+}
+
+export interface ListPublicAiTwinsResponse {
+  twins: PublicAiTwin[];
   total: number;
   offset: number;
   limit: number;
@@ -52,6 +69,21 @@ export async function listAiTwins(params: ListAiTwinsParams = {}): Promise<ListA
 
 export async function getAiTwin(twinId: string): Promise<AiTwin> {
   const res = await api.get<AiTwin>(`/ai-twins/${encodeURIComponent(twinId)}`);
+  return res.data;
+}
+
+// Public directory — sanitized list, safe for non-admin users and guests.
+export async function listPublicAiTwins(params: ListAiTwinsParams = {}): Promise<ListPublicAiTwinsResponse> {
+  const res = await api.get<ListPublicAiTwinsResponse>('/public/ai-twins', {
+    params: { offset: params.offset ?? 0, limit: params.limit ?? 50 },
+  });
+  return res.data;
+}
+
+// Guest read of a twin — backend only exposes the default twin here, with
+// admin fields stripped. Returns 404 for any non-default twin id.
+export async function getPublicAiTwin(twinId: string): Promise<AiTwin> {
+  const res = await api.get<AiTwin>(`/public/ai-twins/${encodeURIComponent(twinId)}`);
   return res.data;
 }
 
@@ -114,6 +146,34 @@ export async function updateTwinSettings(
 ): Promise<TwinSettings> {
   const res = await api.post<TwinSettings>(
     `/ai-twins/${encodeURIComponent(twinId)}/settings`,
+    payload
+  );
+  return res.data;
+}
+
+export type LanguageStyle = 'slang' | 'casual' | 'professional';
+export type ResponseLength = 'short' | 'medium' | 'long';
+
+export interface TwinPersonality {
+  languageStyle: LanguageStyle;
+  responseLength: ResponseLength;
+}
+
+export type UpdateTwinPersonalityPayload = Partial<TwinPersonality>;
+
+export async function getTwinPersonality(twinId: string): Promise<TwinPersonality> {
+  const res = await api.get<TwinPersonality>(
+    `/ai-twins/${encodeURIComponent(twinId)}/personality`
+  );
+  return res.data;
+}
+
+export async function updateTwinPersonality(
+  twinId: string,
+  payload: UpdateTwinPersonalityPayload
+): Promise<TwinPersonality> {
+  const res = await api.post<TwinPersonality>(
+    `/ai-twins/${encodeURIComponent(twinId)}/personality`,
     payload
   );
   return res.data;

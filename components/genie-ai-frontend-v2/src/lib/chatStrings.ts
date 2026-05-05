@@ -4,21 +4,75 @@
 // payload. The frontend keeps a single English source so the shape is fixed
 // and the UI keeps working until the API ships.
 
-export type ChatLang = 'en' | 'fr' | 'mnk';
+// Languages the chat backend can respond in. The picker on the chat surface
+// switches what `language` field is sent with each request — it does NOT
+// retranslate the surrounding UI (UI strings are owned by vue-i18n with a
+// smaller en/fr/mnk set). The authoritative list is supplied by the API
+// (`GET /public/chat-sessions/languages`); this alias is intentionally wide so
+// new server-side languages light up without a frontend change.
+export type ChatLang = string;
+
+export const DEFAULT_CHAT_LANG: ChatLang = 'fr';
 
 export interface LangOption {
   code: ChatLang;
   label: string;
-  // ISO 3166-1 alpha-2 country code used for the flag image.
-  // Mandinka has no flag; we use the Gambia flag as the closest visual cue.
+  // ISO 3166-1 alpha-2 country code used by https://flagcdn.com.
   flag: string;
 }
 
 export const CHAT_LANGS: LangOption[] = [
-  { code: 'en', label: 'English', flag: 'gb' },
-  { code: 'fr', label: 'Français', flag: 'fr' },
+  { code: 'en', label: 'English', flag: 'us' },
+  { code: 'es', label: 'Spanish', flag: 'es' },
+  { code: 'pt', label: 'Portuguese', flag: 'pt' },
+  { code: 'fr', label: 'French', flag: 'fr' },
+  { code: 'ar', label: 'Arabic', flag: 'sa' },
+  { code: 'hi', label: 'Hindi', flag: 'in' },
+  { code: 'zh', label: 'Chinese', flag: 'cn' },
+  { code: 'de', label: 'German', flag: 'de' },
+  { code: 'ja', label: 'Japanese', flag: 'jp' },
+  { code: 'ru', label: 'Russian', flag: 'ru' },
+  { code: 'ko', label: 'Korean', flag: 'kr' },
+  { code: 'id', label: 'Indonesian', flag: 'id' },
+  { code: 'it', label: 'Italian', flag: 'it' },
+  { code: 'nl', label: 'Dutch', flag: 'nl' },
+  { code: 'tr', label: 'Turkish', flag: 'tr' },
+  { code: 'pl', label: 'Polish', flag: 'pl' },
+  { code: 'sv', label: 'Swedish', flag: 'se' },
+  { code: 'tl', label: 'Tagalog', flag: 'ph' },
+  { code: 'ms', label: 'Malay', flag: 'my' },
+  { code: 'ro', label: 'Romanian', flag: 'ro' },
+  { code: 'uk', label: 'Ukrainian', flag: 'ua' },
+  { code: 'el', label: 'Greek', flag: 'gr' },
+  { code: 'cs', label: 'Czech', flag: 'cz' },
+  { code: 'da', label: 'Danish', flag: 'dk' },
+  { code: 'fi', label: 'Finnish', flag: 'fi' },
+  { code: 'bg', label: 'Bulgarian', flag: 'bg' },
+  { code: 'hr', label: 'Croatian', flag: 'hr' },
+  { code: 'sk', label: 'Slovak', flag: 'sk' },
+  { code: 'ta', label: 'Tamil', flag: 'in' },
   { code: 'mnk', label: 'Mandinka', flag: 'gm' },
+  { code: 'th', label: 'Thai', flag: 'th' },
+  { code: 'sw', label: 'Swahili', flag: 'ke' },
+  { code: 'st', label: 'Sesotho', flag: 'ls' },
+  { code: 'bn', label: 'Bengali', flag: 'bd' },
+  { code: 'man', label: 'Mandinka', flag: 'gm' },
 ];
+
+// API codes (`code`) → ISO 3166-1 alpha-2 country flag. Falls back to using
+// the language code itself as a flag (most flagcdn entries match the lang
+// code), then to a globe placeholder if even that is missing.
+const FLAG_BY_CODE: Record<string, string> = Object.fromEntries(
+  CHAT_LANGS.map((opt) => [opt.code, opt.flag]),
+);
+
+export function flagForLang(code: string): string {
+  return FLAG_BY_CODE[code] ?? code;
+}
+
+export function flagUrl(code: string): string {
+  return `https://flagcdn.com/w40/${code.toLowerCase()}.png`;
+}
 
 export interface SuggestionCard {
   topic: string;

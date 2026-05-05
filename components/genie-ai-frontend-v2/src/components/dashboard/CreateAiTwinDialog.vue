@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
-import { SparklesIcon, Upload01Icon } from '@hugeicons/core-free-icons';
-import BaseAvatar from '../ui/BaseAvatar.vue';
+import { Camera01Icon, SparklesIcon, Upload01Icon } from '@hugeicons/core-free-icons';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseDrawer from '../ui/BaseDrawer.vue';
 import BaseInput from '../ui/BaseInput.vue';
@@ -9,6 +8,9 @@ import BaseTextarea from '../ui/BaseTextarea.vue';
 import Icon from '../ui/Icon.vue';
 import { useZodForm } from '../../composables/useZodForm';
 import { createAiTwinSchema, type CreateAiTwinInput } from '../../lib/validation/schemas';
+import { useT } from '../../i18n/composables';
+
+const { t } = useT();
 
 const props = defineProps<{ open: boolean; submitting?: boolean }>();
 const emit = defineEmits<{
@@ -78,7 +80,7 @@ watch(
 <template>
   <BaseDrawer
     :open="open"
-    title="Create AI Twin"
+    :title="t('twins.create.title', 'Create AI Twin')"
     :icon="SparklesIcon"
     width="md"
     :close-on-backdrop="!submitting"
@@ -86,15 +88,43 @@ watch(
   >
     <section class="space-y-4">
       <header>
-        <p class="text-caption font-medium uppercase text-text-subtle">Change Image</p>
-        <h3 class="mt-1 text-body font-semibold text-text">Upload Your Image</h3>
+        <h3 class="text-body font-semibold text-text">{{ t('twins.create.uploadHeader', 'Upload Your Image') }}</h3>
       </header>
 
       <div class="flex items-center gap-4">
-        <BaseAvatar :src="previewUrl" name="?" size="lg" />
+        <button
+          type="button"
+          :class="[
+            'group relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ieee-700/40',
+            previewUrl
+              ? 'ring-1 ring-border'
+              : 'border-2 border-dashed border-slate-300 bg-slate-50 hover:border-ieee-700 hover:bg-ieee-50',
+          ]"
+          :aria-label="previewUrl ? t('twins.detail.avatar.change', 'Change profile picture') : t('twins.detail.avatar.upload', 'Upload profile picture')"
+          @click="pickFile"
+        >
+          <img
+            v-if="previewUrl"
+            :src="previewUrl"
+            alt=""
+            class="h-full w-full object-cover"
+          />
+          <Icon
+            v-else
+            :icon="Camera01Icon"
+            :size="22"
+            class="text-slate-400 transition group-hover:text-ieee-700"
+          />
+          <span
+            v-if="previewUrl"
+            class="pointer-events-none absolute inset-0 grid place-items-center bg-black/40 text-white opacity-0 transition group-hover:opacity-100"
+          >
+            <Icon :icon="Camera01Icon" :size="18" />
+          </span>
+        </button>
         <div class="flex-1">
           <p class="text-caption text-text-muted">
-            Upload your photo here for the profile picture
+            {{ t('twins.create.uploadHelp', 'Upload your photo here for the profile picture') }}
           </p>
           <input
             ref="fileInput"
@@ -108,7 +138,7 @@ watch(
             class="mt-2 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-caption font-medium text-text shadow-card transition hover:bg-surface-muted"
             @click="pickFile"
           >
-            <Icon :icon="Upload01Icon" :size="14" /> {{ avatarFile ? 'Replace' : 'Upload' }}
+            <Icon :icon="Upload01Icon" :size="14" /> {{ avatarFile ? t('twins.create.replace', 'Replace') : t('twins.create.upload', 'Upload') }}
           </button>
           <p v-if="avatarFile" class="mt-1 truncate text-caption text-text-muted">
             {{ avatarFile.name }}
@@ -123,8 +153,8 @@ watch(
       <BaseInput
         id="twin-name"
         v-model="form.name"
-        label="Enter Your Full Name"
-        placeholder="Enter Your Name"
+        :label="t('twins.create.nameLabel', 'Enter Your Full Name')"
+        :placeholder="t('twins.create.namePlaceholder', 'Enter Your Name')"
         :error="errors.name"
         data-autofocus
       />
@@ -132,9 +162,9 @@ watch(
       <BaseTextarea
         id="twin-desc"
         v-model="form.description"
-        label="Twin Description"
+        :label="t('twins.create.descLabel', 'Twin Description')"
         :rows="8"
-        placeholder="Describe what this AI Twin should do…"
+        :placeholder="t('twins.create.descPlaceholder', 'Describe what this AI Twin should do…')"
         :error="errors.description"
       />
     </section>
@@ -146,10 +176,10 @@ watch(
         :disabled="submitting"
         @click="close"
       >
-        Cancel
+        {{ t('common.cancel', 'Cancel') }}
       </button>
       <BaseButton variant="primary" size="md" :loading="submitting" @click="onSubmit">
-        Create Twin
+        {{ t('twins.create.submit', 'Create Twin') }}
       </BaseButton>
     </template>
   </BaseDrawer>

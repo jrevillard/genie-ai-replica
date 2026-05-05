@@ -3,7 +3,9 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
+import { useT } from '../i18n/composables';
 
+const { t } = useT();
 const route = useRoute();
 
 const verifyQuery = computed(() => {
@@ -33,9 +35,9 @@ const verifyQuery = computed(() => {
             </svg>
           </div>
 
-          <h1 class="text-3xl font-semibold text-slate-900">You're almost there</h1>
+          <h1 class="text-3xl font-semibold text-slate-900">{{ t('auth.registrationSuccess.title', "You're almost there") }}</h1>
           <p class="mt-2 text-sm text-slate-500">
-            Your account has been created. Check your inbox to verify your email, then sign in.
+            {{ t('auth.registrationSuccess.subtitle', 'Your account has been created. Check your inbox to verify your email, then sign in.') }}
           </p>
 
           <div class="mt-10 flex flex-col gap-3">
@@ -43,23 +45,23 @@ const verifyQuery = computed(() => {
               :to="{ name: 'verify-email', query: verifyQuery }"
               class="btn-primary text-center no-underline"
             >
-              Enter verification code
+              {{ t('auth.registrationSuccess.enterCode', 'Enter verification code') }}
             </RouterLink>
             <RouterLink
               :to="{ name: 'signin' }"
               class="btn-soft text-center no-underline"
             >
-              Back to sign in
+              {{ t('common.backToSignIn', 'Back to sign in') }}
             </RouterLink>
           </div>
         </div>
       </div>
 
       <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
-        By signing up, you agree to our
-        <a href="#" class="text-ieee-700 hover:underline">terms of service</a>
-        and
-        <a href="#" class="text-ieee-700 hover:underline">privacy policy</a>.
+        {{ t('auth.legal.prefix', 'By signing up, you agree to our') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.terms', 'terms of service') }}</a>
+        {{ t('auth.legal.and', 'and') }}
+        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.privacy', 'privacy policy') }}</a>.
       </p>
     </section>
 

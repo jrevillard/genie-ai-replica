@@ -12,7 +12,9 @@ import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { useAiTwinsStore } from '../stores/aiTwins';
+import { useT } from '../i18n/composables';
 
+const { t } = useT();
 const store = useAiTwinsStore();
 const { twins, loading } = storeToRefs(store);
 
@@ -29,7 +31,7 @@ const filtered = computed(() => {
 
 function loadTwins() {
   store.fetchAll().catch(() => {
-    notify.error(store.error ?? 'Failed to load AI Twins');
+    notify.error(store.error ?? t('twins.list.loadFailedToast', 'Failed to load AI Twins'));
   });
 }
 
@@ -48,13 +50,13 @@ async function onCreated(payload: { name: string; description: string; avatarFil
       try {
         await store.uploadAvatar(twin._key, payload.avatarFile);
       } catch {
-        notify.error(store.error ?? 'Twin created, but the avatar upload failed.');
+        notify.error(store.error ?? t('twins.list.avatarFailedToast', 'Twin created, but the avatar upload failed.'));
       }
     }
-    notify.success('AI Twin created');
+    notify.success(t('twins.list.createdToast', 'AI Twin created'));
     dialogOpen.value = false;
   } catch {
-    notify.error(store.error ?? 'Failed to create AI Twin');
+    notify.error(store.error ?? t('twins.list.createFailedToast', 'Failed to create AI Twin'));
   } finally {
     creating.value = false;
   }
@@ -66,11 +68,11 @@ async function onCreated(payload: { name: string; description: string; avatarFil
     <section class="space-y-6 bg-surface p-6">
       <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <h1 class="text-headline text-text">AI Twins</h1>
+          <h1 class="text-headline text-text">{{ t('twins.list.title', 'AI Twins') }}</h1>
           <div class="w-full sm:w-[360px]">
             <BaseInput
               v-model="search"
-              placeholder="Search"
+              :placeholder="t('twins.list.searchPlaceholder', 'Search')"
               size="md"
               rounded="full"
             >
@@ -79,7 +81,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
                 <button
                   type="button"
                   class="-my-1.5 grid h-7 w-7 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-text"
-                  aria-label="Clear search"
+                  :aria-label="t('twins.list.clearSearch', 'Clear search')"
                   @click="search = ''"
                 >
                   <Icon :icon="Cancel01Icon" :size="14" />
@@ -90,7 +92,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
         </div>
         <BaseButton variant="primary" size="md" rounded="full" @click="dialogOpen = true">
           <Icon :icon="PlusSignIcon" :size="16" />
-          Create AI Twin
+          {{ t('twins.list.create', 'Create AI Twin') }}
         </BaseButton>
       </header>
 
@@ -105,30 +107,30 @@ async function onCreated(payload: { name: string; description: string; avatarFil
       <EmptyState
         v-else-if="store.error && !search.trim()"
         :icon="SparklesIcon"
-        title="Couldn't load AI Twins"
+        :title="t('twins.list.loadFailedTitle', `Couldn't load AI Twins`)"
         :description="store.error"
       >
-        <BaseButton variant="primary" size="md" @click="loadTwins">Retry</BaseButton>
+        <BaseButton variant="primary" size="md" @click="loadTwins">{{ t('common.retry', 'Retry') }}</BaseButton>
       </EmptyState>
 
       <EmptyState
         v-else-if="search.trim()"
         :icon="Search01Icon"
-        title="No matches"
-        description="No AI Twins match your search. Try a different keyword or clear the filter."
+        :title="t('twins.list.noMatchesTitle', 'No matches')"
+        :description="t('twins.list.noMatchesBody', 'No AI Twins match your search. Try a different keyword or clear the filter.')"
       >
-        <BaseButton variant="outline" size="md" @click="search = ''">Clear search</BaseButton>
+        <BaseButton variant="outline" size="md" @click="search = ''">{{ t('twins.list.clearSearch', 'Clear search') }}</BaseButton>
       </EmptyState>
 
       <EmptyState
         v-else
         :icon="SparklesIcon"
-        title="No AI Twins yet"
-        description="Create your first AI Twin to start chatting and tracking conversations."
+        :title="t('twins.list.emptyTitle', 'No AI Twins yet')"
+        :description="t('twins.list.emptyBody', 'Create your first AI Twin to start chatting and tracking conversations.')"
       >
         <BaseButton variant="primary" size="md" @click="dialogOpen = true">
           <Icon :icon="PlusSignIcon" :size="16" />
-          Create AI Twin
+          {{ t('twins.list.create', 'Create AI Twin') }}
         </BaseButton>
       </EmptyState>
     </section>

@@ -16,6 +16,7 @@ interface ChatHistoryState {
   currentSession: ChatSessionRecord | null;
   messages: ChatHistoryMessage[];
   loadingMessages: boolean;
+  searchingMessages: boolean;
   messagesError: string | null;
   messageQuery: string;
   deleting: boolean;
@@ -37,6 +38,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
     currentSession: null,
     messages: [],
     loadingMessages: false,
+    searchingMessages: false,
     messagesError: null,
     messageQuery: '',
     deleting: false,
@@ -105,7 +107,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
     async searchMessages(q: string): Promise<void> {
       this.messageQuery = q;
       if (!this.selectedSessionId) return;
-      this.loadingMessages = true;
+      this.searchingMessages = true;
       this.messagesError = null;
       try {
         const trimmed = q.trim();
@@ -119,7 +121,46 @@ export const useChatHistoryStore = defineStore('chatHistory', {
         this.messagesError = extractError(err, 'Failed to search messages');
         throw err;
       } finally {
-        this.loadingMessages = false;
+        this.searchingMessages = false;
+      }
+    },
+
+    async sendVoice(audio: Blob, opts: api.SendVoiceMessageOptions = {}): Promise<void> {
+      if (this.sending) return;
+      const sessionId = this.selectedSessionId;
+      if (!sessionId) return;
+
+      // TODO: backend `/voice-messages` does not yet return a playback URL,
+      // so we fall back to a local blob URL so the user can hear their own
+      // recording immediately after sending.
+      const localAudioUrl = URL.createObjectURL(audio);
+
+      this.sending = true;
+      try {
+        const res = await api.sendVoiceMessage(sessionId, audio, opts);
+        const now = new Date().toISOString();
+        this.messages.push({
+          _key: res.userMessage.id,
+          role: 'user',
+          content: res.userMessage.text,
+          audioUrl: res.userMessage.audioUrl ?? localAudioUrl,
+          createdAt: now,
+        });
+        this.messages.push({
+          _key: res.assistantMessage.id,
+          role: 'assistant',
+          content: res.assistantMessage.text,
+          createdAt: new Date().toISOString(),
+        });
+        const idx = this.sessions.findIndex((s) => s._key === sessionId);
+        if (idx !== -1) {
+          this.sessions[idx] = {
+            ...this.sessions[idx],
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      } finally {
+        this.sending = false;
       }
     },
 

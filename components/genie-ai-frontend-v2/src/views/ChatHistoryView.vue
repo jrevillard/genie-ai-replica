@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import {
   ArrowDown01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
-  Attachment01Icon,
   BubbleChatIcon,
   CallEnd01Icon,
   CallIcon,
@@ -14,33 +13,54 @@ import {
   Delete02Icon,
   Download04Icon,
   FilterHorizontalIcon,
+  Mic01Icon,
   MoreVerticalIcon,
+  PauseIcon,
   PlayIcon,
   Search01Icon,
+  SentIcon,
+  StopCircleIcon,
+  VolumeHighIcon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
-import TableRowsSkeleton from '../components/ui/skeletons/TableRowsSkeleton.vue';
+import ConfirmDialog from '../components/ui/ConfirmDialog.vue';
+import ChatSessionListSkeleton from '../components/ui/skeletons/ChatSessionListSkeleton.vue';
+import ChatMessagesSkeleton from '../components/ui/skeletons/ChatMessagesSkeleton.vue';
+import CallsTableSkeleton from '../components/ui/skeletons/CallsTableSkeleton.vue';
+import CallTranscriptSkeleton from '../components/ui/skeletons/CallTranscriptSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
+import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useAuthStore } from '../stores/auth';
 import { useChatHistoryStore } from '../stores/chatHistory';
 import { useVoiceStore } from '../stores/voice';
 import type { AiTwin } from '../services/aiTwins';
+import * as chatSessionsApi from '../services/chatSessions';
 import type { ChatSessionRecord } from '../services/chatSessions';
 import type { VoiceSession } from '../services/voice';
+import { useT } from '../i18n/composables';
 
-const dateOptions = ['Today', 'Yesterday', 'Last 7 days', 'Last 30 days', 'Last month', 'Custom Date'];
+const { t } = useT();
+
+const dateOptions = computed(() => [
+  t('history.dateOptions.today', 'Today'),
+  t('history.dateOptions.yesterday', 'Yesterday'),
+  t('history.dateOptions.last7', 'Last 7 days'),
+  t('history.dateOptions.last30', 'Last 30 days'),
+  t('history.dateOptions.lastMonth', 'Last month'),
+  t('history.dateOptions.custom', 'Custom Date'),
+]);
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const leftCalendar = [28, 29, 30, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const rightCalendar = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
 const detailWaveformBars = [54, 72, 88, 64, 92, 46, 76, 82, 60, 78, 70, 92, 98, 74, 50, 66, 86, 44, 72, 82, 58, 74, 88, 54, 68, 38, 82, 76, 90, 48, 72, 60, 80, 44, 76, 62, 88, 54, 74, 92, 46, 66, 84, 58, 78, 52, 90, 64];
 
 const activeTab = ref<'Chats' | 'Calls'>('Chats');
-const selectedDate = ref('Today');
+const selectedDate = ref(t('history.dateOptions.today', 'Today'));
 const dateMenuOpen = ref(false);
 const filterPanelOpen = ref(false);
 const callDetailOpen = ref(false);
@@ -50,9 +70,9 @@ const chatSort = ref<'newest' | 'oldest'>('newest');
 
 const chatSearchOpen = ref(false);
 const chatSearchInput = ref('');
-const chatActionsMenuOpen = ref(false);
 const chatDeleteDialogOpen = ref(false);
 const chatToDeleteId = ref<string | null>(null);
+const mobileShowChatDetail = ref(false);
 
 const auth = useAuthStore();
 const voice = useVoiceStore();
@@ -68,6 +88,7 @@ const {
   selectedSessionId,
   messages: chatMessages,
   loadingMessages,
+  searchingMessages,
   messagesError,
   typeFilter,
   scopeFilter,
@@ -80,12 +101,31 @@ const {
 const composerDraft = ref('');
 const messagesScrollEl = ref<HTMLElement | null>(null);
 
+const isRecording = ref(false);
+const recordingSeconds = ref(0);
+const processingVoice = ref(false);
+let mediaRecorder: MediaRecorder | null = null;
+let recordedChunks: Blob[] = [];
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let recordingStream: MediaStream | null = null;
+let recordingCancelled = false;
+
+interface MessageAudioState {
+  loading: boolean;
+  playing: boolean;
+  url: string | null;
+  audio: HTMLAudioElement | null;
+  duration: number;
+  currentTime: number;
+}
+const assistantAudio = ref<Record<string, MessageAudioState>>({});
+
 const phoneInput = ref('');
 
 const pageSizes = [10, 25, 50] as const;
 const callerName = computed(() => auth.displayName);
 
-const showCalendar = computed(() => selectedDate.value === 'Custom Date');
+const showCalendar = computed(() => selectedDate.value === t('history.dateOptions.custom', 'Custom Date'));
 
 function chooseDate(option: string) {
   selectedDate.value = option;
@@ -95,31 +135,33 @@ const callDateFilter = ref('all');
 const callSort = ref('newest');
 const callLanguageFilter = ref('all');
 
-const dateFilterOptions = [
-  { value: 'all', label: 'All dates' },
-  { value: 'today', label: 'Today' },
-  { value: 'last7', label: 'Last 7 days' },
-  { value: 'last30', label: 'Last 30 days' },
-];
+const dateFilterOptions = computed(() => [
+  { value: 'all', label: t('history.filters.allDates', 'All dates') },
+  { value: 'today', label: t('history.dateOptions.today', 'Today') },
+  { value: 'last7', label: t('history.dateOptions.last7', 'Last 7 days') },
+  { value: 'last30', label: t('history.dateOptions.last30', 'Last 30 days') },
+]);
 
-const sortOptions = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'longest', label: 'Longest' },
-  { value: 'shortest', label: 'Shortest' },
-];
+const sortOptions = computed(() => [
+  { value: 'newest', label: t('history.filters.newest', 'Newest first') },
+  { value: 'oldest', label: t('history.filters.oldest', 'Oldest first') },
+  { value: 'longest', label: t('history.filters.longest', 'Longest') },
+  { value: 'shortest', label: t('history.filters.shortest', 'Shortest') },
+]);
 
-const chatSortOptions = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-];
+const chatSortOptions = computed(() => [
+  { value: 'newest', label: t('history.sortOptions.newestFirst', 'Newest first') },
+  { value: 'oldest', label: t('history.filters.oldest', 'Oldest first') },
+]);
 
+// TODO i18n: missing keys for channel filter labels (All channels, Chat, WhatsApp)
 const typeOptions = [
   { value: '', label: 'All channels' },
   { value: 'chat', label: 'Chat' },
   { value: 'whatsapp', label: 'WhatsApp' },
 ];
 
+// TODO i18n: missing keys for scope filter labels (My sessions, All users)
 const scopeOptions = [
   { value: 'me', label: 'My sessions' },
   { value: 'all', label: 'All users' },
@@ -169,7 +211,7 @@ const languageOptions = computed(() => {
     new Set(callSessions.value.map((s) => s.language).filter(Boolean))
   ).sort();
   return [
-    { value: 'all', label: 'All languages' },
+    { value: 'all', label: t('history.filters.allLanguages', 'All languages') },
     ...langs.map((l) => ({ value: l, label: l.toUpperCase() })),
   ];
 });
@@ -197,6 +239,10 @@ function sessionTitle(session: ChatSessionRecord | null | undefined): string {
 }
 
 function sessionPreview(session: ChatSessionRecord): string {
+  const last = session.lastMessage?.content?.replace(/\s+/g, ' ').trim();
+  if (last) {
+    return session.lastMessage?.role === 'user' ? `You: ${last}` : last;
+  }
   if (session.type === 'whatsapp') {
     return session.phoneNumber ? `WhatsApp · ${session.phoneNumber}` : 'WhatsApp';
   }
@@ -223,11 +269,9 @@ const sortedChatSessions = computed<ChatSessionRecord[]>(() => {
 
 const selectedChatSession = computed<ChatSessionRecord | null>(() => {
   if (!selectedSessionId.value) return null;
-  return (
-    sortedChatSessions.value.find((s) => s._key === selectedSessionId.value) ??
-    chatSessions.value.find((s) => s._key === selectedSessionId.value) ??
-    null
-  );
+  // Only sessions visible under current sidebar filters (e.g. twin); never fall back to
+  // unfiltered sessions or a stale session from another twin remains selected.
+  return sortedChatSessions.value.find((s) => s._key === selectedSessionId.value) ?? null;
 });
 
 const displayedSessions = computed<VoiceSession[]>(() => {
@@ -278,7 +322,13 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
 const sessionListDateFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const messageTimeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-
+const fullDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
 function formatSessionDate(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -294,13 +344,55 @@ function formatSessionTime(iso?: string | null): string {
 function formatSessionListDate(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : sessionListDateFormatter.format(d);
+  if (Number.isNaN(d.getTime())) return '';
+
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return timeFormatter.format(d);
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate();
+  if (isYesterday) return 'Yesterday';
+
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (diffDays > 0 && diffDays < 7) {
+    return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(d);
+  }
+
+  return sessionListDateFormatter.format(d);
 }
 
-function formatMessageTime(iso?: string | null): string {
+/** Clock time for sent-at; adds a short date when the message is not from today. */
+function formatMessageSentAt(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : messageTimeFormatter.format(d);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return messageTimeFormatter.format(d);
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
+  }).format(d);
+}
+
+function formatFullDateTime(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : fullDateTimeFormatter.format(d);
 }
 
 function formatDuration(seconds: number): string {
@@ -340,6 +432,7 @@ async function loadChats(): Promise<void> {
 }
 
 async function selectChatSession(sessionId: string): Promise<void> {
+  mobileShowChatDetail.value = true;
   if (selectedSessionId.value === sessionId) return;
   chatSearchOpen.value = false;
   chatSearchInput.value = '';
@@ -348,6 +441,12 @@ async function selectChatSession(sessionId: string): Promise<void> {
   } catch {
     // messagesError renders in the chat pane
   }
+}
+
+function backToChatList(): void {
+  mobileShowChatDetail.value = false;
+  chatSearchOpen.value = false;
+  chatSearchInput.value = '';
 }
 
 let messageSearchDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -375,10 +474,31 @@ function clearChatSearch(): void {
   chatHistory.searchMessages('').catch(() => {});
 }
 
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightMessage(content: string): string {
+  const safe = escapeHtml(content ?? '');
+  const term = chatSearchInput.value.trim();
+  if (!term) return safe;
+  const re = new RegExp(`(${escapeRegex(term)})`, 'gi');
+  const style = 'background-color:#bbf7d0;color:#166534;border-radius:3px;padding:0 2px;font-weight:600;';
+  return safe.replace(re, `<mark style="${style}">$1</mark>`);
+}
+
 function openChatDeleteDialog(): void {
-  if (!selectedSessionId.value) return;
+  if (!selectedChatSession.value || !selectedSessionId.value) return;
   chatToDeleteId.value = selectedSessionId.value;
-  chatActionsMenuOpen.value = false;
   chatDeleteDialogOpen.value = true;
 }
 
@@ -396,9 +516,10 @@ const composerDisabled = computed(
 );
 
 const composerPlaceholder = computed(() => {
+  // TODO i18n: missing keys for these composer placeholders
   if (!selectedChatSession.value) return 'Select a conversation to start typing...';
   if (selectedChatSession.value.type === 'whatsapp') return 'Replies in WhatsApp sessions are not available here.';
-  return 'Type your message here...';
+  return t('history.typeMessage', 'Type your message here...');
 });
 
 function scrollMessagesToBottom(): void {
@@ -428,10 +549,258 @@ function onComposerKeydown(e: KeyboardEvent): void {
   }
 }
 
+function pickRecorderMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
+}
+
+function formatRecordingClock(seconds: number): string {
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function stopRecordingStream(): void {
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+  if (recordingStream) {
+    recordingStream.getTracks().forEach((t) => t.stop());
+    recordingStream = null;
+  }
+}
+
+async function startRecording(): Promise<void> {
+  if (isRecording.value || composerDisabled.value) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    notify.error('Recording not supported', 'Your browser cannot record audio.');
+    return;
+  }
+  try {
+    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    const e = err as { name?: string; message?: string };
+    notify.error(
+      'Microphone unavailable',
+      e?.name === 'NotAllowedError'
+        ? 'Permission denied. Allow microphone access and try again.'
+        : e?.message ?? 'Could not access the microphone.',
+    );
+    return;
+  }
+
+  const mimeType = pickRecorderMimeType();
+  recordedChunks = [];
+  recordingCancelled = false;
+  try {
+    mediaRecorder = mimeType
+      ? new MediaRecorder(recordingStream, { mimeType })
+      : new MediaRecorder(recordingStream);
+  } catch {
+    stopRecordingStream();
+    notify.error('Recording failed', 'Could not initialize the recorder.');
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (event: BlobEvent) => {
+    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+  };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mediaRecorder?.mimeType || 'audio/webm' });
+    stopRecordingStream();
+    mediaRecorder = null;
+    isRecording.value = false;
+    if (recordingCancelled || blob.size === 0) {
+      recordingSeconds.value = 0;
+      return;
+    }
+    submitVoiceMessage(blob).finally(() => {
+      recordingSeconds.value = 0;
+    });
+  };
+
+  mediaRecorder.start();
+  isRecording.value = true;
+  recordingSeconds.value = 0;
+  playRecordStartChime();
+  recordingTimer = setInterval(() => {
+    recordingSeconds.value += 1;
+    if (recordingSeconds.value >= 600) stopRecording();
+  }, 1000);
+}
+
+function stopRecording(): void {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  playRecordStopChime();
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+  }
+}
+
+function cancelRecording(): void {
+  if (!mediaRecorder) return;
+  recordingCancelled = true;
+  playRecordStopChime();
+  try {
+    mediaRecorder.stop();
+  } catch {
+    stopRecordingStream();
+    isRecording.value = false;
+    recordingSeconds.value = 0;
+  }
+}
+
+async function submitVoiceMessage(blob: Blob): Promise<void> {
+  if (!selectedSessionId.value) return;
+  processingVoice.value = true;
+  try {
+    await chatHistory.sendVoice(blob);
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const message =
+      e?.response?.data?.message ??
+      (status === 413
+        ? 'Recording is too large (max 10 MB).'
+        : status === 502
+          ? 'Voice transcription service is temporarily unavailable.'
+          : e?.message ?? 'Could not send voice message.');
+    notify.error('Voice message failed', message);
+  } finally {
+    processingVoice.value = false;
+  }
+}
+
+function ensureAudioState(messageId: string): MessageAudioState {
+  if (!assistantAudio.value[messageId]) {
+    assistantAudio.value[messageId] = {
+      loading: false,
+      playing: false,
+      url: null,
+      audio: null,
+      duration: 0,
+      currentTime: 0,
+    };
+  }
+  return assistantAudio.value[messageId];
+}
+
+function preloadAudioDuration(messageId: string, audioUrl: string): void {
+  const state = ensureAudioState(messageId);
+  if (state.duration > 0 || state.audio) return;
+  const audio = new Audio();
+  audio.preload = 'metadata';
+  audio.src = audioUrl;
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+  });
+}
+
+function stopAllMessageAudio(): void {
+  Object.values(assistantAudio.value).forEach((state) => {
+    if (state.audio && state.playing) {
+      state.audio.pause();
+      state.playing = false;
+    }
+  });
+}
+
+function attachAudioListeners(state: MessageAudioState): void {
+  if (!state.audio) return;
+  const audio = state.audio;
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) state.duration = audio.duration;
+  });
+  audio.addEventListener('timeupdate', () => {
+    state.currentTime = audio.currentTime;
+  });
+  audio.addEventListener('ended', () => {
+    state.playing = false;
+    state.currentTime = 0;
+  });
+  audio.addEventListener('pause', () => {
+    if (audio.currentTime >= audio.duration) state.playing = false;
+  });
+}
+
+function formatAudioClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+async function toggleMessageAudio(message: { _key?: string; role: string; audioUrl?: string | null }): Promise<void> {
+  const messageId = message._key;
+  if (!messageId || !selectedSessionId.value) return;
+  const state = ensureAudioState(messageId);
+  if (state.playing && state.audio) {
+    state.audio.pause();
+    state.playing = false;
+    return;
+  }
+  stopAllMessageAudio();
+  try {
+    if (!state.url) {
+      const direct = message.audioUrl;
+      if (
+        direct &&
+        (direct.startsWith('blob:') ||
+          direct.startsWith('http') ||
+          direct.startsWith('data:') ||
+          direct.startsWith('/'))
+      ) {
+        state.url = direct;
+      } else {
+        state.loading = true;
+        const blob = await chatSessionsApi.fetchMessageAudio(selectedSessionId.value, messageId);
+        state.url = URL.createObjectURL(blob);
+      }
+    }
+    if (!state.audio) {
+      state.audio = new Audio(state.url);
+      attachAudioListeners(state);
+    }
+    await state.audio.play();
+    state.playing = true;
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const status = e?.response?.status;
+    const fallback =
+      status === 404
+        ? 'Audio for this message could not be found.'
+        : status === 502
+          ? 'Voice synthesis is temporarily unavailable.'
+          : e?.message ?? 'Could not play audio.';
+    notify.error('Playback failed', e?.response?.data?.message ?? fallback);
+  } finally {
+    state.loading = false;
+  }
+}
+
 watch(
   () => chatMessages.value.length,
-  () => scrollMessagesToBottom(),
+  () => {
+    scrollMessagesToBottom();
+    for (const message of chatMessages.value) {
+      if (message.role === 'user' && message._key && message.audioUrl) {
+        preloadAudioDuration(message._key, message.audioUrl);
+      }
+    }
+  },
+  { immediate: true },
 );
+
+watch(sortedChatSessions, (sessions) => {
+  const sid = selectedSessionId.value;
+  if (!sid || sessions.some((s) => s._key === sid)) return;
+  chatHistory.clearSelection();
+});
 
 watch(selectedSessionId, () => {
   composerDraft.value = '';
@@ -496,6 +865,28 @@ watch(activeTab, (tab) => {
 onMounted(() => {
   loadChats();
 });
+
+function cleanupAssistantAudio(): void {
+  Object.values(assistantAudio.value).forEach((state) => {
+    if (state.audio) {
+      state.audio.pause();
+      state.audio.src = '';
+    }
+    if (state.url) URL.revokeObjectURL(state.url);
+  });
+  assistantAudio.value = {};
+}
+
+watch(selectedSessionId, () => {
+  cleanupAssistantAudio();
+  if (isRecording.value) cancelRecording();
+});
+
+onBeforeUnmount(() => {
+  cleanupAssistantAudio();
+  if (isRecording.value) cancelRecording();
+  stopRecordingStream();
+});
 </script>
 
 <template>
@@ -503,7 +894,7 @@ onMounted(() => {
     <section class="h-full min-h-0 bg-white p-4 md:p-6">
       <div class="flex h-full min-h-[760px] flex-col gap-4 lg:min-h-[640px]">
         <header class="flex flex-col gap-4">
-          <h1 class="text-lg font-bold text-slate-900">Chat/Call History</h1>
+          <h1 class="text-lg font-bold text-slate-900">{{ t('history.title', 'Chat/Call History') }}</h1>
           <div class="inline-flex w-fit gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="History type">
             <button
               v-for="tab in ['Chats', 'Calls']"
@@ -515,18 +906,23 @@ onMounted(() => {
               ]"
               @click="activeTab = tab as 'Chats' | 'Calls'"
             >
-              {{ tab }}
+              {{ tab === 'Chats' ? t('history.tabs.chats', 'Chats') : t('history.tabs.calls', 'Calls') }}
             </button>
           </div>
         </header>
 
         <div v-if="activeTab === 'Chats'" class="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm lg:grid-cols-[minmax(250px,330px)_minmax(0,1fr)]">
-          <aside class="relative z-10 flex max-h-[330px] min-h-0 flex-col overflow-hidden border-b border-slate-200 bg-white lg:max-h-none lg:border-b-0 lg:border-r">
+          <aside
+            :class="[
+              'relative z-10 min-h-0 flex-col overflow-hidden bg-white lg:flex lg:max-h-none lg:border-b-0 lg:border-r',
+              mobileShowChatDetail ? 'hidden' : 'flex',
+            ]"
+          >
             <div class="relative z-20 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] gap-2 border-b border-slate-100 px-3 py-4">
               <BaseDropdown
                 v-model="twinFilterValue"
                 :options="twinFilterOptions"
-                placeholder="AI Twin"
+                :placeholder="t('history.aiTwin', 'AI Twin')"
                 width="w-full"
               />
               <BaseDropdown
@@ -622,7 +1018,7 @@ onMounted(() => {
               <BaseDropdown
                 v-model="chatSort"
                 :options="chatSortOptions"
-                placeholder="Sort By"
+                :placeholder="t('history.sortBy', 'Sort By')"
                 width="w-full"
               />
               <BaseDropdown
@@ -645,16 +1041,14 @@ onMounted(() => {
                 <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
                   <Icon :icon="Calendar03Icon" :size="15" /> {{ selectedDate }}
                 </span>
-                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">Unread only</span>
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">{{ t('history.unreadOnly', 'Unread only') }}</span>
               </div>
             </div>
 
             <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              <TableRowsSkeleton
+              <ChatSessionListSkeleton
                 v-if="chatsLoading && chatSessions.length === 0"
                 :rows="6"
-                height="3rem"
-                class="p-4"
               />
 
               <div v-else-if="chatsError" class="flex flex-col items-start gap-2 px-3 py-4 text-xs text-red-600">
@@ -664,48 +1058,88 @@ onMounted(() => {
                   class="rounded-full border border-red-200 px-3 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
                   @click="loadChats"
                 >
-                  Retry
+                  {{ t('common.retry', 'Retry') }}
                 </button>
               </div>
 
               <div v-else-if="sortedChatSessions.length === 0" class="grid flex-1 place-items-center px-3 py-8">
+                <!-- TODO i18n: missing keys for 'No chats yet' and its description -->
                 <EmptyState
                   :icon="BubbleChatIcon"
-                  :title="chatSessions.length === 0 ? 'No chats yet' : 'No matches'"
+                  :title="chatSessions.length === 0 ? 'No chats yet' : t('history.noMatchesTitle', 'No matches')"
                   :description="chatSessions.length === 0
                     ? 'Conversations with your AI Twins will appear here.'
-                    : 'No conversations match the current filters.'"
+                    : t('history.noMatchesBody', 'No calls match the current filters.')"
                 />
               </div>
 
-              <div v-else class="p-2">
+              <div v-else class="space-y-1 p-2">
                 <button
                   v-for="item in sortedChatSessions"
                   :key="item._key"
                   type="button"
                   :class="[
-                    'flex w-full items-center gap-2.5 rounded-lg p-2.5 transition hover:bg-ieee-50',
-                    item._key === selectedSessionId && 'bg-ieee-50',
+                    'group relative flex w-full items-start gap-3 overflow-hidden rounded-xl border p-2.5 text-left transition',
+                    item._key === selectedSessionId
+                      ? 'border-ieee-200 bg-ieee-50/70 shadow-sm'
+                      : 'border-transparent hover:border-slate-200 hover:bg-slate-50',
                   ]"
                   @click="selectChatSession(item._key)"
                 >
+                  <span
+                    aria-hidden="true"
+                    :class="[
+                      'absolute left-0 top-2 bottom-2 w-1 rounded-full transition',
+                      item._key === selectedSessionId ? 'bg-ieee-700' : 'bg-transparent',
+                    ]"
+                  />
                   <BaseAvatar :src="sessionAvatar(item)" :name="sessionTitle(item)" size="sm" />
-                  <span class="min-w-0 flex-1 text-left">
-                    <span class="block truncate text-sm font-semibold text-slate-900">{{ sessionTitle(item) }}</span>
-                    <span class="block truncate text-xs text-slate-500">{{ sessionPreview(item) }}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="flex items-center justify-between gap-2">
+                      <span class="truncate text-sm font-semibold text-slate-900">{{ sessionTitle(item) }}</span>
+                      <time class="shrink-0 text-[11px] text-slate-400">
+                        {{ formatSessionListDate(item.updatedAt || item.createdAt) }}
+                      </time>
+                    </span>
+                    <span class="mt-0.5 flex items-center gap-1.5">
+                      <span
+                        :class="[
+                          'inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold',
+                          item.type === 'whatsapp'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-ieee-50 text-ieee-700',
+                        ]"
+                      >
+                        <Icon :icon="BubbleChatIcon" :size="10" />
+                        {{ item.type === 'whatsapp' ? 'WhatsApp' : 'Chat' }}
+                      </span>
+                      <span class="min-w-0 truncate text-xs text-slate-500">{{ sessionPreview(item) }}</span>
+                    </span>
                   </span>
-                  <time class="text-[11px] shrink-0 text-slate-400">{{ formatSessionListDate(item.updatedAt || item.createdAt) }}</time>
                 </button>
               </div>
             </div>
           </aside>
 
-          <article class="flex min-h-0 min-w-0 flex-col bg-white">
+          <article
+            :class="[
+              'min-h-0 min-w-0 flex-col bg-white lg:flex',
+              mobileShowChatDetail ? 'flex' : 'hidden',
+            ]"
+          >
             <header v-if="selectedChatSession" class="relative flex items-center justify-between gap-3 border-b border-neutral-200 bg-white/95 px-4 py-3">
-              <div class="flex items-center gap-3">
+              <div class="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  class="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-ieee-800 lg:hidden"
+                  aria-label="Back to conversations"
+                  @click="backToChatList"
+                >
+                  <Icon :icon="ArrowLeft01Icon" :size="18" />
+                </button>
                 <BaseAvatar :src="sessionAvatar(selectedChatSession)" :name="sessionTitle(selectedChatSession)" size="sm" badge="online" />
-                <div>
-                  <h2 class="text-sm font-bold text-slate-700">{{ sessionTitle(selectedChatSession) }}</h2>
+                <div class="min-w-0">
+                  <h2 class="truncate text-sm font-bold text-slate-700">{{ sessionTitle(selectedChatSession) }}</h2>
                   <p class="mt-0.5 text-[11px] text-slate-400">
                     {{ selectedChatSession.type === 'whatsapp' ? 'WhatsApp conversation' : 'AI Twin conversation' }}
                   </p>
@@ -725,26 +1159,14 @@ onMounted(() => {
                 </button>
                 <button
                   type="button"
-                  class="grid h-9 w-9 place-items-center rounded-md transition hover:bg-white hover:text-ieee-800"
-                  aria-label="Conversation actions"
-                  @click="chatActionsMenuOpen = !chatActionsMenuOpen"
+                  class="grid h-9 w-9 place-items-center rounded-md text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Delete conversation"
+                  title="Delete conversation"
+                  :disabled="!selectedChatSession"
+                  @click="openChatDeleteDialog"
                 >
-                  <Icon :icon="MoreVerticalIcon" :size="19" />
+                  <Icon :icon="Delete02Icon" :size="19" />
                 </button>
-                <div
-                  v-if="chatActionsMenuOpen"
-                  class="absolute right-0 top-full z-30 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
-                  @mouseleave="chatActionsMenuOpen = false"
-                >
-                  <button
-                    type="button"
-                    class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                    @click="openChatDeleteDialog"
-                  >
-                    <Icon :icon="Delete02Icon" :size="16" />
-                    Delete conversation
-                  </button>
-                </div>
               </div>
             </header>
 
@@ -758,8 +1180,9 @@ onMounted(() => {
                   class="h-9 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
                   @input="onChatSearchInput"
                 />
+                <span v-if="searchingMessages" class="search-spinner" aria-hidden="true" />
                 <button
-                  v-if="chatSearchInput"
+                  v-if="chatSearchInput && !searchingMessages"
                   type="button"
                   class="text-slate-400 transition hover:text-slate-700"
                   aria-label="Clear search"
@@ -778,9 +1201,7 @@ onMounted(() => {
             </div>
 
             <div ref="messagesScrollEl" class="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-7">
-              <div v-if="loadingMessages" class="space-y-3">
-                <TableRowsSkeleton :rows="5" height="2.5rem" />
-              </div>
+              <ChatMessagesSkeleton v-if="loadingMessages" />
 
               <div
                 v-else-if="messagesError"
@@ -793,7 +1214,7 @@ onMounted(() => {
                   class="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
                   @click="selectChatSession(selectedSessionId)"
                 >
-                  Retry
+                  {{ t('common.retry', 'Retry') }}
                 </button>
               </div>
 
@@ -829,50 +1250,204 @@ onMounted(() => {
                   />
                   <div :class="['flex max-w-[86%] flex-col gap-1 md:max-w-[430px]', message.role === 'user' && 'items-end']">
                     <div
+                      v-if="message.role === 'user' && message.audioUrl && message._key"
+                      class="flex items-center gap-3 rounded-2xl rounded-tr-md bg-ieee-700 px-3 py-2.5 text-white shadow-sm"
+                      :title="message.createdAt ? formatFullDateTime(message.createdAt) : undefined"
+                    >
+                      <button
+                        type="button"
+                        class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
+                        :aria-label="assistantAudio[message._key]?.playing ? 'Pause voice note' : 'Play voice note'"
+                        :disabled="assistantAudio[message._key]?.loading"
+                        @click="toggleMessageAudio(message)"
+                      >
+                        <span v-if="assistantAudio[message._key]?.loading" class="typing-dots typing-dots--sm"><span /><span /><span /></span>
+                        <Icon
+                          v-else-if="assistantAudio[message._key]?.playing"
+                          :icon="PauseIcon"
+                          :size="16"
+                        />
+                        <Icon v-else :icon="PlayIcon" :size="16" />
+                      </button>
+                      <span class="flex h-7 flex-1 items-center gap-0.5" aria-hidden="true">
+                        <span
+                          v-for="(bar, barIdx) in detailWaveformBars.slice(0, 32)"
+                          :key="barIdx"
+                          class="w-0.5 rounded-full bg-white/60"
+                          :style="{ height: `${Math.max(20, bar * 0.6)}%` }"
+                        />
+                      </span>
+                      <span class="shrink-0 text-[11px] font-semibold tabular-nums text-white/80">
+                        {{ formatAudioClock(assistantAudio[message._key]?.duration ?? 0) || '0:00' }}
+                      </span>
+                    </div>
+                    <div
+                      v-else
                       :class="[
                         'rounded-2xl px-3.5 py-3 text-xs leading-relaxed whitespace-pre-wrap',
                         message.role === 'user'
                           ? 'rounded-tr-md bg-ieee-700 text-white shadow-sm'
                           : 'rounded-tl-md bg-white text-slate-600 shadow-sm',
                       ]"
+                      :title="message.createdAt ? formatFullDateTime(message.createdAt) : undefined"
                     >
-                      <p>{{ message.content }}</p>
+                      <p v-html="highlightMessage(message.content)" />
                     </div>
-                    <time v-if="message.createdAt" class="text-[11px] text-slate-400">{{ formatMessageTime(message.createdAt) }}</time>
+                    <div
+                      :class="[
+                        'flex items-center gap-2',
+                        message.role === 'user' && 'justify-end',
+                      ]"
+                    >
+                      <time
+                        v-if="message.createdAt"
+                        class="text-[11px] tabular-nums text-slate-500"
+                        :datetime="message.createdAt"
+                        :title="formatFullDateTime(message.createdAt)"
+                      >{{ formatMessageSentAt(message.createdAt) }}</time>
+                      <button
+                        v-if="message.role === 'assistant' && message._key"
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition hover:bg-ieee-50 hover:text-ieee-800 disabled:opacity-50"
+                        :aria-label="assistantAudio[message._key]?.playing ? 'Pause audio' : 'Play audio'"
+                        :disabled="assistantAudio[message._key]?.loading"
+                        @click="toggleMessageAudio(message)"
+                      >
+                        <span v-if="assistantAudio[message._key]?.loading" class="typing-dots typing-dots--sm"><span /><span /><span /></span>
+                        <Icon
+                          v-else-if="assistantAudio[message._key]?.playing"
+                          :icon="PauseIcon"
+                          :size="12"
+                        />
+                        <Icon v-else :icon="VolumeHighIcon" :size="12" />
+                        {{ assistantAudio[message._key]?.playing ? 'Playing' : 'Listen' }}
+                      </button>
+                    </div>
                   </div>
                   <BaseAvatar v-if="message.role === 'user'" :name="callerName" size="xs" />
+                </div>
+
+                <div
+                  v-if="processingVoice"
+                  class="mb-5 flex items-start justify-end gap-2.5"
+                  aria-live="polite"
+                  aria-label="Transcribing voice message"
+                >
+                  <div class="flex flex-col items-end gap-1">
+                    <div class="rounded-2xl rounded-tr-md bg-ieee-700 px-3.5 py-3 text-white shadow-sm">
+                      <span class="typing-dots typing-dots--invert" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </div>
+                    <span class="text-[11px] text-slate-400">Transcribing your voice…</span>
+                  </div>
+                  <BaseAvatar :name="callerName" size="xs" />
+                </div>
+
+                <div
+                  v-else-if="sendingChat"
+                  class="mb-5 flex items-start gap-2.5"
+                  aria-live="polite"
+                  aria-label="Assistant is typing"
+                >
+                  <BaseAvatar
+                    :src="sessionAvatar(selectedChatSession)"
+                    :name="sessionTitle(selectedChatSession)"
+                    size="xs"
+                  />
+                  <div class="flex flex-col gap-1">
+                    <div class="rounded-2xl rounded-tl-md bg-white px-3.5 py-3 shadow-sm">
+                      <span class="typing-dots" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </div>
+                    <span class="text-[11px] text-slate-400">
+                      {{ sessionTitle(selectedChatSession) }} is typing…
+                    </span>
+                  </div>
                 </div>
               </template>
             </div>
 
             <footer class="flex gap-3 border-t border-slate-200 bg-white/80 px-3 py-3 md:px-4 md:pb-4">
-              <label class="flex min-w-0 flex-1 items-center gap-2.5 rounded-full bg-slate-100 px-4">
-                <input
-                  v-model="composerDraft"
-                  type="text"
-                  :placeholder="composerPlaceholder"
-                  :disabled="composerDisabled"
-                  class="h-11 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
-                  @keydown="onComposerKeydown"
-                />
+              <template v-if="!isRecording">
+                <label class="flex min-w-0 flex-1 items-center gap-2.5 rounded-full bg-slate-100 px-4">
+                  <input
+                    v-model="composerDraft"
+                    type="text"
+                    :placeholder="composerPlaceholder"
+                    :disabled="composerDisabled"
+                    class="h-11 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                    @keydown="onComposerKeydown"
+                  />
+                  <button
+                    type="button"
+                    class="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-ieee-800 disabled:opacity-40"
+                    aria-label="Record voice message"
+                    :disabled="composerDisabled"
+                    @click="startRecording"
+                  >
+                    <Icon :icon="Mic01Icon" :size="18" />
+                  </button>
+                </label>
                 <button
                   type="button"
-                  class="text-slate-500 hover:text-ieee-800 disabled:opacity-40"
-                  aria-label="Attach file"
-                  disabled
+                  class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Send message"
+                  :disabled="composerDisabled || !composerDraft.trim()"
+                  @click="sendComposerMessage"
                 >
-                  <Icon :icon="Attachment01Icon" :size="18" />
+                  <Icon :icon="ArrowRight01Icon" :size="21" />
                 </button>
-              </label>
-              <button
-                type="button"
-                class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Send message"
-                :disabled="composerDisabled || !composerDraft.trim()"
-                @click="sendComposerMessage"
+              </template>
+
+              <div
+                v-else
+                class="recorder-bar flex min-w-0 flex-1 items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm"
+                role="status"
+                aria-live="polite"
               >
-                <Icon :icon="ArrowRight01Icon" :size="21" />
-              </button>
+                <span class="recorder-led" aria-hidden="true">
+                  <span class="recorder-led__core" />
+                  <span class="recorder-led__halo" />
+                </span>
+
+                <span class="shrink-0 text-xs font-semibold tabular-nums text-slate-700">
+                  {{ formatRecordingClock(recordingSeconds) }}
+                </span>
+
+                <span class="recorder-wave flex h-7 flex-1 items-center justify-center gap-[3px]" aria-hidden="true">
+                  <span
+                    v-for="i in 48"
+                    :key="i"
+                    class="recorder-wave__bar"
+                    :style="{ animationDelay: `${(i % 8) * 140}ms` }"
+                  />
+                </span>
+
+                <button
+                  type="button"
+                  class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Cancel recording"
+                  @click="cancelRecording"
+                >
+                  <Icon :icon="Cancel01Icon" :size="14" />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-10 items-center gap-2 rounded-full bg-ieee-700 px-4 text-xs font-semibold text-white shadow-md transition hover:bg-ieee-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700"
+                  aria-label="Stop and send recording"
+                  @click="stopRecording"
+                >
+                  <Icon :icon="SentIcon" :size="16" />
+                  Send
+                </button>
+              </div>
             </footer>
           </article>
         </div>
@@ -882,36 +1457,34 @@ onMounted(() => {
             <BaseDropdown
               v-model="callDateFilter"
               :options="dateFilterOptions"
-              placeholder="Select Date"
+              :placeholder="t('history.selectDate', 'Select Date')"
             />
             <BaseDropdown
               v-model="callSort"
               :options="sortOptions"
-              placeholder="Sort By"
+              :placeholder="t('history.sortBy', 'Sort By')"
             />
             <BaseDropdown
               v-model="callLanguageFilter"
               :options="languageOptions"
-              placeholder="Language"
+              :placeholder="t('history.columns.language', 'Language')"
             />
           </div>
 
           <div class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             <div class="grid grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_1.1fr_40px] border-b border-neutral-100 bg-neutral-50 px-5 py-3 text-xs font-semibold text-slate-500">
-              <span>Language</span>
-              <span>Date</span>
-              <span>Start Time</span>
-              <span>End Time</span>
-              <span>Duration</span>
-              <span>Caller Name</span>
+              <span>{{ t('history.columns.language', 'Language') }}</span>
+              <span>{{ t('history.columns.date', 'Date') }}</span>
+              <span>{{ t('history.columns.startTime', 'Start Time') }}</span>
+              <span>{{ t('history.columns.endTime', 'End Time') }}</span>
+              <span>{{ t('history.columns.duration', 'Duration') }}</span>
+              <span>{{ t('history.columns.callerName', 'Caller Name') }}</span>
               <span />
             </div>
             <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
-              <TableRowsSkeleton
+              <CallsTableSkeleton
                 v-if="callsLoading && callSessions.length === 0"
-                :rows="5"
-                height="3rem"
-                class="p-4"
+                :rows="6"
               />
 
               <div
@@ -924,17 +1497,17 @@ onMounted(() => {
                   class="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
                   @click="loadCalls"
                 >
-                  Retry
+                  {{ t('common.retry', 'Retry') }}
                 </button>
               </div>
 
               <div v-else-if="displayedSessions.length === 0" class="px-5 py-12">
                 <EmptyState
                   :icon="CallEnd01Icon"
-                  :title="callSessions.length === 0 ? 'No calls yet' : 'No matches'"
+                  :title="callSessions.length === 0 ? t('history.noCallsTitle', 'No calls yet') : t('history.noMatchesTitle', 'No matches')"
                   :description="callSessions.length === 0
-                    ? 'Voice calls you make will appear here once they finish.'
-                    : 'No calls match the current filters.'"
+                    ? t('history.noCallsBody', 'Voice calls you make will appear here once they finish.')
+                    : t('history.noMatchesBody', 'No calls match the current filters.')"
                 />
               </div>
 
@@ -964,7 +1537,7 @@ onMounted(() => {
             </div>
             <footer class="flex items-center justify-end gap-6 border-t border-neutral-100 px-5 py-3 text-sm text-slate-500">
               <label class="inline-flex items-center gap-2">
-                <span>Rows per page:</span>
+                <span>{{ t('history.rowsPerPage', 'Rows per page:') }}</span>
                 <select
                   :value="callsLimit"
                   class="rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm font-medium text-slate-700 outline-none transition hover:border-neutral-300 focus:border-ieee-700"
@@ -1009,7 +1582,7 @@ onMounted(() => {
               <span class="text-2xl leading-none">&times;</span>
             </button>
             <header>
-              <h2 class="text-base font-semibold text-slate-950">Call Details</h2>
+              <h2 class="text-base font-semibold text-slate-950">{{ t('history.callDetails', 'Call Details') }}</h2>
               <div class="mt-4 flex items-center gap-2">
                 <div class="flex h-12 flex-1 items-center gap-1" aria-hidden="true">
                   <span
@@ -1024,7 +1597,7 @@ onMounted(() => {
               <div class="mt-3 flex items-center justify-between">
                 <button type="button" class="inline-flex h-7 items-center gap-2 rounded-full bg-ieee-700 px-3 text-xs font-semibold text-white">
                   <Icon :icon="PlayIcon" :size="11" />
-                  Play
+                  {{ t('history.play', 'Play') }}
                 </button>
                 <button type="button" class="grid h-7 w-7 place-items-center rounded-full bg-ieee-700 text-white" aria-label="Download recording">
                   <Icon :icon="Download04Icon" :size="14" />
@@ -1038,23 +1611,18 @@ onMounted(() => {
                 :class="['border-b-2 py-2', detailMode === 'transcript' ? 'border-ieee-700 text-slate-950' : 'border-transparent text-slate-500']"
                 @click="detailMode = 'transcript'"
               >
-                Transcript
+                {{ t('history.transcript', 'Transcript') }}
               </button>
               <button
                 type="button"
                 :class="['border-b-2 py-2', detailMode === 'summary' ? 'border-ieee-700 text-slate-950' : 'border-transparent text-slate-500']"
                 @click="detailMode = 'summary'"
               >
-                Summary
+                {{ t('history.summary', 'Summary') }}
               </button>
             </div>
 
-            <TableRowsSkeleton
-              v-if="loadingDetail"
-              :rows="4"
-              height="1.5rem"
-              class="py-4"
-            />
+            <CallTranscriptSkeleton v-if="loadingDetail" />
             <div v-else-if="detailError" class="py-6 text-sm text-red-600">{{ detailError }}</div>
             <template v-else>
               <div v-if="detailMode === 'transcript'" class="min-h-[260px] py-4 text-sm leading-relaxed">
@@ -1089,65 +1657,140 @@ onMounted(() => {
             >
               <span class="text-2xl leading-none">&times;</span>
             </button>
-            <h2 class="text-lg font-bold text-slate-950">Are you sure you want to delete this call recording?</h2>
+            <h2 class="text-lg font-bold text-slate-950">{{ t('history.deleteCallTitle', 'Are you sure you want to delete this call recording?') }}</h2>
             <p class="mt-4 text-sm leading-relaxed text-red-500">
-              If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.
+              {{ t('history.deleteCallBody', `If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.`) }}
             </p>
             <footer class="mt-6 flex justify-end gap-3">
               <button type="button" class="h-10 rounded-full bg-red-500 px-5 text-sm font-semibold text-white hover:bg-red-600" @click="deleteDialogOpen = false">
-                Delete
+                {{ t('common.delete', 'Delete') }}
               </button>
             </footer>
           </section>
         </div>
       </Teleport>
 
-      <Teleport to="body">
-        <div
-          v-if="chatDeleteDialogOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center p-6"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            class="absolute inset-0 bg-neutral-900/35 backdrop-blur-sm"
-            @click="cancelChatDelete"
-          />
-          <section class="relative z-10 w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
-            <button
-              type="button"
-              class="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950 disabled:opacity-40"
-              aria-label="Close delete dialog"
-              :disabled="deletingChat"
-              @click="cancelChatDelete"
-            >
-              <span class="text-2xl leading-none">&times;</span>
-            </button>
-            <h2 class="text-lg font-bold text-slate-950">Delete this conversation?</h2>
-            <p class="mt-4 text-sm leading-relaxed text-red-500">
-              The chat session and all of its messages will be permanently removed. This action cannot be undone.
-            </p>
-            <footer class="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                class="h-10 rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                :disabled="deletingChat"
-                @click="cancelChatDelete"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                class="h-10 rounded-full bg-red-500 px-5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-40"
-                :disabled="deletingChat"
-                @click="confirmChatDelete"
-              >
-                {{ deletingChat ? 'Deleting...' : 'Delete' }}
-              </button>
-            </footer>
-          </section>
-        </div>
-      </Teleport>
+      <!-- TODO i18n: missing keys for "Delete this conversation?" and its description -->
+      <ConfirmDialog
+        v-model:open="chatDeleteDialogOpen"
+        title="Delete this conversation?"
+        description="The chat session and all of its messages will be permanently removed. This action cannot be undone."
+        :confirm-label="t('common.delete', 'Delete')"
+        :loading="deletingChat"
+        @confirm="confirmChatDelete"
+        @cancel="cancelChatDelete"
+      />
     </section>
   </DashboardLayout>
 </template>
+
+<style scoped>
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.typing-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #94a3b8;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing-dots--sm span {
+  width: 4px;
+  height: 4px;
+}
+.typing-dots--invert span {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* ===== Voice recorder ===== */
+.recorder-led {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.recorder-led__core {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+  animation: recorder-led-pulse 1.4s ease-in-out infinite;
+}
+.recorder-led__halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.45);
+  animation: recorder-led-halo 1.8s ease-out infinite;
+}
+@keyframes recorder-led-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.8); }
+}
+@keyframes recorder-led-halo {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.recorder-wave {
+  min-width: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+.recorder-wave__bar {
+  flex: 0 0 auto;
+  width: 3px;
+  border-radius: 2px;
+  background: #94a3b8;
+  opacity: 0.55;
+  animation: recorder-wave-bar 1.8s ease-in-out infinite;
+  height: 22%;
+}
+@keyframes recorder-wave-bar {
+  0%, 100% { height: 18%; opacity: 0.4; }
+  25%      { height: 45%; opacity: 0.7; }
+  50%      { height: 28%; opacity: 0.55; }
+  75%      { height: 55%; opacity: 0.8; }
+}
+
+.search-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #1d4ed8;
+  animation: search-spinner-rotate 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes search-spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recorder-led__core,
+  .recorder-led__halo,
+  .recorder-wave__bar,
+  .search-spinner {
+    animation: none;
+  }
+  .recorder-wave__bar {
+    height: 50%;
+    opacity: 0.7;
+  }
+}
+</style>

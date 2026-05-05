@@ -19,6 +19,9 @@ import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
 import { changePasswordSchema, type ChangePasswordInput } from '../lib/validation/schemas';
+import { useT } from '../i18n/composables';
+
+const { t } = useT();
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -58,12 +61,13 @@ function formatDob(value?: string): string {
 
 const profileFields = computed(() => {
   const pid = user.value?.personalIdentification ?? {};
+  const dash = t('common.notProvided', '—');
   return [
-    { label: 'Full name', value: pid.fullName || '—' },
-    { label: 'Date of birth', value: formatDob(pid.dob) },
-    { label: 'Gender', value: pid.gender || '—' },
-    { label: 'Nationality', value: pid.nationality || '—' },
-    { label: 'Marital status', value: pid.maritalStatus || '—' },
+    { label: t('auth.profile.fields.fullName', 'Full name'), value: pid.fullName || dash },
+    { label: t('auth.profile.fields.dob', 'Date of birth'), value: formatDob(pid.dob) },
+    { label: t('auth.profile.fields.gender', 'Gender'), value: pid.gender || dash },
+    { label: t('auth.profile.fields.nationality', 'Nationality'), value: pid.nationality || dash },
+    { label: t('auth.profile.fields.marital', 'Marital status'), value: pid.maritalStatus || dash },
   ];
 });
 
@@ -98,14 +102,14 @@ async function onSubmit() {
   if (!validate(form)) return;
   try {
     await auth.changePassword(form.currentPassword, form.newPassword);
-    sileo.success({ title: 'Password updated successfully.' });
+    sileo.success({ title: t('auth.profile.successToast', 'Password updated successfully.') });
     clearForm();
   } catch (err) {
     const status = (err as { response?: { status?: number } })?.response?.status;
     if (status === 401) {
-      currentPasswordError.value = 'Current password is incorrect.';
+      currentPasswordError.value = t('auth.profile.currentIncorrect', 'Current password is incorrect.');
     } else {
-      sileo.error({ title: auth.error ?? 'Failed to change password' });
+      sileo.error({ title: auth.error ?? t('auth.profile.failedToast', 'Failed to change password') });
     }
   }
 }
@@ -117,7 +121,7 @@ async function onSubmit() {
       <button
         type="button"
         class="inline-flex items-center gap-1 rounded-full bg-surface-muted p-2 text-text-muted transition hover:bg-surface-subtle hover:text-text"
-        aria-label="Go back"
+        :aria-label="t('common.goBack', 'Go back')"
         @click="router.back()"
       >
         <Icon :icon="ArrowLeft01Icon" :size="18" />
@@ -136,7 +140,7 @@ async function onSubmit() {
               <h1 class="truncate text-2xl font-semibold text-slate-900">{{ displayName }}</h1>
               <p class="mt-1 flex items-center gap-2 text-sm text-slate-500">
                 <Icon :icon="Mail02Icon" :size="14" />
-                <span class="truncate">{{ user?.email ?? '—' }}</span>
+                <span class="truncate">{{ user?.email ?? t('common.notProvided', '—') }}</span>
               </p>
 
               <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -152,13 +156,13 @@ async function onSubmit() {
                   class="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700"
                 >
                   <Icon :icon="CheckmarkCircle02Icon" :size="12" />
-                  Email verified
+                  {{ t('auth.profile.emailVerified', 'Email verified') }}
                 </span>
                 <span
                   v-else-if="user"
                   class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
                 >
-                  Email not verified
+                  {{ t('auth.profile.emailNotVerified', 'Email not verified') }}
                 </span>
               </div>
             </template>
@@ -169,8 +173,8 @@ async function onSubmit() {
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <article class="rounded-2xl border border-border bg-surface p-6 shadow-card">
           <header class="mb-5">
-            <h2 class="text-lg font-semibold text-slate-900">Personal information</h2>
-            <p class="mt-1 text-sm text-slate-500">Details associated with your account.</p>
+            <h2 class="text-lg font-semibold text-slate-900">{{ t('auth.profile.personalTitle', 'Personal information') }}</h2>
+            <p class="mt-1 text-sm text-slate-500">{{ t('auth.profile.personalSubtitle', 'Details associated with your account.') }}</p>
           </header>
 
           <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -189,15 +193,15 @@ async function onSubmit() {
           </dl>
 
           <p class="mt-5 text-xs text-slate-400">
-            Need to update these? Reach out to your administrator.
+            {{ t('auth.profile.adminFootnote', 'Need to update these? Reach out to your administrator.') }}
           </p>
         </article>
 
         <article class="rounded-2xl border border-border bg-surface p-6 shadow-card">
           <header class="mb-5">
-            <h2 class="text-lg font-semibold text-slate-900">Security</h2>
+            <h2 class="text-lg font-semibold text-slate-900">{{ t('auth.profile.securityTitle', 'Security') }}</h2>
             <p class="mt-1 text-sm text-slate-500">
-              Change the password used to sign in to your account.
+              {{ t('auth.profile.securitySubtitle', 'Change the password used to sign in to your account.') }}
             </p>
           </header>
 
@@ -206,8 +210,8 @@ async function onSubmit() {
               id="currentPassword"
               v-model="form.currentPassword"
               :type="currentVisible ? 'text' : 'password'"
-              label="Current password"
-              placeholder="Enter your current password"
+              :label="t('auth.profile.currentPasswordLabel', 'Current password')"
+              :placeholder="t('auth.profile.currentPasswordPlaceholder', 'Enter your current password')"
               autocomplete="current-password"
               required
               rounded="full"
@@ -230,8 +234,8 @@ async function onSubmit() {
               id="newPassword"
               v-model="form.newPassword"
               :type="newVisible ? 'text' : 'password'"
-              label="New password"
-              placeholder="At least 8 characters"
+              :label="t('auth.profile.newPasswordLabel', 'New password')"
+              :placeholder="t('auth.profile.newPasswordPlaceholder', 'At least 8 characters')"
               autocomplete="new-password"
               required
               rounded="full"
@@ -254,8 +258,8 @@ async function onSubmit() {
               id="confirmPassword"
               v-model="form.confirmPassword"
               :type="confirmVisible ? 'text' : 'password'"
-              label="Confirm new password"
-              placeholder="Re-enter your new password"
+              :label="t('auth.profile.confirmLabel', 'Confirm new password')"
+              :placeholder="t('auth.profile.confirmPlaceholder', 'Re-enter your new password')"
               autocomplete="new-password"
               required
               rounded="full"
@@ -275,9 +279,9 @@ async function onSubmit() {
             </BaseInput>
 
             <div class="flex justify-end gap-3 pt-1">
-              <BaseButton variant="ghost" rounded="full" @click="clearForm">Cancel</BaseButton>
+              <BaseButton variant="ghost" rounded="full" @click="clearForm">{{ t('common.cancel', 'Cancel') }}</BaseButton>
               <BaseButton type="submit" variant="primary" rounded="full" :loading="auth.loading">
-                Update password
+                {{ t('auth.profile.updateBtn', 'Update password') }}
               </BaseButton>
             </div>
           </form>

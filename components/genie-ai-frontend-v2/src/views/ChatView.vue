@@ -822,7 +822,7 @@ function formatTime(d: Date): string {
 
           <div
             v-else
-            class="recorder-bar flex items-center gap-3 rounded-3xl px-3 py-2 ring-1 ring-red-200/70"
+            class="recorder-bar flex items-center gap-3 rounded-3xl border border-border bg-surface px-3 py-2 shadow-card"
             role="status"
             aria-live="polite"
           >
@@ -831,20 +831,22 @@ function formatTime(d: Date): string {
               <span class="recorder-led__halo" />
             </span>
 
-            <span class="flex shrink-0 flex-col leading-tight">
-              <span class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600/80">REC</span>
-              <span class="text-body font-semibold tabular-nums text-red-700">
-                {{ formatRecordingClock(recordingSeconds) }}
-              </span>
+            <span class="shrink-0 text-body font-semibold tabular-nums text-text">
+              {{ formatRecordingClock(recordingSeconds) }}
             </span>
 
-            <span class="recorder-wave flex h-9 flex-1 items-center gap-[3px] px-1" aria-hidden="true">
-              <span v-for="i in 22" :key="i" class="recorder-wave__bar" :style="{ animationDelay: `${(i % 6) * 80}ms` }" />
+            <span class="recorder-wave flex h-7 flex-1 items-center justify-center gap-[3px]" aria-hidden="true">
+              <span
+                v-for="i in 48"
+                :key="i"
+                class="recorder-wave__bar"
+                :style="{ animationDelay: `${(i % 8) * 140}ms` }"
+              />
             </span>
 
             <button
               type="button"
-              class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-caption font-semibold text-red-600 transition hover:bg-white/70"
+              class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-caption font-semibold text-text-muted transition hover:bg-surface-muted hover:text-text"
               aria-label="Cancel recording"
               @click="cancelRecording"
             >
@@ -853,7 +855,7 @@ function formatTime(d: Date): string {
             </button>
             <button
               type="button"
-              class="group inline-flex h-11 items-center gap-2 rounded-full bg-red-500 px-4 text-body font-semibold text-white shadow-md transition hover:bg-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+              class="group inline-flex h-11 items-center gap-2 rounded-full bg-accent px-4 text-body font-semibold text-text-inverse shadow-md transition hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               aria-label="Stop and send recording"
               @click="stopRecording"
             >
@@ -896,62 +898,57 @@ function formatTime(d: Date): string {
 }
 
 /* ===== Voice recorder ===== */
-.recorder-bar {
-  background:
-    radial-gradient(120% 120% at 0% 50%, rgba(254, 226, 226, 0.85) 0%, rgba(254, 242, 242, 0.6) 60%, rgba(255, 255, 255, 0.4) 100%);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 24px -16px rgba(239, 68, 68, 0.4);
-}
 .recorder-led {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   margin-left: 4px;
   flex-shrink: 0;
 }
 .recorder-led__core {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 9999px;
   background: #ef4444;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
   animation: recorder-led-pulse 1.4s ease-in-out infinite;
 }
 .recorder-led__halo {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: rgba(239, 68, 68, 0.55);
-  animation: recorder-led-halo 1.4s ease-out infinite;
+  background: rgba(239, 68, 68, 0.45);
+  animation: recorder-led-halo 1.8s ease-out infinite;
 }
 @keyframes recorder-led-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(0.8); }
 }
 @keyframes recorder-led-halo {
-  0% { transform: scale(0.8); opacity: 0.6; }
-  100% { transform: scale(2.4); opacity: 0; }
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
 }
 .recorder-wave {
   min-width: 0;
+  flex: 1 1 0%;
   overflow: hidden;
 }
 .recorder-wave__bar {
-  display: inline-block;
+  flex: 0 0 auto;
   width: 3px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #f87171, #ef4444);
-  animation: recorder-wave-bar 0.9s ease-in-out infinite;
-  height: 30%;
+  background: var(--color-text-muted, #9ca3af);
+  opacity: 0.55;
+  animation: recorder-wave-bar 1.8s ease-in-out infinite;
+  height: 22%;
 }
 @keyframes recorder-wave-bar {
-  0%, 100% { height: 18%; opacity: 0.55; }
-  20%      { height: 80%; opacity: 1; }
-  40%      { height: 35%; opacity: 0.7; }
-  60%      { height: 95%; opacity: 1; }
-  80%      { height: 50%; opacity: 0.85; }
+  0%, 100% { height: 18%; opacity: 0.4; }
+  25%      { height: 45%; opacity: 0.7; }
+  50%      { height: 28%; opacity: 0.55; }
+  75%      { height: 55%; opacity: 0.8; }
 }
 
 @media (prefers-reduced-motion: reduce) {

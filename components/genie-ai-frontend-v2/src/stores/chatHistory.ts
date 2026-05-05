@@ -128,6 +128,11 @@ export const useChatHistoryStore = defineStore('chatHistory', {
       const sessionId = this.selectedSessionId;
       if (!sessionId) return;
 
+      // TODO: backend `/voice-messages` does not yet return a playback URL,
+      // so we fall back to a local blob URL so the user can hear their own
+      // recording immediately after sending.
+      const localAudioUrl = URL.createObjectURL(audio);
+
       this.sending = true;
       try {
         const res = await api.sendVoiceMessage(sessionId, audio, opts);
@@ -136,7 +141,7 @@ export const useChatHistoryStore = defineStore('chatHistory', {
           _key: res.userMessage.id,
           role: 'user',
           content: res.userMessage.text,
-          audioUrl: res.userMessage.audioUrl ?? null,
+          audioUrl: res.userMessage.audioUrl ?? localAudioUrl,
           createdAt: now,
         });
         this.messages.push({

@@ -18,13 +18,17 @@ import {
   PauseIcon,
   PlayIcon,
   Search01Icon,
+  SentIcon,
   StopCircleIcon,
   VolumeHighIcon,
 } from '@hugeicons/core-free-icons';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue';
-import TableRowsSkeleton from '../components/ui/skeletons/TableRowsSkeleton.vue';
+import ChatSessionListSkeleton from '../components/ui/skeletons/ChatSessionListSkeleton.vue';
+import ChatMessagesSkeleton from '../components/ui/skeletons/ChatMessagesSkeleton.vue';
+import CallsTableSkeleton from '../components/ui/skeletons/CallsTableSkeleton.vue';
+import CallTranscriptSkeleton from '../components/ui/skeletons/CallTranscriptSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import DashboardLayout from '../layouts/DashboardLayout.vue';
@@ -247,11 +251,9 @@ const sortedChatSessions = computed<ChatSessionRecord[]>(() => {
 
 const selectedChatSession = computed<ChatSessionRecord | null>(() => {
   if (!selectedSessionId.value) return null;
-  return (
-    sortedChatSessions.value.find((s) => s._key === selectedSessionId.value) ??
-    chatSessions.value.find((s) => s._key === selectedSessionId.value) ??
-    null
-  );
+  // Only sessions visible under current sidebar filters (e.g. twin); never fall back to
+  // unfiltered sessions or a stale session from another twin remains selected.
+  return sortedChatSessions.value.find((s) => s._key === selectedSessionId.value) ?? null;
 });
 
 const displayedSessions = computed<VoiceSession[]>(() => {
@@ -448,7 +450,7 @@ function clearChatSearch(): void {
 }
 
 function openChatDeleteDialog(): void {
-  if (!selectedSessionId.value) return;
+  if (!selectedChatSession.value || !selectedSessionId.value) return;
   chatToDeleteId.value = selectedSessionId.value;
   chatDeleteDialogOpen.value = true;
 }
@@ -674,7 +676,7 @@ function formatAudioClock(seconds: number): string {
   return `${m}:${s}`;
 }
 
-async function toggleMessageAudio(message: { _key?: string; role: string }): Promise<void> {
+async function toggleMessageAudio(message: { _key?: string; role: string; audioUrl?: string | null }): Promise<void> {
   const messageId = message._key;
   if (!messageId || !selectedSessionId.value) return;
   const state = ensureAudioState(messageId);
@@ -686,9 +688,14 @@ async function toggleMessageAudio(message: { _key?: string; role: string }): Pro
   stopAllMessageAudio();
   try {
     if (!state.url) {
-      state.loading = true;
-      const blob = await chatSessionsApi.fetchMessageAudio(selectedSessionId.value, messageId);
-      state.url = URL.createObjectURL(blob);
+      const direct = message.audioUrl;
+      if (direct && (direct.startsWith('blob:') || direct.startsWith('http') || direct.startsWith('data:'))) {
+        state.url = direct;
+      } else {
+        state.loading = true;
+        const blob = await chatSessionsApi.fetchMessageAudio(selectedSessionId.value, messageId);
+        state.url = URL.createObjectURL(blob);
+      }
     }
     if (!state.audio) {
       state.audio = new Audio(state.url);
@@ -715,6 +722,12 @@ watch(
   () => chatMessages.value.length,
   () => scrollMessagesToBottom(),
 );
+
+watch(sortedChatSessions, (sessions) => {
+  const sid = selectedSessionId.value;
+  if (!sid || sessions.some((s) => s._key === sid)) return;
+  chatHistory.clearSelection();
+});
 
 watch(selectedSessionId, () => {
   composerDraft.value = '';
@@ -955,11 +968,9 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              <TableRowsSkeleton
+              <ChatSessionListSkeleton
                 v-if="chatsLoading && chatSessions.length === 0"
                 :rows="6"
-                height="3rem"
-                class="p-4"
               />
 
               <div v-else-if="chatsError" class="flex flex-col items-start gap-2 px-3 py-4 text-xs text-red-600">
@@ -1059,7 +1070,7 @@ onBeforeUnmount(() => {
                   class="grid h-9 w-9 place-items-center rounded-md text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label="Delete conversation"
                   title="Delete conversation"
-                  :disabled="!selectedSessionId"
+                  :disabled="!selectedChatSession"
                   @click="openChatDeleteDialog"
                 >
                   <Icon :icon="Delete02Icon" :size="19" />
@@ -1097,9 +1108,7 @@ onBeforeUnmount(() => {
             </div>
 
             <div ref="messagesScrollEl" class="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-7">
-              <div v-if="loadingMessages" class="space-y-3">
-                <TableRowsSkeleton :rows="5" height="2.5rem" />
-              </div>
+              <ChatMessagesSkeleton v-if="loadingMessages" />
 
               <div
                 v-else-if="messagesError"
@@ -1226,7 +1235,26 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div
-                  v-if="sendingChat"
+                  v-if="processingVoice"
+                  class="mb-5 flex items-start justify-end gap-2.5"
+                  aria-live="polite"
+                  aria-label="Transcribing voice message"
+                >
+                  <div class="flex flex-col items-end gap-1">
+                    <div class="rounded-2xl rounded-tr-md bg-ieee-700 px-3.5 py-3 text-white shadow-sm">
+                      <span class="typing-dots typing-dots--invert" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </div>
+                    <span class="text-[11px] text-slate-400">Transcribing your voice…</span>
+                  </div>
+                  <BaseAvatar :name="callerName" size="xs" />
+                </div>
+
+                <div
+                  v-else-if="sendingChat"
                   class="mb-5 flex items-start gap-2.5"
                   aria-live="polite"
                   aria-label="Assistant is typing"
@@ -1245,7 +1273,7 @@ onBeforeUnmount(() => {
                       </span>
                     </div>
                     <span class="text-[11px] text-slate-400">
-                      {{ processingVoice ? 'Transcribing your voice…' : `${sessionTitle(selectedChatSession)} is typing…` }}
+                      {{ sessionTitle(selectedChatSession) }} is typing…
                     </span>
                   </div>
                 </div>
@@ -1286,32 +1314,45 @@ onBeforeUnmount(() => {
 
               <div
                 v-else
-                class="flex min-w-0 flex-1 items-center gap-3 rounded-full bg-red-50 px-4 py-1 ring-1 ring-red-100"
+                class="recorder-bar flex min-w-0 flex-1 items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm"
                 role="status"
                 aria-live="polite"
               >
-                <span class="relative grid h-8 w-8 place-items-center rounded-full bg-red-500 text-white">
-                  <span class="absolute h-8 w-8 animate-ping rounded-full bg-red-500/40" aria-hidden="true" />
-                  <Icon :icon="Mic01Icon" :size="16" />
+                <span class="recorder-led" aria-hidden="true">
+                  <span class="recorder-led__core" />
+                  <span class="recorder-led__halo" />
                 </span>
-                <span class="flex-1 text-xs font-semibold text-red-700">
-                  Recording… <span class="ml-1 tabular-nums text-red-500">{{ formatRecordingClock(recordingSeconds) }}</span>
+
+                <span class="shrink-0 text-xs font-semibold tabular-nums text-slate-700">
+                  {{ formatRecordingClock(recordingSeconds) }}
                 </span>
+
+                <span class="recorder-wave flex h-7 flex-1 items-center justify-center gap-[3px]" aria-hidden="true">
+                  <span
+                    v-for="i in 48"
+                    :key="i"
+                    class="recorder-wave__bar"
+                    :style="{ animationDelay: `${(i % 8) * 140}ms` }"
+                  />
+                </span>
+
                 <button
                   type="button"
-                  class="grid h-9 w-9 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-700"
+                  class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                   aria-label="Cancel recording"
                   @click="cancelRecording"
                 >
-                  <Icon :icon="Cancel01Icon" :size="16" />
+                  <Icon :icon="Cancel01Icon" :size="14" />
+                  Cancel
                 </button>
                 <button
                   type="button"
-                  class="grid h-11 w-11 place-items-center rounded-full bg-red-500 text-white transition hover:bg-red-600"
+                  class="inline-flex h-10 items-center gap-2 rounded-full bg-ieee-700 px-4 text-xs font-semibold text-white shadow-md transition hover:bg-ieee-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700"
                   aria-label="Stop and send recording"
                   @click="stopRecording"
                 >
-                  <Icon :icon="StopCircleIcon" :size="20" />
+                  <Icon :icon="SentIcon" :size="16" />
+                  Send
                 </button>
               </div>
             </footer>
@@ -1348,11 +1389,9 @@ onBeforeUnmount(() => {
               <span />
             </div>
             <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
-              <TableRowsSkeleton
+              <CallsTableSkeleton
                 v-if="callsLoading && callSessions.length === 0"
-                :rows="5"
-                height="3rem"
-                class="p-4"
+                :rows="6"
               />
 
               <div
@@ -1490,12 +1529,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <TableRowsSkeleton
-              v-if="loadingDetail"
-              :rows="4"
-              height="1.5rem"
-              class="py-4"
-            />
+            <CallTranscriptSkeleton v-if="loadingDetail" />
             <div v-else-if="detailError" class="py-6 text-sm text-red-600">{{ detailError }}</div>
             <template v-else>
               <div v-if="detailMode === 'transcript'" class="min-h-[260px] py-4 text-sm leading-relaxed">
@@ -1574,11 +1608,80 @@ onBeforeUnmount(() => {
   width: 4px;
   height: 4px;
 }
+.typing-dots--invert span {
+  background-color: rgba(255, 255, 255, 0.85);
+}
 .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
 
 @keyframes typing-bounce {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
   40% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* ===== Voice recorder ===== */
+.recorder-led {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.recorder-led__core {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+  animation: recorder-led-pulse 1.4s ease-in-out infinite;
+}
+.recorder-led__halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.45);
+  animation: recorder-led-halo 1.8s ease-out infinite;
+}
+@keyframes recorder-led-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.8); }
+}
+@keyframes recorder-led-halo {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.recorder-wave {
+  min-width: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+.recorder-wave__bar {
+  flex: 0 0 auto;
+  width: 3px;
+  border-radius: 2px;
+  background: #94a3b8;
+  opacity: 0.55;
+  animation: recorder-wave-bar 1.8s ease-in-out infinite;
+  height: 22%;
+}
+@keyframes recorder-wave-bar {
+  0%, 100% { height: 18%; opacity: 0.4; }
+  25%      { height: 45%; opacity: 0.7; }
+  50%      { height: 28%; opacity: 0.55; }
+  75%      { height: 55%; opacity: 0.8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recorder-led__core,
+  .recorder-led__halo,
+  .recorder-wave__bar {
+    animation: none;
+  }
+  .recorder-wave__bar {
+    height: 50%;
+    opacity: 0.7;
+  }
 }
 </style>

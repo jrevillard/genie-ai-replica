@@ -895,6 +895,11 @@ module.exports = (aiTwinService) => {
    *       404: { description: Twin not found }
    *
    * /ai-twins/{twinId}/instructions:
+   *   parameters:
+   *     - in: path
+   *       name: twinId
+   *       required: true
+   *       schema: { type: string }
    *   get:
    *     summary: Get admin instructions for a twin
    *     tags: [AI Twins]

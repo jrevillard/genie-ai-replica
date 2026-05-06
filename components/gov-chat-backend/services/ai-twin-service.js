@@ -21,6 +21,14 @@ const DEFAULT_PERSONALITY = Object.freeze({
   languageStyle: 'slang',
   responseLength: 'medium',
 });
+const MAX_INSTRUCTIONS = 100;
+const MAX_INSTRUCTION_LENGTH = 1000;
+const SUGGESTED_INSTRUCTIONS = Object.freeze([
+  'Be concise and practical in your answers.',
+  'When possible, answer with step-by-step actions.',
+  'Ask a clarifying question if the request is ambiguous.',
+  'State uncertainty clearly when you are not fully sure.',
+]);
 
 /**
  * Map a twin's personality settings to a single instruction string that gets
@@ -61,6 +69,43 @@ function buildPersonalityPromptFragment(personality) {
     `- Tone: ${STYLE_COPY[style]}.`,
     `- Length: ${LENGTH_COPY[length]}.`,
   ].join('\n');
+}
+
+/**
+ * Build a prompt fragment from admin-defined twin instructions.
+ * Each instruction is treated as a strict system-level directive.
+ *
+ * @param {string[] | null | undefined} instructions
+ * @returns {string}
+ */
+function buildInstructionsPromptFragment(instructions) {
+  if (!Array.isArray(instructions) || instructions.length === 0) {
+    return '';
+  }
+  const lines = instructions
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)
+    .slice(0, MAX_INSTRUCTIONS);
+  if (lines.length === 0) {
+    return '';
+  }
+  return [
+    'Additional admin instructions (apply these together with your existing system rules):',
+    ...lines.map((item) => `- ${item}`),
+  ].join('\n');
+}
+
+/**
+ * Compose the full AI twin prompt fragment. Personality comes first, and
+ * admin instructions are appended at the end by design.
+ *
+ * @param {{ personality?: object, instructions?: string[] } | null | undefined} twin
+ * @returns {string}
+ */
+function buildTwinPromptFragment(twin) {
+  const personality = buildPersonalityPromptFragment(twin && twin.personality);
+  const instructions = buildInstructionsPromptFragment(twin && twin.instructions);
+  return [personality, instructions].filter(Boolean).join('\n\n');
 }
 
 /** @typedef {import('arangojs').DocumentCollection} DocumentCollection */
@@ -149,6 +194,7 @@ class AiTwinService {
         isDefault: true,
         twinNumber: DEFAULT_TWIN_NUMBER,
         linkedKbFileIds: [],
+        instructions: [],
         createdAt: now,
         updatedAt: now,
       };
@@ -184,6 +230,7 @@ class AiTwinService {
       twinNumber: isDefault ? (doc.twinNumber || DEFAULT_TWIN_NUMBER) : '',
       linkedKbFileIds,
       personality: this._readPersonality(doc),
+      instructions: this._readInstructions(doc),
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -204,6 +251,53 @@ class AiTwinService {
         ? raw.responseLength
         : DEFAULT_PERSONALITY.responseLength,
     };
+  }
+
+  /**
+   * Read and normalize stored twin instructions.
+   */
+  _readInstructions(doc) {
+    const raw = doc && doc.instructions;
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw) {
+      if (typeof item !== 'string') continue;
+      const s = item.trim();
+      if (!s) continue;
+      if (s.length > MAX_INSTRUCTION_LENGTH) continue;
+      out.push(s);
+      if (out.length >= MAX_INSTRUCTIONS) break;
+    }
+    return out;
+  }
+
+  /**
+   * Validate and normalize a replacement instructions array.
+   */
+  _normalizeInstructions(instructions) {
+    if (!Array.isArray(instructions)) {
+      throw new ValidationError('instructions must be an array of strings');
+    }
+    if (instructions.length > MAX_INSTRUCTIONS) {
+      throw new ValidationError(`instructions cannot have more than ${MAX_INSTRUCTIONS} items`);
+    }
+    const out = [];
+    for (const item of instructions) {
+      if (typeof item !== 'string') {
+        throw new ValidationError('instructions must contain only strings');
+      }
+      const s = item.trim();
+      if (!s) {
+        continue;
+      }
+      if (s.length > MAX_INSTRUCTION_LENGTH) {
+        throw new ValidationError(
+          `each instruction must be at most ${MAX_INSTRUCTION_LENGTH} characters`
+        );
+      }
+      out.push(s);
+    }
+    return out;
   }
 
   /** Validate and normalize an optional greeting (chat or call). */
@@ -375,6 +469,7 @@ class AiTwinService {
       isDefault: false,
       twinNumber: '',
       linkedKbFileIds: [],
+      instructions: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -479,6 +574,14 @@ class AiTwinService {
   }
 
   /**
+   * Read a twin's admin instructions (array of strings).
+   */
+  async getInstructions(key, ownerId) {
+    const twin = await this.getTwinByKey(key, { ownerId });
+    return twin.instructions;
+  }
+
+  /**
    * Patch a twin's personality. Partial updates supported — the object is
    * shallow-merged with existing values, so a client can change one field
    * at a time without resending the other.
@@ -515,6 +618,39 @@ class AiTwinService {
       updatedAt: new Date().toISOString(),
     });
     return merged;
+  }
+
+  /**
+   * Replace a twin's admin instructions with a new array.
+   * @returns {Promise<string[]>}
+   */
+  async updateInstructions(key, instructions, ownerId) {
+    const normalized = this._normalizeInstructions(instructions);
+    await this.getTwinByKey(key, { ownerId }); // 404 if missing or not yours
+    await this.collection.update(key, {
+      instructions: normalized,
+      updatedAt: new Date().toISOString(),
+    });
+    return normalized;
+  }
+
+  getSuggestedInstructions() {
+    return [...SUGGESTED_INSTRUCTIONS];
+  }
+
+  /**
+   * Return suggested instructions minus those already configured on this twin.
+   */
+  async getSuggestedInstructionsForTwin(key, ownerId) {
+    const twin = await this.getTwinByKey(key, { ownerId });
+    const existing = new Set(
+      (Array.isArray(twin.instructions) ? twin.instructions : [])
+        .map((item) => (typeof item === 'string' ? item.trim().toLowerCase() : ''))
+        .filter(Boolean)
+    );
+    return SUGGESTED_INSTRUCTIONS.filter(
+      (item) => !existing.has(String(item).trim().toLowerCase())
+    );
   }
 
   /**
@@ -796,6 +932,9 @@ const aiTwinService = new AiTwinService();
 // derive the personality directive without recreating the wording.
 module.exports = aiTwinService;
 module.exports.buildPersonalityPromptFragment = buildPersonalityPromptFragment;
+module.exports.buildInstructionsPromptFragment = buildInstructionsPromptFragment;
+module.exports.buildTwinPromptFragment = buildTwinPromptFragment;
 module.exports.LANGUAGE_STYLES = LANGUAGE_STYLES;
 module.exports.RESPONSE_LENGTHS = RESPONSE_LENGTHS;
 module.exports.DEFAULT_PERSONALITY = DEFAULT_PERSONALITY;
+module.exports.SUGGESTED_INSTRUCTIONS = SUGGESTED_INSTRUCTIONS;

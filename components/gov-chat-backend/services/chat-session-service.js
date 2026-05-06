@@ -236,18 +236,20 @@ class ChatSessionService {
     const maxH = historyLimit();
     const history = await this.getRecentMessagesChronological(sessionId, maxH);
 
-    // Personality directive: prepend the twin's tone+length instructions as a
-    // system message so the LLM follows them. Best-effort — if we can't load
-    // the twin (legacy session, twin deleted) we just skip the directive.
+    // Twin directives: prepend one system message that includes personality and
+    // admin instructions. Instructions are appended after personality inside
+    // the same fragment so they sit at the end of the generated prompt text.
+    // Best-effort — if we can't load the twin (legacy session, twin deleted)
+    // we skip the directive.
     const opeaMessages = [];
     if (session.twinId) {
       try {
         const aiTwinService = require('./ai-twin-service');
-        const personality = await aiTwinService.getPersonality(session.twinId);
-        const directive = aiTwinService.buildPersonalityPromptFragment(personality);
+        const twin = await aiTwinService.getTwinByKey(session.twinId);
+        const directive = aiTwinService.buildTwinPromptFragment(twin);
         if (directive) opeaMessages.push({ role: 'system', content: directive });
       } catch (e) {
-        logger.warn(`personality lookup failed for session ${sessionId}: ${e.message}`);
+        logger.warn(`twin prompt lookup failed for session ${sessionId}: ${e.message}`);
       }
     }
     opeaMessages.push(...history, { role: 'user', content: t });

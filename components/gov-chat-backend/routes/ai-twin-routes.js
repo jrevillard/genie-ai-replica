@@ -101,6 +101,10 @@ const personalitySchema = Joi.object({
     'object.min': 'at least one of languageStyle, responseLength is required',
   });
 
+const instructionsReplaceSchema = Joi.object({
+  instructions: Joi.array().items(Joi.string().trim().max(1000)).max(100).required(),
+});
+
 
 /** Assign KB files: either `fileId` or `fileIds` (document-repository file_id values). */
 const assignKbBodySchema = Joi.alternatives().try(
@@ -841,6 +845,105 @@ module.exports = (aiTwinService) => {
       }
       logger.error(`ai-twin get personality: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /ai-twins/{twinId}/suggested-instructions:
+   *   get:
+   *     summary: List suggested instructions not already configured on this twin
+   *     tags: [AI Twins]
+   *     security: [ { bearerAuth: [] } ]
+   *     parameters:
+   *       - in: path
+   *         name: twinId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: Suggested instruction strings filtered by twin config
+   *       404: { description: Twin not found }
+   *
+   * /ai-twins/{twinId}/instructions:
+   *   get:
+   *     summary: Get admin instructions for a twin
+   *     tags: [AI Twins]
+   *     security: [ { bearerAuth: [] } ]
+   *     responses:
+   *       200: { description: Instruction list }
+   *       404: { description: Twin not found }
+   *   post:
+   *     summary: Replace admin instructions for a twin
+   *     tags: [AI Twins]
+   *     security: [ { bearerAuth: [] } ]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [instructions]
+   *             properties:
+   *               instructions:
+   *                 type: array
+   *                 items: { type: string, maxLength: 1000 }
+   *                 maxItems: 100
+   *     responses:
+   *       200: { description: Updated instruction list }
+   *       400: { description: Validation error }
+   *       404: { description: Twin not found }
+   */
+  router.get('/:twinId/suggested-instructions', async (req, res) => {
+    try {
+      const instructions = await aiTwinService.getSuggestedInstructionsForTwin(
+        req.params.twinId,
+        ownerIdFromReq(req)
+      );
+      res.json({ instructions });
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return res.status(404).json({ message: error.message });
+      }
+      logger.error(`ai-twin suggested instructions: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  router.get('/:twinId/instructions', async (req, res) => {
+    try {
+      const instructions = await aiTwinService.getInstructions(req.params.twinId, ownerIdFromReq(req));
+      res.json({ instructions });
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return res.status(404).json({ message: error.message });
+      }
+      logger.error(`ai-twin get instructions: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  router.post('/:twinId/instructions', adminOnly, async (req, res) => {
+    const { value, error } = instructionsReplaceSchema.validate(req.body || {}, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ message: error.details[0].message });
+    }
+    try {
+      const instructions = await aiTwinService.updateInstructions(
+        req.params.twinId,
+        value.instructions,
+        ownerIdFromReq(req)
+      );
+      res.json({ instructions });
+    } catch (error_) {
+      if (error_.statusCode === 404) {
+        return res.status(404).json({ message: error_.message });
+      }
+      if (error_.statusCode === 400) {
+        return res.status(400).json({ message: error_.message });
+      }
+      logger.error(`ai-twin post instructions: ${error_.message}`, { stack: error_.stack });
+      res.status(500).json({ message: error_.message });
     }
   });
 

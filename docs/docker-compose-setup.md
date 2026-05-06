@@ -232,7 +232,10 @@ See Section 9 of the `env` template for all available variables. Key ones:
 | `KEYCLOAK_REALM` | `genie` | Realm name |
 | `KEYCLOAK_CLIENT_ID` | `genie-app` | OIDC client ID |
 | `KEYCLOAK_URL` | `https://<domain>/auth` | Public URL (auto-set from NGINX_PUBLIC_DOMAIN) |
+| `NGINX_HTTPS_PORT` | `443` | HTTPS port — included in Keycloak redirect URIs and web origins via `KC_PUBLIC_ORIGIN` |
 | `KEYCLOAK_ADDITIONAL_REALMS` | — | Additional realms (JSON array of realm names, optional) |
+
+**Redirect URIs and web origins** are auto-derived from `NGINX_PUBLIC_DOMAIN` + `NGINX_HTTPS_PORT` into `KC_PUBLIC_ORIGIN` (e.g., `https://localhost:8443`). If you use a non-standard HTTPS port, set `NGINX_HTTPS_PORT` in `.env` — no manual Keycloak configuration needed.
 
 For external IdP integration (Google, Microsoft, etc.), see [External IdP Integration Guide](keycloak-admin-guide.md).
 

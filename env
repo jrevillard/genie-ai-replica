@@ -317,6 +317,11 @@ HUGGING_FACE_HUB_TOKEN=
 # REQUIRED — app will not start without this value
 KEYCLOAK_URL=https://localhost/auth
 
+# Keycloak redirect URIs and web origins are auto-derived from NGINX_PUBLIC_DOMAIN + NGINX_HTTPS_PORT:
+#   KC_PUBLIC_ORIGIN=https://<NGINX_PUBLIC_DOMAIN>[:<NGINX_HTTPS_PORT>]
+# This is set internally in docker-compose.yaml (keycloak-config service).
+# If you use a non-standard HTTPS port (e.g. 8443), set NGINX_HTTPS_PORT in .env — no other changes needed.
+
 # Keycloak realm name
 # REQUIRED — app will not start without this value
 KEYCLOAK_REALM=genie

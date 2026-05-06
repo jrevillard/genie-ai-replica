@@ -117,13 +117,11 @@ clients:
   - clientId: account
     enabled: true
     webOrigins:
-      - http://$(env:NGINX_PUBLIC_DOMAIN)
-      - https://$(env:NGINX_PUBLIC_DOMAIN)
+      - $(env:KC_PUBLIC_ORIGIN)
   - clientId: account-console
     enabled: true
     webOrigins:
-      - http://$(env:NGINX_PUBLIC_DOMAIN)
-      - https://$(env:NGINX_PUBLIC_DOMAIN)
+      - $(env:KC_PUBLIC_ORIGIN)
 
   - clientId: $(env:KC_CLIENT_ID)
     enabled: true
@@ -138,11 +136,9 @@ clients:
       client.credentials.use.refresh.token: false
       require.pushed.authorization.requests: false
     redirectUris:
-      - http://$(env:NGINX_PUBLIC_DOMAIN)/*
-      - https://$(env:NGINX_PUBLIC_DOMAIN)/*
+      - $(env:KC_PUBLIC_ORIGIN)/*
     webOrigins:
-      - http://$(env:NGINX_PUBLIC_DOMAIN)
-      - https://$(env:NGINX_PUBLIC_DOMAIN)
+      - $(env:KC_PUBLIC_ORIGIN)
 
   # Service account for GENIE.AI backend → Keycloak Admin API proxy
   # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations.

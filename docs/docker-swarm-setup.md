@@ -483,6 +483,8 @@ After verifying deployment, set up user accounts and roles. All user management 
 
 Select the **genie** realm (not `master`) after logging in.
 
+**Redirect URIs and web origins** are auto-derived from `NGINX_PUBLIC_DOMAIN` + `NGINX_HTTPS_PORT` into `KC_PUBLIC_ORIGIN` (e.g., `https://gateway.example.com:8443`). If you use a non-standard HTTPS port, set `NGINX_HTTPS_PORT` in `.env` — no manual Keycloak configuration needed.
+
 **GENIE realm admin user** (separate from master admin, used for frontend login):
 - **Username**: `genie-admin` (default, configurable via `GENIE_ADMIN_USERNAME`)
 - **Password**: `<GENIE_ADMIN_PASSWORD>` from `.env`

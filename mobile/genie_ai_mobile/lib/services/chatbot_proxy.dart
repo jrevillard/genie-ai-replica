@@ -1,7 +1,5 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/services/api_service.dart';
 
 class ChatbotProxy {
@@ -51,48 +49,6 @@ class ChatbotProxy {
       debugPrint("[CHATBOT_PROXY] Query error: $e");
       rethrow;
     }
-  }
-
-  /// Submits a streaming query via SSE using the existing http package.
-  /// POST with JSON body, reads streamed response line by line.
-  /// Returns an [http.StreamedResponse] — caller must consume the stream.
-  Future<http.StreamedResponse> submitQueryStream({
-    required String sessionId,
-    required List<Map<String, dynamic>> messages,
-    required String userId,
-    String? categoryId,
-    String? contextLabels,
-    String? language,
-  }) async {
-    final Map<String, dynamic> payload = {
-      'sessionId': sessionId,
-      'messages': messages,
-      'userId': userId,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-    };
-
-    if (language != null && language.isNotEmpty) {
-      payload['language'] = language;
-    }
-
-    if ((categoryId != null && categoryId.isNotEmpty) ||
-        (contextLabels != null && contextLabels.isNotEmpty)) {
-      payload['context'] = {
-        if (categoryId != null) 'categoryId': categoryId,
-        if (contextLabels != null) 'labels': contextLabels,
-      };
-      if (categoryId != null) payload['categoryId'] = categoryId;
-    }
-
-    final uri = Uri.parse('${_api.baseUrl}/queries/stream');
-    final request = http.Request('POST', uri);
-    request.headers.addAll(_api.getHeaders());
-    request.body = jsonEncode(payload);
-
-    debugPrint("[CHATBOT_PROXY] Submitting streaming query to /queries/stream");
-
-    final streamedResponse = await request.send();
-    return streamedResponse;
   }
 
   /// Submits feedback for a specific query response

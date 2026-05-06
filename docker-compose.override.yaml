@@ -1,0 +1,7 @@
+# Local-only overrides for development.
+# This file is gitignored and only loaded automatically by `docker compose up`.
+# Used to expose internal-only services to the host for local testing (e.g., ngrok).
+services:
+  whatsapp-service:
+    ports:
+      - "8000:8000"

@@ -47,7 +47,7 @@ class EmailService {
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@hud.email';
 
     // App name for email templates
-    this.appName = process.env.APP_NAME || 'Huduma AI';
+    this.appName = process.env.APP_NAME || 'GENIE.AI';
 
     // Default frontend URL for links, normalized
     this.defaultFrontendUrl = this.normalizeBaseUrl(process.env.FRONTEND_URL || 'http://localhost:8080'); // Modified
@@ -348,37 +348,88 @@ The ${this.appName} Team
       `,
       html: `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>${this.appName} Email Verification</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify your email - ${this.appName}</title>
   <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { text-align: center; margin-bottom: 20px; }
-    .header img { max-width: 150px; }
-    .content { background: #f9f9f9; padding: 20px; border-radius: 5px; }
-    .button { display: inline-block; padding: 10px 20px; background: #4E97D1; color: white !important; text-decoration: none; border-radius: 5px; }
-    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #777; }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #eaf2fb;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #1a2a3a;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(13, 71, 161, 0.12);
+    }
+    .header {
+      background: linear-gradient(135deg, #1976d2 0%, #0d47a1 100%);
+      padding: 24px;
+      text-align: center;
+    }
+    .header .brand-name {
+      color: #ffffff;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .content {
+      padding: 32px;
+    }
+    .content p {
+      margin: 0 0 16px;
+      color: #334155;
+    }
+    .content .highlight {
+      color: #1976d2;
+      font-weight: 500;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #1976d2;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .button:hover {
+      background-color: #0d47a1;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>${this.appName}</h1>
-    </div>
-    <div class="content">
-      <p>Hello ${userName || ''},</p>
-      <p>Thank you for registering with ${this.appName}. Please verify your email address by using the following token:</p>
-      <p><strong>${token}</strong></p>
-      <p>Alternatively, you can click the button below:</p>
-      <p><a href="${verificationLink}" class="button">Verify Email</a></p>
-      <p>This link will expire in 24 hours.</p>
-    </div>
-    <div class="footer">
-      <p>Thank you,<br>The ${this.appName} Team</p>
-    </div>
-  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding: 24px 0;">
+        <table class="email-container" role="presentation" width="600" cellpadding="0" cellspacing="0">
+          <tr>
+            <td class="header">
+              <div class="brand-name">${this.appName}</div>
+            </td>
+          </tr>
+          <tr>
+            <td class="content">
+              <p>Someone has created a ${this.appName} account with this email address. If this was you, click the link below to verify your email address</p>
+              <p><a href="${verificationLink}" class="button">Verify email</a></p>
+              <p>This link will expire within <span class="highlight">24 hours</span>.</p>
+              <p>If you didn't create this account, just ignore this message.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
       `

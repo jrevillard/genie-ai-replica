@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
@@ -11,6 +12,7 @@ import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
+import 'package:genie_ai_mobile/services/geocoding_service.dart';
 import 'package:genie_ai_mobile/services/voice_conversation_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
@@ -40,6 +42,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   final ChatHistoryProxy _chatHistoryProxy = ChatHistoryProxy();
   final ChatbotProxy _chatBotProxy = ChatbotProxy();
   final ApiService _api = ApiService();
+  final GeocodingService _geocodingService = GeocodingService();
   final VoiceConversationService _voiceService = VoiceConversationService();
 
   // Conversation State
@@ -50,7 +53,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   bool get isQuickHelpVisible => _showQuickHelpOverlay;
   bool _isLoading = false;
   bool _isVoiceListening = false;
-  bool _spokenRepliesEnabled = true;
 
   // Dirty State Tracking
   int _lastSavedMessageCount = 0;
@@ -272,6 +274,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             'isSaved': true,
             'confidence': m['confidence'],
             'metadata': m['metadata'],
+            'map': m['metadata']?['map'],
             'sources': m['metadata'] != null
                 ? (m['metadata']['sources'] ??
                       m['metadata']['source_documents'])
@@ -387,19 +390,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     setState(() => _isVoiceListening = true);
   }
 
-  Future<void> _toggleSpokenReplies() async {
-    final enabled = !_spokenRepliesEnabled;
-    setState(() => _spokenRepliesEnabled = enabled);
-    if (!enabled) {
-      await _voiceService.stopSpeaking();
-    }
-  }
-
-  Future<void> _speakAssistantReply(String content) async {
-    if (!_spokenRepliesEnabled) return;
-    await _voiceService.speak(content, localeId: _voiceLocaleId());
-  }
-
   String _cleanAssistantResponse(dynamic rawResponse) {
     final text = (rawResponse ?? 'No response received').toString();
     return text
@@ -408,13 +398,118 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         .trim();
   }
 
+  _MapRequest? _extractMapRequest(String text) {
+    final normalized = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (normalized.isEmpty) return null;
+
+    final lower = normalized.toLowerCase();
+    final asksForMap =
+        lower.contains('map') ||
+        normalized.contains('মানচিত্র') ||
+        normalized.contains('ম্যাপ');
+    if (!asksForMap) return null;
+
+    final patterns = <RegExp>[
+      RegExp(
+        r'(?:show\s+me\s+)?(?:the\s+)?map\s+(?:of|for)\s+(.+)$',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'(?:show|open|display)\s+(?:the\s+)?map\s+(.+)$',
+        caseSensitive: false,
+      ),
+      RegExp(r'(.+?)\s+(?:on|in)\s+(?:the\s+)?map$', caseSensitive: false),
+      RegExp(r'(?:মানচিত্র|ম্যাপ)\s*(?:দেখাও|দেখান)?\s*(.+)$'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(normalized);
+      final rawPlace = match?.group(1);
+      final place = _cleanMapPlace(rawPlace ?? '');
+      if (place.isNotEmpty) return _MapRequest(place);
+    }
+
+    final fallback = normalized
+        .replaceAll(
+          RegExp(r'show|me|the|map|of|for|please', caseSensitive: false),
+          ' ',
+        )
+        .replaceAll(RegExp(r'মানচিত্র|ম্যাপ|দেখাও|দেখান'), ' ');
+    final place = _cleanMapPlace(fallback);
+    return place.isNotEmpty ? _MapRequest(place) : null;
+  }
+
+  String _cleanMapPlace(String raw) {
+    return raw
+        .replaceAll(RegExp(r'[?.!,;:]+$'), '')
+        .replaceAll(RegExp(r'^\s*(of|for|in|at)\s+', caseSensitive: false), '')
+        .trim();
+  }
+
+  _MapRequest? _safeExtractMapRequest(String text) {
+    try {
+      return _extractMapRequest(text);
+    } catch (e) {
+      debugPrint('[MAP] Could not parse map request: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _handleMapRequest(
+    Map<String, dynamic> userMessage,
+    _MapRequest request, {
+    bool autoSave = false,
+  }) async {
+    setState(() {
+      _messages.add(userMessage);
+      _isLoading = true;
+    });
+
+    _inputController.clear();
+    _scrollToBottom();
+    _updateQuickHelpVisibility();
+
+    try {
+      final place = await _geocodingService.search(request.place);
+      final content = place == null
+          ? "I couldn't find a map location for ${request.place}."
+          : 'Showing map of ${place.query}.';
+
+      final assistantMessage = {
+        'role': 'assistant',
+        'content': content,
+        'timestamp': DateTime.now().toIso8601String(),
+        'isSaved': false,
+        if (place != null) 'map': place.toJson(),
+        if (place != null) 'metadata': {'map': place.toJson()},
+      };
+
+      setState(() {
+        _messages.add(assistantMessage);
+        _isLoading = false;
+      });
+
+      if (autoSave) {
+        await saveConversation(showNotification: false);
+      }
+      _scrollToBottom();
+      _updateQuickHelpVisibility();
+      return content;
+    } catch (e) {
+      setState(() => _isLoading = false);
+      NotificationService.error('Could not load map location');
+      debugPrint('[MAP] Geocoding error: $e');
+      return null;
+    }
+  }
+
   Future<String?> sendHandsfreeMessage(String text) async {
     if (_currentConversationId == null && _messages.length <= 1) {
       _conversationTitle = 'Voice conversation';
       _titleController.text = _conversationTitle;
     }
     setState(() => _showQuickHelpOverlay = false);
-    return _sendMessage(text, autoSave: true, speakReply: false);
+    return _sendMessage(text, autoSave: true);
   }
 
   void sendMessageFromTextInput(String text) {
@@ -425,7 +520,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     String text, {
     String? hiddenPrompt,
     bool autoSave = false,
-    bool speakReply = true,
   }) async {
     if (text.trim().isEmpty || _isLoading) return null;
 
@@ -436,6 +530,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': false,
     };
+
+    final mapRequest = hiddenPrompt == null
+        ? _safeExtractMapRequest(text)
+        : null;
+    if (mapRequest != null) {
+      return _handleMapRequest(userMessage, mapRequest, autoSave: autoSave);
+    }
 
     setState(() {
       _messages.add(userMessage);
@@ -498,9 +599,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       });
 
       widget.onRelatedDocumentsUpdate(_relatedDocuments);
-      if (speakReply) {
-        unawaited(_speakAssistantReply(assistantMessage['content'] as String));
-      }
       if (autoSave) {
         await saveConversation(showNotification: false);
       }
@@ -672,6 +770,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           'userId': widget.userId,
           if (msg['queryId'] != null) 'queryId': msg['queryId'],
           if (msg['metadata'] != null) 'metadata': msg['metadata'],
+          if (msg['metadata'] == null && msg['map'] != null)
+            'metadata': {'map': msg['map']},
         };
 
         try {
@@ -854,6 +954,67 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
+  Widget _buildMapCard(dynamic mapData, Map<String, dynamic> colors) {
+    final place = GeocodedPlace.fromJson(mapData);
+    if (place == null) {
+      return const SizedBox.shrink();
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: 240,
+        width: double.infinity,
+        child: FlutterMap(
+          options: MapOptions(
+            initialCenter: place.point,
+            initialZoom: 12,
+            minZoom: 2,
+            maxZoom: 18,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'genie_ai_mobile',
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: place.point,
+                  width: 44,
+                  height: 44,
+                  child: Icon(
+                    Icons.location_pin,
+                    color: colors['primary'],
+                    size: 44,
+                    shadows: const [
+                      Shadow(
+                        blurRadius: 4,
+                        color: Colors.black45,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution(
+                  'OpenStreetMap contributors',
+                  onTap: () => launchUrl(
+                    Uri.parse('https://www.openstreetmap.org/copyright'),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ===========================================================================
   // HELPER FOR GRADIENT
   // ===========================================================================
@@ -938,540 +1099,603 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
               // Messages
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _messages.length + (_isLoading ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == _messages.length && _isLoading) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Row(
-                          children: [
-                            const CircularProgressIndicator(strokeWidth: 2),
-                            const SizedBox(width: 12),
-                            Text(tr('chatbot.thinking')),
-                          ],
-                        ),
-                      );
-                    }
-
-                    final msg = _messages[index];
-                    final bool isUser = msg['role'] == 'user';
-
-                    return Align(
-                      alignment: isUser
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        padding: const EdgeInsets.all(16),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isUser
-                              ? colors['primary']
-                              : (isDark ? colors['surface'] : Colors.grey[200]),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MarkdownBody(
-                              data: msg['content'] ?? '',
-                              styleSheet: MarkdownStyleSheet(
-                                p: TextStyle(
-                                  color: isUser ? Colors.white : colors['text'],
-                                  fontSize: 16,
-                                  height: 1.5,
-                                ),
-                                codeblockDecoration: BoxDecoration(
-                                  color: isUser
-                                      ? Colors.white.withOpacity(0.1)
-                                      : (isDark
-                                            ? Colors.white10
-                                            : Colors.black12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              selectable: true,
-                              onTapLink: (text, href, title) {
-                                if (href != null) {
-                                  launchUrl(
-                                    Uri.parse(href),
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                }
-                              },
+                child: Stack(
+                  children: [
+                    ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _messages.length + (_isLoading ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == _messages.length && _isLoading) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Row(
+                              children: [
+                                const CircularProgressIndicator(strokeWidth: 2),
+                                const SizedBox(width: 12),
+                                Text(tr('chatbot.thinking')),
+                              ],
                             ),
+                          );
+                        }
 
-                            // Footer: Confidence & Feedback
-                            if (!isUser)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    if (msg['confidence'] != null)
-                                      Text(
-                                        "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: colors['text'].withOpacity(
-                                            0.6,
+                        final msg = _messages[index];
+                        final bool isUser = msg['role'] == 'user';
+                        final bool hasMap = msg['map'] != null;
+
+                        return Align(
+                          alignment: isUser
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            padding: const EdgeInsets.all(16),
+                            constraints: BoxConstraints(
+                              maxWidth:
+                                  MediaQuery.of(context).size.width *
+                                  (hasMap ? 0.92 : 0.75),
+                            ),
+                            decoration: BoxDecoration(
+                              color: isUser
+                                  ? colors['primary']
+                                  : (isDark
+                                        ? colors['surface']
+                                        : Colors.grey[200]),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                MarkdownBody(
+                                  data: msg['content'] ?? '',
+                                  styleSheet: MarkdownStyleSheet(
+                                    p: TextStyle(
+                                      color: isUser
+                                          ? Colors.white
+                                          : colors['text'],
+                                      fontSize: 16,
+                                      height: 1.5,
+                                    ),
+                                    codeblockDecoration: BoxDecoration(
+                                      color: isUser
+                                          ? Colors.white.withOpacity(0.1)
+                                          : (isDark
+                                                ? Colors.white10
+                                                : Colors.black12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  selectable: true,
+                                  onTapLink: (text, href, title) {
+                                    if (href != null) {
+                                      launchUrl(
+                                        Uri.parse(href),
+                                        mode: LaunchMode.externalApplication,
+                                      );
+                                    }
+                                  },
+                                ),
+                                if (hasMap) ...[
+                                  const SizedBox(height: 12),
+                                  _buildMapCard(msg['map'], colors),
+                                ],
+
+                                // Footer: Confidence & Feedback
+                                if (!isUser)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        if (msg['confidence'] != null)
+                                          Text(
+                                            "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: colors['text'].withOpacity(
+                                                0.6,
+                                              ),
+                                              fontStyle: FontStyle.italic,
+                                            ),
                                           ),
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    // Feedback Button
-                                    Tooltip(
-                                      message: tr('feedback.title'),
-                                      child: InkWell(
-                                        onTap: () => _openFeedbackDialog(msg),
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: Icon(
-                                            Icons.thumb_up_alt_outlined,
-                                            size: 16,
-                                            color: colors['text'].withOpacity(
-                                              0.5,
+                                        // Feedback Button
+                                        Tooltip(
+                                          message: tr('feedback.title'),
+                                          child: InkWell(
+                                            onTap: () =>
+                                                _openFeedbackDialog(msg),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(
+                                                4.0,
+                                              ),
+                                              child: Icon(
+                                                Icons.thumb_up_alt_outlined,
+                                                size: 16,
+                                                color: colors['text']
+                                                    .withOpacity(0.5),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
+                      Container(
+                        color: colors['background'].withOpacity(0.98),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 24,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              tr('chatbot.whatCanIHelp'),
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colors['text'],
                               ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 20),
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final int crossAxisCount =
+                                      _quickHelpLayout['columns'] as int? ?? 2;
+                                  final double aspectRatio =
+                                      (_quickHelpLayout['childAspectRatio']
+                                              as num?)
+                                          ?.toDouble() ??
+                                      3.5;
+
+                                  return GridView.builder(
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: crossAxisCount,
+                                          childAspectRatio: aspectRatio,
+                                          mainAxisSpacing: 10,
+                                          crossAxisSpacing: 10,
+                                        ),
+                                    itemCount: _quickHelpButtons.length,
+                                    itemBuilder: (context, index) {
+                                      final button = _quickHelpButtons[index];
+                                      // Use safe access with casting to Map to prevent null cast errors
+                                      final appearance =
+                                          button['appearance']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final action =
+                                          button['action']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final darkMode =
+                                          button['darkMode']
+                                              as Map<String, dynamic>? ??
+                                          {};
+
+                                      // Determine active styles based on Theme
+                                      // If in Dark Mode and darkMode overrides exist, merge them
+                                      final Map<String, dynamic>
+                                      activeAppearance;
+                                      if (isDark && darkMode.isNotEmpty) {
+                                        // Deep merge logic simplified: override top-level keys if present
+                                        activeAppearance = {
+                                          ...appearance,
+                                          'label': {
+                                            ...(appearance['label']
+                                                    as Map<String, dynamic>? ??
+                                                {}),
+                                            ...(darkMode['label']
+                                                    as Map<String, dynamic>? ??
+                                                {}),
+                                          },
+                                          'icon': {
+                                            ...(appearance['icon']
+                                                    as Map<String, dynamic>? ??
+                                                {}),
+                                            ...(darkMode['icon']
+                                                    as Map<String, dynamic>? ??
+                                                {}),
+                                          },
+                                          'style': {
+                                            ...(appearance['style']
+                                                    as Map<String, dynamic>? ??
+                                                {}),
+                                            ...(darkMode['style']
+                                                    as Map<String, dynamic>? ??
+                                                {}),
+                                          },
+                                        };
+
+                                        // Handle nested background style merge if needed
+                                        if (darkMode['style'] != null &&
+                                            (darkMode['style']
+                                                    as Map)['background'] !=
+                                                null) {
+                                          final baseStyle =
+                                              appearance['style']
+                                                  as Map<String, dynamic>? ??
+                                              {};
+                                          final darkStyle =
+                                              darkMode['style']
+                                                  as Map<String, dynamic>? ??
+                                              {};
+
+                                          final baseBg =
+                                              baseStyle['background']
+                                                  as Map<String, dynamic>? ??
+                                              {};
+                                          final darkBg =
+                                              darkStyle['background']
+                                                  as Map<String, dynamic>? ??
+                                              {};
+
+                                          final mergedBg = {
+                                            ...baseBg,
+                                            ...darkBg,
+                                          };
+
+                                          final mergedStyle = {
+                                            ...(activeAppearance['style']
+                                                as Map<String, dynamic>),
+                                            'background': mergedBg,
+                                          };
+                                          activeAppearance['style'] =
+                                              mergedStyle;
+                                        }
+                                      } else {
+                                        activeAppearance = appearance;
+                                      }
+
+                                      // CORRECTED: Use label text key for button display
+                                      final labelMap =
+                                          activeAppearance['label']
+                                              as Map<String, dynamic>?;
+                                      final String titleKey =
+                                          labelMap?['text']?.toString() ?? '';
+                                      final String translatedTitle = _t(
+                                        titleKey,
+                                      );
+                                      final String iconAsset =
+                                          button['iconAsset']?.toString() ?? '';
+
+                                      // Style Extraction from Active Appearance
+                                      final styles =
+                                          activeAppearance['style']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final bg =
+                                          styles['background']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final gradientConfig =
+                                          bg['gradient']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final borderConfig =
+                                          styles['border']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final shadowConfig =
+                                          styles['shadow']
+                                              as Map<String, dynamic>? ??
+                                          {};
+
+                                      // Colors
+                                      final String startColorHex =
+                                          gradientConfig['start']?.toString() ??
+                                          '#FFFFFF';
+                                      final String endColorHex =
+                                          gradientConfig['end']?.toString() ??
+                                          startColorHex;
+                                      final String gradientDirection =
+                                          gradientConfig['direction']
+                                              ?.toString() ??
+                                          'horizontal';
+
+                                      final Color startColor = Color(
+                                        int.parse(
+                                          startColorHex.replaceAll('#', '0xFF'),
+                                        ),
+                                      );
+                                      final Color endColor = Color(
+                                        int.parse(
+                                          endColorHex.replaceAll('#', '0xFF'),
+                                        ),
+                                      );
+
+                                      final bool showShadow =
+                                          (_quickHelpDefaults['showShadow'] ==
+                                              true) ||
+                                          (shadowConfig['enabled'] == true);
+                                      final bool showBorder =
+                                          (_quickHelpDefaults['showBorder'] ==
+                                              true) ||
+                                          (borderConfig['enabled'] == true);
+
+                                      // Label Color
+                                      final labelConfig =
+                                          activeAppearance['label']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final String labelColorHex =
+                                          labelConfig['color']?.toString() ??
+                                          (isDark ? '#FFFFFF' : '#000000');
+                                      final Color labelColor = Color(
+                                        int.parse(
+                                          labelColorHex.replaceAll('#', '0xFF'),
+                                        ),
+                                      );
+
+                                      // Icon Color (if you want to tint icons, though SVGs might have own colors)
+                                      // final iconConfig = activeAppearance['icon'] as Map<String, dynamic>? ?? {};
+                                      // final String iconColorHex = iconConfig['color']?.toString() ?? labelColorHex;
+                                      // final Color iconColor = Color(int.parse(iconColorHex.replaceAll('#', '0xFF')));
+
+                                      // Shadow Configuration (Stronger defaults)
+                                      final defaultShadow =
+                                          _quickHelpDefaults['shadow']
+                                              as Map<String, dynamic>? ??
+                                          {};
+                                      final double shadowOpacity =
+                                          (defaultShadow['opacity'] as num?)
+                                              ?.toDouble() ??
+                                          0.25; // Stronger default
+                                      final double shadowBlur =
+                                          _parsePixelValue(
+                                            defaultShadow['blur']?.toString() ??
+                                                '8px',
+                                          ); // Stronger default
+
+                                      return Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          onTap: () =>
+                                              _quickHelpPressed(button),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              // Gradient Fill with Direction
+                                              gradient: LinearGradient(
+                                                colors: [startColor, endColor],
+                                                begin: _getGradientAlignment(
+                                                  gradientDirection,
+                                                  true,
+                                                ),
+                                                end: _getGradientAlignment(
+                                                  gradientDirection,
+                                                  false,
+                                                ),
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              // Border
+                                              border: showBorder
+                                                  ? Border.all(
+                                                      color: colors['border'],
+                                                    )
+                                                  : null,
+                                              // Shadow
+                                              boxShadow: showShadow
+                                                  ? [
+                                                      BoxShadow(
+                                                        color: Colors.black
+                                                            .withOpacity(
+                                                              shadowOpacity,
+                                                            ),
+                                                        blurRadius: shadowBlur,
+                                                        offset: const Offset(
+                                                          0,
+                                                          2,
+                                                        ),
+                                                      ),
+                                                    ]
+                                                  : null,
+                                            ),
+                                            child: Row(
+                                              // Changed to Row for Slimline
+                                              children: [
+                                                SvgPicture.asset(
+                                                  iconAsset,
+                                                  width:
+                                                      18, // Smaller icon for slimline
+                                                  height: 18,
+                                                  placeholderBuilder: (_) => Icon(
+                                                    Icons.help_outline,
+                                                    size: 20,
+                                                    // Fallback icon color matches text if not specified in SVG
+                                                    color: labelColor,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Text(
+                                                    translatedTitle,
+                                                    style: theme
+                                                        .textTheme
+                                                        .labelMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontSize:
+                                                              11, // Smaller font
+                                                          color: labelColor,
+                                                        ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    );
-                  },
+                  ],
                 ),
               ),
 
               // Input Area
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors['surface'],
-                  border: Border(top: BorderSide(color: colors['border'])),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.add_circle_outline,
-                            color: colors['text'],
+              if (!_showQuickHelpOverlay)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colors['surface'],
+                    border: Border(top: BorderSide(color: colors['border'])),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.add_circle_outline,
+                              color: colors['text'],
+                            ),
+                            tooltip: tr('chatbot.newChatTitle'),
+                            onPressed: startNewChat,
                           ),
-                          tooltip: tr('chatbot.newChatTitle'),
-                          onPressed: startNewChat,
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.save_outlined,
-                            color: colors['text'],
+                          IconButton(
+                            icon: Icon(
+                              Icons.save_outlined,
+                              color: colors['text'],
+                            ),
+                            tooltip: tr('chatbot.saveChat'),
+                            onPressed: () {
+                              _titleController.text = _conversationTitle;
+                              setState(() => _showSaveDialog = true);
+                            },
                           ),
-                          tooltip: tr('chatbot.saveChat'),
-                          onPressed: () {
-                            _titleController.text = _conversationTitle;
-                            setState(() => _showSaveDialog = true);
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.picture_as_pdf_outlined,
-                            color: colors['text'],
+                          IconButton(
+                            icon: Icon(
+                              Icons.picture_as_pdf_outlined,
+                              color: colors['text'],
+                            ),
+                            tooltip: tr('chatbot.exportChat'),
+                            onPressed: () {
+                              _exportFilename =
+                                  "chat_${DateTime.now().toIso8601String().split('T').first}";
+                              setState(() => _showExportDialog = true);
+                            },
                           ),
-                          tooltip: tr('chatbot.exportChat'),
-                          onPressed: () {
-                            _exportFilename =
-                                "chat_${DateTime.now().toIso8601String().split('T').first}";
-                            setState(() => _showExportDialog = true);
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: tr('chatbot.shareWhatsApp'),
-                          onPressed:
-                              _shareToWhatsApp, // Ensure you added the function from the previous step
-                          icon: SvgPicture.string(
-                            '''
+                          const SizedBox(width: 8),
+                          IconButton(
+                            tooltip: tr('chatbot.shareWhatsApp'),
+                            onPressed:
+                                _shareToWhatsApp, // Ensure you added the function from the previous step
+                            icon: SvgPicture.string(
+                              '''
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
       <path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 16.61c-1.48 0-2.94-.4-4.21-1.15l-.3-.18-3.11.82.83-3.04-.19-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23m4.53-6.18c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28z"/>
     </svg>
     ''',
-                            width: 24,
-                            height: 24,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _inputController,
-                            focusNode: _inputFocusNode,
-                            style: TextStyle(color: colors['text']),
-                            decoration: InputDecoration(
-                              hintText: tr('chatbot.placeholder'),
-                              hintStyle: TextStyle(
-                                color: isDark
-                                    ? Colors.grey[500]
-                                    : Colors.grey[600],
-                              ),
-                              filled: true,
-                              fillColor: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.transparent,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: colors['border']),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: colors['border']),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
+                              width: 24,
+                              height: 24,
                             ),
-                            maxLines: null,
-                            onSubmitted: (_) =>
-                                sendMessageFromTextInput(_inputController.text),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (_voiceService.isSupportedPlatform) ...[
-                          IconButton(
-                            tooltip: _isVoiceListening
-                                ? 'Stop voice input'
-                                : 'Start voice input',
-                            icon: Icon(
-                              _isVoiceListening ? Icons.stop_circle : Icons.mic,
-                            ),
-                            color: _isVoiceListening
-                                ? Colors.redAccent
-                                : colors['primary'],
-                            onPressed: _isLoading ? null : _toggleVoiceInput,
-                          ),
-                          IconButton(
-                            tooltip: _spokenRepliesEnabled
-                                ? 'Mute spoken replies'
-                                : 'Enable spoken replies',
-                            icon: Icon(
-                              _spokenRepliesEnabled
-                                  ? Icons.volume_up
-                                  : Icons.volume_off,
-                            ),
-                            color: colors['primary'],
-                            onPressed: _toggleSpokenReplies,
                           ),
                         ],
-                        IconButton(
-                          icon: const Icon(Icons.send),
-                          color: colors['primary'],
-                          onPressed: _isLoading
-                              ? null
-                              : () => sendMessageFromTextInput(
-                                  _inputController.text,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _inputController,
+                              focusNode: _inputFocusNode,
+                              style: TextStyle(color: colors['text']),
+                              decoration: InputDecoration(
+                                hintText: tr('chatbot.placeholder'),
+                                hintStyle: TextStyle(
+                                  color: isDark
+                                      ? Colors.grey[500]
+                                      : Colors.grey[600],
                                 ),
-                        ),
-                      ],
-                    ),
-                  ],
+                                filled: true,
+                                fillColor: isDark
+                                    ? Colors.white.withOpacity(0.05)
+                                    : Colors.transparent,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: colors['border'],
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: colors['border'],
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                              ),
+                              maxLines: null,
+                              onSubmitted: (_) => sendMessageFromTextInput(
+                                _inputController.text,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (_voiceService.isSupportedPlatform) ...[
+                            IconButton(
+                              tooltip: _isVoiceListening
+                                  ? 'Stop voice input'
+                                  : 'Start voice input',
+                              icon: Icon(
+                                _isVoiceListening
+                                    ? Icons.stop_circle
+                                    : Icons.mic,
+                              ),
+                              color: _isVoiceListening
+                                  ? Colors.redAccent
+                                  : colors['primary'],
+                              onPressed: _isLoading ? null : _toggleVoiceInput,
+                            ),
+                          ],
+                          IconButton(
+                            icon: const Icon(Icons.send),
+                            color: colors['primary'],
+                            onPressed: _isLoading
+                                ? null
+                                : () => sendMessageFromTextInput(
+                                    _inputController.text,
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
-
-          // Quick Help Overlay
-          if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-            Container(
-              color: colors['background'].withOpacity(0.98),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    tr('chatbot.whatCanIHelp'),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colors['text'],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
-                        final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                ?.toDouble() ??
-                            3.5;
-
-                        return GridView.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                childAspectRatio: aspectRatio,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
-                              ),
-                          itemCount: _quickHelpButtons.length,
-                          itemBuilder: (context, index) {
-                            final button = _quickHelpButtons[index];
-                            // Use safe access with casting to Map to prevent null cast errors
-                            final appearance =
-                                button['appearance'] as Map<String, dynamic>? ??
-                                {};
-                            final action =
-                                button['action'] as Map<String, dynamic>? ?? {};
-                            final darkMode =
-                                button['darkMode'] as Map<String, dynamic>? ??
-                                {};
-
-                            // Determine active styles based on Theme
-                            // If in Dark Mode and darkMode overrides exist, merge them
-                            final Map<String, dynamic> activeAppearance;
-                            if (isDark && darkMode.isNotEmpty) {
-                              // Deep merge logic simplified: override top-level keys if present
-                              activeAppearance = {
-                                ...appearance,
-                                'label': {
-                                  ...(appearance['label']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['label']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                },
-                                'icon': {
-                                  ...(appearance['icon']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['icon']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                },
-                                'style': {
-                                  ...(appearance['style']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                  ...(darkMode['style']
-                                          as Map<String, dynamic>? ??
-                                      {}),
-                                },
-                              };
-
-                              // Handle nested background style merge if needed
-                              if (darkMode['style'] != null &&
-                                  (darkMode['style'] as Map)['background'] !=
-                                      null) {
-                                final baseStyle =
-                                    appearance['style']
-                                        as Map<String, dynamic>? ??
-                                    {};
-                                final darkStyle =
-                                    darkMode['style']
-                                        as Map<String, dynamic>? ??
-                                    {};
-
-                                final baseBg =
-                                    baseStyle['background']
-                                        as Map<String, dynamic>? ??
-                                    {};
-                                final darkBg =
-                                    darkStyle['background']
-                                        as Map<String, dynamic>? ??
-                                    {};
-
-                                final mergedBg = {...baseBg, ...darkBg};
-
-                                final mergedStyle = {
-                                  ...(activeAppearance['style']
-                                      as Map<String, dynamic>),
-                                  'background': mergedBg,
-                                };
-                                activeAppearance['style'] = mergedStyle;
-                              }
-                            } else {
-                              activeAppearance = appearance;
-                            }
-
-                            // CORRECTED: Use label text key for button display
-                            final labelMap =
-                                activeAppearance['label']
-                                    as Map<String, dynamic>?;
-                            final String titleKey =
-                                labelMap?['text']?.toString() ?? '';
-                            final String translatedTitle = _t(titleKey);
-                            final String iconAsset =
-                                button['iconAsset']?.toString() ?? '';
-
-                            // Style Extraction from Active Appearance
-                            final styles =
-                                activeAppearance['style']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final bg =
-                                styles['background'] as Map<String, dynamic>? ??
-                                {};
-                            final gradientConfig =
-                                bg['gradient'] as Map<String, dynamic>? ?? {};
-                            final borderConfig =
-                                styles['border'] as Map<String, dynamic>? ?? {};
-                            final shadowConfig =
-                                styles['shadow'] as Map<String, dynamic>? ?? {};
-
-                            // Colors
-                            final String startColorHex =
-                                gradientConfig['start']?.toString() ??
-                                '#FFFFFF';
-                            final String endColorHex =
-                                gradientConfig['end']?.toString() ??
-                                startColorHex;
-                            final String gradientDirection =
-                                gradientConfig['direction']?.toString() ??
-                                'horizontal';
-
-                            final Color startColor = Color(
-                              int.parse(startColorHex.replaceAll('#', '0xFF')),
-                            );
-                            final Color endColor = Color(
-                              int.parse(endColorHex.replaceAll('#', '0xFF')),
-                            );
-
-                            final bool showShadow =
-                                (_quickHelpDefaults['showShadow'] == true) ||
-                                (shadowConfig['enabled'] == true);
-                            final bool showBorder =
-                                (_quickHelpDefaults['showBorder'] == true) ||
-                                (borderConfig['enabled'] == true);
-
-                            // Label Color
-                            final labelConfig =
-                                activeAppearance['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String labelColorHex =
-                                labelConfig['color']?.toString() ??
-                                (isDark ? '#FFFFFF' : '#000000');
-                            final Color labelColor = Color(
-                              int.parse(labelColorHex.replaceAll('#', '0xFF')),
-                            );
-
-                            // Icon Color (if you want to tint icons, though SVGs might have own colors)
-                            // final iconConfig = activeAppearance['icon'] as Map<String, dynamic>? ?? {};
-                            // final String iconColorHex = iconConfig['color']?.toString() ?? labelColorHex;
-                            // final Color iconColor = Color(int.parse(iconColorHex.replaceAll('#', '0xFF')));
-
-                            // Shadow Configuration (Stronger defaults)
-                            final defaultShadow =
-                                _quickHelpDefaults['shadow']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final double shadowOpacity =
-                                (defaultShadow['opacity'] as num?)
-                                    ?.toDouble() ??
-                                0.25; // Stronger default
-                            final double shadowBlur = _parsePixelValue(
-                              defaultShadow['blur']?.toString() ?? '8px',
-                            ); // Stronger default
-
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () => _quickHelpPressed(button),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    // Gradient Fill with Direction
-                                    gradient: LinearGradient(
-                                      colors: [startColor, endColor],
-                                      begin: _getGradientAlignment(
-                                        gradientDirection,
-                                        true,
-                                      ),
-                                      end: _getGradientAlignment(
-                                        gradientDirection,
-                                        false,
-                                      ),
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    // Border
-                                    border: showBorder
-                                        ? Border.all(color: colors['border'])
-                                        : null,
-                                    // Shadow
-                                    boxShadow: showShadow
-                                        ? [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(
-                                                shadowOpacity,
-                                              ),
-                                              blurRadius: shadowBlur,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                  child: Row(
-                                    // Changed to Row for Slimline
-                                    children: [
-                                      SvgPicture.asset(
-                                        iconAsset,
-                                        width: 18, // Smaller icon for slimline
-                                        height: 18,
-                                        placeholderBuilder: (_) => Icon(
-                                          Icons.help_outline,
-                                          size: 20,
-                                          // Fallback icon color matches text if not specified in SVG
-                                          color: labelColor,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          translatedTitle,
-                                          style: theme.textTheme.labelMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 11, // Smaller font
-                                                color: labelColor,
-                                              ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
           // Confirm Dialogs & Save/Export Alerts
           ConfirmDialog(
@@ -1567,4 +1791,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   double _parsePixelValue(String val) {
     return double.tryParse(val.replaceAll('px', '')) ?? 0.0;
   }
+}
+
+class _MapRequest {
+  final String place;
+
+  const _MapRequest(this.place);
 }

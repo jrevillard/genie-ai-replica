@@ -405,7 +405,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     heroTag: 'handsfree-mode',
                     icon: const Icon(Icons.record_voice_over),
                     label: const Text('Handsfree'),
-                    onPressed: () => setState(() => _showHandsfreeMode = true),
+                    onPressed: () {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      setState(() => _showHandsfreeMode = true);
+                    },
                   ),
                 ),
               ),
@@ -516,17 +519,22 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
   bool _isThinking = false;
   bool _isSpeaking = false;
   bool _isClosing = false;
+  bool _isSubmittingHeardText = false;
   String _heardText = '';
+  Timer? _speechSilenceTimer;
+  Timer? _listenFallbackTimer;
 
   @override
   void initState() {
     super.initState();
+    FocusManager.instance.primaryFocus?.unfocus();
     unawaited(_startHandsfreeLoop());
   }
 
   @override
   void dispose() {
     _isClosing = true;
+    _cancelListenTimers();
     unawaited(_voiceService.dispose());
     super.dispose();
   }
@@ -545,7 +553,9 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
 
   Future<void> _listen() async {
     if (_isClosing || !mounted) return;
+    _cancelListenTimers();
     _heardText = '';
+    _isSubmittingHeardText = false;
     setState(() {
       _isListening = true;
       _isThinking = false;
@@ -554,7 +564,10 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
 
     final started = await _voiceService.startListening(
       localeId: _localeId,
-      onText: (text) => _heardText = text,
+      onText: (text) {
+        _heardText = text;
+        _scheduleSilenceSubmit();
+      },
       onDone: () => unawaited(_submitHeardText()),
       onError: (_) => unawaited(_restartListening()),
     );
@@ -562,11 +575,41 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
     if (!started) {
       await _speak('Voice input is unavailable on this device.');
       if (mounted) widget.onClose();
+      return;
     }
+
+    _listenFallbackTimer = Timer(const Duration(seconds: 18), () {
+      if (_heardText.trim().isEmpty) {
+        unawaited(_restartListening());
+      } else {
+        unawaited(_submitHeardText());
+      }
+    });
+  }
+
+  void _scheduleSilenceSubmit() {
+    if (_heardText.trim().isEmpty || _isSubmittingHeardText) return;
+    _speechSilenceTimer?.cancel();
+    _speechSilenceTimer = Timer(const Duration(milliseconds: 1600), () {
+      unawaited(_submitHeardText());
+    });
+  }
+
+  void _cancelListenTimers() {
+    _speechSilenceTimer?.cancel();
+    _speechSilenceTimer = null;
+    _listenFallbackTimer?.cancel();
+    _listenFallbackTimer = null;
   }
 
   Future<void> _submitHeardText() async {
-    if (_isClosing || _isThinking || _isSpeaking) return;
+    if (_isClosing || _isThinking || _isSpeaking || _isSubmittingHeardText) {
+      return;
+    }
+
+    _isSubmittingHeardText = true;
+    _cancelListenTimers();
+    await _voiceService.stopListening();
 
     final text = _heardText.trim();
     if (mounted) {
@@ -577,6 +620,7 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
     }
 
     if (text.isEmpty) {
+      _isSubmittingHeardText = false;
       await _restartListening();
       return;
     }
@@ -593,11 +637,14 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
           : 'I could not get a response. Please try again.',
     );
 
+    _isSubmittingHeardText = false;
     await _listen();
   }
 
   Future<void> _restartListening() async {
-    if (_isClosing || !mounted) return;
+    if (_isClosing || !mounted || _isSubmittingHeardText) return;
+    _cancelListenTimers();
+    await _voiceService.cancelListening();
     await Future<void>.delayed(const Duration(milliseconds: 500));
     await _listen();
   }
@@ -615,6 +662,7 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
 
   Future<void> _close() async {
     _isClosing = true;
+    _cancelListenTimers();
     await _voiceService.dispose();
     if (mounted) widget.onClose();
   }
@@ -637,7 +685,7 @@ class _HandsfreeOverlayState extends State<_HandsfreeOverlay> {
           return false;
         },
         child: Material(
-          color: Colors.black.withOpacity(0.88),
+          color: Colors.black,
           child: SafeArea(
             child: Stack(
               children: [

@@ -55,6 +55,8 @@ dependencies:
 
   intl: any
   markdown: any
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

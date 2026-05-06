@@ -110,3 +110,4 @@ english_g2.zip
 *.crt
 !configs/**/*.crt
 !configs/**/*.pem
+docker-compose.override.yaml

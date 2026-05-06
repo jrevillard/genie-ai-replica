@@ -32,6 +32,7 @@ import 'package:genie_ai_mobile/services/auth/auth_state.dart';
 // COMPONENT IMPORTS
 // ===========================================================================
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
@@ -60,11 +61,7 @@ void main() async {
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends ConsumerStatefulWidget {
@@ -158,13 +155,12 @@ class _MyAppState extends ConsumerState<MyApp> {
               ? MainScreen(
                   // TODO(Epic 2): accessToken is empty until AuthInterceptor
                   // provides real tokens to downstream components.
-                  user: {
-                    'id': authState.userId ?? '',
-                    'accessToken': '',
-                  },
+                  user: {'id': authState.userId ?? '', 'accessToken': ''},
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
                   onLogout: _onLogout,
+                  httpClient: ref.read(apiServiceProvider).httpClient,
+                  streamBaseUrl: ref.read(apiServiceProvider).baseUrl,
                 )
               : const OidcLoginScreen(),
           routes: {
@@ -173,9 +169,8 @@ class _MyAppState extends ConsumerState<MyApp> {
             '/registration-success': (context) =>
                 const RegistrationSuccessScreen(),
             '/password-reset': (context) => const PasswordResetInitiateScreen(),
-            '/profile': (context) => UserProfileScreen(
-              user: {'id': authState.userId ?? ''},
-            ),
+            '/profile': (context) =>
+                UserProfileScreen(user: {'id': authState.userId ?? ''}),
             '/about': (context) => const AboutScreen(),
             '/password-reset-confirm': (context) {
               final settings = ModalRoute.of(context)?.settings;
@@ -199,6 +194,8 @@ class MainScreen extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback toggleTheme;
   final VoidCallback onLogout;
+  final http.Client? httpClient;
+  final String? streamBaseUrl;
 
   const MainScreen({
     super.key,
@@ -206,6 +203,8 @@ class MainScreen extends StatefulWidget {
     required this.isDarkMode,
     required this.toggleTheme,
     required this.onLogout,
+    this.httpClient,
+    this.streamBaseUrl,
   });
 
   @override
@@ -364,6 +363,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               userId: widget.user['id'] ?? widget.user['_id'],
                               onRefreshSidebar: _refreshSidebar,
                               onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                              httpClient: widget.httpClient,
+                              streamBaseUrl: widget.streamBaseUrl,
                             ),
                           ),
                         ),

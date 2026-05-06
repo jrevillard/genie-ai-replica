@@ -9,6 +9,10 @@ class ApiService {
   final String baseUrl;
   final AuthLogger? _logger;
 
+  /// Exposes the underlying HTTP client for streaming requests.
+  /// This is the AuthInterceptor-wrapped client when using apiServiceProvider.
+  http.Client get httpClient => _httpClient;
+
   // Backward-compatible: existing code calls ApiService(logger: logger).
   // The logger parameter is accepted but http.Client defaults to a new instance
   // and baseUrl defaults to config — this matches the old singleton behavior.

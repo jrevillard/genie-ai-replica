@@ -40,7 +40,8 @@ class PatientService {
         LIMIT 1
         RETURN u._key
     `);
-    if (await cursor.hasNext()) {
+    const existing = await cursor.next();
+    if (existing) {
       const err = new Error('A user with this email already exists');
       err.status = 409;
       throw err;
@@ -145,13 +146,14 @@ class PatientService {
 
     if (email) {
       // Check email collision (excluding current user)
-      const cursor = await this.db.query(aql`
+      const emailCursor = await this.db.query(aql`
         FOR u IN users
           FILTER u.email == ${email.toLowerCase().trim()} AND u._key != ${patientKey}
           LIMIT 1
           RETURN u._key
       `);
-      if (await cursor.hasNext()) {
+      const emailConflict = await emailCursor.next();
+      if (emailConflict) {
         const err = new Error('A user with this email already exists');
         err.status = 409;
         throw err;

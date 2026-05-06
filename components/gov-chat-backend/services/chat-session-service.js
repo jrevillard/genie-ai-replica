@@ -131,6 +131,9 @@ class ChatSessionService {
     if (extra && typeof extra.audioUrl === 'string' && extra.audioUrl) {
       doc.audioUrl = extra.audioUrl;
     }
+    if (extra && typeof extra.responseTime === 'number' && isFinite(extra.responseTime)) {
+      doc.responseTime = extra.responseTime;
+    }
     const meta = await this.sessionMessages.save(doc);
     await this.sessions.update(sessionId, { updatedAt: now });
     return meta._key;
@@ -275,7 +278,9 @@ class ChatSessionService {
       options && options.userAudioUrl ? { audioUrl: options.userAudioUrl } : {}
     );
     const reply = result.response == null ? '' : String(result.response);
-    const assistantMessageKey = await this.appendMessage(sessionId, 'assistant', reply);
+    const assistantMessageKey = await this.appendMessage(sessionId, 'assistant', reply, {
+      responseTime: result.responseTime,
+    });
 
     return {
       queryId: result.queryId,

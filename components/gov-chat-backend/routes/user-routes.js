@@ -5,6 +5,8 @@ const authMiddleware = require('../middleware/auth-middleware');
 const { logger } = require('../shared-lib');
 const keycloakProxyService = require('../services/keycloak-proxy-service');
 const { JIT_FORWARD_FIELDS } = require('../constants/jit-fields');
+const aiTwinService = require('../services/ai-twin-service');
+const patientService = require('../services/patient-service');
 
 /**
  * @swagger
@@ -279,6 +281,90 @@ module.exports = (userService) => {
       const status = error.status === 404 ? 404 : error.status === 403 ? 403 : 500;
       logger.error(`[PUT /me] Error updating user ${userId}: ${error.message}`, { stack: error.stack });
       res.status(status).json({ success: false, message: error.message || 'Failed to update user' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/me/twins:
+   *   get:
+   *     summary: Get AI twins accessible to the current user
+   *     description: >
+   *       For admin users this returns all twins they own.
+   *       For patient users (users with an adminId) this returns only the twins
+   *       that the admin has explicitly granted access to via the twin-access API.
+   *       If the admin has not set any restriction yet (allowedTwinIds is null),
+   *       all twins are returned. Returns an empty list if access is restricted to none.
+   *     tags: [Current User]
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *     responses:
+   *       200:
+   *         description: Paginated twin list (sanitized – no admin fields)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 twins:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       _key:          { type: string }
+   *                       name:          { type: string }
+   *                       description:   { type: string }
+   *                       profilePicUrl: { type: string, nullable: true }
+   *                 total:  { type: integer }
+   *                 offset: { type: integer }
+   *                 limit:  { type: integer }
+   *       401:
+   *         description: Authentication required
+   */
+  router.get('/twins', authMiddleware.authenticate, async (req, res) => {
+    try {
+      const userKey = req.user._key;
+      const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+      const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+
+      // Determine which twin IDs this patient is allowed to see.
+      // getSelfTwinAccess returns:
+      //   null  → user is not a patient (or no restriction) → show all
+      //   []    → patient has no access to any twin
+      //   [...] → explicit allow-list
+      const allowedIds = await patientService.getSelfTwinAccess(userKey);
+
+      const result = await aiTwinService.listTwins({
+        offset,
+        limit,
+        allowedIds, // null → all twins, [] → none, [...] → filtered
+      });
+
+      return res.json({
+        twins: result.twins.map((t) => ({
+          _key: t._key,
+          name: t.name,
+          description: t.description,
+          profilePicUrl: t.profilePicUrl ?? null,
+        })),
+        total: result.total,
+        offset,
+        limit,
+      });
+    } catch (error) {
+      logger.error(`[GET /me/twins] ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
     }
   });
 

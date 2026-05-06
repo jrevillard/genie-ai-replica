@@ -725,6 +725,7 @@ async function initializeServices() {
   let voiceCatalogService;
   let chatSessionService;
   let authService, sessionService;
+  let patientService;
 
   const importService = async (name, path) => {
     logger.info(`Importing service: ${name}`);
@@ -762,6 +763,7 @@ async function initializeServices() {
     chatSessionService = await importService('ChatSessionService', './services/chat-session-service');
     authService = await importService('AuthService', './services/auth-service');
     sessionService = await importService('SessionService', './services/session-service');
+    patientService = await importService('PatientService', './services/patient-service');
 
     // Initialize user provisioning schema (indexes, legacy cleanup)
     const userProvisioningService = require('./services/user-provisioning-service');
@@ -786,7 +788,8 @@ async function initializeServices() {
       voiceCatalogService: { instance: voiceCatalogService, name: 'VoiceCatalogService' },
       chatSessionService: { instance: chatSessionService, name: 'ChatSessionService' },
       authService: { instance: authService, name: 'AuthService' },
-      sessionService: { instance: sessionService, name: 'SessionService' }
+      sessionService: { instance: sessionService, name: 'SessionService' },
+      patientService: { instance: patientService, name: 'PatientService' }
     };
 
     // Validate services
@@ -853,7 +856,8 @@ async function initializeServices() {
         service: services.authService,
         name: 'AuthService',
         preInit: () => services.authService.setSessionService(services.sessionService),
-      }
+      },
+      { service: services.patientService, name: 'PatientService' }
     ];
 
     for (const { service, name, preInit, optional } of initPromises) {
@@ -1023,7 +1027,8 @@ async function startApp() {
     { file: 'ai-twin-routes', paths: ['/api/ai-twins', '/api/ai-twin'], service: services.aiTwinService },
     { file: 'voice-catalog-routes', paths: ['/api/voices'], service: services.voiceCatalogService },
     { file: 'chat-session-routes', paths: ['/api/chat-sessions', '/api/chat-session'], service: services.chatSessionService },
-    { file: 'suggested-questions-routes', paths: ['/api/suggested-questions'], service: null }
+    { file: 'suggested-questions-routes', paths: ['/api/suggested-questions'], service: null },
+    { file: 'patient-routes', paths: ['/api/patients'], service: services.patientService }
   ];
 
   // Log route configurations

@@ -442,10 +442,30 @@ class AiTwinService {
     const limitRaw = parseInt(String(opts.limit ?? 50), 10);
     const limit = Math.min(Math.max(limitRaw || 50, 1), 200);
     const ownerId = typeof opts.ownerId === 'string' && opts.ownerId ? String(opts.ownerId) : null;
+    // allowedIds: string[] | null — when non-null, only return twins whose _key is in the list.
+    const allowedIds = Array.isArray(opts.allowedIds) ? opts.allowedIds : null;
 
     let total;
     let cursor;
-    if (ownerId) {
+    if (allowedIds !== null) {
+      // Patient-scoped fetch: only the explicitly allowed twin keys.
+      if (allowedIds.length === 0) {
+        return { twins: [], total: 0, offset, limit };
+      }
+      const countCursor = await this.db.query(
+        aql`FOR t IN ${this.collection} FILTER t._key IN ${allowedIds} COLLECT WITH COUNT INTO n RETURN n`
+      );
+      total = (await countCursor.all())[0] ?? 0;
+      cursor = await this.db.query(
+        aql`
+          FOR t IN ${this.collection}
+            FILTER t._key IN ${allowedIds}
+            SORT t.updatedAt DESC
+            LIMIT ${offset}, ${limit}
+            RETURN t
+        `
+      );
+    } else if (ownerId) {
       const countCursor = await this.db.query(
         aql`FOR t IN ${this.collection} FILTER t.ownerId == ${ownerId} COLLECT WITH COUNT INTO n RETURN n`
       );

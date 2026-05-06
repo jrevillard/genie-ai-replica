@@ -31,6 +31,33 @@ class FileService {
   }
 
   /**
+   * Remove a file id from all aiTwins.linkedKbFileIds.
+   * Best-effort cleanup only; does not fail file deletion if aiTwins DB is unavailable.
+   *
+   * @param {string} fileId
+   */
+  async _unlinkFileFromAiTwins(fileId) {
+    if (!fileId) return;
+    try {
+      const twinDb = await dbService.getConnection('default');
+      await twinDb.query(
+        `
+          FOR t IN aiTwins
+            FILTER t.linkedKbFileIds != null AND @fileId IN t.linkedKbFileIds
+            UPDATE t WITH {
+              linkedKbFileIds: REMOVE_VALUE(t.linkedKbFileIds, @fileId),
+              updatedAt: DATE_ISO8601(DATE_NOW())
+            } IN aiTwins
+        `,
+        { fileId }
+      );
+      logger.info(`[FILE-SERVICE] Unlinked file ${fileId} from aiTwins`);
+    } catch (e) {
+      logger.warn(`[FILE-SERVICE] Could not unlink ${fileId} from aiTwins: ${e.message}`);
+    }
+  }
+
+  /**
    * Extracts text content from a file buffer based on MIME type
    * @param {Buffer} buffer - File buffer
    * @param {string} mimeType - File MIME type
@@ -733,10 +760,12 @@ class FileService {
       try {
         await fs.unlink(filePath);
         logger.info(`File deleted from disk: ${filePath}`);
+        await this._unlinkFileFromAiTwins(fileId);
         return true;
       } catch (error) {
         if (error.code === 'ENOENT') {
           logger.warn(`Physical file was already missing, but metadata deleted: ${filePath}`);
+          await this._unlinkFileFromAiTwins(fileId);
           return true; // Consider success if metadata is gone and file was already gone
         }
         logger.error(`File metadata deleted but failed to delete physical file: ${error.message}`);

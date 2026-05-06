@@ -7,63 +7,42 @@ const { NotFoundError } = require('../middleware/errors');
 
 class QueryService {
   constructor() {
-    this.dbService = dbService; // Store the service reference instead of the promise
+    this.dbService = dbService;
     this.db = null;
     this.queries = null;
     this.serviceCategories = null;
     this.services = null;
-    this.analyticsService = null; // Will be set via dependency injection
-    this.chatHistoryService = null; // Will be set via dependency injection
+    // Set later via setAnalyticsService / setChatHistoryService.
+    this.analyticsService = null;
+    this.chatHistoryService = null;
     this.initialized = false;
-    logger.info('QueryService constructor called');
   }
 
-  /**
-   * Initialize the QueryService
-   * @returns {Promise<void>}
-   */
   async init() {
-    if (this.initialized) {
-      logger.debug('QueryService already initialized, skipping');
-      return;
-    }
+    if (this.initialized) return;
     try {
       this.db = await this.dbService.getConnection('default');
       this.queries = this.db.collection('queries');
       this.serviceCategories = this.db.collection('serviceCategories');
       this.services = this.db.collection('services');
       this.initialized = true;
-      logger.info('QueryService initialized successfully');
+      logger.info('QueryService initialized');
     } catch (error) {
       logger.error(`Error initializing QueryService: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
 
-  /**
-   * Set the analytics service
-   * @param {Object} analyticsService - Analytics service instance
-   */
   setAnalyticsService(analyticsService) {
     this.analyticsService = analyticsService;
-    logger.info('QueryService.analytics_service_set');
   }
 
-  /**
-   * Set the chat history service
-   * @param {Object} chatHistoryService - Chat history service instance
-   */
   async setChatHistoryService(chatHistoryService) {
     this.chatHistoryService = chatHistoryService;
-    logger.info('QueryService.chat_history_service_set');
   }
 
-  /**
-   * Offload OPEA call to a worker thread
-   * @param {string} url - The OPEA endpoint URL
-   * @param {Object} payload - The request payload
-   * @returns {Promise<Object>} The worker result
-   */
+  /** Run a single OPEA call in a worker thread so the slow round-trip
+   *  doesn't block the event loop. Resolves with the worker's payload. */
   runOPEAWorker(url, payload, headers = null) {
     return new Promise((resolve, reject) => {
       const workerPath = path.join(__dirname, './opea-worker.js');
@@ -91,13 +70,10 @@ class QueryService {
     });
   }
 
-  /**
-   * Generates a mock OPEA response for testing purposes.
-   * @param {Object} queryData - The incoming query data.
-   * @returns {Object} A mock response object { response, metadata }.
-   */
+  /** Hand-crafted canned responses keyed off categoryLabel / serviceLabels.
+   *  Used when CONTEXT_OPTION=test-mode so the backend can be exercised
+   *  without standing up the full OPEA stack. */
   getMockOpeaResponse(queryData) {
-    logger.info('[DEBUG] Generating mock OPEA response for test mode.');
     const { categoryLabel, serviceLabels } = queryData.context;
     const lastMessage = queryData.messages[queryData.messages.length - 1].content.toLowerCase();
 
@@ -217,79 +193,38 @@ class QueryService {
   async createQuery(queryData, headers = null) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.create_query_start');
-      logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
-
       const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
-      logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
-      logger.info('[DEBUG] Starting validation of incoming data...');
+      // Validate required fields. Accept the legacy `text` field as a
+      // fallback when `messages` is missing (older frontend builds).
       const missingFields = [];
-
-      if (!queryData.userId) {
-        logger.warn('[DEBUG] Validation FAILED: userId is missing.');
-        missingFields.push('userId');
-      } else {
-        logger.info(`[DEBUG] Validation PASSED: userId is present (${queryData.userId}).`);
-      }
-
-      if (!queryData.sessionId) {
-        logger.warn('[DEBUG] Validation FAILED: sessionId is missing.');
-        missingFields.push('sessionId');
-      } else {
-        logger.info(`[DEBUG] Validation PASSED: sessionId is present (${queryData.sessionId}).`);
-      }
-
-      // --- FIX: START messages VALIDATION ---
+      if (!queryData.userId) missingFields.push('userId');
+      if (!queryData.sessionId) missingFields.push('sessionId');
       if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
-        // Fallback: Check for the legacy 'text' field
         if (queryData.text) {
-          logger.warn('[DEBUG] Validation: messages array is missing. Synthesizing from legacy "text" field.');
-          // Create the messages array from the text field
           queryData.messages = [{ role: 'user', content: queryData.text }];
-          logger.info(`[DEBUG] Validation PASSED: messages array synthesized with 1 item.`);
         } else {
-          // Only fail if BOTH messages and text are missing
-          logger.warn('[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.');
           missingFields.push('messages');
         }
-      } else {
-        logger.info(`[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`);
       }
-      // --- FIX: END messages VALIDATION ---
 
-
-      // --- FIX: START context VALIDATION ---
+      // Default the context shape so downstream code can rely on it.
       if (!queryData.context) {
-        logger.warn('[DEBUG] Validation: context object is missing. Supplying default context.');
-        // Create a default context object
         queryData.context = { categoryLabel: 'General', serviceLabels: [] };
-        logger.info('[DEBUG] Validation PASSED: Default context object supplied.');
       } else {
-        logger.info('[DEBUG] Validation PASSED: context object is present.');
-        
-        // Also validate the internals of the provided context
         if (!Array.isArray(queryData.context.serviceLabels)) {
-          logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.');
           queryData.context.serviceLabels = [];
-        } else {
-          logger.info(`[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`);
         }
-        
         if (!queryData.context.categoryLabel) {
-           logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
-           queryData.context.categoryLabel = 'General';
+          queryData.context.categoryLabel = 'General';
         }
       }
-      // --- FIX: END context VALIDATION ---
-
 
       if (missingFields.length > 0) {
         const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(', ')}`;
         logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
         throw new Error(errorMsg);
       }
-      logger.info('[DEBUG] All validations passed successfully.');
 
       // Derive text from the last message for backward compatibility and analytics
       const lastMessage = queryData.messages[queryData.messages.length - 1];
@@ -364,80 +299,57 @@ class QueryService {
       let opeaMetadata = null;
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
-
-      // *** START: TEST MODE LOGIC ***
       if (backendMode === 'test-mode') {
-        logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
         opeaMetadata = mockData.metadata;
-        opeaResponseTime = (Date.now() - opeaStartTime) + Math.floor(Math.random() * 200); // Simulate network delay
-
-        logger.info(`[DEBUG] Mock response generated in ${opeaResponseTime}ms.`);
-        logger.info(`[DEBUG] Mock Response Content: ${opeaResponseContent}`);
-        logger.info(`[DEBUG] Mock Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
-
-        const updateData = {
+        // Add a small jitter so timing-based tests don't always see 0 ms.
+        opeaResponseTime = (Date.now() - opeaStartTime) + Math.floor(Math.random() * 200);
+        await this.queries.update(queryId, {
           response: opeaResponseContent,
           responseTime: opeaResponseTime,
           isAnswered: true,
-          metadata: opeaMetadata
-        };
-        await this.queries.update(queryId, updateData);
-
+          metadata: opeaMetadata,
+        });
       } else {
-        // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
         const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
         const opeaPort = process.env.OPEA_PORT || '8888';
         const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
         let opeaPayload;
         if (backendMode === 'single-message') {
-          logger.info('[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.');
           const lastMessage = queryData.messages[queryData.messages.length - 1];
           const queryText = lastMessage ? lastMessage.content : '';
-
           if (!queryText) {
             throw new Error('Could not extract last message content for single-message mode.');
           }
-
           opeaPayload = {
             messages: queryText,
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: queryData.context.language,
             },
             user_id: queryData.userId,
-            stream: false
+            stream: false,
           };
         } else {
-          logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
           opeaPayload = {
             messages: queryData.messages,
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: queryData.context.language,
             },
-            stream: false
+            stream: false,
           };
         }
 
-        logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
-        logger.info(`TRACE_CTX [2/7] query-service -> OPEA: context=${JSON.stringify(opeaPayload?.context ?? null)}`);
-        logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
-
-        // *** CHANGED: Use Worker Thread for OPEA Call ***
+        // Worker thread keeps the slow OPEA round-trip off the main loop.
         const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
-
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;
         opeaMetadata = workerResult.metadata;
-
-        logger.info(`[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`);
-        logger.info(`[DEBUG] OPEA Response Content: ${opeaResponseContent}`);
-        logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
 
         const updateData = {
           response: opeaResponseContent,
@@ -585,7 +497,7 @@ class QueryService {
         user_id: userId,
         stream: false,
       };
-      logger.info(`TRACE_CTX executeChatqnaTurn -> OPEA context=${JSON.stringify(opeaPayload.context)}`);
+      logger.debug(`TRACE_CTX executeChatqnaTurn -> OPEA context=${JSON.stringify(opeaPayload.context)}`);
       const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
       opeaResponseTime = workerResult.responseTime;
       opeaResponseContent = workerResult.response;

@@ -247,39 +247,80 @@ class AiTwinService {
     if (!Array.isArray(normalizedIds) || normalizedIds.length === 0) {
       return [];
     }
-    try {
-      const cursor = await this.db.query({
-        query: `
-          FOR f IN files
-            FILTER f.file_id IN @ids
-            RETURN {
-              fileId: f.file_id,
-              _key: f._key,
-              fileName: f.file_name || null,
-              originalName: f.original_name || null,
-              mimeType: f.mime_type || null,
-              fileType: f.file_type || null,
-              size: f.size || null,
-              title: f.title || null,
-              description: f.description || null,
-              category: f.category || null,
-              tags: f.tags || [],
-              labels: f.labels || [],
-              status: f.status || null,
-              sourceUrl: f.source_url || null,
-              createdAt: f.created_at || f.createdAt || null,
-              updatedAt: f.updated_at || f.updatedAt || null
-            }
-        `,
-        bindVars: { ids: normalizedIds },
-      });
-      const rows = await cursor.all();
+    const querySpec = {
+      query: `
+        FOR f IN files
+          FILTER f.file_id IN @ids
+          RETURN {
+            fileId: f.file_id,
+            _key: f._key,
+            fileName: f.file_name || null,
+            originalName: f.original_name || null,
+            mimeType: f.mime_type || null,
+            fileType: f.file_type || null,
+            size: f.size || null,
+            title: f.title || null,
+            description: f.description || null,
+            category: f.category || null,
+            tags: f.tags || [],
+            labels: f.labels || [],
+            status: f.status || null,
+            sourceUrl: f.source_url || null,
+            createdAt: f.created_at || f.createdAt || null,
+            updatedAt: f.updated_at || f.updatedAt || null
+          }
+      `,
+      bindVars: { ids: normalizedIds },
+    };
+    const orderRows = (rows) => {
       const byId = new Map(rows.map((row) => [row.fileId, row]));
       return normalizedIds.map((id) => byId.get(id)).filter(Boolean);
+    };
+    try {
+      const primaryCursor = await this.db.query(querySpec);
+      const primaryRows = await primaryCursor.all();
+      if (primaryRows.length > 0) {
+        return orderRows(primaryRows);
+      }
+
+      // Some deployments keep document-repository metadata in a dedicated "files" DB.
+      const filesDb = await dbService.getConnection('files');
+      if (!filesDb || filesDb === this.db) {
+        return [];
+      }
+      const fallbackCursor = await filesDb.query(querySpec);
+      const fallbackRows = await fallbackCursor.all();
+      return orderRows(fallbackRows);
     } catch (e) {
       logger.warn(`AiTwin linked KB metadata fetch failed: ${e.message}`);
       return [];
     }
+  }
+
+  /**
+   * Remove missing file ids from a twin's linkedKbFileIds.
+   *
+   * @param {string} twinKey
+   * @param {string[]} currentIds
+   * @param {string[]} existingIds
+   * @returns {Promise<string[]>} pruned ids
+   */
+  async _pruneMissingLinkedKbFileIds(twinKey, currentIds, existingIds) {
+    const existingSet = new Set(existingIds || []);
+    const nextIds = (currentIds || []).filter((id) => existingSet.has(id));
+    if (nextIds.length === (currentIds || []).length) {
+      return currentIds || [];
+    }
+    await this.collection.update(twinKey, {
+      linkedKbFileIds: nextIds,
+      updatedAt: new Date().toISOString(),
+    });
+    const removed = (currentIds || []).filter((id) => !existingSet.has(id));
+    logger.info(
+      `AiTwin ${twinKey}: pruned missing KB file links (${removed.length})`,
+      { removed }
+    );
+    return nextIds;
   }
 
   /**
@@ -459,7 +500,15 @@ class AiTwinService {
     }
     const twin = this._sanitizeTwin(doc);
     if (opts && opts.includeKbFiles === true) {
-      twin.linkedKbFiles = await this._fetchKbFilesByIds(twin.linkedKbFileIds || []);
+      const linkedKbFiles = await this._fetchKbFilesByIds(twin.linkedKbFileIds || []);
+      const existingIds = linkedKbFiles.map((f) => f.fileId).filter(Boolean);
+      twin.linkedKbFileIds = await this._pruneMissingLinkedKbFileIds(
+        twin._key,
+        twin.linkedKbFileIds || [],
+        existingIds
+      );
+      const byId = new Map(linkedKbFiles.map((f) => [f.fileId, f]));
+      twin.linkedKbFiles = twin.linkedKbFileIds.map((id) => byId.get(id)).filter(Boolean);
     }
     return twin;
   }

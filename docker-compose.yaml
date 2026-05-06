@@ -382,6 +382,14 @@ services:
     environment:
       # Public API base for Swagger UI "Try it out" (must match how browsers reach /api)
       - SWAGGER_SERVER_URL=${SWAGGER_SERVER_URL:-https://genie.innov8ai.com/api}
+      # Public frontend URL — used to build email verification / password reset
+      # links and the post-verification redirect. Email clients strip Origin/Referer
+      # on top-level navigations, so this MUST be set explicitly; otherwise the
+      # backend falls back to http://localhost:8090. Mirrors KEYCLOAK_URL pattern
+      # (Compose does not expand nested ${} defaults, so we can't fall back to
+      # ${FRONTEND_URL:-...} on top of NGINX_PUBLIC_DOMAIN — set FRONTEND_URL
+      # in .env if the frontend is on a different host than the gateway).
+      - FRONTEND_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}

@@ -13,6 +13,24 @@ export interface AiTwin {
   isDefault: boolean;
   twinNumber: string;
   linkedKbFileIds: string[];
+  linkedKbFiles?: Array<{
+    fileId: string;
+    _key: string;
+    fileName: string | null;
+    originalName: string | null;
+    mimeType: string | null;
+    fileType: string | null;
+    size: number | null;
+    title: string | null;
+    description: string | null;
+    category: string | null;
+    tags: string[];
+    labels: string[];
+    status: string | null;
+    sourceUrl: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  }>;
   createdAt: string;
   updatedAt: string;
   numChats?: number;
@@ -37,6 +55,7 @@ export interface PublicAiTwin {
   _key: string;
   name: string;
   description: string;
+  profilePicUrl: string | null;
 }
 
 export interface ListPublicAiTwinsResponse {

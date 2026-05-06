@@ -78,21 +78,20 @@ const config = {
   clamscan: {
     removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false,
 
-    // FIX: Check for the string 'false' or use the env var as a path
+    // 'false' = disabled; any other non-empty value is taken as the
+    // quarantine directory path.
     quarantineInfected:
       process.env.CLAMSCAN_QUARANTINE_INFECTED === 'false' ? false : process.env.CLAMSCAN_QUARANTINE_INFECTED || false,
 
     debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false,
 
-    // FIX: Use a strict === 'true' check, as 'false' string is truthy
+    // Strict === 'true' — 'false' is a truthy string in JS so we can't rely on
+    // implicit boolean coercion here.
     socket: process.env.CLAMSCAN_SOCKET === 'true' || false,
 
     host: process.env.CLAMSCAN_HOST || '127.0.0.1',
 
-    // FIX: Convert port string to a number
     port: parseInt(process.env.CLAMSCAN_PORT, 10) || 3310,
-
-    // FIX: Convert timeout string to a number
     timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
 
     localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true,

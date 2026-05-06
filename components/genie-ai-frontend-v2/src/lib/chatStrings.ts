@@ -17,7 +17,8 @@ export const DEFAULT_CHAT_LANG: ChatLang = 'fr';
 export interface LangOption {
   code: ChatLang;
   label: string;
-  // ISO 3166-1 alpha-2 country code used by https://flagcdn.com.
+  // ISO 3166-1 alpha-2 country code; resolved to a bundled SVG under
+  // /public/images/flags/.
   flag: string;
 }
 
@@ -60,8 +61,8 @@ export const CHAT_LANGS: LangOption[] = [
 ];
 
 // API codes (`code`) → ISO 3166-1 alpha-2 country flag. Falls back to using
-// the language code itself as a flag (most flagcdn entries match the lang
-// code), then to a globe placeholder if even that is missing.
+// the language code itself as a flag, then the file resolver returns whatever
+// SVG happens to match (or 404s — callers should still pass a known code).
 const FLAG_BY_CODE: Record<string, string> = Object.fromEntries(
   CHAT_LANGS.map((opt) => [opt.code, opt.flag]),
 );
@@ -71,7 +72,7 @@ export function flagForLang(code: string): string {
 }
 
 export function flagUrl(code: string): string {
-  return `https://flagcdn.com/w40/${code.toLowerCase()}.png`;
+  return `/images/flags/${code.toLowerCase()}.svg`;
 }
 
 export interface SuggestionCard {

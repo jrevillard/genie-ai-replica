@@ -54,7 +54,7 @@ const searchSchema = Joi.object({
   mimeType: Joi.string().optional()
 });
 
-// UPDATED: Added 'killed' to validation per state machine spec
+// `killed` is an explicit terminal state in the dataprep state machine.
 const getFilesSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
@@ -79,17 +79,14 @@ const updateFileSchema = Joi.object({
   language: Joi.string().min(2).max(5).optional()
 });
 
-// --- NEW SCHEMAS ADDED ---
-
-// Schema for new log entry
+// Schema for a single ingestion-log entry.
 const ingestionLogSchema = Joi.object({
   level: Joi.string().valid('INFO', 'WARN', 'ERROR').required(),
   stage: Joi.string().required(),
   message: Joi.string().required()
 });
 
-// Schema for status update from OPEA
-// UPDATED: Added 'Killed' to supported statuses
+// Status update from OPEA dataprep — values mirror the dataprep state machine.
 const updateStatusSchema = Joi.object({
   dataprep: Joi.object({
     status: Joi.string()

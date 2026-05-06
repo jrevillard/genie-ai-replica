@@ -23,10 +23,9 @@ const dialogOpen = ref(false);
 const creating = ref(false);
 
 const filtered = computed(() => {
-  const visible = twins.value.filter((t) => !t.isDefault);
   const q = search.value.trim().toLowerCase();
-  if (!q) return visible;
-  return visible.filter((t) => t.name.toLowerCase().includes(q));
+  if (!q) return twins.value;
+  return twins.value.filter((t) => t.name.toLowerCase().includes(q));
 });
 
 function loadTwins() {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Eye, EyeOff } from 'lucide-vue-next';
 import {
   ArrowLeft01Icon,
@@ -12,6 +12,7 @@ import { storeToRefs } from 'pinia';
 import { sileo } from '../lib/notify';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import ProfileHeaderSkeleton from '../components/ui/skeletons/ProfileHeaderSkeleton.vue';
 import Icon from '../components/ui/Icon.vue';
@@ -19,6 +20,7 @@ import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
 import { changePasswordSchema, type ChangePasswordInput } from '../lib/validation/schemas';
+import type { PersonalIdentification } from '../services/auth';
 import { useT } from '../i18n/composables';
 
 const { t } = useT();
@@ -65,11 +67,98 @@ const profileFields = computed(() => {
   return [
     { label: t('auth.profile.fields.fullName', 'Full name'), value: pid.fullName || dash },
     { label: t('auth.profile.fields.dob', 'Date of birth'), value: formatDob(pid.dob) },
-    { label: t('auth.profile.fields.gender', 'Gender'), value: pid.gender || dash },
+    { label: t('auth.profile.fields.gender', 'Gender'), value: genderLabel(pid.gender) },
     { label: t('auth.profile.fields.nationality', 'Nationality'), value: pid.nationality || dash },
-    { label: t('auth.profile.fields.marital', 'Marital status'), value: pid.maritalStatus || dash },
+    { label: t('auth.profile.fields.marital', 'Marital status'), value: maritalLabel(pid.maritalStatus) },
   ];
 });
+
+// ---------- Personal information edit ----------
+
+type PidForm = Required<Pick<PersonalIdentification, 'fullName' | 'dob' | 'gender' | 'nationality' | 'maritalStatus'>>;
+
+const editing = ref(false);
+const saving = ref(false);
+const pidForm = reactive<PidForm>({
+  fullName: '',
+  dob: '',
+  gender: '',
+  nationality: '',
+  maritalStatus: '',
+});
+
+const genderOptions = computed(() => [
+  { value: 'male', label: t('auth.profile.gender.male', 'Male') },
+  { value: 'female', label: t('auth.profile.gender.female', 'Female') },
+  { value: 'other', label: t('auth.profile.gender.other', 'Other') },
+  { value: 'unspecified', label: t('auth.profile.gender.unspecified', 'Prefer not to say') },
+]);
+
+const maritalOptions = computed(() => [
+  { value: 'single', label: t('auth.profile.marital.single', 'Single') },
+  { value: 'married', label: t('auth.profile.marital.married', 'Married') },
+  { value: 'divorced', label: t('auth.profile.marital.divorced', 'Divorced') },
+  { value: 'widowed', label: t('auth.profile.marital.widowed', 'Widowed') },
+  { value: 'unspecified', label: t('auth.profile.marital.unspecified', 'Prefer not to say') },
+]);
+
+function genderLabel(value?: string): string {
+  if (!value) return t('common.notProvided', '—');
+  return genderOptions.value.find(o => o.value === value)?.label ?? value;
+}
+
+function maritalLabel(value?: string): string {
+  if (!value) return t('common.notProvided', '—');
+  return maritalOptions.value.find(o => o.value === value)?.label ?? value;
+}
+
+function hydrateForm() {
+  const pid = user.value?.personalIdentification ?? {};
+  pidForm.fullName = pid.fullName ?? '';
+  // <input type="date"> wants YYYY-MM-DD; the stored DOB is already that shape.
+  pidForm.dob = pid.dob ? pid.dob.slice(0, 10) : '';
+  pidForm.gender = pid.gender ?? '';
+  pidForm.nationality = pid.nationality ?? '';
+  pidForm.maritalStatus = pid.maritalStatus ?? '';
+}
+
+watch(user, hydrateForm, { immediate: true });
+
+function startEdit() {
+  hydrateForm();
+  editing.value = true;
+}
+
+function cancelEdit() {
+  hydrateForm();
+  editing.value = false;
+}
+
+async function saveProfile() {
+  saving.value = true;
+  try {
+    // Send only fields that actually changed so we never overwrite untouched
+    // server data with empty strings.
+    const current = user.value?.personalIdentification ?? {};
+    const diff: PersonalIdentification = {};
+    (Object.keys(pidForm) as Array<keyof PidForm>).forEach(k => {
+      const next = pidForm[k].trim();
+      const prev = (current[k] ?? '').toString();
+      if (next !== prev) diff[k] = next;
+    });
+    if (Object.keys(diff).length === 0) {
+      editing.value = false;
+      return;
+    }
+    await auth.updateProfile(diff);
+    sileo.success({ title: t('auth.profile.saved', 'Profile updated successfully.') });
+    editing.value = false;
+  } catch {
+    sileo.error({ title: auth.error ?? t('auth.profile.saveFailed', 'Failed to update profile') });
+  } finally {
+    saving.value = false;
+  }
+}
 
 // ---------- Password section ----------
 
@@ -172,12 +261,17 @@ async function onSubmit() {
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <article class="rounded-2xl border border-border bg-surface p-6 shadow-card">
-          <header class="mb-5">
-            <h2 class="text-lg font-semibold text-slate-900">{{ t('auth.profile.personalTitle', 'Personal information') }}</h2>
-            <p class="mt-1 text-sm text-slate-500">{{ t('auth.profile.personalSubtitle', 'Details associated with your account.') }}</p>
+          <header class="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900">{{ t('auth.profile.personalTitle', 'Personal information') }}</h2>
+              <p class="mt-1 text-sm text-slate-500">{{ t('auth.profile.personalSubtitle', 'Details associated with your account.') }}</p>
+            </div>
+            <BaseButton v-if="!editing" variant="ghost" rounded="full" @click="startEdit">
+              {{ t('auth.profile.edit', 'Edit') }}
+            </BaseButton>
           </header>
 
-          <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <dl v-if="!editing" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div
               v-for="field in profileFields"
               :key="field.label"
@@ -192,9 +286,64 @@ async function onSubmit() {
             </div>
           </dl>
 
-          <p class="mt-5 text-xs text-slate-400">
-            {{ t('auth.profile.adminFootnote', 'Need to update these? Reach out to your administrator.') }}
-          </p>
+          <form v-else class="space-y-4" novalidate @submit.prevent="saveProfile">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <BaseInput
+                id="pid-fullName"
+                v-model="pidForm.fullName"
+                :label="t('auth.profile.fields.fullName', 'Full name')"
+                :placeholder="t('auth.profile.placeholders.fullName', 'Your full name')"
+                rounded="full"
+              />
+              <BaseInput
+                id="pid-dob"
+                v-model="pidForm.dob"
+                type="date"
+                :label="t('auth.profile.fields.dob', 'Date of birth')"
+                rounded="full"
+              />
+              <div>
+                <label for="pid-gender" class="mb-1.5 block text-body font-medium text-text">
+                  {{ t('auth.profile.fields.gender', 'Gender') }}
+                </label>
+                <BaseDropdown
+                  id="pid-gender"
+                  v-model="pidForm.gender"
+                  :options="genderOptions"
+                  :placeholder="t('common.notProvided', '—')"
+                  width="w-full"
+                />
+              </div>
+              <BaseInput
+                id="pid-nationality"
+                v-model="pidForm.nationality"
+                :label="t('auth.profile.fields.nationality', 'Nationality')"
+                :placeholder="t('auth.profile.placeholders.nationality', 'e.g. Kenyan')"
+                rounded="full"
+              />
+              <div>
+                <label for="pid-marital" class="mb-1.5 block text-body font-medium text-text">
+                  {{ t('auth.profile.fields.marital', 'Marital status') }}
+                </label>
+                <BaseDropdown
+                  id="pid-marital"
+                  v-model="pidForm.maritalStatus"
+                  :options="maritalOptions"
+                  :placeholder="t('common.notProvided', '—')"
+                  width="w-full"
+                />
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-1">
+              <BaseButton type="button" variant="ghost" rounded="full" :disabled="saving" @click="cancelEdit">
+                {{ t('auth.profile.cancel', 'Cancel') }}
+              </BaseButton>
+              <BaseButton type="submit" variant="primary" rounded="full" :loading="saving">
+                {{ t('auth.profile.save', 'Save changes') }}
+              </BaseButton>
+            </div>
+          </form>
         </article>
 
         <article class="rounded-2xl border border-border bg-surface p-6 shadow-card">

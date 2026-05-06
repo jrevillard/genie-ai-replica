@@ -11,10 +11,8 @@ import {
   Calendar03Icon,
   Cancel01Icon,
   Delete02Icon,
-  Download04Icon,
   FilterHorizontalIcon,
   Mic01Icon,
-  MoreVerticalIcon,
   PauseIcon,
   PlayIcon,
   Search01Icon,
@@ -25,6 +23,8 @@ import {
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue';
+import FlagIcon from '../components/ui/FlagIcon.vue';
+import { flagForLang } from '../lib/chatStrings';
 import ChatSessionListSkeleton from '../components/ui/skeletons/ChatSessionListSkeleton.vue';
 import ChatMessagesSkeleton from '../components/ui/skeletons/ChatMessagesSkeleton.vue';
 import CallsTableSkeleton from '../components/ui/skeletons/CallsTableSkeleton.vue';
@@ -38,7 +38,7 @@ import { useAiTwinsStore } from '../stores/aiTwins';
 import { useAuthStore } from '../stores/auth';
 import { useChatHistoryStore } from '../stores/chatHistory';
 import { useVoiceStore } from '../stores/voice';
-import type { AiTwin } from '../services/aiTwins';
+import type { AiTwin, PublicAiTwin } from '../services/aiTwins';
 import * as chatSessionsApi from '../services/chatSessions';
 import type { ChatSessionRecord } from '../services/chatSessions';
 import type { VoiceSession } from '../services/voice';
@@ -65,6 +65,8 @@ const dateMenuOpen = ref(false);
 const filterPanelOpen = ref(false);
 const callDetailOpen = ref(false);
 const deleteDialogOpen = ref(false);
+const callToDeleteId = ref<string | null>(null);
+const deletingCall = ref(false);
 const detailMode = ref<'transcript' | 'summary'>('transcript');
 const chatSort = ref<'newest' | 'oldest'>('newest');
 
@@ -79,8 +81,23 @@ const voice = useVoiceStore();
 const aiTwins = useAiTwinsStore();
 const chatHistory = useChatHistoryStore();
 
-const { sessions: callSessions, current: currentSession, messages: currentMessages, loading: callsLoading, loadingDetail, error: callsError, detailError, hasMore, offset: callsOffset, limit: callsLimit } = storeToRefs(voice);
-const { twins } = storeToRefs(aiTwins);
+const {
+  sessions: callSessions,
+  current: currentSession,
+  messages: currentMessages,
+  loading: callsLoading,
+  loadingDetail,
+  error: callsError,
+  detailError,
+  hasMore,
+  offset: callsOffset,
+  limit: callsLimit,
+  twinId: callTwinIdState,
+  language: callLanguageState,
+  dateRange: callDateRangeState,
+  sort: callSortState,
+} = storeToRefs(voice);
+const { twins, publicTwins } = storeToRefs(aiTwins);
 const {
   sessions: chatSessions,
   loading: chatsLoading,
@@ -131,9 +148,33 @@ function chooseDate(option: string) {
   selectedDate.value = option;
 }
 
-const callDateFilter = ref('all');
-const callSort = ref('newest');
-const callLanguageFilter = ref('all');
+const callDateFilter = computed<string>({
+  get: () => callDateRangeState.value,
+  set: (v) => {
+    voice.setDateRange((v as 'all' | 'today' | 'last7' | 'last30') || 'all').catch(() => {});
+  },
+});
+
+const callSort = computed<string>({
+  get: () => callSortState.value,
+  set: (v) => {
+    voice.setSort((v as 'newest' | 'oldest' | 'longest' | 'shortest') || 'newest').catch(() => {});
+  },
+});
+
+const callLanguageFilter = computed<string>({
+  get: () => callLanguageState.value ?? 'all',
+  set: (v) => {
+    voice.setLanguage(v && v !== 'all' ? v : null).catch(() => {});
+  },
+});
+
+const callTwinFilter = computed<string>({
+  get: () => callTwinIdState.value ?? '',
+  set: (v) => {
+    voice.setTwinId(v || null).catch(() => {});
+  },
+});
 
 const dateFilterOptions = computed(() => [
   { value: 'all', label: t('history.filters.allDates', 'All dates') },
@@ -167,7 +208,23 @@ const scopeOptions = [
   { value: 'all', label: 'All users' },
 ];
 
-const isAdmin = computed(() => auth.role === 'admin');
+const isAdmin = computed(() => auth.isAdmin);
+
+// Admins see the privileged `/ai-twins` list (full payload + admin-only fields).
+// Non-admins fall back to the sanitized `/public/ai-twins` directory so the
+// dropdown filter is populated with the twins the user can actually see.
+type TwinOption = Pick<AiTwin, '_key' | 'name' | 'description' | 'profilePicUrl'>;
+const availableTwins = computed<TwinOption[]>(() =>
+  isAdmin.value ? (twins.value as TwinOption[]) : (publicTwins.value as TwinOption[])
+);
+
+async function fetchTwins(): Promise<void> {
+  if (isAdmin.value) {
+    await aiTwins.fetchAll().catch(() => {});
+  } else {
+    await aiTwins.fetchAllPublic().catch(() => {});
+  }
+}
 
 const typeFilterValue = computed<string>({
   get: () => typeFilter.value ?? '',
@@ -206,28 +263,31 @@ function refreshChats(): void {
   });
 }
 
-const languageOptions = computed(() => {
-  const langs = Array.from(
-    new Set(callSessions.value.map((s) => s.language).filter(Boolean))
-  ).sort();
-  return [
-    { value: 'all', label: t('history.filters.allLanguages', 'All languages') },
-    ...langs.map((l) => ({ value: l, label: l.toUpperCase() })),
-  ];
-});
+const languageOptions = computed(() => [
+  { value: 'all', label: t('history.filters.allLanguages', 'All languages') },
+  { value: 'en', label: 'English', flag: flagForLang('en') },
+  { value: 'fr', label: 'Français', flag: flagForLang('fr') },
+  { value: 'es', label: 'Español', flag: flagForLang('es') },
+  { value: 'sw', label: 'Kiswahili', flag: flagForLang('sw') },
+]);
 
 const twinFilterOptions = computed(() =>
-  twins.value.map((t) => ({ value: t._key, label: t.name }))
+  availableTwins.value.map((t) => ({ value: t._key, label: t.name }))
 );
+
+const callTwinFilterOptions = computed(() => [
+  { value: '', label: t('history.filters.allTwins', 'All twins') },
+  ...availableTwins.value.map((tw) => ({ value: tw._key, label: tw.name })),
+]);
 
 const twinFilterValue = computed<string>({
   get: () => twinIdFilter.value ?? '',
   set: (v) => chatHistory.setTwinFilter(v || null),
 });
 
-function twinById(twinId?: string | null): AiTwin | null {
+function twinById(twinId?: string | null): TwinOption | null {
   if (!twinId) return null;
-  return twins.value.find((t) => t._key === twinId) ?? null;
+  return availableTwins.value.find((t) => t._key === twinId) ?? null;
 }
 
 function sessionTitle(session: ChatSessionRecord | null | undefined): string {
@@ -274,42 +334,9 @@ const selectedChatSession = computed<ChatSessionRecord | null>(() => {
   return sortedChatSessions.value.find((s) => s._key === selectedSessionId.value) ?? null;
 });
 
-const displayedSessions = computed<VoiceSession[]>(() => {
-  const now = Date.now();
-  const day = 24 * 60 * 60 * 1000;
-  const cutoffByFilter: Record<string, number> = {
-    all: 0,
-    today: now - day,
-    last7: now - 7 * day,
-    last30: now - 30 * day,
-  };
-  const cutoff = cutoffByFilter[callDateFilter.value] ?? 0;
-
-  let rows = callSessions.value.slice();
-
-  if (cutoff > 0) {
-    rows = rows.filter((s) => {
-      const t = new Date(s.startAt).getTime();
-      return Number.isFinite(t) && t >= cutoff;
-    });
-  }
-
-  if (callLanguageFilter.value !== 'all') {
-    rows = rows.filter((s) => s.language === callLanguageFilter.value);
-  }
-
-  if (callSort.value === 'oldest') {
-    rows.sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
-  } else if (callSort.value === 'longest') {
-    rows.sort((a, b) => b.durationSeconds - a.durationSeconds);
-  } else if (callSort.value === 'shortest') {
-    rows.sort((a, b) => a.durationSeconds - b.durationSeconds);
-  } else {
-    rows.sort((a, b) => +new Date(b.startAt) - +new Date(a.startAt));
-  }
-
-  return rows;
-});
+// Server applies twinId/language/dateRange/sort filters, so we just render the
+// page returned by the API.
+const displayedSessions = computed<VoiceSession[]>(() => callSessions.value);
 
 const displayedRangeStart = computed(() =>
   displayedSessions.value.length ? callsOffset.value + 1 : 0
@@ -407,6 +434,9 @@ function formatDuration(seconds: number): string {
 }
 
 function loadCalls(): void {
+  if (availableTwins.value.length === 0) {
+    fetchTwins();
+  }
   voice.fetchSessions().catch(() => {
     // store.error renders into the inline error row
   });
@@ -414,11 +444,11 @@ function loadCalls(): void {
 
 async function loadChats(): Promise<void> {
   try {
-    if (twins.value.length === 0) {
-      await aiTwins.fetchAll().catch(() => {});
+    if (availableTwins.value.length === 0) {
+      await fetchTwins();
     }
-    if (!twinIdFilter.value && twins.value[0]) {
-      chatHistory.setTwinFilter(twins.value[0]._key);
+    if (!twinIdFilter.value && availableTwins.value[0]) {
+      chatHistory.setTwinFilter(availableTwins.value[0]._key);
     }
     phoneInput.value = phoneNumberFilter.value;
     await chatHistory.fetchSessions();
@@ -848,10 +878,44 @@ function closeCallDetails(): void {
   voice.closeSession();
 }
 
-function changePageSize(event: Event): void {
-  const next = Number((event.target as HTMLSelectElement).value);
-  if (Number.isFinite(next) && next > 0) voice.setLimit(next);
+function openDeleteCallDialog(session: VoiceSession): void {
+  callToDeleteId.value = session._key;
+  deleteDialogOpen.value = true;
 }
+
+function cancelDeleteCall(): void {
+  if (deletingCall.value) return;
+  deleteDialogOpen.value = false;
+  callToDeleteId.value = null;
+}
+
+async function confirmDeleteCall(): Promise<void> {
+  if (!callToDeleteId.value) {
+    deleteDialogOpen.value = false;
+    return;
+  }
+  // Backend deletion is not wired yet; close cleanly so the dialog matches
+  // the delete-twin / logout flow visually without orphaning state.
+  deletingCall.value = true;
+  try {
+    deleteDialogOpen.value = false;
+    callToDeleteId.value = null;
+  } finally {
+    deletingCall.value = false;
+  }
+}
+
+const pageSizeOptions = computed(() =>
+  pageSizes.map((n) => ({ value: String(n), label: String(n) }))
+);
+
+const pageSizeValue = computed<string>({
+  get: () => String(callsLimit.value),
+  set: (v) => {
+    const next = Number(v);
+    if (Number.isFinite(next) && next > 0) voice.setLimit(next);
+  },
+});
 
 watch(activeTab, (tab) => {
   if (tab === 'Calls' && callSessions.value.length === 0 && !callsLoading.value) {
@@ -918,7 +982,9 @@ onBeforeUnmount(() => {
               mobileShowChatDetail ? 'hidden' : 'flex',
             ]"
           >
-            <div class="relative z-20 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] gap-2 border-b border-slate-100 px-3 py-4">
+            <div
+              class="relative z-20 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] gap-2 border-b border-slate-100 px-3 py-4"
+            >
               <BaseDropdown
                 v-model="twinFilterValue"
                 :options="twinFilterOptions"
@@ -1016,16 +1082,16 @@ onBeforeUnmount(() => {
 
             <div v-if="filterPanelOpen" class="flex flex-col gap-3 border-b border-slate-100 px-3 pb-3 pt-1">
               <BaseDropdown
-                v-model="chatSort"
-                :options="chatSortOptions"
-                :placeholder="t('history.sortBy', 'Sort By')"
-                width="w-full"
-              />
-              <BaseDropdown
                 v-if="isAdmin"
                 v-model="scopeFilterValue"
                 :options="scopeOptions"
                 placeholder="Scope"
+                width="w-full"
+              />
+              <BaseDropdown
+                v-model="chatSort"
+                :options="chatSortOptions"
+                :placeholder="t('history.sortBy', 'Sort By')"
                 width="w-full"
               />
               <input
@@ -1331,7 +1397,7 @@ onBeforeUnmount(() => {
                   v-if="processingVoice"
                   class="mb-5 flex items-start justify-end gap-2.5"
                   aria-live="polite"
-                  aria-label="Transcribing voice message"
+                  aria-label="Processing voice message"
                 >
                   <div class="flex flex-col items-end gap-1">
                     <div class="rounded-2xl rounded-tr-md bg-ieee-700 px-3.5 py-3 text-white shadow-sm">
@@ -1341,7 +1407,7 @@ onBeforeUnmount(() => {
                         <span />
                       </span>
                     </div>
-                    <span class="text-[11px] text-slate-400">Transcribing your voice…</span>
+                    <span class="text-[11px] text-slate-400">Processing your voice message…</span>
                   </div>
                   <BaseAvatar :name="callerName" size="xs" />
                 </div>
@@ -1455,6 +1521,11 @@ onBeforeUnmount(() => {
         <div v-else class="flex min-h-0 flex-1 flex-col gap-3">
           <div class="flex flex-wrap items-center gap-3">
             <BaseDropdown
+              v-model="callTwinFilter"
+              :options="callTwinFilterOptions"
+              :placeholder="t('history.aiTwin', 'AI Twin')"
+            />
+            <BaseDropdown
               v-model="callDateFilter"
               :options="dateFilterOptions"
               :placeholder="t('history.selectDate', 'Select Date')"
@@ -1472,13 +1543,14 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-            <div class="grid grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_1.1fr_40px] border-b border-neutral-100 bg-neutral-50 px-5 py-3 text-xs font-semibold text-slate-500">
+            <div class="grid grid-cols-[1.4fr_1fr_1fr_1fr_0.8fr_0.8fr_1.2fr_48px] gap-2 border-b border-neutral-100 bg-neutral-50/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <span>{{ t('history.columns.language', 'Language') }}</span>
               <span>{{ t('history.columns.date', 'Date') }}</span>
               <span>{{ t('history.columns.startTime', 'Start Time') }}</span>
               <span>{{ t('history.columns.endTime', 'End Time') }}</span>
               <span>{{ t('history.columns.duration', 'Duration') }}</span>
-              <span>{{ t('history.columns.callerName', 'Caller Name') }}</span>
+              <span>{{ t('history.columns.gender', 'Gender') }}</span>
+              <span>{{ t('history.aiTwin', 'AI Twin') }}</span>
               <span />
             </div>
             <div class="min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
@@ -1515,37 +1587,66 @@ onBeforeUnmount(() => {
                 v-for="record in displayedSessions"
                 v-else
                 :key="record._key"
-                class="grid grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_1.1fr_40px] items-center px-5 py-4 text-sm text-slate-600"
+                class="group grid grid-cols-[1.4fr_1fr_1fr_1fr_0.8fr_0.8fr_1.2fr_48px] items-center gap-2 px-5 py-3 text-sm text-slate-600 transition hover:bg-slate-50"
               >
-                <button type="button" class="flex items-center gap-3 text-left font-semibold text-slate-900" @click="openCallDetails(record, 'transcript')">
-                  <span class="grid h-6 w-6 place-items-center rounded-full bg-violet-50 text-violet-500">
-                    <Icon :icon="CallIcon" :size="14" />
+                <button type="button" class="flex items-center gap-3 text-left" @click="openCallDetails(record, 'transcript')">
+                  <span class="grid h-9 w-9 place-items-center rounded-full bg-ieee-50 text-ieee-700 transition group-hover:bg-ieee-100">
+                    <Icon :icon="CallIcon" :size="16" />
                   </span>
-                  <span class="uppercase">{{ record.language || '—' }}</span>
+                  <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-0.5 pl-0.5 pr-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                    <FlagIcon v-if="record.language" :code="flagForLang(record.language)" :width="18" shape="circle" />
+                    {{ record.language || '—' }}
+                  </span>
                 </button>
-                <span>{{ formatSessionDate(record.startAt) }}</span>
-                <span>{{ formatSessionTime(record.startAt) }}</span>
-                <span>{{ formatSessionTime(record.endAt) }}</span>
-                <span>{{ formatDuration(record.durationSeconds) }}</span>
-                <button type="button" class="text-left transition hover:text-ieee-800" @click="openCallDetails(record, 'summary')">
-                  {{ callerName }}
+                <span class="tabular-nums">{{ formatSessionDate(record.startAt) }}</span>
+                <span class="tabular-nums">{{ formatSessionTime(record.startAt) }}</span>
+                <span class="tabular-nums">{{ formatSessionTime(record.endAt) }}</span>
+                <span class="font-semibold text-slate-700 tabular-nums">{{ formatDuration(record.durationSeconds ?? 0) }}</span>
+                <span>
+                  <span
+                    v-if="record.gender"
+                    :class="[
+                      'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize',
+                      record.gender === 'female'
+                        ? 'bg-pink-50 text-pink-600'
+                        : record.gender === 'male'
+                          ? 'bg-sky-50 text-sky-600'
+                          : 'bg-slate-100 text-slate-600',
+                    ]"
+                  >
+                    {{ record.gender }}
+                  </span>
+                  <span v-else class="text-slate-400">—</span>
+                </span>
+                <button
+                  type="button"
+                  class="flex min-w-0 items-center gap-2 text-left transition hover:text-ieee-800"
+                  @click="openCallDetails(record, 'summary')"
+                >
+                  <BaseAvatar
+                    :src="twinById(record.twinId)?.profilePicUrl ?? undefined"
+                    :name="twinById(record.twinId)?.name ?? 'AI Twin'"
+                    size="xs"
+                  />
+                  <span class="truncate font-medium text-slate-700">
+                    {{ twinById(record.twinId)?.name ?? '—' }}
+                  </span>
                 </button>
-                <button type="button" class="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-500" aria-label="Delete call" @click="deleteDialogOpen = true">
-                  <Icon :icon="MoreVerticalIcon" :size="18" />
+                <button
+                  type="button"
+                  class="grid h-9 w-9 place-items-center justify-self-end rounded-full text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
+                  aria-label="Delete call"
+                  @click="openDeleteCallDialog(record)"
+                >
+                  <Icon :icon="Delete02Icon" :size="16" />
                 </button>
               </div>
             </div>
-            <footer class="flex items-center justify-end gap-6 border-t border-neutral-100 px-5 py-3 text-sm text-slate-500">
-              <label class="inline-flex items-center gap-2">
+            <footer class="flex items-center justify-end gap-6 border-t border-neutral-100 bg-neutral-50/40 px-5 py-3 text-xs font-medium text-slate-500">
+              <div class="inline-flex items-center gap-2">
                 <span>{{ t('history.rowsPerPage', 'Rows per page:') }}</span>
-                <select
-                  :value="callsLimit"
-                  class="rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm font-medium text-slate-700 outline-none transition hover:border-neutral-300 focus:border-ieee-700"
-                  @change="changePageSize"
-                >
-                  <option v-for="n in pageSizes" :key="n" :value="n">{{ n }}</option>
-                </select>
-              </label>
+                <BaseDropdown v-model="pageSizeValue" :options="pageSizeOptions" width="w-20" />
+              </div>
               <span>{{ displayedRangeStart }}-{{ displayedRangeEnd }}</span>
               <button
                 type="button"
@@ -1571,104 +1672,156 @@ onBeforeUnmount(() => {
       </div>
 
       <Teleport to="body">
-        <div v-if="callDetailOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-[#7f819f] p-6">
-          <section class="relative w-full max-w-2xl rounded-xl bg-white p-4 shadow-2xl">
-            <button
-              type="button"
-              class="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950"
-              aria-label="Close call details"
-              @click="closeCallDetails"
-            >
-              <span class="text-2xl leading-none">&times;</span>
-            </button>
-            <header>
-              <h2 class="text-base font-semibold text-slate-950">{{ t('history.callDetails', 'Call Details') }}</h2>
-              <div class="mt-4 flex items-center gap-2">
-                <div class="flex h-12 flex-1 items-center gap-1" aria-hidden="true">
+        <div v-if="callDetailOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div class="absolute inset-0 bg-neutral-900/35 backdrop-blur-sm" @click="closeCallDetails" />
+          <section class="relative z-10 flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)]">
+            <header class="flex items-start justify-between gap-4 px-6 pt-6">
+              <div class="min-w-0">
+                <h2 class="text-lg font-semibold text-slate-900">{{ t('history.callDetails', 'Call Details') }}</h2>
+                <div v-if="currentSession" class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                  <span v-if="twinById(currentSession.twinId)?.name" class="font-semibold text-slate-700">
+                    {{ twinById(currentSession.twinId)?.name }}
+                  </span>
+                  <span v-if="twinById(currentSession.twinId)?.name" class="h-1 w-1 rounded-full bg-slate-300" aria-hidden="true" />
+                  <span>{{ formatSessionDate(currentSession.startAt) }}</span>
+                  <span class="h-1 w-1 rounded-full bg-slate-300" aria-hidden="true" />
+                  <span>{{ formatSessionTime(currentSession.startAt) }}</span>
+                  <span class="h-1 w-1 rounded-full bg-slate-300" aria-hidden="true" />
+                  <span>{{ formatDuration(currentSession.durationSeconds ?? 0) }}</span>
                   <span
-                    v-for="(height, index) in detailWaveformBars"
-                    :key="index"
-                    :class="['w-0.5 rounded-full', index < 18 ? 'bg-ieee-700' : 'bg-slate-300']"
-                    :style="{ height: `${height}%` }"
-                  />
+                    v-if="currentSession.language"
+                    class="ml-1 inline-flex items-center gap-1.5 rounded-full bg-violet-50 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold uppercase tracking-wide text-violet-600"
+                  >
+                    <FlagIcon :code="flagForLang(currentSession.language)" :width="14" shape="circle" />
+                    {{ currentSession.language }}
+                  </span>
                 </div>
-                <span class="text-xs text-slate-400">3:50</span>
               </div>
-              <div class="mt-3 flex items-center justify-between">
-                <button type="button" class="inline-flex h-7 items-center gap-2 rounded-full bg-ieee-700 px-3 text-xs font-semibold text-white">
-                  <Icon :icon="PlayIcon" :size="11" />
-                  {{ t('history.play', 'Play') }}
-                </button>
-                <button type="button" class="grid h-7 w-7 place-items-center rounded-full bg-ieee-700 text-white" aria-label="Download recording">
-                  <Icon :icon="Download04Icon" :size="14" />
-                </button>
-              </div>
+              <button
+                type="button"
+                class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950"
+                aria-label="Close call details"
+                @click="closeCallDetails"
+              >
+                <Icon :icon="Cancel01Icon" :size="16" />
+              </button>
             </header>
 
-            <div class="mt-4 grid grid-cols-2 border-b border-slate-200 text-sm font-semibold">
-              <button
-                type="button"
-                :class="['border-b-2 py-2', detailMode === 'transcript' ? 'border-ieee-700 text-slate-950' : 'border-transparent text-slate-500']"
-                @click="detailMode = 'transcript'"
-              >
-                {{ t('history.transcript', 'Transcript') }}
-              </button>
-              <button
-                type="button"
-                :class="['border-b-2 py-2', detailMode === 'summary' ? 'border-ieee-700 text-slate-950' : 'border-transparent text-slate-500']"
-                @click="detailMode = 'summary'"
-              >
-                {{ t('history.summary', 'Summary') }}
-              </button>
+            <div class="mt-5 px-6">
+              <div class="inline-flex w-full gap-1 rounded-full bg-slate-100 p-1" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="detailMode === 'transcript'"
+                  :class="[
+                    'flex-1 rounded-full py-2 text-xs font-semibold transition',
+                    detailMode === 'transcript' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                  ]"
+                  @click="detailMode = 'transcript'"
+                >
+                  {{ t('history.transcript', 'Transcript') }}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="detailMode === 'summary'"
+                  :class="[
+                    'flex-1 rounded-full py-2 text-xs font-semibold transition',
+                    detailMode === 'summary' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                  ]"
+                  @click="detailMode = 'summary'"
+                >
+                  {{ t('history.summary', 'Summary') }}
+                </button>
+              </div>
             </div>
 
-            <CallTranscriptSkeleton v-if="loadingDetail" />
-            <div v-else-if="detailError" class="py-6 text-sm text-red-600">{{ detailError }}</div>
-            <template v-else>
-              <div v-if="detailMode === 'transcript'" class="min-h-[260px] py-4 text-sm leading-relaxed">
-                <template v-if="currentMessages.length">
-                  <div v-for="msg in currentMessages" :key="msg._key" class="mb-3">
-                    <p class="font-bold text-ieee-700">{{ msg.isAssistant ? 'AI Twin' : 'User' }}</p>
-                    <p class="mt-1 text-slate-950 whitespace-pre-wrap">{{ msg.content }}</p>
+            <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
+              <CallTranscriptSkeleton v-if="loadingDetail" />
+              <div v-else-if="detailError" class="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">{{ detailError }}</div>
+              <template v-else>
+                <div v-if="detailMode === 'transcript'" class="min-h-[240px] space-y-3">
+                  <template v-if="currentMessages.length">
+                    <div
+                      v-for="msg in currentMessages"
+                      :key="msg._key"
+                      :class="['flex items-start gap-2.5', msg.isAssistant ? 'justify-start' : 'flex-row-reverse']"
+                    >
+                      <BaseAvatar
+                        v-if="msg.isAssistant"
+                        :src="twinById(currentSession?.twinId)?.profilePicUrl ?? undefined"
+                        :name="twinById(currentSession?.twinId)?.name ?? 'AI Twin'"
+                        size="xs"
+                      />
+                      <BaseAvatar v-else :name="callerName" size="xs" />
+                      <div class="flex max-w-[78%] flex-col gap-1" :class="msg.isAssistant ? 'items-start' : 'items-end'">
+                        <span class="px-1 text-[11px] font-semibold" :class="msg.isAssistant ? 'text-ieee-700' : 'text-slate-500'">
+                          {{ msg.isAssistant ? (twinById(currentSession?.twinId)?.name ?? 'AI Twin') : 'You' }}
+                        </span>
+                        <p
+                          :class="[
+                            'whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
+                            msg.isAssistant
+                              ? 'rounded-tl-md bg-slate-50 text-slate-800'
+                              : 'rounded-tr-md bg-ieee-700 text-white',
+                          ]"
+                        >
+                          {{ msg.content }}
+                        </p>
+                      </div>
+                    </div>
+                  </template>
+                  <div v-else class="grid place-items-center py-12 text-sm text-slate-500">
+                    No transcript available for this call.
                   </div>
-                </template>
-                <p v-else class="text-slate-500">No transcript available for this call.</p>
-              </div>
-              <div v-else class="min-h-[260px] space-y-4 py-4 text-sm leading-relaxed text-slate-950">
-                <p v-if="currentSession">
-                  Call in <span class="font-semibold uppercase">{{ currentSession.language || '—' }}</span>,
-                  duration {{ formatDuration(currentSession.durationSeconds) }} on {{ formatSessionDate(currentSession.startAt) }}.
-                </p>
-                <p v-else class="text-slate-500">No summary available.</p>
-              </div>
-            </template>
+                </div>
+
+                <div v-else class="min-h-[240px] space-y-3 text-sm leading-relaxed">
+                  <div v-if="currentSession" class="grid grid-cols-2 gap-3 sm:grid-cols-2">
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+                      <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{{ t('history.aiTwin', 'AI Twin') }}</p>
+                      <div class="mt-1 flex items-center gap-2">
+                        <BaseAvatar
+                          :src="twinById(currentSession.twinId)?.profilePicUrl ?? undefined"
+                          :name="twinById(currentSession.twinId)?.name ?? 'AI Twin'"
+                          size="xs"
+                        />
+                        <p class="truncate font-semibold text-slate-900">{{ twinById(currentSession.twinId)?.name ?? '—' }}</p>
+                      </div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+                      <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{{ t('history.columns.language', 'Language') }}</p>
+                      <div class="mt-1 flex items-center gap-2">
+                        <FlagIcon v-if="currentSession.language" :code="flagForLang(currentSession.language)" :width="18" shape="circle" />
+                        <p class="font-semibold uppercase text-slate-900">{{ currentSession.language || '—' }}</p>
+                      </div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+                      <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{{ t('history.columns.duration', 'Duration') }}</p>
+                      <p class="mt-1 font-semibold text-slate-900">{{ formatDuration(currentSession.durationSeconds ?? 0) }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+                      <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{{ t('history.columns.date', 'Date') }}</p>
+                      <p class="mt-1 font-semibold text-slate-900">{{ formatSessionDate(currentSession.startAt) }}</p>
+                    </div>
+                  </div>
+                  <p v-else class="text-slate-500">No summary available.</p>
+                </div>
+              </template>
+            </div>
           </section>
         </div>
       </Teleport>
 
-      <Teleport to="body">
-        <div v-if="deleteDialogOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-[#7f819f] p-6">
-          <section class="relative w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
-            <button
-              type="button"
-              class="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950"
-              aria-label="Close delete dialog"
-              @click="deleteDialogOpen = false"
-            >
-              <span class="text-2xl leading-none">&times;</span>
-            </button>
-            <h2 class="text-lg font-bold text-slate-950">{{ t('history.deleteCallTitle', 'Are you sure you want to delete this call recording?') }}</h2>
-            <p class="mt-4 text-sm leading-relaxed text-red-500">
-              {{ t('history.deleteCallBody', `If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.`) }}
-            </p>
-            <footer class="mt-6 flex justify-end gap-3">
-              <button type="button" class="h-10 rounded-full bg-red-500 px-5 text-sm font-semibold text-white hover:bg-red-600" @click="deleteDialogOpen = false">
-                {{ t('common.delete', 'Delete') }}
-              </button>
-            </footer>
-          </section>
-        </div>
-      </Teleport>
+      <ConfirmDialog
+        v-model:open="deleteDialogOpen"
+        :title="t('history.deleteCallTitle', 'Are you sure you want to delete this call recording?')"
+        :description="t('history.deleteCallBody', `If you decide to delete, you'll lose all data related to this call. You can't recover them once deleted.`)"
+        :confirm-label="t('common.delete', 'Delete')"
+        :loading="deletingCall"
+        @confirm="confirmDeleteCall"
+        @cancel="cancelDeleteCall"
+      />
 
       <!-- TODO i18n: missing keys for "Delete this conversation?" and its description -->
       <ConfirmDialog

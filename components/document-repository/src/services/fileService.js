@@ -326,7 +326,7 @@ class FileService {
     let pageTitle = $('title').text().trim() || 'untitled';
     pageTitle = pageTitle.replace(/[/\\?%*:|"<>]/g, '-').substring(0, 100) || 'untitled';
 
-    // [FIX] Include Domain in filename to ensure it matches search queries
+    // Include the domain in the filename so a search for the domain matches.
     let domain = 'web';
     try {
       domain = new URL(url).hostname;
@@ -375,7 +375,7 @@ class FileService {
 
     const uploadedFile = await this.uploadFile(fileData, fileInfo);
 
-    // [FIX] Create a "synthetic" crawl_job record so the dashboard knows this happened
+    // Stamp a synthetic crawl_job row so the dashboard reflects this crawl.
     try {
       const db = await this.getDb();
       const crawlJob = {
@@ -622,7 +622,7 @@ class FileService {
         bindVars.mimeType = mimeType;
       }
       if (search) {
-        // [FIX] Search in both filename AND source_url so domain search works
+        // Match against filename AND source_url so domain searches still hit.
         filters.push(
           '(CONTAINS(LOWER(file.file_name), LOWER(@search)) OR CONTAINS(LOWER(file.source_url), LOWER(@search)))'
         );
@@ -638,8 +638,8 @@ class FileService {
         query += ` FILTER ${filters.join(' AND ')}`;
       }
 
-      // [FIX] Sort by file_id DESC instead of uploaded_date to avoid timezone/UTC confusion
-      // file_id is chronologically generated so new files always appear first.
+      // Sort by file_id DESC — chronologically generated, sidesteps the UTC
+      // / timezone confusion that bit us when sorting by uploaded_date.
       query += ' SORT file.file_id DESC';
 
       query += ` LIMIT ${offset}, ${limit}`;

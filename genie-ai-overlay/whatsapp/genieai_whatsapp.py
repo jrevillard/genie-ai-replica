@@ -2,8 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 """WhatsApp AI Agent — FastAPI webhook adapter.
 
-Receives Meta WhatsApp Cloud API webhooks, routes inbound text messages to the
-GENIE.AI OPEA ChatQnA pipeline, and sends the AI reply back via the Graph API.
+Receives Meta WhatsApp Cloud API webhooks, processes inbound text messages
+and voice notes (via Whisper ASR), routes them through the GENIE.AI OPEA
+ChatQnA pipeline together with the default twin's personality directive,
+and sends the AI reply back via the Graph API. The reply is text for now —
+sending voice notes back requires ffmpeg in the image to transcode Piper
+WAV to OGG/Opus, which WhatsApp accepts.
+
+Conversation history is cached in Redis (keyed by sender phone number) and
+also persisted to ArangoDB's `chatSessions` / `chatSessionMessages` so it
+shows up alongside web sessions in the admin dashboard.
 """
 
 from __future__ import annotations
@@ -64,16 +72,14 @@ async def verify_webhook(
     raise HTTPException(status_code=403, detail="verification failed")
 
 
-def _extract_first_text_message(
-    payload: WhatsAppWebhookPayload,
-) -> WhatsAppMessage | None:
+def _extract_first_message(payload: WhatsAppWebhookPayload) -> WhatsAppMessage | None:
+    """Return the first inbound message from a webhook payload, or None if
+    the payload is a status receipt (delivery/read) with no `messages` array."""
     for entry in payload.entry:
         for change in entry.changes:
             messages = change.value.messages
-            if not messages:
-                continue
-            for message in messages:
-                return message
+            if messages:
+                return messages[0]
     return None
 
 
@@ -158,7 +164,7 @@ async def _process_message(message: WhatsAppMessage) -> None:
 @app.post("/webhook/whatsapp")
 async def receive_webhook(payload: WhatsAppWebhookPayload, background_tasks: BackgroundTasks) -> dict:
     """Acknowledge Meta within 20s; process the message in the background."""
-    message = _extract_first_text_message(payload)
+    message = _extract_first_message(payload)
     if message is None:
         # Status receipt (delivery/read) — nothing to do.
         return {"status": "ok"}

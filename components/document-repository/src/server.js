@@ -1,9 +1,9 @@
 require('dotenv').config();
-process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128; // Increased from default 4 to support high concurrency
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128;
 
-const http = require('http'); // [ADDED] For agent tuning
-const path = require('path'); // [ADDED] For worker path resolution
-const { Worker } = require('worker_threads'); // [ADDED] For non-blocking execution
+const http = require('http');
+const path = require('path');
+const { Worker } = require('worker_threads');
 
 const app = require('./app');
 const appConfig = require('./config/appConfig');
@@ -29,10 +29,9 @@ if (isProduction) {
     throw new Error(`Production requires secure values for: ${missingSecrets.join(', ')}`);
   }
 }
-// const crawlWorker = require('./workers/crawlWorker'); // [MODIFIED] Handled via Worker Thread now
+// Crawler runs in a Worker thread; see the Worker spawn below.
 
-// [ADDED] High Concurrency Global Tuning
-// Allow more concurrent outgoing connections (e.g., to DB, Dataprep, or external sites)
+// Bumped so outbound calls (DB, dataprep, scraping targets) don't queue.
 http.globalAgent.maxSockets = 1000;
 http.globalAgent.keepAlive = true;
 
@@ -66,18 +65,17 @@ const server = app.listen(PORT, HOST, () => {
   logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
   logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);
 
-  // [ADDED] Server Socket Optimizations
-  // Prevents "EMFILE" errors and helps drop stuck connections faster
-  server.maxConnections = 10000; // Hard limit on concurrent TCP connections
-  server.keepAliveTimeout = 60000; // 1 minute (must be higher than load balancer timeout)
-  server.headersTimeout = 65000; // Must be slightly higher than keepAliveTimeout
+  // Socket tuning: avoid EMFILE under load and drop stuck connections fast.
+  // keepAliveTimeout must exceed the LB idle timeout; headersTimeout must
+  // exceed keepAliveTimeout (Node enforces this ordering).
+  server.maxConnections = 10000;
+  server.keepAliveTimeout = 60000;
+  server.headersTimeout = 65000;
 
-  // Start background workers
+  // Crawler runs in a Worker thread so its CPU work doesn't block request
+  // handling. Spawned via eval so we don't need a separate worker entry file.
   try {
-    // [MODIFIED] Spawn Crawler in a separate thread to prevent Event Loop blocking
     const workerPath = path.resolve(__dirname, './workers/crawlWorker.js');
-
-    // We use eval to require the file and call start(), isolating the CPU load
     const worker = new Worker(
       `
       const { start } = require('${workerPath.replace(/\\/g, '/')}');

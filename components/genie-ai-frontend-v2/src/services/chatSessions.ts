@@ -16,6 +16,8 @@ export interface SendChatMessagePayload {
 }
 
 export interface SendChatMessageResponse {
+  userMessageId?: string;
+  assistantMessageId?: string;
   queryId?: string;
   sessionId?: string;
   response?: string;
@@ -23,6 +25,41 @@ export interface SendChatMessageResponse {
   metadata?: {
     source_documents?: unknown[];
     confidence_score?: number;
+  };
+}
+
+function pickString(...candidates: unknown[]): string | undefined {
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function normalizeSendChatMessageResponse(raw: unknown): SendChatMessageResponse {
+  if (!raw || typeof raw !== 'object') return {};
+  const r = raw as Record<string, unknown>;
+  const assistantObj =
+    r.assistantMessage && typeof r.assistantMessage === 'object'
+      ? (r.assistantMessage as Record<string, unknown>)
+      : null;
+  const userObj =
+    r.userMessage && typeof r.userMessage === 'object' ? (r.userMessage as Record<string, unknown>) : null;
+  const response = pickString(r.response, r.reply, r.answer, assistantObj?.text);
+  return {
+    userMessageId: pickString(r.userMessageId, r.user_message_id, userObj?.id, userObj?._key),
+    assistantMessageId: pickString(
+      r.assistantMessageId,
+      r.assistant_message_id,
+      r.messageId,
+      r.message_id,
+      assistantObj?.id,
+      assistantObj?._key
+    ),
+    queryId: pickString(r.queryId, r.query_id),
+    sessionId: pickString(r.sessionId, r.session_id),
+    response,
+    responseTime: typeof r.responseTime === 'number' ? r.responseTime : undefined,
+    metadata: r.metadata && typeof r.metadata === 'object' ? (r.metadata as SendChatMessageResponse['metadata']) : undefined,
   };
 }
 
@@ -148,12 +185,12 @@ export async function createChatSession(twinId: string): Promise<string> {
 export async function sendChatMessage(
   sessionId: string,
   payload: SendChatMessagePayload
-): Promise<string> {
+): Promise<SendChatMessageResponse> {
   const res = await api.post<SendChatMessageResponse>(
     `/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
     payload
   );
-  return res.data?.response ?? '';
+  return normalizeSendChatMessageResponse(res.data);
 }
 
 export async function listChatSessions(
@@ -243,9 +280,29 @@ export interface ChatLanguage {
   name: string;
 }
 
+export interface SuggestedQuestion {
+  order: number;
+  category: string;
+  content: string;
+}
+
 export async function getChatLanguages(): Promise<ChatLanguage[]> {
   const res = await api.get<ChatLanguage[]>('/public/chat-sessions/languages');
   return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function getPublicSuggestedQuestions(): Promise<SuggestedQuestion[]> {
+  const res = await api.get<SuggestedQuestion[] | { questions?: SuggestedQuestion[] }>(
+    '/public/suggested-questions'
+  );
+  const list = Array.isArray(res.data)
+    ? res.data
+    : Array.isArray(res.data?.questions)
+      ? res.data.questions
+      : [];
+  return list
+    .filter((item) => typeof item?.content === 'string' && item.content.trim().length > 0)
+    .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
 }
 
 // ============================================================================
@@ -267,12 +324,12 @@ export async function createPublicChatSession(): Promise<PublicCreateChatSession
 export async function sendPublicChatMessage(
   sessionId: string,
   payload: SendChatMessagePayload
-): Promise<string> {
+): Promise<SendChatMessageResponse> {
   const res = await api.post<SendChatMessageResponse>(
     `/public/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
     payload
   );
-  return res.data?.response ?? '';
+  return normalizeSendChatMessageResponse(res.data);
 }
 
 export async function getPublicChatSessionMessages(

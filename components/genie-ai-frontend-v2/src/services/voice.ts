@@ -5,9 +5,10 @@ export interface VoiceSession {
   userId: string;
   language: string;
   gender: string;
+  twinId?: string | null;
   startAt: string;
   endAt: string | null;
-  durationSeconds: number;
+  durationSeconds: number | null;
   createdAt: string;
 }
 
@@ -29,9 +30,16 @@ export interface VoiceTokenResponse {
   fullName: string;
 }
 
+export type VoiceDateRange = 'all' | 'today' | 'last7' | 'last30';
+export type VoiceSort = 'newest' | 'oldest' | 'longest' | 'shortest';
+
 export interface ListVoiceSessionsParams {
   limit?: number;
   offset?: number;
+  twinId?: string | null;
+  language?: string | null;
+  dateRange?: VoiceDateRange;
+  sort?: VoiceSort;
 }
 
 export interface GetVoiceMessagesParams {
@@ -51,9 +59,15 @@ export async function mintVoiceToken(
 export async function listVoiceSessions(
   params: ListVoiceSessionsParams = {}
 ): Promise<VoiceSession[]> {
-  const res = await api.get<VoiceSession[]>('/voice/sessions', {
-    params: { limit: params.limit ?? 50, offset: params.offset ?? 0 },
-  });
+  const query: Record<string, string | number> = {
+    limit: params.limit ?? 50,
+    offset: params.offset ?? 0,
+  };
+  if (params.twinId) query.twinId = params.twinId;
+  if (params.language) query.language = params.language;
+  if (params.dateRange && params.dateRange !== 'all') query.dateRange = params.dateRange;
+  if (params.sort) query.sort = params.sort;
+  const res = await api.get<VoiceSession[]>('/voice/sessions', { params: query });
   return res.data;
 }
 

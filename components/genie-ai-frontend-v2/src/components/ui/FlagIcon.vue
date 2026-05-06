@@ -14,7 +14,7 @@ const props = withDefaults(
   { width: 20, shape: 'sm', alt: '' }
 );
 
-const src = computed(() => `https://flagcdn.com/${props.code.toLowerCase()}.svg`);
+const src = computed(() => `/images/flags/${props.code.toLowerCase()}.svg`);
 const isCircle = computed(() => props.shape === 'circle');
 </script>
 

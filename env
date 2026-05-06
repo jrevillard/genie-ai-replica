@@ -259,6 +259,12 @@ CSP_CONNECT_SRC="'self' https://genie.innov8ai.com wss://genie.innov8ai.com http
 # Used by: nginx (reverse proxy)
 NGINX_PUBLIC_DOMAIN=genie.innov8ai.com
 
+# Public frontend URL is auto-derived from NGINX_PUBLIC_DOMAIN in docker-compose
+# (FRONTEND_URL=https://${NGINX_PUBLIC_DOMAIN}) — used by the backend for email
+# verification / password reset links and the post-verification redirect target.
+# If your frontend is served on a different host than the API gateway, edit the
+# FRONTEND_URL line directly in docker-compose.yaml's backend service block.
+
 # NGINX HTTP port (host port for HTTP redirect)
 # Default: 80
 NGINX_HTTP_PORT=80

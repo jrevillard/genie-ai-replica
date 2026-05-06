@@ -4,6 +4,8 @@ import {
   createChatSession,
   createPublicChatSession,
   fetchMessageAudio,
+  getChatSessionMessages,
+  getPublicChatSessionMessages,
   fetchPublicMessageAudio,
   sendChatMessage,
   sendPublicChatMessage,
@@ -56,6 +58,14 @@ function extractError(err: unknown, fallback: string): string {
   return e?.response?.data?.message ?? e?.message ?? fallback;
 }
 
+function latestAssistantMessageId(messages: { _key?: string; role: string }[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (msg.role === 'assistant' && msg._key) return msg._key;
+  }
+  return undefined;
+}
+
 export const useChatStore = defineStore('chat', {
   state: (): ChatState => ({
     currentTwinId: null,
@@ -105,13 +115,14 @@ export const useChatStore = defineStore('chat', {
       const trimmed = text.trim();
       if (!trimmed || this.sending) return;
 
-      this.messages.push({
+      const userMessage: ChatMessage = {
         id: makeId(),
         role: 'user',
         text: trimmed,
         lang: this.lang,
         createdAt: new Date(),
-      });
+      };
+      this.messages.push(userMessage);
 
       const placeholder: ChatMessage = {
         id: makeId(),
@@ -128,13 +139,30 @@ export const useChatStore = defineStore('chat', {
         const sessionId = await this.ensureSession();
         if (!sessionId) throw new Error('No twin selected');
         const send = readSession() ? sendChatMessage : sendPublicChatMessage;
-        const reply = await send(sessionId, {
+        const res = await send(sessionId, {
           text: trimmed,
           context: { language: this.lang },
         });
+        if (res.userMessageId) {
+          userMessage.serverId = res.userMessageId;
+        }
+        let assistantId = res.assistantMessageId;
+        // Some backend builds return only text for the POST response. In that
+        // case, fetch recent history to recover the assistant message id so the
+        // "Listen" action can always call /messages/{messageId}/audio.
+        if (!assistantId) {
+          try {
+            const getMessages = readSession() ? getChatSessionMessages : getPublicChatSessionMessages;
+            const history = await getMessages(sessionId, { limit: 20 });
+            assistantId = latestAssistantMessageId(history.messages);
+          } catch {
+            // Best effort only; message still renders even if id lookup fails.
+          }
+        }
         const target = this.messages.find((m) => m.id === placeholder.id);
         if (target) {
-          target.text = reply;
+          target.text = res.response ?? '';
+          target.serverId = assistantId;
           target.streaming = false;
         }
       } catch (err) {

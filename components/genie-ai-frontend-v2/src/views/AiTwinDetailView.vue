@@ -257,12 +257,12 @@ async function confirmDelete() {
               @change="onImageChange"
             />
             <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
-              <!-- TODO i18n: missing key for 'Chat With Twin' button -->
-              Chat With Twin
+              {{ t('aiTwins.detail.chatWithTwin', 'Chat With Twin') }}
             </BaseButton>
           </div>
 
           <button
+            v-if="!twin?.isDefault"
             type="button"
             class="inline-flex h-10 items-center gap-2 rounded-full border border-danger/30 bg-danger/5 px-4 text-sm font-semibold text-danger transition duration-200 hover:-translate-y-0.5 hover:border-danger/60 hover:bg-danger/10 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger/50 disabled:cursor-not-allowed disabled:opacity-60"
             :disabled="deleting"

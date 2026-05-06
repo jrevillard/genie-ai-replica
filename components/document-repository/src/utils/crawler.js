@@ -9,7 +9,8 @@ const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true });
 
 class Crawler {
-  // [MODIFIED] Added 'metricsUpdateFn' to constructor (optional)
+  // `config.metricsUpdateFn` is optional — when set, the crawler calls it
+  // after each page so the caller can stream progress to a dashboard.
   constructor(pool = null, timeoutMs = 10000, config = {}) {
     logger.debug('Crawler instance created.');
     this.timeoutMs = timeoutMs;
@@ -290,7 +291,10 @@ class Crawler {
     }
   }
 
-  // [MODIFIED] Crawl method signature accepts metricsUpdateFn
+  /**
+   * Run the crawl. `metricsUpdateFn(stats)`, if provided, is invoked after
+   * each page so the caller can stream progress to a dashboard.
+   */
   async crawl(pool, work = null, maxDepth = 10, workers = 10, metricsUpdateFn = null) {
     logger.info(`Starting new crawl. Max depth: ${maxDepth}, Concurrency: ${workers}`);
 

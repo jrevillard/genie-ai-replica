@@ -237,6 +237,52 @@ class AiTwinService {
   }
 
   /**
+   * Fetch KB file metadata for linked ids from document-repository `files`.
+   * Returned in the same order as the input ids (missing ids are skipped).
+   *
+   * @param {string[]} normalizedIds
+   * @returns {Promise<Array<object>>}
+   */
+  async _fetchKbFilesByIds(normalizedIds) {
+    if (!Array.isArray(normalizedIds) || normalizedIds.length === 0) {
+      return [];
+    }
+    try {
+      const cursor = await this.db.query({
+        query: `
+          FOR f IN files
+            FILTER f.file_id IN @ids
+            RETURN {
+              fileId: f.file_id,
+              _key: f._key,
+              fileName: f.file_name || null,
+              originalName: f.original_name || null,
+              mimeType: f.mime_type || null,
+              fileType: f.file_type || null,
+              size: f.size || null,
+              title: f.title || null,
+              description: f.description || null,
+              category: f.category || null,
+              tags: f.tags || [],
+              labels: f.labels || [],
+              status: f.status || null,
+              sourceUrl: f.source_url || null,
+              createdAt: f.created_at || f.createdAt || null,
+              updatedAt: f.updated_at || f.updatedAt || null
+            }
+        `,
+        bindVars: { ids: normalizedIds },
+      });
+      const rows = await cursor.all();
+      const byId = new Map(rows.map((row) => [row.fileId, row]));
+      return normalizedIds.map((id) => byId.get(id)).filter(Boolean);
+    } catch (e) {
+      logger.warn(`AiTwin linked KB metadata fetch failed: ${e.message}`);
+      return [];
+    }
+  }
+
+  /**
    * Read a twin's personality, applying project defaults for any field that
    * is missing or invalid. Always returns a fully-populated object — never
    * `null` — so callers can blindly forward to `buildPersonalityPromptFragment`.
@@ -411,7 +457,11 @@ class AiTwinService {
     if (opts && opts.ownerId && doc.ownerId !== opts.ownerId) {
       throw new NotFoundError('AI twin not found');
     }
-    return this._sanitizeTwin(doc);
+    const twin = this._sanitizeTwin(doc);
+    if (opts && opts.includeKbFiles === true) {
+      twin.linkedKbFiles = await this._fetchKbFilesByIds(twin.linkedKbFileIds || []);
+    }
+    return twin;
   }
 
   /**

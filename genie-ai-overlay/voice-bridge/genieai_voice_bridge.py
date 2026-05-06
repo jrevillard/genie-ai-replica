@@ -46,7 +46,10 @@ from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("genieai_voice_bridge")
-logflag = os.getenv("LOGFLAG", "").lower() in ("1", "true", "yes")
+
+# ---------------------------------------------------------------------------
+# Configuration (env-driven)
+# ---------------------------------------------------------------------------
 
 ASR_URL = os.getenv("ASR_WHISPER_URL", "http://asr-whisper:9100")
 TTS_URL = os.getenv("TTS_PIPER_URL") or os.getenv("TTS_URL") or "http://tts-piper:9200"
@@ -362,6 +365,10 @@ def health() -> JSONResponse:
     return JSONResponse({"ok": True, "asr": ASR_URL, "tts": TTS_URL, "llm": LLM_ENDPOINT})
 
 
+# ---------------------------------------------------------------------------
+# Audio helpers
+# ---------------------------------------------------------------------------
+
 def pcm_to_wav_bytes(pcm: bytes, sample_rate: int = SAMPLE_RATE) -> bytes:
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wav:
@@ -371,6 +378,10 @@ def pcm_to_wav_bytes(pcm: bytes, sample_rate: int = SAMPLE_RATE) -> bytes:
         wav.writeframes(pcm)
     return buf.getvalue()
 
+
+# ---------------------------------------------------------------------------
+# ArangoDB — call sessions / messages / twin lookup
+# ---------------------------------------------------------------------------
 
 _arango_db_handle = None
 
@@ -396,6 +407,10 @@ def get_arango_db():
         logger.exception("[ARANGO] connection failed: %s", exc)
         return None
 
+
+# ---------------------------------------------------------------------------
+# JWT auth
+# ---------------------------------------------------------------------------
 
 def verify_voice_token(token: str) -> Optional[dict]:
     """Verify the short-lived voice JWT. Returns a {'user_id', 'twin_id'} dict
@@ -578,6 +593,10 @@ async def end_call_session(session_id: Optional[str]) -> None:
     await asyncio.to_thread(_end_call_session_sync, session_id)
 
 
+# ---------------------------------------------------------------------------
+# ASR / LLM / TTS
+# ---------------------------------------------------------------------------
+
 async def transcribe(pcm: bytes, language: str) -> str:
     duration_s = len(pcm) / (SAMPLE_RATE * 2)
     logger.info("[ASR] start lang=%s pcm_bytes=%d duration=%.2fs", language, len(pcm), duration_s)
@@ -731,6 +750,10 @@ def split_sentences(buf: str) -> tuple[List[str], str]:
     return sentences, buf[last:]
 
 
+# ---------------------------------------------------------------------------
+# Per-utterance orchestration
+# ---------------------------------------------------------------------------
+
 async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: list,
                              *, voice: Optional[str],
                              session_id: Optional[str] = None) -> None:
@@ -802,6 +825,10 @@ async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: l
     except Exception as exc:
         logger.exception("[PROCESS] failed: %s", exc)
 
+
+# ---------------------------------------------------------------------------
+# WebSocket entry point
+# ---------------------------------------------------------------------------
 
 @app.websocket("/v1/voice/stream")
 async def voice_stream(ws: WebSocket) -> None:
@@ -925,8 +952,10 @@ async def voice_stream(ws: WebSocket) -> None:
     async def maybe_process_now() -> None:
         nonlocal utterance, speech_frames, silence_frames, in_speech
         if speech_frames < MIN_UTTERANCE_FRAMES:
-            logger.info("[VAD] utterance too short (%d frames < min %d), discarding",
-                        speech_frames, MIN_UTTERANCE_FRAMES)
+            # Routine: caller said something too brief to bother transcribing.
+            # Keep at debug — sneezes / "uhh" shouldn't pollute prod logs.
+            logger.debug("[VAD] utterance too short (%d frames < min %d), discarding",
+                         speech_frames, MIN_UTTERANCE_FRAMES)
             utterance.clear()
             speech_frames = 0
             silence_frames = 0
@@ -982,9 +1011,11 @@ async def voice_stream(ws: WebSocket) -> None:
 
             total_frames_received += 1
             now = asyncio.get_event_loop().time()
+            # 5-second heartbeat at debug level — useful for diagnosing
+            # "WS open but no audio reaches us" but pure noise in prod.
             if now - last_audio_log > 5:
-                logger.info("[MIC] received %d audio messages so far (this one %d bytes), processing=%s in_speech=%s",
-                            total_frames_received, len(data), is_processing(), in_speech)
+                logger.debug("[MIC] received %d audio messages so far (this one %d bytes), processing=%s in_speech=%s",
+                             total_frames_received, len(data), is_processing(), in_speech)
                 last_audio_log = now
 
             # Drop audio while we're processing (we're not listening) AND for a

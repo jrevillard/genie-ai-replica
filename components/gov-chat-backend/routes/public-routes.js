@@ -179,6 +179,34 @@ router.get('/chat-sessions/languages', (req, res) => {
 });
 
 /* =========================================================================
+   GET /api/public/suggested-questions   (curated chat-landing prompts)
+   ------------------------------------------------------------------------- */
+/**
+ * @swagger
+ * /public/suggested-questions:
+ *   get:
+ *     summary: List curated chat-landing suggested questions — same list as the authed endpoint
+ *     tags: [Public (Guest)]
+ *     responses:
+ *       200:
+ *         description: Suggested questions ordered by importance
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   order:    { type: integer }
+ *                   category: { type: string }
+ *                   content:  { type: string }
+ */
+router.get('/suggested-questions', (req, res) => {
+  const { SUGGESTED_QUESTIONS } = require('../constants/suggested-questions');
+  res.json(SUGGESTED_QUESTIONS);
+});
+
+/* =========================================================================
    GET /api/public/ai-twins   (sanitized public directory of twins)
    ------------------------------------------------------------------------- */
 /**

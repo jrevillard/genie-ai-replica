@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import * as authApi from '../services/auth';
 import { clearSession, readSession, writeSession } from '../services/http';
-import type { User } from '../services/auth';
+import type { PersonalIdentification, User } from '../services/auth';
 
 interface AuthState {
   user: User | null;
@@ -157,6 +157,22 @@ export const useAuthStore = defineStore('auth', {
         await authApi.changePassword(currentPassword, newPassword);
       } catch (err) {
         this.error = extractError(err, 'Failed to change password');
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async updateProfile(pid: PersonalIdentification): Promise<void> {
+      this.loading = true;
+      this.error = null;
+      try {
+        const updated = await authApi.updateProfile(pid);
+        // Backend returns the full user doc; mirror fetchCurrentUser shape so
+        // displayName/profileFields recompute against the fresh values.
+        if (updated) this.user = updated;
+      } catch (err) {
+        this.error = extractError(err, 'Failed to update profile');
         throw err;
       } finally {
         this.loading = false;

@@ -25,7 +25,9 @@ import BaseButton from '../components/ui/BaseButton.vue';
 import BaseCheckbox from '../components/ui/BaseCheckbox.vue';
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue';
 import BaseDrawer from '../components/ui/BaseDrawer.vue';
+import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
+import { CHAT_LANGS } from '../lib/chatStrings';
 import CreateAiTwinDialog from '../components/dashboard/CreateAiTwinDialog.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
@@ -36,7 +38,7 @@ import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { useT } from '../i18n/composables';
 import { notify } from '../lib/notify';
 import fileService from '../services/files';
-import type { RepoFileRow } from '../services/files';
+import type { IngestionLogEntry, RepoFileRow } from '../services/files';
 import type { AiTwin } from '../services/aiTwins';
 import { useAiTwinsStore } from '../stores/aiTwins';
 
@@ -79,12 +81,11 @@ const linkLanguage = ref('');
 const linkLabels = ref('');
 const crawlUrl = ref('');
 const crawlMaxDepth = ref<number | ''>(2);
-const crawlMaxPages = ref<number | ''>(50);
-const crawlLanguage = ref('');
 
 const rowMenuOpenFor = ref<string | null>(null);
 const ingestingId = ref<string | null>(null);
 const retractingId = ref<string | null>(null);
+const killingId = ref<string | null>(null);
 const bulkBusy = ref(false);
 
 interface FileDetailsState {
@@ -102,7 +103,8 @@ interface FileDetailsState {
   saving: boolean;
   // Logs tabs
   tab: 'details' | 'edit' | 'ingestion' | 'crawl';
-  ingestionLog: string;
+  ingestionLog: IngestionLogEntry[];
+  ingestionLogError: string | null;
   ingestionLogLoading: boolean;
   crawlJob: unknown;
   crawlMetrics: unknown;
@@ -127,7 +129,8 @@ function emptyDetails(): FileDetailsState {
     editAuthor: '',
     saving: false,
     tab: 'details',
-    ingestionLog: '',
+    ingestionLog: [],
+    ingestionLogError: null,
     ingestionLogLoading: false,
     crawlJob: null,
     crawlMetrics: null,
@@ -138,17 +141,41 @@ function emptyDetails(): FileDetailsState {
 }
 
 const deleteDialogOpen = ref(false);
-const deleteTarget = ref<{ fileId: string; name: string } | null>(null);
+const deleteTarget = ref<{ fileId: string; name: string; statusRaw: string } | null>(null);
 const deleteSubmitting = ref(false);
-const deleteDialogDescription = computed(() =>
-  t(
-    'knowledgeSet.deleteConfirmBody',
-    {
-      name: deleteTarget.value?.name ?? '',
-    },
-    'This removes the file from the repository. Linked AI Twins will stop using it.\n{name}'
-  )
+// Deleting a file that the dataprep worker is still processing leaves the
+// running job orphaned (chunks pointing at a deleted file_id). The delete
+// dialog refuses the action and offers to stop ingestion first.
+const deleteTargetIngesting = computed(() =>
+  (deleteTarget.value?.statusRaw ?? '').toLowerCase().includes('ingesting')
 );
+const deleteDialogTitle = computed(() =>
+  deleteTargetIngesting.value
+    ? t('knowledgeSet.stopBeforeDeleteTitle', 'Stop ingestion before deleting')
+    : t('knowledgeSet.deleteConfirmTitle', 'Delete this file?')
+);
+const deleteDialogConfirmLabel = computed(() =>
+  deleteTargetIngesting.value
+    ? t('knowledgeSet.stopIngestionAction', 'Stop ingestion')
+    : t('knowledgeSet.deleteAction', 'Delete')
+);
+const deleteDialogTone = computed<'danger' | 'primary'>(() =>
+  deleteTargetIngesting.value ? 'primary' : 'danger'
+);
+const deleteDialogDescription = computed(() => {
+  if (deleteTargetIngesting.value) {
+    return t(
+      'knowledgeSet.stopBeforeDeleteBody',
+      { name: deleteTarget.value?.name ?? '' },
+      `"{name}" is currently being ingested. Stop the ingestion job first, then delete the file once it has stopped.`
+    );
+  }
+  return t(
+    'knowledgeSet.deleteConfirmBody',
+    { name: deleteTarget.value?.name ?? '' },
+    'This removes the file from the repository. Linked AI Twins will stop using it.\n{name}'
+  );
+});
 
 function extractServerError(err: unknown, fallback?: string): string | undefined {
   const e = err as {
@@ -177,9 +204,13 @@ function formatDateLabel(iso: string | undefined): string {
 
 function mapDataprepToLabel(raw: string | undefined): string {
   const n = (raw || '').toLowerCase();
-  if (n.includes('pending')) return t('knowledgeSet.statusPending', 'Pending');
+  if (n.includes('error')) return t('knowledgeSet.statusError', 'Ingestion error');
+  if (n.includes('warning')) return t('knowledgeSet.statusWarning', 'Ingested with warnings');
   if (n.includes('ingesting')) return t('knowledgeSet.statusIngesting', 'Ingesting');
   if (n.includes('ingested')) return t('knowledgeSet.statusIngested', 'Ingested');
+  if (n.includes('retracted')) return t('knowledgeSet.statusRetracted', 'Retracted');
+  if (n.includes('killed')) return t('knowledgeSet.statusKilled', 'Stopped');
+  if (n.includes('pending')) return t('knowledgeSet.statusPending', 'Pending');
   return raw?.trim() || t('knowledgeSet.statusPending', 'Pending');
 }
 
@@ -268,11 +299,77 @@ onBeforeUnmount(() => {
 
 const filteredDocuments = computed(() => documents.value);
 
+// The dataprep service only runs one job at a time (returns 429 otherwise),
+// so we surface whichever file is currently in the "Ingesting" state to set
+// the user's expectations and explain why a 429 fires on a second click.
+const currentlyIngesting = computed<DocumentRow | null>(
+  () =>
+    documents.value.find((d) => d.statusRaw.toLowerCase().includes('ingesting')) ??
+    null
+);
+
+function isBusyError(err: unknown): boolean {
+  return (err as { response?: { status?: number } })?.response?.status === 429;
+}
+
+function busyMessage(): string {
+  const inFlight = currentlyIngesting.value;
+  if (inFlight) {
+    return t(
+      'knowledgeSet.toasts.ingestBusyNamed',
+      { name: inFlight.name },
+      `"${inFlight.name}" is still being ingested. Wait until it finishes before queueing another.`
+    );
+  }
+  return t(
+    'knowledgeSet.toasts.ingestBusy',
+    'Another ingestion job is still running. Wait for it to finish before queueing another.'
+  );
+}
+
+// Capability helpers — single source of truth for what each row can do based
+// on its dataprep status. Mirrors the valid backend transitions so the UI
+// never offers an action that's guaranteed to fail.
+const INGESTABLE_STATUSES = ['pending', 'retracted', 'killed'];
+function statusKey(doc: DocumentRow): string {
+  return doc.statusRaw.toLowerCase();
+}
+function isIngesting(doc: DocumentRow): boolean {
+  return statusKey(doc).includes('ingesting');
+}
+function canIngest(doc: DocumentRow): boolean {
+  const s = statusKey(doc);
+  // "Ingestion Error" is recoverable — allow retry. "Ingested" is already
+  // indexed; user must Retract first to re-ingest.
+  return INGESTABLE_STATUSES.some((x) => s === x) || s.includes('error');
+}
+function canRetract(doc: DocumentRow): boolean {
+  const s = statusKey(doc);
+  return s.includes('ingested') && !s.includes('ingesting');
+}
+function canStop(doc: DocumentRow): boolean {
+  return isIngesting(doc);
+}
+
+const isGloballyBusy = computed(() => !!currentlyIngesting.value);
+const ingestBlockedReason = computed(() =>
+  isGloballyBusy.value
+    ? t(
+        'knowledgeSet.tooltips.busyJob',
+        { name: currentlyIngesting.value?.name ?? '' },
+        'Wait — "{name}" is still ingesting.'
+      )
+    : ''
+);
+
+const selectedDocs = computed(() => documents.value.filter((d) => d.selected));
+const selectedIngestable = computed(() => selectedDocs.value.filter(canIngest));
+const selectedRetractable = computed(() => selectedDocs.value.filter(canRetract));
+
 const filteredTwins = computed(() => {
-  const visible = storeTwins.value.filter((tw) => !tw.isDefault);
   const q = twinSearch.value.trim().toLowerCase();
-  if (!q) return visible;
-  return visible.filter((tw) => tw.name.toLowerCase().includes(q));
+  if (!q) return storeTwins.value;
+  return storeTwins.value.filter((tw) => tw.name.toLowerCase().includes(q));
 });
 
 const allDocumentsSelected = computed({
@@ -286,10 +383,14 @@ const allDocumentsSelected = computed({
 
 const selectedCount = computed(() => documents.value.filter((d) => d.selected).length);
 
-function statusTone(statusRaw: string): 'neutral' | 'accent' | 'success' {
+function statusTone(
+  statusRaw: string
+): 'neutral' | 'accent' | 'success' | 'warning' | 'danger' {
   const n = statusRaw.toLowerCase();
-  if (n.includes('ingested')) return 'success';
+  if (n.includes('error')) return 'danger';
+  if (n.includes('warning')) return 'warning';
   if (n.includes('ingesting')) return 'accent';
+  if (n.includes('ingested')) return 'success';
   return 'neutral';
 }
 
@@ -427,27 +528,66 @@ async function confirmLinkToTwin() {
 }
 
 function askDelete(doc: DocumentRow) {
-  deleteTarget.value = { fileId: doc.fileId, name: doc.name };
+  deleteTarget.value = {
+    fileId: doc.fileId,
+    name: doc.name,
+    statusRaw: doc.statusRaw,
+  };
   deleteDialogOpen.value = true;
 }
 
-async function confirmDelete() {
+async function confirmDeleteOrKill() {
   const target = deleteTarget.value;
   if (!target || deleteSubmitting.value) return;
   deleteSubmitting.value = true;
   try {
-    await fileService.deleteFile(target.fileId);
-    notify.success(t('knowledgeSet.toasts.deleteSuccess', 'File deleted'));
+    if (deleteTargetIngesting.value) {
+      // Refuse delete while dataprep is still working on the file.
+      // Send the stop signal, close the dialog, and let the user re-attempt
+      // delete once the row drops out of the Ingesting state.
+      await fileService.killIngestion(target.fileId);
+      notify.success(
+        t(
+          'knowledgeSet.toasts.killSent',
+          'Stop signal sent. You can delete the file once it has stopped.'
+        )
+      );
+    } else {
+      await fileService.deleteFile(target.fileId);
+      notify.success(t('knowledgeSet.toasts.deleteSuccess', 'File deleted'));
+    }
     deleteDialogOpen.value = false;
     deleteTarget.value = null;
     await loadDocuments();
   } catch (err) {
     notify.error(
-      t('knowledgeSet.toasts.deleteFailed', 'Delete failed'),
+      deleteTargetIngesting.value
+        ? t('knowledgeSet.toasts.killFailed', 'Could not stop ingestion')
+        : t('knowledgeSet.toasts.deleteFailed', 'Delete failed'),
       extractServerError(err)
     );
   } finally {
     deleteSubmitting.value = false;
+  }
+}
+
+async function killIngestionRow(doc: DocumentRow): Promise<void> {
+  closeRowMenu();
+  if (killingId.value) return;
+  killingId.value = doc.fileId;
+  try {
+    await fileService.killIngestion(doc.fileId);
+    notify.success(
+      t('knowledgeSet.toasts.killSent', 'Stop signal sent. You can delete the file once it has stopped.')
+    );
+    await loadDocuments();
+  } catch (err) {
+    notify.error(
+      t('knowledgeSet.toasts.killFailed', 'Could not stop ingestion'),
+      extractServerError(err)
+    );
+  } finally {
+    killingId.value = null;
   }
 }
 
@@ -523,16 +663,40 @@ function closeRowMenu(): void {
 async function ingestOne(doc: DocumentRow): Promise<void> {
   closeRowMenu();
   if (ingestingId.value) return;
+  if (!canIngest(doc)) {
+    notify.warning(
+      t(
+        'knowledgeSet.toasts.cannotIngest',
+        { status: doc.statusLabel },
+        `Cannot ingest a file in "{status}" state.`
+      )
+    );
+    return;
+  }
+  if (isGloballyBusy.value) {
+    notify.warning(
+      t('knowledgeSet.toasts.ingestBusyTitle', 'Ingestion in progress'),
+      busyMessage()
+    );
+    return;
+  }
   ingestingId.value = doc.fileId;
   try {
     await fileService.ingestFile(doc.fileId);
     notify.success(t('knowledgeSet.toasts.ingestQueued', 'Ingestion started'));
     await loadDocuments();
   } catch (err) {
-    notify.error(
-      t('knowledgeSet.toasts.ingestFailed', 'Failed to start ingestion'),
-      extractServerError(err)
-    );
+    if (isBusyError(err)) {
+      notify.warning(
+        t('knowledgeSet.toasts.ingestBusyTitle', 'Ingestion in progress'),
+        busyMessage()
+      );
+    } else {
+      notify.error(
+        t('knowledgeSet.toasts.ingestFailed', 'Failed to start ingestion'),
+        extractServerError(err)
+      );
+    }
   } finally {
     ingestingId.value = null;
   }
@@ -602,8 +766,36 @@ function reportBulkResult(
 }
 
 async function ingestSelected(): Promise<void> {
-  const ids = selectedFileIds.value;
-  if (!ids.length || bulkBusy.value) return;
+  if (bulkBusy.value) return;
+  if (isGloballyBusy.value) {
+    notify.warning(
+      t('knowledgeSet.toasts.ingestBusyTitle', 'Ingestion in progress'),
+      busyMessage()
+    );
+    return;
+  }
+  // Skip selected files that aren't in an ingestable state — telling the user
+  // up front beats letting the backend reject row-by-row.
+  const ids = selectedIngestable.value.map((d) => d.fileId);
+  const skipped = selectedDocs.value.length - ids.length;
+  if (!ids.length) {
+    notify.warning(
+      t(
+        'knowledgeSet.toasts.noIngestable',
+        'None of the selected files are in a state that can be ingested.'
+      )
+    );
+    return;
+  }
+  if (skipped > 0) {
+    notify.info(
+      t(
+        'knowledgeSet.toasts.ingestSkipped',
+        { count: skipped },
+        '{count} file(s) skipped — already ingested or currently ingesting.'
+      )
+    );
+  }
   bulkBusy.value = true;
   try {
     const res = await fileService.ingestMultipleFiles(ids);
@@ -618,18 +810,44 @@ async function ingestSelected(): Promise<void> {
     );
     await loadDocuments();
   } catch (err) {
-    notify.error(
-      t('knowledgeSet.toasts.bulkIngestFailed', 'Bulk ingestion failed'),
-      extractServerError(err)
-    );
+    if (isBusyError(err)) {
+      notify.warning(
+        t('knowledgeSet.toasts.ingestBusyTitle', 'Ingestion in progress'),
+        busyMessage()
+      );
+    } else {
+      notify.error(
+        t('knowledgeSet.toasts.bulkIngestFailed', 'Bulk ingestion failed'),
+        extractServerError(err)
+      );
+    }
   } finally {
     bulkBusy.value = false;
   }
 }
 
 async function retractSelected(): Promise<void> {
-  const ids = selectedFileIds.value;
-  if (!ids.length || bulkBusy.value) return;
+  if (bulkBusy.value) return;
+  const ids = selectedRetractable.value.map((d) => d.fileId);
+  const skipped = selectedDocs.value.length - ids.length;
+  if (!ids.length) {
+    notify.warning(
+      t(
+        'knowledgeSet.toasts.noRetractable',
+        'None of the selected files are ingested, so nothing can be retracted.'
+      )
+    );
+    return;
+  }
+  if (skipped > 0) {
+    notify.info(
+      t(
+        'knowledgeSet.toasts.retractSkipped',
+        { count: skipped },
+        '{count} file(s) skipped — not currently ingested.'
+      )
+    );
+  }
   bulkBusy.value = true;
   try {
     const res = await fileService.retractMultipleFiles(ids);
@@ -707,12 +925,9 @@ async function submitCrawl(): Promise<void> {
     await fileService.scheduleSiteCrawl({
       url,
       maxDepth: typeof crawlMaxDepth.value === 'number' ? crawlMaxDepth.value : undefined,
-      maxPages: typeof crawlMaxPages.value === 'number' ? crawlMaxPages.value : undefined,
-      language: crawlLanguage.value.trim() || undefined,
     });
     notify.success(t('knowledgeSet.toasts.crawlScheduled', 'Crawl scheduled'));
     crawlUrl.value = '';
-    crawlLanguage.value = '';
     uploadOpen.value = false;
     await loadDocuments();
   } catch (err) {
@@ -733,6 +948,260 @@ function asString(v: unknown): string {
   if (typeof v === 'object') return JSON.stringify(v, null, 2);
   return String(v);
 }
+
+// Hide raw plumbing fields from the friendly Details view; users don't need
+// _key / _id / _rev / file_hash / storage_path to make decisions about a file.
+const TECHNICAL_META_KEYS = new Set([
+  '_key',
+  '_id',
+  '_rev',
+  'file_hash',
+  'storage_path',
+  'file_id',
+  'create_date',
+]);
+
+const showAdvancedMeta = ref(false);
+
+function formatMetaDate(value: unknown): string {
+  const s = asString(value);
+  if (!s) return '—';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function friendlyFileType(mime: string, name: string): string {
+  const m = (mime || '').toLowerCase();
+  if (m === 'application/pdf') return 'PDF document';
+  if (m === 'text/markdown') return 'Markdown document';
+  if (m === 'text/plain') return 'Plain text';
+  if (m === 'text/html') return 'HTML page';
+  if (m.startsWith('image/')) return 'Image';
+  if (m.includes('word')) return 'Word document';
+  if (m.includes('spreadsheet') || m.includes('excel')) return 'Spreadsheet';
+  const ext = name.split('.').pop()?.toUpperCase();
+  return ext ? `${ext} file` : 'File';
+}
+
+function statusInfo(raw: unknown): { label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' } {
+  const s = asString(raw).toLowerCase();
+  if (s.includes('error')) return { label: 'Ingestion error', tone: 'danger' };
+  if (s.includes('warning')) return { label: 'Ingested with warnings', tone: 'warning' };
+  if (s.includes('ingesting')) return { label: 'Ingesting', tone: 'accent' };
+  if (s.includes('ingested')) return { label: 'Ingested', tone: 'success' };
+  if (s.includes('retract')) return { label: 'Retracted', tone: 'neutral' };
+  if (s.includes('killed')) return { label: 'Stopped', tone: 'neutral' };
+  return { label: 'Pending', tone: 'neutral' };
+}
+
+interface MetaSummary {
+  fileName: string;
+  fileTypeLabel: string;
+  fileSizeLabel: string;
+  status: ReturnType<typeof statusInfo>;
+  uploaded: string;
+  ingested: string;
+  retracted: string;
+  language: string;
+  author: string;
+  labels: string[];
+  sourceUrl: string;
+  chunkCount: string;
+}
+
+const metaSummary = computed<MetaSummary | null>(() => {
+  const m = details.value.metadata;
+  if (!m) return null;
+  const dataprep = (m.dataprep ?? {}) as Record<string, unknown>;
+  const sizeRaw = Number(m.file_size ?? 0);
+  return {
+    fileName: asString(m.file_name) || details.value.name,
+    fileTypeLabel: friendlyFileType(asString(m.file_type), asString(m.file_name)),
+    fileSizeLabel: Number.isFinite(sizeRaw) && sizeRaw > 0 ? formatFileSize(sizeRaw) : '—',
+    status: statusInfo(dataprep.status),
+    uploaded: formatMetaDate(m.uploaded_date),
+    ingested: formatMetaDate(dataprep.ingest_date),
+    retracted: formatMetaDate(dataprep.retract_date),
+    language: asString(m.language) || '—',
+    author: asString(m.author) || '—',
+    labels: Array.isArray(m.labels) ? (m.labels as string[]) : [],
+    sourceUrl: asString(m.source_url),
+    chunkCount: asString(m.chunk_count) || '0',
+  };
+});
+
+const advancedMetaEntries = computed(() => {
+  const m = details.value.metadata ?? {};
+  return Object.entries(m).filter(([k]) => TECHNICAL_META_KEYS.has(k));
+});
+
+// Reuse the same canonical language list the chat backend supports — matching
+// languages here means a file's `language` value will line up with the chat
+// language dropdown elsewhere. Sorted alphabetically for scannability and
+// prefixed with an empty option so the user can clear an existing selection.
+const languageOptions = computed(() => {
+  const sorted = [...CHAT_LANGS].sort((a, b) => a.label.localeCompare(b.label));
+  return [
+    { value: '', label: t('knowledgeSet.languageAuto', 'Auto-detect / unset'), flag: '' },
+    ...sorted.map((l) => ({ value: l.code, label: l.label, flag: l.flag })),
+  ];
+});
+
+// Live status of the file open in the drawer — used to gate the "Kill ingest"
+// button so it disappears as soon as the job leaves the Ingesting state.
+const detailsIsIngesting = computed(() => {
+  const status = asString((details.value.metadata?.dataprep as Record<string, unknown> | undefined)?.status);
+  return status.toLowerCase().includes('ingesting');
+});
+
+// A file shows the Crawl tab only if it actually came from a site crawl.
+// `source_url` is the most reliable marker — the crawler always sets it,
+// regular uploads never do.
+const detailsIsCrawled = computed(() =>
+  Boolean(asString(details.value.metadata?.source_url))
+);
+
+// Active crawl detection — drives the "Kill crawl" button. The crawl_job
+// document carries `status` ∈ {Pending, Running, Completed, Failed, Killed}.
+const detailsCrawlActive = computed(() => {
+  const job = details.value.crawlJob as { status?: unknown } | null;
+  const status = asString(job?.status).toLowerCase();
+  return status === 'pending' || status === 'running';
+});
+
+const detailsTabs = computed<Array<'details' | 'edit' | 'ingestion' | 'crawl'>>(() =>
+  detailsIsCrawled.value
+    ? ['details', 'edit', 'ingestion', 'crawl']
+    : ['details', 'edit', 'ingestion']
+);
+
+watch(detailsTabs, (tabs) => {
+  if (!tabs.includes(details.value.tab)) {
+    details.value.tab = 'details';
+  }
+});
+
+// ─── Ingestion log filters & summary ───────────────────────────────────────
+
+const logStageFilter = ref<string>('all');
+const logLevelFilter = ref<string>('all');
+const logSearch = ref<string>('');
+
+watch(
+  () => details.value.fileId,
+  () => {
+    logStageFilter.value = 'all';
+    logLevelFilter.value = 'all';
+    logSearch.value = '';
+  }
+);
+
+function logLevelTone(level: string): 'neutral' | 'accent' | 'success' | 'warning' | 'danger' {
+  const l = (level || '').toUpperCase();
+  if (l === 'ERROR' || l === 'CRITICAL') return 'danger';
+  if (l === 'WARN' || l === 'WARNING') return 'warning';
+  if (l === 'DEBUG') return 'neutral';
+  return 'accent'; // INFO and unknown → accent (informational)
+}
+
+function logTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString(locale.value, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function logDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(locale.value, { month: 'short', day: 'numeric' });
+}
+
+function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '0s';
+  const totalSec = Math.round(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+const logStages = computed<string[]>(() => {
+  const stages = new Set<string>();
+  for (const entry of details.value.ingestionLog) {
+    if (entry.stage) stages.add(entry.stage);
+  }
+  return Array.from(stages);
+});
+
+const filteredLogEntries = computed<IngestionLogEntry[]>(() => {
+  const stage = logStageFilter.value;
+  const level = logLevelFilter.value.toUpperCase();
+  const q = logSearch.value.trim().toLowerCase();
+  return details.value.ingestionLog.filter((entry) => {
+    if (stage !== 'all' && entry.stage !== stage) return false;
+    if (level !== 'ALL') {
+      const l = (entry.level || '').toUpperCase();
+      if (level === 'WARN') {
+        if (l !== 'WARN' && l !== 'WARNING') return false;
+      } else if (level === 'ERROR') {
+        if (l !== 'ERROR' && l !== 'CRITICAL') return false;
+      } else if (l !== level) return false;
+    }
+    if (q && !entry.message.toLowerCase().includes(q)) return false;
+    return true;
+  });
+});
+
+interface LogSummary {
+  total: number;
+  warnings: number;
+  errors: number;
+  latestStage: string;
+  elapsed: string;
+}
+
+const logSummary = computed<LogSummary | null>(() => {
+  const entries = details.value.ingestionLog;
+  if (!entries.length) return null;
+  let warnings = 0;
+  let errors = 0;
+  let firstTs = Infinity;
+  let lastTs = -Infinity;
+  let latestStage = '';
+  let latestTs = -Infinity;
+  for (const e of entries) {
+    const l = (e.level || '').toUpperCase();
+    if (l === 'WARN' || l === 'WARNING') warnings++;
+    else if (l === 'ERROR' || l === 'CRITICAL') errors++;
+    const ts = new Date(e.timestamp).getTime();
+    if (Number.isFinite(ts)) {
+      if (ts < firstTs) firstTs = ts;
+      if (ts > lastTs) lastTs = ts;
+      if (ts > latestTs) {
+        latestTs = ts;
+        latestStage = e.stage || '';
+      }
+    }
+  }
+  return {
+    total: entries.length,
+    warnings,
+    errors,
+    latestStage,
+    elapsed: Number.isFinite(firstTs) && Number.isFinite(lastTs)
+      ? formatDurationMs(lastTs - firstTs)
+      : '0s',
+  };
+});
 
 async function openFileDetails(doc: DocumentRow): Promise<void> {
   closeRowMenu();
@@ -791,16 +1260,26 @@ async function loadIngestionLog(): Promise<void> {
   const fileId = details.value.fileId;
   if (!fileId) return;
   details.value.ingestionLogLoading = true;
+  details.value.ingestionLogError = null;
   try {
-    const log = await fileService.getIngestionLogs(fileId);
-    details.value.ingestionLog = asString(log);
-  } catch {
-    details.value.ingestionLog = t(
-      'knowledgeSet.logs.loadFailed',
-      'Could not load logs.'
-    );
+    details.value.ingestionLog = await fileService.getIngestionLogs(fileId);
+  } catch (err) {
+    details.value.ingestionLog = [];
+    details.value.ingestionLogError =
+      extractServerError(err) ?? t('knowledgeSet.logs.loadFailed', 'Could not load logs.');
   } finally {
     details.value.ingestionLogLoading = false;
+  }
+}
+
+async function refreshDrawerMetadata(): Promise<void> {
+  const fileId = details.value.fileId;
+  if (!fileId) return;
+  try {
+    const meta = (await fileService.getFileMetadata(fileId)) as Record<string, unknown> | null;
+    details.value.metadata = meta ?? null;
+  } catch {
+    // Stale metadata is non-fatal — the drawer keeps what it had.
   }
 }
 
@@ -811,8 +1290,9 @@ async function killIngestion(): Promise<void> {
   try {
     await fileService.killIngestion(fileId);
     notify.success(t('knowledgeSet.toasts.killSuccess', 'Process stopped'));
-    await loadIngestionLog();
-    await loadDocuments();
+    // Refresh in parallel — log + new dataprep status + the row in the list
+    // all need to reflect the kill.
+    await Promise.all([loadIngestionLog(), refreshDrawerMetadata(), loadDocuments()]);
   } catch (err) {
     notify.error(
       t('knowledgeSet.toasts.killFailed', 'Could not stop process'),
@@ -848,8 +1328,7 @@ async function killCrawl(): Promise<void> {
   try {
     await fileService.killCrawl(fileId);
     notify.success(t('knowledgeSet.toasts.killSuccess', 'Process stopped'));
-    await loadCrawlState();
-    await loadDocuments();
+    await Promise.all([loadCrawlState(), refreshDrawerMetadata(), loadDocuments()]);
   } catch (err) {
     notify.error(
       t('knowledgeSet.toasts.killFailed', 'Could not stop process'),
@@ -864,7 +1343,11 @@ watch(
   () => [details.value.open, details.value.tab] as const,
   ([open, tab]) => {
     if (!open || !details.value.fileId) return;
-    if (tab === 'ingestion' && !details.value.ingestionLog && !details.value.ingestionLogLoading) {
+    if (
+      tab === 'ingestion' &&
+      details.value.ingestionLog.length === 0 &&
+      !details.value.ingestionLogLoading
+    ) {
       void loadIngestionLog();
     }
     if (tab === 'crawl' && !details.value.crawlLogs && !details.value.crawlLoading) {
@@ -899,6 +1382,32 @@ watch(
             </div>
           </div>
 
+          <div
+            v-if="currentlyIngesting"
+            class="mb-3 flex items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft/50 px-3 py-2 text-caption text-text"
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              class="block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent"
+              aria-hidden="true"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="font-semibold">
+                {{ t('knowledgeSet.ingestingNowLabel', 'Ingesting now:') }}
+              </span>
+              <span class="ml-1 truncate">{{ currentlyIngesting.name }}</span>
+            </span>
+            <span class="shrink-0 text-meta text-text-muted">
+              {{
+                t(
+                  'knowledgeSet.ingestingNowHint',
+                  'Only one job can run at a time. Other ingests will queue after this finishes.'
+                )
+              }}
+            </span>
+          </div>
+
           <div class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-subtle bg-surface-muted px-3 py-2">
             <BaseCheckbox v-model="allDocumentsSelected" size="sm" class="min-w-0">
               <span class="truncate text-caption font-medium text-text-muted">
@@ -922,21 +1431,51 @@ watch(
                 v-if="selectedCount > 0"
                 type="button"
                 class="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-caption font-semibold text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="bulkBusy"
+                :disabled="bulkBusy || isGloballyBusy || selectedIngestable.length === 0"
+                :title="
+                  isGloballyBusy
+                    ? ingestBlockedReason
+                    : selectedIngestable.length === 0
+                      ? t(
+                          'knowledgeSet.tooltips.noIngestable',
+                          'None of the selected files can be ingested in their current state.'
+                        )
+                      : ''
+                "
                 @click="ingestSelected"
               >
                 <Icon :icon="PlayIcon" :size="14" />
-                {{ t('knowledgeSet.ingestSelectedAction', 'Ingest') }}
+                <span>{{ t('knowledgeSet.ingestSelectedAction', 'Ingest') }}</span>
+                <span
+                  v-if="selectedIngestable.length && selectedIngestable.length !== selectedCount"
+                  class="rounded-full bg-accent-soft px-1.5 text-meta font-semibold text-accent"
+                >
+                  {{ selectedIngestable.length }}
+                </span>
               </button>
               <button
                 v-if="selectedCount > 0"
                 type="button"
                 class="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-caption font-semibold text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="bulkBusy"
+                :disabled="bulkBusy || selectedRetractable.length === 0"
+                :title="
+                  selectedRetractable.length === 0
+                    ? t(
+                        'knowledgeSet.tooltips.noRetractable',
+                        'None of the selected files are ingested, so nothing can be retracted.'
+                      )
+                    : ''
+                "
                 @click="retractSelected"
               >
                 <Icon :icon="PauseIcon" :size="14" />
-                {{ t('knowledgeSet.retractSelectedAction', 'Retract') }}
+                <span>{{ t('knowledgeSet.retractSelectedAction', 'Retract') }}</span>
+                <span
+                  v-if="selectedRetractable.length && selectedRetractable.length !== selectedCount"
+                  class="rounded-full bg-accent-soft px-1.5 text-meta font-semibold text-accent"
+                >
+                  {{ selectedRetractable.length }}
+                </span>
               </button>
             </div>
           </div>
@@ -1017,10 +1556,32 @@ watch(
 
                 <div class="relative flex shrink-0 items-center gap-0.5" data-row-menu>
                   <button
+                    v-if="canStop(document)"
+                    type="button"
+                    class="grid h-8 w-8 place-items-center rounded-lg text-text-muted opacity-0 transition hover:bg-surface-subtle hover:text-text focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    :aria-label="t('knowledgeSet.stopAria', 'Stop ingestion')"
+                    :title="t('knowledgeSet.stopAria', 'Stop ingestion')"
+                    :disabled="killingId === document.fileId"
+                    @click.stop="killIngestionRow(document)"
+                  >
+                    <span
+                      v-if="killingId === document.fileId"
+                      class="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                      aria-hidden="true"
+                    />
+                    <Icon v-else :icon="StopCircleIcon" :size="16" />
+                  </button>
+                  <button
+                    v-else-if="canIngest(document)"
                     type="button"
                     class="grid h-8 w-8 place-items-center rounded-lg text-text-muted opacity-0 transition hover:bg-surface-subtle hover:text-text focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
                     :aria-label="t('knowledgeSet.ingestAria', 'Ingest now')"
-                    :disabled="ingestingId === document.fileId"
+                    :title="
+                      isGloballyBusy
+                        ? ingestBlockedReason
+                        : t('knowledgeSet.ingestAria', 'Ingest now')
+                    "
+                    :disabled="ingestingId === document.fileId || isGloballyBusy"
                     @click.stop="ingestOne(document)"
                   >
                     <span
@@ -1071,16 +1632,19 @@ watch(
                     </button>
                     <div class="my-1 border-t border-border-subtle" />
                     <button
+                      v-if="canIngest(document)"
                       type="button"
                       role="menuitem"
                       class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                      :disabled="ingestingId === document.fileId"
+                      :disabled="ingestingId === document.fileId || isGloballyBusy"
+                      :title="isGloballyBusy ? ingestBlockedReason : ''"
                       @click="ingestOne(document)"
                     >
                       <Icon :icon="PlayIcon" :size="14" />
                       {{ t('knowledgeSet.menu.ingest', 'Ingest now') }}
                     </button>
                     <button
+                      v-if="canRetract(document)"
                       type="button"
                       role="menuitem"
                       class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
@@ -1089,6 +1653,17 @@ watch(
                     >
                       <Icon :icon="PauseIcon" :size="14" />
                       {{ t('knowledgeSet.menu.retract', 'Retract') }}
+                    </button>
+                    <button
+                      v-if="canStop(document)"
+                      type="button"
+                      role="menuitem"
+                      class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                      :disabled="killingId === document.fileId"
+                      @click="killIngestionRow(document)"
+                    >
+                      <Icon :icon="StopCircleIcon" :size="14" />
+                      {{ t('knowledgeSet.menu.stopIngestion', 'Stop ingestion') }}
                     </button>
                     <div class="my-1 border-t border-border-subtle" />
                     <button
@@ -1484,7 +2059,7 @@ watch(
               v-model="linkUrl"
               type="url"
               :placeholder="t('knowledgeSet.urlPlaceholder', 'https://example.com/document.pdf')"
-              rounded="md"
+              rounded="full"
             />
           </label>
           <div class="grid gap-3 sm:grid-cols-2">
@@ -1492,10 +2067,11 @@ watch(
               <span class="text-caption font-semibold text-text">
                 {{ t('knowledgeSet.languageField', 'Language') }}
               </span>
-              <BaseInput
+              <BaseDropdown
                 v-model="linkLanguage"
-                :placeholder="t('knowledgeSet.languagePlaceholder', 'e.g. en, fr')"
-                rounded="md"
+                :options="languageOptions"
+                :placeholder="t('knowledgeSet.languagePlaceholder', 'Select a language')"
+                width="w-full"
               />
             </label>
             <label class="flex flex-col gap-1.5">
@@ -1505,7 +2081,7 @@ watch(
               <BaseInput
                 v-model="linkLabels"
                 :placeholder="t('knowledgeSet.labelsPlaceholder', 'comma, separated')"
-                rounded="md"
+                rounded="full"
               />
             </label>
           </div>
@@ -1524,31 +2100,20 @@ watch(
               v-model="crawlUrl"
               type="url"
               :placeholder="t('knowledgeSet.crawlUrlPlaceholder', 'https://example.com')"
-              rounded="md"
+              rounded="full"
             />
           </label>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="flex flex-col gap-1.5">
-              <span class="text-caption font-semibold text-text">
-                {{ t('knowledgeSet.crawlMaxDepth', 'Max depth') }}
-              </span>
-              <BaseInput v-model.number="crawlMaxDepth" type="number" min="1" max="10" rounded="md" />
-            </label>
-            <label class="flex flex-col gap-1.5">
-              <span class="text-caption font-semibold text-text">
-                {{ t('knowledgeSet.crawlMaxPages', 'Max pages') }}
-              </span>
-              <BaseInput v-model.number="crawlMaxPages" type="number" min="1" max="500" rounded="md" />
-            </label>
-          </div>
           <label class="flex flex-col gap-1.5">
             <span class="text-caption font-semibold text-text">
-              {{ t('knowledgeSet.languageField', 'Language') }}
+              {{ t('knowledgeSet.crawlMaxDepth', 'Max depth') }}
             </span>
             <BaseInput
-              v-model="crawlLanguage"
-              :placeholder="t('knowledgeSet.languagePlaceholder', 'e.g. en, fr')"
-              rounded="md"
+              v-model.number="crawlMaxDepth"
+              type="number"
+              min="1"
+              max="20"
+              :placeholder="t('knowledgeSet.crawlMaxDepthPlaceholder', '2 (recommended)')"
+              rounded="full"
             />
           </label>
           <p class="text-meta text-text-muted">
@@ -1612,12 +2177,13 @@ watch(
 
       <ConfirmDialog
         v-model:open="deleteDialogOpen"
-        :title="t('knowledgeSet.deleteConfirmTitle', 'Delete this file?')"
+        :title="deleteDialogTitle"
         :description="deleteDialogDescription"
-        :confirm-label="t('knowledgeSet.deleteAction', 'Delete')"
+        :confirm-label="deleteDialogConfirmLabel"
         :cancel-label="t('knowledgeSet.cancel', 'Cancel')"
+        :tone="deleteDialogTone"
         :loading="deleteSubmitting"
-        @confirm="confirmDelete"
+        @confirm="confirmDeleteOrKill"
       />
 
       <CreateAiTwinDialog
@@ -1639,7 +2205,7 @@ watch(
           :aria-label="t('knowledgeSet.detailsTabsLabel', 'File details tabs')"
         >
           <button
-            v-for="tab in (['details', 'edit', 'ingestion', 'crawl'] as const)"
+            v-for="tab in detailsTabs"
             :key="tab"
             type="button"
             role="tab"
@@ -1669,33 +2235,157 @@ watch(
         </div>
         <p v-else-if="details.metaError" class="text-caption text-danger">{{ details.metaError }}</p>
 
-        <dl
-          v-else-if="details.tab === 'details'"
-          class="grid grid-cols-1 gap-px overflow-hidden rounded-xl bg-border-subtle text-meta sm:grid-cols-2"
-        >
-          <div
-            v-for="(v, k) in (details.metadata ?? {})"
-            :key="String(k)"
-            class="flex flex-col gap-0.5 bg-surface-muted px-3 py-2.5"
-          >
-            <dt class="font-semibold uppercase tracking-wide text-text-subtle">{{ k }}</dt>
-            <dd class="break-words text-text">{{ asString(v) }}</dd>
-          </div>
-        </dl>
+        <div v-else-if="details.tab === 'details' && metaSummary" class="flex flex-col gap-4">
+          <!-- Hero card: file + status at a glance -->
+          <section class="flex flex-col gap-4 rounded-2xl border border-border bg-surface-muted px-4 py-4 sm:flex-row sm:items-center">
+            <div class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-danger-soft text-danger">
+              <Icon :icon="docIcon(metaSummary.fileName)" :size="24" />
+            </div>
+            <div class="flex min-w-0 flex-1 flex-col gap-1">
+              <h3 class="truncate text-body font-semibold text-text">
+                {{ metaSummary.fileName }}
+              </h3>
+              <p class="truncate text-meta text-text-muted">
+                {{ metaSummary.fileTypeLabel }} · {{ metaSummary.fileSizeLabel }}
+              </p>
+            </div>
+            <BaseBadge :tone="metaSummary.status.tone" dot class="shrink-0">
+              {{ metaSummary.status.label }}
+            </BaseBadge>
+          </section>
+
+          <!-- Properties grid: only the fields a non-technical user cares about -->
+          <dl class="grid grid-cols-1 gap-px overflow-hidden rounded-2xl bg-border-subtle text-caption sm:grid-cols-2">
+            <div class="flex flex-col gap-1 bg-surface px-4 py-3">
+              <dt class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.detailsField.uploaded', 'Uploaded') }}
+              </dt>
+              <dd class="text-text">{{ metaSummary.uploaded }}</dd>
+            </div>
+            <div class="flex flex-col gap-1 bg-surface px-4 py-3">
+              <dt class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.detailsField.lastIngested', 'Last ingested') }}
+              </dt>
+              <dd class="text-text">{{ metaSummary.ingested }}</dd>
+            </div>
+            <div class="flex flex-col gap-1 bg-surface px-4 py-3">
+              <dt class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.detailsField.author', 'Author') }}
+              </dt>
+              <dd class="text-text">{{ metaSummary.author }}</dd>
+            </div>
+            <div class="flex flex-col gap-1 bg-surface px-4 py-3">
+              <dt class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.detailsField.language', 'Language') }}
+              </dt>
+              <dd class="text-text">{{ metaSummary.language }}</dd>
+            </div>
+            <div class="flex flex-col gap-1 bg-surface px-4 py-3">
+              <dt class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.detailsField.chunks', 'Chunks indexed') }}
+              </dt>
+              <dd class="text-text">{{ metaSummary.chunkCount }}</dd>
+            </div>
+            <div
+              v-if="metaSummary.status.label === 'Retracted'"
+              class="flex flex-col gap-1 bg-surface px-4 py-3"
+            >
+              <dt class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.detailsField.retracted', 'Retracted') }}
+              </dt>
+              <dd class="text-text">{{ metaSummary.retracted }}</dd>
+            </div>
+            <div
+              v-if="metaSummary.sourceUrl"
+              class="col-span-full flex flex-col gap-1 bg-surface px-4 py-3"
+            >
+              <dt class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.detailsField.source', 'Source URL') }}
+              </dt>
+              <dd class="truncate text-text">
+                <a
+                  :href="metaSummary.sourceUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1.5 text-accent transition hover:underline"
+                >
+                  <Icon :icon="Globe02Icon" :size="14" />
+                  <span class="truncate">{{ metaSummary.sourceUrl }}</span>
+                </a>
+              </dd>
+            </div>
+          </dl>
+
+          <!-- Labels chips -->
+          <section v-if="metaSummary.labels.length" class="flex flex-col gap-2">
+            <h4 class="text-meta font-semibold uppercase tracking-wide text-text-subtle">
+              {{ t('knowledgeSet.detailsField.labels', 'Labels') }}
+            </h4>
+            <div class="flex flex-wrap gap-1.5">
+              <span
+                v-for="label in metaSummary.labels"
+                :key="label"
+                class="rounded-full bg-surface-muted px-2.5 py-0.5 text-meta font-medium text-text"
+              >
+                {{ label }}
+              </span>
+            </div>
+          </section>
+
+          <!-- Advanced disclosure: keeps raw IDs / hash / storage path one click away
+               for power users without polluting the friendly view. -->
+          <section v-if="advancedMetaEntries.length" class="rounded-2xl border border-border-subtle">
+            <button
+              type="button"
+              class="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-caption font-semibold text-text-muted transition hover:text-text"
+              :aria-expanded="showAdvancedMeta"
+              @click="showAdvancedMeta = !showAdvancedMeta"
+            >
+              <span>{{ t('knowledgeSet.advancedDetails', 'Advanced (technical)') }}</span>
+              <span aria-hidden="true">{{ showAdvancedMeta ? '−' : '+' }}</span>
+            </button>
+            <dl
+              v-if="showAdvancedMeta"
+              class="grid grid-cols-1 gap-px overflow-hidden rounded-b-2xl bg-border-subtle text-meta sm:grid-cols-2"
+            >
+              <div
+                v-for="[k, v] in advancedMetaEntries"
+                :key="k"
+                class="flex flex-col gap-0.5 bg-surface-muted px-3 py-2.5"
+              >
+                <dt class="font-semibold uppercase tracking-wide text-text-subtle">{{ k }}</dt>
+                <dd class="break-all text-text">{{ asString(v) }}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
 
         <div v-else-if="details.tab === 'edit'" class="flex flex-col gap-3">
           <label class="flex flex-col gap-1.5">
             <span class="text-caption font-semibold text-text">{{ t('knowledgeSet.fileNameField', 'File name') }}</span>
-            <BaseInput v-model="details.editName" rounded="md" />
+            <BaseInput
+              v-model="details.editName"
+              :placeholder="t('knowledgeSet.fileNamePlaceholder', 'Document file name')"
+              rounded="full"
+            />
           </label>
           <div class="grid gap-3 sm:grid-cols-2">
             <label class="flex flex-col gap-1.5">
               <span class="text-caption font-semibold text-text">{{ t('knowledgeSet.languageField', 'Language') }}</span>
-              <BaseInput v-model="details.editLanguage" rounded="md" />
+              <BaseDropdown
+                v-model="details.editLanguage"
+                :options="languageOptions"
+                :placeholder="t('knowledgeSet.languagePlaceholder', 'Select a language')"
+                width="w-full"
+              />
             </label>
             <label class="flex flex-col gap-1.5">
               <span class="text-caption font-semibold text-text">{{ t('knowledgeSet.authorField', 'Author') }}</span>
-              <BaseInput v-model="details.editAuthor" rounded="md" />
+              <BaseInput
+                v-model="details.editAuthor"
+                :placeholder="t('knowledgeSet.authorPlaceholder', 'Author or organization')"
+                rounded="full"
+              />
             </label>
           </div>
           <label class="flex flex-col gap-1.5">
@@ -1703,12 +2393,13 @@ watch(
             <BaseInput
               v-model="details.editLabels"
               :placeholder="t('knowledgeSet.labelsPlaceholder', 'comma, separated')"
-              rounded="md"
+              rounded="full"
             />
           </label>
         </div>
 
-        <div v-else-if="details.tab === 'ingestion'" class="flex flex-col gap-3">
+        <div v-else-if="details.tab === 'ingestion'" class="flex flex-col gap-4">
+          <!-- Toolbar: title + refresh / stop -->
           <div class="flex items-center justify-between gap-2">
             <span class="text-caption font-semibold text-text">
               {{ t('knowledgeSet.ingestionLogTitle', 'Ingestion log') }}
@@ -1717,16 +2408,176 @@ watch(
               <BaseButton variant="soft" size="sm" rounded="full" :loading="details.ingestionLogLoading" @click="loadIngestionLog">
                 {{ t('knowledgeSet.refresh', 'Refresh') }}
               </BaseButton>
-              <BaseButton variant="outline" size="sm" rounded="full" :loading="details.killing" @click="killIngestion">
+              <BaseButton
+                v-if="detailsIsIngesting"
+                variant="outline"
+                size="sm"
+                rounded="full"
+                :loading="details.killing"
+                @click="killIngestion"
+              >
                 <Icon :icon="StopCircleIcon" :size="14" />
-                {{ t('knowledgeSet.killIngest', 'Kill ingest') }}
+                {{ t('knowledgeSet.killIngest', 'Stop ingestion') }}
               </BaseButton>
             </div>
           </div>
-          <pre class="max-h-80 overflow-auto rounded-xl border border-border bg-surface-muted px-3 py-2 text-meta leading-relaxed text-text">{{ details.ingestionLog || t('knowledgeSet.logs.empty', 'No log output yet.') }}</pre>
+
+          <!-- Summary card -->
+          <section
+            v-if="logSummary"
+            class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border-subtle text-meta sm:grid-cols-4"
+          >
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <span class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.logs.totalEntries', 'Entries') }}
+              </span>
+              <span class="text-body font-semibold text-text">{{ logSummary.total }}</span>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <span class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.logs.warnings', 'Warnings') }}
+              </span>
+              <span :class="['text-body font-semibold', logSummary.warnings ? 'text-warning' : 'text-text']">
+                {{ logSummary.warnings }}
+              </span>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <span class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.logs.errors', 'Errors') }}
+              </span>
+              <span :class="['text-body font-semibold', logSummary.errors ? 'text-danger' : 'text-text']">
+                {{ logSummary.errors }}
+              </span>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <span class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.logs.elapsed', 'Elapsed') }}
+              </span>
+              <span class="text-body font-semibold text-text">{{ logSummary.elapsed }}</span>
+            </div>
+            <div
+              v-if="logSummary.latestStage"
+              class="col-span-2 flex flex-col gap-0.5 bg-surface px-3 py-2.5 sm:col-span-4"
+            >
+              <span class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.logs.latestStage', 'Latest stage') }}
+              </span>
+              <span class="text-body font-semibold text-text">{{ logSummary.latestStage }}</span>
+            </div>
+          </section>
+
+          <!-- Filters -->
+          <div v-if="details.ingestionLog.length" class="flex flex-col gap-2">
+            <BaseInput
+              v-model="logSearch"
+              :placeholder="t('knowledgeSet.logs.searchPlaceholder', 'Search messages…')"
+              size="sm"
+              rounded="full"
+            >
+              <template #leading><Icon :icon="Search01Icon" :size="14" /></template>
+            </BaseInput>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                :class="[
+                  'rounded-full px-2.5 py-1 text-meta font-semibold transition',
+                  logStageFilter === 'all'
+                    ? 'bg-accent text-text-inverse'
+                    : 'bg-surface-muted text-text-muted hover:bg-surface-subtle',
+                ]"
+                @click="logStageFilter = 'all'"
+              >
+                {{ t('knowledgeSet.logs.allStages', 'All stages') }}
+              </button>
+              <button
+                v-for="stage in logStages"
+                :key="stage"
+                type="button"
+                :class="[
+                  'rounded-full px-2.5 py-1 text-meta font-semibold transition',
+                  logStageFilter === stage
+                    ? 'bg-accent text-text-inverse'
+                    : 'bg-surface-muted text-text-muted hover:bg-surface-subtle',
+                ]"
+                @click="logStageFilter = stage"
+              >
+                {{ stage }}
+              </button>
+              <span class="mx-1 h-4 w-px bg-border-subtle" aria-hidden="true" />
+              <button
+                v-for="lvl in (['all', 'INFO', 'WARN', 'ERROR'] as const)"
+                :key="lvl"
+                type="button"
+                :class="[
+                  'rounded-full px-2.5 py-1 text-meta font-semibold transition',
+                  logLevelFilter === lvl
+                    ? 'bg-accent text-text-inverse'
+                    : 'bg-surface-muted text-text-muted hover:bg-surface-subtle',
+                ]"
+                @click="logLevelFilter = lvl"
+              >
+                {{
+                  lvl === 'all'
+                    ? t('knowledgeSet.logs.allLevels', 'All levels')
+                    : lvl
+                }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Entries -->
+          <div v-if="details.ingestionLogLoading && !details.ingestionLog.length" class="space-y-2">
+            <div class="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" />
+            <div class="h-4 w-1/2 animate-pulse rounded bg-surface-subtle" />
+            <div class="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" />
+          </div>
+          <p v-else-if="details.ingestionLogError" class="text-caption text-danger">
+            {{ details.ingestionLogError }}
+          </p>
+          <p
+            v-else-if="!details.ingestionLog.length"
+            class="rounded-xl border border-border bg-surface-muted px-3 py-2 text-meta text-text-muted"
+          >
+            {{ t('knowledgeSet.logs.empty', 'No log output yet.') }}
+          </p>
+          <p
+            v-else-if="!filteredLogEntries.length"
+            class="rounded-xl border border-border bg-surface-muted px-3 py-2 text-meta text-text-muted"
+          >
+            {{ t('knowledgeSet.logs.noMatches', 'No log entries match your filters.') }}
+          </p>
+          <ol
+            v-else
+            class="max-h-[28rem] overflow-y-auto rounded-2xl border border-border-subtle"
+            role="list"
+          >
+            <li
+              v-for="(entry, idx) in filteredLogEntries"
+              :key="entry._key ?? `${entry.timestamp}-${idx}`"
+              class="flex flex-col gap-1 border-b border-border-subtle px-3 py-2 last:border-b-0 sm:flex-row sm:items-start sm:gap-3"
+            >
+              <time
+                class="shrink-0 font-mono text-meta tabular-nums text-text-muted sm:w-32"
+                :datetime="entry.timestamp"
+                :title="entry.timestamp"
+              >
+                {{ logTime(entry.timestamp) }}
+                <span class="text-text-subtle">· {{ logDate(entry.timestamp) }}</span>
+              </time>
+              <div class="flex shrink-0 items-center gap-1.5 sm:w-44">
+                <BaseBadge :tone="logLevelTone(entry.level)" size="sm">
+                  {{ entry.level }}
+                </BaseBadge>
+                <BaseBadge tone="neutral" size="sm">{{ entry.stage }}</BaseBadge>
+              </div>
+              <p class="min-w-0 flex-1 break-words text-caption text-text">
+                {{ entry.message }}
+              </p>
+            </li>
+          </ol>
         </div>
 
-        <div v-else class="flex flex-col gap-3">
+        <div v-else-if="details.tab === 'crawl'" class="flex flex-col gap-3">
           <div class="flex items-center justify-between gap-2">
             <span class="text-caption font-semibold text-text">
               {{ t('knowledgeSet.crawlStatusTitle', 'Crawl status') }}
@@ -1735,9 +2586,16 @@ watch(
               <BaseButton variant="soft" size="sm" rounded="full" :loading="details.crawlLoading" @click="loadCrawlState">
                 {{ t('knowledgeSet.refresh', 'Refresh') }}
               </BaseButton>
-              <BaseButton variant="outline" size="sm" rounded="full" :loading="details.killing" @click="killCrawl">
+              <BaseButton
+                v-if="detailsCrawlActive"
+                variant="outline"
+                size="sm"
+                rounded="full"
+                :loading="details.killing"
+                @click="killCrawl"
+              >
                 <Icon :icon="StopCircleIcon" :size="14" />
-                {{ t('knowledgeSet.killCrawl', 'Kill crawl') }}
+                {{ t('knowledgeSet.killCrawl', 'Stop crawl') }}
               </BaseButton>
             </div>
           </div>

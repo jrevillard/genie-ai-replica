@@ -298,18 +298,31 @@ async function uploadLink(payload: UploadLinkPayload): Promise<UploadedFileRecor
   return data.data;
 }
 
+export interface SiteCrawlConfig {
+  followExternalLinks?: boolean;
+  maxExternalDepth?: number;
+  contentSelector?: string;
+  excludePatterns?: string[];
+}
+
 export interface SiteCrawlPayload {
   url: string;
+  // Document-repo schema requires depth (1–20). UI may collect this as
+  // "Max depth" — translate before sending.
   maxDepth?: number;
-  maxPages?: number;
-  language?: string;
-  labels?: string[];
+  config?: SiteCrawlConfig;
 }
 
 async function scheduleSiteCrawl(payload: SiteCrawlPayload): Promise<unknown> {
+  const depth = typeof payload.maxDepth === 'number' ? payload.maxDepth : 2;
+  const body: { url: string; depth: number; config?: SiteCrawlConfig } = {
+    url: payload.url,
+    depth,
+  };
+  if (payload.config) body.config = payload.config;
   const { data } = await api.post<{ success?: boolean; data?: unknown; message?: string }>(
     'files/crawl/schedule',
-    payload
+    body
   );
   if (data?.success === false) {
     throw new Error(data?.message || 'Crawl scheduling failed');
@@ -346,11 +359,22 @@ async function killCrawl(fileId: string): Promise<void> {
 
 // ─── Per-file ingestion observability ──────────────────────────────────────
 
-async function getIngestionLogs(fileId: string): Promise<unknown> {
-  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
+export interface IngestionLogEntry {
+  _key?: string;
+  file_id: string;
+  timestamp: string;
+  level: string; // INFO | WARN | ERROR | DEBUG | …
+  stage: string; // System | Chunking | Labeling | Embedding | Retract | …
+  message: string;
+}
+
+async function getIngestionLogs(fileId: string): Promise<IngestionLogEntry[]> {
+  const { data } = await api.get<{ success?: boolean; data?: IngestionLogEntry[] }>(
     `files/${encodeURIComponent(fileId)}/ingestion-log`
   );
-  return data?.data ?? data;
+  // Endpoint returns `{ success, message, data: [...] }`. Normalise to an
+  // array so callers can render directly without poking at the envelope.
+  return Array.isArray(data?.data) ? data.data : [];
 }
 
 async function killIngestion(fileId: string): Promise<void> {

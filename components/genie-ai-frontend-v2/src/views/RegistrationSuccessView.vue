@@ -1,17 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
 import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
 import { useT } from '../i18n/composables';
 
 const { t } = useT();
-const route = useRoute();
-
-const verifyQuery = computed(() => {
-  const email = typeof route.query.email === 'string' ? route.query.email : '';
-  return email ? ({ email } as Record<string, string>) : {};
-});
 </script>
 
 <template>
@@ -42,14 +34,8 @@ const verifyQuery = computed(() => {
 
           <div class="mt-10 flex flex-col gap-3">
             <RouterLink
-              :to="{ name: 'verify-email', query: verifyQuery }"
-              class="btn-primary text-center no-underline"
-            >
-              {{ t('auth.registrationSuccess.enterCode', 'Enter verification code') }}
-            </RouterLink>
-            <RouterLink
               :to="{ name: 'signin' }"
-              class="btn-soft text-center no-underline"
+              class="btn-primary text-center no-underline"
             >
               {{ t('common.backToSignIn', 'Back to sign in') }}
             </RouterLink>

@@ -1022,7 +1022,8 @@ async function startApp() {
     { file: 'voice-routes', paths: ['/api/voice'], service: services.voiceTokenService, extraService: services.voiceSessionService },
     { file: 'ai-twin-routes', paths: ['/api/ai-twins', '/api/ai-twin'], service: services.aiTwinService },
     { file: 'voice-catalog-routes', paths: ['/api/voices'], service: services.voiceCatalogService },
-    { file: 'chat-session-routes', paths: ['/api/chat-sessions', '/api/chat-session'], service: services.chatSessionService }
+    { file: 'chat-session-routes', paths: ['/api/chat-sessions', '/api/chat-session'], service: services.chatSessionService },
+    { file: 'suggested-questions-routes', paths: ['/api/suggested-questions'], service: null }
   ];
 
   // Log route configurations

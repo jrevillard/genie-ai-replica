@@ -507,6 +507,32 @@ module.exports = (aiTwinService) => {
    *                 linkedKbFileIds:
    *                   type: array
    *                   items: { type: string }
+   *                 linkedKbFiles:
+   *                   type: array
+   *                   description: Expanded KB file metadata for linkedKbFileIds
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       fileId: { type: string }
+   *                       _key: { type: string }
+   *                       fileName: { type: string, nullable: true }
+   *                       originalName: { type: string, nullable: true }
+   *                       mimeType: { type: string, nullable: true }
+   *                       fileType: { type: string, nullable: true }
+   *                       size: { type: number, nullable: true }
+   *                       title: { type: string, nullable: true }
+   *                       description: { type: string, nullable: true }
+   *                       category: { type: string, nullable: true }
+   *                       tags:
+   *                         type: array
+   *                         items: { type: string }
+   *                       labels:
+   *                         type: array
+   *                         items: { type: string }
+   *                       status: { type: string, nullable: true }
+   *                       sourceUrl: { type: string, nullable: true }
+   *                       createdAt: { type: string, nullable: true }
+   *                       updatedAt: { type: string, nullable: true }
    *                 numChats: { type: integer, description: "Web chat sessions linked to this twin" }
    *                 numWhatsappChats: { type: integer, description: "WhatsApp chat sessions linked to this twin" }
    *                 numCalls: { type: integer, description: "Voice call sessions linked to this twin" }
@@ -516,7 +542,10 @@ module.exports = (aiTwinService) => {
    */
   router.get('/:twinId', async (req, res) => {
     try {
-      const twin = await aiTwinService.getTwinByKey(req.params.twinId, { ownerId: ownerIdFromReq(req) });
+      const twin = await aiTwinService.getTwinByKey(req.params.twinId, {
+        ownerId: ownerIdFromReq(req),
+        includeKbFiles: true,
+      });
       const counts = await aiTwinService.getTwinSessionCounts(twin._key);
       res.json({ ...twin, ...counts });
     } catch (error) {

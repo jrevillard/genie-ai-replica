@@ -13,9 +13,19 @@ const tokenSchema = Joi.object({
   twinId: Joi.string().trim().max(200).optional()
 });
 
+// UI-friendly enums for date range + sort. Backend translates these into the
+// concrete startAt bounds and AQL sort clause.
+const DATE_RANGES = ['all', 'today', 'last7', 'last30'];
+const SORT_OPTIONS = ['newest', 'oldest', 'longest', 'shortest'];
+
 const listSessionsSchema = Joi.object({
-  limit: Joi.number().integer().min(1).max(200).default(50),
-  offset: Joi.number().integer().min(0).default(0)
+  limit:  Joi.number().integer().min(1).max(200).default(50),
+  offset: Joi.number().integer().min(0).default(0),
+  // Filters — all optional; combined with AND.
+  twinId:    Joi.string().trim().max(200),
+  language:  Joi.string().valid(...SUPPORTED_LANGUAGES),
+  dateRange: Joi.string().valid(...DATE_RANGES).default('all'),
+  sort:      Joi.string().valid(...SORT_OPTIONS).default('newest'),
 });
 
 function getUserId(req) {
@@ -126,10 +136,9 @@ module.exports = (voiceTokenService, voiceSessionService) => {
    * @swagger
    * /voice/sessions:
    *   get:
-   *     summary: List the caller's voice call sessions (most recent first)
+   *     summary: List the caller's voice call sessions with optional filters + sort
    *     tags: [Voice]
-   *     security:
-   *       - bearerAuth: []
+   *     security: [ { bearerAuth: [] } ]
    *     parameters:
    *       - in: query
    *         name: limit
@@ -137,9 +146,29 @@ module.exports = (voiceTokenService, voiceSessionService) => {
    *       - in: query
    *         name: offset
    *         schema: { type: integer, minimum: 0, default: 0 }
+   *       - in: query
+   *         name: twinId
+   *         schema: { type: string }
+   *         description: Only sessions placed against this twin.
+   *       - in: query
+   *         name: language
+   *         schema: { type: string, enum: [en, fr, es, sw] }
+   *         description: Filter by call language.
+   *       - in: query
+   *         name: dateRange
+   *         schema: { type: string, enum: [all, today, last7, last30], default: all }
+   *         description: >-
+   *           `today` = since 00:00 UTC today, `last7` = last 7 days,
+   *           `last30` = last 30 days, `all` = no date bound.
+   *       - in: query
+   *         name: sort
+   *         schema: { type: string, enum: [newest, oldest, longest, shortest], default: newest }
+   *         description: >-
+   *           `newest` / `oldest` sort by startAt; `longest` / `shortest` by
+   *           durationSeconds (in-progress calls without a duration sort last).
    *     responses:
    *       200:
-   *         description: Array of sessions
+   *         description: Filtered sessions
    *         content:
    *           application/json:
    *             schema:
@@ -152,7 +181,15 @@ module.exports = (voiceTokenService, voiceSessionService) => {
     if (error) return res.status(400).json({ message: error.details[0].message });
     try {
       const userId = getUserId(req);
-      const sessions = await voiceSessionService.listSessions({ userId, limit: value.limit, offset: value.offset });
+      const sessions = await voiceSessionService.listSessions({
+        userId,
+        twinId: value.twinId,
+        language: value.language,
+        dateRange: value.dateRange,
+        sort: value.sort,
+        limit: value.limit,
+        offset: value.offset,
+      });
       return res.json(sessions);
     } catch (err) {
       logger.error(`voice/sessions GET error: ${err.message}`, { stack: err.stack });

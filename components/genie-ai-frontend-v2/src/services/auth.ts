@@ -124,3 +124,12 @@ export async function changePassword(
   });
   return res.data;
 }
+
+export async function updateProfile(
+  pid: PersonalIdentification
+): Promise<User> {
+  const res = await api.put<{ success: boolean; user: User }>('/users/', {
+    personalIdentification: pid,
+  });
+  return res.data.user;
+}

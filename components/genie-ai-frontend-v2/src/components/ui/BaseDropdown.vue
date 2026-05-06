@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import FlagIcon from './FlagIcon.vue';
 
 interface Option {
   value: string;
   label: string;
+  // ISO 3166-1 alpha-2 country code; when set, a rounded flag is rendered
+  // before the label in both the trigger and the option list.
+  flag?: string;
 }
 
 const props = withDefaults(
@@ -22,13 +26,59 @@ const emit = defineEmits<{
 
 const open = ref(false);
 const wrapperRef = ref<HTMLElement | null>(null);
+const menuRef = ref<HTMLElement | null>(null);
 
-const selectedLabel = computed(
-  () => props.options.find((o) => o.value === props.modelValue)?.label ?? props.placeholder
+interface MenuPosition {
+  top: number;
+  left: number;
+  width: number;
+  placement: 'bottom' | 'top';
+}
+const menuPosition = ref<MenuPosition>({ top: 0, left: 0, width: 0, placement: 'bottom' });
+
+const selectedOption = computed(() =>
+  props.options.find((o) => o.value === props.modelValue) ?? null
 );
+const selectedLabel = computed(() => selectedOption.value?.label ?? props.placeholder);
+
+const menuStyle = computed(() => ({
+  position: 'fixed' as const,
+  top: `${menuPosition.value.top}px`,
+  left: `${menuPosition.value.left}px`,
+  width: `${menuPosition.value.width}px`,
+}));
+
+function recomputePosition(): void {
+  const trigger = wrapperRef.value;
+  if (!trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  // Estimate menu height — flips upward only if there isn't room below.
+  const estimated = Math.min(280, props.options.length * 40 + 16);
+  const gap = 8;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+  const placement: 'bottom' | 'top' =
+    spaceBelow >= estimated + gap || spaceBelow >= spaceAbove ? 'bottom' : 'top';
+  menuPosition.value = {
+    top: placement === 'bottom' ? rect.bottom + gap : rect.top - gap - estimated,
+    left: rect.left,
+    width: rect.width,
+    placement,
+  };
+}
+
+function openMenu(): void {
+  recomputePosition();
+  open.value = true;
+  nextTick(() => recomputePosition());
+}
 
 function toggle(): void {
-  open.value = !open.value;
+  if (open.value) {
+    open.value = false;
+  } else {
+    openMenu();
+  }
 }
 
 function pick(option: Option): void {
@@ -37,12 +87,32 @@ function pick(option: Option): void {
 }
 
 function onDocClick(event: MouseEvent): void {
-  if (!wrapperRef.value) return;
-  if (!wrapperRef.value.contains(event.target as Node)) open.value = false;
+  const target = event.target as Node;
+  if (wrapperRef.value?.contains(target)) return;
+  if (menuRef.value?.contains(target)) return;
+  open.value = false;
 }
 
+function onWindowChange(): void {
+  if (open.value) recomputePosition();
+}
+
+watch(open, (isOpen) => {
+  if (isOpen) {
+    window.addEventListener('scroll', onWindowChange, true);
+    window.addEventListener('resize', onWindowChange);
+  } else {
+    window.removeEventListener('scroll', onWindowChange, true);
+    window.removeEventListener('resize', onWindowChange);
+  }
+});
+
 onMounted(() => document.addEventListener('mousedown', onDocClick));
-onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocClick);
+  window.removeEventListener('scroll', onWindowChange, true);
+  window.removeEventListener('resize', onWindowChange);
+});
 </script>
 
 <template>
@@ -54,7 +124,10 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
       aria-haspopup="listbox"
       @click="toggle"
     >
-      <span :class="['truncate', !modelValue && 'text-slate-400']">{{ selectedLabel }}</span>
+      <span class="flex min-w-0 items-center gap-2">
+        <FlagIcon v-if="selectedOption?.flag" :code="selectedOption.flag" :width="16" shape="circle" />
+        <span :class="['truncate', !modelValue && 'text-slate-400']">{{ selectedLabel }}</span>
+      </span>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
@@ -69,19 +142,25 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
       </svg>
     </button>
 
-    <Transition
-      enter-active-class="transition duration-150 ease-out"
-      enter-from-class="opacity-0 -translate-y-1 scale-95"
-      enter-to-class="opacity-100 translate-y-0 scale-100"
-      leave-active-class="transition duration-100 ease-in"
-      leave-from-class="opacity-100 translate-y-0 scale-100"
-      leave-to-class="opacity-0 -translate-y-1 scale-95"
-    >
-      <ul
-        v-if="open"
-        role="listbox"
-        class="absolute left-0 top-full z-30 mt-2 w-full origin-top overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-150 ease-out"
+        enter-from-class="opacity-0 -translate-y-1 scale-95"
+        enter-to-class="opacity-100 translate-y-0 scale-100"
+        leave-active-class="transition duration-100 ease-in"
+        leave-from-class="opacity-100 translate-y-0 scale-100"
+        leave-to-class="opacity-0 -translate-y-1 scale-95"
       >
+        <ul
+          v-if="open"
+          ref="menuRef"
+          role="listbox"
+          :style="menuStyle"
+          :class="[
+            'z-50 max-h-[280px] origin-top overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]',
+            menuPosition.placement === 'top' && 'origin-bottom',
+          ]"
+        >
         <li
           v-for="option in options"
           :key="option.value"
@@ -98,7 +177,10 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
             ]"
             @click="pick(option)"
           >
-            <span class="truncate">{{ option.label }}</span>
+            <span class="flex min-w-0 items-center gap-2">
+              <FlagIcon v-if="option.flag" :code="option.flag" :width="16" shape="circle" />
+              <span class="truncate">{{ option.label }}</span>
+            </span>
             <span
               v-if="modelValue === option.value"
               class="ml-2 inline-flex h-4 w-4 shrink-0 items-center justify-center"
@@ -110,7 +192,8 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocClick));
             </span>
           </button>
         </li>
-      </ul>
-    </Transition>
+        </ul>
+      </Transition>
+    </Teleport>
   </div>
 </template>

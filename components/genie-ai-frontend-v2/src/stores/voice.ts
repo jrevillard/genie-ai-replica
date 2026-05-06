@@ -1,6 +1,11 @@
 import { defineStore } from 'pinia';
 import * as api from '../services/voice';
-import type { VoiceMessage, VoiceSession } from '../services/voice';
+import type {
+  VoiceDateRange,
+  VoiceMessage,
+  VoiceSession,
+  VoiceSort,
+} from '../services/voice';
 
 interface VoiceState {
   sessions: VoiceSession[];
@@ -9,6 +14,11 @@ interface VoiceState {
   hasMore: boolean;
   loading: boolean;
   error: string | null;
+
+  twinId: string | null;
+  language: string | null;
+  dateRange: VoiceDateRange;
+  sort: VoiceSort;
 
   current: VoiceSession | null;
   messages: VoiceMessage[];
@@ -24,6 +34,11 @@ export const useVoiceStore = defineStore('voice', {
     hasMore: false,
     loading: false,
     error: null,
+
+    twinId: null,
+    language: null,
+    dateRange: 'all',
+    sort: 'newest',
 
     current: null,
     messages: [],
@@ -44,7 +59,14 @@ export const useVoiceStore = defineStore('voice', {
       this.loading = true;
       this.error = null;
       try {
-        const sessions = await api.listVoiceSessions({ offset, limit });
+        const sessions = await api.listVoiceSessions({
+          offset,
+          limit,
+          twinId: this.twinId,
+          language: this.language,
+          dateRange: this.dateRange,
+          sort: this.sort,
+        });
         this.sessions = sessions;
         this.offset = offset;
         this.limit = limit;
@@ -73,6 +95,31 @@ export const useVoiceStore = defineStore('voice', {
       // Reset to first page when page size changes — keeping offset would land
       // mid-window and confuse the range counter.
       await this.fetchSessions({ offset: 0, limit });
+    },
+
+    async setTwinId(twinId: string | null): Promise<void> {
+      if (this.twinId === twinId) return;
+      this.twinId = twinId;
+      await this.fetchSessions({ offset: 0 });
+    },
+
+    async setLanguage(language: string | null): Promise<void> {
+      const next = language && language !== 'all' ? language : null;
+      if (this.language === next) return;
+      this.language = next;
+      await this.fetchSessions({ offset: 0 });
+    },
+
+    async setDateRange(range: VoiceDateRange): Promise<void> {
+      if (this.dateRange === range) return;
+      this.dateRange = range;
+      await this.fetchSessions({ offset: 0 });
+    },
+
+    async setSort(sort: VoiceSort): Promise<void> {
+      if (this.sort === sort) return;
+      this.sort = sort;
+      await this.fetchSessions({ offset: 0 });
     },
 
     async openSession(sessionId: string): Promise<void> {

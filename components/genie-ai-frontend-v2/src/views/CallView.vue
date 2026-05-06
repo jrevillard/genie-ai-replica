@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
@@ -13,15 +13,13 @@ import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
-import { CHAT_LANGS, chatStrings, type ChatLang } from '../lib/chatStrings';
+import { chatStrings } from '../lib/chatStrings';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore } from '../stores/chat';
 import { useVoiceCallStore } from '../stores/voiceCall';
 import type { VoiceLanguage } from '../services/voiceCall';
 
-// Live voice call wired through useVoiceCallStore. UI bindings (state, muted,
-// langOpen) are unchanged — they're just driven by the store now instead of
-// local refs.
+// Live voice call wired through useVoiceCallStore.
 type CallState = 'idle' | 'ended';
 
 const route = useRoute();
@@ -54,7 +52,6 @@ const muted = computed<boolean>({
     if (v !== callMuted.value) voiceCall.toggleMute();
   },
 });
-const langOpen = ref(false);
 
 async function loadTwin(): Promise<void> {
   if (!twinId.value) return;
@@ -88,12 +85,10 @@ async function startVoiceCall(): Promise<void> {
 
 onMounted(() => {
   void loadTwin();
-  document.addEventListener('click', onDocumentClick);
   void startVoiceCall();
 });
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', onDocumentClick);
   void voiceCall.endCall();
 });
 
@@ -135,21 +130,6 @@ function toggleMute(): void {
   voiceCall.toggleMute();
 }
 
-function setLanguage(next: ChatLang): void {
-  chatStore.setLanguage(next);
-  langOpen.value = false;
-}
-
-function onDocumentClick(e: MouseEvent): void {
-  if (!langOpen.value) return;
-  const root = (e.target as Element)?.closest('[data-lang-root]');
-  if (!root) langOpen.value = false;
-}
-
-const currentLang = computed(
-  () => CHAT_LANGS.find((l) => l.code === lang.value) ?? CHAT_LANGS[0]
-);
-
 const orbStateClass = computed(() => {
   if (state.value === 'ended') return 'orb--ended';
   if (callStatus.value === 'connecting') return 'orb--connecting';
@@ -163,52 +143,6 @@ const orbStateClass = computed(() => {
   <div class="call-shell relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden text-white">
     <!-- Ambient backdrop -->
     <div class="bg-aurora pointer-events-none absolute inset-0" aria-hidden="true" />
-
-    <!-- Top bar -->
-    <header
-      v-if="twinId"
-      class="relative z-10 flex flex-wrap items-center justify-end gap-3 px-6 py-4"
-    >
-      <div class="flex items-center gap-2">
-        <div class="relative" data-lang-root>
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-body font-medium text-white/95 transition hover:bg-white/15"
-            :aria-label="t.langLabel"
-            :aria-expanded="langOpen"
-            aria-haspopup="listbox"
-            @click="langOpen = !langOpen"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-            </svg>
-            <span class="uppercase">{{ currentLang.code }}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3 transition-transform" :class="langOpen && 'rotate-180'" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-          <ul
-            v-if="langOpen"
-            role="listbox"
-            class="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-2xl border border-white/15 bg-[#022c4a] p-2 text-white shadow-popover"
-          >
-            <li v-for="opt in CHAT_LANGS" :key="opt.code" role="option" :aria-selected="opt.code === lang">
-              <button
-                type="button"
-                class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-white/90 transition hover:bg-white/10"
-                @click="setLanguage(opt.code)"
-              >
-                <span class="font-medium">{{ opt.label }}</span>
-                <span class="rounded-md bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white">
-                  {{ opt.code }}
-                </span>
-              </button>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </header>
 
     <!-- Body -->
     <main class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-2">
@@ -289,15 +223,6 @@ const orbStateClass = computed(() => {
         <Icon :icon="CallEnd01Icon" :size="32" />
       </button>
 
-      <button
-        type="button"
-        class="control control--neutral"
-        :aria-label="c.switchToChat"
-        :title="c.switchToChat"
-        @click="switchToChat"
-      >
-        <Icon :icon="BubbleChatIcon" :size="26" />
-      </button>
     </footer>
   </div>
 </template>

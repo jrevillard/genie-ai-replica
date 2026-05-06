@@ -12,6 +12,7 @@ import {
   PauseIcon,
   PlayIcon,
   SentIcon,
+  SparklesIcon,
   VolumeHighIcon,
 } from '@hugeicons/core-free-icons';
 
@@ -22,20 +23,30 @@ import ChatPageSkeleton from '../components/ui/skeletons/ChatPageSkeleton.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
 import { CHAT_LANGS, chatStrings, flagForLang, flagUrl, type ChatLang } from '../lib/chatStrings';
-import { getChatLanguages, type ChatLanguage } from '../services/chatSessions';
+import {
+  getChatLanguages,
+  getPublicSuggestedQuestions,
+  type ChatLanguage,
+  type SuggestedQuestion,
+} from '../services/chatSessions';
 import { playRecordStartChime, playRecordStopChime } from '../lib/chimes';
 import { notify } from '../lib/notify';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore, type ChatMessage } from '../stores/chat';
+import { useTranslationStore } from '../stores/translation';
 import { useT } from '../i18n/composables';
 
-const { t: tt } = useT();
+const { t: tt, locale } = useT();
 
 const route = useRoute();
 const router = useRouter();
 
 const aiTwinsStore = useAiTwinsStore();
 const chatStore = useChatStore();
+const translationStore = useTranslationStore();
+// All chat content (greeting, suggested questions) is authored in English.
+// The selected ChatLang is the target.
+const CHAT_SOURCE_LANG = 'en';
 const { current: twin, loading: twinLoading, error: twinError } = storeToRefs(aiTwinsStore);
 const { messages, sending, lang } = storeToRefs(chatStore);
 
@@ -85,6 +96,18 @@ const FALLBACK_LANG_OPTIONS: LangPickerOption[] = CHAT_LANGS.map((opt) => ({
 
 const languageOptions = ref<LangPickerOption[]>(FALLBACK_LANG_OPTIONS);
 const languagesLoading = ref(false);
+const suggestedQuestions = ref<SuggestedQuestion[]>([]);
+const suggestedQuestionsLoading = ref(false);
+interface MessageTranslationState {
+  isTranslated: boolean;
+  showOriginal: boolean;
+  loading: boolean;
+}
+interface ChatMessageBodyExposed {
+  toggleTranslation: () => void;
+}
+const messageTranslationStates = ref<Record<string, MessageTranslationState>>({});
+const messageBodyRefs = ref<Record<string, ChatMessageBodyExposed | null>>({});
 
 async function loadLanguages(): Promise<void> {
   languagesLoading.value = true;
@@ -104,6 +127,96 @@ async function loadLanguages(): Promise<void> {
     languagesLoading.value = false;
   }
 }
+
+async function loadSuggestedQuestions(): Promise<void> {
+  suggestedQuestionsLoading.value = true;
+  try {
+    suggestedQuestions.value = await getPublicSuggestedQuestions();
+  } catch {
+    suggestedQuestions.value = [];
+  } finally {
+    suggestedQuestionsLoading.value = false;
+  }
+}
+
+const rawSuggestedQuestions = computed(() => suggestedQuestions.value.slice(0, 6));
+
+// Reactive translation of the welcome screen (greeting + suggested questions)
+// into the selected chat content language. The source data is English; we
+// route through the translation store so calls are batched + cached.
+const greetingSource = computed<string>(() => {
+  const fromTwin = twin.value?.chatGreeting?.trim();
+  return fromTwin && fromTwin.length > 0 ? fromTwin : t.greeting;
+});
+
+const greetingTranslating = ref(false);
+const suggestedTranslating = ref(false);
+
+const greetingDisplay = computed<string>(() => {
+  const src = greetingSource.value;
+  const target = lang.value;
+  if (!src || target === CHAT_SOURCE_LANG) return src;
+  return translationStore.peek(src, CHAT_SOURCE_LANG, target) ?? src;
+});
+
+const visibleSuggestedQuestions = computed(() =>
+  rawSuggestedQuestions.value.map((q) => {
+    const target = lang.value;
+    if (target === CHAT_SOURCE_LANG) {
+      return { ...q, displayContent: q.content, displayCategory: q.category };
+    }
+    return {
+      ...q,
+      displayContent: translationStore.peek(q.content, CHAT_SOURCE_LANG, target) ?? q.content,
+      displayCategory: translationStore.peek(q.category, CHAT_SOURCE_LANG, target) ?? q.category,
+    };
+  })
+);
+
+watch(
+  [greetingSource, lang],
+  async ([src, target]) => {
+    if (!src || target === CHAT_SOURCE_LANG) return;
+    if (translationStore.peek(src, CHAT_SOURCE_LANG, target) !== undefined) return;
+    greetingTranslating.value = true;
+    try {
+      await translationStore.getOne(src, CHAT_SOURCE_LANG, target);
+    } catch {
+      // Falls back to source via greetingDisplay.
+    } finally {
+      greetingTranslating.value = false;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  [rawSuggestedQuestions, lang],
+  async ([list, target]) => {
+    if (target === CHAT_SOURCE_LANG || list.length === 0) return;
+    const missing: string[] = [];
+    for (const q of list) {
+      if (q.content && translationStore.peek(q.content, CHAT_SOURCE_LANG, target) === undefined) {
+        missing.push(q.content);
+      }
+      if (q.category && translationStore.peek(q.category, CHAT_SOURCE_LANG, target) === undefined) {
+        missing.push(q.category);
+      }
+    }
+    if (missing.length === 0) return;
+    suggestedTranslating.value = true;
+    try {
+      await Promise.all(
+        missing.map((text) => translationStore.getOne(text, CHAT_SOURCE_LANG, target))
+      );
+    } catch {
+      // Cards fall back to English on failure.
+    } finally {
+      suggestedTranslating.value = false;
+    }
+  },
+  { immediate: true }
+);
 
 async function loadTwin(): Promise<void> {
   if (!twinId.value) return;
@@ -151,6 +264,19 @@ watch(
   () => scrollToBottom()
 );
 
+watch(
+  () => messages.value.map((m) => m.id),
+  (ids) => {
+    const active = new Set(ids);
+    Object.keys(messageTranslationStates.value).forEach((id) => {
+      if (!active.has(id)) delete messageTranslationStates.value[id];
+    });
+    Object.keys(messageBodyRefs.value).forEach((id) => {
+      if (!active.has(id)) delete messageBodyRefs.value[id];
+    });
+  }
+);
+
 async function send(text?: string): Promise<void> {
   const value = (text ?? draft.value).trim();
   if (!value || sending.value) return;
@@ -183,9 +309,9 @@ function goBack(): void {
 async function copyMessage(m: ChatMessage): Promise<void> {
   try {
     await navigator.clipboard.writeText(m.text);
-    notify.success(t.copied);
+    notify.success(tt('chat.copied', t.copied));
   } catch {
-    notify.error('Copy failed');
+    notify.error(tt('chat.copyFailed', 'Copy failed'));
   }
 }
 
@@ -225,7 +351,10 @@ function stopRecordingStream(): void {
 async function startRecording(): Promise<void> {
   if (isRecording.value || sending.value) return;
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-    notify.error('Recording not supported', 'Your browser cannot record audio.');
+    notify.error(
+      tt('chat.voiceUnsupportedTitle', 'Recording not supported'),
+      tt('chat.voiceUnsupportedBody', 'Your browser cannot record audio.'),
+    );
     return;
   }
   try {
@@ -233,10 +362,10 @@ async function startRecording(): Promise<void> {
   } catch (err) {
     const e = err as { name?: string; message?: string };
     notify.error(
-      'Microphone unavailable',
+      tt('chat.micUnavailableTitle', 'Microphone unavailable'),
       e?.name === 'NotAllowedError'
-        ? 'Permission denied. Allow microphone access and try again.'
-        : e?.message ?? 'Could not access the microphone.',
+        ? tt('chat.micPermissionDenied', 'Permission denied. Allow microphone access and try again.')
+        : e?.message ?? tt('chat.micGenericError', 'Could not access the microphone.'),
     );
     return;
   }
@@ -315,11 +444,11 @@ async function submitVoiceMessage(blob: Blob): Promise<void> {
     const message =
       e?.response?.data?.message ??
       (status === 413
-        ? 'Recording is too large (max 10 MB).'
+        ? tt('chat.voiceTooLarge', 'Recording is too large (max 10 MB).')
         : status === 502
-          ? 'Voice transcription service is temporarily unavailable.'
-          : e?.message ?? 'Could not send voice message.');
-    notify.error('Voice message failed', message);
+          ? tt('chat.voiceServiceUnavailable', 'Voice transcription service is temporarily unavailable.')
+          : e?.message ?? tt('chat.voiceGenericError', 'Could not send voice message.'));
+    notify.error(tt('chat.voiceFailedTitle', 'Voice message failed'), message);
   } finally {
     processingVoice.value = false;
   }
@@ -437,11 +566,11 @@ async function toggleMessageAudio(message: ChatMessage): Promise<void> {
     const status = e?.response?.status;
     const fallback =
       status === 404
-        ? 'Audio for this message could not be found.'
+        ? tt('chat.audioNotFound', 'Audio for this message could not be found.')
         : status === 502
-          ? 'Voice synthesis is temporarily unavailable.'
-          : e?.message ?? 'Could not play audio.';
-    notify.error('Playback failed', e?.response?.data?.message ?? fallback);
+          ? tt('chat.audioServiceUnavailable', 'Voice synthesis is temporarily unavailable.')
+          : e?.message ?? tt('chat.audioGenericError', 'Could not play audio.');
+    notify.error(tt('chat.playbackFailedTitle', 'Playback failed'), e?.response?.data?.message ?? fallback);
   } finally {
     state.loading = false;
   }
@@ -465,11 +594,7 @@ watch(twinId, () => {
 
 function startVoiceCall(): void {
   if (!twinId.value) return;
-  const href = router.resolve({
-    name: 'call',
-    params: { twinId: twinId.value },
-  }).href;
-  window.open(href, '_blank', 'noopener');
+  router.push({ name: 'call', params: { twinId: twinId.value } });
 }
 
 function setLanguage(next: ChatLang): void {
@@ -497,6 +622,7 @@ onMounted(() => {
   autoSize();
   loadTwin();
   loadLanguages();
+  loadSuggestedQuestions();
 });
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick);
@@ -528,9 +654,10 @@ function dayLabel(d: Date): string {
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate();
-  if (sameDay(d, today)) return t.today;
-  if (sameDay(d, yesterday)) return t.yesterday;
-  return d.toLocaleDateString('en-GB', {
+  if (sameDay(d, today)) return tt('chat.today', t.today);
+  if (sameDay(d, yesterday)) return tt('chat.yesterday', t.yesterday);
+  const localeTag = locale.value === 'mnk' ? 'en-GB' : locale.value;
+  return d.toLocaleDateString(localeTag, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -552,10 +679,38 @@ const groupedMessages = computed<Group[]>(() => {
 });
 
 function formatTime(d: Date): string {
-  return d.toLocaleTimeString('en-GB', {
+  const localeTag = locale.value === 'mnk' ? 'en-GB' : locale.value;
+  return d.toLocaleTimeString(localeTag, {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+// Single unified accent chip for all suggested-question cards.
+const PROMPT_CARD_ACCENT = {
+  chip: 'bg-accent-soft text-accent ring-ieee-100',
+} as const;
+
+function setMessageBodyRef(id: string, instance: unknown): void {
+  if (instance && typeof (instance as ChatMessageBodyExposed).toggleTranslation === 'function') {
+    messageBodyRefs.value[id] = instance as ChatMessageBodyExposed;
+    return;
+  }
+  messageBodyRefs.value[id] = null;
+}
+
+function onMessageTranslationState(id: string, state: MessageTranslationState): void {
+  messageTranslationStates.value[id] = state;
+}
+
+function toggleMessageTranslation(id: string): void {
+  messageBodyRefs.value[id]?.toggleTranslation();
+}
+
+function translationToggleLabel(id: string): string {
+  return messageTranslationStates.value[id]?.showOriginal
+    ? tt('history.showTranslation', 'Show translation')
+    : tt('history.showOriginal', 'Show original');
 }
 </script>
 
@@ -583,7 +738,7 @@ function formatTime(d: Date): string {
     <section v-else class="flex h-full min-h-0 flex-col bg-surface">
       <!-- Top bar -->
       <header
-        class="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle bg-surface px-6 py-4"
+        class="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle bg-surface px-6 py-3"
       >
         <div class="flex items-center gap-3">
           <button
@@ -598,13 +753,13 @@ function formatTime(d: Date): string {
             <BaseAvatar
               :src="twin?.profilePicUrl ?? ''"
               :name="twin?.name ?? 'AI Twin'"
-              size="md"
+              size="sm"
               badge="online"
             />
             <div class="min-w-0">
               <p class="truncate text-title text-text">{{ twin?.name ?? 'AI Twin' }}</p>
               <p class="truncate text-meta text-text-muted">
-                {{ t.subgreeting.split('.')[0] }}
+                {{ tt('chat.subgreeting', t.subgreeting).split('.')[0] }}
               </p>
             </div>
           </template>
@@ -620,7 +775,7 @@ function formatTime(d: Date): string {
               ref="langButton"
               type="button"
               class="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-2 py-1.5 text-body font-medium text-text transition hover:bg-surface-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              :aria-label="t.langLabel"
+              :aria-label="tt('chat.langLabel', t.langLabel)"
               :aria-expanded="langOpen"
               aria-haspopup="listbox"
               @click="langOpen = !langOpen"
@@ -643,7 +798,7 @@ function formatTime(d: Date): string {
               class="absolute right-0 top-full z-20 mt-2 max-h-80 w-60 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
             >
               <li v-if="languagesLoading && languageOptions.length === 0" class="px-3 py-2 text-sm text-text-subtle">
-                Loading languages…
+                {{ tt('chat.loadingLanguages', 'Loading languages…') }}
               </li>
               <li v-for="opt in languageOptions" :key="opt.code" role="option" :aria-selected="opt.code === lang">
                 <button
@@ -677,27 +832,30 @@ function formatTime(d: Date): string {
             </ul>
           </div>
 
-          <BaseButton
+          <button
             v-if="twin"
-            variant="outline"
-            size="md"
-            rounded="full"
+            type="button"
+            class="header-btn header-btn--ghost"
+            :aria-label="tt('chat.newChat', t.newChat)"
+            :title="tt('chat.newChat', t.newChat)"
             @click="newConversation"
           >
             <Icon :icon="BubbleChatIcon" :size="16" />
-            {{ t.newChat }}
-          </BaseButton>
+            <span class="hidden sm:inline">{{ tt('chat.newChat', t.newChat) }}</span>
+          </button>
 
           <button
             v-if="twin"
             type="button"
-            class="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-surface-inverse px-4 text-sm font-semibold text-text-inverse transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            :aria-label="t.call.startCall"
-            :title="t.call.startCall"
+            class="header-btn header-btn--call"
+            :aria-label="tt('chat.startCall', t.call.startCall)"
+            :title="tt('chat.startCall', t.call.startCall)"
             @click="startVoiceCall"
           >
-            <Icon :icon="CallIcon" :size="16" />
-            <span>{{ t.call.startCall }}</span>
+            <span class="header-btn__call-icon" aria-hidden="true">
+              <Icon :icon="CallIcon" :size="16" />
+            </span>
+            <span class="hidden sm:inline">{{ tt('chat.startCall', t.call.startCall) }}</span>
           </button>
         </div>
       </header>
@@ -708,33 +866,111 @@ function formatTime(d: Date): string {
         <EmptyState
           v-if="!twinId"
           :icon="BubbleChatIcon"
-          :title="t.pickTwinTitle"
-          :description="t.pickTwinDescription"
+          :title="tt('chat.pickTwinTitle', t.pickTwinTitle)"
+          :description="tt('chat.pickTwinDescription', t.pickTwinDescription)"
         >
           <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">
-            {{ t.pickTwinAction }}
+            {{ tt('chat.pickTwinAction', t.pickTwinAction) }}
           </BaseButton>
         </EmptyState>
 
         <!-- Greeting (twin selected, no messages yet) -->
         <div
           v-else-if="messages.length === 0"
-          class="flex min-h-0 flex-1 flex-col px-6 py-6"
+          class="welcome-stage relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-8 sm:px-6"
         >
-          <div class="mx-auto flex w-full max-w-3xl">
-            <div class="flex gap-3">
-              <BaseAvatar
-                :src="twin?.profilePicUrl ?? ''"
-                :name="twin?.name ?? 'AI Twin'"
-                size="sm"
-              />
-              <div class="flex max-w-[80%] flex-col items-start">
-                <div class="rounded-2xl bg-surface-muted px-5 py-3 text-body text-text shadow-card">
-                  <p class="whitespace-pre-wrap leading-relaxed">
-                    {{ twin?.chatGreeting?.trim() || t.greeting }}
-                  </p>
-                </div>
+          <!-- Aurora background -->
+          <div class="welcome-aurora pointer-events-none absolute inset-0" aria-hidden="true">
+            <div class="welcome-aurora__orb welcome-aurora__orb--a" />
+            <div class="welcome-aurora__orb welcome-aurora__orb--b" />
+            <div class="welcome-aurora__orb welcome-aurora__orb--c" />
+            <div class="welcome-aurora__grid" />
+          </div>
+
+          <div class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-start pt-6 sm:pt-10">
+            <!-- Hero -->
+            <div class="welcome-hero w-full max-w-3xl text-center">
+              <div class="welcome-avatar group relative mx-auto mb-5 inline-flex">
+                <span class="welcome-avatar__halo" aria-hidden="true" />
+                <span class="welcome-avatar__ring" aria-hidden="true" />
+                <BaseAvatar
+                  class="relative z-10"
+                  :src="twin?.profilePicUrl ?? ''"
+                  :name="twin?.name ?? 'AI Twin'"
+                  size="xl"
+                />
+                <span class="welcome-avatar__badge" aria-hidden="true">
+                  <Icon :icon="SparklesIcon" :size="12" />
+                </span>
               </div>
+
+              <h2 class="welcome-title" :class="{ 'welcome-title--loading': greetingTranslating }">
+                <span class="welcome-title__accent">
+                  {{ greetingDisplay.split(' ')[0] }}
+                </span>
+                <span class="welcome-title__rest">
+                  {{ greetingDisplay.split(' ').slice(1).join(' ') }}
+                </span>
+              </h2>
+
+              <p class="welcome-sub mx-auto mt-3 max-w-xl">
+                {{ tt('chat.subgreeting', t.subgreeting) }}
+              </p>
+            </div>
+
+            <!-- Suggested prompts -->
+            <div class="mx-auto mt-10 w-full max-w-3xl">
+              <div class="mb-4 flex items-center justify-center gap-2 text-text-muted">
+                <span class="welcome-divider" aria-hidden="true" />
+                <span class="inline-flex items-center gap-1.5 text-meta font-semibold uppercase tracking-[0.14em]">
+                  <Icon :icon="SparklesIcon" :size="12" class="text-accent" />
+                  {{ tt('chat.suggestedQuestions', 'Suggested questions') }}
+                </span>
+                <span class="welcome-divider" aria-hidden="true" />
+              </div>
+
+              <div v-if="suggestedQuestionsLoading" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div
+                  v-for="idx in 6"
+                  :key="idx"
+                  class="welcome-skeleton h-[88px] rounded-2xl"
+                />
+              </div>
+
+              <div
+                v-else-if="visibleSuggestedQuestions.length > 0"
+                :class="[
+                  'grid grid-cols-1 gap-3 sm:grid-cols-2',
+                  suggestedTranslating && 'welcome-cards--loading',
+                ]"
+              >
+                <button
+                  v-for="(question, index) in visibleSuggestedQuestions"
+                  :key="`${question.order}-${question.content}`"
+                  type="button"
+                  class="prompt-card group"
+                  :style="{ animationDelay: `${index * 60}ms` }"
+                  :title="question.displayContent"
+                  @click="send(question.displayContent)"
+                >
+                  <span class="prompt-card__glow" aria-hidden="true" />
+                  <span class="prompt-card__body">
+                    <span :class="['prompt-card__chip ring-1', PROMPT_CARD_ACCENT.chip]">
+                      {{ question.displayCategory }}
+                    </span>
+                    <span class="prompt-card__text">
+                      {{ question.displayContent }}
+                    </span>
+                  </span>
+                  <span class="prompt-card__arrow" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5 12h14" />
+                      <path d="m13 6 6 6-6 6" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+
             </div>
           </div>
         </div>
@@ -796,12 +1032,15 @@ function formatTime(d: Date): string {
                       />
                       <Icon v-else :icon="PlayIcon" :size="18" />
                     </button>
-                    <span class="flex h-9 flex-1 items-center gap-[3px]" aria-hidden="true">
+                    <span class="voice-note-wave flex h-9 flex-1 items-center gap-[3px]" aria-hidden="true">
                       <span
                         v-for="(h, i) in VOICE_WAVE_HEIGHTS"
                         :key="i"
-                        class="w-[3px] rounded-full bg-white/85"
-                        :style="{ height: `${h}%` }"
+                        :class="[
+                          'voice-note-wave__bar w-[3px] rounded-full bg-white/85',
+                          messageAudio[m.serverId]?.playing && 'voice-note-wave__bar--active',
+                        ]"
+                        :style="{ '--voice-bar-height': `${h}%`, animationDelay: `${(i % 10) * 90}ms` }"
                       />
                     </span>
                     <span class="shrink-0 text-sm font-bold tabular-nums text-white">
@@ -822,7 +1061,14 @@ function formatTime(d: Date): string {
                       <span class="dot" style="animation-delay: 0.15s" />
                       <span class="dot" style="animation-delay: 0.3s" />
                     </span>
-                    <ChatMessageBody v-else :text="m.text" :lang="m.lang" :role="m.role" />
+                    <ChatMessageBody
+                      v-else
+                      :ref="(instance) => setMessageBodyRef(m.id, instance)"
+                      :text="m.text"
+                      :lang="m.lang"
+                      :role="m.role"
+                      @translation-state="(state) => onMessageTranslationState(m.id, state)"
+                    />
                   </div>
                   <div
                     :class="[
@@ -831,18 +1077,41 @@ function formatTime(d: Date): string {
                     ]"
                   >
                     <span>{{ formatTime(m.createdAt) }}</span>
-                    <template v-if="m.role === 'assistant' && !m.streaming">
-                      <span aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
-                        :aria-label="t.copy"
-                        :title="t.copy"
-                        @click="copyMessage(m)"
-                      >
-                        <Icon :icon="Copy01Icon" :size="14" />
-                      </button>
-                      <template v-if="m.serverId">
+                    <template v-if="!m.streaming">
+                      <template v-if="m.role === 'assistant'">
+                        <span aria-hidden="true">·</span>
+                        <button
+                          type="button"
+                          class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
+                          :aria-label="tt('chat.copy', t.copy)"
+                          :title="tt('chat.copy', t.copy)"
+                          @click="copyMessage(m)"
+                        >
+                          <Icon :icon="Copy01Icon" :size="14" />
+                        </button>
+                      </template>
+                      <template v-if="messageTranslationStates[m.id]?.loading">
+                        <span aria-hidden="true">·</span>
+                        <span class="inline-flex items-center gap-1 rounded p-1 text-text-subtle">
+                          <span
+                            class="block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                            aria-hidden="true"
+                          />
+                          <span>{{ tt('common.loading', 'Loading…') }}</span>
+                        </span>
+                      </template>
+                      <template v-else-if="messageTranslationStates[m.id]?.isTranslated">
+                        <span aria-hidden="true">·</span>
+                        <button
+                          type="button"
+                          class="rounded p-1 text-text-subtle underline-offset-2 transition hover:bg-surface-muted hover:text-text hover:underline"
+                          :aria-label="translationToggleLabel(m.id)"
+                          @click="toggleMessageTranslation(m.id)"
+                        >
+                          {{ translationToggleLabel(m.id) }}
+                        </button>
+                      </template>
+                      <template v-if="m.serverId && m.role === 'assistant'">
                         <span aria-hidden="true">·</span>
                         <button
                           type="button"
@@ -862,7 +1131,7 @@ function formatTime(d: Date): string {
                             :size="13"
                           />
                           <Icon v-else :icon="VolumeHighIcon" :size="13" />
-                          <span>{{ messageAudio[m.serverId]?.playing ? 'Playing' : 'Listen' }}</span>
+                          <span>{{ messageAudio[m.serverId]?.playing ? tt('chat.playing', 'Playing') : tt('chat.listen', 'Listen') }}</span>
                         </button>
                       </template>
                     </template>
@@ -886,7 +1155,7 @@ function formatTime(d: Date): string {
                     <span class="dot" style="animation-delay: 0.3s" />
                   </span>
                 </div>
-                <span class="text-meta text-text-subtle">Sending your voice note…</span>
+                <span class="text-meta text-text-subtle">{{ tt('chat.sendingVoice', 'Sending your voice note…') }}</span>
               </div>
             </div>
 
@@ -909,7 +1178,7 @@ function formatTime(d: Date): string {
               ref="composer"
               v-model="draft"
               rows="1"
-              :placeholder="t.placeholder"
+              :placeholder="tt('chat.placeholder', t.placeholder)"
               :disabled="sending"
               class="composer-input flex-1 resize-none bg-transparent px-2 py-2 text-body leading-6 text-text outline-none placeholder:text-text-subtle disabled:cursor-not-allowed"
               @keydown="onComposerKeydown"
@@ -918,8 +1187,8 @@ function formatTime(d: Date): string {
             <button
               type="button"
               class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-text-muted transition hover:bg-surface-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-              :aria-label="t.micAria"
-              :title="t.micAria"
+              :aria-label="tt('chat.micAria', t.micAria)"
+              :title="tt('chat.micAria', t.micAria)"
               :disabled="sending"
               @click="startRecording"
             >
@@ -928,8 +1197,8 @@ function formatTime(d: Date): string {
             <button
               type="button"
               class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-text-inverse transition hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
-              :aria-label="t.sendAria"
-              :title="t.sendAria"
+              :aria-label="tt('chat.sendAria', t.sendAria)"
+              :title="tt('chat.sendAria', t.sendAria)"
               :disabled="!draft.trim() || sending"
               @click="send()"
             >
@@ -964,25 +1233,25 @@ function formatTime(d: Date): string {
             <button
               type="button"
               class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-caption font-semibold text-text-muted transition hover:bg-surface-muted hover:text-text"
-              aria-label="Cancel recording"
+              :aria-label="tt('chat.cancelRecording', 'Cancel')"
               @click="cancelRecording"
             >
               <Icon :icon="Cancel01Icon" :size="14" />
-              Cancel
+              {{ tt('chat.cancelRecording', 'Cancel') }}
             </button>
             <button
               type="button"
               class="group inline-flex h-11 items-center gap-2 rounded-full bg-accent px-4 text-body font-semibold text-text-inverse shadow-md transition hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              aria-label="Stop and send recording"
+              :aria-label="tt('chat.sendRecording', 'Send')"
               @click="stopRecording"
             >
               <Icon :icon="SentIcon" :size="16" />
-              Send
+              {{ tt('chat.sendRecording', 'Send') }}
             </button>
           </div>
 
           <p class="mt-2 text-center text-caption text-text-subtle">
-            {{ t.disclaimer }}
+            {{ tt('chat.disclaimer', t.disclaimer) }}
           </p>
         </div>
       </footer>
@@ -1010,6 +1279,25 @@ function formatTime(d: Date): string {
   }
   40% {
     transform: scale(1);
+    opacity: 0.95;
+  }
+}
+
+/* ===== Voice-note playback waveform ===== */
+.voice-note-wave__bar {
+  height: var(--voice-bar-height);
+  transition: height 180ms ease, opacity 180ms ease;
+}
+.voice-note-wave__bar--active {
+  animation: voice-note-wave-bounce 1.2s ease-in-out infinite;
+}
+@keyframes voice-note-wave-bounce {
+  0%, 100% {
+    height: calc(var(--voice-bar-height) * 0.62);
+    opacity: 0.65;
+  }
+  50% {
+    height: var(--voice-bar-height);
     opacity: 0.95;
   }
 }
@@ -1069,6 +1357,7 @@ function formatTime(d: Date): string {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .voice-note-wave__bar--active,
   .recorder-led__core,
   .recorder-led__halo,
   .recorder-wave__bar {
@@ -1077,6 +1366,401 @@ function formatTime(d: Date): string {
   .recorder-wave__bar {
     height: 50%;
     opacity: 0.7;
+  }
+}
+
+/* ===== Header action buttons ===== */
+.header-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 40px;
+  padding: 0 1rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms ease,
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+.header-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 82, 128, 0.22);
+}
+
+.header-btn--ghost {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+}
+.header-btn--ghost:hover {
+  color: #00629b;
+  border-color: rgba(0, 98, 155, 0.4);
+  background: #f8fbff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px -4px rgba(0, 82, 128, 0.18);
+}
+
+.header-btn--call {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0073b9 0%, #003e62 100%);
+  border: 1px solid rgba(0, 0, 0, 0);
+  padding-left: 0.5rem;
+  box-shadow:
+    0 6px 14px -4px rgba(0, 82, 128, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.header-btn--call:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 22px -6px rgba(0, 82, 128, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.header-btn__call-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+.header-btn__call-icon::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  animation: header-call-pulse 2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes header-call-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  80%, 100% { transform: scale(1.45); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-btn__call-icon::after { animation: none; opacity: 0; }
+  .header-btn:hover { transform: none; }
+}
+
+/* ===== Welcome / empty state ===== */
+.welcome-stage {
+  background-color: #ffffff;
+  background-image:
+    radial-gradient(1200px 600px at 50% -10%, rgba(0, 82, 128, 0.08), transparent 60%),
+    radial-gradient(800px 400px at 100% 100%, rgba(0, 115, 185, 0.05), transparent 65%);
+  background-repeat: no-repeat;
+  background-attachment: local;
+}
+
+.welcome-aurora {
+  overflow: hidden;
+}
+.welcome-aurora__orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.welcome-aurora__orb--a {
+  top: -120px;
+  left: 8%;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(0, 115, 185, 0.45), transparent 70%);
+  animation: welcome-float 14s ease-in-out infinite;
+}
+.welcome-aurora__orb--b {
+  top: 20%;
+  right: 4%;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(0, 115, 185, 0.22), transparent 70%);
+  animation: welcome-float 18s ease-in-out infinite reverse;
+}
+.welcome-aurora__orb--c {
+  bottom: -160px;
+  left: 28%;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.25), transparent 70%);
+  animation: welcome-float 22s ease-in-out infinite;
+}
+.welcome-aurora__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at center, #000 0%, transparent 70%);
+  opacity: 0.55;
+}
+
+@keyframes welcome-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(20px, -28px, 0) scale(1.05); }
+}
+
+.welcome-hero {
+  animation: welcome-rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes welcome-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Avatar with glowing aura + sparkle badge */
+.welcome-avatar__halo {
+  position: absolute;
+  inset: -22px;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle, rgba(0, 115, 185, 0.35) 0%, rgba(0, 115, 185, 0) 70%);
+  animation: welcome-halo 3.6s ease-in-out infinite;
+}
+.welcome-avatar__ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  padding: 2px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(0, 115, 185, 0.9),
+    rgba(14, 165, 233, 0.6),
+    rgba(0, 82, 128, 0.9),
+    rgba(0, 115, 185, 0.9)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: welcome-spin 8s linear infinite;
+}
+.welcome-avatar__badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  z-index: 20;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  color: #fff;
+  background: linear-gradient(135deg, #0073b9, #003e62);
+  box-shadow:
+    0 4px 12px rgba(0, 82, 128, 0.35),
+    0 0 0 3px #ffffff;
+}
+@keyframes welcome-halo {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.08); }
+}
+@keyframes welcome-spin {
+  to { transform: rotate(360deg); }
+}
+
+.welcome-title--loading,
+.welcome-cards--loading {
+  opacity: 0.55;
+  transition: opacity 200ms ease;
+}
+
+.welcome-title {
+  font-size: clamp(1.85rem, 4vw, 2.85rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: #020617;
+}
+.welcome-title__accent {
+  background: linear-gradient(120deg, #00629b 0%, #0ea5e9 50%, #00629b 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  animation: welcome-shine 6s ease-in-out infinite;
+}
+.welcome-title__rest {
+  margin-left: 0.45rem;
+}
+@keyframes welcome-shine {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.welcome-sub {
+  color: #475569;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.welcome-divider {
+  flex: 1 1 0%;
+  max-width: 80px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.12), transparent);
+}
+
+.welcome-skeleton {
+  background:
+    linear-gradient(110deg, #f1f5f9 30%, #f8fafc 50%, #f1f5f9 70%);
+  background-size: 200% 100%;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  animation: welcome-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes welcome-shimmer {
+  to { background-position: -200% 0; }
+}
+
+/* Prompt cards */
+.prompt-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  padding: 0.95rem 3rem 0.95rem 1rem;
+  min-height: 88px;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  box-shadow:
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    0 1px 3px 0 rgba(15, 23, 42, 0.04);
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+  overflow: hidden;
+  cursor: pointer;
+  animation: welcome-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.prompt-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0, 82, 128, 0.25);
+  background: #ffffff;
+  box-shadow:
+    0 12px 28px -10px rgba(15, 23, 42, 0.18),
+    0 4px 10px -4px rgba(0, 82, 128, 0.12);
+}
+.prompt-card:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(0, 82, 128, 0.22),
+    0 12px 28px -10px rgba(15, 23, 42, 0.18);
+}
+.prompt-card__glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(0, 115, 185, 0.22), rgba(0, 82, 128, 0.14));
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+  z-index: 0;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  padding: 1px;
+}
+.prompt-card:hover .prompt-card__glow {
+  opacity: 1;
+}
+.prompt-card__body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.prompt-card__chip {
+  align-self: flex-start;
+  display: inline-flex;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prompt-card__text {
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: #0f172a;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.prompt-card__arrow {
+  position: absolute;
+  top: 50%;
+  right: 0.85rem;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.04);
+  transform: translate(-4px, -50%);
+  opacity: 0;
+  transition:
+    transform 220ms ease,
+    opacity 220ms ease,
+    background-color 220ms ease,
+    color 220ms ease;
+}
+.prompt-card:hover .prompt-card__arrow {
+  transform: translate(0, -50%);
+  opacity: 1;
+  color: #ffffff;
+  background: #005280;
+}
+
+@keyframes welcome-card-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-aurora__orb,
+  .welcome-avatar__halo,
+  .welcome-avatar__ring,
+  .welcome-title__accent,
+  .welcome-skeleton,
+  .prompt-card {
+    animation: none !important;
+  }
+  .prompt-card__arrow {
+    opacity: 1;
+    transform: translate(0, -50%);
   }
 }
 </style>

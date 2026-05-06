@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx eslint *)",
+      "Bash(node node_modules/.bin/vue-tsc --noEmit)",
+      "Bash(./node_modules/.bin/vue-tsc --noEmit)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

@@ -49,6 +49,7 @@ volumes:
   doc_repo_uploads:
   arango_data: {}
   hf_cache:
+  lid_models:
   backend_uploads:
   backend_data:
   certbot-webroot:
@@ -914,6 +915,37 @@ services:
       restart_policy:
         condition: on-failure
         delay: 10s
+
+  lid:
+    profiles: [opea]
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: genie-ai-overlay/lid/Dockerfile-lid_genie-ai
+    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-lid:${OPEA_VERSION:-latest}
+    environment:
+      - LID_MODEL_PATH=/models/lid.bin
+      - LID_DEFAULT_TOPK=${LID_DEFAULT_TOPK:-3}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - lid_models:/models:ro
+    # Internal only - reachable as http://lid:8000 from other services
+    # ports:
+    #   - "8500:8000"
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      replicas: ${DEPLOY_OPEA:-1}
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 30
 
   dataprep-arango-service:
     depends_on:

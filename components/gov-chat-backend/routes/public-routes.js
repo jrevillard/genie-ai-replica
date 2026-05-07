@@ -25,7 +25,46 @@ const aiTwinService = require('../services/ai-twin-service');
 const chatSessionService = require('../services/chat-session-service');
 const voiceTokenService = require('../services/voice-token-service');
 const voiceCatalogService = require('../services/voice-catalog-service');
+const translationService = require('../services/translation-service');
 const { NotFoundError, ValidationError } = require('../middleware/errors');
+
+// franc is ESM-only (v6+); we load it lazily per request via dynamic import.
+let _francMod = null;
+async function loadFranc() {
+  if (!_francMod) _francMod = await import('franc');
+  return _francMod;
+}
+
+// Map franc's ISO 639-3 code → the code the translator backend expects.
+// Mostly identity for African languages already on the gemma map; otherwise
+// down-converts to ISO 639-1.
+const ISO3_TO_TRANSLATOR_CODE = {
+  eng: 'en', ara: 'ar', tha: 'th', cmn: 'zh', zho: 'zh',
+  deu: 'de', fra: 'fr', ind: 'id', spa: 'es', rus: 'ru',
+  por: 'pt', swh: 'sw', swa: 'sw', amh: 'am', aze: 'az',
+  ben: 'bn', pes: 'fa', fas: 'fa', ful: 'ff', fuc: 'ff',
+  hau: 'ha', jav: 'jv', kaz: 'kk', kur: 'ku', mal: 'ml',
+  zlm: 'ms', msa: 'ms', orm: 'om', pan: 'pa', pus: 'ps',
+  snd: 'sd', som: 'so', sun: 'su', tur: 'tr', uig: 'ug',
+  urd: 'ur', uzb: 'uz', yor: 'yo', ckb: 'ckb',
+  mnk: 'mnk', sot: 'st',
+};
+
+// Display names for the detected ISO 639-3 codes franc most commonly returns.
+const ISO3_NAMES = {
+  eng: 'English', wol: 'Wolof', mnk: 'Mandinka', man: 'Mandinka',
+  fra: 'French', spa: 'Spanish', ara: 'Arabic', deu: 'German',
+  por: 'Portuguese', rus: 'Russian', cmn: 'Chinese (Mandarin)', zho: 'Chinese',
+  ind: 'Indonesian', tha: 'Thai', swh: 'Swahili', swa: 'Swahili',
+  amh: 'Amharic', aze: 'Azerbaijani', ben: 'Bengali',
+  pes: 'Persian', fas: 'Persian', ful: 'Fulah', fuc: 'Pulaar',
+  hau: 'Hausa', jav: 'Javanese', kaz: 'Kazakh', kur: 'Kurdish',
+  mal: 'Malayalam', zlm: 'Malay', msa: 'Malay', orm: 'Oromo',
+  pan: 'Punjabi', pus: 'Pashto', snd: 'Sindhi', som: 'Somali',
+  sun: 'Sundanese', tur: 'Turkish', uig: 'Uyghur', urd: 'Urdu',
+  uzb: 'Uzbek', yor: 'Yoruba', sot: 'Sesotho',
+  ckb: 'Sorani Kurdish', und: 'Undetermined',
+};
 
 const ASR_WHISPER_URL = process.env.ASR_WHISPER_URL || 'http://asr-whisper:9100';
 const TTS_PIPER_URL = process.env.TTS_PIPER_URL || 'http://tts-piper:9200';
@@ -728,6 +767,133 @@ router.post('/voice/token', async (req, res) => {
     if (error.statusCode === 503) return res.status(503).json({ message: error.message });
     logger.error(`public voice token: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: 'Failed to mint voice token' });
+  }
+});
+
+/**
+ * @swagger
+ * /public/translate-detect:
+ *   post:
+ *     summary: Detect a sentence's language and translate it to English (test endpoint)
+ *     description: >-
+ *       Public, unauthenticated endpoint for testing the translation pipeline. Accepts a single
+ *       sentence/paragraph, runs language detection (franc, ISO 639-3 trigram model with broad
+ *       African-language coverage), then asks the configured translator (Gemma 3 4B by default)
+ *       to translate it to English. Useful for sanity-checking which languages the system actually
+ *       handles end-to-end vs. silently falls back to English.
+ *     tags: [Public (Guest)]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [text]
+ *             properties:
+ *               text:
+ *                 type: string
+ *                 description: The sentence to detect and translate. Detection is more reliable on 30+ characters.
+ *                 maxLength: 5000
+ *           examples:
+ *             english:
+ *               summary: English (no translation needed)
+ *               value: { text: "Hello, my name is Ryan and I am happy to meet you." }
+ *             wolof:
+ *               summary: Wolof
+ *               value: { text: "Salaam aleekum, sama tudd RYAAN la te bég naa la gis." }
+ *             mandinka:
+ *               summary: Mandinka
+ *               value: { text: "I salaa maa lekum, n too mu RYAAN ti, n seewoota ka i je." }
+ *             french:
+ *               summary: French
+ *               value: { text: "Bonjour, je m'appelle Ryan et je suis heureux de vous rencontrer." }
+ *     responses:
+ *       200:
+ *         description: Detection + translation result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 input: { type: string }
+ *                 detected:
+ *                   type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       description: ISO 639-3 code (or "und" if undetermined)
+ *                     name: { type: string, nullable: true }
+ *                     candidates:
+ *                       type: array
+ *                       description: Top 5 ranked guesses with probabilities (1.0 = certain)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           code: { type: string }
+ *                           name: { type: string, nullable: true }
+ *                           probability: { type: number }
+ *                 translation:
+ *                   type: object
+ *                   properties:
+ *                     language: { type: string, nullable: true }
+ *                     text: { type: string, nullable: true }
+ *                     sourceLanguage: { type: string, nullable: true, description: Translator-side code used for the request }
+ *                     note: { type: string, nullable: true, description: Set when no translation was performed (English input, undetermined, or unsupported by translator) }
+ *                     error: { type: string, nullable: true }
+ *       400: { description: Missing or invalid "text" }
+ *       500: { description: Detection or translation failed }
+ */
+router.post('/translate-detect', async (req, res) => {
+  const text = req.body && req.body.text;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ message: 'Body must include "text" (non-empty string).' });
+  }
+  if (text.length > 5000) {
+    return res.status(400).json({ message: 'text too long (max 5000 chars).' });
+  }
+
+  try {
+    const { franc, francAll } = await loadFranc();
+    const top = franc(text, { minLength: 0 });
+    const candidates = francAll(text, { minLength: 0 }).slice(0, 5).map(([code, prob]) => ({
+      code,
+      name: ISO3_NAMES[code] || null,
+      probability: Number(Number(prob).toFixed(3)),
+    }));
+
+    const detected = {
+      code: top,
+      name: ISO3_NAMES[top] || null,
+      candidates,
+    };
+
+    let translation;
+    if (top === 'eng') {
+      translation = { language: 'en', text, note: 'detected as English; no translation needed' };
+    } else if (top === 'und') {
+      translation = { language: null, text: null, note: 'language could not be detected (text may be too short or out of franc\'s 414-language set)' };
+    } else {
+      const translatorCode = ISO3_TO_TRANSLATOR_CODE[top];
+      if (!translatorCode) {
+        translation = {
+          language: null,
+          text: null,
+          note: `detected language '${top}' is not in the translator's supported list — no translation attempted`,
+        };
+      } else {
+        try {
+          const out = await translationService.translate([text], translatorCode, 'en');
+          translation = { language: 'en', text: out[0], sourceLanguage: translatorCode };
+        } catch (err) {
+          translation = { language: null, text: null, error: err.message };
+        }
+      }
+    }
+
+    return res.json({ input: text, detected, translation });
+  } catch (e) {
+    logger.error(`public translate-detect: ${e.message}`, { stack: e.stack });
+    return res.status(500).json({ message: 'translation failed', error: e.message });
   }
 });
 

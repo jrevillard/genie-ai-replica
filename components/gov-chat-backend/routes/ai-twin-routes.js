@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const authMiddleware = require('../middleware/auth-middleware');
+const patientService = require('../services/patient-service');
 const { logger } = require('../shared-lib');
 
 /** Where AI twin avatars are written. Mounted statically at /Uploads/ai-twins/. */
@@ -153,6 +154,10 @@ module.exports = (aiTwinService) => {
     return req.user && (req.user._key || req.user.id || req.user.userId);
   }
 
+  function isAdminReq(req) {
+    return req.user && req.user.role === 'Admin';
+  }
+
   /**
    * @swagger
    * tags:
@@ -179,7 +184,18 @@ module.exports = (aiTwinService) => {
     try {
       const offset = req.query.offset;
       const limit = req.query.limit;
-      const result = await aiTwinService.listTwins({ offset, limit, ownerId: ownerIdFromReq(req) });
+      const userKey = ownerIdFromReq(req);
+
+      // Admins see twins they own. Patients (non-admins linked to an admin) see
+      // only twins explicitly granted via allowedTwinIds — null means "no
+      // restriction yet" and falls back to all twins, matching /api/me/twins.
+      let result;
+      if (isAdminReq(req)) {
+        result = await aiTwinService.listTwins({ offset, limit, ownerId: userKey });
+      } else {
+        const allowedIds = await patientService.getSelfTwinAccess(userKey);
+        result = await aiTwinService.listTwins({ offset, limit, allowedIds });
+      }
       res.json(result);
     } catch (error) {
       logger.error(`ai-twin list: ${error.message}`, { stack: error.stack });
@@ -542,10 +558,19 @@ module.exports = (aiTwinService) => {
    */
   router.get('/:twinId', async (req, res) => {
     try {
-      const twin = await aiTwinService.getTwinByKey(req.params.twinId, {
-        ownerId: ownerIdFromReq(req),
-        includeKbFiles: true,
-      });
+      const userKey = ownerIdFromReq(req);
+      const getOpts = { includeKbFiles: true };
+      // Admins are scoped to twins they own. Patients can read any twin in
+      // their allowedTwinIds list (null → no restriction, [] → forbidden).
+      if (isAdminReq(req)) {
+        getOpts.ownerId = userKey;
+      } else {
+        const allowedIds = await patientService.getSelfTwinAccess(userKey);
+        if (Array.isArray(allowedIds) && !allowedIds.includes(req.params.twinId)) {
+          return res.status(404).json({ message: 'AI twin not found' });
+        }
+      }
+      const twin = await aiTwinService.getTwinByKey(req.params.twinId, getOpts);
       const counts = await aiTwinService.getTwinSessionCounts(twin._key);
       res.json({ ...twin, ...counts });
     } catch (error) {

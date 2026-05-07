@@ -69,7 +69,7 @@ const { value: tChatGreeting } = useTranslated(() => twin.value?.chatGreeting ??
           </div>
           <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
             <Icon :icon="Comment01Icon" :size="16" />
-            {{ t('user.twins.chat', 'Chat With Twin') }}
+            {{ t('twins.detail.chatWithTwin', 'Chat With Twin') }}
           </BaseButton>
         </header>
 
@@ -93,6 +93,7 @@ const { value: tChatGreeting } = useTranslated(() => twin.value?.chatGreeting ??
 
       <EmptyState
         v-else-if="store.error"
+        full-height
         :icon="Cancel01Icon"
         :title="t('twins.detail.loadFailedTitle', `Couldn't load AI Twin`)"
         :description="store.error"
@@ -102,6 +103,7 @@ const { value: tChatGreeting } = useTranslated(() => twin.value?.chatGreeting ??
 
       <EmptyState
         v-else
+        full-height
         :icon="Cancel01Icon"
         :title="t('twins.detail.notFoundTitle', 'Twin not found')"
         :description="t('twins.detail.notFoundBody', `This AI Twin doesn't exist or has been deleted.`)"

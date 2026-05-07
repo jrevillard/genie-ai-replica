@@ -53,14 +53,30 @@ logger = logging.getLogger("genieai_voice_bridge")
 
 ASR_URL = os.getenv("ASR_WHISPER_URL", "http://asr-whisper:9100")
 TTS_URL = os.getenv("TTS_PIPER_URL") or os.getenv("TTS_URL") or "http://tts-piper:9200"
-# Direct vLLM endpoint (OpenAI-compatible). We bypass chatqna's RAG pipeline
-# for voice — RAG adds 5-7s of overhead per turn (embedding, retrieval,
-# reranking, big system prompt) that voice users don't need. Voice replies
-# come straight from the LLM with a tight conversational prompt.
+# Direct vLLM endpoint (OpenAI-compatible). Voice always streams from vLLM —
+# we bypass chatqna's megaservice because its full RAG pipeline (with
+# reranker + translation hops) costs 5-7s per turn, which kills a live call.
 LLM_ENDPOINT = os.getenv("LLM_ENDPOINT", "http://vllm:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", os.getenv("VLLM_LLM_MODEL_ID", "meta-llama/Meta-Llama-3.1-8B-Instruct"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "128"))
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
+
+# Inline RAG: when VOICE_RAG_ENABLED=true we run a direct AQL k-NN against
+# Arango (no graph hop, no reranker, no megaservice round-trip) in parallel
+# with the rest of the per-turn work, then inject the top chunks as a system
+# message before streaming from vLLM. End-to-end target ~2 s.
+VOICE_RAG_ENABLED = os.getenv("VOICE_RAG_ENABLED", "").lower() in ("1", "true", "yes")
+TEI_EMBED_URL = os.getenv("TEI_EMBED_URL", "http://tei:80")
+# OPEA's dataprep stores chunk embeddings in GRAPH_SOURCE. Override only if
+# you've moved them.
+VOICE_RAG_COLLECTION = os.getenv("VOICE_RAG_COLLECTION", "GRAPH_SOURCE")
+VOICE_RAG_TOP_K = int(os.getenv("VOICE_RAG_TOP_K", "3"))
+# Skip retrieval for very short messages ("hi", "thanks") — chitchat doesn't
+# need grounding and would just add latency.
+VOICE_RAG_MIN_QUERY_LEN = int(os.getenv("VOICE_RAG_MIN_QUERY_LEN", "12"))
+# Trim each retrieved chunk so the system prompt stays compact.
+VOICE_RAG_CHUNK_CHARS = int(os.getenv("VOICE_RAG_CHUNK_CHARS", "400"))
+
 HOST = os.getenv("VOICE_BRIDGE_HOST", "0.0.0.0")
 PORT = int(os.getenv("VOICE_BRIDGE_PORT", "9400"))
 
@@ -694,6 +710,106 @@ async def call_llm(messages: list) -> str:
     return text
 
 
+async def _embed_query(query: str) -> Optional[list]:
+    """Call TEI to embed the user's transcript. Returns the vector or None
+    on any failure. ~10 ms typical."""
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.post(f"{TEI_EMBED_URL}/embed", json={"inputs": query})
+            r.raise_for_status()
+            data = r.json()
+        return data[0] if isinstance(data, list) and data else None
+    except Exception as exc:
+        logger.warning("[RAG] embed failed: %s", exc)
+        return None
+
+
+def _arango_topk_chunks(vec: list, k: int) -> list[dict]:
+    """Top-K cosine-similarity chunks from the OPEA dataprep collection.
+
+    Direct AQL — no megaservice, no reranker, no graph traversal. With ~750
+    chunks and 768-dim vectors, this is a ~50-100 ms full scan. Compared to
+    the OPEA Arango retriever's ~3 s per call, the trade-off is: we lose the
+    knowledge-graph hop (entity expansion, related-document traversal) but
+    keep raw vector relevance, which is what voice needs.
+
+    Each row returns `{ text, sim, file_id, chunk_index }` so the caller can
+    log what was retrieved and from where (helps diagnose grounding issues)."""
+    db = get_arango_db()
+    if db is None:
+        return []
+    try:
+        cursor = db.aql.execute(
+            """
+              FOR c IN @@coll
+                FILTER c.embedding != null
+                LET sim = COSINE_SIMILARITY(c.embedding, @vec)
+                SORT sim DESC
+                LIMIT @k
+                RETURN { text: c.text, sim: sim, file_id: c.file_id, chunk_index: c.chunk_index }
+            """,
+            bind_vars={"@coll": VOICE_RAG_COLLECTION, "vec": vec, "k": k},
+        )
+        return [r for r in list(cursor) if r and r.get("text")]
+    except Exception as exc:
+        logger.warning("[RAG] AQL k-NN failed: %s", exc)
+        return []
+
+
+async def retrieve_for_voice(query: str) -> list[str]:
+    """Top-K vector matches for the user's question, ready to inject into
+    the prompt. Empty list on chitchat, missing collection, or any failure
+    — voice continues without grounding rather than blocking the call."""
+    if len(query) < VOICE_RAG_MIN_QUERY_LEN:
+        return []
+    t0 = asyncio.get_event_loop().time()
+
+    vec = await _embed_query(query)
+    if not vec:
+        return []
+
+    rows = await asyncio.to_thread(_arango_topk_chunks, vec, VOICE_RAG_TOP_K)
+    chunks: list[str] = []
+    for row in rows:
+        text = (row.get("text") or "").strip()[:VOICE_RAG_CHUNK_CHARS]
+        if not text:
+            continue
+        chunks.append(text)
+        # Surface each retrieved chunk so the call log shows exactly what got
+        # injected into the prompt — invaluable when an answer feels off.
+        preview = text.replace("\n", " ")[:160]
+        logger.info("[RAG]  - sim=%.3f file=%s chunk=%s preview=%r",
+                    row.get("sim") or 0.0,
+                    row.get("file_id") or "?",
+                    row.get("chunk_index"),
+                    preview)
+
+    elapsed = asyncio.get_event_loop().time() - t0
+    logger.info("[RAG] retrieved %d chunks in %.2fs for %r",
+                len(chunks), elapsed, query[:60])
+    return chunks
+
+
+def inject_rag_chunks(history: list, chunks: list[str]) -> list:
+    """Return a copy of `history` with the retrieved chunks prepended as a
+    system message (placed right after the existing voice system prompt so
+    the assistant sees its role first, then the grounded facts)."""
+    if not chunks:
+        return history
+    rag_msg = {
+        "role": "system",
+        "content": (
+            "Use this verified knowledge from the health knowledge base when "
+            "answering. Only cite facts present here:\n"
+            + "\n".join(f"- {c}" for c in chunks)
+        ),
+    }
+    out = list(history)
+    insert_at = 1 if out and out[0].get("role") == "system" else 0
+    out.insert(insert_at, rag_msg)
+    return out
+
+
 async def speak(ws: WebSocket, text: str, language: str, *, voice: Optional[str],
                 session_id: Optional[str] = None) -> None:
     """Synthesize `text` via Piper TTS and stream PCM frames to the client."""
@@ -779,20 +895,34 @@ async def process_utterance(ws: WebSocket, pcm: bytes, language: str, history: l
             logger.info("[PROCESS] skipping — empty or near-empty transcript: %r", text)
             return
 
+        # Kick off retrieval immediately if RAG is on. It runs in parallel
+        # with the WS send + Arango logging below so its latency is hidden.
+        retrieval_task = (
+            asyncio.create_task(retrieve_for_voice(text)) if VOICE_RAG_ENABLED else None
+        )
+
         await ws.send_text(json.dumps({"type": "transcript", "text": text}))
         await log_call_message(session_id, text, is_assistant=False)
         history.append({"role": "user", "content": text})
 
+        # If RAG was started, await it now and inject any chunks before the
+        # LLM call. On failure or empty result we just skip injection.
+        history_for_call = history
+        if retrieval_task is not None:
+            chunks = await retrieval_task
+            if chunks:
+                history_for_call = inject_rag_chunks(history, chunks)
+
         try:
             if _is_openai_compat(LLM_ENDPOINT):
-                async for delta in stream_llm_tokens(history):
+                async for delta in stream_llm_tokens(history_for_call):
                     sentence_buf += delta
                     full_parts.append(delta)
                     sentences, sentence_buf = split_sentences(sentence_buf)
                     for sent in sentences:
                         await speak(ws, sent, language, voice=voice, session_id=session_id)
             else:
-                full_reply = await call_llm(history)
+                full_reply = await call_llm(history_for_call)
                 if full_reply:
                     full_parts.append(full_reply)
                     sentences, sentence_buf = split_sentences(full_reply + " ")

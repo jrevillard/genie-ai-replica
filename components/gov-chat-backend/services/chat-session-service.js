@@ -105,9 +105,18 @@ class ChatSessionService {
     );
     const rows = await cursor.all();
     rows.reverse();
+    // Match the shape returned by searchMessages so the chat-history UI gets
+    // the message _key (needed to fetch per-message audio), audioUrl (voice
+    // bubbles), and createdAt (timestamps) regardless of which path served
+    // the conversation detail.
+    // contentEn is included when present so ChatQnA can skip re-translation.
     return rows.map((m) => ({
+      _key: m._key,
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content == null ? '' : String(m.content),
+      ...(m.contentEn != null ? { contentEn: String(m.contentEn) } : {}),
+      audioUrl: m.audioUrl || null,
+      createdAt: m.createdAt,
     }));
   }
 
@@ -134,9 +143,34 @@ class ChatSessionService {
     if (extra && typeof extra.responseTime === 'number' && isFinite(extra.responseTime)) {
       doc.responseTime = extra.responseTime;
     }
+    if (extra && typeof extra.contentEn === 'string' && extra.contentEn) {
+      doc.contentEn = extra.contentEn;
+    }
     const meta = await this.sessionMessages.save(doc);
     await this.sessions.update(sessionId, { updatedAt: now });
     return meta._key;
+  }
+
+  /**
+   * Persist English translations for a batch of historical messages.
+   * Called fire-and-forget by the ChatQnA service after translating history.
+   * @param {Array<{_key: string, contentEn: string}>} translations
+   */
+  async bulkSaveMessageTranslations(translations = []) {
+    if (!Array.isArray(translations) || translations.length === 0) return;
+    const valid = translations.filter(
+      (t) => t && typeof t._key === 'string' && t._key && typeof t.contentEn === 'string' && t.contentEn
+    );
+    await Promise.allSettled(
+      valid.map((t) =>
+        this.sessionMessages
+          .update(t._key, { contentEn: t.contentEn })
+          .catch((e) => logger.warn(`bulkSaveMessageTranslations: key=${t._key} err=${e.message}`))
+      )
+    );
+    if (valid.length > 0) {
+      logger.debug(`Persisted contentEn for ${valid.length} messages`);
+    }
   }
 
   /**
@@ -278,9 +312,13 @@ class ChatSessionService {
       options && options.userAudioUrl ? { audioUrl: options.userAudioUrl } : {}
     );
     const reply = result.response == null ? '' : String(result.response);
-    const assistantMessageKey = await this.appendMessage(sessionId, 'assistant', reply, {
-      responseTime: result.responseTime,
-    });
+    const assistantExtra = { responseTime: result.responseTime };
+    // When the session is non-English, ChatQnA returns the raw English LLM
+    // output in response_en so we can cache it and skip re-translation next turn.
+    if (result.response_en && typeof result.response_en === 'string') {
+      assistantExtra.contentEn = result.response_en;
+    }
+    const assistantMessageKey = await this.appendMessage(sessionId, 'assistant', reply, assistantExtra);
 
     return {
       queryId: result.queryId,

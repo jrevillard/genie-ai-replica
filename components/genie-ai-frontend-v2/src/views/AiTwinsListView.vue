@@ -24,8 +24,17 @@ const creating = ref(false);
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
-  if (!q) return twins.value;
-  return twins.value.filter((t) => t.name.toLowerCase().includes(q));
+  const matches = q
+    ? twins.value.filter((t) => t.name.toLowerCase().includes(q))
+    : twins.value.slice();
+  // Sort by creation date (newest first). Backend returns by updatedAt by
+  // default, but the list reads more naturally as a chronological roster of
+  // when each twin was added.
+  return matches.sort((a, b) => {
+    const ta = new Date(a.createdAt || 0).getTime() || 0;
+    const tb = new Date(b.createdAt || 0).getTime() || 0;
+    return tb - ta;
+  });
 });
 
 function loadTwins() {
@@ -105,6 +114,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
 
       <EmptyState
         v-else-if="store.error && !search.trim()"
+        full-height
         :icon="SparklesIcon"
         :title="t('twins.list.loadFailedTitle', `Couldn't load AI Twins`)"
         :description="store.error"
@@ -114,6 +124,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
 
       <EmptyState
         v-else-if="search.trim()"
+        full-height
         :icon="Search01Icon"
         :title="t('twins.list.noMatchesTitle', 'No matches')"
         :description="t('twins.list.noMatchesBody', 'No AI Twins match your search. Try a different keyword or clear the filter.')"
@@ -123,6 +134,7 @@ async function onCreated(payload: { name: string; description: string; avatarFil
 
       <EmptyState
         v-else
+        full-height
         :icon="SparklesIcon"
         :title="t('twins.list.emptyTitle', 'No AI Twins yet')"
         :description="t('twins.list.emptyBody', 'Create your first AI Twin to start chatting and tracking conversations.')"

@@ -3,7 +3,29 @@
     "allow": [
       "Bash(npx eslint *)",
       "Bash(node node_modules/.bin/vue-tsc --noEmit)",
-      "Bash(./node_modules/.bin/vue-tsc --noEmit)"
+      "Bash(./node_modules/.bin/vue-tsc --noEmit)",
+      "Bash(./node_modules/.bin/eslint components/genie-ai-frontend-v2/src/components/twin-tabs/KnowledgeSetTab.vue)",
+      "Bash(/root/genie-ai/components/genie-ai-frontend-v2/node_modules/.bin/vue-tsc --noEmit)",
+      "Bash(xargs basename -a)",
+      "Bash(node node_modules/.bin/eslint src/views/KnowledgeSetView.vue src/views/ChatHistoryView.vue src/components/dashboard/AddKnowledgeDrawer.vue src/components/twin-tabs/KnowledgeSetTab.vue src/services/files.ts src/services/aiTwins.ts src/components/ui/BaseDropdown.vue)",
+      "Bash(npm install *)",
+      "Bash(ls /root/.claude/plans/ 2>/dev/null)",
+      "Read(//root/.claude/plans/**)",
+      "Bash(mkdir -p /root/.claude/plans && ls /root/.claude/plans/)",
+      "Bash(find /root -maxdepth 6 -type f \\\\\\( -name \"npm\" -o -name \"pnpm\" -o -name \"yarn\" \\\\\\) 2>/dev/null | grep -v node_modules | head -10)",
+      "Read(//root/**)",
+      "Bash(grep -n \"Select \\\\${v.name}\\\\|preview available with play\\\\|Pause preview of\\\\|Play preview of\" /root/genie-ai/components/genie-ai-frontend-v2/src/components/twin-tabs/VoiceTab.vue)",
+      "Bash(grep -n \"Preview \\\\${twin.name}\\\\|'Profile picture'\\\\|'Profile picture preview'\\\\|'Close preview'\" /root/genie-ai/components/genie-ai-frontend-v2/src/components/dashboard/AiTwinCard.vue)",
+      "Bash(./node_modules/.bin/vite build *)",
+      "Bash(node -e \"const icons = require\\('@hugeicons/core-free-icons'\\); console.log\\('ArrowDown01Icon:', typeof icons.ArrowDown01Icon\\); console.log\\('Calendar03Icon:', typeof icons.Calendar03Icon\\); console.log\\('StopCircleIcon:', typeof icons.StopCircleIcon\\);\")",
+      "Bash(grep -nE \"@\\\\{|\\\\$\\\\{|@\\\\.\" /root/genie-ai/components/genie-ai-frontend-v2/src/i18n/locales/en.ts /root/genie-ai/components/genie-ai-frontend-v2/src/i18n/locales/fr.ts /root/genie-ai/components/genie-ai-frontend-v2/src/i18n/locales/mnk.ts)",
+      "Bash(grep -nB3 -A8 \"INVALID_LINKED_FORMAT\" /root/genie-ai/components/genie-ai-frontend-v2/node_modules/vue-i18n/dist/vue-i18n.esm-browser.js)",
+      "Bash(python3)",
+      "Bash(chmod +x /tmp/audit.sh)",
+      "Bash(/tmp/audit.sh)"
+    ],
+    "additionalDirectories": [
+      "/root/.claude/plans"
     ]
   },
   "hooks": {

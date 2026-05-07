@@ -376,19 +376,6 @@ TTS_PIPER_VOICE_FEMALE_SW=sw_CD-lanfrica-medium
 TTS_PIPER_VOICE_MALE_SW=sw_CD-lanfrica-medium
 
 # =============================================================================
-# SECTION 8c: LEGACY VOICE STACK (LiveKit + coturn — `--profile legacy_voice`)
-# =============================================================================
-# Kept for reference only. Not used by the default voice profile.
-# LIVEKIT_API_KEY=genieai-devkey
-# LIVEKIT_API_SECRET=genieai-devsecret-change-me-32chars
-# LIVEKIT_WS_URL=ws://localhost:7880
-# LIVEKIT_NODE_IP=127.0.0.1
-# TURN_USERNAME=genieai_voice
-# TURN_CREDENTIAL=genieai-turn-secret-change-me
-# TURN_EXTERNAL_IP=127.0.0.1
-# TURN_PORT=7881
-
-# =============================================================================
 # SECTION 9: GPU-SPECIFIC CONFIGURATION
 # SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)
 # =============================================================================
@@ -699,13 +686,3 @@ TTS_PIPER_DEFAULT_VOICE_FR=fr_FR-siwis-medium
 TTS_PIPER_DEFAULT_VOICE_ES=es_MX-claude-high
 TTS_PIPER_DEFAULT_VOICE_SW=sw_CD-lanfrica-medium
 
-# Legacy WebRTC stack — only set when running with profile [legacy_voice].
-# Generate LIVEKIT_API_SECRET / TURN_CREDENTIAL with token_urlsafe(32).
-LIVEKIT_API_KEY=
-LIVEKIT_API_SECRET=
-LIVEKIT_WS_URL=
-LIVEKIT_NODE_IP=127.0.0.1
-TURN_USERNAME=
-TURN_CREDENTIAL=
-TURN_EXTERNAL_IP=
-TURN_PORT=7881

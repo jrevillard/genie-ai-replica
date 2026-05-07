@@ -31,6 +31,11 @@ export interface AiTwin {
     createdAt: string | null;
     updatedAt: string | null;
   }>;
+  // Hydrated by the privileged read so PersonalityTab/InstructionsTab can
+  // render correct initial values without a separate async fetch (and the
+  // visible flicker that comes with one).
+  personality?: TwinPersonality;
+  instructions?: string[];
   createdAt: string;
   updatedAt: string;
   numChats?: number;
@@ -196,6 +201,29 @@ export async function updateTwinPersonality(
     payload
   );
   return res.data;
+}
+
+// Admin instructions — replace-only. The backend enforces uniqueness +
+// dedupes on save, so callers can pass the raw list as displayed. The current
+// list is hydrated on the AiTwin payload, so a dedicated GET isn't needed
+// here; only the suggestions need their own endpoint.
+export async function replaceTwinInstructions(
+  twinId: string,
+  instructions: string[]
+): Promise<string[]> {
+  const res = await api.post<{ instructions: string[] }>(
+    `/ai-twins/${encodeURIComponent(twinId)}/instructions`,
+    { instructions }
+  );
+  return res.data?.instructions ?? [];
+}
+
+// Curated suggestions filtered to exclude what the twin already has applied.
+export async function getSuggestedInstructions(twinId: string): Promise<string[]> {
+  const res = await api.get<{ instructions: string[] }>(
+    `/ai-twins/${encodeURIComponent(twinId)}/suggested-instructions`
+  );
+  return res.data?.instructions ?? [];
 }
 
 // Multipart upload — server stores the file and returns the updated twin

@@ -11,9 +11,17 @@ import {
 } from '@hugeicons/core-free-icons';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseDrawer from '../ui/BaseDrawer.vue';
+import BaseDropdown from '../ui/BaseDropdown.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import Icon from '../ui/Icon.vue';
+import { CHAT_LANGS } from '../../lib/chatStrings';
 import { notify } from '../../lib/notify';
+import {
+  ACCEPT_ATTR,
+  MAX_FILE_SIZE_BYTES,
+  MAX_FILES_PER_UPLOAD,
+  validateUploadCandidates,
+} from '../../lib/uploadLimits';
 import { useT } from '../../i18n/composables';
 import fileService from '../../services/files';
 
@@ -37,8 +45,16 @@ const linkLabels = ref('');
 
 const crawlUrl = ref('');
 const crawlMaxDepth = ref<number | ''>(2);
-const crawlMaxPages = ref<number | ''>(50);
-const crawlLanguage = ref('');
+
+// Reuse the canonical language list the chat backend supports — keeps the
+// file `language` value aligned with the chat language picker.
+const languageOptions = computed(() => {
+  const sorted = [...CHAT_LANGS].sort((a, b) => a.label.localeCompare(b.label));
+  return [
+    { value: '', label: t('knowledgeSet.languageAuto', 'Auto-detect / unset'), flag: '' },
+    ...sorted.map((l) => ({ value: l.code, label: l.label, flag: l.flag })),
+  ];
+});
 
 const drawerFilesTotalSize = computed(() =>
   drawerFiles.value.reduce((sum, f) => sum + (f.size || 0), 0)
@@ -53,7 +69,6 @@ watch(
       linkLanguage.value = '';
       linkLabels.value = '';
       crawlUrl.value = '';
-      crawlLanguage.value = '';
       tab.value = 'files';
     }
   }
@@ -67,11 +82,54 @@ function fileTypeIcon(name: string) {
   return name.toLowerCase().endsWith('.pdf') ? Pdf01Icon : File02Icon;
 }
 
+function formatLimit(bytes: number): string {
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+function reportRejections(
+  rejected: ReturnType<typeof validateUploadCandidates>['rejected'],
+  overflow: File[]
+): void {
+  for (const r of rejected) {
+    if (r.reason === 'extension') {
+      notify.warning(
+        t(
+          'knowledgeSet.toasts.unsupportedType',
+          { name: r.file.name, ext: r.ext || '?' },
+          'Skipped "{name}" — {ext} is not supported.'
+        )
+      );
+    } else {
+      notify.warning(
+        t(
+          'knowledgeSet.toasts.fileTooLarge',
+          { name: r.file.name, limit: formatLimit(MAX_FILE_SIZE_BYTES) },
+          'Skipped "{name}" — exceeds the {limit} per-file limit.'
+        )
+      );
+    }
+  }
+  if (overflow.length) {
+    notify.warning(
+      t(
+        'knowledgeSet.toasts.tooManyFiles',
+        { max: MAX_FILES_PER_UPLOAD, count: overflow.length },
+        'Only {max} files can be staged at once — {count} dropped.'
+      )
+    );
+  }
+}
+
 function appendDrawerFiles(list: FileList | File[] | null | undefined): void {
   if (!list) return;
-  const next = [...drawerFiles.value];
-  for (const f of Array.from(list)) next.push(f);
-  drawerFiles.value = next;
+  const incoming = Array.from(list);
+  const { accepted, rejected, overflow } = validateUploadCandidates(
+    incoming,
+    drawerFiles.value.length
+  );
+  reportRejections(rejected, overflow);
+  if (!accepted.length) return;
+  drawerFiles.value = [...drawerFiles.value, ...accepted];
 }
 
 function pickFile(): void {
@@ -194,8 +252,6 @@ async function submitCrawl(): Promise<void> {
     await fileService.scheduleSiteCrawl({
       url,
       maxDepth: typeof crawlMaxDepth.value === 'number' ? crawlMaxDepth.value : undefined,
-      maxPages: typeof crawlMaxPages.value === 'number' ? crawlMaxPages.value : undefined,
-      language: crawlLanguage.value.trim() || undefined,
     });
     notify.success(t('knowledgeSet.toasts.crawlScheduled', 'Crawl scheduled'));
     // The crawl is asynchronous and does not return file IDs synchronously, so
@@ -272,7 +328,14 @@ async function submitCrawl(): Promise<void> {
       </button>
     </div>
 
-    <input ref="fileInput" type="file" multiple class="hidden" @change="onFileChange" />
+    <input
+      ref="fileInput"
+      type="file"
+      multiple
+      :accept="ACCEPT_ATTR"
+      class="hidden"
+      @change="onFileChange"
+    />
 
     <!-- Files tab -->
     <div v-if="tab === 'files'">
@@ -291,7 +354,7 @@ async function submitCrawl(): Promise<void> {
         </span>
         <p class="text-body font-medium text-text">{{ t('knowledgeSet.uploadFile', 'Drag & drop files here') }}</p>
         <p class="max-w-xs text-caption text-text-muted">
-          {{ t('knowledgeSet.allowedTypes', 'PDF, Word, CSV, TXT, DOCX') }}
+          {{ t('knowledgeSet.allowedTypes', 'PDF, Word (.docx), Excel (.xlsx), Markdown, HTML, TXT — up to 50 MB') }}
         </p>
         <BaseButton variant="soft" size="sm" rounded="full" @click="pickFile">
           {{ t('knowledgeSet.browseFiles', 'Browse files') }}
@@ -380,7 +443,7 @@ async function submitCrawl(): Promise<void> {
           v-model="linkUrl"
           type="url"
           :placeholder="t('knowledgeSet.urlPlaceholder', 'https://example.com/document.pdf')"
-          rounded="md"
+          rounded="full"
         />
       </label>
       <div class="grid gap-3 sm:grid-cols-2">
@@ -388,10 +451,11 @@ async function submitCrawl(): Promise<void> {
           <span class="text-caption font-semibold text-text">
             {{ t('knowledgeSet.languageField', 'Language') }}
           </span>
-          <BaseInput
+          <BaseDropdown
             v-model="linkLanguage"
-            :placeholder="t('knowledgeSet.languagePlaceholder', 'e.g. en, fr')"
-            rounded="md"
+            :options="languageOptions"
+            :placeholder="t('knowledgeSet.languagePlaceholder', 'Select a language')"
+            width="w-full"
           />
         </label>
         <label class="flex flex-col gap-1.5">
@@ -401,7 +465,7 @@ async function submitCrawl(): Promise<void> {
           <BaseInput
             v-model="linkLabels"
             :placeholder="t('knowledgeSet.labelsPlaceholder', 'comma, separated')"
-            rounded="md"
+            rounded="full"
           />
         </label>
       </div>
@@ -420,31 +484,20 @@ async function submitCrawl(): Promise<void> {
           v-model="crawlUrl"
           type="url"
           :placeholder="t('knowledgeSet.crawlUrlPlaceholder', 'https://example.com')"
-          rounded="md"
+          rounded="full"
         />
       </label>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <label class="flex flex-col gap-1.5">
-          <span class="text-caption font-semibold text-text">
-            {{ t('knowledgeSet.crawlMaxDepth', 'Max depth') }}
-          </span>
-          <BaseInput v-model.number="crawlMaxDepth" type="number" min="1" max="10" rounded="md" />
-        </label>
-        <label class="flex flex-col gap-1.5">
-          <span class="text-caption font-semibold text-text">
-            {{ t('knowledgeSet.crawlMaxPages', 'Max pages') }}
-          </span>
-          <BaseInput v-model.number="crawlMaxPages" type="number" min="1" max="500" rounded="md" />
-        </label>
-      </div>
       <label class="flex flex-col gap-1.5">
         <span class="text-caption font-semibold text-text">
-          {{ t('knowledgeSet.languageField', 'Language') }}
+          {{ t('knowledgeSet.crawlMaxDepth', 'Max depth') }}
         </span>
         <BaseInput
-          v-model="crawlLanguage"
-          :placeholder="t('knowledgeSet.languagePlaceholder', 'e.g. en, fr')"
-          rounded="md"
+          v-model.number="crawlMaxDepth"
+          type="number"
+          min="1"
+          max="20"
+          :placeholder="t('knowledgeSet.crawlMaxDepthPlaceholder', '2 (recommended)')"
+          rounded="full"
         />
       </label>
       <p class="text-meta text-text-muted">

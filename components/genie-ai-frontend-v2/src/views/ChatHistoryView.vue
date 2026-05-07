@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import {
   ArrowDown01Icon,
@@ -10,7 +10,9 @@ import {
   CallIcon,
   Calendar03Icon,
   Cancel01Icon,
+  Copy01Icon,
   Delete02Icon,
+  Tick02Icon,
   FilterHorizontalIcon,
   Mic01Icon,
   PauseIcon,
@@ -290,11 +292,16 @@ function twinById(twinId?: string | null): TwinOption | null {
   return availableTwins.value.find((t) => t._key === twinId) ?? null;
 }
 
+// Backend now returns the chatting user on each session. Show that user
+// (avatar + name) in the row instead of the AI Twin — the twin is still
+// surfaced in the right-pane subtitle and via the twin filter dropdown.
 function sessionTitle(session: ChatSessionRecord | null | undefined): string {
   if (!session) return '';
+  const userName = session.user?.name?.trim();
+  if (userName) return userName;
+  if (session.phoneNumber) return session.phoneNumber;
   const twin = twinById(session.twinId);
   if (twin?.name) return twin.name;
-  if (session.phoneNumber) return session.phoneNumber;
   return session.type === 'whatsapp' ? 'WhatsApp session' : 'Chat session';
 }
 
@@ -312,7 +319,27 @@ function sessionPreview(session: ChatSessionRecord): string {
 
 function sessionAvatar(session: ChatSessionRecord | null | undefined): string | null {
   if (!session) return null;
+  return session.user?.profilePicUrl ?? null;
+}
+
+// Twin-side avatar for assistant message bubbles. Falls back to the twin name
+// (initials) so BaseAvatar can render a placeholder when no profile pic exists.
+function twinAvatarSrc(session: ChatSessionRecord | null | undefined): string | null {
+  if (!session) return null;
   return twinById(session.twinId)?.profilePicUrl ?? null;
+}
+function twinAvatarName(session: ChatSessionRecord | null | undefined): string {
+  if (!session) return 'AI Twin';
+  return twinById(session.twinId)?.name ?? 'AI Twin';
+}
+
+// Right-pane subtitle: keep the twin name visible so the admin can still see
+// which AI Twin the conversation was with (the title is now the user).
+function sessionSubtitle(session: ChatSessionRecord | null | undefined): string {
+  if (!session) return '';
+  if (session.type === 'whatsapp') return 'WhatsApp conversation';
+  const twin = twinById(session.twinId);
+  return twin?.name ? `Chat with ${twin.name}` : 'AI Twin conversation';
 }
 
 const sortedChatSessions = computed<ChatSessionRecord[]>(() => {
@@ -568,7 +595,10 @@ async function sendComposerMessage(): Promise<void> {
   } catch (err) {
     composerDraft.value = text;
     const e = err as { response?: { data?: { message?: string } }; message?: string };
-    notify.error('Send failed', e?.response?.data?.message ?? e?.message ?? 'Could not deliver message.');
+    notify.error(
+      t('history.toasts.sendFailedTitle', 'Send failed'),
+      e?.response?.data?.message ?? e?.message ?? t('history.toasts.sendFailedBody', 'Could not deliver message.'),
+    );
   }
 }
 
@@ -605,7 +635,10 @@ function stopRecordingStream(): void {
 async function startRecording(): Promise<void> {
   if (isRecording.value || composerDisabled.value) return;
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-    notify.error('Recording not supported', 'Your browser cannot record audio.');
+    notify.error(
+      t('chat.voiceUnsupportedTitle', 'Recording not supported'),
+      t('chat.voiceUnsupportedBody', 'Your browser cannot record audio.'),
+    );
     return;
   }
   try {
@@ -613,10 +646,10 @@ async function startRecording(): Promise<void> {
   } catch (err) {
     const e = err as { name?: string; message?: string };
     notify.error(
-      'Microphone unavailable',
+      t('chat.micUnavailableTitle', 'Microphone unavailable'),
       e?.name === 'NotAllowedError'
-        ? 'Permission denied. Allow microphone access and try again.'
-        : e?.message ?? 'Could not access the microphone.',
+        ? t('chat.micPermissionDenied', 'Permission denied. Allow microphone access and try again.')
+        : e?.message ?? t('chat.micGenericError', 'Could not access the microphone.'),
     );
     return;
   }
@@ -630,7 +663,10 @@ async function startRecording(): Promise<void> {
       : new MediaRecorder(recordingStream);
   } catch {
     stopRecordingStream();
-    notify.error('Recording failed', 'Could not initialize the recorder.');
+    notify.error(
+      t('chat.recordingFailedTitle', 'Recording failed'),
+      t('chat.recordingFailedBody', 'Could not initialize the recorder.'),
+    );
     return;
   }
 
@@ -696,11 +732,11 @@ async function submitVoiceMessage(blob: Blob): Promise<void> {
     const message =
       e?.response?.data?.message ??
       (status === 413
-        ? 'Recording is too large (max 10 MB).'
+        ? t('chat.voiceTooLarge', 'Recording is too large (max 10 MB).')
         : status === 502
-          ? 'Voice transcription service is temporarily unavailable.'
-          : e?.message ?? 'Could not send voice message.');
-    notify.error('Voice message failed', message);
+          ? t('chat.voiceServiceUnavailable', 'Voice transcription service is temporarily unavailable.')
+          : e?.message ?? t('chat.voiceGenericError', 'Could not send voice message.'));
+    notify.error(t('chat.voiceFailedTitle', 'Voice message failed'), message);
   } finally {
     processingVoice.value = false;
   }
@@ -765,6 +801,73 @@ function formatAudioClock(seconds: number): string {
   return `${m}:${s}`;
 }
 
+// Per-message "just copied" flag — flips a button's icon to a check for ~2s
+// after a successful copy, then reverts to the copy glyph. Keyed by message
+// _key so multiple copies don't fight over a shared timer. Falls back to a
+// random per-render id when the message has no _key so the visual feedback
+// still works even when the backend omits message ids.
+const copiedFlags = reactive<Record<string, boolean>>({});
+const copiedTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+function flagCopied(key: string): void {
+  copiedFlags[key] = true;
+  if (copiedTimers[key]) clearTimeout(copiedTimers[key]);
+  copiedTimers[key] = setTimeout(() => {
+    copiedFlags[key] = false;
+  }, 2000);
+}
+
+// Fallback for environments where the async Clipboard API is unavailable
+// (insecure context, older browsers). Returns true on success.
+function legacyCopyToClipboard(text: string): boolean {
+  if (typeof document === 'undefined') return false;
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.top = '0';
+  ta.style.left = '0';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  document.body.removeChild(ta);
+  return ok;
+}
+
+function copyKey(message: { _key?: string; content?: string | null | undefined }): string {
+  return message._key ?? `idx-${(message.content ?? '').slice(0, 32)}`;
+}
+
+async function copyMessage(message: { _key?: string; content: string | null | undefined }): Promise<void> {
+  const text = message.content;
+  if (!text) return;
+  const key = copyKey(message);
+  let ok = false;
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } else {
+      ok = legacyCopyToClipboard(text);
+    }
+  } catch {
+    ok = legacyCopyToClipboard(text);
+  }
+  if (ok) {
+    flagCopied(key);
+    notify.success(t('chat.copied', 'Copied to clipboard'));
+  } else {
+    notify.error(t('chat.copyFailed', 'Copy failed'));
+  }
+}
+
 async function toggleMessageAudio(message: { _key?: string; role: string; audioUrl?: string | null }): Promise<void> {
   const messageId = message._key;
   if (!messageId || !selectedSessionId.value) return;
@@ -803,11 +906,11 @@ async function toggleMessageAudio(message: { _key?: string; role: string; audioU
     const status = e?.response?.status;
     const fallback =
       status === 404
-        ? 'Audio for this message could not be found.'
+        ? t('chat.audioNotFound', 'Audio for this message could not be found.')
         : status === 502
-          ? 'Voice synthesis is temporarily unavailable.'
-          : e?.message ?? 'Could not play audio.';
-    notify.error('Playback failed', e?.response?.data?.message ?? fallback);
+          ? t('chat.audioServiceUnavailable', 'Voice synthesis is temporarily unavailable.')
+          : e?.message ?? t('chat.audioGenericError', 'Could not play audio.');
+    notify.error(t('chat.playbackFailedTitle', 'Playback failed'), e?.response?.data?.message ?? fallback);
   } finally {
     state.loading = false;
   }
@@ -844,9 +947,11 @@ async function confirmChatDelete(): Promise<void> {
     chatDeleteDialogOpen.value = false;
     chatToDeleteId.value = null;
     notify.success(
-      'Conversation deleted',
+      t('history.toasts.deletedTitle', 'Conversation deleted'),
       deletedMessages > 0
-        ? `${deletedMessages} message${deletedMessages === 1 ? '' : 's'} removed.`
+        ? deletedMessages === 1
+          ? t('history.toasts.deletedBodyOne', '1 message removed.')
+          : t('history.toasts.deletedBodyMany', { count: deletedMessages }, '{count} messages removed.')
         : undefined,
     );
   } catch (err) {
@@ -855,11 +960,11 @@ async function confirmChatDelete(): Promise<void> {
     const message =
       e?.response?.data?.message ??
       (status === 403
-        ? "You don't have permission to delete this conversation."
+        ? t('history.toasts.deleteForbidden', "You don't have permission to delete this conversation.")
         : status === 404
-          ? 'This conversation no longer exists.'
-          : e?.message ?? 'Failed to delete conversation');
-    notify.error('Delete failed', message);
+          ? t('history.toasts.deleteNotFound', 'This conversation no longer exists.')
+          : e?.message ?? t('history.toasts.deleteFailed', 'Failed to delete conversation'));
+    notify.error(t('history.toasts.deleteFailedTitle', 'Delete failed'), message);
   }
 }
 
@@ -926,6 +1031,20 @@ watch(activeTab, (tab) => {
   }
 }, { immediate: false });
 
+// Auto-select the first twin in the chat-filter dropdown as soon as twins
+// arrive, so the chat panel never sits empty on first paint. Fires whenever
+// the available list changes (admin login, language reload, etc.) and the
+// user hasn't picked one yet.
+watch(
+  availableTwins,
+  (list) => {
+    if (!twinIdFilter.value && list.length > 0) {
+      chatHistory.setTwinFilter(list[0]._key);
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
   loadChats();
 });
@@ -959,14 +1078,16 @@ onBeforeUnmount(() => {
       <div class="flex h-full min-h-[760px] flex-col gap-4 lg:min-h-[640px]">
         <header class="flex flex-col gap-4">
           <h1 class="text-lg font-bold text-slate-900">{{ t('history.title', 'Chat/Call History') }}</h1>
-          <div class="inline-flex w-fit gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="History type">
+          <div class="inline-flex w-fit gap-1 rounded-full border border-slate-200 bg-slate-50 p-1" role="tablist" :aria-label="t('history.aria.historyType', 'History type')">
             <button
               v-for="tab in ['Chats', 'Calls']"
               :key="tab"
               type="button"
               :class="[
-                'rounded-md px-3 py-2 text-xs font-semibold text-slate-400 transition',
-                activeTab === tab && 'bg-white text-slate-700 shadow-sm',
+                'whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium transition',
+                activeTab === tab
+                  ? 'bg-white text-ieee-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800',
               ]"
               @click="activeTab = tab as 'Chats' | 'Calls'"
             >
@@ -994,7 +1115,7 @@ onBeforeUnmount(() => {
               <BaseDropdown
                 v-model="typeFilterValue"
                 :options="typeOptions"
-                placeholder="Channel"
+                :placeholder="t('history.channelPlaceholder', 'Channel')"
                 width="w-full"
               />
               <button
@@ -1005,7 +1126,7 @@ onBeforeUnmount(() => {
                     ? 'border-ieee-300 bg-ieee-50 text-ieee-800'
                     : 'border-neutral-200 text-ieee-700 hover:border-neutral-300 hover:bg-neutral-50',
                 ]"
-                aria-label="Open filters"
+                :aria-label="t('history.aria.openFilters', 'Open filters')"
                 @click="filterPanelOpen = !filterPanelOpen"
               >
                 <Icon :icon="FilterHorizontalIcon" :size="18" />
@@ -1037,12 +1158,12 @@ onBeforeUnmount(() => {
                 class="absolute left-3 top-[330px] z-50 w-[calc(100vw-4rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-2xl sm:w-[520px] lg:left-[225px] lg:top-[58px]"
               >
                 <div class="mb-3 grid grid-cols-[28px_1fr_28px] items-center gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-[28px_1fr_1fr_28px]">
-                  <button type="button" class="grid h-7 place-items-center rounded-md hover:bg-slate-100" aria-label="Previous month">
+                  <button type="button" class="grid h-7 place-items-center rounded-md hover:bg-slate-100" :aria-label="t('common.previousMonth', 'Previous month')">
                     <Icon :icon="ArrowLeft01Icon" :size="16" />
                   </button>
                   <span>December 2021</span>
                   <span class="hidden sm:block">December 2021</span>
-                  <button type="button" class="grid h-7 place-items-center rounded-md hover:bg-slate-100" aria-label="Next month">
+                  <button type="button" class="grid h-7 place-items-center rounded-md hover:bg-slate-100" :aria-label="t('common.nextMonth', 'Next month')">
                     <Icon :icon="ArrowRight01Icon" :size="16" />
                   </button>
                 </div>
@@ -1085,7 +1206,7 @@ onBeforeUnmount(() => {
                 v-if="isAdmin"
                 v-model="scopeFilterValue"
                 :options="scopeOptions"
-                placeholder="Scope"
+                :placeholder="t('history.scopePlaceholder', 'Scope')"
                 width="w-full"
               />
               <BaseDropdown
@@ -1099,16 +1220,10 @@ onBeforeUnmount(() => {
                 type="tel"
                 inputmode="tel"
                 :value="phoneInput"
-                placeholder="Phone number"
+                :placeholder="t('history.phonePlaceholder', 'Phone number')"
                 class="h-10 w-full rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-ieee-700"
                 @input="onPhoneInput"
               />
-              <div class="flex flex-wrap gap-2">
-                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                  <Icon :icon="Calendar03Icon" :size="15" /> {{ selectedDate }}
-                </span>
-                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">{{ t('history.unreadOnly', 'Unread only') }}</span>
-              </div>
             </div>
 
             <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -1129,12 +1244,11 @@ onBeforeUnmount(() => {
               </div>
 
               <div v-else-if="sortedChatSessions.length === 0" class="grid flex-1 place-items-center px-3 py-8">
-                <!-- TODO i18n: missing keys for 'No chats yet' and its description -->
                 <EmptyState
                   :icon="BubbleChatIcon"
-                  :title="chatSessions.length === 0 ? 'No chats yet' : t('history.noMatchesTitle', 'No matches')"
+                  :title="chatSessions.length === 0 ? t('history.noChatsTitle', 'No chats yet') : t('history.noMatchesTitle', 'No matches')"
                   :description="chatSessions.length === 0
-                    ? 'Conversations with your AI Twins will appear here.'
+                    ? t('history.noChatsBody', 'Conversations with your AI Twins will appear here.')
                     : t('history.noMatchesBody', 'No calls match the current filters.')"
                 />
               </div>
@@ -1198,7 +1312,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-ieee-800 lg:hidden"
-                  aria-label="Back to conversations"
+                  :aria-label="t('history.aria.backToList', 'Back to conversations')"
                   @click="backToChatList"
                 >
                   <Icon :icon="ArrowLeft01Icon" :size="18" />
@@ -1206,8 +1320,8 @@ onBeforeUnmount(() => {
                 <BaseAvatar :src="sessionAvatar(selectedChatSession)" :name="sessionTitle(selectedChatSession)" size="sm" badge="online" />
                 <div class="min-w-0">
                   <h2 class="truncate text-sm font-bold text-slate-700">{{ sessionTitle(selectedChatSession) }}</h2>
-                  <p class="mt-0.5 text-[11px] text-slate-400">
-                    {{ selectedChatSession.type === 'whatsapp' ? 'WhatsApp conversation' : 'AI Twin conversation' }}
+                  <p class="mt-0.5 truncate text-[11px] text-slate-400">
+                    {{ sessionSubtitle(selectedChatSession) }}
                   </p>
                 </div>
               </div>
@@ -1218,7 +1332,7 @@ onBeforeUnmount(() => {
                     'grid h-9 w-9 place-items-center rounded-md transition hover:bg-white hover:text-ieee-800',
                     chatSearchOpen && 'bg-ieee-50 text-ieee-800',
                   ]"
-                  aria-label="Search conversation"
+                  :aria-label="t('history.aria.searchConversation', 'Search conversation')"
                   @click="toggleChatSearch"
                 >
                   <Icon :icon="Search01Icon" :size="19" />
@@ -1226,7 +1340,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="grid h-9 w-9 place-items-center rounded-md text-slate-500 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label="Delete conversation"
+                  :aria-label="t('history.aria.deleteConversation', 'Delete conversation')"
                   title="Delete conversation"
                   :disabled="!selectedChatSession"
                   @click="openChatDeleteDialog"
@@ -1242,7 +1356,7 @@ onBeforeUnmount(() => {
                 <input
                   type="text"
                   :value="chatSearchInput"
-                  placeholder="Search in messages..."
+                  :placeholder="t('history.searchPlaceholder', 'Search in messages...')"
                   class="h-9 min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
                   @input="onChatSearchInput"
                 />
@@ -1251,7 +1365,7 @@ onBeforeUnmount(() => {
                   v-if="chatSearchInput && !searchingMessages"
                   type="button"
                   class="text-slate-400 transition hover:text-slate-700"
-                  aria-label="Clear search"
+                  :aria-label="t('twins.list.clearSearch', 'Clear search')"
                   @click="clearChatSearch"
                 >
                   <Icon :icon="Cancel01Icon" :size="14" />
@@ -1287,18 +1401,18 @@ onBeforeUnmount(() => {
               <div v-else-if="!selectedChatSession" class="grid h-full place-items-center">
                 <EmptyState
                   :icon="BubbleChatIcon"
-                  title="Select a conversation"
-                  description="Pick a chat on the left to read its full history."
+                  :title="t('history.pickConversationTitle', 'Select a conversation')"
+                  :description="t('history.pickConversationBody', 'Pick a chat on the left to read its full history.')"
                 />
               </div>
 
               <div v-else-if="chatMessages.length === 0" class="grid h-full place-items-center">
                 <EmptyState
                   :icon="BubbleChatIcon"
-                  :title="chatSearchInput ? 'No matches' : 'No messages yet'"
+                  :title="chatSearchInput ? t('history.noMatchesTitle', 'No matches') : t('history.noMessagesTitle', 'No messages yet')"
                   :description="chatSearchInput
-                    ? `No messages contain &quot;${chatSearchInput}&quot;.`
-                    : 'This conversation does not contain any messages.'"
+                    ? t('history.searchNoMatchesBody', { query: chatSearchInput }, 'No messages contain &quot;{query}&quot;.')
+                    : t('history.noMessagesBody', 'This conversation does not contain any messages.')"
                 />
               </div>
 
@@ -1310,8 +1424,8 @@ onBeforeUnmount(() => {
                 >
                   <BaseAvatar
                     v-if="message.role !== 'user'"
-                    :src="sessionAvatar(selectedChatSession)"
-                    :name="sessionTitle(selectedChatSession)"
+                    :src="twinAvatarSrc(selectedChatSession)"
+                    :name="twinAvatarName(selectedChatSession)"
                     size="xs"
                   />
                   <div :class="['flex max-w-[86%] flex-col gap-1 md:max-w-[430px]', message.role === 'user' && 'items-end']">
@@ -1323,7 +1437,7 @@ onBeforeUnmount(() => {
                       <button
                         type="button"
                         class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
-                        :aria-label="assistantAudio[message._key]?.playing ? 'Pause voice note' : 'Play voice note'"
+                        :aria-label="assistantAudio[message._key]?.playing ? t('history.aria.pauseVoiceNote', 'Pause voice note') : t('history.aria.playVoiceNote', 'Play voice note')"
                         :disabled="assistantAudio[message._key]?.loading"
                         @click="toggleMessageAudio(message)"
                       >
@@ -1372,10 +1486,24 @@ onBeforeUnmount(() => {
                         :title="formatFullDateTime(message.createdAt)"
                       >{{ formatMessageSentAt(message.createdAt) }}</time>
                       <button
+                        v-if="message.role === 'assistant' && message.content"
+                        type="button"
+                        class="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-ieee-50 hover:text-ieee-800"
+                        :aria-label="copiedFlags[copyKey(message)] ? t('chat.copied', 'Copied') : t('chat.copy', 'Copy')"
+                        :title="copiedFlags[copyKey(message)] ? t('chat.copied', 'Copied') : t('chat.copy', 'Copy')"
+                        @click="copyMessage(message)"
+                      >
+                        <Icon
+                          :icon="copiedFlags[copyKey(message)] ? Tick02Icon : Copy01Icon"
+                          :size="12"
+                          :class="copiedFlags[copyKey(message)] ? 'text-green-600' : ''"
+                        />
+                      </button>
+                      <button
                         v-if="message.role === 'assistant' && message._key"
                         type="button"
                         class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition hover:bg-ieee-50 hover:text-ieee-800 disabled:opacity-50"
-                        :aria-label="assistantAudio[message._key]?.playing ? 'Pause audio' : 'Play audio'"
+                        :aria-label="assistantAudio[message._key]?.playing ? t('history.aria.pauseAudio', 'Pause audio') : t('history.aria.playAudio', 'Play audio')"
                         :disabled="assistantAudio[message._key]?.loading"
                         @click="toggleMessageAudio(message)"
                       >
@@ -1386,7 +1514,7 @@ onBeforeUnmount(() => {
                           :size="12"
                         />
                         <Icon v-else :icon="VolumeHighIcon" :size="12" />
-                        {{ assistantAudio[message._key]?.playing ? 'Playing' : 'Listen' }}
+                        {{ assistantAudio[message._key]?.playing ? t('chat.playing', 'Playing') : t('chat.listen', 'Listen') }}
                       </button>
                     </div>
                   </div>
@@ -1397,7 +1525,7 @@ onBeforeUnmount(() => {
                   v-if="processingVoice"
                   class="mb-5 flex items-start justify-end gap-2.5"
                   aria-live="polite"
-                  aria-label="Processing voice message"
+                  :aria-label="t('history.aria.processingVoice', 'Processing voice message')"
                 >
                   <div class="flex flex-col items-end gap-1">
                     <div class="rounded-2xl rounded-tr-md bg-ieee-700 px-3.5 py-3 text-white shadow-sm">
@@ -1407,7 +1535,7 @@ onBeforeUnmount(() => {
                         <span />
                       </span>
                     </div>
-                    <span class="text-[11px] text-slate-400">Processing your voice message…</span>
+                    <span class="text-[11px] text-slate-400">{{ t('history.processing', 'Processing your voice message…') }}</span>
                   </div>
                   <BaseAvatar :name="callerName" size="xs" />
                 </div>
@@ -1416,11 +1544,11 @@ onBeforeUnmount(() => {
                   v-else-if="sendingChat"
                   class="mb-5 flex items-start gap-2.5"
                   aria-live="polite"
-                  aria-label="Assistant is typing"
+                  :aria-label="t('history.aria.assistantTyping', 'Assistant is typing')"
                 >
                   <BaseAvatar
-                    :src="sessionAvatar(selectedChatSession)"
-                    :name="sessionTitle(selectedChatSession)"
+                    :src="twinAvatarSrc(selectedChatSession)"
+                    :name="twinAvatarName(selectedChatSession)"
                     size="xs"
                   />
                   <div class="flex flex-col gap-1">
@@ -1453,7 +1581,7 @@ onBeforeUnmount(() => {
                   <button
                     type="button"
                     class="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition hover:bg-white hover:text-ieee-800 disabled:opacity-40"
-                    aria-label="Record voice message"
+                    :aria-label="t('history.aria.recordVoice', 'Record voice message')"
                     :disabled="composerDisabled"
                     @click="startRecording"
                   >
@@ -1463,7 +1591,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="grid h-11 w-11 place-items-center rounded-full bg-ieee-700 text-white transition hover:bg-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label="Send message"
+                  :aria-label="t('history.aria.sendMessage', 'Send message')"
                   :disabled="composerDisabled || !composerDraft.trim()"
                   @click="sendComposerMessage"
                 >
@@ -1498,7 +1626,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Cancel recording"
+                  :aria-label="t('history.aria.cancelRecording', 'Cancel recording')"
                   @click="cancelRecording"
                 >
                   <Icon :icon="Cancel01Icon" :size="14" />
@@ -1507,7 +1635,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="inline-flex h-10 items-center gap-2 rounded-full bg-ieee-700 px-4 text-xs font-semibold text-white shadow-md transition hover:bg-ieee-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700"
-                  aria-label="Stop and send recording"
+                  :aria-label="t('history.aria.stopAndSend', 'Stop and send recording')"
                   @click="stopRecording"
                 >
                   <Icon :icon="SentIcon" :size="16" />
@@ -1635,7 +1763,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="grid h-9 w-9 place-items-center justify-self-end rounded-full text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
-                  aria-label="Delete call"
+                  :aria-label="t('history.aria.deleteCall', 'Delete call')"
                   @click="openDeleteCallDialog(record)"
                 >
                   <Icon :icon="Delete02Icon" :size="16" />
@@ -1651,7 +1779,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="text-slate-400 transition hover:text-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Previous page"
+                :aria-label="t('common.previousPage', 'Previous page')"
                 :disabled="callsOffset === 0 || callsLoading"
                 @click="voice.prevPage()"
               >
@@ -1660,7 +1788,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="text-slate-700 transition hover:text-ieee-800 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Next page"
+                :aria-label="t('common.nextPage', 'Next page')"
                 :disabled="!hasMore || callsLoading"
                 @click="voice.nextPage()"
               >
@@ -1700,7 +1828,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950"
-                aria-label="Close call details"
+                :aria-label="t('history.aria.closeCallDetails', 'Close call details')"
                 @click="closeCallDetails"
               >
                 <Icon :icon="Cancel01Icon" :size="16" />
@@ -1823,11 +1951,10 @@ onBeforeUnmount(() => {
         @cancel="cancelDeleteCall"
       />
 
-      <!-- TODO i18n: missing keys for "Delete this conversation?" and its description -->
       <ConfirmDialog
         v-model:open="chatDeleteDialogOpen"
-        title="Delete this conversation?"
-        description="The chat session and all of its messages will be permanently removed. This action cannot be undone."
+        :title="t('history.deleteConvoTitle', 'Delete this conversation?')"
+        :description="t('history.deleteConvoBody', 'The chat session and all of its messages will be permanently removed.')"
         :confirm-label="t('common.delete', 'Delete')"
         :loading="deletingChat"
         @confirm="confirmChatDelete"

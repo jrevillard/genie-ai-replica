@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from 'vue';
+import { useT } from '../../i18n/composables';
+
+const { t } = useT();
 
 const props = defineProps<{
   open: boolean;
@@ -57,7 +60,7 @@ watch(
           <button
             type="button"
             class="absolute right-5 top-5 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-neutral-200 hover:text-neutral-950"
-            aria-label="Close dialog"
+            :aria-label="t('common.closeDialog', 'Close dialog')"
             @click="close"
           >
             <span class="-mt-px block text-2xl leading-none">&times;</span>

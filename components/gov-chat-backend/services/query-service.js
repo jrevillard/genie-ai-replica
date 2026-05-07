@@ -41,6 +41,51 @@ class QueryService {
     this.chatHistoryService = chatHistoryService;
   }
 
+  /**
+   * Normalize arbitrary chat message objects into the strict shape expected by ChatQnA.
+   * - Keeps only supported fields.
+   * - Drops null/unsupported extras from persisted history docs (e.g. _key, createdAt).
+   * - Ensures `audioUrl` is sent only when it is a non-empty string.
+   */
+  sanitizeMessagesForChatqna(messages = []) {
+    const allowedRoles = new Set(['system', 'user', 'assistant', 'tool']);
+    return (Array.isArray(messages) ? messages : [])
+      .map((raw) => {
+        if (!raw || typeof raw !== 'object') return null;
+
+        const role = allowedRoles.has(raw.role) ? raw.role : 'user';
+        const normalized = { role };
+
+        // ChatQnA supports string content (and can also accept structured arrays in some paths).
+        // Keep arrays only when already valid; otherwise coerce to string.
+        if (Array.isArray(raw.content)) {
+          const contentParts = raw.content.filter(
+            (part) => part && typeof part === 'object' && typeof part.type === 'string'
+          );
+          normalized.content = contentParts.length > 0 ? contentParts : '';
+        } else {
+          normalized.content = raw.content == null ? '' : String(raw.content);
+        }
+
+        if (typeof raw.audioUrl === 'string' && raw.audioUrl.trim()) {
+          normalized.audioUrl = raw.audioUrl.trim();
+        }
+
+        // Pass DB key so ChatQnA can fire-and-forget translation persistence
+        if (typeof raw._key === 'string' && raw._key) {
+          normalized._key = raw._key;
+        }
+
+        // Pass cached English translation so ChatQnA skips re-translating
+        if (typeof raw.contentEn === 'string' && raw.contentEn) {
+          normalized.contentEn = raw.contentEn;
+        }
+
+        return normalized;
+      })
+      .filter((m) => m && (typeof m.content === 'string' || Array.isArray(m.content)));
+  }
+
   /** Run a single OPEA call in a worker thread so the slow round-trip
    *  doesn't block the event loop. Resolves with the worker's payload. */
   runOPEAWorker(url, payload, headers = null) {
@@ -408,11 +453,23 @@ class QueryService {
     if (!userId || !Array.isArray(messages) || messages.length === 0) {
       throw new Error('executeChatqnaTurn: userId and non-empty messages are required');
     }
+    const sanitizedMessages = this.sanitizeMessagesForChatqna(messages);
+    if (sanitizedMessages.length === 0) {
+      throw new Error('executeChatqnaTurn: no valid messages after sanitization');
+    }
+
+    if (sanitizedMessages.length !== messages.length) {
+      logger.warn('executeChatqnaTurn message_sanitization_dropped_items', {
+        before: messages.length,
+        after: sanitizedMessages.length,
+      });
+    }
+
     const ctx = context && typeof context === 'object' ? context : { categoryLabel: 'General', serviceLabels: [], language: 'EN' };
     if (!Array.isArray(ctx.serviceLabels)) ctx.serviceLabels = [];
     if (!ctx.categoryLabel) ctx.categoryLabel = 'General';
 
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = sanitizedMessages[sanitizedMessages.length - 1];
     const queryText = lastMessage && lastMessage.content ? lastMessage.content : '';
 
     let categoryId = null;
@@ -456,7 +513,7 @@ class QueryService {
       serviceId: serviceIds.length > 0 ? serviceIds : null,
       responseTime: 0,
       contextOption: 'server-chat-session',
-      messages,
+      messages: sanitizedMessages,
       context: ctx,
       text: queryText,
     };
@@ -469,10 +526,11 @@ class QueryService {
     let opeaResponseContent = null;
     let opeaMetadata = null;
     let opeaResponseTime = 0;
+    let opeaResponseEn = null;
     const opeaStartTime = Date.now();
 
     if (backendMode === 'test-mode') {
-      const mockData = this.getMockOpeaResponse({ messages, context: ctx });
+      const mockData = this.getMockOpeaResponse({ messages: sanitizedMessages, context: ctx });
       opeaResponseContent = mockData.response;
       opeaMetadata = mockData.metadata;
       opeaResponseTime = Date.now() - opeaStartTime;
@@ -487,7 +545,7 @@ class QueryService {
       const opeaPort = process.env.OPEA_PORT || '8888';
       const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
       const opeaPayload = {
-        messages,
+        messages: sanitizedMessages,
         context: {
           categoryLabel: ctx.categoryLabel,
           serviceLabels: ctx.serviceLabels,
@@ -502,6 +560,7 @@ class QueryService {
       opeaResponseTime = workerResult.responseTime;
       opeaResponseContent = workerResult.response;
       opeaMetadata = workerResult.metadata;
+      opeaResponseEn = workerResult.response_en || null;
       await this.queries.update(queryId, {
         response: opeaResponseContent,
         responseTime: opeaResponseTime,
@@ -522,6 +581,7 @@ class QueryService {
     return {
       queryId,
       response: opeaResponseContent,
+      response_en: opeaResponseEn,
       metadata: opeaMetadata,
       responseTime: opeaResponseTime,
       sessionId,

@@ -66,7 +66,7 @@ function closeImagePreview() {
           'block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ieee-700/40',
           hasAvatar ? 'cursor-zoom-in' : 'cursor-default',
         ]"
-        :aria-label="hasAvatar ? `Preview ${twin.name}'s profile picture` : 'Profile picture'"
+        :aria-label="hasAvatar ? t('twins.list.card.previewProfile', { name: twin.name }, `Preview {name}'s profile picture`) : t('common.profilePicture', 'Profile picture')"
         :disabled="!hasAvatar"
         @click="openImagePreview"
       >
@@ -103,14 +103,14 @@ function closeImagePreview() {
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
         role="dialog"
         aria-modal="true"
-        aria-label="Profile picture preview"
+        :aria-label="t('common.profilePicturePreview', 'Profile picture preview')"
         @click.self="closeImagePreview"
         @keydown.esc="closeImagePreview"
       >
         <button
           type="button"
           class="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-          aria-label="Close preview"
+          :aria-label="t('common.closePreview', 'Close preview')"
           @click="closeImagePreview"
         >
           <Icon :icon="Cancel01Icon" :size="20" />

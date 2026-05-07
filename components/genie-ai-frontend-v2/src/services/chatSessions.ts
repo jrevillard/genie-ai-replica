@@ -73,6 +73,14 @@ export interface ChatSessionLastMessage {
   createdAt?: string;
 }
 
+export interface ChatSessionUser {
+  // 'user' for an authenticated app user, 'whatsapp' for a phone-only sender, etc.
+  kind?: string;
+  name?: string | null;
+  email?: string | null;
+  profilePicUrl?: string | null;
+}
+
 export interface ChatSessionRecord {
   _key: string;
   userId: string;
@@ -82,6 +90,7 @@ export interface ChatSessionRecord {
   createdAt: string;
   updatedAt: string;
   lastMessage?: ChatSessionLastMessage | null;
+  user?: ChatSessionUser | null;
 }
 
 export interface ListChatSessionsParams {

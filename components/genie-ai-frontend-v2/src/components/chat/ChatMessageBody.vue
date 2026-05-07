@@ -10,7 +10,7 @@ const props = defineProps<{
   role: 'user' | 'assistant';
 }>();
 const emit = defineEmits<{
-  (e: 'translation-state', state: { isTranslated: boolean; showOriginal: boolean; loading: boolean }): void;
+  (e: 'translation-state', state: { isTranslated: boolean; showOriginal: boolean; loading: boolean; canTranslate: boolean }): void;
 }>();
 
 const { t } = useT();
@@ -18,22 +18,29 @@ const { t } = useT();
 const sourceText = computed(() => props.text);
 const sourceLang = computed(() => props.lang || 'en');
 
-const { value, loading, isTranslated, showOriginal, toggle } = useTranslated(sourceText, sourceLang);
+// Authors read their own input verbatim — never re-translate user messages.
+const isUser = computed(() => props.role === 'user');
+
+const { value: translated, loading, isTranslated, showOriginal, canTranslate, toggle } = useTranslated(sourceText, sourceLang);
+
+const value = computed(() => (isUser.value ? sourceText.value : translated.value));
 
 watch(
-  [isTranslated, showOriginal, loading],
-  ([nextIsTranslated, nextShowOriginal, nextLoading]) => {
+  [isTranslated, showOriginal, loading, canTranslate, isUser],
+  ([nextIsTranslated, nextShowOriginal, nextLoading, nextCanTranslate, nextIsUser]) => {
     emit('translation-state', {
-      isTranslated: nextIsTranslated,
-      showOriginal: nextShowOriginal,
-      loading: nextLoading,
+      isTranslated: nextIsUser ? false : nextIsTranslated,
+      showOriginal: nextIsUser ? false : nextShowOriginal,
+      loading: nextIsUser ? false : nextLoading,
+      canTranslate: nextIsUser ? false : nextCanTranslate,
     });
   },
   { immediate: true }
 );
 
 function toggleTranslation(): void {
-  toggle();
+  if (isUser.value) return;
+  void toggle();
 }
 
 defineExpose({
@@ -44,7 +51,7 @@ defineExpose({
 <template>
   <p class="whitespace-pre-wrap leading-relaxed">{{ value }}</p>
   <div
-    v-if="loading"
+    v-if="loading && !isUser"
     :class="['mt-1 inline-flex items-center gap-1 text-[11px]', role === 'user' ? 'text-white/80' : 'text-text-subtle']"
   >
     <span

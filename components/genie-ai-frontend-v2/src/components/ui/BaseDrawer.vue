@@ -2,6 +2,9 @@
 import { nextTick, onMounted, onUnmounted, ref, useSlots, watch } from 'vue';
 import { Cancel01Icon, MoreHorizontalIcon } from '@hugeicons/core-free-icons';
 import Icon from './Icon.vue';
+import { useT } from '../../i18n/composables';
+
+const { t } = useT();
 
 const props = withDefaults(
   defineProps<{
@@ -113,7 +116,7 @@ const widthClass = {
       >
         <div
           class="absolute inset-0 bg-text/30 backdrop-blur-[2px]"
-          @click="closeOnBackdrop && close()"
+          @click.self="closeOnBackdrop && close()"
         />
 
         <Transition name="drawer-slide">
@@ -151,7 +154,7 @@ const widthClass = {
                   v-if="showMore"
                   type="button"
                   class="flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-surface-subtle hover:text-text"
-                  aria-label="More options"
+                  :aria-label="t('common.moreOptions', 'More options')"
                   @click="emit('more')"
                 >
                   <Icon :icon="MoreHorizontalIcon" :size="18" />
@@ -159,7 +162,7 @@ const widthClass = {
                 <button
                   type="button"
                   class="flex h-9 w-9 items-center justify-center rounded-full ring-1 ring-inset ring-border transition hover:bg-surface-subtle hover:text-text"
-                  aria-label="Close drawer"
+                  :aria-label="t('common.closeDrawer', 'Close drawer')"
                   @click="close"
                 >
                   <Icon :icon="Cancel01Icon" :size="18" />

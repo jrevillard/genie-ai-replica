@@ -35,10 +35,17 @@ interface ChatState {
   sessionId: string | null;
   messages: ChatMessage[];
   sending: boolean;
+  // True while a stored session is being fetched after a reload — lets the
+  // view suppress the empty/welcome state during the brief restore window.
+  restoring: boolean;
   lang: ChatLang;
 }
 
 const CHAT_LANG_STORAGE_KEY = 'chat.lang.v2';
+// Map of twinId -> active sessionId. Lets a reloaded chat page resume the
+// same conversation rather than starting a new session — only "New chat"
+// (resetConversation) drops the entry.
+const ACTIVE_SESSIONS_STORAGE_KEY = 'chat.activeSessions.v1';
 
 function readPersistedChatLang(): ChatLang {
   if (typeof window === 'undefined') return DEFAULT_CHAT_LANG;
@@ -47,6 +54,53 @@ function readPersistedChatLang(): ChatLang {
     return stored as ChatLang;
   }
   return DEFAULT_CHAT_LANG;
+}
+
+function readActiveSessionsMap(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_SESSIONS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof k === 'string' && k && typeof v === 'string' && v) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeActiveSessionsMap(map: Record<string, string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(ACTIVE_SESSIONS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Quota or disabled storage — non-fatal; resume just won't work.
+  }
+}
+
+function readActiveSessionForTwin(twinId: string): string | null {
+  if (!twinId) return null;
+  return readActiveSessionsMap()[twinId] ?? null;
+}
+
+function writeActiveSessionForTwin(twinId: string, sessionId: string): void {
+  if (!twinId || !sessionId) return;
+  const map = readActiveSessionsMap();
+  map[twinId] = sessionId;
+  writeActiveSessionsMap(map);
+}
+
+function clearActiveSessionForTwin(twinId: string | null): void {
+  if (!twinId) return;
+  const map = readActiveSessionsMap();
+  if (twinId in map) {
+    delete map[twinId];
+    writeActiveSessionsMap(map);
+  }
 }
 
 function makeId(): string {
@@ -72,6 +126,7 @@ export const useChatStore = defineStore('chat', {
     sessionId: null,
     messages: [],
     sending: false,
+    restoring: false,
     lang: readPersistedChatLang(),
   }),
 
@@ -92,6 +147,8 @@ export const useChatStore = defineStore('chat', {
     },
 
     resetConversation(): void {
+      // Drop the persisted resume entry so the next reload starts fresh too.
+      clearActiveSessionForTwin(this.currentTwinId);
       this.sessionId = null;
       this.messages = [];
     },
@@ -102,13 +159,53 @@ export const useChatStore = defineStore('chat', {
         if (!this.currentTwinId) return null;
         const sessionId = await createChatSession(this.currentTwinId);
         this.sessionId = sessionId;
+        writeActiveSessionForTwin(this.currentTwinId, sessionId);
         return sessionId;
       }
       // Guest path — backend assigns the default twin and returns its id.
       const res = await createPublicChatSession();
       this.sessionId = res.sessionId;
       this.currentTwinId = res.twinId;
+      writeActiveSessionForTwin(res.twinId, res.sessionId);
       return res.sessionId;
+    },
+
+    async loadSessionMessages(sessionId: string): Promise<boolean> {
+      if (!sessionId) return false;
+      try {
+        const fetcher = readSession() ? getChatSessionMessages : getPublicChatSessionMessages;
+        const data = await fetcher(sessionId, { limit: 500 });
+        this.sessionId = sessionId;
+        this.messages = data.messages.map((m) => ({
+          id: makeId(),
+          serverId: m._key,
+          role: m.role === 'user' ? 'user' : 'assistant',
+          text: m.content ?? '',
+          lang: this.lang,
+          audioUrl: m.audioUrl ?? null,
+          createdAt: m.createdAt ? new Date(m.createdAt) : new Date(),
+        }));
+        return true;
+      } catch {
+        // Session likely missing/expired or auth mismatch — caller decides
+        // whether to drop the persisted entry.
+        return false;
+      }
+    },
+
+    async restoreSessionForTwin(twinId: string): Promise<void> {
+      if (!twinId) return;
+      // Already loaded for this twin — don't refetch (would clobber in-flight sends).
+      if (this.sessionId && this.currentTwinId === twinId) return;
+      const stored = readActiveSessionForTwin(twinId);
+      if (!stored) return;
+      this.restoring = true;
+      try {
+        const ok = await this.loadSessionMessages(stored);
+        if (!ok) clearActiveSessionForTwin(twinId);
+      } finally {
+        this.restoring = false;
+      }
     },
 
     async sendMessage(text: string): Promise<void> {
@@ -179,30 +276,64 @@ export const useChatStore = defineStore('chat', {
 
     async sendVoice(audio: Blob, opts: SendVoiceMessageOptions = {}): Promise<void> {
       if (this.sending) return;
+
+      // Optimistic placeholders so the welcome stage gives way to the chat
+      // surface immediately on the first voice message — otherwise the user
+      // taps mic, releases, and sees no feedback while the upload + transcribe
+      // round-trip is in flight (the welcome state hides the messages area
+      // and its "Sending voice note…" indicator).
+      const userPlaceholder: ChatMessage = {
+        id: makeId(),
+        role: 'user',
+        text: '',
+        lang: this.lang,
+        createdAt: new Date(),
+        streaming: true,
+      };
+      const assistantPlaceholder: ChatMessage = {
+        id: makeId(),
+        role: 'assistant',
+        text: '',
+        lang: this.lang,
+        createdAt: new Date(),
+        streaming: true,
+      };
+      this.messages.push(userPlaceholder);
+      this.messages.push(assistantPlaceholder);
       this.sending = true;
+
       try {
         const sessionId = await this.ensureSession();
         if (!sessionId) throw new Error('No twin selected');
         const send = readSession() ? sendVoiceMessage : sendPublicVoiceMessage;
         const res = await send(sessionId, audio, { language: this.lang, ...opts });
-        const now = new Date();
-        this.messages.push({
-          id: makeId(),
-          serverId: res.userMessage.id,
-          role: 'user',
-          text: res.userMessage.text,
-          lang: this.lang,
-          audioUrl: res.userMessage.audioUrl ?? null,
-          createdAt: now,
-        });
-        this.messages.push({
-          id: makeId(),
-          serverId: res.assistantMessage.id,
-          role: 'assistant',
-          text: res.assistantMessage.text,
-          lang: this.lang,
-          createdAt: new Date(),
-        });
+
+        const userTarget = this.messages.find((m) => m.id === userPlaceholder.id);
+        if (userTarget) {
+          userTarget.serverId = res.userMessage.id;
+          userTarget.text = res.userMessage.text;
+          userTarget.audioUrl = res.userMessage.audioUrl ?? null;
+          userTarget.streaming = false;
+        }
+        const assistantTarget = this.messages.find((m) => m.id === assistantPlaceholder.id);
+        if (assistantTarget) {
+          assistantTarget.serverId = res.assistantMessage.id;
+          assistantTarget.text = res.assistantMessage.text;
+          assistantTarget.streaming = false;
+        }
+      } catch (err) {
+        const userTarget = this.messages.find((m) => m.id === userPlaceholder.id);
+        if (userTarget) {
+          userTarget.streaming = false;
+          userTarget.errored = true;
+        }
+        const assistantTarget = this.messages.find((m) => m.id === assistantPlaceholder.id);
+        if (assistantTarget) {
+          assistantTarget.text = extractError(err, 'Failed to send voice message.');
+          assistantTarget.streaming = false;
+          assistantTarget.errored = true;
+        }
+        throw err;
       } finally {
         this.sending = false;
       }

@@ -43,12 +43,6 @@ const { t } = useT();
         </div>
       </div>
 
-      <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
-        {{ t('auth.legal.prefix', 'By signing up, you agree to our') }}
-        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.terms', 'terms of service') }}</a>
-        {{ t('auth.legal.and', 'and') }}
-        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.privacy', 'privacy policy') }}</a>.
-      </p>
     </section>
 
     <BrandPanel />

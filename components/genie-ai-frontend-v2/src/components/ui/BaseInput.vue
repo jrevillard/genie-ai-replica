@@ -16,7 +16,7 @@ const props = withDefaults(
     rounded?: 'md' | 'lg' | 'full';
     size?: 'sm' | 'md';
   }>(),
-  { type: 'text', rounded: 'lg', size: 'md' }
+  { type: 'text', rounded: 'full', size: 'md' }
 );
 
 defineEmits<{

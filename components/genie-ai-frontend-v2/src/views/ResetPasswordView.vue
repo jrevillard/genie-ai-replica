@@ -107,7 +107,7 @@ function requestNewLink() {
                   <button
                     type="button"
                     class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
-                    :aria-label="passwordVisible ? 'Hide password' : 'Show password'"
+                    :aria-label="passwordVisible ? t('common.hidePassword', 'Hide password') : t('common.showPassword', 'Show password')"
                     @click="passwordVisible = !passwordVisible"
                   >
                     <EyeOff v-if="passwordVisible" class="h-4 w-4" />
@@ -131,7 +131,7 @@ function requestNewLink() {
                   <button
                     type="button"
                     class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
-                    :aria-label="confirmVisible ? 'Hide password' : 'Show password'"
+                    :aria-label="confirmVisible ? t('common.hidePassword', 'Hide password') : t('common.showPassword', 'Show password')"
                     @click="confirmVisible = !confirmVisible"
                   >
                     <EyeOff v-if="confirmVisible" class="h-4 w-4" />
@@ -165,12 +165,6 @@ function requestNewLink() {
         </div>
       </div>
 
-      <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
-        {{ t('auth.legal.prefix', 'By signing up, you agree to our') }}
-        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.terms', 'terms of service') }}</a>
-        {{ t('auth.legal.and', 'and') }}
-        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.privacy', 'privacy policy') }}</a>.
-      </p>
     </section>
 
     <BrandPanel />

@@ -174,7 +174,7 @@ const { value: tCallGreeting } = useTranslated(() => form.callGreeting, 'en');
         <BaseInput
           v-model="form.twinNumber"
           type="tel"
-          :placeholder="t('twins.general.numberPlaceholder', '+1 234 567 8900')"
+          :placeholder="t('twins.general.numberPlaceholder', 'Enter twin number')"
           disabled
         />
       </div>

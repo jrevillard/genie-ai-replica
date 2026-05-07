@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
-  BubbleChatIcon,
   CallEnd01Icon,
   Mic01Icon,
   MicOff01Icon,
@@ -18,6 +17,9 @@ import { useAiTwinsStore } from '../stores/aiTwins';
 import { useChatStore } from '../stores/chat';
 import { useVoiceCallStore } from '../stores/voiceCall';
 import type { VoiceLanguage } from '../services/voiceCall';
+import { useT } from '../i18n/composables';
+
+const { t: tt } = useT();
 
 // Live voice call wired through useVoiceCallStore.
 type CallState = 'idle' | 'ended';
@@ -97,6 +99,19 @@ watch(twinId, () => {
   void startVoiceCall();
 });
 
+// When the call ends (user hangs up, backend closes, or anything else),
+// skip the standalone "Call ended" screen and drop the user back into the
+// chat surface for the same twin. Falls back to the twin list if we somehow
+// have no twinId.
+watch(state, (next) => {
+  if (next !== 'ended') return;
+  if (twinId.value) {
+    router.replace({ name: 'chat', params: { twinId: twinId.value } });
+  } else {
+    router.replace({ name: 'ai-twins' });
+  }
+});
+
 const statusLabel = computed(() => {
   if (state.value === 'ended') return c.ended;
   if (callStatus.value === 'connecting') return c.connecting;
@@ -107,23 +122,6 @@ const statusLabel = computed(() => {
 
 function endCall(): void {
   void voiceCall.endCall();
-}
-
-function returnToTwin(): void {
-  if (window.opener) {
-    window.close();
-    return;
-  }
-  if (twinId.value) {
-    router.push({ name: 'ai-twin-detail', params: { id: twinId.value } });
-  } else {
-    router.push({ name: 'ai-twins' });
-  }
-}
-
-function switchToChat(): void {
-  if (!twinId.value) return;
-  router.replace({ name: 'chat', params: { twinId: twinId.value } });
 }
 
 function toggleMute(): void {
@@ -150,31 +148,13 @@ const orbStateClass = computed(() => {
       <EmptyState
         v-if="!twinId"
         :icon="CallEnd01Icon"
-        title="No AI Twin selected"
-        description="Open an AI Twin to start a voice call."
+        :title="tt('chat.call.emptyTitle', 'No AI Twin selected')"
+        :description="tt('chat.call.emptyBody', 'Open an AI Twin to start a voice call.')"
       >
         <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">
-          Browse AI Twins
+          {{ tt('chat.call.emptyCta', 'Browse AI Twins') }}
         </BaseButton>
       </EmptyState>
-
-      <!-- Ended state: simple, calm farewell -->
-      <div v-else-if="state === 'ended'" class="flex flex-col items-center text-center">
-        <div class="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-white/10">
-          <Icon :icon="CallEnd01Icon" :size="32" />
-        </div>
-        <h1 class="text-display">{{ c.ended }}</h1>
-        <p class="mt-2 max-w-md text-lead text-white/70">{{ c.endedSubtitle }}</p>
-        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <BaseButton variant="outline" rounded="full" @click="switchToChat">
-            <Icon :icon="BubbleChatIcon" :size="16" />
-            {{ c.switchToChat }}
-          </BaseButton>
-          <BaseButton variant="primary" rounded="full" @click="returnToTwin">
-            {{ c.closeWindow }}
-          </BaseButton>
-        </div>
-      </div>
 
       <!-- Idle call shell (UI only — voice API not yet wired) -->
       <template v-else-if="twin">

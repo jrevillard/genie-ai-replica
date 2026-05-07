@@ -189,12 +189,10 @@ async function save(): Promise<boolean> {
   if (selectedVoiceId.value === (twin.value.voiceId ?? null)) return true;
   try {
     await aiTwinsStore.update(twin.value._key, { voiceId: selectedVoiceId.value });
-    // TODO i18n: missing key for "Voice updated" toast
-    notify.success('Voice updated');
+    notify.success(t('twins.voice.toasts.updated', 'Voice updated'));
     return true;
   } catch {
-    // TODO i18n: missing key for "Failed to save voice" toast
-    notify.error(aiTwinsStore.error ?? 'Failed to save voice');
+    notify.error(aiTwinsStore.error ?? t('twins.voice.toasts.updateFailed', 'Failed to save voice'));
     return false;
   }
 }
@@ -250,7 +248,7 @@ onBeforeUnmount(disposeAllPreviews);
                 role="radio"
                 :tabindex="editing ? 0 : -1"
                 :aria-checked="selectedVoiceId === v._key"
-                :aria-label="editing ? `Select ${v.name}` : `${v.name} (preview available with play button)`"
+                :aria-label="editing ? t('twins.voice.aria.select', { name: v.name }, 'Select {name}') : t('twins.voice.aria.previewHint', { name: v.name }, '{name} (preview available with play button)')"
                 @click="onVoiceRowActivate(v._key)"
                 @keydown.enter.prevent="onVoiceRowActivate(v._key)"
                 @keydown.space.prevent="onVoiceRowActivate(v._key)"
@@ -258,7 +256,7 @@ onBeforeUnmount(disposeAllPreviews);
                 <button
                   type="button"
                   class="rounded-full bg-accent-soft p-2 text-accent transition hover:bg-ieee-100 disabled:opacity-50"
-                  :aria-label="playingVoiceId === v._key ? `Pause preview of ${v.name}` : `Play preview of ${v.name}`"
+                  :aria-label="playingVoiceId === v._key ? t('twins.voice.aria.pausePreview', { name: v.name }, 'Pause preview of {name}') : t('twins.voice.aria.playPreview', { name: v.name }, 'Play preview of {name}')"
                   :disabled="previewLoadingId === v._key"
                   @click.stop="togglePreview(v)"
                   @keydown.stop

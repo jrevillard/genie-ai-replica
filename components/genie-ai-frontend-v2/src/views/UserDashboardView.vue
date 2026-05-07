@@ -15,18 +15,21 @@ import { useT } from '../i18n/composables';
 
 const { t } = useT();
 const store = useAiTwinsStore();
-const { publicTwins, loading } = storeToRefs(store);
+// User view reads from the same privileged /api/ai-twins endpoint as the
+// admin list — the backend already filters by what the signed-in user can see,
+// and the response includes profilePicUrl/etc. that the public list strips.
+const { twins, loading } = storeToRefs(store);
 
 const search = ref('');
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
-  if (!q) return publicTwins.value;
-  return publicTwins.value.filter((tw) => tw.name.toLowerCase().includes(q));
+  if (!q) return twins.value;
+  return twins.value.filter((tw) => tw.name.toLowerCase().includes(q));
 });
 
 function loadTwins() {
-  store.fetchAllPublic().catch(() => {
+  store.fetchAll().catch(() => {
     notify.error(store.error ?? t('twins.list.loadFailedToast', 'Failed to load AI Twins'));
   });
 }
@@ -73,6 +76,7 @@ onMounted(loadTwins);
 
       <EmptyState
         v-else-if="store.error && !search.trim()"
+        full-height
         :icon="SparklesIcon"
         :title="t('twins.list.loadFailedTitle', `Couldn't load AI Twins`)"
         :description="store.error"
@@ -82,6 +86,7 @@ onMounted(loadTwins);
 
       <EmptyState
         v-else-if="search.trim()"
+        full-height
         :icon="Search01Icon"
         :title="t('twins.list.noMatchesTitle', 'No matches')"
         :description="t('twins.list.noMatchesBody', 'No AI Twins match your search. Try a different keyword or clear the filter.')"
@@ -91,6 +96,7 @@ onMounted(loadTwins);
 
       <EmptyState
         v-else
+        full-height
         :icon="SparklesIcon"
         :title="t('user.twins.emptyTitle', 'No AI Twins available')"
         :description="t('user.twins.emptyBody', 'There are no AI Twins to chat with right now. Check back later.')"

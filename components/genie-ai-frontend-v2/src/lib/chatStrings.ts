@@ -88,12 +88,9 @@ export interface CallStrings {
   mute: string;
   unmute: string;
   endCall: string;
-  switchToChat: string;
   you: string;
   twin: string;
   ended: string;
-  endedSubtitle: string;
-  closeWindow: string;
   startCall: string;
   tapToSpeak: string;
   demoUserLine: string;
@@ -182,12 +179,9 @@ export const chatStrings: ChatStrings = {
     mute: 'Mute',
     unmute: 'Unmute',
     endCall: 'End call',
-    switchToChat: 'Switch to chat',
     you: 'You',
     twin: 'AI Twin',
     ended: 'Call ended',
-    endedSubtitle: 'Hope that was helpful. Take care of yourself.',
-    closeWindow: 'Close',
     startCall: 'Start call',
     tapToSpeak: 'Tap and hold to speak',
     demoUserLine: 'How can I lower my blood pressure naturally?',

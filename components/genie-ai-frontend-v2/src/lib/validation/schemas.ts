@@ -16,7 +16,6 @@ const trimmed = (msg: string) =>
 export const signInSchema = z.object({
   loginName: trimmed('Username or email is required'),
   password: z.string().min(1, 'Password is required'),
-  remember: z.boolean().optional(),
 });
 export type SignInInput = z.infer<typeof signInSchema>;
 
@@ -25,6 +24,9 @@ export const signUpSchema = z.object({
   lastName: trimmed('Last name is required'),
   email: z.string().trim().email('Enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  agreedToTerms: z.literal(true, {
+    errorMap: () => ({ message: 'You must agree to the terms to continue' }),
+  }),
 });
 export type SignUpInput = z.infer<typeof signUpSchema>;
 
@@ -83,3 +85,49 @@ export type CreateAiTwinInput = z.infer<typeof createAiTwinSchema>;
 
 export const updateAiTwinSchema = createAiTwinSchema.partial();
 export type UpdateAiTwinInput = z.infer<typeof updateAiTwinSchema>;
+
+// ---------- Patients ----------
+
+export const createPatientSchema = z
+  .object({
+    firstName: trimmed('First name is required').max(120, 'First name is too long'),
+    lastName: trimmed('Last name is required').max(120, 'Last name is too long'),
+    email: z.string().trim().email('Enter a valid email'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string().min(1, 'Confirm the password'),
+    phone: z.string().trim().max(40, 'Phone number is too long').optional().or(z.literal('')),
+    // ISO yyyy-mm-dd from <input type="date"> — keep loose so empty strings pass.
+    dateOfBirth: z.string().trim().optional().or(z.literal('')),
+    notes: z.string().trim().max(2000, 'Notes are too long').optional().or(z.literal('')),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match',
+  });
+export type CreatePatientInput = z.infer<typeof createPatientSchema>;
+
+// Update flow leaves password to a dedicated subsection so it's never
+// silently cleared by a profile save. The General-tab form uses this schema.
+// `confirmPassword` is a UI-only field; strip it before unwrapping with
+// `.partial()` since `.omit()` works on the inner object.
+const patientObjectSchema = z.object({
+  firstName: trimmed('First name is required').max(120, 'First name is too long'),
+  lastName: trimmed('Last name is required').max(120, 'Last name is too long'),
+  email: z.string().trim().email('Enter a valid email'),
+  phone: z.string().trim().max(40, 'Phone number is too long').optional().or(z.literal('')),
+  dateOfBirth: z.string().trim().optional().or(z.literal('')),
+  notes: z.string().trim().max(2000, 'Notes are too long').optional().or(z.literal('')),
+});
+export const updatePatientSchema = patientObjectSchema.partial();
+export type UpdatePatientInput = z.infer<typeof updatePatientSchema>;
+
+export const changePatientPasswordSchema = z
+  .object({
+    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string().min(1, 'Confirm the password'),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match',
+  });
+export type ChangePatientPasswordInput = z.infer<typeof changePatientPasswordSchema>;

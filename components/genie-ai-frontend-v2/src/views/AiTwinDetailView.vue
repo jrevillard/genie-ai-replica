@@ -24,6 +24,7 @@ import TwinStatsGrid from '../components/twin-tabs/TwinStatsGrid.vue';
 import VoiceTab from '../components/twin-tabs/VoiceTab.vue';
 import PersonalityTab from '../components/twin-tabs/PersonalityTab.vue';
 import KnowledgeSetTab from '../components/twin-tabs/KnowledgeSetTab.vue';
+import InstructionsTab from '../components/twin-tabs/InstructionsTab.vue';
 import { useAiTwinsStore } from '../stores/aiTwins';
 import { useT } from '../i18n/composables';
 
@@ -54,6 +55,7 @@ const tabs = computed<TabItem[]>(() => [
   { value: 'voice', label: t('twins.tabs.voice', 'Voice') },
   { value: 'personality', label: t('twins.tabs.personality', 'AI Personality') },
   { value: 'knowledge', label: t('twins.tabs.knowledge', 'Knowledge Set') },
+  { value: 'instructions', label: t('twins.tabs.instructions', 'Instructions') },
 ]);
 
 const twinId = computed(() => String(route.params.id ?? ''));
@@ -212,7 +214,7 @@ async function confirmDelete() {
                   'block rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ieee-700/50',
                   twin.profilePicUrl ? 'cursor-zoom-in' : 'cursor-default',
                 ]"
-                :aria-label="twin.profilePicUrl ? 'Preview profile picture' : 'Profile picture'"
+                :aria-label="twin.profilePicUrl ? t('common.profilePicturePreview', 'Profile picture preview') : t('common.profilePicture', 'Profile picture')"
                 :disabled="!twin.profilePicUrl"
                 @click="openImagePreview"
               >
@@ -257,7 +259,7 @@ async function confirmDelete() {
               @change="onImageChange"
             />
             <BaseButton variant="primary" size="md" rounded="xl" @click="chatWithTwin">
-              {{ t('aiTwins.detail.chatWithTwin', 'Chat With Twin') }}
+              {{ t('twins.detail.chatWithTwin', 'Chat With Twin') }}
             </BaseButton>
           </div>
 
@@ -317,14 +319,14 @@ async function confirmDelete() {
         <TwinStatsGrid v-if="tab === 'general'" :twin="twin" />
 
         <fieldset
-          :disabled="!editing && tab !== 'voice'"
+          :disabled="!editing && tab !== 'voice' && tab !== 'knowledge'"
           :class="[
             'rounded-2xl border bg-surface p-6 shadow-card transition-colors',
             editing ? 'border-accent/30 ring-1 ring-accent/10' : 'border-border',
-            !editing && tab !== 'voice' && 'opacity-70',
+            !editing && tab !== 'voice' && tab !== 'knowledge' && 'opacity-70',
           ]"
         >
-          <div :class="!editing && tab !== 'voice' && 'pointer-events-none select-none'">
+          <div :class="!editing && tab !== 'voice' && tab !== 'knowledge' && 'pointer-events-none select-none'">
             <GeneralTab
               v-if="tab === 'general'"
               ref="activeTab"
@@ -339,6 +341,12 @@ async function confirmDelete() {
               :editing="editing"
             />
             <KnowledgeSetTab v-else-if="tab === 'knowledge'" ref="activeTab" :twin="twin" />
+            <InstructionsTab
+              v-else-if="tab === 'instructions'"
+              ref="activeTab"
+              :twin="twin"
+              :editing="editing"
+            />
           </div>
         </fieldset>
       </template>
@@ -347,6 +355,7 @@ async function confirmDelete() {
 
       <EmptyState
         v-else-if="store.error"
+        full-height
         :icon="Cancel01Icon"
         :title="t('twins.detail.loadFailedTitle', `Couldn't load AI Twin`)"
         :description="store.error"
@@ -356,6 +365,7 @@ async function confirmDelete() {
 
       <EmptyState
         v-else
+        full-height
         :icon="Cancel01Icon"
         :title="t('twins.detail.notFoundTitle', 'Twin not found')"
         :description="t('twins.detail.notFoundBody', `This AI Twin doesn't exist or has been deleted.`)"

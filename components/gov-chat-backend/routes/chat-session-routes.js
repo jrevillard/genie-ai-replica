@@ -105,10 +105,75 @@ module.exports = (chatSessionService, deps = {}) => {
   const voiceCatalogService = deps.voiceCatalogService || null;
 
   const router = express.Router();
+
+  /**
+   * Internal service endpoint — no user auth required.
+   * Called fire-and-forget by the ChatQnA Python service to persist per-message
+   * English translations so future turns skip re-translation.
+   *
+   * POST /api/chat-sessions/internal/message-translations
+   * Body: { translations: [{ _key: string, contentEn: string }] }
+   */
+  router.post('/internal/message-translations', async (req, res) => {
+    try {
+      const { translations } = req.body || {};
+      if (!Array.isArray(translations) || translations.length === 0) {
+        return res.status(400).json({ message: 'translations array required' });
+      }
+      await chatSessionService.bulkSaveMessageTranslations(translations);
+      return res.json({ saved: translations.length });
+    } catch (err) {
+      logger.error(`Internal translation persist error: ${err.message}`);
+      return res.status(500).json({ message: 'Failed to persist translations' });
+    }
+  });
+
   router.use(authMiddleware.authenticate);
 
   function userIdFromReq(req) {
     return req.user._key || req.user.id || req.user.userId;
+  }
+
+  /**
+   * Resolve the `userId` field on a chat session into a small public-safe
+   * profile for the UI. Three kinds:
+   *   - 'guest'    — userId starts with "guest:" (sharable-link sessions)
+   *   - 'whatsapp' — session.type === 'whatsapp'; userId is a phone number
+   *   - 'user'     — registered platform user; looked up in `users`
+   *
+   * Returns `{ kind, name, profilePicUrl, email? }`. Never throws — falls
+   * back to a minimal `{ kind: 'unknown' }` object on lookup errors so the
+   * sessions list never fails because one user row is corrupted.
+   */
+  async function buildUserObject(session, userCache) {
+    const uid = String(session.userId || '');
+    if (uid.startsWith('guest:')) {
+      return { kind: 'guest', name: 'Guest', profilePicUrl: null };
+    }
+    if (session.type === 'whatsapp') {
+      return {
+        kind: 'whatsapp',
+        name: session.phoneNumber || uid,
+        profilePicUrl: null,
+        phoneNumber: session.phoneNumber || uid,
+      };
+    }
+    if (userCache.has(uid)) return userCache.get(uid);
+    try {
+      const u = await chatSessionService.db.collection('users').document(uid);
+      const obj = {
+        kind: 'user',
+        name: u.personalIdentification?.fullName || u.loginName || uid,
+        profilePicUrl: u.profilePicUrl ?? u.avatarUrl ?? null,
+        email: typeof u.email === 'string' ? u.email : null,
+      };
+      userCache.set(uid, obj);
+      return obj;
+    } catch (e) {
+      const obj = { kind: 'unknown', name: uid, profilePicUrl: null };
+      userCache.set(uid, obj);
+      return obj;
+    }
   }
 
   /**
@@ -280,6 +345,15 @@ module.exports = (chatSessionService, deps = {}) => {
    *                       content:   { type: string }
    *                       audioUrl:  { type: string, nullable: true }
    *                       createdAt: { type: string, format: date-time }
+   *                   user:
+   *                     type: object
+   *                     description: Resolved profile of whoever chatted with the twin
+   *                     properties:
+   *                       kind:          { type: string, enum: [user, guest, whatsapp, unknown] }
+   *                       name:          { type: string }
+   *                       profilePicUrl: { type: string, nullable: true }
+   *                       email:         { type: string, nullable: true, description: only for kind=user }
+   *                       phoneNumber:   { type: string, nullable: true, description: only for kind=whatsapp }
    *       401: { description: Unauthenticated }
    *       403: { description: scope=all requires admin }
    *       500: { description: Server error }
@@ -341,6 +415,12 @@ module.exports = (chatSessionService, deps = {}) => {
         bind
       );
       const rows = await cursor.all();
+      // Enrich each session with the resolved chatter profile. Cache lookups
+      // across the page so a user who owns N sessions is fetched once.
+      const userCache = new Map();
+      for (const row of rows) {
+        row.user = await buildUserObject(row, userCache);
+      }
       res.json(rows);
     } catch (error) {
       logger.error(`chat-session list: ${error.message}`, { stack: error.stack });
@@ -408,6 +488,7 @@ module.exports = (chatSessionService, deps = {}) => {
       const messages = q
         ? await chatSessionService.searchMessages(sessionId, q, limit)
         : await chatSessionService.getRecentMessagesChronological(sessionId, limit);
+      session.user = await buildUserObject(session, new Map());
       res.json({ session, messages });
     } catch (error) {
       logger.error(`chat-session messages list: ${error.message}`, { stack: error.stack });

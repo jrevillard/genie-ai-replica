@@ -1,6 +1,11 @@
+import NProgress from 'nprogress';
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { readSession } from '../services/http';
 import { useAuthStore } from '../stores/auth';
+
+// Top-of-page progress bar (NProgress) — same idea as nextjs-toploader.
+// Spinner is off because it would conflict with per-component loading states.
+NProgress.configure({ showSpinner: false, trickleSpeed: 200, minimum: 0.1 });
 
 const routes: RouteRecordRaw[] = [
   // Default lands on the AI Twins surface (post-login home). The actual
@@ -46,6 +51,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/ResetPasswordView.vue'),
     meta: { public: true },
   },
+  {
+    path: '/terms',
+    name: 'terms',
+    component: () => import('../views/TermsOfServiceView.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/privacy',
+    name: 'privacy',
+    component: () => import('../views/PrivacyPolicyView.vue'),
+    meta: { public: true },
+  },
 
   // Authenticated admin dashboard.
   {
@@ -58,6 +75,18 @@ const routes: RouteRecordRaw[] = [
     path: '/ai-twins/:id',
     name: 'ai-twin-detail',
     component: () => import('../views/AiTwinDetailView.vue'),
+    meta: { adminOnly: true },
+  },
+  {
+    path: '/users',
+    name: 'patients',
+    component: () => import('../views/PatientsListView.vue'),
+    meta: { adminOnly: true },
+  },
+  {
+    path: '/users/:id',
+    name: 'patient-detail',
+    component: () => import('../views/PatientDetailView.vue'),
     meta: { adminOnly: true },
   },
 
@@ -101,6 +130,12 @@ const routes: RouteRecordRaw[] = [
     meta: { adminOnly: true },
   },
   {
+    path: '/analytics',
+    name: 'analytics',
+    component: () => import('../views/AnalyticsView.vue'),
+    meta: { adminOnly: true },
+  },
+  {
     path: '/profile',
     name: 'profile',
     component: () => import('../views/ProfileView.vue'),
@@ -115,6 +150,11 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
+  // Start the bar on every navigation; afterEach/onError below close it.
+  // No-op if a navigation is already in progress, so guard-driven redirects
+  // share the same bar.
+  NProgress.start();
+
   const isPublic = to.meta.public === true;
   const session = readSession();
   if (!isPublic && !session?.accessToken) {
@@ -139,6 +179,13 @@ router.beforeEach((to) => {
   if (to.meta.userOnly && auth.isAdmin) {
     return { name: 'ai-twins' };
   }
+});
+
+router.afterEach(() => {
+  NProgress.done();
+});
+router.onError(() => {
+  NProgress.done();
 });
 
 export default router;

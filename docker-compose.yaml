@@ -1299,43 +1299,9 @@ services:
   # ===========================================================================
   # Voice Agent Stack
   # ===========================================================================
-  # Two implementations co-exist:
-  #   - profile [voice]:        WebSocket bridge (asr-whisper + tts-piper +
-  #                             voice-bridge). Default; works behind cloud
-  #                             firewalls. Enable with --profile voice.
-  #   - profile [legacy_voice]: WebRTC stack (livekit-server + voice-agent +
-  #                             coturn). Requires UDP reachability. Kept for
-  #                             environments where it works.
+  # WebSocket bridge: asr-whisper + tts-piper + voice-bridge. Works behind
+  # cloud firewalls (no UDP reachability required).
   # ===========================================================================
-
-  livekit-server:
-    restart: unless-stopped
-    image: livekit/livekit-server:v1.7
-    command: --config /etc/livekit.yaml --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
-    environment:
-      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-genieai-devkey}: ${LIVEKIT_API_SECRET}"
-    # No host port mappings — signal is reverse-proxied through nginx
-    # (wss://<host>/livekit/), and RTC media flows through coturn over the
-    # docker network.
-    volumes:
-      - ./deploy/livekit/livekit.yaml:/etc/livekit.yaml:ro
-    networks:
-      - genieai_network
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7880/ 2>&1 | grep -q OK || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.labels.gateway == true
-      restart_policy:
-        condition: any
-        delay: 5s
-        max_attempts: 10
 
   asr-whisper:
     restart: unless-stopped
@@ -1420,88 +1386,6 @@ services:
         delay: 5s
         max_attempts: 30
 
-  voice-agent:
-    restart: unless-stopped
-    depends_on:
-      - livekit-server
-      - asr-whisper
-      - tts-piper
-    build:
-      context: .
-      dockerfile: genie-ai-overlay/voice-agent/Dockerfile-voiceagent_genie-ai
-    image: ${SWARM_REGISTRY_URL:-localhost:5000}/genie-ai-voice-agent:latest
-    environment:
-      LIVEKIT_URL: ws://livekit-server:7880
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-genieai-devkey}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-      ASR_WHISPER_URL: http://asr-whisper:9100
-      TTS_PIPER_URL: http://tts-piper:9200
-      LLM_ENDPOINT: http://chatqna-xeon-backend-server:8888/v1/chat/completions
-      VOICE_AGENT_VAD: ${VOICE_AGENT_VAD:-silero}
-      VOICE_AGENT_MAX_CONCURRENT: ${VOICE_AGENT_MAX_CONCURRENT:-2}
-      LOGFLAG: ${LOGFLAG:-}
-    networks:
-      - genieai_network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9300/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.labels.genieai == true
-      restart_policy:
-        condition: any
-        delay: 10s
-        max_attempts: 30
-
-  coturn:
-    restart: unless-stopped
-    image: coturn/coturn:4.6
-    command:
-      - "-n"
-      - "--listening-port=7881"
-      - "--listening-ip=0.0.0.0"
-      - "--external-ip=${TURN_EXTERNAL_IP:-${LIVEKIT_NODE_IP:-127.0.0.1}}"
-      - "--realm=genieai"
-      - "--fingerprint"
-      - "--lt-cred-mech"
-      - "--user=${TURN_USERNAME:-genieai_voice}:${TURN_CREDENTIAL}"
-      - "--min-port=49160"
-      - "--max-port=49200"
-      - "--no-udp"
-      - "--no-multicast-peers"
-      - "--no-cli"
-      - "--no-tls"
-      - "--no-dtls"
-      - "--simple-log"
-    # mode: host bypasses Swarm's ingress mesh, which mangles non-HTTP
-    # connections (real client IP gets rewritten to an overlay IP and the
-    # return path breaks). Coturn needs the real client IP for TURN.
-    ports:
-      - target: 7881
-        published: 7881
-        protocol: tcp
-        mode: host
-    networks:
-      - genieai_network
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.labels.gateway == true
-      restart_policy:
-        condition: any
-        delay: 5s
-        max_attempts: 10
-
-  # Voice bridge: single WebSocket service that wires ASR + chatqna + TTS into
-  # a real-time-ish voice call. Replaces the LiveKit/coturn stack for cloud
-  # environments without UDP reachability — uses only the existing TLS port
-  # 443 via nginx /voice/ proxy.
   voice-bridge:
     restart: unless-stopped
     depends_on:

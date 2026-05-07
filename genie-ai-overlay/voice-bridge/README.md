@@ -51,8 +51,7 @@ nginx gateway on port 443. The pros and cons:
 | Concurrent calls | High | Acceptable for demo / dozens |
 
 For this deployment the WebSocket path is the right trade-off. The legacy
-LiveKit/coturn services still exist in `docker-compose.yaml` under the
-`legacy_voice` profile but are not deployed.
+LiveKit/coturn services have been removed from `docker-compose.yaml`.
 
 ---
 
@@ -469,9 +468,6 @@ components/gov-chat-backend/
 
 scripts/
   download-piper-voices.sh                  # fetches Piper voice files
-
-deploy/livekit/                              # legacy_voice profile only
-  livekit.yaml
 
 data/piper-voices/                           # voice files (gitignored)
   fr_FR-siwis-medium.onnx, *.onnx.json

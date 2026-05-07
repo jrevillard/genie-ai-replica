@@ -2,11 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import {
   AiBrain01Icon,
+  Analytics01Icon,
   Logout01Icon,
   MessageMultiple01Icon,
   Search01Icon,
   SidebarLeftIcon,
   SparklesIcon,
+  UserMultipleIcon,
 } from '@hugeicons/core-free-icons';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
@@ -63,8 +65,10 @@ interface NavItem {
 const allItems: NavItem[] = [
   { labelKey: 'nav.aiTwins', fallback: 'AI Twins', icon: SparklesIcon, to: '/ai-twins', adminOnly: true },
   { labelKey: 'nav.aiTwins', fallback: 'AI Twins', icon: SparklesIcon, to: '/my-twins', userOnly: true },
+  { labelKey: 'nav.patients', fallback: 'Users', icon: UserMultipleIcon, to: '/users', adminOnly: true },
   { labelKey: 'nav.chatCallHistory', fallback: 'Chat/Call History', icon: MessageMultiple01Icon, to: '/chat-history' },
   { labelKey: 'nav.knowledgeSet', fallback: 'Knowledge Set', icon: AiBrain01Icon, to: '/knowledge-set', adminOnly: true },
+  { labelKey: 'nav.analytics', fallback: 'Analytics', icon: Analytics01Icon, to: '/analytics', adminOnly: true },
 ];
 
 const items = computed<NavItem[]>(() =>
@@ -103,10 +107,16 @@ async function onLogout() {
   logoutDialogOpen.value = false;
   try {
     await auth.signOut();
-    notify.success('Signed out', 'See you soon!');
+    notify.success(
+      t('auth.signOut.successTitle', 'Signed out'),
+      t('auth.signOut.successBody', 'See you soon!'),
+    );
   } catch (err) {
     const e = err as { message?: string };
-    notify.error('Sign-out failed', e?.message ?? 'Could not complete sign-out.');
+    notify.error(
+      t('auth.signOut.failedTitle', 'Sign-out failed'),
+      e?.message ?? t('auth.signOut.failedBody', 'Could not complete sign-out.'),
+    );
   } finally {
     router.push({ name: 'signin' });
   }

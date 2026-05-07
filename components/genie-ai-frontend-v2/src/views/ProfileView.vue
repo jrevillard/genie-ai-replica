@@ -12,6 +12,7 @@ import { storeToRefs } from 'pinia';
 import { sileo } from '../lib/notify';
 import BaseAvatar from '../components/ui/BaseAvatar.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import BaseDatePicker from '../components/ui/BaseDatePicker.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import ProfileHeaderSkeleton from '../components/ui/skeletons/ProfileHeaderSkeleton.vue';
@@ -295,12 +296,10 @@ async function onSubmit() {
                 :placeholder="t('auth.profile.placeholders.fullName', 'Your full name')"
                 rounded="full"
               />
-              <BaseInput
+              <BaseDatePicker
                 id="pid-dob"
                 v-model="pidForm.dob"
-                type="date"
                 :label="t('auth.profile.fields.dob', 'Date of birth')"
-                rounded="full"
               />
               <div>
                 <label for="pid-gender" class="mb-1.5 block text-body font-medium text-text">
@@ -370,7 +369,7 @@ async function onSubmit() {
                 <button
                   type="button"
                   class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
-                  :aria-label="currentVisible ? 'Hide password' : 'Show password'"
+                  :aria-label="currentVisible ? t('common.hidePassword', 'Hide password') : t('common.showPassword', 'Show password')"
                   @click="currentVisible = !currentVisible"
                 >
                   <EyeOff v-if="currentVisible" class="h-4 w-4" />
@@ -394,7 +393,7 @@ async function onSubmit() {
                 <button
                   type="button"
                   class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
-                  :aria-label="newVisible ? 'Hide password' : 'Show password'"
+                  :aria-label="newVisible ? t('common.hidePassword', 'Hide password') : t('common.showPassword', 'Show password')"
                   @click="newVisible = !newVisible"
                 >
                   <EyeOff v-if="newVisible" class="h-4 w-4" />
@@ -418,7 +417,7 @@ async function onSubmit() {
                 <button
                   type="button"
                   class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
-                  :aria-label="confirmVisible ? 'Hide password' : 'Show password'"
+                  :aria-label="confirmVisible ? t('common.hidePassword', 'Hide password') : t('common.showPassword', 'Show password')"
                   @click="confirmVisible = !confirmVisible"
                 >
                   <EyeOff v-if="confirmVisible" class="h-4 w-4" />

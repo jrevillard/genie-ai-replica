@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue';
 import BaseRadioCard from '../ui/BaseRadioCard.vue';
+import { extractError } from '../../lib/errors';
 import { notify } from '../../lib/notify';
 import { useT } from '../../i18n/composables';
 import {
@@ -24,10 +25,26 @@ const DEFAULTS: TwinPersonality = {
   responseLength: 'medium',
 };
 
-const form = reactive<TwinPersonality>({ ...DEFAULTS });
-const baseline = ref<TwinPersonality>({ ...DEFAULTS });
+// Seeded from the parent-supplied twin payload (the privileged GET already
+// returns `personality`) so the first render shows the correct radio
+// selection — no flicker. The async fetch below still runs as a safety net
+// for the rare case where the twin object lacks the field.
+function seedFromTwin(): TwinPersonality {
+  const p = props.twin?.personality;
+  return {
+    languageStyle: p?.languageStyle ?? DEFAULTS.languageStyle,
+    responseLength: p?.responseLength ?? DEFAULTS.responseLength,
+  };
+}
+
+const initialSeed = seedFromTwin();
+const form = reactive<TwinPersonality>({ ...initialSeed });
+const baseline = ref<TwinPersonality>({ ...initialSeed });
 const loading = ref(false);
 const saving = ref(false);
+// Suppresses the "load failed" toast when the twin payload already supplied
+// `personality` — the UI is correct, so a refresh failure is just noise.
+const hydrated = ref(!!props.twin?.personality);
 
 async function load(): Promise<void> {
   if (!props.twin?._key) return;
@@ -36,17 +53,29 @@ async function load(): Promise<void> {
     const data = await getTwinPersonality(props.twin._key);
     Object.assign(form, data);
     baseline.value = { ...data };
+    hydrated.value = true;
   } catch {
-    // Backend returns defaults when the twin has no personality field, so a
-    // failure here means a real network/auth issue — surface it once.
-    notify.error(t('twins.personality.loadFailedToast', 'Failed to load AI Personality'));
+    if (!hydrated.value) {
+      notify.error(t('twins.personality.loadFailedToast', 'Failed to load AI Personality'));
+    }
   } finally {
     loading.value = false;
   }
 }
 
 onMounted(load);
-watch(() => props.twin?._key, load);
+watch(
+  () => props.twin?._key,
+  () => {
+    // Twin switched — reseed synchronously so the radios don't flash the
+    // previous twin's selection while the new fetch is in flight.
+    const seed = seedFromTwin();
+    Object.assign(form, seed);
+    baseline.value = { ...seed };
+    hydrated.value = !!props.twin?.personality;
+    void load();
+  }
+);
 
 function isDirty(): boolean {
   return (
@@ -80,10 +109,7 @@ async function save(): Promise<boolean> {
     notify.success(t('twins.personality.savedToast', 'Personality updated'));
     return true;
   } catch (err) {
-    const e = err as { response?: { data?: { message?: string } }; message?: string };
-    notify.error(
-      e?.response?.data?.message ?? e?.message ?? t('twins.personality.saveFailedToast', 'Failed to update personality')
-    );
+    notify.error(extractError(err, t('twins.personality.saveFailedToast', 'Failed to update personality')));
     return false;
   } finally {
     saving.value = false;

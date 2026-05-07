@@ -28,6 +28,12 @@ import BaseDrawer from '../components/ui/BaseDrawer.vue';
 import BaseDropdown from '../components/ui/BaseDropdown.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import { CHAT_LANGS } from '../lib/chatStrings';
+import {
+  ACCEPT_ATTR,
+  MAX_FILE_SIZE_BYTES,
+  MAX_FILES_PER_UPLOAD,
+  validateUploadCandidates,
+} from '../lib/uploadLimits';
 import CreateAiTwinDialog from '../components/dashboard/CreateAiTwinDialog.vue';
 import EmptyState from '../components/ui/EmptyState.vue';
 import Icon from '../components/ui/Icon.vue';
@@ -38,7 +44,7 @@ import DashboardLayout from '../layouts/DashboardLayout.vue';
 import { useT } from '../i18n/composables';
 import { notify } from '../lib/notify';
 import fileService from '../services/files';
-import type { IngestionLogEntry, RepoFileRow } from '../services/files';
+import type { CrawlJob, CrawlLogEntry, CrawlMetrics, IngestionLogEntry, RepoFileRow } from '../services/files';
 import type { AiTwin } from '../services/aiTwins';
 import { useAiTwinsStore } from '../stores/aiTwins';
 
@@ -71,6 +77,23 @@ const twinSearch = ref('');
 const pendingLinkIds = ref<string[]>([]);
 const selectedTwinKey = ref<string | null>(null);
 const FILES_PAGE_LIMIT = 50;
+
+type DocViewMode = 'list' | 'grid';
+const DOC_VIEW_STORAGE_KEY = 'knowledgeSet.viewMode.v1';
+function readPersistedViewMode(): DocViewMode {
+  if (typeof window === 'undefined') return 'grid';
+  const stored = window.localStorage.getItem(DOC_VIEW_STORAGE_KEY);
+  if (stored === 'list') return 'list';
+  if (stored === 'grid') return 'grid';
+  return 'grid';
+}
+const docViewMode = ref<DocViewMode>(readPersistedViewMode());
+function setDocViewMode(next: DocViewMode): void {
+  docViewMode.value = next;
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(DOC_VIEW_STORAGE_KEY, next);
+  }
+}
 
 const createTwinOpen = ref(false);
 const creatingTwin = ref(false);
@@ -106,9 +129,10 @@ interface FileDetailsState {
   ingestionLog: IngestionLogEntry[];
   ingestionLogError: string | null;
   ingestionLogLoading: boolean;
-  crawlJob: unknown;
-  crawlMetrics: unknown;
-  crawlLogs: string;
+  crawlJob: CrawlJob | null;
+  crawlMetrics: CrawlMetrics | null;
+  crawlLogs: CrawlLogEntry[];
+  crawlError: string | null;
   crawlLoading: boolean;
   killing: boolean;
 }
@@ -134,7 +158,8 @@ function emptyDetails(): FileDetailsState {
     ingestionLogLoading: false,
     crawlJob: null,
     crawlMetrics: null,
-    crawlLogs: '',
+    crawlLogs: [],
+    crawlError: null,
     crawlLoading: false,
     killing: false,
   };
@@ -297,7 +322,24 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick);
 });
 
-const filteredDocuments = computed(() => documents.value);
+// Show currently-ingesting files first, then ingested, then the rest.
+// Within each bucket, preserve the backend's original order.
+function statusSortRank(statusRaw: string): number {
+  const s = statusRaw.toLowerCase();
+  if (s.includes('ingesting')) return 0;
+  if (s.includes('ingested')) return 1;
+  return 2;
+}
+
+const filteredDocuments = computed(() =>
+  documents.value
+    .map((d, idx) => ({ d, idx }))
+    .sort((a, b) => {
+      const r = statusSortRank(a.d.statusRaw) - statusSortRank(b.d.statusRaw);
+      return r !== 0 ? r : a.idx - b.idx;
+    })
+    .map((x) => x.d)
+);
 
 // The dataprep service only runs one job at a time (returns 429 otherwise),
 // so we surface whichever file is currently in the "Ingesting" state to set
@@ -388,7 +430,9 @@ function statusTone(
 ): 'neutral' | 'accent' | 'success' | 'warning' | 'danger' {
   const n = statusRaw.toLowerCase();
   if (n.includes('error')) return 'danger';
+  if (n.includes('killed')) return 'danger';
   if (n.includes('warning')) return 'warning';
+  if (n.includes('pending')) return 'warning';
   if (n.includes('ingesting')) return 'accent';
   if (n.includes('ingested')) return 'success';
   return 'neutral';
@@ -396,6 +440,41 @@ function statusTone(
 
 function docIcon(name: string) {
   return name.toLowerCase().endsWith('.pdf') ? Pdf01Icon : File02Icon;
+}
+
+// Per-extension tile colour so users can scan the list by file type at a
+// glance instead of every row looking like a PDF.
+function docIconClasses(name: string): string {
+  const lower = name.toLowerCase();
+  const ext = lower.includes('.') ? lower.slice(lower.lastIndexOf('.') + 1) : '';
+  switch (ext) {
+    case 'pdf':
+      return 'bg-rose-50 text-rose-600';
+    case 'md':
+    case 'markdown':
+      return 'bg-sky-50 text-sky-600';
+    case 'doc':
+    case 'docx':
+      return 'bg-indigo-50 text-indigo-600';
+    case 'xls':
+    case 'xlsx':
+    case 'csv':
+      return 'bg-emerald-50 text-emerald-600';
+    case 'ppt':
+    case 'pptx':
+      return 'bg-orange-50 text-orange-600';
+    case 'html':
+    case 'htm':
+      return 'bg-amber-50 text-amber-600';
+    case 'txt':
+      return 'bg-slate-100 text-slate-600';
+    case 'json':
+    case 'yaml':
+    case 'yml':
+      return 'bg-violet-50 text-violet-600';
+    default:
+      return 'bg-slate-100 text-slate-600';
+  }
 }
 
 function toggleDocument(doc: DocumentRow) {
@@ -406,11 +485,53 @@ function pickFile() {
   fileInput.value?.click();
 }
 
+function formatUploadLimit(bytes: number): string {
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+function reportUploadRejections(
+  rejected: ReturnType<typeof validateUploadCandidates>['rejected'],
+  overflow: File[]
+): void {
+  for (const r of rejected) {
+    if (r.reason === 'extension') {
+      notify.warning(
+        t(
+          'knowledgeSet.toasts.unsupportedType',
+          { name: r.file.name, ext: r.ext || '?' },
+          'Skipped "{name}" — {ext} is not supported.'
+        )
+      );
+    } else {
+      notify.warning(
+        t(
+          'knowledgeSet.toasts.fileTooLarge',
+          { name: r.file.name, limit: formatUploadLimit(MAX_FILE_SIZE_BYTES) },
+          'Skipped "{name}" — exceeds the {limit} per-file limit.'
+        )
+      );
+    }
+  }
+  if (overflow.length) {
+    notify.warning(
+      t(
+        'knowledgeSet.toasts.tooManyFiles',
+        { max: MAX_FILES_PER_UPLOAD, count: overflow.length },
+        'Only {max} files can be staged at once — {count} dropped.'
+      )
+    );
+  }
+}
+
 function appendDrawerFiles(list: FileList | File[] | null | undefined) {
   if (!list?.length) return;
-  const next = [...drawerFiles.value];
-  Array.from(list).forEach((f) => next.push(f));
-  drawerFiles.value = next;
+  const { accepted, rejected, overflow } = validateUploadCandidates(
+    Array.from(list),
+    drawerFiles.value.length
+  );
+  reportUploadRejections(rejected, overflow);
+  if (!accepted.length) return;
+  drawerFiles.value = [...drawerFiles.value, ...accepted];
 }
 
 function onFileChange(e: Event) {
@@ -522,8 +643,13 @@ async function confirmLinkToTwin() {
     mode.value = 'documents';
     await loadDocuments();
     await aiStore.fetchAll();
-  } catch {
-    notify.error(aiStore.error ?? t('knowledgeSet.toasts.linkFailed', 'Failed to link files to twin'));
+  } catch (err) {
+    // Surface the backend's reason — usually "Unknown KB file id(s): …" when
+    // a selected file isn't in the document-repository `files` collection.
+    notify.error(
+      t('knowledgeSet.toasts.linkFailed', 'Failed to link files to twin'),
+      extractServerError(err) ?? aiStore.error ?? undefined
+    );
   }
 }
 
@@ -729,10 +855,6 @@ async function retractOne(doc: DocumentRow): Promise<void> {
 }
 
 // ─── Bulk actions ──────────────────────────────────────────────────────────
-
-const selectedFileIds = computed(() =>
-  documents.value.filter((d) => d.selected).map((d) => d.fileId)
-);
 
 // The bulk endpoints return HTTP 200 with a per-file `results: [{ success, error }]`
 // array, so a 200 response can still contain failures. Categorise the results
@@ -987,12 +1109,12 @@ function friendlyFileType(mime: string, name: string): string {
 function statusInfo(raw: unknown): { label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' } {
   const s = asString(raw).toLowerCase();
   if (s.includes('error')) return { label: 'Ingestion error', tone: 'danger' };
+  if (s.includes('killed')) return { label: 'Stopped', tone: 'danger' };
   if (s.includes('warning')) return { label: 'Ingested with warnings', tone: 'warning' };
   if (s.includes('ingesting')) return { label: 'Ingesting', tone: 'accent' };
   if (s.includes('ingested')) return { label: 'Ingested', tone: 'success' };
   if (s.includes('retract')) return { label: 'Retracted', tone: 'neutral' };
-  if (s.includes('killed')) return { label: 'Stopped', tone: 'neutral' };
-  return { label: 'Pending', tone: 'neutral' };
+  return { label: 'Pending', tone: 'warning' };
 }
 
 interface MetaSummary {
@@ -1065,8 +1187,7 @@ const detailsIsCrawled = computed(() =>
 // Active crawl detection — drives the "Kill crawl" button. The crawl_job
 // document carries `status` ∈ {Pending, Running, Completed, Failed, Killed}.
 const detailsCrawlActive = computed(() => {
-  const job = details.value.crawlJob as { status?: unknown } | null;
-  const status = asString(job?.status).toLowerCase();
+  const status = (details.value.crawlJob?.status ?? '').toLowerCase();
   return status === 'pending' || status === 'running';
 });
 
@@ -1168,6 +1289,125 @@ interface LogSummary {
   latestStage: string;
   elapsed: string;
 }
+
+// ─── Crawl tab presentation ────────────────────────────────────────────────
+
+function crawlStatusInfo(raw: string | undefined | null): {
+  label: string;
+  tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
+} {
+  const s = (raw || '').toLowerCase();
+  if (s === 'succeeded' || s === 'completed') return { label: 'Completed', tone: 'success' };
+  if (s === 'running') return { label: 'Running', tone: 'accent' };
+  if (s === 'pending') return { label: 'Pending', tone: 'neutral' };
+  if (s === 'failed' || s === 'error') return { label: 'Failed', tone: 'danger' };
+  if (s === 'killed' || s === 'stopped') return { label: 'Stopped', tone: 'neutral' };
+  return { label: raw || 'Unknown', tone: 'neutral' };
+}
+
+interface CrawlSummary {
+  url: string;
+  status: ReturnType<typeof crawlStatusInfo>;
+  depth: number | string;
+  pagesCrawled: string;
+  startedAt: string;
+  finishedAt: string;
+  duration: string;
+  errorMessage: string | null;
+  // Live metrics (only meaningful while running, but harmless to show after)
+  processed: string;
+  internalLinks: string;
+  externalLinks: string;
+  queueSize: string;
+  crawlRate: string;
+  errorRate: string;
+}
+
+function fmtNum(n: unknown): string {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
+  return n.toLocaleString(locale.value);
+}
+
+const crawlSummary = computed<CrawlSummary | null>(() => {
+  const job = details.value.crawlJob;
+  if (!job) return null;
+  const m = details.value.crawlMetrics ?? {};
+  const startedTs = job.started_at ? new Date(job.started_at).getTime() : NaN;
+  const finishedTs = job.finished_at ? new Date(job.finished_at).getTime() : NaN;
+  const durationMs =
+    Number.isFinite(startedTs) && Number.isFinite(finishedTs)
+      ? finishedTs - startedTs
+      : null;
+  const pages =
+    typeof job.pages_crawled === 'number'
+      ? typeof job.max_pages === 'number'
+        ? `${fmtNum(job.pages_crawled)} / ${fmtNum(job.max_pages)}`
+        : fmtNum(job.pages_crawled)
+      : '—';
+  return {
+    url: job.url,
+    status: crawlStatusInfo(job.status),
+    depth: typeof job.depth === 'number' ? job.depth : '—',
+    pagesCrawled: pages,
+    startedAt: formatMetaDate(job.started_at),
+    finishedAt: formatMetaDate(job.finished_at),
+    duration: durationMs != null ? formatDurationMs(durationMs) : '—',
+    errorMessage: job.error_message?.trim() || null,
+    processed: fmtNum(m.processed),
+    internalLinks: fmtNum(m.links_internal),
+    externalLinks: fmtNum(m.links_external),
+    queueSize: fmtNum(m.queue_size),
+    crawlRate:
+      typeof m.crawl_rate === 'number' && Number.isFinite(m.crawl_rate)
+        ? `${m.crawl_rate.toFixed(2)} /s`
+        : '—',
+    errorRate:
+      typeof m.error_rate === 'number' && Number.isFinite(m.error_rate)
+        ? `${(m.error_rate * 100).toFixed(1)}%`
+        : '—',
+  };
+});
+
+// Reuse the ingestion-log filter machinery for crawl logs — same shape, same UX.
+const crawlLogStageFilter = ref<string>('all');
+const crawlLogLevelFilter = ref<string>('all');
+const crawlLogSearch = ref<string>('');
+
+watch(
+  () => details.value.fileId,
+  () => {
+    crawlLogStageFilter.value = 'all';
+    crawlLogLevelFilter.value = 'all';
+    crawlLogSearch.value = '';
+  }
+);
+
+const crawlLogStages = computed<string[]>(() => {
+  const stages = new Set<string>();
+  for (const entry of details.value.crawlLogs) {
+    if (entry.stage) stages.add(entry.stage);
+  }
+  return Array.from(stages);
+});
+
+const filteredCrawlLogs = computed<CrawlLogEntry[]>(() => {
+  const stage = crawlLogStageFilter.value;
+  const level = crawlLogLevelFilter.value.toUpperCase();
+  const q = crawlLogSearch.value.trim().toLowerCase();
+  return details.value.crawlLogs.filter((entry) => {
+    if (stage !== 'all' && entry.stage !== stage) return false;
+    if (level !== 'ALL') {
+      const l = (entry.level || '').toUpperCase();
+      if (level === 'WARN') {
+        if (l !== 'WARN' && l !== 'WARNING') return false;
+      } else if (level === 'ERROR') {
+        if (l !== 'ERROR' && l !== 'CRITICAL') return false;
+      } else if (l !== level) return false;
+    }
+    if (q && !entry.message.toLowerCase().includes(q)) return false;
+    return true;
+  });
+});
 
 const logSummary = computed<LogSummary | null>(() => {
   const entries = details.value.ingestionLog;
@@ -1307,15 +1547,20 @@ async function loadCrawlState(): Promise<void> {
   const fileId = details.value.fileId;
   if (!fileId) return;
   details.value.crawlLoading = true;
+  details.value.crawlError = null;
   try {
     const [job, metrics, logs] = await Promise.all([
       fileService.getCrawlJob(fileId).catch(() => null),
       fileService.getCrawlMetrics(fileId).catch(() => null),
-      fileService.getCrawlLogs(fileId).catch(() => null),
+      fileService.getCrawlLogs(fileId).catch(() => [] as CrawlLogEntry[]),
     ]);
     details.value.crawlJob = job;
     details.value.crawlMetrics = metrics;
-    details.value.crawlLogs = asString(logs);
+    details.value.crawlLogs = logs;
+  } catch (err) {
+    details.value.crawlError =
+      extractServerError(err) ??
+      t('knowledgeSet.crawl.loadFailed', 'Could not load crawl status.');
   } finally {
     details.value.crawlLoading = false;
   }
@@ -1380,16 +1625,64 @@ watch(
                 <template #leading><Icon :icon="Search01Icon" :size="18" /></template>
               </BaseInput>
             </div>
+            <div
+              role="group"
+              :aria-label="t('knowledgeSet.viewToggleAria', 'Switch document layout')"
+              class="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface p-1"
+            >
+              <button
+                type="button"
+                :class="[
+                  'inline-flex h-8 w-8 items-center justify-center rounded-full transition',
+                  docViewMode === 'list'
+                    ? 'bg-accent text-text-inverse shadow-sm'
+                    : 'text-text-muted hover:bg-surface-subtle hover:text-text',
+                ]"
+                :aria-pressed="docViewMode === 'list'"
+                :aria-label="t('knowledgeSet.viewList', 'List view')"
+                :title="t('knowledgeSet.viewList', 'List view')"
+                @click="setDocViewMode('list')"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true">
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" />
+                  <line x1="3" y1="18" x2="3.01" y2="18" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'inline-flex h-8 w-8 items-center justify-center rounded-full transition',
+                  docViewMode === 'grid'
+                    ? 'bg-accent text-text-inverse shadow-sm'
+                    : 'text-text-muted hover:bg-surface-subtle hover:text-text',
+                ]"
+                :aria-pressed="docViewMode === 'grid'"
+                :aria-label="t('knowledgeSet.viewGrid', 'Grid view')"
+                :title="t('knowledgeSet.viewGrid', 'Grid view')"
+                @click="setDocViewMode('grid')"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div
             v-if="currentlyIngesting"
-            class="mb-3 flex items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft/50 px-3 py-2 text-caption text-text"
+            class="mb-3 flex items-center gap-3 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2 text-caption text-text"
             role="status"
             aria-live="polite"
           >
             <span
-              class="block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent"
+              class="block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-warning border-t-transparent"
               aria-hidden="true"
             />
             <span class="min-w-0 flex-1">
@@ -1490,7 +1783,7 @@ watch(
           </div>
 
           <div v-else class="-mx-2 min-h-0 flex-1 overflow-y-auto px-2 py-1">
-            <ul v-if="filteredDocuments.length" class="space-y-2" role="list">
+            <ul v-if="filteredDocuments.length && docViewMode === 'list'" class="space-y-2" role="list">
               <li
                 v-for="document in filteredDocuments"
                 :key="document.fileId"
@@ -1532,7 +1825,10 @@ watch(
                 </span>
 
                 <span
-                  class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-danger-soft text-danger"
+                  :class="[
+                    'grid h-10 w-10 shrink-0 place-items-center rounded-lg',
+                    docIconClasses(document.name),
+                  ]"
                   aria-hidden="true"
                 >
                   <Icon :icon="docIcon(document.name)" :size="20" />
@@ -1679,6 +1975,167 @@ watch(
                 </div>
               </li>
             </ul>
+
+            <div
+              v-else-if="filteredDocuments.length && docViewMode === 'grid'"
+              role="list"
+              class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            >
+              <div
+                v-for="document in filteredDocuments"
+                :key="document.fileId"
+                role="checkbox"
+                tabindex="0"
+                :aria-checked="!!document.selected"
+                :class="[
+                  'group relative flex cursor-pointer flex-col gap-3 rounded-xl border bg-surface p-4 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                  document.selected
+                    ? 'border-accent bg-accent-soft/40'
+                    : 'border-border hover:border-border-strong hover:bg-surface-subtle',
+                ]"
+                @click="toggleDocument(document)"
+                @keydown.enter.prevent="toggleDocument(document)"
+                @keydown.space.prevent="toggleDocument(document)"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <span
+                    :class="[
+                      'grid h-12 w-12 shrink-0 place-items-center rounded-xl',
+                      docIconClasses(document.name),
+                    ]"
+                    aria-hidden="true"
+                  >
+                    <Icon :icon="docIcon(document.name)" :size="24" />
+                  </span>
+                  <div class="relative flex items-center gap-1" data-row-menu>
+                    <span
+                      :class="[
+                        'grid h-4 w-4 shrink-0 place-items-center rounded border transition',
+                        document.selected
+                          ? 'border-accent bg-accent text-text-inverse opacity-100'
+                          : selectedCount > 0
+                            ? 'border-border bg-surface text-text opacity-100'
+                            : 'border-border bg-surface text-text opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+                      ]"
+                      :aria-hidden="true"
+                    >
+                      <svg
+                        v-if="document.selected"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-2.5 w-2.5"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                    <button
+                      type="button"
+                      :class="[
+                        'grid h-7 w-7 place-items-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
+                        rowMenuOpenFor === document.fileId
+                          ? 'bg-surface-subtle text-text'
+                          : 'text-text-muted hover:bg-surface-subtle hover:text-text',
+                      ]"
+                      :aria-label="t('knowledgeSet.moreAria', 'More actions')"
+                      :aria-expanded="rowMenuOpenFor === document.fileId"
+                      aria-haspopup="menu"
+                      @click.stop="toggleRowMenu(document.fileId, $event)"
+                    >
+                      <Icon :icon="MoreVerticalIcon" :size="16" />
+                    </button>
+                    <div
+                      v-if="rowMenuOpenFor === document.fileId"
+                      role="menu"
+                      class="absolute right-3 top-12 z-20 w-56 overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-popover"
+                      @click.stop
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle"
+                        @click="openFileDetails(document)"
+                      >
+                        <Icon :icon="File02Icon" :size="14" />
+                        {{ t('knowledgeSet.menu.details', 'View details') }}
+                      </button>
+                      <div class="my-1 border-t border-border-subtle" />
+                      <button
+                        v-if="canIngest(document)"
+                        type="button"
+                        role="menuitem"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="ingestingId === document.fileId || isGloballyBusy"
+                        :title="isGloballyBusy ? ingestBlockedReason : ''"
+                        @click="ingestOne(document)"
+                      >
+                        <Icon :icon="PlayIcon" :size="14" />
+                        {{ t('knowledgeSet.menu.ingest', 'Ingest now') }}
+                      </button>
+                      <button
+                        v-if="canRetract(document)"
+                        type="button"
+                        role="menuitem"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="retractingId === document.fileId"
+                        @click="retractOne(document)"
+                      >
+                        <Icon :icon="PauseIcon" :size="14" />
+                        {{ t('knowledgeSet.menu.retract', 'Retract') }}
+                      </button>
+                      <button
+                        v-if="canStop(document)"
+                        type="button"
+                        role="menuitem"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="killingId === document.fileId"
+                        @click="killIngestionRow(document)"
+                      >
+                        <Icon :icon="StopCircleIcon" :size="14" />
+                        {{ t('knowledgeSet.menu.stopIngestion', 'Stop ingestion') }}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text transition hover:bg-surface-subtle"
+                        @click.stop="downloadDoc(document); closeRowMenu()"
+                      >
+                        <Icon :icon="Download04Icon" :size="14" />
+                        {{ t('knowledgeSet.downloadAria', 'Download document') }}
+                      </button>
+                      <div class="my-1 border-t border-border-subtle" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-danger transition hover:bg-danger-soft"
+                        @click="closeRowMenu(); askDelete(document)"
+                      >
+                        <Icon :icon="Delete02Icon" :size="14" />
+                        {{ t('knowledgeSet.menu.delete', 'Delete') }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex min-w-0 flex-col gap-1.5">
+                  <h2 class="line-clamp-2 text-body font-medium text-text" :title="document.name">
+                    <TranslatedText :text="document.name" :lang="document.lang" />
+                  </h2>
+                  <BaseBadge :tone="statusTone(document.statusRaw)" dot class="self-start">
+                    {{ document.statusLabel }}
+                  </BaseBadge>
+                  <p class="truncate text-meta text-text-muted">
+                    <span>{{ document.dateLabel }}</span>
+                    <span v-if="document.subtitle" aria-hidden="true" class="mx-1.5">·</span>
+                    <span>{{ document.subtitle }}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <EmptyState
               v-else-if="documentSearch.trim()"
@@ -1949,7 +2406,14 @@ watch(
           </button>
         </div>
 
-        <input ref="fileInput" type="file" multiple class="hidden" @change="onFileChange" />
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          :accept="ACCEPT_ATTR"
+          class="hidden"
+          @change="onFileChange"
+        />
 
         <!-- Files tab -->
         <div v-if="uploadTab === 'files'">
@@ -1969,7 +2433,7 @@ watch(
           </span>
           <p class="text-body font-medium text-text">{{ t('knowledgeSet.uploadFile', 'Drag & drop files here') }}</p>
           <p class="max-w-xs text-caption text-text-muted">
-            {{ t('knowledgeSet.allowedTypes', 'PDF, Word, CSV, TXT, DOCX') }}
+            {{ t('knowledgeSet.allowedTypes', 'PDF, Word (.docx), Excel (.xlsx), Markdown, HTML, TXT — up to 50 MB') }}
           </p>
           <BaseButton variant="soft" size="sm" rounded="full" @click="pickFile">
             {{ t('knowledgeSet.browseFiles', 'Browse files') }}
@@ -2600,18 +3064,184 @@ watch(
             </div>
           </div>
 
-          <section v-if="details.crawlJob" class="rounded-xl border border-border bg-surface-muted px-3 py-2.5">
-            <h3 class="mb-1 text-caption font-semibold text-text">{{ t('knowledgeSet.crawlJob', 'Job') }}</h3>
-            <pre class="max-h-40 overflow-auto text-meta text-text">{{ asString(details.crawlJob) }}</pre>
+          <p v-if="details.crawlError" class="text-caption text-danger">
+            {{ details.crawlError }}
+          </p>
+
+          <!-- Hero card: site + status at a glance -->
+          <section
+            v-if="crawlSummary"
+            class="flex flex-col gap-2 rounded-2xl border border-border bg-surface-muted px-4 py-4"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <a
+                :href="crawlSummary.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex min-w-0 items-center gap-1.5 truncate text-body font-semibold text-accent transition hover:underline"
+              >
+                <Icon :icon="Globe02Icon" :size="16" />
+                <span class="truncate">{{ crawlSummary.url }}</span>
+              </a>
+              <BaseBadge :tone="crawlSummary.status.tone" dot class="ml-auto shrink-0">
+                {{ crawlSummary.status.label }}
+              </BaseBadge>
+            </div>
+            <p
+              v-if="crawlSummary.errorMessage"
+              class="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-meta text-danger"
+            >
+              {{ crawlSummary.errorMessage }}
+            </p>
           </section>
-          <section v-if="details.crawlMetrics" class="rounded-xl border border-border bg-surface-muted px-3 py-2.5">
-            <h3 class="mb-1 text-caption font-semibold text-text">{{ t('knowledgeSet.crawlMetrics', 'Metrics') }}</h3>
-            <pre class="max-h-40 overflow-auto text-meta text-text">{{ asString(details.crawlMetrics) }}</pre>
-          </section>
-          <section class="rounded-xl border border-border bg-surface-muted px-3 py-2.5">
-            <h3 class="mb-1 text-caption font-semibold text-text">{{ t('knowledgeSet.crawlLogs', 'Logs') }}</h3>
-            <pre class="max-h-60 overflow-auto text-meta leading-relaxed text-text">{{ details.crawlLogs || t('knowledgeSet.logs.empty', 'No log output yet.') }}</pre>
-          </section>
+
+          <!-- Job snapshot -->
+          <dl
+            v-if="crawlSummary"
+            class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border-subtle text-meta sm:grid-cols-4"
+          >
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.pages', 'Pages crawled') }}
+              </dt>
+              <dd class="text-body font-semibold text-text">{{ crawlSummary.pagesCrawled }}</dd>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.depth', 'Depth') }}
+              </dt>
+              <dd class="text-body font-semibold text-text">{{ crawlSummary.depth }}</dd>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.duration', 'Duration') }}
+              </dt>
+              <dd class="text-body font-semibold text-text">{{ crawlSummary.duration }}</dd>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.rate', 'Crawl rate') }}
+              </dt>
+              <dd class="text-body font-semibold text-text">{{ crawlSummary.crawlRate }}</dd>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.startedAt', 'Started') }}
+              </dt>
+              <dd class="text-text">{{ crawlSummary.startedAt }}</dd>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.finishedAt', 'Finished') }}
+              </dt>
+              <dd class="text-text">{{ crawlSummary.finishedAt }}</dd>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.linksInternal', 'Internal links') }}
+              </dt>
+              <dd class="text-body font-semibold text-text">{{ crawlSummary.internalLinks }}</dd>
+            </div>
+            <div class="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+              <dt class="font-semibold uppercase tracking-wide text-text-subtle">
+                {{ t('knowledgeSet.crawl.linksExternal', 'External links') }}
+              </dt>
+              <dd class="text-body font-semibold text-text">{{ crawlSummary.externalLinks }}</dd>
+            </div>
+          </dl>
+
+          <!-- Logs -->
+          <div v-if="details.crawlLogs.length" class="flex flex-col gap-2">
+            <BaseInput
+              v-model="crawlLogSearch"
+              :placeholder="t('knowledgeSet.logs.searchPlaceholder', 'Search messages…')"
+              size="sm"
+              rounded="full"
+            >
+              <template #leading><Icon :icon="Search01Icon" :size="14" /></template>
+            </BaseInput>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                :class="[
+                  'rounded-full px-2.5 py-1 text-meta font-semibold transition',
+                  crawlLogStageFilter === 'all'
+                    ? 'bg-accent text-text-inverse'
+                    : 'bg-surface-muted text-text-muted hover:bg-surface-subtle',
+                ]"
+                @click="crawlLogStageFilter = 'all'"
+              >
+                {{ t('knowledgeSet.logs.allStages', 'All stages') }}
+              </button>
+              <button
+                v-for="stage in crawlLogStages"
+                :key="stage"
+                type="button"
+                :class="[
+                  'rounded-full px-2.5 py-1 text-meta font-semibold transition',
+                  crawlLogStageFilter === stage
+                    ? 'bg-accent text-text-inverse'
+                    : 'bg-surface-muted text-text-muted hover:bg-surface-subtle',
+                ]"
+                @click="crawlLogStageFilter = stage"
+              >
+                {{ stage }}
+              </button>
+              <span class="mx-1 h-4 w-px bg-border-subtle" aria-hidden="true" />
+              <button
+                v-for="lvl in (['all', 'INFO', 'WARN', 'ERROR'] as const)"
+                :key="lvl"
+                type="button"
+                :class="[
+                  'rounded-full px-2.5 py-1 text-meta font-semibold transition',
+                  crawlLogLevelFilter === lvl
+                    ? 'bg-accent text-text-inverse'
+                    : 'bg-surface-muted text-text-muted hover:bg-surface-subtle',
+                ]"
+                @click="crawlLogLevelFilter = lvl"
+              >
+                {{ lvl === 'all' ? t('knowledgeSet.logs.allLevels', 'All levels') : lvl }}
+              </button>
+            </div>
+          </div>
+
+          <p
+            v-if="!details.crawlLogs.length && !details.crawlLoading"
+            class="rounded-xl border border-border bg-surface-muted px-3 py-2 text-meta text-text-muted"
+          >
+            {{ t('knowledgeSet.logs.empty', 'No log output yet.') }}
+          </p>
+          <p
+            v-else-if="details.crawlLogs.length && !filteredCrawlLogs.length"
+            class="rounded-xl border border-border bg-surface-muted px-3 py-2 text-meta text-text-muted"
+          >
+            {{ t('knowledgeSet.logs.noMatches', 'No log entries match your filters.') }}
+          </p>
+          <ol
+            v-else-if="filteredCrawlLogs.length"
+            class="max-h-[28rem] overflow-y-auto rounded-2xl border border-border-subtle"
+            role="list"
+          >
+            <li
+              v-for="(entry, idx) in filteredCrawlLogs"
+              :key="entry._key ?? `${entry.timestamp}-${idx}`"
+              class="flex flex-col gap-1 border-b border-border-subtle px-3 py-2 last:border-b-0 sm:flex-row sm:items-start sm:gap-3"
+            >
+              <time
+                class="shrink-0 font-mono text-meta tabular-nums text-text-muted sm:w-32"
+                :datetime="entry.timestamp"
+                :title="entry.timestamp"
+              >
+                {{ logTime(entry.timestamp) }}
+                <span class="text-text-subtle">· {{ logDate(entry.timestamp) }}</span>
+              </time>
+              <div class="flex shrink-0 items-center gap-1.5 sm:w-44">
+                <BaseBadge :tone="logLevelTone(entry.level)" size="sm">{{ entry.level }}</BaseBadge>
+                <BaseBadge tone="neutral" size="sm">{{ entry.stage }}</BaseBadge>
+              </div>
+              <p class="min-w-0 flex-1 break-words text-caption text-text">{{ entry.message }}</p>
+            </li>
+          </ol>
         </div>
 
         <template #footer>

@@ -46,6 +46,8 @@ parentPort.on('message', async (task) => {
       status: 'success',
       data: {
         response: response.data.response,
+        // Included when ChatQnA translates the reply (non-English sessions)
+        response_en: response.data.response_en || null,
         metadata: response.data.metadata,
         responseTime: duration
       }

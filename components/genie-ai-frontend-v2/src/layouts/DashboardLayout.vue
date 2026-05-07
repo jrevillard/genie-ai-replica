@@ -4,7 +4,9 @@ import { useRoute } from 'vue-router';
 import { SidebarLeftIcon } from '@hugeicons/core-free-icons';
 import Sidebar from '../components/dashboard/Sidebar.vue';
 import Icon from '../components/ui/Icon.vue';
+import { useT } from '../i18n/composables';
 
+const { t } = useT();
 const collapsed = ref(false);
 const mobileOpen = ref(false);
 const route = useRoute();
@@ -57,7 +59,7 @@ function closeMobile(): void {
           <button
             type="button"
             class="grid h-9 w-9 place-items-center rounded-lg text-text-subtle transition hover:bg-surface-subtle hover:text-text"
-            aria-label="Open menu"
+            :aria-label="t('common.openMenu', 'Open menu')"
             @click="mobileOpen = true"
           >
             <Icon :icon="SidebarLeftIcon" :size="20" />

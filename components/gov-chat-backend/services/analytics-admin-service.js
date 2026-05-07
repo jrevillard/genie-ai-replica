@@ -342,31 +342,38 @@ class AnalyticsAdminService {
 
   async _twinBreakdown(patientKeys, twinKeys, fromIso, toIso) {
     const [chatCursor, callCursor] = await Promise.all([
+      // Compute per-session stats BEFORE COLLECT so we never reference
+      // the 'chatSessions' collection name after it has been shadowed by
+      // the AGGREGATE variable of the same name.
       this.db.query(aql`
         FOR s IN chatSessions
           FILTER (s.userId IN ${patientKeys} OR s.twinId IN ${twinKeys})
             AND s.createdAt >= ${fromIso} AND s.createdAt <= ${toIso}
             AND s.twinId != null
-          COLLECT twinId = s.twinId
-          AGGREGATE chatSessions = COUNT(1)
-          LET sessionIds = (
-            FOR cs IN chatSessions
-              FILTER cs.twinId == twinId
-                AND (cs.userId IN ${patientKeys} OR cs.twinId IN ${twinKeys})
-                AND cs.createdAt >= ${fromIso} AND cs.createdAt <= ${toIso}
-              RETURN cs._key
-          )
-          LET avgRt = AVG(
+          LET sessionRt = AVG(
             FOR m IN chatSessionMessages
-              FILTER m.sessionId IN sessionIds AND m.role == 'assistant' AND m.responseTime != null
+              FILTER m.sessionId == s._key AND m.role == 'assistant' AND m.responseTime != null
               RETURN m.responseTime
           )
-          LET avgMsgs = AVG(
-            FOR sid IN sessionIds
-              RETURN COUNT(FOR m IN chatSessionMessages FILTER m.sessionId == sid RETURN 1)
+          LET sessionMsgCount = LENGTH(
+            FOR m IN chatSessionMessages
+              FILTER m.sessionId == s._key
+              RETURN 1
           )
+          COLLECT twinId = s.twinId
+          AGGREGATE
+            sessionCount   = COUNT(1),
+            rtSum          = SUM(sessionRt != null ? sessionRt : 0),
+            rtCount        = SUM(sessionRt != null ? 1 : 0),
+            totalMsgCount  = SUM(sessionMsgCount)
           LET twinName = FIRST(FOR t IN aiTwins FILTER t._key == twinId RETURN t.name)
-          RETURN { twinId, name: twinName, chatSessions, avgResponseTimeMs: avgRt != null ? ROUND(avgRt) : null, avgMsgsPerSession: avgMsgs != null ? ROUND(avgMsgs * 10) / 10 : null }
+          RETURN {
+            twinId,
+            name: twinName,
+            chatSessions: sessionCount,
+            avgResponseTimeMs: rtCount > 0 ? ROUND(rtSum / rtCount) : null,
+            avgMsgsPerSession: sessionCount > 0 ? ROUND((totalMsgCount / sessionCount) * 10) / 10 : null
+          }
       `),
       this.db.query(aql`
         FOR s IN call_sessions
@@ -430,7 +437,7 @@ class AnalyticsAdminService {
           RETURN s._key
       )
       FOR sid IN sessionIds
-        LET msgCount = COUNT(FOR m IN chatSessionMessages FILTER m.sessionId == sid RETURN 1)
+        LET msgCount = LENGTH(FOR m IN chatSessionMessages FILTER m.sessionId == sid RETURN 1)
         LET bucket = msgCount <= 5 ? '1-5' :
                      msgCount <= 10 ? '6-10' :
                      msgCount <= 20 ? '11-20' : '21+'

@@ -332,29 +332,65 @@ async function scheduleSiteCrawl(payload: SiteCrawlPayload): Promise<unknown> {
 
 // ─── Per-file crawl observability ──────────────────────────────────────────
 
-async function getCrawlJob(fileId: string): Promise<unknown> {
-  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
-    `files/${encodeURIComponent(fileId)}/crawl`
-  );
-  return data?.data ?? data;
+export interface CrawlJob {
+  _key?: string;
+  file_id: string;
+  url: string;
+  status: string; // Pending | Running | Succeeded | Failed | Killed
+  depth: number;
+  config?: Record<string, unknown>;
+  max_pages?: number;
+  pages_crawled?: number;
+  kill_requested?: boolean;
+  started_at?: string | null;
+  finished_at?: string | null;
+  error_message?: string | null;
 }
 
-async function getCrawlMetrics(fileId: string): Promise<unknown> {
-  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
-    `files/${encodeURIComponent(fileId)}/crawl/metrics`
-  );
-  return data?.data ?? data;
+export interface CrawlMetrics {
+  processed?: number;
+  links_external?: number;
+  links_internal?: number;
+  current_depth?: number;
+  error_counts?: Record<string, number>;
+  error_rate?: number;
+  total_crawled?: number;
+  queue_size?: number;
+  crawl_rate?: number;
 }
 
-async function getCrawlLogs(fileId: string): Promise<unknown> {
-  const { data } = await api.get<{ success?: boolean; data?: unknown }>(
-    `files/${encodeURIComponent(fileId)}/crawl/logs`
+export interface CrawlLogEntry {
+  _key?: string;
+  file_id: string;
+  timestamp: string;
+  level: string; // INFO | WARN | ERROR | DEBUG | …
+  stage: string; // System | Page | …
+  message: string;
+}
+
+async function getCrawlJob(fileId: string): Promise<CrawlJob | null> {
+  const { data } = await api.get<{ success?: boolean; data?: CrawlJob }>(
+    `files/${encodeURIComponent(fileId)}/crawl-job`
   );
-  return data?.data ?? data;
+  return data?.data ?? null;
+}
+
+async function getCrawlMetrics(fileId: string): Promise<CrawlMetrics | null> {
+  const { data } = await api.get<{ success?: boolean; data?: CrawlMetrics }>(
+    `files/${encodeURIComponent(fileId)}/crawl-metrics`
+  );
+  return data?.data ?? null;
+}
+
+async function getCrawlLogs(fileId: string): Promise<CrawlLogEntry[]> {
+  const { data } = await api.get<{ success?: boolean; data?: CrawlLogEntry[] }>(
+    `files/${encodeURIComponent(fileId)}/crawl-log`
+  );
+  return Array.isArray(data?.data) ? data.data : [];
 }
 
 async function killCrawl(fileId: string): Promise<void> {
-  await api.post(`files/${encodeURIComponent(fileId)}/crawl/kill`);
+  await api.post(`files/${encodeURIComponent(fileId)}/kill-crawl`);
 }
 
 // ─── Per-file ingestion observability ──────────────────────────────────────

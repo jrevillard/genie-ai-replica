@@ -6,7 +6,6 @@ import { sileo } from '../lib/notify';
 import AuthHeader from '../components/AuthHeader.vue';
 import BrandPanel from '../components/BrandPanel.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
-import BaseCheckbox from '../components/ui/BaseCheckbox.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import { useAuthStore } from '../stores/auth';
 import { useZodForm } from '../composables/useZodForm';
@@ -21,7 +20,6 @@ const auth = useAuthStore();
 const form = reactive<SignInInput>({
   loginName: '',
   password: '',
-  remember: false,
 });
 
 const { errors, validate } = useZodForm(signInSchema, ['loginName', 'password']);
@@ -85,7 +83,7 @@ async function onSubmit() {
                 <button
                   type="button"
                   class="-my-1.5 grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-surface-subtle hover:text-accent"
-                  :aria-label="passwordVisible ? 'Hide password' : 'Show password'"
+                  :aria-label="passwordVisible ? t('common.hidePassword', 'Hide password') : t('common.showPassword', 'Show password')"
                   @click="passwordVisible = !passwordVisible"
                 >
                   <EyeOff v-if="passwordVisible" class="h-4 w-4" />
@@ -94,8 +92,7 @@ async function onSubmit() {
               </template>
             </BaseInput>
 
-            <div class="flex items-center justify-between">
-              <BaseCheckbox v-model="form.remember" :label="t('auth.signIn.remember', 'Remember me')" size="sm" />
+            <div class="flex justify-end">
               <RouterLink
                 to="/forgot-password"
                 class="text-meta font-semibold text-accent hover:underline"
@@ -118,12 +115,6 @@ async function onSubmit() {
         </div>
       </div>
 
-      <p class="mt-8 text-center text-xs leading-relaxed text-slate-400">
-        {{ t('auth.legal.prefix', 'By signing up, you agree to our') }}
-        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.terms', 'terms of service') }}</a>
-        {{ t('auth.legal.and', 'and') }}
-        <a href="#" class="text-ieee-700 hover:underline">{{ t('auth.legal.privacy', 'privacy policy') }}</a>.
-      </p>
     </section>
 
     <BrandPanel />

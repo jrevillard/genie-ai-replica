@@ -48,7 +48,7 @@ const translationStore = useTranslationStore();
 // The selected ChatLang is the target.
 const CHAT_SOURCE_LANG = 'en';
 const { current: twin, loading: twinLoading, error: twinError } = storeToRefs(aiTwinsStore);
-const { messages, sending, lang } = storeToRefs(chatStore);
+const { messages, sending, lang, restoring } = storeToRefs(chatStore);
 
 const showTwinSkeleton = computed(
   () => Boolean(twinId.value) && twinLoading.value && !twin.value
@@ -102,6 +102,7 @@ interface MessageTranslationState {
   isTranslated: boolean;
   showOriginal: boolean;
   loading: boolean;
+  canTranslate: boolean;
 }
 interface ChatMessageBodyExposed {
   toggleTranslation: () => void;
@@ -139,7 +140,7 @@ async function loadSuggestedQuestions(): Promise<void> {
   }
 }
 
-const rawSuggestedQuestions = computed(() => suggestedQuestions.value.slice(0, 6));
+const rawSuggestedQuestions = computed(() => suggestedQuestions.value.slice(0, 3));
 
 // Reactive translation of the welcome screen (greeting + suggested questions)
 // into the selected chat content language. The source data is English; we
@@ -148,9 +149,6 @@ const greetingSource = computed<string>(() => {
   const fromTwin = twin.value?.chatGreeting?.trim();
   return fromTwin && fromTwin.length > 0 ? fromTwin : t.greeting;
 });
-
-const greetingTranslating = ref(false);
-const suggestedTranslating = ref(false);
 
 const greetingDisplay = computed<string>(() => {
   const src = greetingSource.value;
@@ -173,26 +171,42 @@ const visibleSuggestedQuestions = computed(() =>
   })
 );
 
+// Synchronous "not ready" flags derived from the translation cache. Computed
+// so they flip the instant `lang` changes — no async race window between the
+// language switch and the fetch watcher firing, which would otherwise let a
+// user click a card showing fallback English text and send the wrong language.
+const greetingNotReady = computed<boolean>(() => {
+  const src = greetingSource.value;
+  const target = lang.value;
+  if (!src || target === CHAT_SOURCE_LANG) return false;
+  return translationStore.peek(src, CHAT_SOURCE_LANG, target) === undefined;
+});
+
+const suggestedNotReady = computed<boolean>(() => {
+  const target = lang.value;
+  if (target === CHAT_SOURCE_LANG) return false;
+  return rawSuggestedQuestions.value.some(
+    (q) =>
+      (q.content && translationStore.peek(q.content, CHAT_SOURCE_LANG, target) === undefined) ||
+      (q.category && translationStore.peek(q.category, CHAT_SOURCE_LANG, target) === undefined)
+  );
+});
+
 watch(
   [greetingSource, lang],
-  async ([src, target]) => {
+  ([src, target]) => {
     if (!src || target === CHAT_SOURCE_LANG) return;
     if (translationStore.peek(src, CHAT_SOURCE_LANG, target) !== undefined) return;
-    greetingTranslating.value = true;
-    try {
-      await translationStore.getOne(src, CHAT_SOURCE_LANG, target);
-    } catch {
+    translationStore.getOne(src, CHAT_SOURCE_LANG, target).catch(() => {
       // Falls back to source via greetingDisplay.
-    } finally {
-      greetingTranslating.value = false;
-    }
+    });
   },
   { immediate: true }
 );
 
 watch(
   [rawSuggestedQuestions, lang],
-  async ([list, target]) => {
+  ([list, target]) => {
     if (target === CHAT_SOURCE_LANG || list.length === 0) return;
     const missing: string[] = [];
     for (const q of list) {
@@ -204,16 +218,11 @@ watch(
       }
     }
     if (missing.length === 0) return;
-    suggestedTranslating.value = true;
-    try {
-      await Promise.all(
-        missing.map((text) => translationStore.getOne(text, CHAT_SOURCE_LANG, target))
-      );
-    } catch {
+    Promise.all(
+      missing.map((text) => translationStore.getOne(text, CHAT_SOURCE_LANG, target))
+    ).catch(() => {
       // Cards fall back to English on failure.
-    } finally {
-      suggestedTranslating.value = false;
-    }
+    });
   },
   { immediate: true }
 );
@@ -221,6 +230,9 @@ watch(
 async function loadTwin(): Promise<void> {
   if (!twinId.value) return;
   chatStore.setTwinContext(twinId.value);
+  // Resume the prior conversation for this twin if one was persisted (page
+  // reload, back-nav). No-op if no stored session or it's no longer valid.
+  void chatStore.restoreSessionForTwin(twinId.value);
   try {
     await aiTwinsStore.fetchOne(twinId.value);
   } catch {
@@ -318,7 +330,6 @@ async function copyMessage(m: ChatMessage): Promise<void> {
 // ─── Voice recording ────────────────────────────────────────────────────────
 const isRecording = ref(false);
 const recordingSeconds = ref(0);
-const processingVoice = ref(false);
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: Blob[] = [];
 let recordingStream: MediaStream | null = null;
@@ -379,7 +390,10 @@ async function startRecording(): Promise<void> {
       : new MediaRecorder(recordingStream);
   } catch {
     stopRecordingStream();
-    notify.error('Recording failed', 'Could not initialize the recorder.');
+    notify.error(
+      tt('chat.recordingFailedTitle', 'Recording failed'),
+      tt('chat.recordingFailedBody', 'Could not initialize the recorder.'),
+    );
     return;
   }
 
@@ -435,7 +449,6 @@ function cancelRecording(): void {
 }
 
 async function submitVoiceMessage(blob: Blob): Promise<void> {
-  processingVoice.value = true;
   try {
     await chatStore.sendVoice(blob);
   } catch (err) {
@@ -449,8 +462,6 @@ async function submitVoiceMessage(blob: Blob): Promise<void> {
           ? tt('chat.voiceServiceUnavailable', 'Voice transcription service is temporarily unavailable.')
           : e?.message ?? tt('chat.voiceGenericError', 'Could not send voice message.'));
     notify.error(tt('chat.voiceFailedTitle', 'Voice message failed'), message);
-  } finally {
-    processingVoice.value = false;
   }
 }
 
@@ -741,14 +752,6 @@ function translationToggleLabel(id: string): string {
         class="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle bg-surface px-6 py-3"
       >
         <div class="flex items-center gap-3">
-          <button
-            type="button"
-            class="inline-flex items-center justify-center rounded-full bg-surface-muted p-2 text-text-muted transition hover:bg-surface-subtle hover:text-text"
-            :aria-label="tt('common.goBack', 'Go back')"
-            @click="goBack"
-          >
-            <Icon :icon="ArrowLeft01Icon" :size="18" />
-          </button>
           <template v-if="twinId">
             <BaseAvatar
               :src="twin?.profilePicUrl ?? ''"
@@ -764,7 +767,7 @@ function translationToggleLabel(id: string): string {
             </div>
           </template>
           <template v-else>
-            <p class="text-title text-text">Chat</p>
+            <p class="text-title text-text">{{ tt('chat.headerLabel', 'Chat') }}</p>
           </template>
         </div>
 
@@ -865,6 +868,7 @@ function translationToggleLabel(id: string): string {
         <!-- No twin selected -->
         <EmptyState
           v-if="!twinId"
+          full-height
           :icon="BubbleChatIcon"
           :title="tt('chat.pickTwinTitle', t.pickTwinTitle)"
           :description="tt('chat.pickTwinDescription', t.pickTwinDescription)"
@@ -874,9 +878,9 @@ function translationToggleLabel(id: string): string {
           </BaseButton>
         </EmptyState>
 
-        <!-- Greeting (twin selected, no messages yet) -->
+        <!-- Greeting (twin selected, no messages yet, not mid-restore) -->
         <div
-          v-else-if="messages.length === 0"
+          v-else-if="messages.length === 0 && !restoring"
           class="welcome-stage relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-8 sm:px-6"
         >
           <!-- Aurora background -->
@@ -887,24 +891,10 @@ function translationToggleLabel(id: string): string {
             <div class="welcome-aurora__grid" />
           </div>
 
-          <div class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-start pt-6 sm:pt-10">
+          <div class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-end gap-10 py-6 sm:py-10">
             <!-- Hero -->
             <div class="welcome-hero w-full max-w-3xl text-center">
-              <div class="welcome-avatar group relative mx-auto mb-5 inline-flex">
-                <span class="welcome-avatar__halo" aria-hidden="true" />
-                <span class="welcome-avatar__ring" aria-hidden="true" />
-                <BaseAvatar
-                  class="relative z-10"
-                  :src="twin?.profilePicUrl ?? ''"
-                  :name="twin?.name ?? 'AI Twin'"
-                  size="xl"
-                />
-                <span class="welcome-avatar__badge" aria-hidden="true">
-                  <Icon :icon="SparklesIcon" :size="12" />
-                </span>
-              </div>
-
-              <h2 class="welcome-title" :class="{ 'welcome-title--loading': greetingTranslating }">
+              <h2 class="welcome-title" :class="{ 'welcome-title--loading': greetingNotReady }">
                 <span class="welcome-title__accent">
                   {{ greetingDisplay.split(' ')[0] }}
                 </span>
@@ -918,20 +908,11 @@ function translationToggleLabel(id: string): string {
               </p>
             </div>
 
-            <!-- Suggested prompts -->
-            <div class="mx-auto mt-10 w-full max-w-3xl">
-              <div class="mb-4 flex items-center justify-center gap-2 text-text-muted">
-                <span class="welcome-divider" aria-hidden="true" />
-                <span class="inline-flex items-center gap-1.5 text-meta font-semibold uppercase tracking-[0.14em]">
-                  <Icon :icon="SparklesIcon" :size="12" class="text-accent" />
-                  {{ tt('chat.suggestedQuestions', 'Suggested questions') }}
-                </span>
-                <span class="welcome-divider" aria-hidden="true" />
-              </div>
-
-              <div v-if="suggestedQuestionsLoading" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <!-- Suggested prompts (anchored just above the input, width matches the composer) -->
+            <div class="mx-auto w-full max-w-5xl">
+              <div v-if="suggestedQuestionsLoading" class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div
-                  v-for="idx in 6"
+                  v-for="idx in 3"
                   :key="idx"
                   class="welcome-skeleton h-[88px] rounded-2xl"
                 />
@@ -940,17 +921,19 @@ function translationToggleLabel(id: string): string {
               <div
                 v-else-if="visibleSuggestedQuestions.length > 0"
                 :class="[
-                  'grid grid-cols-1 gap-3 sm:grid-cols-2',
-                  suggestedTranslating && 'welcome-cards--loading',
+                  'grid grid-cols-1 gap-3 sm:grid-cols-3',
+                  suggestedNotReady && 'welcome-cards--loading',
                 ]"
               >
                 <button
                   v-for="(question, index) in visibleSuggestedQuestions"
                   :key="`${question.order}-${question.content}`"
                   type="button"
-                  class="prompt-card group"
+                  class="prompt-card group disabled:cursor-not-allowed disabled:opacity-60"
                   :style="{ animationDelay: `${index * 60}ms` }"
                   :title="question.displayContent"
+                  :disabled="suggestedNotReady"
+                  :aria-busy="suggestedNotReady || undefined"
                   @click="send(question.displayContent)"
                 >
                   <span class="prompt-card__glow" aria-hidden="true" />
@@ -980,7 +963,7 @@ function translationToggleLabel(id: string): string {
           v-else
           class="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6 scrollbar-thin"
         >
-          <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6">
+          <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
             <template v-for="group in groupedMessages" :key="group.label">
               <div class="flex items-center justify-center">
                 <span
@@ -1016,7 +999,7 @@ function translationToggleLabel(id: string): string {
                     <button
                       type="button"
                       class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-50"
-                      :aria-label="messageAudio[m.serverId]?.playing ? 'Pause voice note' : 'Play voice note'"
+                      :aria-label="messageAudio[m.serverId]?.playing ? tt('chat.aria.pauseVoiceNote', 'Pause voice note') : tt('chat.aria.playVoiceNote', 'Play voice note')"
                       :disabled="messageAudio[m.serverId]?.loading"
                       @click="toggleMessageAudio(m)"
                     >
@@ -1082,7 +1065,7 @@ function translationToggleLabel(id: string): string {
                         <span aria-hidden="true">·</span>
                         <button
                           type="button"
-                          class="rounded p-1 text-text-subtle opacity-0 transition hover:bg-surface-muted hover:text-text group-hover:opacity-100 focus-visible:opacity-100"
+                          class="rounded p-1 text-text-subtle transition hover:bg-surface-muted hover:text-text"
                           :aria-label="tt('chat.copy', t.copy)"
                           :title="tt('chat.copy', t.copy)"
                           @click="copyMessage(m)"
@@ -1100,7 +1083,7 @@ function translationToggleLabel(id: string): string {
                           <span>{{ tt('common.loading', 'Loading…') }}</span>
                         </span>
                       </template>
-                      <template v-else-if="messageTranslationStates[m.id]?.isTranslated">
+                      <template v-else-if="messageTranslationStates[m.id]?.canTranslate">
                         <span aria-hidden="true">·</span>
                         <button
                           type="button"
@@ -1116,7 +1099,7 @@ function translationToggleLabel(id: string): string {
                         <button
                           type="button"
                           class="inline-flex items-center gap-1 rounded p-1 text-text-subtle transition hover:bg-surface-muted hover:text-text disabled:opacity-50"
-                          :aria-label="messageAudio[m.serverId]?.playing ? 'Pause audio' : 'Listen to message'"
+                          :aria-label="messageAudio[m.serverId]?.playing ? tt('chat.aria.pauseMessage', 'Pause audio') : tt('chat.aria.playMessage', 'Listen to message')"
                           :disabled="messageAudio[m.serverId]?.loading"
                           @click="toggleMessageAudio(m)"
                         >
@@ -1140,25 +1123,6 @@ function translationToggleLabel(id: string): string {
               </div>
             </template>
 
-            <div
-              v-if="processingVoice"
-              class="flex items-start justify-end gap-3"
-              role="status"
-              aria-live="polite"
-              aria-label="Sending voice and waiting for a reply"
-            >
-              <div class="flex flex-col items-end gap-1">
-                <div class="rounded-2xl bg-accent px-5 py-3 text-text-inverse shadow-card">
-                  <span class="inline-flex items-center gap-1">
-                    <span class="dot" />
-                    <span class="dot" style="animation-delay: 0.15s" />
-                    <span class="dot" style="animation-delay: 0.3s" />
-                  </span>
-                </div>
-                <span class="text-meta text-text-subtle">{{ tt('chat.sendingVoice', 'Sending your voice note…') }}</span>
-              </div>
-            </div>
-
             <div ref="messagesEnd" />
           </div>
         </div>
@@ -1169,7 +1133,7 @@ function translationToggleLabel(id: string): string {
         v-if="twinId"
         class="border-t border-border-subtle bg-surface px-6 py-4"
       >
-        <div class="mx-auto w-full max-w-3xl">
+        <div class="mx-auto w-full max-w-5xl">
           <div
             v-if="!isRecording"
             class="flex items-end gap-2 rounded-3xl border border-border bg-surface px-3 py-2 shadow-card transition focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/20"
@@ -1521,58 +1485,6 @@ function translationToggleLabel(id: string): string {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Avatar with glowing aura + sparkle badge */
-.welcome-avatar__halo {
-  position: absolute;
-  inset: -22px;
-  border-radius: 9999px;
-  background:
-    radial-gradient(circle, rgba(0, 115, 185, 0.35) 0%, rgba(0, 115, 185, 0) 70%);
-  animation: welcome-halo 3.6s ease-in-out infinite;
-}
-.welcome-avatar__ring {
-  position: absolute;
-  inset: -6px;
-  border-radius: 9999px;
-  padding: 2px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(0, 115, 185, 0.9),
-    rgba(14, 165, 233, 0.6),
-    rgba(0, 82, 128, 0.9),
-    rgba(0, 115, 185, 0.9)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  animation: welcome-spin 8s linear infinite;
-}
-.welcome-avatar__badge {
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  z-index: 20;
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  color: #fff;
-  background: linear-gradient(135deg, #0073b9, #003e62);
-  box-shadow:
-    0 4px 12px rgba(0, 82, 128, 0.35),
-    0 0 0 3px #ffffff;
-}
-@keyframes welcome-halo {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 0.95; transform: scale(1.08); }
-}
-@keyframes welcome-spin {
-  to { transform: rotate(360deg); }
-}
-
 .welcome-title--loading,
 .welcome-cards--loading {
   opacity: 0.55;
@@ -1580,10 +1492,10 @@ function translationToggleLabel(id: string): string {
 }
 
 .welcome-title {
-  font-size: clamp(1.85rem, 4vw, 2.85rem);
+  font-size: clamp(1.5rem, 3vw, 2.15rem);
   font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
+  line-height: 1.12;
+  letter-spacing: -0.018em;
   color: #020617;
 }
 .welcome-title__accent {
@@ -1604,15 +1516,8 @@ function translationToggleLabel(id: string): string {
 
 .welcome-sub {
   color: #475569;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   line-height: 1.55;
-}
-
-.welcome-divider {
-  flex: 1 1 0%;
-  max-width: 80px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.12), transparent);
 }
 
 .welcome-skeleton {
@@ -1696,20 +1601,31 @@ function translationToggleLabel(id: string): string {
 .prompt-card__chip {
   align-self: flex-start;
   display: inline-flex;
-  padding: 1px 8px;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 3px 10px 3px 8px;
   border-radius: 9999px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.prompt-card__chip::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.85;
+}
 .prompt-card__text {
-  font-size: 0.9rem;
-  line-height: 1.35;
+  font-size: 0.84rem;
+  line-height: 1.4;
   color: #0f172a;
   font-weight: 500;
   display: -webkit-box;
@@ -1751,8 +1667,6 @@ function translationToggleLabel(id: string): string {
 
 @media (prefers-reduced-motion: reduce) {
   .welcome-aurora__orb,
-  .welcome-avatar__halo,
-  .welcome-avatar__ring,
   .welcome-title__accent,
   .welcome-skeleton,
   .prompt-card {

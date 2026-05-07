@@ -121,13 +121,21 @@ async def classify_route_for_query(
         return {"error": "empty_question", "primary": None}
 
     sys = (
-        "You classify a user question for a government services knowledge base. "
-        "Pick the single best category and 0-4 service names from the taxonomy lines only "
-        "(use exact strings from the taxonomy). Output strictly one JSON object, no markdown, keys:\n"
-        '{"categoryLabel":"string or null","serviceLabels":["..."],"confidence":0.0-1.0,'
+        "You classify a user question for a government health services knowledge base. "
+        "Decide TWO things:\n"
+        "1. search_mode — how to search for this question:\n"
+        '   "vector_search": use for most specific health questions, symptoms, advice, '
+        "single-topic queries (this is the default).\n"
+        '   "deep_search": use ONLY for complex multi-concept queries that likely span '
+        "several documents or require cross-referencing multiple conditions, medications, "
+        "or population groups simultaneously.\n"
+        "2. The best category and 0-4 service names from the taxonomy (exact strings only).\n"
+        "Output strictly one JSON object, no markdown, keys:\n"
+        '{"search_mode":"vector_search|deep_search",'
+        '"categoryLabel":"string or null","serviceLabels":["..."],"confidence":0.0-1.0,'
         '"secondary":{"categoryLabel":"string or null","serviceLabels":[],"confidence":0.0-1.0} or null}\n'
         "If unsure, set confidence below 0.4 and use few or zero serviceLabels. "
-        "Use null category only if no category fits."
+        "Use null category only if no category fits. Default search_mode is vector_search."
     )
     user = f"TAXONOMY (pick ONLY from here):\n{taxonomy_lines}\n\nUSER_QUESTION:\n{question}"
 
@@ -164,7 +172,15 @@ async def classify_route_for_query(
     primary = _norm_block(parsed)
     sec_raw = parsed.get("secondary")
     secondary = _norm_block(sec_raw) if sec_raw else None
-    return {"primary": primary, "secondary": secondary, "raw": (content or "")[:800]}
+    # Normalise search_mode; default to vector_search
+    raw_mode = parsed.get("search_mode", "vector_search")
+    search_mode = "deep_search" if str(raw_mode).strip().lower() == "deep_search" else "vector_search"
+    return {
+        "primary": primary,
+        "secondary": secondary,
+        "search_mode": search_mode,
+        "raw": (content or "")[:800],
+    }
 
 
 def build_retrieval_from_route(
@@ -173,7 +189,13 @@ def build_retrieval_from_route(
     route: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any], str | None]:
     lang = base_context.get("language") or "EN"
-    routing_meta: dict[str, Any] = {"mode": "auto_broad", "classifier_error": route.get("error")}
+    # Propagate search_mode from classifier; fall back to vector_search
+    search_mode = route.get("search_mode", "vector_search") or "vector_search"
+    routing_meta: dict[str, Any] = {
+        "mode": "auto_broad",
+        "search_mode": search_mode,
+        "classifier_error": route.get("error"),
+    }
 
     if route.get("primary") is None and route.get("error"):
         rc = {"categoryLabel": "General", "serviceLabels": [], "language": lang}

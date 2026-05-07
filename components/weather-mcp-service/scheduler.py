@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 async def run_potato_ews_pipeline(
     storage:    "StorageLayer",
     potato_ews: "PotatoShortTermEWS",
+    notifier:   "Notifier | None" = None,
 ) -> dict:
     """
     Run the potato EWS for all districts that have a stored forecast.
@@ -53,10 +54,21 @@ async def run_potato_ews_pipeline(
             if assessment:
                 evaluated += 1
                 if potato_ews.should_alert(assessment):
-                    await asyncio.get_running_loop().run_in_executor(
-                        None, lambda a=assessment: potato_ews.record_alert(a)
-                    )
-                    alerted += 1
+                    dispatched = False
+                    if notifier is not None:
+                        dispatched = await asyncio.get_running_loop().run_in_executor(
+                            None, lambda a=assessment: notifier.dispatch_potato_alert(a)
+                        )
+                    if dispatched:
+                        await asyncio.get_running_loop().run_in_executor(
+                            None, lambda a=assessment: potato_ews.record_alert(a)
+                        )
+                        alerted += 1
+                    else:
+                        logger.warning(
+                            "[POTATO_PIPELINE] Alert for %s was not recorded because notification dispatch failed",
+                            location,
+                        )
         except Exception as exc:
             logger.error("[POTATO_PIPELINE] Failed for %s: %s", location, exc)
             errors += 1
@@ -146,7 +158,7 @@ async def run_hourly_pipeline(
     # Run potato EWS after forecasts are fresh
     if potato_ews is not None:
         try:
-            await run_potato_ews_pipeline(storage, potato_ews)
+            await run_potato_ews_pipeline(storage, potato_ews, notifier)
         except Exception as exc:
             logger.error("[PIPELINE] Potato EWS pipeline failed: %s", exc)
 

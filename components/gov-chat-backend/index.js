@@ -694,7 +694,7 @@ async function initializeServices() {
   // Import services individually with error handling
   let authService, userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, sessionService, logsService;
-  let databaseOperationsService, weatherService, securityScanService, translationService;
+  let databaseOperationsService, weatherService, securityScanService, translationService, notificationService;
 
   const importService = async (name, path) => {
     logger.info(`Importing service: ${name}`);
@@ -727,6 +727,7 @@ async function initializeServices() {
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
+    notificationService = await importService('NotificationService', './services/notification-service');
 
     logger.info('Constructing service map');
     const serviceMap = {
@@ -742,7 +743,8 @@ async function initializeServices() {
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
-      translationService: { instance: translationService, name: 'TranslationService' }
+      translationService: { instance: translationService, name: 'TranslationService' },
+      notificationService: { instance: notificationService, name: 'NotificationService' }
     };
 
     // Validate services
@@ -791,7 +793,8 @@ async function initializeServices() {
       { service: services.logsService, name: 'LogsService' },
       // Marked optional: true to prevent boot failure on rate limits
       { service: services.weatherService, name: 'WeatherService', optional: true },
-      { service: services.translationService, name: 'TranslationService' }
+      { service: services.translationService, name: 'TranslationService' },
+      { service: services.notificationService, name: 'NotificationService' }
     ];
 
     for (const { service, name, preInit, optional } of initPromises) {
@@ -981,7 +984,8 @@ async function startApp() {
     { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
     { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService },
     { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService },
-    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService }
+    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService },
+    { file: 'notification-routes', paths: ['/api/notifications'], service: services.notificationService }
   ];
 
   // Log route configurations

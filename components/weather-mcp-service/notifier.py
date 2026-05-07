@@ -34,6 +34,8 @@ class Notifier:
         self._twilio_token    = os.getenv("TWILIO_AUTH_TOKEN", "")
         self._twilio_from     = os.getenv("TWILIO_PHONE_FROM", "")
         self._broadcast_url   = os.getenv("BROADCAST_WEBHOOK_URL", "")
+        self._notification_url = self._resolve_notification_broadcast_url()
+        self._notification_secret = os.getenv("NOTIFICATION_BROADCAST_SECRET", "")
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -91,11 +93,33 @@ class Notifier:
         )
 
     def _push(self, a: RiskAssessment) -> None:
+        """Send a weather push through the app backend when configured.
+
+        The backend owns device-token matching. Legacy topic FCM remains as a
+        fallback for deployments that have not enabled /api/notifications yet.
         """
-        Firebase Cloud Messaging push to topic /topics/weather_{district}.
-        Topic subscribers are users who have opted in to weather alerts for
-        that district in the frontend app.
-        """
+        backend_payload = {
+            "type": "weather_warning",
+            "title": f"Weather {a.tier_label} — {a.location}",
+            "body": a.reasoning[:200],
+            "location": a.location,
+            "districts": [a.location],
+            "crops": [],
+            "alertTypes": ["weather_warning"],
+            "tier": a.tier,
+            "tierLabel": a.tier_label,
+            "data": {
+                "type": "weather_warning",
+                "tier": str(a.tier),
+                "tier_label": a.tier_label,
+                "location": a.location,
+                "triggers": json.dumps(a.triggers),
+                "assessed_at": a.assessed_at,
+            },
+        }
+        if self._post_notification_broadcast(backend_payload, f"weather alert for {a.location}"):
+            return
+
         if not self._fcm_key:
             logger.info("[NOTIFY] FCM_SERVER_KEY not set — push skipped for %s", a.location)
             return
@@ -109,13 +133,7 @@ class Notifier:
                 "body": a.reasoning[:200],
                 "color": TIER_COLOURS[a.tier],
             },
-            "data": {
-                "tier":      str(a.tier),
-                "tier_label": a.tier_label,
-                "location":  a.location,
-                "triggers":  json.dumps(a.triggers),
-                "assessed_at": a.assessed_at,
-            },
+            "data": backend_payload["data"],
         }
         try:
             resp = _requests.post(
@@ -131,6 +149,47 @@ class Notifier:
             logger.info("[NOTIFY] FCM push sent to %s (topic %s)", a.location, topic)
         except Exception as exc:
             logger.error("[NOTIFY] FCM push failed for %s: %s", a.location, exc)
+
+    def dispatch_potato_alert(self, assessment: dict) -> bool:
+        """Broadcast a potato EWS alert through the backend token registry."""
+        tier = int(assessment.get("tier", 0) or 0)
+        if tier < 2:
+            return False
+
+        location = assessment.get("location", "")
+        tier_label = assessment.get("tier_label") or assessment.get("tierLabel") or "Warning"
+        body = assessment.get("message") or "; ".join(
+            (assessment.get("triggers") or assessment.get("disease_risks") or [])[:2]
+        ) or "New potato early warning alert"
+        payload = {
+            "type": "potato_ews",
+            "title": f"Potato {tier_label} — {location}",
+            "body": body[:240],
+            "location": location,
+            "districts": [location] if location else [],
+            "crops": ["potato"],
+            "alertTypes": ["potato_ews", "weather_warning"],
+            "tier": tier,
+            "tierLabel": tier_label,
+            "data": {
+                "type": "potato_ews",
+                "crop": "potato",
+                "tier": str(tier),
+                "tier_label": tier_label,
+                "location": location,
+                "forecast_date": assessment.get("forecast_date", ""),
+                "triggers": json.dumps(assessment.get("triggers", [])),
+                "disease_risks": json.dumps(assessment.get("disease_risks", [])),
+            },
+        }
+        if self._post_notification_broadcast(payload, f"potato alert for {location}"):
+            return True
+
+        logger.warning(
+            "[NOTIFY] Backend notification URL not configured or failed — potato alert for %s not pushed",
+            location,
+        )
+        return False
 
     def _sms(self, a: RiskAssessment) -> None:
         """
@@ -225,6 +284,42 @@ class Notifier:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _post_notification_broadcast(self, payload: dict, context: str) -> bool:
+        if not self._notification_url:
+            return False
+
+        headers = {"Content-Type": "application/json"}
+        if self._notification_secret:
+            headers["x-notification-secret"] = self._notification_secret
+
+        try:
+            resp = _requests.post(
+                self._notification_url,
+                headers=headers,
+                json=payload,
+                timeout=10,
+            )
+            resp.raise_for_status()
+            logger.info("[NOTIFY] Backend broadcast sent for %s", context)
+            return True
+        except Exception as exc:
+            logger.error("[NOTIFY] Backend broadcast failed for %s: %s", context, exc)
+            return False
+
+    @staticmethod
+    def _resolve_notification_broadcast_url() -> str:
+        explicit = os.getenv("NOTIFICATION_BROADCAST_URL", "").strip()
+        if explicit:
+            return explicit
+
+        base = os.getenv("BACKEND_API_URL", "").strip()
+        if not base:
+            return ""
+        base = base.rstrip("/")
+        if base.endswith("/api"):
+            return f"{base}/notifications/broadcast"
+        return f"{base}/api/notifications/broadcast"
 
     @staticmethod
     def _channel_name(tier: int) -> str:

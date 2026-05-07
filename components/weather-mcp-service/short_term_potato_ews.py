@@ -152,12 +152,12 @@ class PotatoShortTermEWS:
             assessment["location"], _CROP, assessment["tier"], within_hours=12
         )
 
-    def record_alert(self, assessment: dict) -> None:
+    def record_alert(self, assessment: dict, channel: str = "backend_broadcast") -> None:
         """Record that an alert was dispatched (deduplication log)."""
         self._storage.record_crop_alert_sent(
             assessment["location"],
             _CROP,
             assessment["tier"],
-            "frontend_poll",
+            channel,
             assessment.get("forecast_date", ""),
         )

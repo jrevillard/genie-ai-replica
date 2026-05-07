@@ -339,7 +339,7 @@ async def trigger_potato_pipeline(background_tasks: BackgroundTasks):
 
     from scheduler import run_potato_ews_pipeline
 
-    background_tasks.add_task(run_potato_ews_pipeline, storage_layer, potato_ews)
+    background_tasks.add_task(run_potato_ews_pipeline, storage_layer, potato_ews, notifier)
     return {"status": "potato_pipeline_started"}
 
 

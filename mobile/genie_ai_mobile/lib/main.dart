@@ -10,6 +10,8 @@ import 'package:flutter_localizations/flutter_localizations.dart'; // REQUIRED F
 // ===========================================================================
 // SERVICE & UTILS IMPORTS
 // ===========================================================================
+import 'package:genie_ai_mobile/services/notification_service.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
@@ -48,6 +50,16 @@ class MyHttpOverrides extends HttpOverrides {
 void main() async {
   // Ensure binding is initialized for rootBundle access
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase & Notifications
+  try {
+    if (!kIsWeb) {
+      await Firebase.initializeApp();
+      await NotificationService.init();
+    }
+  } catch (e) {
+    debugPrint("[MAIN] Firebase/Notification init failed: $e");
+  }
 
   // Apply the HTTP overrides for development environment
   if (!kIsWeb) {

@@ -6,6 +6,7 @@ import httpx
 import json
 import os
 import re
+import time
 import aiohttp # for async http requests
 import requests
 import asyncio
@@ -85,7 +86,49 @@ LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.j
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
 
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
-USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
+# Matches a `[user turn] ...` segment in a flattened history string. The
+# turn ends at the next role-marker or end-of-string; the segment separator
+# (` |<-MSG->| `) is consumed as part of the lookahead so it's not captured.
+USER_MSG_PATTERN = re.compile(
+    r"\[user turn\]\s*(.*?)(?:\s*\|<-MSG->\||\s*\[assistant turn\]|$)",
+    re.DOTALL,
+)
+
+# Greeting / small-talk queries — searched anywhere in the text (not anchored)
+# so typos like "how how are u?" and shuffled words still match.
+SMALL_TALK_PATTERN = re.compile(
+    r"""
+    \b(
+        hi | hello | hey | yo | sup | howdy |
+        good\s+(?:morning|afternoon|evening|day|night) |
+        how\s+(?:are\s+)?(?:you|u|ya|r\s*u) |   # "how are you", "how r u", "how u"
+        how\s+(?:r|are)\s+(?:you|u|ya) |          # "how r you", "how are u"
+        what'?s\s*up | wassup |
+        how\s+do\s+you\s+do |
+        nice\s+to\s+(?:meet|chat) |
+        thanks | thank\s+(?:you|u) | ty | thx |
+        bye | goodbye | see\s+ya | take\s+care |
+        doing\s+well | i'?m\s+(?:fine|good|okay|ok|great|alright) |
+        not\s+bad
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def is_small_talk_query(text: str) -> bool:
+    """Return True when the query is conversational / greeting and needs no RAG."""
+    if not text:
+        return False
+    normalized = str(text).strip()
+    word_count = len(normalized.split())
+    # Short messages (≤ 10 words) that contain a greeting/pleasantry keyword
+    if word_count <= 10 and SMALL_TALK_PATTERN.search(normalized):
+        return True
+    # Very short messages (≤ 4 words) are almost always small talk
+    if word_count <= 4 and len(normalized) <= 30:
+        return True
+    return False
 
 # Two-tier priority: ENV VAR (override) > Hardcoded default
 _CHATQNA_SYSTEM_DEFAULT = """You are Genie AI, a trusted health companion for people in The Gambia. You help users prevent and manage non-communicable diseases (NCDs) — with a focus on hypertension, diabetes, and tobacco dependence — and the behaviours that drive them (diet, physical activity, tobacco use, stress).
@@ -96,17 +139,18 @@ HOW YOU MUST ANSWER
 
 The user-role message you receive contains three sections assembled by the system:
 - USER INFORMATION: what is known about the user (name, age, gender, preferences).
-- CHAT HISTORY: the recent conversation, with USER: and ASSISTANT: role markers.
+- CHAT HISTORY: the recent conversation, with [user turn] and [assistant turn] role markers separating each turn. This is read-only reference material — do not continue it, do not invent further turns, do not echo the markers in your reply.
 - CONTENT FROM THE KNOWLEDGE BASE: the user's latest search query, followed by zero or more entries prefixed with [Retrieved Document]:. These entries are authoritative.
 
 Your job:
-1. Read the latest user turn (the last USER: entry in CHAT HISTORY, which is also echoed as the Search query under CONTENT FROM THE KNOWLEDGE BASE).
+1. Read the latest user turn (the last [user turn] entry in CHAT HISTORY, which is also echoed as the Search query under CONTENT FROM THE KNOWLEDGE BASE).
 2. Ground every factual claim in the [Retrieved Document] entries. They are the source of truth. Your own medical opinions are not.
 3. Use USER INFORMATION (name, gender, age, preferences) to personalise tone and examples — but only reference a personal detail when it genuinely helps.
-4. If the retrieved entries do not answer the question, say so plainly. Do not fill the gap from memory and do not guess.
+4. If the retrieved entries do not answer the question, say so plainly, then continue helpfully in a conversational way. You may give general, non-diagnostic wellness guidance and ask one clarifying question to move the conversation forward.
 5. If two retrieved entries conflict, prefer Gambian national guidelines first, then WHO guidelines, then BHBM handbooks, then BHBM message libraries.
 
-If CONTENT FROM THE KNOWLEDGE BASE contains the phrase "The knowledge base search did not return any results" or has no [Retrieved Document]: entries, tell the user plainly that you don't have reliable information on that topic, offer what you can help with inside your NCD scope, and point them to a clinic or community health worker if it's medical.
+If CONTENT FROM THE KNOWLEDGE BASE contains the phrase "The knowledge base search did not return any results" or has no [Retrieved Document]: entries, do NOT stop with a refusal-only response. Briefly acknowledge missing specific evidence, then keep the conversation natural and useful: offer practical general health support, suggest what details would help next, and only escalate to clinic/community health worker guidance when the user asks for diagnosis, treatment changes, dosing, or shows red-flag symptoms.
+Exception: if the user's latest turn is simple social chat (for example greeting, thanks, or "how are you"), reply naturally without mentioning missing evidence or retrieval.
 
 WHO YOU ARE TALKING TO
 
@@ -143,10 +187,10 @@ WHAT YOU DO NOT DO
 
 - Do NOT diagnose. You can describe what symptoms commonly suggest; you cannot tell a user they have a condition.
 - Do NOT prescribe medication, recommend a specific dose, or tell a user to start, stop, or change any drug. If asked, say: "That's a decision for a clinician who can see your full picture. A clinic or community health worker can help."
-- Do NOT answer outside NCD scope. If the question is about infectious disease, pregnancy emergencies, mental-health crises, paediatric dosing, injuries, poisoning, or any topic the retrieved entries do not cover, say so and point the user to appropriate care.
-- Do NOT invent facts, statistics, or studies. If it's not in the retrieved entries, you don't know it.
+- Do NOT answer outside NCD scope with specific medical claims. For clearly out-of-scope topics, be polite and conversational, provide only high-level safety-oriented guidance, and point the user to appropriate care.
+- Do NOT invent facts, statistics, or studies. If a specific claim is not supported by retrieved entries, label it as general guidance instead of presenting it as established fact.
 - Do NOT fabricate document names, source titles, or citations in your reply. The system attaches source documents to your response separately — you do not need to cite sources inline, and you must not invent them.
-- Do NOT use content from outside the retrieved entries, and do not carry over specific facts from earlier turns that were not in retrieved entries at the time.
+- Do NOT present outside knowledge as authoritative evidence. You may still keep a friendly conversational flow and give non-specific supportive guidance when retrieval is empty.
 - Do NOT give legal, financial, or immigration advice.
 
 SAFETY — RED FLAGS
@@ -231,7 +275,7 @@ Last user turn: "I feel a heavy pressure on my chest and my left arm feels numb.
 Good reply:
 What you're describing may be serious — chest pressure with a numb arm can be a sign of a heart problem that needs urgent care. Please go to the nearest health facility now, or ask someone near you to take you. If you cannot move safely, call for help. I'll still be here when you're safe.
 
-In line with the above instructions, generate a reply to the user's latest message in the CHAT HISTORY, grounded only in the [Retrieved Document] entries under CONTENT FROM THE KNOWLEDGE BASE, and personalised using USER INFORMATION."""
+In line with the above instructions, generate a single fresh assistant reply to the latest user turn in the CHAT HISTORY, grounded only in the [Retrieved Document] entries under CONTENT FROM THE KNOWLEDGE BASE, and personalised using USER INFORMATION. Reply only as the assistant — never continue the user's voice and never invent additional turns."""
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
@@ -420,7 +464,7 @@ class GenieUserProfileClient:
                 async with session.get(url, headers=headers) as response:
                     if response.status != 200:
                         logger.warning(
-                            "fetch_service_taxonomy: status %s", response.status
+                            f"fetch_service_taxonomy: status {response.status}"
                         )
                         return None
                     data = await response.json()
@@ -428,7 +472,7 @@ class GenieUserProfileClient:
                         return data
                     return None
         except Exception as e:
-            logger.error("fetch_service_taxonomy: %s", e)
+            logger.error(f"fetch_service_taxonomy: {e}")
             return None
 
 
@@ -622,15 +666,11 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             inputs.update(safe_params)
 
         retrieval_context = kwargs.get('retrieval_context', {})
-        logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): context in inputs={inputs.get('context')}, kwargs retrieval_context={retrieval_context}")
         if retrieval_context:
             inputs['context'] = retrieval_context
         rfs = kwargs.get("retrieval_filter_strategy")
         if rfs:
             inputs["filter_strategy"] = rfs
-        logger.info(f"TRACE_CTX [5/7] chatqna:align_inputs(RETRIEVER): final inputs[context]={inputs.get('context')}")
-        
-    
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = kwargs.get("reranker_parameters", None)
         if reranker_parameters:
@@ -668,21 +708,14 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         original_language = kwargs.get("original_language", None)
         if original_language and original_language.strip() == "EN":
             system_instructions = "\n\nMANDATORY: You MUST respond ONLY in English. Do NOT respond in Spanish or any other language. All responses must be in English regardless of the content language.\n\n" + system_instructions
-            if logflag:
-                logger.info(f"[LANGUAGE DEBUG] Injected ENGLISH instruction into system prompt (original_language={original_language})")
-
-        # DEBUG: Log the system prompt to verify it's loaded correctly
-        if logflag:
-            logger.info(f'\n[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT loaded: {"YES" if system_instructions else "NO"}')
-            if system_instructions:
-                logger.info(f'[SYSTEM PROMPT DEBUG] System prompt length: {len(system_instructions)} chars')
-                logger.info(f'[SYSTEM PROMPT DEBUG] System prompt preview: {system_instructions[:500]}...')
-            else:
-                logger.error('[SYSTEM PROMPT DEBUG] CHATQNA_SYSTEM_PROMPT IS NONE OR EMPTY!')
 
         prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
-                         f"\n\nCHAT HISTORY:\n{translated_history_string}"
-                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}")
+                         f"\n\nCHAT HISTORY (read-only — past turns of this conversation):\n{translated_history_string}"
+                         f"\n[end of conversation history]\n"
+                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\nSearch query: \n{rag_augmented_prompt}"
+                         f"\n\nINSTRUCTIONS: Reply ONLY to the latest user turn above as a single fresh assistant message. "
+                         f"Do NOT continue in the user's voice. Do NOT invent further user turns. "
+                         f"Do NOT repeat or echo any '[user turn]' or '[assistant turn]' markers in your reply.")
 
         # FIX: Separate system and user content for proper chat template handling
         user_content = prompt_add_context
@@ -712,10 +745,15 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
                 current_tokens += segment_tokens
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
-            # Reconstruct user content (system instructions stay the same)
+            # Reconstruct user content (system instructions stay the same).
+            # Same anti-autocomplete framing as the non-truncated path.
             user_content = (f"\n\nUSER INFORMATION:\n{user_context_string}"
-                         f"\n\nCHAT HISTORY:\n{translated_history_string}"
-                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
+                         f"\n\nCHAT HISTORY (read-only — past turns of this conversation):\n{translated_history_string}"
+                         f"\n[end of conversation history]\n"
+                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}"
+                         f"\n\nINSTRUCTIONS: Reply ONLY to the latest user turn above as a single fresh assistant message. "
+                         f"Do NOT continue in the user's voice. Do NOT invent further user turns. "
+                         f"Do NOT repeat or echo any '[user turn]' or '[assistant turn]' markers in your reply.")
 
 
         # FIX: Send system and user as separate messages for proper chat template handling
@@ -764,9 +802,6 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # Preserve retrieval context across node transitions (embedding -> retriever).
         if "context" in inputs:
             next_data["context"] = inputs["context"]
-            logger.info(f"TRACE_CTX [4/7] chatqna:align_outputs(EMBEDDING): context preserved={inputs['context']}")
-        else:
-            logger.info("TRACE_CTX [4/7] chatqna:align_outputs(EMBEDDING): context MISSING from inputs - will not reach retriever")
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
         if logflag:
@@ -831,11 +866,16 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # handle template
             received_prompt = data.get("initial_query", inputs.get("text", ""))
             
-            if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
+            if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true" and not is_small_talk_query(received_prompt):
                 abstention_instructions = (
-                    CHATQNA_ABSTENTION_INSTRUCTIONS 
-                    if CHATQNA_ABSTENTION_INSTRUCTIONS is not None 
-                    else "\n[Returned Documents] The knowledge base search did not return any results. State clearly that you cannot answer based on available information."
+                    CHATQNA_ABSTENTION_INSTRUCTIONS
+                    if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
+                    else (
+                        "\n[Returned Documents] The knowledge base search did not return any results. "
+                        "Do not give a refusal-only reply. Briefly mention limited evidence, then continue "
+                        "with a natural, helpful, conversational response using safe general guidance. "
+                        "Avoid diagnosis, dosing, or treatment-change advice."
+                    )
                 )
                 received_prompt += abstention_instructions
             
@@ -864,9 +904,6 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         next_data["retrieved_docs"] = retrieved_docs
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
-        if logflag:
-            logger.info(f"\n[ DEBUG ] MICROSERVICE RERANK OUTPUT: {data}")
-            
         docs = []
         reranked_docs_with_scores = []
 
@@ -930,12 +967,17 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # else:
         #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
             
-        if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
+        if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true" and not is_small_talk_query(initial_query):
             abstention_instructions = (
-                CHATQNA_ABSTENTION_INSTRUCTIONS 
-                if CHATQNA_ABSTENTION_INSTRUCTIONS is not None 
-                else "\n[Retrieved Documents] The knowledge base search did not return any results. State clearly that you cannot answer based on available information."
+                CHATQNA_ABSTENTION_INSTRUCTIONS
+                if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
+                else (
+                    "\n[Retrieved Documents] The knowledge base search did not return any results. "
+                    "Do not give a refusal-only reply. Briefly mention limited evidence, then continue "
+                    "with a natural, helpful, conversational response using safe general guidance. "
+                    "Avoid diagnosis, dosing, or treatment-change advice."
                 )
+            )
             next_data["inputs"] = initial_query + abstention_instructions
         else:
             next_data["inputs"] = initial_query + "".join(f"\n[Retrieved Document]: {doc}" for doc in docs) # prompt <- change to 'prompt' if you re-introduce the code above
@@ -980,9 +1022,6 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             logger.debug(f'\nAligned output of the llm\n {next_data}\n')
     else:
         next_data = data
-
-    if logflag:
-        logger.info(f"\n[ DEBUG ] FINAL ALIGNED DATA FOR NEXT NODE:\n{json.dumps(next_data, indent=2, default=str)}\n")
 
     return next_data
         
@@ -1292,69 +1331,112 @@ class ChatQnAService:
 
     async def _get_translated_history_string(self, history: list, target_language: str) -> str:
         """
-        A helper that:
-        1. Truncates history to stay within a token limit.
-        2. Flattens the history into a single string.
-        3. Sends the string to the translation LLM.
+        Build an English history string from chat messages with translation caching.
+
+        - Messages that already carry a ``contentEn`` field (cached from a
+          previous turn) are used directly — no LLM call for those.
+        - Only messages without a cache hit are translated (concurrently, one
+          LLM call each so results stay per-message and can be individually
+          persisted back to the DB).
+        - New translations are fire-and-forgot to the backend so future turns
+          for the same messages are instant.
         """
-        
         max_translation_chars = MAX_TRANSLATION_CHARS
         current_chars = 0
         messages_to_process = []
+
         if logflag:
             logger.debug(f'Processing translation for history with {len(history)} messages.')
 
         for message in reversed(history):
-            if logflag:
-                logger.debug(f'Examining message: {message}')
-            message_chars = len(message["content"])
+            message_chars = len(message.get("content") or "")
             if current_chars + message_chars > max_translation_chars:
                 break
             messages_to_process.append(message)
             current_chars += message_chars
         messages_to_process.reverse()
 
-        
-        flattened_history_parts = []
-        for message in messages_to_process:
-            role = message.get("role", "unknown").upper()
-            content = message.get("content", "")
-            flattened_history_parts.append(f"{role}: {content}")
-        
-        flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
+        if not messages_to_process:
+            return ""
 
-        # --- Simple Translation API Call ---
-        prompt = f"Translate the following chat history to {target_language}. Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\nHISTORY:\n{flattened_history_string}"
+        # Which messages lack a cached English translation?
+        uncached_indices = [
+            i for i, msg in enumerate(messages_to_process)
+            if not msg.get("contentEn")
+        ]
 
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
-            "stream": False
-        }
+        if uncached_indices:
+            logger.info(
+                f"[TRANSLATION] {len(uncached_indices)}/{len(messages_to_process)} "
+                f"messages need translation (rest are cached)."
+            )
 
-        if logflag:
-            logger.debug(f"Payload for translation service: {payload}")
+            async def _translate_one(content: str) -> str:
+                if not content.strip():
+                    return content
+                try:
+                    return await self._translate_text_chunk(content, target_language)
+                except Exception as e:
+                    logger.warning(f"Per-message translation failed: {e}")
+                    return content
 
+            uncached_contents = [
+                messages_to_process[i].get("content", "") for i in uncached_indices
+            ]
+            translated_contents = await asyncio.gather(
+                *[_translate_one(c) for c in uncached_contents]
+            )
+
+            new_translations = []
+            for j, i in enumerate(uncached_indices):
+                msg = messages_to_process[i]
+                translated = translated_contents[j]
+                # Update in-memory so assembly below uses the translated text
+                messages_to_process[i] = {**msg, "contentEn": translated}
+                # Only persist when we have a DB key and the text actually changed
+                msg_key = msg.get("_key")
+                if msg_key and translated != msg.get("content", ""):
+                    new_translations.append({"_key": msg_key, "contentEn": translated})
+
+            if new_translations:
+                asyncio.create_task(self._persist_translations_bg(new_translations))
+        else:
+            logger.info(
+                f"[TRANSLATION] All {len(messages_to_process)} history messages "
+                f"served from contentEn cache — no LLM call needed."
+            )
+
+        # Assemble the final string
+        parts = []
+        for msg in messages_to_process:
+            role = (msg.get("role") or "unknown").lower()
+            marker = "[assistant turn]" if role == "assistant" else "[user turn]"
+            content = msg.get("contentEn") or msg.get("content", "")
+            parts.append(f"{marker} {content}")
+
+        return " |<-MSG->| ".join(parts)
+
+    async def _persist_translations_bg(self, translations: list) -> None:
+        """
+        Fire-and-forget: POST new contentEn translations to the backend so
+        future requests for the same messages skip re-translation.
+        """
         try:
-            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
-                response = await client.post(
-                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
-                    json=payload,
-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{BACKEND_SERVICE_URL}/api/chat-sessions/internal/message-translations",
+                    json={"translations": translations},
                 )
-                response.raise_for_status()
-                response_data = response.json()
-                translated_blob = response_data["choices"][0]["message"]["content"]
-                if logflag:
-                    logger.debug(f"Translated chat history: {translated_blob.strip()}")
-                return translated_blob.strip()
-
-        except httpx.TimeoutException as e:
-            logger.error(f"History translation timeout after {TRANSLATION_SERVICE_TIMEOUT} seconds. Returning history in original language. Error: {e}")
-            return flattened_history_string
+                if resp.status_code >= 300:
+                    logger.warning(
+                        f"Translation persistence returned {resp.status_code}: {resp.text[:200]}"
+                    )
+                else:
+                    logger.info(
+                        f"[TRANSLATION] Persisted {len(translations)} new contentEn entries."
+                    )
         except Exception as e:
-            logger.error(f"Translation error: {e}")
-            return flattened_history_string
+            logger.warning(f"Failed to persist message translations to backend: {e}")
 
 
     def load_language_codes(self, filepath: str) -> dict:
@@ -1428,9 +1510,6 @@ class ChatQnAService:
         """Translate long text by splitting into chunks and translating separately."""
         chunks = self._split_text_into_chunks(text, max_chars=2000)
 
-        if logflag:
-            logger.info(f"Translating {len(text)} chars in {len(chunks)} chunks to {target_lang}")
-
         # Translate chunks concurrently
         translated_chunks = await asyncio.gather(
             *[self._translate_text_chunk(chunk, target_lang, iso_code) for chunk in chunks]
@@ -1438,7 +1517,54 @@ class ChatQnAService:
 
         return " ".join(translated_chunks)
 
+    async def _direct_llm_call(
+        self,
+        messages: list,
+        parameters,
+    ) -> str:
+        """
+        Call the LLM directly — no embedding, no retrieval, no reranker.
+        Used for the ``no_search`` fast path (small talk / conversational queries).
+
+        ``messages`` is the full raw chat history as received from the frontend
+        (system directive + history turns + current user turn). The main
+        CHATQNA_SYSTEM_PROMPT is prepended as the first system message so the
+        assistant still operates within its health-companion role.
+        """
+        llm_messages = [{"role": "system", "content": CHATQNA_SYSTEM_PROMPT}]
+        for msg in messages:
+            role = (msg.get("role") or "user").strip()
+            content = msg.get("content") or ""
+            if content:
+                llm_messages.append({"role": role, "content": content})
+
+        payload = {
+            "model": parameters.model or LLM_MODEL,
+            "messages": llm_messages,
+            "temperature": parameters.temperature if parameters.temperature is not None else 0.01,
+            "max_tokens": parameters.max_tokens if parameters.max_tokens else 512,
+            "stream": False,
+        }
+        url = f"http://{LLM_SERVER_HOST_IP}:{LLM_SERVER_PORT}/v1/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        if OPENAI_API_KEY:
+            headers["Authorization"] = f"Bearer {OPENAI_API_KEY}"
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.error(f"_direct_llm_call failed: {e}")
+            return "Hey! I'm here to help. What's on your mind?"
+
     async def handle_request(self, request: Request):
+        req_t0 = time.perf_counter()
+        def _ms_since(start):
+            return round((time.perf_counter() - start) * 1000, 1)
+
         data = await request.json()
 
         # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
@@ -1453,6 +1579,7 @@ class ChatQnAService:
                 # logger.info(f"USER PROFILE RETRIEVED: {user_details}")
             except Exception as e:
                 logger.error(f"USER PROFILE ERROR: {e}")
+        logger.info(f"[LATENCY] handle_request.profile_lookup_ms={_ms_since(req_t0)}")
 
         # -----------------------------------------------
 
@@ -1462,6 +1589,7 @@ class ChatQnAService:
 
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
         logger.info(f"Parsed chat request: {chat_request}")
+        logger.info(f"[LATENCY] handle_request.parse_and_validate_ms={_ms_since(req_t0)}")
         
         retrieval_context = {}
         
@@ -1470,7 +1598,6 @@ class ChatQnAService:
                 retrieval_context = chat_request.context.model_dump(exclude_unset=True)
             except Exception:
                 retrieval_context = chat_request.context.dict(exclude_unset=True)
-        logger.info(f"TRACE_CTX [3/7] chatqna:handle_request: retrieval_context={retrieval_context}")
         # -----------------------------------------------
 
         if logflag:
@@ -1484,19 +1611,12 @@ class ChatQnAService:
         elif chat_request.language and chat_request.language != "auto":
             original_language = chat_request.language
 
-        if logflag:
-            logger.info(f"Language from frontend - context.language: {chat_request.context.language if chat_request.context else None}, direct language: {chat_request.language}, final: {original_language}")
             logger.info(f"Language debug - type: {type(original_language)}, repr: {repr(original_language)} if original_language else None")
 
         # Re-enabled language detection as fallback ---
+        lang_t0 = time.perf_counter()
         try:
-            if logflag:
-                logger.info(f"Language detection check - original_language is None: {original_language is None}, is empty string: {original_language == '' if original_language else 'N/A'}")
-
             if not original_language or original_language.strip() == "":
-                if logflag:
-                    logger.info(f"Triggering auto-detection because original_language is falsy or empty")
-
                 # Attempt to detect language from the last user message
                 last_user_content = ""
                 for msg in reversed(full_chat_history):
@@ -1504,22 +1624,13 @@ class ChatQnAService:
                         last_user_content = msg.get("content", "")
                         break
 
-                if logflag:
-                    logger.info(f"Last user content for detection (first 100 chars): {last_user_content[:100] if last_user_content else 'None'}")
-
                 if last_user_content:
                     detected_lang = detect(last_user_content)
-                    if logflag:
-                        logger.info(f"langdetect result: '{detected_lang}' (will convert to uppercase: '{detected_lang.upper()}')")
-
                     # Load supported languages to validate the detection
                     language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
 
                     # Only use detected language if it's in our supported list OR if it's 'en'
                     is_supported = detected_lang and (detected_lang.lower() in language_codes or detected_lang.lower() == 'en')
-
-                    if logflag:
-                        logger.info(f"Language validation - detected '{detected_lang}', supported: {is_supported}, in language_codes: {detected_lang.lower() in language_codes if detected_lang else 'N/A'}")
 
                     if is_supported:
                         if detected_lang.upper() != "EN":
@@ -1533,16 +1644,30 @@ class ChatQnAService:
             # Fallback to English if detection fails
             if not original_language:
                 original_language = "EN"
+        logger.info(f"[LATENCY] handle_request.language_resolution_ms={_ms_since(lang_t0)}")
+
+        # Normalize to uppercase so 'en', 'EN', 'En' all compare equal
+        if original_language:
+            original_language = original_language.strip().upper()
 
         translated_history_string = ""
-        if original_language and original_language.strip() != "EN":
+        translation_t0 = time.perf_counter()
+        if original_language and original_language != "EN":
             if logflag:
                 logger.debug(f"Original language detected: {original_language}. Proceeding with translation of chat history.")
             translated_history_string = await self._get_translated_history_string(full_chat_history, "English")
         else:
-            # If already English, flatten without translation
-            parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
+            # If already English, flatten without translation. Bracketed role
+            # markers (instead of "USER:" / "ASSISTANT:") break the autocomplete
+            # pattern Llama would otherwise follow when it sees a repeated
+            # USER/ASSISTANT sequence and continues in the user's voice.
+            parts = []
+            for msg in full_chat_history:
+                role = (msg.get('role') or '').lower()
+                marker = '[assistant turn]' if role == 'assistant' else '[user turn]'
+                parts.append(f"{marker} {msg.get('content', '')}")
             translated_history_string = " |<-MSG->| ".join(parts)
+        logger.info(f"[LATENCY] handle_request.history_prepare_ms={_ms_since(translation_t0)}")
 
         if logflag:
             logger.debug(f'Translated History String: {translated_history_string}')
@@ -1578,8 +1703,28 @@ class ChatQnAService:
         routing_filter_strategy = None
         routing_meta: dict = {"mode": "pass_through"}
         lang_for_ctx = (original_language or raw_ctx.get("language") or "EN").strip().upper()
+        retrieval_context: dict = {}
 
-        if manual:
+        # ── Query intent: detect search mode ──────────────────────────────────
+        # Fast-path (regex, free): small talk → skip router + megaservice entirely
+        # LLM-based classifier: for real queries, decides vector_search vs deep_search
+        #   while also picking the best taxonomy category (replaces old auto-router).
+        qtext = last_user_plain_text(full_chat_history) or last_translated_message_content
+
+        search_mode: str  # "no_search" | "vector_search" | "deep_search"
+        if is_small_talk_query(qtext):
+            search_mode = "no_search"
+        else:
+            search_mode = "vector_search"  # safe default; classifier may upgrade to deep_search
+
+        routing_t0 = time.perf_counter()
+
+        if search_mode == "no_search":
+            # Small talk / conversational — skip routing and megaservice entirely
+            routing_meta = {"mode": "no_search", "search_mode": "no_search", "reason": "small_talk"}
+            logger.info(f"[LATENCY] handle_request.routing_stage_ms={_ms_since(routing_t0)} mode=no_search")
+
+        elif manual:
             rc = dict(raw_ctx)
             rc.pop("skipAutoRoute", None)
             retrieval_context = strip_non_retrieval_keys(rc)
@@ -1589,20 +1734,34 @@ class ChatQnAService:
             retrieval_context.setdefault("serviceLabels", [])
             routing_meta = {
                 "mode": "manual",
+                "search_mode": "vector_search",
                 "categoryLabel": retrieval_context.get("categoryLabel"),
                 "serviceLabels": retrieval_context.get("serviceLabels") or [],
             }
+            logger.info(
+                f"[LATENCY] handle_request.routing_stage_ms={_ms_since(routing_t0)} "
+                f"mode=manual strategy=none ctx_services={len(retrieval_context.get('serviceLabels') or [])}"
+            )
+
         elif CHATQNA_AUTO_ROUTE:
+            taxonomy_t0 = time.perf_counter()
             tax = await self.user_profile_client.fetch_service_taxonomy(lang_for_ctx)
-            qtext = last_user_plain_text(full_chat_history) or last_translated_message_content
+            logger.info(f"[LATENCY] handle_request.fetch_taxonomy_ms={_ms_since(taxonomy_t0)} has_taxonomy={bool(tax)}")
             tlines = taxonomy_prompt_lines(tax) if tax else ""
             if tax and tlines.strip() and qtext.strip():
+                classify_t0 = time.perf_counter()
                 route = await classify_route_for_query(
                     question=qtext,
                     taxonomy_lines=tlines,
                     llm_host=LLM_SERVER_HOST_IP,
                     llm_port=LLM_SERVER_PORT,
                     api_key=OPENAI_API_KEY,
+                )
+                # Extract search_mode from classifier output
+                search_mode = route.get("search_mode", "vector_search") or "vector_search"
+                logger.info(
+                    f"[LATENCY] handle_request.auto_router_classify_ms={_ms_since(classify_t0)} "
+                    f"search_mode={search_mode}"
                 )
                 base_ctx = {
                     "categoryLabel": raw_ctx.get("categoryLabel") or "General",
@@ -1613,23 +1772,33 @@ class ChatQnAService:
                     base_context=base_ctx, route=route
                 )
                 routing_meta["question_excerpt"] = qtext[:200]
-                logger.info(f"TRACE_CTX chatqna:auto_route routing_meta={routing_meta}")
+                routing_meta["search_mode"] = search_mode
             else:
                 retrieval_context = strip_non_retrieval_keys({**raw_ctx, "language": lang_for_ctx})
                 if not retrieval_context.get("categoryLabel"):
                     retrieval_context["categoryLabel"] = "General"
                 retrieval_context.setdefault("serviceLabels", [])
-                routing_meta = {"mode": "auto_skipped", "reason": "no_taxonomy_or_question"}
+                routing_meta = {"mode": "auto_skipped", "search_mode": "vector_search", "reason": "no_taxonomy_or_question"}
+            logger.info(
+                f"[LATENCY] handle_request.routing_stage_ms={_ms_since(routing_t0)} "
+                f"mode={routing_meta.get('mode')} search_mode={search_mode} "
+                f"strategy={routing_filter_strategy or 'none'} "
+                f"ctx_services={len(retrieval_context.get('serviceLabels') or [])}"
+            )
+
         else:
             retrieval_context = strip_non_retrieval_keys({**raw_ctx, "language": lang_for_ctx})
             if not retrieval_context.get("categoryLabel"):
                 retrieval_context["categoryLabel"] = "General"
             retrieval_context.setdefault("serviceLabels", [])
-            routing_meta = {"mode": "auto_route_disabled"}
+            routing_meta = {"mode": "auto_route_disabled", "search_mode": "vector_search"}
+            logger.info(
+                f"[LATENCY] handle_request.routing_stage_ms={_ms_since(routing_t0)} "
+                f"mode=auto_route_disabled"
+            )
 
-        logger.info(f"TRACE_CTX [3/7] chatqna:handle_request: retrieval_context={retrieval_context}")
         if logflag:
-            logger.debug(f"Retrieval Context (final): {retrieval_context}")
+            logger.debug(f"Retrieval Context (final): {retrieval_context}  search_mode={search_mode}")
 
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
@@ -1643,87 +1812,108 @@ class ChatQnAService:
             chat_template=chat_request.chat_template if chat_request.chat_template else None,
             model=chat_request.model if chat_request.model else None,
         )
-        retriever_parameters = GenieaiRetrieverParms(
-            # in the current implementation, search_type should always be set to similarity_score_threshold, 
-            # otherwise not possible to calculate confidence scores
-            # this is currently enforced by the genieai_api_protocol (ChatCompletionRequest model)
-            search_type=chat_request.search_type if chat_request.search_type else "similarity_score_threshold",
-            k=chat_request.k if chat_request.k is not None else RETRIEVER_K,
-            fetch_k=chat_request.fetch_k if chat_request.fetch_k is not None else RETRIEVER_FETCH_K,
-            search_start=chat_request.search_start if chat_request.search_start is not None else RETRIEVER_SEARCH_START,
-            enable_traversal=chat_request.enable_traversal if chat_request.enable_traversal is not None else RETRIEVER_TRAVERSAL_ENABLED,
-            traversal_max_depth=chat_request.traversal_max_depth if chat_request.traversal_max_depth is not None else RETRIEVER_TRAVERSAL_MAX_DEPTH,
-            traversal_max_returned=chat_request.traversal_max_returned if chat_request.traversal_max_returned is not None else RETRIEVER_TRAVERSAL_MAX_RETURNED,
-            traversal_score_threshold=chat_request.traversal_score_threshold if chat_request.traversal_score_threshold is not None else RETRIEVER_TRAVERSAL_SCORE_THRESHOLD,
-            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
-            lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
-            score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
-            # Also attach context directly to retriever params so alignment does not
-            # depend on schedule kwargs propagation behavior.
-            context=retrieval_context if retrieval_context else None,
-        )
 
-        reranker_parameters = GenieaiRerankerParms(
-        	reranking_strategy=chat_request.reranking_strategy if chat_request.reranking_strategy is not None else RERANKING_STRATEGY,
-        	top_n=chat_request.top_n if chat_request.top_n is not None else RERANKER_TOP_N,
-        	reranking_threshold=chat_request.reranking_threshold if chat_request.reranking_threshold is not None else RERANKING_THRESHOLD,
-        )
+        # ── Branch on search_mode ──────────────────────────────────────────────
+        if search_mode == "no_search":
+            # Fast path: call LLM directly, skip embedding / retrieval / reranker
+            direct_t0 = time.perf_counter()
+            llm_response = await self._direct_llm_call(full_chat_history, parameters)
+            logger.info(f"[LATENCY] handle_request.direct_llm_ms={_ms_since(direct_t0)} (no_search fast path)")
+            # No retrieved docs → empty source list & zero confidence
+            source_documents_formatted = []
+            confidence_score = 0.0
+        else:
+            # Normal path: full megaservice (embedding → retriever → reranker → LLM)
+            # For vector_search, disable graph traversal to stay fast.
+            # For deep_search, respect whatever RETRIEVER_TRAVERSAL_ENABLED says.
+            force_no_traversal = (search_mode == "vector_search")
 
-        initial_inputs = {"text": last_translated_message_content}
-        if retrieval_context:
-            # Keep context in the runtime payload so it is preserved across node transitions.
-            initial_inputs["context"] = retrieval_context
+            retriever_parameters = GenieaiRetrieverParms(
+                # search_type must stay similarity_score_threshold for confidence scoring
+                search_type=chat_request.search_type if chat_request.search_type else "similarity_score_threshold",
+                k=chat_request.k if chat_request.k is not None else RETRIEVER_K,
+                fetch_k=chat_request.fetch_k if chat_request.fetch_k is not None else RETRIEVER_FETCH_K,
+                search_start=chat_request.search_start if chat_request.search_start is not None else RETRIEVER_SEARCH_START,
+                enable_traversal=(
+                    "false" if force_no_traversal
+                    else (chat_request.enable_traversal if chat_request.enable_traversal is not None else RETRIEVER_TRAVERSAL_ENABLED)
+                ),
+                traversal_max_depth=chat_request.traversal_max_depth if chat_request.traversal_max_depth is not None else RETRIEVER_TRAVERSAL_MAX_DEPTH,
+                traversal_max_returned=chat_request.traversal_max_returned if chat_request.traversal_max_returned is not None else RETRIEVER_TRAVERSAL_MAX_RETURNED,
+                traversal_score_threshold=chat_request.traversal_score_threshold if chat_request.traversal_score_threshold is not None else RETRIEVER_TRAVERSAL_SCORE_THRESHOLD,
+                distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
+                lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
+                score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
+                context=retrieval_context if retrieval_context else None,
+            )
 
-        result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs=initial_inputs,
-            llm_parameters=parameters,
-            retriever_parameters=retriever_parameters,
-            reranker_parameters=reranker_parameters,
-            full_chat_history_string=translated_history_string,
-            retrieval_context=retrieval_context,
-            retrieval_filter_strategy=routing_filter_strategy,
-            original_language=original_language,
-            user_details=user_details,
-        )
+            reranker_parameters = GenieaiRerankerParms(
+                reranking_strategy=chat_request.reranking_strategy if chat_request.reranking_strategy is not None else RERANKING_STRATEGY,
+                top_n=chat_request.top_n if chat_request.top_n is not None else RERANKER_TOP_N,
+                reranking_threshold=chat_request.reranking_threshold if chat_request.reranking_threshold is not None else RERANKING_THRESHOLD,
+            )
 
-        if logflag:
-            logger.debug(f'\nResult Dict: {result_dict}')
-            logger.debug(f'\nRuntime Graph: {runtime_graph}')
+            initial_inputs = {"text": last_translated_message_content}
+            if retrieval_context:
+                initial_inputs["context"] = retrieval_context
 
-        for node, response in result_dict.items():
-            if isinstance(response, StreamingResponse):
-                return response
-        
-        llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get("text", "Sorry, I could not generate a response.")
+            schedule_t0 = time.perf_counter()
+            result_dict, runtime_graph = await self.megaservice.schedule(
+                initial_inputs=initial_inputs,
+                llm_parameters=parameters,
+                retriever_parameters=retriever_parameters,
+                reranker_parameters=reranker_parameters,
+                full_chat_history_string=translated_history_string,
+                retrieval_context=retrieval_context,
+                retrieval_filter_strategy=routing_filter_strategy,
+                original_language=original_language,
+                user_details=user_details,
+            )
+            logger.info(f"[LATENCY] handle_request.megaservice_schedule_ms={_ms_since(schedule_t0)}")
 
-        # Strip leaked conversation markers from LLM response.
-        # The LLM sometimes echoes back the |<-MSG->| delimiters and
-        # USER:/ASSISTANT: role markers that are used internally to
-        # format chat history in the prompt.
+            if logflag:
+                logger.debug(f'\nResult Dict: {result_dict}')
+                logger.debug(f'\nRuntime Graph: {runtime_graph}')
+
+            for node, response in result_dict.items():
+                if isinstance(response, StreamingResponse):
+                    return response
+
+            llm_response = result_dict.get(self._find_node_key("llm", result_dict), {}).get("text", "Sorry, I could not generate a response.")
+
+            # Source documents and confidence (only available from megaservice)
+            rerank_key = self._find_node_key("rerank", result_dict)
+            retriever_key = self._find_node_key("retriever", result_dict)
+            source_node_key = rerank_key if rerank_key else retriever_key
+            source_node_output = result_dict.get(source_node_key, {})
+            retrieved_docs_with_scores = source_node_output.get("retrieved_docs", [])
+            retriever_node_output = result_dict.get(retriever_key, {})
+            file_id_pairs = retriever_node_output.get("file_id_pairs", {})
+
+        # Strip leaked conversation markers from the LLM response. The LLM
+        # sometimes echoes the internal delimiters and turn markers used
+        # in the prompt; they're prompt scaffolding, not part of the reply.
         llm_response = re.sub(r'\s*\|<-MSG->\|\s*', '\n', llm_response)
         llm_response = re.sub(r'^(USER|ASSISTANT):\s*', '', llm_response, flags=re.MULTILINE)
+        llm_response = re.sub(r'\[(?:user|assistant)\s+turn\]\s*', '', llm_response, flags=re.IGNORECASE)
+        # If the model autocompleted into a "[user turn] ..." block (the bug
+        # this format change is meant to prevent), drop everything from that
+        # leak onward — keep only the assistant turn that came first.
+        llm_response = re.split(
+            r'\n\s*\[user\s+turn\]', llm_response, maxsplit=1, flags=re.IGNORECASE
+        )[0].strip()
+        logger.info(f"[LATENCY] handle_request.total_ms={_ms_since(req_t0)}")
         
-        if original_language and original_language.strip() != "EN":
-            if logflag:
-                logger.info(f"Translation requested - original_language: '{original_language}' (type: {type(original_language).__name__})")
-
+        if original_language and original_language != "EN":
             # Load Language Codes
             language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
-
-            if logflag:
-                logger.info(f"Language codes loaded - keys: {list(language_codes.keys())[:10]}... (total: {len(language_codes)})")
 
             # Fallback logic for language codes. If not in map, use the original code.
             target_lang_name = original_language
             lookup_key = original_language.lower()
 
-            if logflag:
-                logger.info(f"Looking up language code: '{lookup_key}' in language_codes")
-
             if lookup_key in language_codes:
                 target_lang_name = language_codes[lookup_key]
-                if logflag:
-                    logger.info(f"Found language code mapping: '{lookup_key}' -> '{target_lang_name}'")
             else:
                 logger.warning(f"Warning: Language '{original_language}' not found in language codes (lookup key: '{lookup_key}'). Attempting to translate using code directly.")
 
@@ -1732,8 +1922,6 @@ class ChatQnAService:
 
             try:
                 final_text_response = await self._translate_with_chunking(llm_response, target_lang_name, original_language)
-                if logflag:
-                    logger.info(f"Translation completed successfully")
             except Exception as e:
                 logger.error(f"Translation failed: {e}, returning original response")
                 final_text_response = llm_response
@@ -1743,32 +1931,21 @@ class ChatQnAService:
         if logflag:
             logger.debug(f'\nFinal Text Response: {final_text_response}')
 
-        rerank_key = self._find_node_key("rerank", result_dict)
-        retriever_key = self._find_node_key("retriever", result_dict)
-        
-        source_node_key = rerank_key if rerank_key else retriever_key
-
-        source_node_output = result_dict.get(source_node_key, {}) # reranker microservice output or retriever microservice output
-        retrieved_docs_with_scores = source_node_output.get("retrieved_docs", []) # downstream_black_list, id, text, score
-
-        retriever_node_output = result_dict.get(retriever_key, {})
-        file_id_pairs = retriever_node_output.get("file_id_pairs", {})
-
-        # Format the source documents list
-        source_documents_formatted = []
+        # Format source documents (only populated for vector_search / deep_search paths)
         scores = []
         source_documents_file_ids = []
+        source_documents_formatted = source_documents_formatted if search_mode == "no_search" else []
+        # retrieved_docs_with_scores / file_id_pairs only exist on the megaservice path
+        _retrieved_docs = retrieved_docs_with_scores if search_mode != "no_search" else []
+        _file_id_pairs = file_id_pairs if search_mode != "no_search" else {}
 
-        if logflag:
-            logger.info(f"\n\n[ DEBUG ] retrieved docs with scores: {retrieved_docs_with_scores}\n")
-
-        for item in retrieved_docs_with_scores:
+        for item in _retrieved_docs:
             doc_id_by_orchestrator = item.get("id", "N/A")
-            if doc_id_by_orchestrator not in file_id_pairs:
+            if doc_id_by_orchestrator not in _file_id_pairs:
                 logger.warning(f"Warning: Document ID {doc_id_by_orchestrator} not found in file_id_pairs mapping.")
                 continue
             else:
-                file_id = file_id_pairs[doc_id_by_orchestrator]
+                file_id = _file_id_pairs[doc_id_by_orchestrator]
                 if not file_id:
                     logger.warning(f"Warning: No File ID mapped for Document ID {doc_id_by_orchestrator}.")
                     continue
@@ -1829,6 +2006,9 @@ class ChatQnAService:
         # Construct the final JSON payload
         final_response_payload = {
             "response": final_text_response,
+            # Include the raw English LLM output so the backend can cache it as
+            # contentEn on the assistant message (avoids re-translating history).
+            "response_en": llm_response if original_language and original_language != "EN" else None,
             "metadata": {
                 "source_documents": source_documents_formatted,
                 "confidence_score": round(confidence_score, 2),
@@ -1837,8 +2017,6 @@ class ChatQnAService:
         }
 
         # Return as a JSONResponse
-        if logflag:
-            logger.info(f'Megaservice output payload: {final_response_payload}')
         return final_response_payload
 
     def start(self):

@@ -645,7 +645,6 @@ services:
       --max_model_len ${VLLM_MAX_MODEL_LEN:-2048}
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-64}
       --dtype=${VLLM_DTYPE:-half}
-      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA

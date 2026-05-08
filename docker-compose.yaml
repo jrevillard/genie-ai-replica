@@ -442,7 +442,7 @@ services:
       # Logging (error, warn, info, debug)
       - LOG_LEVEL=${LOG_LEVEL:-info}
       # CORS (deployment-specific, localhost defaults)
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC:-'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090}
     networks:
       - genieai_network
@@ -634,24 +634,26 @@ services:
   vllm-translation-guardrail:
     profiles: [opea]
     restart: unless-stopped
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.10.0
     # Internal only
     # ports:
-    #   - "9031:9031"
+    #   - "${VLLM_TRANSLATION_SERVICE_PORT:-9031}:${VLLM_TRANSLATION_SERVICE_PORT:-9031}"
     command: >
       --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
       --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
-      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-fp8}
-      --dtype=${VLLM_TRANSLATION_DTYPE:-half}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
       --port ${VLLM_TRANSLATION_SERVICE_PORT:-9031}
       --no-enable-chunked-prefill
       --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
+      --chat-template-content-format openai
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    depends_on:
+      vllm:
+        condition: service_healthy
     volumes:
       - hf_cache:/root/.cache/huggingface
     networks:

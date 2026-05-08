@@ -1,920 +1,955 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
-status: complete
+stepsCompleted: [1, 2, 3]
 inputDocuments:
   - '_bmad-output/planning-artifacts/prd.md'
   - '_bmad-output/planning-artifacts/architecture.md'
-  - '_bmad-output/planning-artifacts/validation-prd.md'
 ---
 
 # genie-ai - Epic Breakdown
 
 ## Overview
 
-This document provides the complete epic and story breakdown for genie-ai Mobile OIDC Migration, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
+This document provides the complete epic and story breakdown for the Testing Framework initiative, decomposing the requirements from the PRD and Architecture into implementable stories. Stories are organized by user value and will be created as GitLab Epics and Issues.
 
 ## Requirements Inventory
 
 ### Functional Requirements
 
-- FR1: A user can sign in to the app using their institution's Keycloak credentials via the device system browser
-- FR2: A user can complete the Authorization Code + PKCE flow without the app handling their credentials directly
-- FR3: A user who already has an active Keycloak session in their device browser is automatically authenticated (SSO) without re-entering credentials
-- FR4: A user can sign out, which clears local tokens and terminates the Keycloak session via the OIDC logout endpoint
-- FR5: The app silently refreshes the access token using the refresh token when the access token expires, without user interaction, and stores the new refresh token returned by Keycloak
-- FR6: The app checks token validity when the app returns to foreground (AppLifecycleState.resumed) and transitions to the login screen if the refresh token has expired
-- FR7: The app detects when a token refresh fails (expired refresh token or revoked session) and transitions to the login screen with an explanatory message
-- FR8: The app detects when an API call returns 401 and attempts a silent token refresh before falling back to the login screen
-- FR9: The app stores authentication tokens (access token, refresh token, ID token) in the platform secure storage
-- FR10: The app provides an auth state service that exposes the current authentication state (authenticated/unauthenticated), valid access token, and user identity claims to downstream consumers
-- FR11: The app automatically includes a valid access token as a Bearer token in the Authorization header of all API requests to the backend
-- FR12: The app displays a "No internet connection" message within 500ms of network loss detection during login, token refresh, or API calls
-- FR13: The app recovers gracefully from a deep link callback failure (network timeout, lost packet) and allows the user to retry the login flow
-- FR14: The app displays a specific error state with a user-facing message and a recovery action within 2 seconds of any authentication operation failure, and never remains in an indefinite loading state for more than 10 seconds without user feedback
-- FR15: A user can reset their password by tapping "Forgot password" on the Keycloak login page in the system browser
-- FR16: A password reset link received by email opens the Keycloak password reset flow in the system browser (not intercepted by the app)
-- FR17: Each institutional deployment has its own dedicated build with a unique app ID, Keycloak client, backend URL, and deep link scheme — all configured at build-time
-- FR18: Each deployment has its own Keycloak client configured for secure mobile authentication with no client secret in the app binary
-- FR19: A deployment operator can create a new deployment by following the documented guide (copy flavor template, create Keycloak client, build, test, ship)
-- FR20: The app registers a custom URL scheme per deployment for the OIDC authorization callback
-- FR21: The app handles incoming cryptographic domain-verified deep links for password reset and email verification
-- FR22: The app discovers OIDC endpoints (authorization, token, userinfo, end_session) from the identity provider's standard discovery document using the Keycloak URL configured at build-time
-- FR23: The app enforces valid TLS certificate validation for all network connections (no certificate bypass)
-- FR24: The app removes all legacy authentication code (custom login endpoints, password hashing, plaintext password handling)
-- FR25: The app does not store authentication tokens, credentials, or PII in plaintext storage or logs
-- FR26: The deployment guide documents the complete process for onboarding a new institutional deployment (deployment configuration, Keycloak client creation, deep link setup, build, test)
-- FR27: The deployment guide documents the network prerequisites for air-gapped deployments (device must reach Keycloak on internal network, DNS configuration)
-- FR28: The deployment guide documents the OS version policy trade-off (technical minimums vs. institutional security policies)
-- FR29: Unit tests cover the core auth logic (token refresh, session validation, error handling) in platform-agnostic code
-- FR30: Integration tests cover the login, token refresh, logout, and error scenarios on Android
-- FR31: The test suite runs in CI on Android for continuous validation
+- FR1: The CI pipeline runs lint checks across all JavaScript, Python, and Dart components on every merge request
+- FR2: The CI pipeline executes unit tests for all 5 components (backend, frontend, OPEA microservices, document-repository, mobile) on every merge request
+- FR3: The CI pipeline executes contract tests validating API request/response schemas on every merge request
+- FR4: The CI pipeline executes configuration validation tests on every merge request
+- FR5: The CI pipeline blocks merge requests when any mandatory test stage fails
+- FR6: The CI pipeline produces JUnit XML test reports as artifacts for all test runners
+- FR7: The CI pipeline executes integration tests on a scheduled basis against deployed infrastructure
+- FR8: The CI pipeline executes RAG quality regression tests on a scheduled basis
+- FR9: The test suite validates API route contracts for all route groups (auth, chat, analytics, admin, files, categories)
+- FR10: The test suite verifies service layer business logic for all backend services (not limited to auth)
+- FR11: The test suite validates middleware behavior (authentication, authorization, error handling, rate limiting)
+- FR12: The test suite tests route handlers via HTTP requests against an in-memory Express application
+- FR13: The test suite validates component rendering and user interaction for critical UI components (ChatBot, NavBar, UserProfile)
+- FR14: The test suite verifies Vuex store state management for all store modules
+- FR15: The test suite validates HTTP service interactions with mocked API responses
+- FR16: The test suite verifies authentication state transitions and token management in the UI
+- FR17: The test suite validates the retriever's hybrid search logic (vector similarity, graph traversal, label filtering) with mocked ArangoDB
+- FR18: The test suite validates the dataprep extraction pipeline (multi-format parsing, chunking, labeling) with mocked dependencies
+- FR19: The test suite validates the reranker's score validation and top-K constraint enforcement with mocked TEI
+- FR20: The test suite validates core type definitions, protocols, and constants
+- FR21: The test suite validates custom overlay interfaces that deviate from standard OPEA component contracts
+- FR22: The test suite validates file upload, download, search, and delete endpoint behavior
+- FR23: The test suite verifies security middleware (ClamAV virus scanning, file type validation, authentication)
+- FR24: The test suite validates metadata and label service business logic
+- FR25: The test suite executes existing service-layer tests (~104 tests) within the CI pipeline
+- FR26: The test suite reports Flutter test results in a CI-compatible format
+- FR27: The validation suite verifies that all environment variables referenced in docker-compose are documented in the env template
+- FR28: The validation suite verifies that required environment variables have no undefined defaults
+- FR29: The validation suite detects conflicting or orphaned environment variable configurations
+- FR30: The validation suite validates environment variable values against hardware-specific parameter ranges (GPU profiles)
+- FR31: The validation suite verifies feature flag interdependencies (e.g., DEPLOY_OPEA affecting expected service topology)
+- FR32: The quality suite executes predefined queries against a known document corpus and measures retrieval accuracy
+- FR33: The quality suite computes RAGAS metrics (faithfulness, answer relevance, context precision, context recall) for RAG pipeline outputs
+- FR34: The quality suite compares RAGAS scores against configurable thresholds and reports pass/fail
+- FR35: The quality suite validates RAG pipeline stage integrity (embedding dimensions, reranker top-K, retriever score thresholds)
+- FR36: The framework provides version-controlled test fixtures (mocks, stubs, factory data) for each component
+- FR37: The framework provides test document corpora in multiple formats (.txt, .md, .pdf, .xlsx, .docx) for RAG quality testing
+- FR38: The framework provides controlled ArangoDB test database states (graph structures, vector embeddings) for integration tests
+- FR39: The framework provides environment-specific configuration profiles for different deployment targets and GPU hardware
+- FR40: The test framework produces structured output (JSON, JUnit XML) consumable by the OpenTelemetry pipeline
+- FR41: The test framework propagates OTel trace context in test fixtures for distributed trace correlation
+- FR42: The test framework provides assertion helpers for validating structured JSON log output from services under test
+- FR43: Test execution results are queryable via the MELT Provider API for post-test diagnostics
+- FR44: Test health metrics (pass rates, execution times, flaky test detection) are visualizable in Grafana dashboards
+- FR45: The framework leverages AI to generate test scaffolding (boilerplate test files, mock factories, fixture generators) from existing code
+- FR46: The framework leverages AI to suggest test cases based on code changes and API specifications
 
 ### NonFunctional Requirements
 
-- NFR1: Silent token refresh completes within 2 seconds for 95th percentile under normal network conditions, measured by automated integration test recording wall-clock time from refresh initiation to completion over 100 runs on a reference network (50ms RTT, 10Mbps)
-- NFR2: The login screen is displayed within 1 second of app launch when no valid session exists, measured by platform startup time instrumentation (cold start)
-- NFR3: The app processes the OIDC callback and establishes an authenticated session within 1 second of receiving the deep link redirect from the system browser, measured by timestamp delta between deep link intent received and auth state updated
-- NFR4: All authentication error states display a user-visible error message and a recovery action (retry button or return to login) within 2 seconds of error detection. The app transitions to one of three defined states after any auth error: login screen, error screen with retry, or authenticated screen. Verified by automated UI tests triggering each error condition and asserting message visibility within 2 seconds
-- NFR5: After any authentication error, the app is in one of three defined terminal states (login screen, error screen with recovery action, or authenticated screen). The app never remains in an intermediate loading state for more than 10 seconds without user feedback. Verified by state machine unit tests covering all error transitions
-- NFR6: The auth state service recalculates state on every token operation. An expired or invalid token immediately triggers a state transition to unauthenticated. Verified by unit tests asserting no combination of expired token + authenticated state is possible
-- NFR7: The app binary size increase from the OIDC migration is less than 8MB per platform (Android APK, iOS IPA) compared to the pre-migration build, measured by comparing release build output sizes before and after migration
-- NFR8: 100% of non-authentication user data (conversation history, preferences, cached content) is preserved across the app update, verified by pre/post update data comparison test on a reference device
-- NFR9: Authentication failures (login, refresh, logout) are logged at WARN level with the following fields: error_code, keycloak_endpoint, http_status, network_reachable, timestamp. Logs are accessible via device diagnostics (adb logcat / Xcode console) for 30 days. Verified by automated test injecting auth failures and asserting log output contains all required fields
-- NFR10: All authentication screens support platform-native accessibility features (VoiceOver on iOS, TalkBack on Android). All interactive elements have accessibility labels. Minimum touch target size is 44x44 points (iOS) / 48x48dp (Android). Authentication state is not indicated by color alone. Verified by platform accessibility inspector tools (Accessibility Inspector on iOS, Accessibility Scanner on Android)
+- NFR1: Unit and contract test stages complete in under 10 minutes total on every merge request
+- NFR2: Configuration validation completes in under 2 minutes
+- NFR3: Full E2E test suite (Playwright) completes in under 30 minutes
+- NFR4: Individual component test suites execute in isolation without waiting for other components (parallel execution where possible)
+- NFR5: RAG quality regression suite completes in under 60 minutes against a deployed environment
+- NFR6: All unit and contract tests produce identical results across repeated executions with the same inputs (no flaky tests in mandatory CI gates)
+- NFR7: Test execution is independent of execution order — no test depends on side effects from another test
+- NFR8: Tests requiring external services (ArangoDB, Redis, Keycloak, vLLM) use mocked dependencies in CI; real service integration runs only in scheduled pipelines against deployed infrastructure
+- NFR9: GPU-dependent tests are conditionally skipped in CI environments without GPU access, with clear skip reporting
+- NFR10: Test fixtures are version-controlled and produce reproducible results across environments
+- NFR11: Test code follows the same linting and formatting standards as production code (ESLint, Ruff, Flutter analyze)
+- NFR12: Test file structure mirrors the production code structure within each component
+- NFR13: Mock and fixture definitions are centralized in __tests__/mocks/ (backend, frontend) and tests/ (Python) directories, not duplicated across test files
+- NFR14: AI-assisted test generation produces code that passes linting and follows project conventions
+- NFR15: Adding a new test for an existing feature requires changes in only one file (the test file) — no cross-file fixture setup for standard cases
+- NFR16: The CI pipeline operates identically across GitLab shared runners and self-hosted runners
+- NFR17: All test runners produce JUnit XML reports in a format consumable by GitLab CI test reporting
+- NFR18: The test framework supports execution in Docker Compose, Docker Swarm, and Kubernetes environments
+- NFR19: Python tests run on Python 3.10+; Node.js tests run on Node.js 18+; Dart tests run on Flutter 3.10+
+- NFR20: Test output formats are compatible with OpenTelemetry ingestion (structured JSON, trace context propagation) for MELT integration in Sprint 23
+- NFR21: Backend tests use CommonJS module syntax exclusively (no ESM imports)
+- NFR22: Frontend component tests use Options API exclusively (no Composition API patterns)
+- NFR23: Python test files include ITU copyright headers as required by project convention
+- NFR24: All Python test code passes Ruff linting and formatting checks
 
 ### Additional Requirements
 
-From Architecture document:
+- Backend `index.js` (1,193 lines) must export `createApp()` before any route testing can begin — prerequisite refactor with its own tests
+- `shared/lib/db-connection-service.js` frozen singleton must be mocked at module level via `moduleNameMapper` in all backend tests
+- OPEA `comps` library is vendored at build time (`docarray` → `opea_docarray` rename in Dockerfile) — cannot pip-install locally, all OPEA dependencies must be mocked in tests
+- pytest must be configured from scratch for `genie-ai-overlay/` — zero test infrastructure exists (5,018 lines of Python untested)
+- GitLab CI pipeline must be built from scratch (no `.gitlab-ci.yml` exists)
+- JUnit XML reporting: `jest-junit` v17 for JS, built-in `junitxml` for pytest, `junitreport` for Flutter, built-in `junit` for Playwright
+- Test execution tiers: mandatory (lint, unit, contract, config on every MR), scheduled (integration, E2E nightly), on-demand (RAG quality, manual GPU)
+- MELT instrumentation hooks must function independently in Sprint 22, consumable by Sprint 23 OTel pipeline without code changes
+- Hybrid mock architecture: centralized shared factories in `__tests__/mocks/` and `tests/conftest.py` + co-located test-specific overrides
+- PCCQ organizing principle: Pipeline, Contract, Configuration, Quality pillars
+- 80+ new files/directories across 5 components plus shared infrastructure at root `tests/`
+- Implementation sequence: createApp refactor → pytest config → CI pipeline → per-component suites → config validation → MELT hooks → RAG fixtures
+- GitLab Ultimate Epics for grouping, Issues for stories, all in `un/itu/genie-ai` on `opensource.unicc.org`
 
-- **Token passthrough architecture** — No GENIE.AI JWT issued. Keycloak tokens validated directly at backend via JWKS, JIT provisioning by {iss}#{sub}, downstream headers (X-User-Id, X-User-Roles, X-Issuer). Mobile sends raw Keycloak access token as Bearer token. Zero or minimal backend changes expected.
-- **Riverpod as state management** — `flutter_riverpod` ^3.0.0 for reactive state. NotifierProvider for auth and future reactive states. ProviderScope wraps the app in main.dart.
-- **TokenStorage injectable abstraction** — Abstract class with SecureTokenStorage (prod, flutter_secure_storage) and InMemoryTokenStorage (test). Constructor injection for testability without platform dependencies. Atomicity via single JSON blob or startup validation.
-- **Auth state machine — 3 states** — `AuthStatus { authenticated, unauthenticated, error }` with `AuthState` class containing userId, displayName, errorMessage, retryable flag. No initial state, no retryCount.
-- **AuthInterceptor (http.BaseClient override)** — Bearer token injection + 401→refresh→retry with single retry. Completer<String?> mutex for concurrent refresh serialization. Request cloning before first send (BaseRequest single-use).
-- **Logout via Future.wait** — Parallel calls to POST /api/auth/logout (backend) and Keycloak end_session_endpoint (direct), each individually wrapped in .catchError. deleteAll() runs regardless. No backend changes required.
-- **Flavor config system** — lib/config/ directory with KeycloakConfig data class + getConfig(). Environment configs (dev, staging, e2e) at config/ root. Deployment flavors in config/flavors/ (e.g., itu.dart). Selected via --dart-define=FLAVOR=<name> at build time. No code generation (no flavorizr, no build_runner).
-- **AppLifecycle integration** — WidgetsBindingObserver on AuthNotifier. validateTokens() on AppLifecycleState.resumed (non-blocking, silent). addObserver in constructor, removeObserver via ref.onDispose().
-- **Deep link dual mechanism** — Custom URL scheme per flavor for OIDC callback (genieai://callback). Universal Links (iOS) / App Links (Android) for password reset — requires server-side files (apple-app-site-association, assetlinks.json) on each deployment's Keycloak domain.
-- **flutter_secure_storage replaces shared_preferences entirely** — EncryptedSharedPreferences on Android, Keychain on iOS. Remove shared_preferences dependency.
-- **Persistent file-based logging** — NFR9 requires 30-day retention. dart:developer log() does not persist and is stripped in release builds. Use lightweight persistent logging package with FileOutput sink, automatic rotation/retention.
-- **Account management migration** — SettingsComponent password change/delete flows replaced by Keycloak account console (same pattern as web frontend). No custom app screens needed for account management post-migration.
-- **No starter template** — Brownfield project. Existing codebase at mobile/genie_ai_mobile/ evolves. Legacy auth components deleted, new auth services added.
-- **Implementation sequence** — (1) TokenStorage, (2) AuthState, (3) AuthNotifier, (4) Riverpod providers, (5) AuthInterceptor, (6) AppLifecycle + deep link, (7) Flavor config, (8) Legacy removal, (9) badCertificateCallback removal.
+### UX Design Requirements
+
+None — testing framework has no user-facing UI.
 
 ### FR Coverage Map
 
 | FR | Epic | Description |
-|----|------|-------------|
-| FR1 | Epic 1 | Sign in via system browser |
-| FR2 | Epic 1 | Authorization Code + PKCE |
-| FR3 | Epic 1 | SSO with active Keycloak session |
-| FR4 | Epic 2 | Logout (local + Keycloak end_session) |
-| FR5 | Epic 2 | Silent token refresh |
-| FR6 | Epic 3 | Token check on foreground resume |
-| FR7 | Epic 2 | Detect refresh failure → login screen |
-| FR8 | Epic 2 | 401 → silent refresh → login fallback |
-| FR9 | Epic 1 | Secure token storage (platform keystore) |
-| FR10 | Epic 2 | Auth state service for downstream consumers |
-| FR11 | Epic 2 | Bearer token auto-injection on API calls |
-| FR12 | Epic 3 | Network error message within 500ms |
-| FR13 | Epic 3 | Deep link callback failure recovery |
-| FR14 | Epic 3 | Error state with recovery action within 2s |
-| FR15 | Epic 5 | Password reset via Keycloak browser |
-| FR16 | Epic 5 | Deep link routing for password reset |
-| FR17 | Epic 4 | Dedicated build per deployment |
-| FR18 | Epic 4 | Keycloak client per deployment (public, PKCE) |
-| FR19 | Epic 4 | Documented deployment onboarding guide |
-| FR20 | Epic 4 | Custom URL scheme per deployment |
-| FR21 | Epic 5 | Universal Links / App Links for password reset |
-| FR22 | Epic 1 | OIDC discovery from .well-known/openid-configuration |
-| FR23 | Epic 6 | TLS certificate enforcement (remove badCertificateCallback) |
-| FR24 | Epic 6 | Legacy auth code removal |
-| FR25 | Epic 1 | No tokens/PII in plaintext storage or logs |
-| FR26 | Epic 4 | Deployment guide (config, Keycloak client, deep links, build, test) |
-| FR27 | Epic 4 | Air-gapped deployment network prerequisites |
-| FR28 | Epic 4 | OS version policy trade-off documentation |
-| FR29 | Epic 6 | Unit tests for auth logic (platform-agnostic Dart) |
-| FR30 | Epic 6 | Integration tests on Android |
-| FR31 | Epic 6 | CI test suite on Android |
+|---|---|---|
+| FR1 | Epic 1 | CI lint checks on every MR |
+| FR2 | Epic 1 | CI unit tests for all 5 components on every MR |
+| FR3 | Epic 1 | CI contract tests on every MR |
+| FR4 | Epic 1 | CI config validation on every MR |
+| FR5 | Epic 1 | CI blocks MR on failure |
+| FR6 | Epic 1 | JUnit XML test reports |
+| FR7 | Epic 1 | Scheduled integration tests |
+| FR8 | Epic 1 | Scheduled RAG quality tests |
+| FR9 | Epic 2 | Backend route contract tests |
+| FR10 | Epic 2 | Backend service layer tests |
+| FR11 | Epic 2 | Backend middleware tests |
+| FR12 | Epic 2 | Backend HTTP route tests via Supertest |
+| FR13 | Epic 3 | Frontend component rendering tests |
+| FR14 | Epic 3 | Vuex store state management tests |
+| FR15 | Epic 3 | Frontend HTTP service tests |
+| FR16 | Epic 3 | Auth state transition tests |
+| FR17 | Epic 4 | Retriever hybrid search tests |
+| FR18 | Epic 4 | Dataprep extraction pipeline tests |
+| FR19 | Epic 4 | Reranker score validation tests |
+| FR20 | Epic 4 | Core type/protocol tests |
+| FR21 | Epic 4 | Custom overlay interface tests |
+| FR22 | Epic 5 | File CRUD endpoint tests |
+| FR23 | Epic 5 | Security middleware tests |
+| FR24 | Epic 5 | Metadata/label service tests |
+| FR25 | Epic 1 | Mobile tests in CI |
+| FR26 | Epic 1 | Flutter CI-compatible reporting |
+| FR27 | Epic 6 | Env var documentation coverage |
+| FR28 | Epic 6 | Required var default validation |
+| FR29 | Epic 6 | Conflicting config detection |
+| FR30 | Epic 6 | Hardware profile range validation |
+| FR31 | Epic 6 | Feature flag interdependency validation |
+| FR32 | Epic 8 | RAG corpus query execution |
+| FR33 | Epic 8 | RAGAS metric computation |
+| FR34 | Epic 8 | Threshold comparison and pass/fail |
+| FR35 | Epic 8 | Pipeline stage integrity validation |
+| FR36 | Epics 2–5 | Version-controlled test fixtures (distributed per component) |
+| FR37 | Epic 8 | Multi-format document corpora |
+| FR38 | Epic 8 | ArangoDB test database states |
+| FR39 | Epic 6 | Environment-specific config profiles |
+| FR40 | Epic 7 | Structured JSON/JUnit output |
+| FR41 | Epic 7 | OTel trace context propagation |
+| FR42 | Epic 7 | Structured log assertion helpers |
+| FR43 | Epic 7 | MELT Provider API queryability |
+| FR44 | Epic 7 | Grafana test health dashboards |
+| FR45 | Epic 9 | AI test scaffolding generation |
+| FR46 | Epic 9 | AI test case suggestions |
 
 ## Epic List
 
-### Epic 1: Secure Keycloak Login
-A user can sign in to the app using their institution's Keycloak credentials via the system browser. Tokens are stored securely in the platform keystore.
-**FRs covered:** FR1, FR2, FR3, FR9, FR22, FR25
-**Depends on:** None (foundation epic)
+### Epic 1: Merge with Confidence — CI/CD Pipeline
+The developer merges a feature branch and the CI pipeline automatically runs lint, unit tests, contract tests, and configuration validation across all 5 components, blocking the merge request on failure with clear pass/fail reporting via JUnit XML.
+**FRs covered:** FR1–FR8, FR25–FR26
+**Sprint:** 22 (MVP)
 
-### Epic 2: Persistent Authenticated Session
-A user stays logged in across token expiry (silent refresh), API calls are automatically authenticated (Bearer token), and the user can sign out completely (local + Keycloak session).
-**FRs covered:** FR4, FR5, FR7, FR8, FR10, FR11
-**Depends on:** Epic 1
+### Epic 2: Backend API Test Suite
+The developer writes and runs tests for backend route handlers, service layer business logic, and middleware behavior against an in-memory Express application with deterministic mocks.
+**FRs covered:** FR9–FR12, FR36 (backend fixtures)
+**Sprint:** 22 (MVP)
 
-### Epic 3: Reliable Auth Experience
-A user sees clear error messages when auth fails, the app recovers gracefully from network issues, and background sessions are validated on resume.
-**FRs covered:** FR6, FR12, FR13, FR14
-**Depends on:** Epic 2
+### Epic 3: Frontend Component Test Suite
+The developer writes and runs tests for Vue components (ChatBot, NavBar, UserProfile), Vuex store modules, and HTTP service interactions using Options API patterns.
+**FRs covered:** FR13–FR16, FR36 (frontend fixtures)
+**Sprint:** 22 (MVP)
 
-### Epic 4: Institutional Deployment
-Each institution gets its own branded build with a dedicated Keycloak client, deep link scheme, and app store presence. Deployment operators can onboard new institutions following a documented guide.
-**FRs covered:** FR17, FR18, FR19, FR20, FR26, FR27, FR28
-**Depends on:** Epic 1, Epic 2
+### Epic 4: OPEA Microservice Test Suite
+The developer writes and runs pytest tests for the retriever's hybrid search, dataprep extraction pipeline, reranker score validation, core types, and custom overlay interfaces — all with mocked ArangoDB, vLLM, and TEI dependencies.
+**FRs covered:** FR17–FR21, FR36 (OPEA fixtures)
+**Sprint:** 22 (MVP)
 
-### Epic 5: Account Recovery & Deep Links
-A user can reset their password via the Keycloak browser. Password reset and email verification links open correctly in the system browser (not intercepted by the app).
-**FRs covered:** FR15, FR16, FR21
-**Depends on:** Epic 1
+### Epic 5: Document Repository Test Suite
+The developer writes and runs tests for file upload/download/search/delete endpoints, ClamAV security scanning, file type validation, and metadata service business logic.
+**FRs covered:** FR22–FR24, FR36 (doc-repo fixtures)
+**Sprint:** 22 (MVP)
 
-### Epic 6: Legacy Removal & Security Hardening
-The app is cleaned of all legacy authentication code, enforces valid TLS certificates, and has comprehensive auth tests running in CI.
-**FRs covered:** FR23, FR24, FR29, FR30, FR31
-**Depends on:** Epic 1, Epic 2
+### Epic 6: Configuration Integrity Validation
+The DevOps engineer runs the configuration validation suite and sees clear pass/fail results for env var coverage, required secret defaults, conflicting configurations, hardware-specific parameter ranges, and feature flag interdependencies.
+**FRs covered:** FR27–FR31, FR39
+**Sprint:** 22 (MVP)
 
-<!-- Repeat for each epic in epics_list (N = 1, 2, 3...) -->
+### Epic 7: MELT-Ready Test Instrumentation
+The developer can trace test failures through structured log assertions and mock trace context, while Sprint 23's MELT observability platform can consume test telemetry without code changes.
+**FRs covered:** FR40–FR44
+**Sprint:** 22 (hooks) → 23 (MELT integration)
 
-## Epic 1: Secure Keycloak Login
+### Epic 8: RAG Quality Assurance
+The QA engineer runs the RAG quality regression suite against a curated document corpus, sees RAGAS metrics compared against configurable thresholds, and flags quality degradation before release.
+**FRs covered:** FR32–FR35, FR37–FR38
+**Sprint:** 22 (fixture structure) → 23 (RAGAS pipeline)
 
-A user can sign in to the app using their institution's Keycloak credentials via the system browser. Tokens are stored securely in the platform keystore.
+### Epic 9: AI-Assisted Test Generation
+The developer leverages AI to generate test scaffolding (boilerplate, mock factories, fixture generators) from existing code and receive test case suggestions based on code changes and API specifications.
+**FRs covered:** FR45–FR46
+**Sprint:** 23
 
-### Story 1.1: Secure Token Storage Foundation
+## Epic 1: Merge with Confidence — CI/CD Pipeline
 
-As a mobile app,
-I want a secure token storage abstraction backed by the platform keystore,
-So that authentication tokens are encrypted at rest and the auth stack is fully testable without platform dependencies.
+The developer merges a feature branch and the CI pipeline automatically runs lint, unit tests, contract tests, and configuration validation across all 5 components, blocking the merge request on failure with clear pass/fail reporting via JUnit XML.
 
-**Acceptance Criteria:**
+### Story 1.1: Configure JUnit XML Reporting for All Test Runners
 
-**Given** the app dependencies are configured
-**When** `flutter_secure_storage`, `flutter_appauth`, `flutter_riverpod`, and `app_links` are added to `pubspec.yaml`
-**Then** all packages resolve successfully with `flutter pub get`
-**And** `shared_preferences` and `crypto` remain in `pubspec.yaml` (removed later in Epic 6)
-
-**Given** the `TokenStorage` abstract class is implemented
-**When** `SecureTokenStorage.saveTokens()` is called with accessToken, idToken, refreshToken, and expiresIn
-**Then** all values are stored as a single JSON blob under one key (`auth_tokens`) in the platform keystore
-**And** `expiresIn` is stored as the calculated absolute expiration date (`DateTime.now().add(Duration(seconds: expiresIn))`)
-
-**Given** `SecureTokenStorage` has stored tokens
-**When** `getAccessToken()`, `getIdToken()`, `getRefreshToken()`, or `getAccessTokenExpiration()` is called
-**Then** the corresponding value is returned from the stored JSON blob
-
-**Given** tokens are stored
-**When** `deleteAll()` is called
-**Then** the `auth_tokens` key is removed from the platform keystore
-
-**Given** `InMemoryTokenStorage` is used in tests
-**When** tokens are saved and retrieved
-**Then** the behavior is identical to `SecureTokenStorage` but without platform dependencies
-**And** all unit tests pass without requiring a device emulator
-
-**Given** `deleteAll()` fails due to keystore unavailability
-**When** the error is caught
-**Then** it does not propagate — the error is silently handled (per architecture: `deleteAll().catchError`)
-
-### Story 1.2: Auth State Machine & Flavor Configuration
-
-As a mobile app,
-I want a reactive auth state machine and build-time flavor configuration,
-So that the app can represent authentication status and connect to the correct Keycloak instance per environment.
+As a developer,
+I want all test runners to produce JUnit XML reports,
+So that GitLab CI can visualize test results and track pass/fail trends.
 
 **Acceptance Criteria:**
 
-**Given** the `AuthStatus` enum is defined
-**When** the app checks auth status
-**Then** exactly three states exist: `authenticated`, `unauthenticated`, `error`
-**And** no `initial` state and no `retryCount` field exist
+**Given** the project has 5 test runners (Jest ×3, pytest, flutter_test, Playwright)
+**When** I install the required reporting dependencies
+- `jest-junit: ^17.0.0` added to `gov-chat-backend/package.json`, `gov-chat-frontend/package.json`, `document-repository/package.json`
+- `junitreport` added to `mobile/genie_ai_mobile/pubspec.yaml`
+- Playwright junit reporter configured in `playwright.config.js`
+- pytest junitxml configured in `genie-ai-overlay/pytest.ini`
+**Then** all test runners can produce JUnit XML output
+**And** Jest configs include `jest-junit` in reporters configuration
+**And** Playwright config includes `['junit', { outputFile: 'reports/playwright-report.xml' }]` in reporter array
+**And** pytest is configured with `--junitxml=reports/pytest-report.xml`
+**And** Flutter test command pipes to `tojunit` for XML output
+**And** all dependencies pass their respective lint checks (ESLint, Ruff, flutter analyze)
 
-**Given** the `AuthState` class is defined
-**When** an auth state is created
-**Then** it contains `status` (AuthStatus), `userId` (String?), `displayName` (String?), `errorMessage` (String?), and `retryable` (bool)
+### Story 1.2: Create CI Pipeline Lint Stage
 
-**Given** `getConfig()` is called
-**When** `FLAVOR` is `dev` (default)
-**Then** the dev config is returned with dev Keycloak URL, dev client ID, dev backend URL, and dev redirect scheme
-
-**Given** `getConfig()` is called
-**When** `FLAVOR` is `itu`
-**Then** the ITU production flavor config is returned with production values
-
-**Given** `getConfig()` is called
-**When** `FLAVOR` is `staging`
-**Then** the staging config is returned with staging values
-
-**Given** `getConfig()` is called
-**When** `FLAVOR` is `e2e`
-**Then** the e2e test config is returned with e2e test values
-
-**Given** `FLAVOR` is set via `--dart-define=FLAVOR=<name>`
-**When** the app is built
-**Then** `String.fromEnvironment` resolves at compile time and unused flavor configs are tree-shaken
-
-**Given** two `AuthState` instances with identical fields
-**When** they are compared
-**Then** they are equal (implement `==` and `hashCode`)
-
-**Given** an `AuthState` with `status: AuthStatus.error` and `retryable: true`
-**When** the UI reads the state
-**Then** it can display a retry button (network error scenario)
-
-**Given** an `AuthState` with `status: AuthStatus.error` and `retryable: false`
-**When** the UI reads the state
-**Then** it displays a login button (invalid_grant scenario)
-
-### Story 1.3a: Keycloak Login via System Browser
-
-As a user,
-I want to sign in to the app using my institution's Keycloak credentials via the system browser,
-So that I can authenticate securely without the app handling my password directly.
+As a developer,
+I want the CI pipeline to run lint checks across all components on every merge request,
+So that code quality violations are caught before review.
 
 **Acceptance Criteria:**
 
-**Given** `KeycloakService` is initialized with a `KeycloakConfig`
-**When** `discoverEndpoints()` is called
-**Then** the OIDC endpoints (authorization, token, userinfo, end_session) are fetched from `{keycloakUrl}/.well-known/openid-configuration`
-**And** the discovered endpoints are cached for subsequent calls
+**Given** a `.gitlab-ci.yml` exists at the repository root
+**When** a merge request is opened or updated
+**Then** the pipeline runs parallel lint jobs:
+- `lint:backend` — ESLint on `components/gov-chat-backend/`
+- `lint:frontend` — ESLint on `components/gov-chat-frontend/`
+- `lint:doc-repo` — ESLint on `components/document-repository/`
+- `lint:python` — Ruff on `genie-ai-overlay/`
+- `lint:dart` — Flutter analyze on `mobile/genie_ai_mobile/`
+**And** each job uses the appropriate Docker image (node:20, python:3.10)
+**And** jobs fail the pipeline if any lint errors are found
+**And** path-based `rules:changes` trigger only relevant linters on MRs
 
-**Given** `KeycloakService.discoverEndpoints()` fails (network error, invalid URL)
-**When** the error is caught
-**Then** an `AuthState(status: AuthStatus.error, retryable: true, errorMessage: 'Network unreachable')` is emitted
+### Story 1.3: Create CI Pipeline Test Stage
 
-**Given** the user taps "Sign in"
-**When** `AuthNotifier.authorize()` is called
-**Then** `flutter_appauth` opens the system browser (ASWebAuthenticationSession on iOS, Chrome Custom Tabs on Android) to the Keycloak authorization endpoint
-**And** the PKCE code_verifier and code_challenge are generated automatically
-**And** the redirect URI matches the custom URL scheme from the flavor config
-
-**Given** the user authenticates successfully in the system browser
-**When** Keycloak redirects back to the app via the custom URL scheme with an authorization code
-**Then** `flutter_appauth` exchanges the code for tokens at the token endpoint
-**And** the access token, ID token, and refresh token are saved via `TokenStorage.saveTokens()`
-**And** the `expiresIn` from `TokenResponse` is stored as an absolute expiration date
-**And** the auth state transitions to `AuthState(status: AuthStatus.authenticated, userId: <sub>, displayName: <name>)`
-**And** SSO works automatically — if the user already has an active Keycloak session in the browser, they are authenticated without re-entering credentials (FR3)
-
-**Given** the user cancels the login in the system browser
-**When** `flutter_appauth` returns a cancellation error
-**Then** the auth state transitions to `AuthState(status: AuthStatus.unauthenticated)` — no error, just back to login
-
-**Given** `Riverpod` providers are configured
-**When** `authProvider` is read
-**Then** it returns a `NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new)`
-**And** `tokenStorageProvider` injects `SecureTokenStorage`
-**And** `keycloakServiceProvider` injects `KeycloakService` with the flavor config
-
-**Given** the app starts
-**When** `ProviderScope` wraps the app in `main.dart`
-**Then** all providers are available to the widget tree via `ref.watch()` and `ref.read()`
-
-**Given** `AuthNotifier` is initialized
-**When** tokens exist in `TokenStorage` from a previous session and the access token has not expired
-**Then** the auth state is set to `authenticated` (the user is silently logged in)
-
-**Given** `AuthNotifier` is initialized
-**When** tokens exist in `TokenStorage` but the access token is expired
-**Then** `validateTokens()` attempts a silent refresh
-**And** if refresh succeeds, the state is `authenticated`; if it fails, the state is `unauthenticated`
-
-**Given** `AuthNotifier` is initialized
-**When** no tokens exist in `TokenStorage`
-**Then** the auth state remains `unauthenticated`
-
-### Story 1.3b: Custom URL Scheme Registration
-
-As a mobile app,
-I want the custom URL scheme registered on Android and iOS,
-So that `flutter_appauth` can receive the OIDC callback from Keycloak after authentication.
-
-**Note:** `flutter_appauth` v11 handles the OIDC callback entirely internally via native AppAuth SDKs (`RedirectUriReceiverActivity` on Android, auto-registration on iOS). No `app_links` integration or manual deep link handling is needed for OIDC. The `DeepLinkHandler` service (using `app_links`) is deferred to Epic 5 when non-OIDC deep links are needed.
+As a developer,
+I want the CI pipeline to run unit tests for all 5 components in parallel on every merge request,
+So that I get fast feedback on whether my changes break anything.
 
 **Acceptance Criteria:**
 
-**Given** the app is built with a specific flavor
-**When** `build.gradle` defines `appAuthRedirectScheme` in `manifestPlaceholders`
-**Then** `flutter_appauth`'s `RedirectUriReceiverActivity` is configured with the correct custom URL scheme (e.g., `com.itu.genieai.dev`)
+**Given** the lint stage passes
+**When** the test stage runs
+**Then** parallel test jobs execute:
+- `test:backend` — `npm ci && npm test` in `components/gov-chat-backend/`
+- `test:frontend` — `npm ci && npm test` in `components/gov-chat-frontend/`
+- `test:doc-repo` — `npm ci && npm test` in `components/document-repository/`
+- `test:python` — `pip install && pytest` in `genie-ai-overlay/`
+- `test:mobile` — `flutter test --machine | tojunit` in `mobile/genie_ai_mobile/`
+**And** each job produces JUnit XML as `artifacts:reports:junit`
+**And** each job uses `cache:` for `node_modules` and Python `.venv`
+**And** `NODE_ENV=test` is set for all Node.js jobs
+**And** path-based `rules:changes` trigger only affected component tests on MRs
+**And** all 5 jobs run on `main` branch pushes regardless of path changes
 
-**Given** the app is built with a specific flavor
-**When** `Info.plist` is configured
-**Then** the custom URL scheme (e.g., `com.itu.genieai.dev`) is registered under `CFBundleURLTypes`
+### Story 1.4: Create CI Pipeline Contract Test Stage
 
-**Given** the user completes authentication in the system browser
-**When** Keycloak redirects to `{redirectScheme}://callback?code=...`
-**Then** `flutter_appauth` intercepts the callback, exchanges the authorization code for tokens, and `AuthNotifier.authorize()` completes successfully
-**And** the auth state transitions to `AuthState.authenticated()`
-
-### Story 1.4: Login Screen UI & Accessibility
-
-As a user,
-I want a clean login screen with a "Sign in" button that opens Keycloak in the system browser,
-So that I can authenticate and see my auth status clearly.
-
-**Acceptance Criteria:**
-
-**Given** the user is not authenticated
-**When** the app launches
-**Then** the login screen is displayed within 1 second of cold start (NFR2)
-
-**Given** the login screen is displayed
-**When** the user sees the screen
-**Then** the institution's branding (logo, app title) from `GenieAiConfig` is displayed
-**And** a "Sign in" button is visible with a minimum touch target of 48x48dp (NFR10)
-
-**Given** the user taps "Sign in"
-**When** the button is pressed
-**Then** `ref.read(authProvider.notifier).authorize()` is called
-**And** the system browser opens with the Keycloak login page
-
-**Given** the login screen is displayed
-**When** an accessibility scanner runs (TalkBack/VoiceOver)
-**Then** all interactive elements have semantic labels
-**And** the sign-in button is announced correctly
-**And** auth status is not indicated by color alone (NFR10)
-
-**Given** authentication fails
-**When** `authProvider` emits `AuthState(status: AuthStatus.error)`
-**Then** the error message is displayed on the login screen
-**And** a recovery action is shown (retry button if retryable, or "Sign in" button if not retryable)
-
-**Given** the user is already authenticated (tokens in storage, not expired)
-**When** the app launches
-**Then** the login screen is skipped and the user sees the authenticated UI directly
-
-**Given** the login screen is displayed
-**When** no tokens, credentials, or PII appear in debug logs
-**Then** FR25 is satisfied — no sensitive data in logs (NFR9 partial — full persistent logging deferred to Epic 2)
-
-## Epic 2: Persistent Authenticated Session
-
-A user stays logged in across token expiry (silent refresh), API calls are automatically authenticated (Bearer token), and the user can sign out completely (local + Keycloak session).
-
-### Story 2.0: Persistent Auth Logging Infrastructure
-
-As a mobile app,
-I want a persistent file-based logging system for authentication events,
-So that auth failures can be diagnosed from device logs for 30 days without requiring a live connection.
+As a developer,
+I want the CI pipeline to validate API request/response schemas,
+So that breaking interface changes are caught before merge.
 
 **Acceptance Criteria:**
 
-**Given** the logging package is added to dependencies
-**When** the app initializes
-**Then** a log file is created in the app's documents directory with automatic rotation
+**Given** the test stage passes
+**When** the contract stage runs
+**Then** contract test jobs validate API schemas for backend and document-repository
+**And** Supertest-based route handler tests verify request/response shapes
+**And** JUnit XML reports are collected as artifacts
+**And** the stage blocks the MR on failure
 
-**Given** an authentication failure occurs
-**When** the failure is logged
-**Then** the log entry contains: `error_code`, `keycloak_endpoint`, `http_status`, `network_reachable`, `timestamp`
-**And** no tokens, refresh tokens, ID tokens, or PII appear in the log output
+### Story 1.5: Create CI Pipeline Configuration Validation Stage
 
-**Given** logs have accumulated over time
-**When** 30 days have passed since a log entry
-**Then** that entry is automatically rotated/deleted (NFR9)
-
-**Given** a developer needs to read auth logs
-**When** they run `adb shell run-as` or transfer the log file from the device
-**Then** the log file is readable in a structured format
-
-### Story 2.1: Silent Token Refresh & Logout
-
-As a user,
-I want my session to persist across token expiry without re-entering my credentials, and to be able to sign out completely from both the app and Keycloak,
-So that I stay logged in seamlessly and my session is fully terminated when I choose to sign out.
+As a developer,
+I want the CI pipeline to validate the environment configuration,
+So that configuration drift and missing variables are caught automatically.
 
 **Acceptance Criteria:**
 
-**Given** the user is authenticated with a valid access token and refresh token
-**When** the access token expires (detected via stored `expiresIn` date comparison)
-**Then** `AuthNotifier.refreshToken()` exchanges the refresh token for new tokens at the Keycloak token endpoint
-**And** the new tokens and new `expiresIn` are saved via `TokenStorage.saveTokens()`
-**And** the auth state remains `authenticated` — no user interruption
+**Given** the contract stage passes
+**When** the config stage runs
+**Then** the configuration validation suite executes in `tests/config-validator/`
+**And** it validates all env vars referenced in `docker-compose.yaml` are documented in the `env` template
+**And** it checks required secrets have no undefined defaults
+**And** it detects conflicting or orphaned configurations
+**And** it validates feature flag interdependencies (e.g., `DEPLOY_OPEA`)
+**And** JUnit XML reports are collected as artifacts
+**And** the stage completes in under 2 minutes (NFR2)
 
-**Given** `AuthNotifier.refreshToken()` succeeds
-**When** the new token pair is saved
-**Then** the old refresh token is replaced (Keycloak refresh token rotation)
+### Story 1.6: Configure MR Blocking and Scheduled Jobs
 
-**Given** `AuthNotifier.refreshToken()` fails (expired refresh token or revoked session)
-**When** the Keycloak token endpoint returns an error
-**Then** the auth state transitions to `AuthState(status: AuthStatus.unauthenticated, errorMessage: 'Your session has expired. Please sign in again.')` (FR7)
-**And** the failure is logged via the persistent logging infrastructure (NFR9)
-
-**Given** the auth state is recalculated after any token operation
-**When** a token becomes expired or invalid
-**Then** the state immediately transitions to `unauthenticated` — no stale `authenticated` state possible (NFR6)
-
-**Given** the user taps "Sign out"
-**When** `AuthNotifier.logout()` is called
-**Then** `POST /api/auth/logout` and `KeycloakService.endSession(idTokenHint: idToken)` fire in parallel via `Future.wait`, each wrapped in `.catchError((_) {})`
-**And** `TokenStorage.deleteAll()` runs regardless of upstream failures
-**And** the auth state transitions to `unauthenticated` (FR4)
-**And** the logout operation is logged via the persistent logging infrastructure (NFR9)
-
-**Given** `KeycloakService.endSession()` fails
-**When** the backend logout succeeds but Keycloak logout fails
-**Then** tokens are deleted locally, state is `unauthenticated`, failure is logged
-
-**Given** the user taps "Sign in" immediately after logging out
-**When** the system browser opens Keycloak
-**Then** the login page is displayed — the user is not automatically re-authenticated
-
-### Story 2.2: AuthInterceptor & ApiService Refactor
-
-As a user,
-I want all my API calls to the backend to be automatically authenticated with a valid token,
-So that I can use all app features without manually managing tokens.
+As a developer,
+I want mandatory CI stages to block merge requests and integration/RAG tests to run on schedule,
+So that every merged change is validated while heavy tests don't slow down reviews.
 
 **Acceptance Criteria:**
 
-**Given** the user is authenticated
-**When** any API call is made through `ApiService`
-**Then** the `AuthInterceptor` injects the access token as a `Bearer` token in the `Authorization` header (FR11)
+**Given** the `.gitlab-ci.yml` has lint, test, contract, and config stages
+**When** a merge request fails any mandatory stage
+**Then** the MR is blocked and cannot be merged
+**When** the nightly schedule triggers
+**Then** integration tests run against deployed Docker Compose infrastructure (FR7)
+**And** E2E Playwright tests run against deployed infrastructure
+**When** a developer manually triggers the RAG quality pipeline
+**Then** RAG quality regression tests execute (FR8)
+**And** GPU-dependent jobs are conditional on runner tags
+**And** scheduled and manual jobs do not block MRs
 
-**Given** an API call returns HTTP 401
-**When** the `AuthInterceptor` catches the 401
-**Then** it triggers `AuthNotifier.refreshToken()` via the `Completer<String?>` mutex
-**And** if refresh succeeds, the original request is retried with the new token — only one retry (FR8)
+### Story 1.7: Configure CI Caching and Path-Based Triggers
 
-**Given** concurrent API calls all receive 401 simultaneously
-**When** the first 401 triggers a token refresh
-**Then** subsequent 401s await the same `Completer<String?>` — no parallel refreshes
-**And** a test with a mock slow refresh verifies that all concurrent requests receive the same result
-
-**Given** the retried request also returns 401
-**When** the second 401 is detected
-**Then** `AuthNotifier.logout()` is triggered and `AuthException('Session expired')` is thrown
-
-**Given** `http.BaseRequest` is sent
-**When** a 401 is received
-**Then** the request is cloned via `request.cloneStream()` before the first send — the retry uses the clone
-
-**Given** the existing `ApiService` singleton
-**When** the refactor is complete
-**Then** the singleton pattern is removed
-**And** `baseUrl` is configurable via `KeycloakConfig.backendUrl`
-**And** `ApiService` accepts `http.Client` as constructor parameter
-
-**Given** `setToken()`, `clearToken()`, and `getHeaders()` exist in `ApiService`
-**When** the refactor is complete
-**Then** these methods are marked `@Deprecated` with a comment referencing Epic 6 removal
-**And** they remain functional to preserve compilation of `user_service.dart`, `auth_proxy.dart`, and `file_proxy.dart`
-
-**Given** `file_proxy.dart` calls `_api.getHeaders()` for multipart uploads
-**When** the AuthInterceptor is active
-**Then** `file_proxy.dart` continues to work unchanged — migration deferred to Epic 6
-
-**Given** all existing `print()` calls in `ApiService`
-**When** the refactor is complete
-**Then** they are replaced with the persistent logging infrastructure (NFR9)
-
-**Given** a test needs to bypass the `AuthInterceptor`
-**When** `ApiService` is constructed with a mock `http.Client`
-**Then** requests are sent without Bearer token injection
-
-**Given** the complete auth flow is in place (login + refresh + interceptor)
-**When** the OIDC callback is received and tokens are exchanged
-**Then** the authenticated session is established within 1 second of receiving the deep link (NFR3)
-
-## Epic 3: Reliable Auth Experience
-
-A user sees clear error messages when auth fails, the app recovers gracefully from network issues, and background sessions are validated on resume.
-
-### Story 3.1: AppLifecycle Token Validation
-
-As a user,
-I want my session to be validated when I return to the app after being in the background,
-So that I am not stuck with an expired session and see the login screen promptly if needed.
+As a developer,
+I want CI jobs to use caching and only run when relevant files change,
+So that pipeline execution is fast and efficient.
 
 **Acceptance Criteria:**
 
-**Given** the user has the app in the background for an extended period
-**When** the app returns to foreground (`AppLifecycleState.resumed`)
-**Then** `AuthNotifier.didChangeAppLifecycleState()` triggers `validateTokens()` silently
+**Given** the `.gitlab-ci.yml` pipeline is defined
+**When** a merge request modifies only `components/gov-chat-backend/`
+**Then** only `lint:backend` and `test:backend` run (not frontend, Python, mobile, etc.)
+**And** `npm ci` uses cached `node_modules` keyed on `package-lock.json` hash
+**And** Python jobs use cached `.venv` keyed on dependency file hash
+**And** Flutter jobs use cached build artifacts
+**And** full suite runs on `main` branch pushes regardless of path changes
+**And** total mandatory pipeline time is under 10 minutes (NFR1)
 
-**Given** `validateTokens()` runs on resume
-**When** the access token is still valid (stored `expiresIn` date is in the future)
-**Then** no UI change occurs — the user sees the authenticated interface immediately (NFR4)
+## Epic 2: Backend API Test Suite
 
-**Given** `validateTokens()` runs on resume
-**When** the access token has expired (stored `expiresIn` date is in the past) but the refresh token is valid
-**Then** a silent refresh is triggered — the user sees no interruption
-**And** the auth state remains `authenticated` after refresh (FR6)
+The developer writes and runs tests for backend route handlers, service layer business logic, and middleware behavior against an in-memory Express application with deterministic mocks.
 
-**Given** `validateTokens()` runs on resume
-**When** the refresh token has also expired
-**Then** `TokenStorage.deleteAll()` is called
-**And** the auth state transitions to `AuthState(status: AuthStatus.unauthenticated)`
-**And** the user sees the login screen with a message: "Your session has expired. Please sign in again." (FR6)
+### Story 2.1: Refactor Backend index.js to Export createApp()
 
-**Given** `AuthNotifier` is disposed
-**When** the widget tree is torn down
-**Then** `ref.onDispose()` calls `WidgetsBinding.instance.removeObserver(this)` — no memory leak, no stale lifecycle events
-
-**Given** `AuthNotifier` is constructed
-**When** initialization completes
-**Then** `WidgetsBinding.instance.addObserver(this)` is called — lifecycle events are active
-
-### Story 3.2: Network Error Detection & Recovery
-
-As a user,
-I want to see clear error messages when the network is unavailable during authentication,
-So that I know what is happening and can take action without being stuck on a blank screen.
+As a developer,
+I want `index.js` to export a `createApp()` function,
+So that I can test route handlers via Supertest without starting the server.
 
 **Acceptance Criteria:**
 
-**Given** the device has no network connectivity
-**When** the user taps "Sign in"
-**Then** the system browser fails to load the Keycloak login page
-**And** the app displays a "No internet connection" message within 500ms of network loss detection (FR12)
-**And** the error state has `retryable: true` — a retry button is displayed
+**Given** `components/gov-chat-backend/index.js` is 1,193 lines with inline middleware and route registration
+**When** I extract the Express app creation into a `createApp()` function
+**Then** `createApp()` accepts an optional config object and returns the configured Express app without calling `app.listen()`
+**And** all middleware registration (helmet, cors, express.json, rate limiting, error handling) is inside `createApp()`
+**And** all route registration is inside `createApp()`
+**And** `index.js` calls `createApp()` and starts the server when run directly (`require('./index')`)
+**And** `createApp()` is exported via `module.exports = { createApp }`
+**And** the refactor includes its own tests verifying `createApp()` returns an Express app with all routes registered
+**And** all existing auth tests continue to pass unchanged
 
-**Given** the user taps "Retry" on a network error
-**When** the network is still unavailable
-**Then** the same error message is displayed again
-**And** the app does not enter an infinite retry loop — the user must explicitly tap retry
+### Story 2.2: Create Backend Test Fixtures and Shared Mocks
 
-**Given** the device regains network connectivity
-**When** the user taps "Retry"
-**Then** the sign-in flow resumes — the system browser opens Keycloak
-
-**Given** the device has no network connectivity
-**When** a token refresh is attempted
-**Then** the refresh fails with a network error
-**And** the auth state transitions to `AuthState(status: AuthStatus.error, retryable: true, errorMessage: 'No internet connection')` (FR12)
-
-**Given** the device has no network connectivity
-**When** any API call is made
-**Then** the HTTP client reports an error
-**And** the app shows an appropriate error state
-
-### Story 3.3: Auth Error State Machine
-
-As a user,
-I want the app to always show me a clear state after any authentication error,
-So that I am never stuck on a spinner or a blank screen.
+As a developer,
+I want centralized test fixtures and mock factories for the backend,
+So that all backend tests use consistent, maintainable test data.
 
 **Acceptance Criteria:**
 
-**Given** any authentication operation fails (login, refresh, logout, network error)
-**When** the error is detected
-**Then** a user-visible error message and a recovery action are displayed within 2 seconds (NFR4)
+**Given** the backend has `__tests__/mocks/shared-lib.js` for module-level mocking
+**When** I create the fixture infrastructure
+**Then** `__tests__/fixtures/users.js` exports `createMockUser(overrides)` factory function
+**And** `__tests__/fixtures/tokens.js` exports `createValidToken(claims)` and `createExpiredToken()` helpers
+**And** `__tests__/fixtures/requests.js` exports `createMockReq(overrides)` and `createMockRes()` helpers
+**And** all factories use the overrides pattern (spread with defaults)
+**And** `db-connection-service.js` is mocked at module level via `jest.mock()` in a setup file
+**And** all fixtures use CommonJS `require()` syntax (NFR21)
 
-**Given** an authentication error occurs
-**When** the app transitions to an error state
-**Then** the app is in one of three defined terminal states: login screen, error screen with recovery action, or authenticated screen (NFR4)
-**And** the app never remains in an intermediate loading state for more than 10 seconds without user feedback (NFR5)
+### Story 2.3: Test Backend Auth Route Handlers
 
-**Given** an `AuthState(status: AuthStatus.error, retryable: true)`
-**When** the error screen is displayed
-**Then** a retry button is shown — tapping it re-triggers the failed operation
-
-**Given** an `AuthState(status: AuthStatus.error, retryable: false)`
-**When** the error screen is displayed
-**Then** a "Sign in" button is shown — the user must start a new authentication flow
-
-**Given** a deep link callback is received but fails mid-way (network timeout, lost packet)
-**When** the app never receives the authorization code
-**Then** the app remains on the login screen — not stuck on a spinner (FR13)
-**And** the user can tap "Sign in" again — Keycloak SSO recognizes the active session and the callback succeeds on retry
-
-**Given** the auth state machine
-**When** all error transitions are tested
-**Then** every possible error path ends in one of the three defined terminal states — verified by state machine unit tests (NFR5)
-
-**Given** any authentication failure
-**When** the failure is logged
-**Then** the persistent logging infrastructure records the failure with structured fields (NFR9)
-
-## Epic 4: Institutional Deployment
-
-Each institution gets its own branded build with a dedicated Keycloak client, deep link scheme, and app store presence. Deployment operators can onboard new institutions following a documented guide.
-
-### Story 4.1: Flutter Build Flavor System
-
-As a deployment operator,
-I want to create a new institutional deployment with a unique app ID, signing config, and build identity,
-So that each institution has its own dedicated build for app store submission.
+As a developer,
+I want tests for the authentication route group,
+So that auth endpoints are validated against the API contract.
 
 **Acceptance Criteria:**
 
-**Given** the current app has no flavor system
-**When** `build.gradle` is updated
-**Then** `flavorDimensions` and `productFlavors` are configured with at least a `dev` and `itu` flavor
-**And** each flavor defines a unique `applicationId` (e.g., `com.itu.genieai` for ITU, `com.example.genieai` for dev)
+**Given** `createApp()` is exported from `index.js`
+**When** I create `__tests__/routes/auth.test.js`
+**Then** tests cover POST `/api/auth/login` with valid credentials (200 + token)
+**And** tests cover POST `/api/auth/login` with invalid credentials (401)
+**And** tests cover POST `/api/auth/logout` with valid token (200)
+**And** tests cover POST `/api/auth/logout` with expired token (401)
+**And** tests cover POST `/api/auth/refresh` with valid refresh token (200 + new token pair)
+**And** tests use Supertest `request(app)` with pre-signed JWT fixtures
+**And** Keycloak is mocked — no real OIDC calls
+**And** all tests follow AAA structure and "should" naming convention
 
-**Given** the iOS project
-**When** XCConfig files are created per flavor
-**Then** each flavor has a unique `PRODUCT_BUNDLE_IDENTIFIER`
-**And** each flavor has its own build scheme in Xcode
+### Story 2.4: Test Backend Chat Route Handlers
 
-**Given** the `itu` flavor is built for Android
-**When** `flutter build apk --dart-define=FLAVOR=itu -t lib/config/flavors/itu.dart` runs
-**Then** the APK has application ID `com.itu.genieai` and contains only the ITU config
-
-**Given** the `itu` flavor is built for iOS
-**When** `flutter build ipa --dart-define=FLAVOR=itu -t lib/config/flavors/itu.dart` runs
-**Then** the IPA has bundle identifier `com.itu.genieai`
-
-### Story 4.2: Dart Flavor Config & Keycloak Client Template
-
-As a deployment operator,
-I want a Keycloak OIDC client created automatically for each institutional deployment via keycloak-config-cli,
-So that I don't have to manually configure clients in the Keycloak admin console.
+As a developer,
+I want tests for the chat route group,
+So that conversation endpoints are validated against the API contract.
 
 **Acceptance Criteria:**
 
-**Given** `genie-realm.yaml` is updated
-**When** a mobile client section is added
-**Then** it defines: `clientId: $(env:KC_MOBILE_CLIENT_ID)`, `publicClient: true`, `pkce.code.challenge.method: S256`, `client.credentials.use.refresh.token: true` (refresh token rotation), `standardFlowEnabled: true`, `directAccessGrantsEnabled: false`
+**Given** `createApp()` is exported from `index.js`
+**When** I create `__tests__/routes/chat.test.js`
+**Then** tests cover GET `/api/chat/conversations` (200 + conversation list)
+**And** tests cover POST `/api/chat/conversations` (201 + new conversation)
+**And** tests cover GET `/api/chat/conversations/:id/messages` (200 + messages)
+**And** tests cover POST `/api/chat/conversations/:id/messages` (201 + message sent)
+**And** tests cover error cases (401 unauthorized, 404 conversation not found)
+**And** query-service and chat-history-service are mocked
+**And** all tests use factory fixtures from `__tests__/fixtures/`
 
-**Given** the mobile client section in `genie-realm.yaml`
-**When** `redirectUris` is configured
-**Then** it uses `$(env:KC_MOBILE_REDIRECT_SCHEME)://callback` — the custom URL scheme from the environment
+### Story 2.5: Test Backend Analytics, Admin, Files, and Categories Route Handlers
 
-**Given** the operator adds `KC_MOBILE_CLIENT_ID` and `KC_MOBILE_REDIRECT_SCHEME` to the deployment `.env`
-**When** `keycloak-config-cli` runs at container startup
-**Then** the mobile OIDC client is created automatically in Keycloak with the correct configuration (FR18)
-
-**Given** `lib/config/flavors/template.dart` exists
-**When** a new institution needs a deployment
-**Then** the template contains placeholder fields for: `keycloakUrl`, `clientId`, `redirectScheme`, `backendUrl`
-**And** the `redirectScheme` in the Dart config matches `KC_MOBILE_REDIRECT_SCHEME` in the `.env`
-
-**Given** `getConfig()` is called with any registered flavor
-**When** the corresponding `KeycloakConfig` is returned
-**Then** all fields are populated from the flavor's config file
-
-### Story 4.3: Custom URL Scheme Per Deployment
-
-As a mobile app,
-I want to register a unique custom URL scheme per institutional deployment,
-So that the OIDC callback is routed to the correct app instance on the device.
+As a developer,
+I want tests for the remaining route groups,
+So that all backend API contracts are fully validated.
 
 **Acceptance Criteria:**
 
-**Given** the app is built with flavor `itu`
-**When** the `AndroidManifest.xml` is generated
-**Then** an intent filter is registered for the URL scheme matching `KC_MOBILE_REDIRECT_SCHEME` (e.g., `com.itu.genieai://callback`)
+**Given** `createApp()` is exported from `index.js`
+**When** I create route test files for analytics, admin, files, and categories
+**Then** `__tests__/routes/analytics.test.js` covers GET `/api/analytics/*` endpoints
+**And** `__tests__/routes/admin.test.js` covers GET/PUT `/api/admin/*` endpoints with role-based access (403 for non-admin)
+**And** `__tests__/routes/files.test.js` covers POST/GET/DELETE `/api/files/*` endpoints
+**And** `__tests__/routes/categories.test.js` covers GET `/api/categories/*` endpoints
+**And** all services are mocked (analytics-service, admin controller, fileService)
+**And** error format follows `{ error, message, details }` (RFC 9457)
 
-**Given** the app is built with flavor `itu`
-**When** the `Info.plist` is generated
-**Then** the URL scheme is registered under `CFBundleURLTypes` matching `KC_MOBILE_REDIRECT_SCHEME`
+### Story 2.6: Test Backend Service Layer
 
-**Given** two different flavor builds are installed on the same device
-**When** both apps register their respective URL schemes
-**Then** the OIDC callback is routed to the correct app based on the scheme (FR20)
-
-### Story 4.4: Deployment Onboarding Guide
-
-As a deployment operator,
-I want a comprehensive guide documenting the complete onboarding process,
-So that I can create and publish a new deployment in under a day.
+As a developer,
+I want unit tests for backend service business logic,
+So that service-layer bugs are caught without network or database dependencies.
 
 **Acceptance Criteria:**
 
-**Given** the deployment guide exists
-**When** an operator follows it
-**Then** it covers: adding `KC_MOBILE_CLIENT_ID` and `KC_MOBILE_REDIRECT_SCHEME` to `.env`, copying and filling the flavor template, configuring build files (gradle/XCConfig), build commands, and testing steps (FR26)
+**Given** the backend has multiple service files in `services/`
+**When** I create `__tests__/services/` test files
+**Then** `query-service.test.js` tests query construction and formatting logic
+**And** `chat-history-service.test.js` tests conversation/message CRUD operations
+**And** `analytics-service.test.js` tests analytics data aggregation
+**And** `user-profile-service.test.js` tests profile retrieval and update logic
+**And** `translation-service.test.js` tests translation request handling
+**And** ArangoDB and external services are mocked via `jest.mock()`
+**And** all tests are independent of execution order (NFR7)
 
-**Given** the guide covers Keycloak client creation
-**When** the operator adds the env vars and restarts keycloak-config-cli
-**Then** the mobile client is created automatically with: public client, PKCE mandatory, refresh token rotation enabled, no client secret (FR18, FR19)
+### Story 2.7: Test Backend Middleware
 
-**Given** the guide covers the scheme coherence rule
-**When** the operator configures a new deployment
-**Then** it explicitly documents that `KC_MOBILE_REDIRECT_SCHEME` in `.env` must match `redirectScheme` in the Dart flavor config — mismatch causes callback failure
-
-**Given** the guide covers air-gapped deployments
-**When** the operator deploys in a restricted-network environment
-**Then** it documents: device must reach Keycloak on internal network, local DNS configuration, no external dependency (FR27)
-
-**Given** the guide covers OS version policy
-**When** the operator reads the trade-off section
-**Then** it documents: technical minimums (iOS 13+, Android 6.0+) vs institutional security policies, MDM enforcement recommendation (FR28)
-
-**Given** the guide covers app store submission
-**When** the operator is ready to publish
-**Then** it documents: Google Play / Apple App Store requirements, signing certificate management, provisioning profiles per deployment
-
-## Epic 5: Account Recovery & Deep Links
-
-A user can reset their password via the Keycloak browser. Password reset and email verification links open correctly in the system browser (not intercepted by the app).
-
-**Note:** Story 1.3b originally included a `DeepLinkHandler` service using `app_links` for deep link management. After architectural review (Party Mode), this was deferred to Epic 5 since no non-OIDC deep links exist in Epics 1-4. The `app_links` package (^6.3.3) remains in `pubspec.yaml` but is unused until this epic. The DeepLinkHandler implementation, `app_links` integration (`uriLinkStream`, `getInitialLink`), and `FlutterDeepLinkingEnabled=false` configuration will be added in Story 5.2 alongside Universal Links / App Links setup.
-
-### Story 5.1: Password Reset via Keycloak Browser
-
-As a user,
-I want to reset my password by tapping "Forgot password" on the Keycloak login page,
-So that I can regain access to my account without contacting an administrator.
+As a developer,
+I want tests for middleware behavior,
+So that authentication, authorization, rate limiting, and error handling work correctly.
 
 **Acceptance Criteria:**
 
-**Given** the user is on the Keycloak login page in the system browser
-**When** they tap "Forgot password"
-**Then** the Keycloak password reset flow is displayed — email input field, submit button (FR15)
+**Given** the backend uses Express middleware for auth, security, and error handling
+**When** I create `__tests__/middleware/` test files
+**Then** `keycloak-auth-middleware.test.js` validates JWT claims (`iss_sub`, `sub`, `iss`) and rejects invalid tokens
+**And** `security-middleware.test.js` tests rate limiting, threat detection, and IP reputation
+**And** `error-handler.test.js` tests error response format (`{ error, message, details }`)
+**And** middleware is tested in isolation with mock `req`/`res`/`next` objects
+**And** all tests follow closure-based mock reference pattern
 
-**Given** the user submits their email on the password reset form
-**When** Keycloak sends a reset link by email
-**Then** the email contains a link to the Keycloak password reset page
+## Epic 3: Frontend Component Test Suite
 
-**Given** the user taps the password reset link on their phone
-**When** the deep link opens
-**Then** it opens the Keycloak password reset flow in the **system browser** — not intercepted by the app (FR16)
+The developer writes and runs tests for Vue components (ChatBot, NavBar, UserProfile), Vuex store modules, and HTTP service interactions using Options API patterns.
 
-**Given** the user completes the password reset in the browser
-**When** they return to the app and tap "Sign in"
-**Then** they can authenticate with their new password
+### Story 3.1: Create Frontend Test Fixtures and Shared Mocks
 
-**Given** the Keycloak login page is rendered
-**When** "Forgot password" is not available (disabled by admin)
-**Then** no "Forgot password" link is displayed — this is a Keycloak realm setting, not app-controlled
-
-### Story 5.2: Universal Links & App Links for Password Reset
-
-As a mobile app,
-I want password reset and email verification links to open in the system browser via cryptographic domain verification,
-So that these links are not intercepted by the app's custom URL scheme handler.
+As a developer,
+I want centralized test fixtures and mock factories for the frontend,
+So that all frontend tests use consistent, maintainable test data.
 
 **Acceptance Criteria:**
 
-**Given** the Keycloak domain hosts the required verification files
-**When** `apple-app-site-association` is served at `https://<keycloak-domain>/.well-known/apple-app-site-association`
-**Then** iOS recognizes the domain as verified and routes password reset links to the system browser instead of the app (FR21)
+**Given** the frontend has 8 existing test files covering stores and services
+**When** I create the fixture infrastructure
+**Then** `src/__tests__/mocks/axios.js` exports a centralized axios mock with request/response interception
+**And** `src/__tests__/mocks/keycloakAuthService.js` exports a centralized Keycloak auth mock
+**And** `src/__tests__/fixtures/store-state.js` exports `createAuthenticatedState(overrides)` and `createUnauthenticatedState()` factories
+**And** `src/__tests__/fixtures/api-responses.js` exports mocked API response data for chat, categories, user profile
+**And** all mocks follow the closure-based reference pattern to avoid hoisting issues
+**And** all code follows ESLint and Prettier standards (NFR11)
 
-**Given** the Keycloak domain hosts the required verification files
-**When** `assetlinks.json` is served at `https://<keycloak-domain>/.well-known/assetlinks.json`
-**Then** Android recognizes the domain as verified and routes password reset links to the system browser instead of the app (FR21)
+### Story 3.2: Test Critical Vue Components — ChatBot and NavBar
 
-**Given** the deployment guide (Story 4.4)
-**When** an operator reads the deep link configuration section
-**Then** it documents: how to host `apple-app-site-association` and `assetlinks.json` on the Keycloak domain, the JSON structure for each file, and verification testing steps
-
-**Given** a password reset email link is clicked on the device
-**When** the link points to the Keycloak domain (e.g., `https://keycloak.itu.int/...`)
-**Then** the system browser opens (not the app) — Universal Links / App Links take precedence over custom URL schemes
-
-**Given** the OIDC callback deep link is received
-**When** the URL matches the custom URL scheme (e.g., `com.itu.genieai://callback`)
-**Then** the app intercepts it — custom URL schemes handle OIDC callbacks, Universal Links handle everything else
-
-## Epic 6: Legacy Removal & Security Hardening
-
-The app is cleaned of all legacy authentication code, enforces valid TLS certificates, and has comprehensive auth tests running in CI.
-
-### Story 6.1: UserService Migration
-
-As a mobile app,
-I want the UserService to use the new auth system instead of legacy password hashing,
-So that all API calls are authenticated through Keycloak tokens and legacy credential handling is eliminated.
+As a developer,
+I want component tests for ChatBotComponent and NavBarComponent,
+So that the most critical UI interactions are validated.
 
 **Acceptance Criteria:**
 
-**Given** `user_service.dart` currently uses `crypto` for password hashing
-**When** the migration is complete
-**Then** `hashPassword()`, `login()`, `register()`, `updateEmail()`, `deactivateAccount()`, `deleteAccount()` are removed — all legacy auth methods (FR24)
+**Given** ChatBotComponent is 2,441 lines and NavBarComponent handles navigation/auth state
+**When** I create `src/__tests__/components/ChatBotComponent.test.js`
+**Then** tests verify the component renders with an empty message list
+**And** tests verify a user message is displayed after submission
+**And** tests verify the chat input is cleared after submission
+**And** tests verify loading state is shown while waiting for response
+**And** tests verify error state is shown when API call fails
+**When** I create `src/__tests__/components/NavBarComponent.test.js`
+**Then** tests verify navigation links render correctly
+**And** tests verify login/logout button state reflects auth status
+**And** tests verify user dropdown appears when authenticated
+**And** all components are mounted using Options API `mount()` with full Vuex store setup (NFR22)
+**And** all tests use `@vue/test-utils` `mount()` or `shallowMount()`
 
-**Given** the non-password methods in `user_service.dart`
-**When** the migration is complete
-**Then** `getCurrentUser()`, `getCurrentUserInfo()`, `getProfile()`, `refreshUserData()`, `updateAccountSettings()`, `resetUserData()`, `checkUsernameAvailability()`, `checkEmailAvailability()` are preserved and migrated
+### Story 3.3: Test Critical Vue Components — UserProfile and Admin Dashboard
 
-**Given** the migrated `user_service.dart`
-**When** API calls are made
-**Then** they rely on `AuthInterceptor` for Bearer token injection — `_api.setToken()` and `_api.clearToken()` calls are removed
-
-**Given** `import 'package:crypto/crypto.dart'` in `user_service.dart`
-**When** the migration is complete
-**Then** the import is removed
-**And** `grep -r "package:crypto" lib/` returns no results — `crypto` can be safely removed from `pubspec.yaml`
-
-**Given** `api_service.dart` has `@Deprecated` methods (`setToken`, `clearToken`, `getHeaders`, `accessToken`) and a legacy `factory ApiService({AuthLogger? logger})` constructor from Story 2.2
-**When** the migration is complete
-**Then** all `@Deprecated` methods and the legacy factory constructor are removed
-**And** `// TODO(epic-6)` grep markers are cleaned up
-**And** `grep -r "TODO(epic-6)" lib/` returns no results
-
-**Given** `file_proxy.dart` calls `_api.getHeaders()` for multipart uploads
-**When** the migration is complete
-**Then** `file_proxy.dart` is migrated to use `apiServiceProvider` (Riverpod) instead of `getHeaders()` for Bearer token injection
-
-### Story 6.2: Legacy Auth Code Removal
-
-As a mobile app,
-I want all legacy authentication code to be removed,
-So that there is zero legacy auth debt and no security vulnerabilities from the old system.
+As a developer,
+I want component tests for UserProfileComponent and AdminDashboard,
+So that profile management and admin functionality are validated.
 
 **Acceptance Criteria:**
 
-**Given** the legacy auth files exist
-**When** the removal is complete
-**Then** `auth_proxy.dart` and `password_proxy.dart` are deleted (FR24)
+**Given** UserProfileComponent displays user data and AdminDashboard is 4,885 lines
+**When** I create `src/__tests__/components/UserProfileComponent.test.js`
+**Then** tests verify user profile data displays correctly (name, email, organization)
+**And** tests verify edit mode allows profile modification
+**And** tests verify save triggers the correct API call
+**When** I create `src/__tests__/components/AdminDashboard.test.js`
+**Then** tests verify the dashboard renders without errors (may be split into sub-components)
+**And** tests verify admin-only access control (non-admin users see restricted view)
+**And** tests verify key admin sections render (users, analytics, settings)
+**And** all tests use Options API patterns (NFR22)
 
-**Given** the legacy auth screens exist
-**When** the removal is complete
-**Then** all files in `components/auth/` are deleted (login_screen.dart, register_screen.dart, password reset screens)
+### Story 3.4: Test Vuex Store Modules
 
-**Given** the legacy routes exist
-**When** the removal is complete
-**Then** routes `/register` and `/password-reset` (legacy) are removed from the navigation/routing
-
-**Given** no legacy auth code remains
-**When** `git grep` is run on legacy endpoints (`auth/login`, `auth/register`, `encPassword`)
-**Then** no results are returned — zero legacy auth code (FR24)
-
-### Story 6.3: LoginScreen Replacement & SharedPreferences Cleanup
-
-As a mobile app,
-I want the legacy login screen replaced by the OIDC login screen and all plaintext credentials cleared,
-So that users authenticate securely and no sensitive data remains in insecure storage.
+As a developer,
+I want tests for all Vuex store modules,
+So that state management logic is validated independently of components.
 
 **Acceptance Criteria:**
 
-**Given** the OIDC login screen was created in Story 1.4
-**When** the legacy `login_screen.dart` is deleted
-**Then** the OIDC login screen is the only login interface in the app
+**Given** the frontend has a root store with auth and chatHistory modules
+**When** I create `src/__tests__/store/chatHistory.test.js`
+**Then** tests verify chatHistory module initial state
+**And** tests verify `ADD_CONVERSATION` mutation adds a conversation to state
+**And** tests verify `SET_CURRENT_CONVERSATION` mutation updates current conversation
+**And** tests verify `ADD_MESSAGE` mutation appends a message
+**And** tests verify chatHistory actions dispatch API calls correctly
+**And** the existing `authStore.test.js` continues to pass unchanged
+**And** all store tests use `createStore` or direct commit testing
 
-**Given** the legacy login screen stored passwords in plaintext via `SharedPreferences`
-**When** the app launches for the first time after the update
-**Then** `SharedPreferences` entries `savedLoginName` and `savedPassword` are cleared if they exist
+### Story 3.5: Test HTTP Services
 
-**Given** `shared_preferences` is no longer used anywhere
-**When** `grep -r "shared_preferences" lib/` returns no results
-**Then** `shared_preferences` is removed from `pubspec.yaml`
-
-**Given** `settings_service.dart` only references `shared_preferences` in comments
-**When** the cleanup is complete
-**Then** the comments are removed or updated — no dead references
-
-### Story 6.4: TLS Enforcement
-
-As a mobile app,
-I want valid TLS certificate validation enforced on all network connections,
-So that the app never connects to servers with invalid or self-signed certificates.
+As a developer,
+I want tests for frontend HTTP service interactions,
+So that API communication is validated with mocked responses.
 
 **Acceptance Criteria:**
 
-**Given** `main.dart` currently contains a `badCertificateCallback` override
-**When** the removal is complete
-**Then** the `badCertificateCallback` is removed from `main.dart` (FR23)
+**Given** the frontend has 16 service files (only httpService is partially tested)
+**When** I create `src/__tests__/services/chatService.test.js`
+**Then** tests verify `sendMessage()` posts to the correct endpoint with the correct payload
+**And** tests verify `getConversations()` fetches and returns conversation list
+**And** tests verify error handling (401 redirects to login, 500 shows error message)
+**When** I create `src/__tests__/services/analyticsService.test.js`
+**Then** tests verify analytics data fetching and formatting
+**And** tests verify API error handling and retry behavior
+**And** all services use the centralized axios mock from `src/__tests__/mocks/`
 
-**Given** a debug build needs to work with self-signed certificates
-**When** the app runs in debug mode (`kDebugMode`)
-**Then** a conditional bypass can be enabled for development — documented in the dev workflow
+## Epic 4: OPEA Microservice Test Suite
 
-**Given** the app runs in release mode
-**When** any HTTPS connection is made to a server with an invalid certificate
-**Then** the connection is rejected — no bypass (FR23)
+The developer writes and runs pytest tests for the retriever's hybrid search, dataprep extraction pipeline, reranker score validation, core types, and custom overlay interfaces — all with mocked ArangoDB, vLLM, and TEI dependencies.
 
-**Given** `flutter analyze` runs
-**When** the codebase is checked
-**Then** no TLS bypass code is detected in release paths
+### Story 4.1: Configure pytest and Create Shared Fixtures for OPEA
 
-### Story 6.5: Auth Test Suite & CI
-
-As a team,
-I want comprehensive auth tests running in CI on Android,
-So that every PR is validated against the auth flows automatically.
+As a developer,
+I want pytest configured with shared mock fixtures for the OPEA overlay,
+So that all OPEA microservice tests have a consistent mock foundation.
 
 **Acceptance Criteria:**
 
-**Given** the auth service layer
-**When** unit tests run
-**Then** they cover: TokenStorage (save, get, delete, InMemoryTokenStorage), AuthState (transitions, equality), AuthNotifier (login, refresh, logout, lifecycle, error states), KeycloakService (end_session, discovery), AuthInterceptor (Bearer injection, 401→refresh→retry, Completer mutex) (FR29)
+**Given** `genie-ai-overlay/` has zero test infrastructure (5,018 lines of Python untested)
+**When** I configure pytest
+**Then** `genie-ai-overlay/pytest.ini` is created with test discovery, asyncio mode, and junitxml output
+**And** `genie-ai-overlay/pyproject.toml` includes `pytest`, `pytest-asyncio`, `pytest-cov`, `httpx`, `asgi-lifespan` in test dependencies
+**When** I create `genie-ai-overlay/tests/conftest.py`
+**Then** shared fixtures provide `mock_arangodb()` mocking the ArangoDB driver (collections, queries, AQL)
+**And** shared fixtures provide `mock_redis()` mocking the Redis client
+**And** shared fixtures provide `mock_vllm()` mocking vLLM inference responses
+**And** shared fixtures provide `mock_tei()` mocking TEI embedding/reranking responses
+**And** shared fixtures provide `mock_comps()` mocking the vendored OPEA comps library
+**And** all Python test files include ITU copyright headers (NFR23)
+**And** all Python code passes Ruff linting and formatting (NFR24)
 
-**Given** the unit test suite
-**When** `flutter test` runs in CI
-**Then** auth service layer achieves minimum 80% line coverage (FR29)
+### Story 4.2: Test Retriever Hybrid Search Logic
 
-**Given** an Android emulator in CI
-**When** integration tests run
-**Then** they cover: login happy path, silent token refresh, logout (local + Keycloak session termination), network error during login, deep link callback failure + retry, 401→refresh→login fallback chain (FR30)
+As a developer,
+I want pytest tests for the retriever's hybrid search (vector + graph + labels),
+So that retrieval logic is validated without real ArangoDB or embedding services.
 
-**Given** the CI pipeline
-**When** a PR is submitted
-**Then** `flutter test` runs automatically on Android (FR31)
+**Acceptance Criteria:**
 
-**Given** the state machine unit tests
-**When** all error transitions are tested
-**Then** every error path ends in one of three defined terminal states — no stale or intermediate states possible (NFR5, NFR6)
+**Given** `geniei_retriever_arangodb.py` implements custom hybrid search (854 lines)
+**When** I create `tests/test_retriever.py`
+**Then** tests verify hybrid search combines vector similarity, graph traversal, and label filtering
+**And** tests verify query construction for different search modes (vector-only, graph-only, hybrid)
+**And** tests verify score threshold filtering (minimum score cutoff)
+**And** tests verify pagination and top-K result limiting
+**And** tests verify error handling when ArangoDB mock returns empty results
+**And** tests verify error handling when ArangoDB mock raises ConnectionError
+**And** ArangoDB and embedding services are fully mocked
 
-**Given** release builds before and after the migration
-**When** binary sizes are compared
-**Then** the size increase is less than 8MB per platform (NFR7)
+### Story 4.3: Test Dataprep Extraction Pipeline
 
-**Given** a reference device with existing user data
-**When** the app is updated
-**Then** all non-authentication user data (conversation history, preferences, cached content) is preserved (NFR8)
+As a developer,
+I want pytest tests for the dataprep extraction and chunking pipeline,
+So that document processing logic is validated without real file system or embedding services.
+
+**Acceptance Criteria:**
+
+**Given** `genieai_dataprep_arangodb.py` implements custom ingestion (877 lines)
+**When** I create `tests/test_dataprep.py`
+**Then** tests verify multi-format document parsing (txt, md, pdf, xlsx, docx)
+**And** tests verify chunking strategy produces correctly sized chunks
+**And** tests verify labeling logic assigns correct labels to chunks
+**And** tests verify embedding generation calls TEI with correct payload
+**And** tests verify ArangoDB document insertion with correct graph structure
+**And** tests verify error handling for corrupted or unsupported file formats
+**And** all external services (Docling, TEI, ArangoDB) are mocked
+
+### Story 4.4: Test Reranker Score Validation and Core Types
+
+As a developer,
+I want pytest tests for the reranker and core type definitions,
+So that score validation, top-K constraints, and API protocols are validated.
+
+**Acceptance Criteria:**
+
+**Given** `genieai_reranker.py` validates scores and `genieai_api_protocol.py` defines custom Pydantic models
+**When** I create `tests/test_reranker.py`
+**Then** tests verify score validation accepts valid scores and rejects out-of-range values
+**And** tests verify top-K constraint enforcement returns exactly K results
+**And** tests verify TEI service call with correct payload
+**When** I create `tests/test_core.py`
+**Then** tests verify custom Pydantic models serialize/deserialize correctly
+**And** tests verify protocol constants match expected values
+**And** tests verify type validation on request/response models
+
+### Story 4.5: Test ChatQnA Orchestrator Interface
+
+As a developer,
+I want pytest tests for the ChatQnA orchestrator interface,
+So that the custom OPEA overlay orchestrator is validated without real services.
+
+**Acceptance Criteria:**
+
+**Given** `genieai_chatqna.py` implements a custom MegaService orchestrator (1,673 lines)
+**When** I create `tests/test_chatqna.py`
+**Then** tests verify the orchestrator accepts valid chat requests and returns responses
+**And** tests verify user profile enrichment logic with mocked user data
+**And** tests verify multilingual translation integration with mocked translation service
+**And** tests verify citation formatting in response output
+**And** tests verify error handling when downstream services fail
+**And** tests verify the orchestrator handles streaming responses (SSE)
+**And** all downstream services (retriever, reranker, vLLM, translation) are mocked via conftest fixtures
+
+## Epic 5: Document Repository Test Suite
+
+The developer writes and runs tests for file upload/download/search/delete endpoints, ClamAV security scanning, file type validation, and metadata service business logic.
+
+### Story 5.1: Create Document Repository Test Fixtures and Mocks
+
+As a developer,
+I want centralized test fixtures and mock factories for the document repository,
+So that all doc-repo tests use consistent, maintainable test data.
+
+**Acceptance Criteria:**
+
+**Given** the document-repository has `__tests__/__mocks__/shared-lib.js` for module-level mocking
+**When** I create the fixture infrastructure
+**Then** `__tests__/mocks/files.js` exports `createMockFile(overrides)` factory for file metadata objects
+**And** `__tests__/mocks/clamav.js` exports a mock ClamAV scanner that returns clean/infected results
+**And** `__tests__/fixtures/test-document.txt` is a plain text test file for upload tests
+**And** `__tests__/fixtures/test-document.pdf` is a PDF test file for multi-format validation
+**And** `__tests__/fixtures/eicar.txt` contains the standard EICAR test virus signature for ClamAV validation
+**And** the existing `__mocks__/shared-lib.js` continues to work unchanged
+**And** all fixtures use CommonJS `require()` syntax (NFR21)
+
+### Story 5.2: Test File Upload, Download, Search, and Delete Endpoints
+
+As a developer,
+I want route handler tests for all document repository endpoints,
+So that file operations are validated against the API contract.
+
+**Acceptance Criteria:**
+
+**Given** the document-repository has `fileController.js` (1,374 lines) with zero route tests
+**When** I create `__tests__/routes/upload.test.js`
+**Then** tests verify POST `/files/upload` accepts multipart file upload (201 + file metadata)
+**And** tests verify upload rejects unsupported file types (415)
+**And** tests verify upload triggers ClamAV scan
+**When** I create `__tests__/routes/download.test.js`
+**Then** tests verify GET `/files/:id/download` returns file content with correct headers
+**And** tests verify download returns 404 for non-existent file
+**When** I create `__tests__/routes/search.test.js`
+**Then** tests verify GET `/files/search` returns matching files for valid queries
+**And** tests verify search with empty query returns appropriate response
+**When** I create `__tests__/routes/delete.test.js`
+**Then** tests verify DELETE `/files/:id` removes a file (200)
+**And** tests verify delete returns 404 for non-existent file
+**And** all tests use Supertest with mocked fileService and ArangoDB
+
+### Story 5.3: Test File Service Business Logic
+
+As a developer,
+I want unit tests for the file service layer,
+So that file processing logic is validated without file system dependencies.
+
+**Acceptance Criteria:**
+
+**Given** `fileService.js` (882 lines) handles upload, download, delete, search, and ingestion
+**When** I create `__tests__/services/fileService.test.js`
+**Then** tests verify file upload stores file metadata in ArangoDB
+**And** tests verify file download retrieves file from storage
+**And** tests verify file search queries ArangoDB with correct filters
+**And** tests verify file delete removes metadata and triggers storage cleanup
+**And** tests verify ingestion triggers dataprep pipeline for new documents
+**And** ArangoDB, file system, and ClamAV are fully mocked
+**And** error handling covers storage failures and database errors
+
+### Story 5.4: Test Security Middleware and Metadata Services
+
+As a developer,
+I want tests for security middleware and metadata/label services,
+So that file security and metadata management are validated.
+
+**Acceptance Criteria:**
+
+**Given** the document-repository has security middleware and metadata/label services
+**When** I create `__tests__/middleware/security.test.js`
+**Then** tests verify ClamAV integration detects infected files (using EICAR test signature)
+**And** tests verify file type validation accepts allowed MIME types
+**And** tests verify file type validation rejects dangerous types (executable, script)
+**And** tests verify authentication middleware rejects unauthenticated requests
+**When** I extend existing `metadataService.test.js` and `labelService.test.js`
+**Then** tests verify metadata extraction from uploaded files
+**And** tests verify label assignment and retrieval
+**And** all security tests use the EICAR test fixture
+
+## Epic 6: Configuration Integrity Validation
+
+The DevOps engineer runs the configuration validation suite and sees clear pass/fail results for env var coverage, required secret defaults, conflicting configurations, hardware-specific parameter ranges, and feature flag interdependencies.
+
+### Story 6.1: Build Env Template Parser and Docker-Compose Cross-Reference Validator
+
+As a DevOps engineer,
+I want the configuration validator to parse the `env` template and cross-reference all variables against `docker-compose.yaml`,
+So that every compose reference is documented and no orphaned variables exist.
+
+**Acceptance Criteria:**
+
+**Given** the `env` template contains 50+ variables across 13 sections
+**When** I create `tests/config-validator/validate-env.js`
+**Then** the parser extracts all documented variables with their types, defaults, sections, and descriptions
+**When** I create `tests/config-validator/validate-compose.js`
+**Then** the cross-referencer finds all `${VAR}` references in `docker-compose.yaml`
+**And** it verifies every compose reference has a documented default in the `env` template
+**And** it identifies required secrets (no defaults) that are referenced in compose
+**And** it detects orphaned env template variables not referenced in compose
+**And** it produces structured output (pass/fail per variable) consumable by Jest
+**And** the validator completes in under 30 seconds for the full env template
+
+### Story 6.2: Build Hardware Profile and Feature Flag Validators
+
+As a DevOps engineer,
+I want the configuration validator to check hardware-specific parameter ranges and feature flag interdependencies,
+So that GPU misconfigurations and topology inconsistencies are caught automatically.
+
+**Acceptance Criteria:**
+
+**When** I create `tests/config-validator/validate-hardware.js`
+**Then** the validator defines valid parameter ranges per GPU profile (T4: 16GB VRAM, RTX 6000: 24GB VRAM)
+**And** it validates `VLLM_MAX_MODEL_LEN` against GPU memory constraints
+**And** it validates `TEI_BATCH_SIZE` and embedding model compatibility
+**And** it produces warnings for unsupported GPU types while allowing any CUDA-compatible device
+**When** I create `tests/config-validator/validate-features.js`
+**Then** the validator checks `DEPLOY_OPEA=0` means vLLM/TEI/retriever/dataprep/chatqna vars are irrelevant
+**And** it checks `DEPLOY_OPEA=1` means all OPEA-related vars must be set
+**And** it validates `KC_DATAPREP_CLIENT_SECRET` is required when dataprep features are enabled
+**And** it produces structured output consumable by Jest
+
+### Story 6.3: Create Configuration Validation Test Suite and Env Profiles
+
+As a DevOps engineer,
+I want a Jest test suite and environment-specific config profiles,
+So that configuration validation runs in CI and profiles can validate specific deployments.
+
+**Acceptance Criteria:**
+
+**When** I create `tests/config-validator/__tests__/config-validation.test.js`
+**Then** tests cover env template parsing with all 50+ variables extracted
+**And** tests cover docker-compose cross-reference with known compose references
+**And** tests cover hardware profile validation with valid and invalid GPU configs
+**And** tests cover feature flag interdependency checks
+**And** tests cover error reporting for missing or conflicting configurations
+**And** the test suite produces JUnit XML for GitLab CI reporting
+**When** I create config profile fixtures in `tests/fixtures/config/`
+**Then** `default.env` contains baseline configuration values
+**And** `gpu-t4.env` contains T4 GPU-specific overrides
+**And** `gpu-rtx6000.env` contains RTX 6000 GPU-specific overrides
+**And** `no-opea.env` contains `DEPLOY_OPEA=0` with minimal config
+
+## Epic 7: MELT-Ready Test Instrumentation
+
+The developer can trace test failures through structured log assertions and mock trace context, while Sprint 23's MELT observability platform can consume test telemetry without code changes.
+
+### Story 7.1: Create Structured Test Output and Trace Context Helpers
+
+As a developer,
+I want test framework helpers that produce structured output and mock trace IDs,
+So that Sprint 23's MELT platform can consume test telemetry without code changes.
+
+**Acceptance Criteria:**
+
+**Given** Sprint 23's MELT framework (VictoriaMetrics + Grafana + OTel) won't exist until Sprint 23
+**When** I create `tests/melt-helpers/trace-context.js`
+**Then** the helper generates deterministic mock trace IDs for JS test correlation
+**And** the helper is usable in Jest `beforeEach()` to set trace context per test
+**When** I create `tests/melt-helpers/trace-context.py`
+**Then** the helper generates mock trace context (trace_id, span_id) as pytest fixtures
+**And** the fixture is usable via `@pytest.fixture` decorator
+**And** trace IDs are deterministic and reproducible (NFR10)
+**And** no Sprint 22 code imports or depends on MELT libraries
+
+### Story 7.2: Create Structured Log Assertion Helpers
+
+As a developer,
+I want assertion helpers that validate structured JSON log output from services under test,
+So that test failures can be traced to specific log entries.
+
+**Acceptance Criteria:**
+
+**When** I create `tests/melt-helpers/log-assertions.js`
+**Then** `expectLogged(loggerMock, level, message)` asserts the logger was called with matching structured fields
+**And** the helper works with winston JSON log format
+**When** I create `tests/melt-helpers/log-assertions.py`
+**Then** `assert_logged(caplog, level, message)` asserts log records match the expected level and contain the message
+**And** the helper works with Python's `logging` and `CustomLogger` structured format
+**And** both helpers are importable by any component's test suite
+
+### Story 7.3: Create MELT Provider API Query Interface and Grafana Dashboard Specs
+
+As a developer,
+I want documentation for how Sprint 23 will consume test telemetry and display test health,
+So that the MELT integration path is clear and unambiguous.
+
+**Acceptance Criteria:**
+
+**When** I document the MELT Provider API query interface
+**Then** the spec defines how Sprint 23 queries test results via MELTService (no Sprint 22 implementation)
+**And** the spec defines how OTel ingests JUnit XML and JSON test results
+**And** the spec defines how trace context links test spans to service spans
+**When** I document the Grafana dashboard spec
+**Then** the spec defines Test Health panels: pass rate, execution time trends, flaky test detection
+**And** the spec defines how Test Health dashboards sit alongside Service Health dashboards
+**And** both specs are stored as markdown in `tests/melt-helpers/` for Sprint 23 reference
+
+## Epic 8: RAG Quality Assurance
+
+The QA engineer runs the RAG quality regression suite against a curated document corpus, sees RAGAS metrics compared against configurable thresholds, and flags quality degradation before release.
+
+### Story 8.1: Create RAG Quality Test Bed and Document Corpus Fixtures
+
+As a QA engineer,
+I want a curated document corpus with known QA pairs for RAG quality testing,
+So that RAG output quality is measured against a reproducible benchmark.
+
+**Acceptance Criteria:**
+
+**When** I create `tests/fixtures/corpora/el-salvador/`
+**Then** the corpus contains test documents in multiple formats (.txt, .md, .pdf, .xlsx, .docx)
+**And** `tests/fixtures/corpora/el-salvador/qa-pairs.json` contains curated query-answer pairs
+**And** each QA pair has: query, expected answer (or quality bounds), relevant document references
+**And** the corpus is version-controlled and committed to the repository
+**And** `tests/fixtures/arangodb/` contains ArangoDB collection and graph fixtures for the corpus
+
+### Story 8.2: Create RAGAS Threshold Configuration and Evaluation Pipeline
+
+As a QA engineer,
+I want a configurable RAGAS evaluation pipeline with quality thresholds,
+So that RAG output quality is measured and compared against defined standards.
+
+**Acceptance Criteria:**
+
+**When** I create `tests/rag-quality/thresholds.json`
+**Then** thresholds define: faithfulness >0.95, answer relevance >0.85, context precision >0.80, context recall >0.90
+**And** thresholds are configurable per deployment (different countries may have different standards)
+**When** I create `tests/rag-quality/evaluate.py`
+**Then** the pipeline executes predefined queries against the document corpus
+**And** the pipeline computes RAGAS metrics (faithfulness, answer relevance, context precision, context recall)
+**And** the pipeline compares scores against thresholds and reports pass/fail per metric
+**And** the pipeline handles GPU unavailability gracefully (conditional skip with clear reporting)
+**And** a `tests/rag-quality/README.md` documents usage and configuration
+
+### Story 8.3: Create RAG Quality Report Generator
+
+As a QA engineer,
+I want the RAG quality suite to produce machine-readable reports,
+So that CI pipelines and developers can consume quality results programmatically.
+
+**Acceptance Criteria:**
+
+**When** I create `tests/rag-quality/generate-report.py`
+**Then** the generator produces a JSON report with: timestamp, corpus used, per-query scores, overall scores, threshold comparison
+**And** the generator produces JUnit XML for GitLab CI test visualization
+**And** reports include per-metric pass/fail status and aggregate statistics
+**And** reports are version-controlled or uploaded as CI artifacts
+**And** the report format is compatible with Sprint 23 MELT ingestion (structured JSON)
+
+## Epic 9: AI-Assisted Test Generation
+
+The developer leverages AI to generate test scaffolding (boilerplate, mock factories, fixture generators) from existing code and receive test case suggestions based on code changes and API specifications.
+
+### Story 9.1: Create AI Test Scaffolding Generator
+
+As a developer,
+I want AI to generate test file scaffolding from existing code,
+So that writing boilerplate test files is automated and consistent.
+
+**Acceptance Criteria:**
+
+**When** AI generates test scaffolding for a production source file
+**Then** the generated file includes correct test runner setup (describe/it for Jest, class/def for pytest, group/test for Dart)
+**Then** the generated file includes correct imports using project conventions (CommonJS for backend, Options API for frontend, ITU headers for Python)
+**Then** the generated file includes mock setup using centralized mock patterns (closure-based refs for Jest, conftest.py for pytest)
+**Then** the generated file includes placeholder AAA structure with descriptive test names
+**And** the generated file passes the project's linter (ESLint/Ruff/flutter analyze) without manual fixes
+**And** the generated scaffolding follows the AI-Generated Test Rules from the architecture document
+
+### Story 9.2: Create AI Test Case Suggestion Engine
+
+As a developer,
+I want AI to suggest test cases based on code changes and API specifications,
+So that test coverage gaps are identified automatically.
+
+**Acceptance Criteria:**
+
+**When** AI analyzes a code change (diff or new file)
+**Then** it suggests test cases covering: happy path, error cases, edge cases, boundary values
+**And** suggestions reference specific functions, endpoints, or components being changed
+**When** AI analyzes an API specification (OpenAPI/Swagger)
+**Then** it suggests contract tests for each endpoint with example request/response pairs
+**And** suggestions are presented as human-readable descriptions before code generation
+**And** human review is required before suggestions become test code (FR46)

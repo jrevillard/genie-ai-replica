@@ -586,7 +586,10 @@ class QueryService {
 
           opeaPayload = {
             messages: queryText,
-            stream: false
+            stream: false,
+            context: {
+              language: queryData.context?.language,
+            },
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');

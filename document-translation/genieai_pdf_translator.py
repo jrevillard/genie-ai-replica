@@ -6,6 +6,7 @@
 # DEPENDENCIES 
 # ------------------------------------------------------------------------------------
 import logging
+import os
 import time
 import requests
 from pathlib import Path
@@ -60,8 +61,37 @@ SYSTEM_PROMPT = (
 
 # vLLM Specific Settings
 # This is leveraging vllm-vllm-translation-guardrail service
-VLLM_ENDPOINT = "http://localhost:9031/v1/chat/completions"
-VLLM_MODEL = "Infomaniak-AI/vllm-translategemma-4b-it"
+# These can be overridden via environment variables (e.g. from .env)
+_VLLM_TRANSLATION_BASE = os.getenv("VLLM_TRANSLATION_ENDPOINT", "http://localhost:9031")
+VLLM_ENDPOINT = f"{_VLLM_TRANSLATION_BASE}/v1/chat/completions"
+VLLM_COMPLETIONS_ENDPOINT = f"{_VLLM_TRANSLATION_BASE}/v1/completions"
+VLLM_MODEL = os.getenv("VLLM_TRANSLATION_MODEL_ID", "google/gemma-3-4b-it")
+IS_TRANSLATEGEMMA = "translategemma" in VLLM_MODEL.lower()
+
+
+def build_translategemma_prompt(text: str, source_lang_code: str, target_lang_code: str,
+                                 source_lang_name: str = "English", target_lang_name: str = "English") -> str:
+    """Build a prompt for TranslateGemma using the completions API.
+
+    Duplicated in genie-ai-overlay/chatqna/genieai_chatqna.py — keep in sync.
+    Keep in sync when updating the prompt.
+    """
+    return (
+        f"<bos><start_of_turn>user\n"
+        f"You are a professional {source_lang_name} ({source_lang_code}) to "
+        f"{target_lang_name} ({target_lang_code}) translator. Your goal is to "
+        f"accurately convey the meaning and nuances of the original {source_lang_name} "
+        f"text while adhering to {target_lang_name} grammar, vocabulary, and cultural "
+        f"sensitivities.\n"
+        f"CRITICAL: You MUST output ONLY in {target_lang_name} ({target_lang_code}). "
+        f"Do NOT output in Nepali, Hindi, Bengali, or any other language. "
+        f"Do NOT use Devanagari, Bengali, or any non-Latin script. "
+        f"{target_lang_name} uses the LATIN alphabet only.\n"
+        f"Produce only the {target_lang_name} translation, without any additional "
+        f"explanations or commentary. Please translate the following {source_lang_name} "
+        f"text into {target_lang_name}:\n\n\n{text}"
+        f"<end_of_turn>\n<start_of_turn>model\n"
+    )
 
 
 # ------------------------------------------------------------------------------------
@@ -160,24 +190,45 @@ def attempt_llm_call(text: str) -> str:
         return response["message"]["content"].strip()
         
     elif LLM_BACKEND == "vllm":
-        vllm_prompt = f"<<<source>>>{SOURCE_LANG}<<<target>>>{TARGET_LANG}<<<text>>>{text}"
-        payload = {
-            "model": VLLM_MODEL,
-            "messages": [{"role": "user", "content": vllm_prompt}],
-            "temperature": 0.1
-        }
-        
+        if IS_TRANSLATEGEMMA:
+            prompt = build_translategemma_prompt(
+                text=text,
+                source_lang_code=SOURCE_LANG,
+                target_lang_code=TARGET_LANG,
+                source_lang_name=SOURCE_LANG.upper(),
+                target_lang_name=TARGET_LANG.upper()
+            )
+            payload = {
+                "model": VLLM_MODEL,
+                "prompt": prompt,
+                "temperature": 0.0,
+                "max_tokens": min(max(len(text) // 2, 512), 4096),
+                "repetition_penalty": 1.2
+            }
+            endpoint = VLLM_COMPLETIONS_ENDPOINT
+        else:
+            vllm_prompt = f"Translate the following {SOURCE_LANG} markdown to {TARGET_LANG}. Translate every line, preserve all markdown formatting. Output ONLY the translated text.\n\n{text}"
+            payload = {
+                "model": VLLM_MODEL,
+                "messages": [{"role": "user", "content": vllm_prompt}],
+                "temperature": 0.1
+            }
+            endpoint = VLLM_ENDPOINT
+
         response = requests.post(
-            VLLM_ENDPOINT, 
-            json=payload, 
+            endpoint,
+            json=payload,
             headers={"Content-Type": "application/json"},
             timeout=REQUEST_TIMEOUT
         )
         response.raise_for_status()
         result = response.json()
-        
+
         if "choices" in result and len(result["choices"]) > 0:
-            return result["choices"][0]["message"]["content"].strip()
+            if IS_TRANSLATEGEMMA:
+                return result["choices"][0]["text"].strip()
+            else:
+                return result["choices"][0]["message"]["content"].strip()
         else:
             raise ValueError(f"Unexpected vLLM payload structure: {result}")
             

@@ -33,6 +33,18 @@ TRANSLATION_SERVICE_PORT = int(os.getenv("TRANSLATION_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_TIMEOUT = int(
     os.getenv("TRANSLATION_SERVICE_TIMEOUT", 180)
 )  # Timeout in seconds for translation service (default: 3 minutes)
+TRANSLATION_MODEL_ID = os.getenv("VLLM_TRANSLATION_MODEL_ID", "")
+IS_TRANSLATEGEMMA = "translategemma" in TRANSLATION_MODEL_ID.lower()
+# Connect directly to vLLM for translation when VLLM_TRANSLATION_ENDPOINT is set,
+# bypassing the OPEA translation microservice which reformats payloads and breaks
+# TranslateGemma's structured chat template. Falls back to OPEA proxy if not set.
+_VLLM_TRANSLATION_ENDPOINT = os.getenv("VLLM_TRANSLATION_ENDPOINT", "")
+if _VLLM_TRANSLATION_ENDPOINT:
+    TRANSLATION_LLM_URL = f"{_VLLM_TRANSLATION_ENDPOINT}/v1/chat/completions"
+    TRANSLATION_COMPLETIONS_URL = f"{_VLLM_TRANSLATION_ENDPOINT}/v1/completions"
+else:
+    TRANSLATION_LLM_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions"
+    TRANSLATION_COMPLETIONS_URL = f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/completions"
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
@@ -1059,13 +1071,49 @@ class ChatQnAService:
         self.megaservice.flow_to(retriever, rerank)
         self.megaservice.flow_to(rerank, llm)
 
-    async def _get_translated_history_string(self, history: list, target_language: str) -> str:
+    @staticmethod
+    def _build_translategemma_prompt(text: str, source_lang_code: str, target_lang_code: str,
+                                      source_lang_name: str = "English", target_lang_name: str = "English") -> str:
+        """Build a prompt for TranslateGemma using the completions API.
+
+        Duplicated in document-translation/genieai_pdf_translator.py — keep in sync.
+        """
+        return (
+            f"<bos><start_of_turn>user\n"
+            f"You are a professional {source_lang_name} ({source_lang_code}) to "
+            f"{target_lang_name} ({target_lang_code}) translator. Your goal is to "
+            f"accurately convey the meaning and nuances of the original {source_lang_name} "
+            f"text while adhering to {target_lang_name} grammar, vocabulary, and cultural "
+            f"sensitivities.\n"
+            f"CRITICAL: You MUST output ONLY in {target_lang_name} ({target_lang_code}). "
+            f"Do NOT output in Nepali, Hindi, Bengali, or any other language. "
+            f"Do NOT use Devanagari, Bengali, or any non-Latin script. "
+            f"{target_lang_name} uses the LATIN alphabet only.\n"
+            f"Produce only the {target_lang_name} translation, without any additional "
+            f"explanations or commentary. Please translate the following {source_lang_name} "
+            f"text into {target_lang_name}:\n\n\n{text}"
+            f"<end_of_turn>\n<start_of_turn>model\n"
+        )
+
+    async def _get_translated_history_string(self, history: list, target_language: str, source_lang_code: str = "en") -> str:
         """
         A helper that:
         1. Truncates history to stay within a token limit.
         2. Flattens the history into a single string.
         3. Sends the string to the translation LLM.
+
+        Automatically uses TranslateGemma structured format or generic prompt format
+        based on the configured VLLM_TRANSLATION_MODEL_ID.
+
+        Args:
+            history: Chat history as list of dicts or plain string (single-message mode).
+            target_language: Target language name (e.g. "English").
+            source_lang_code: Source ISO language code (e.g. "st") for TranslateGemma.
         """
+
+        # Single-message mode sends history as a plain string — translate it
+        if isinstance(history, str):
+            return await self._translate_text_chunk(history, target_language, source_lang_code=source_lang_code, iso_code="en")
 
         max_translation_chars = MAX_TRANSLATION_CHARS
         current_chars = 0
@@ -1083,6 +1131,7 @@ class ChatQnAService:
             current_chars += message_chars
         messages_to_process.reverse()
 
+
         flattened_history_parts = []
         for message in messages_to_process:
             role = message.get("role", "unknown").upper()
@@ -1091,28 +1140,50 @@ class ChatQnAService:
 
         flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
 
-        # --- Simple Translation API Call ---
-        prompt = (
-            f"Translate the following chat history to {target_language}. "
-            "Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\n"
-            f"HISTORY:\n{flattened_history_string}"
-        )
-
-        payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0, "stream": False}
+        # Build payload based on model type
+        if IS_TRANSLATEGEMMA:
+            # Use completions API with pre-formatted prompt (vLLM v0.10.0 cannot
+            # pass structured content through chat completions to TranslateGemma's template)
+            prompt = self._build_translategemma_prompt(
+                text=flattened_history_string,
+                source_lang_code=source_lang_code,
+                target_lang_code="en",
+                source_lang_name=source_lang_code.upper(),
+                target_lang_name="English"
+            )
+            payload = {
+                "model": TRANSLATION_MODEL_ID,
+                "prompt": prompt,
+                "temperature": 0.0,
+                "max_tokens": min(max(len(flattened_history_string) // 2, 512), 4096),
+                "repetition_penalty": 1.2
+            }
+            url = TRANSLATION_COMPLETIONS_URL
+        else:
+            prompt = f"Translate the following chat history to {target_language}. Preserve the role markers (e.g., 'USER:', 'ASSISTANT:').\n\nHISTORY:\n{flattened_history_string}"
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "stream": False
+            }
+            url = TRANSLATION_LLM_URL
 
         if logflag:
-            logger.debug(f"Payload for translation service: {payload}")
+            logger.debug(f"Payload for translation service ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
 
         try:
             async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
                 response = await client.post(
-                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
+                    url,
                     json=payload,
                     headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                translated_blob = response_data["choices"][0]["message"]["content"]
+                if IS_TRANSLATEGEMMA:
+                    translated_blob = response_data["choices"][0]["text"]
+                else:
+                    translated_blob = response_data["choices"][0]["message"]["content"]
                 if logflag:
                     logger.debug(f"Translated chat history: {translated_blob.strip()}")
                 return translated_blob.strip()
@@ -1160,51 +1231,74 @@ class ChatQnAService:
 
         return chunks
 
-    async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None) -> str:
-        """Translate a single chunk of text."""
-        # More specific prompt to avoid language confusion (e.g., Sesotho vs Afrikaans, Bengali vs Hindi)
-        language_notes = {
-            "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
-            "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
-            "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali).",
-        }
+    async def _translate_text_chunk(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
+        """Translate a single chunk of text.
 
-        note = language_notes.get(target_lang, "")
+        Automatically uses TranslateGemma completions API (with pre-formatted prompt)
+        or generic chat completions format based on the configured VLLM_TRANSLATION_MODEL_ID.
 
-        if iso_code:
-            prompt = (
-                f"Translate the following text to {target_lang} "
-                f"(ISO 639-1 code: {iso_code}). {note} "
-                "Only output the translated text, nothing else.\n\n"
-                f"Text: {text}\n\nTranslation:"
+        Args:
+            text: Text to translate.
+            target_lang: Target language name (e.g. "Sesotho").
+            iso_code: Target ISO language code (e.g. "st").
+            source_lang_code: Source ISO language code (e.g. "en"). Defaults to "en".
+        """
+        if IS_TRANSLATEGEMMA:
+            target_lang_code = iso_code.lower() if iso_code else target_lang.lower()
+            prompt = self._build_translategemma_prompt(
+                text=text,
+                source_lang_code=source_lang_code,
+                target_lang_code=target_lang_code,
+                source_lang_name=source_lang_code.upper(),
+                target_lang_name=target_lang
             )
+            payload = {
+                "model": TRANSLATION_MODEL_ID,
+                "prompt": prompt,
+                "temperature": 0.0,
+                "max_tokens": min(max(len(text) // 2, 512), 4096),
+                "repetition_penalty": 1.2
+            }
+            url = TRANSLATION_COMPLETIONS_URL
         else:
-            prompt = (
-                f"Translate the following text to {target_lang}. {note} "
-                "Only output the translated text.\n\n"
-                f"Text: {text}\n\nTranslation:"
-            )
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0,
-            "stream": False,
-        }
+            language_notes = {
+                "Sesotho": "NOTE: Sesotho is spoken in Lesotho and South Africa. It is NOT Afrikaans.",
+                "Bengali": "NOTE: Bengali is spoken in Bangladesh and India. It is NOT Hindi.",
+                "Mandinka": "NOTE: Mandinka is spoken in West Africa (Gambia, Senegal, Mali)."
+            }
+            note = language_notes.get(target_lang, "")
+            if iso_code:
+                prompt = f"Translate the following text to {target_lang} (ISO 639-1 code: {iso_code}). {note} Only output the translated text, nothing else.\n\nText: {text}\n\nTranslation:"
+            else:
+                prompt = f"Translate the following text to {target_lang}. {note} Only output the translated text.\n\nText: {text}\n\nTranslation:"
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "stream": False
+            }
+            url = TRANSLATION_LLM_URL
+
+        if logflag:
+            logger.debug(f"Translation payload ({'TranslateGemma' if IS_TRANSLATEGEMMA else 'generic'}): {payload}")
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=TRANSLATION_SERVICE_TIMEOUT) as client:
                 response = await client.post(
-                    f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
+                    url,
                     json=payload,
                     headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                return response_data["choices"][0]["message"]["content"].strip()
+                if IS_TRANSLATEGEMMA:
+                    return response_data["choices"][0]["text"].strip()
+                else:
+                    return response_data["choices"][0]["message"]["content"].strip()
         except Exception as e:
-            logger.warning(f"Failed to translate chunk, returning original: {e}")
+            logger.warning(f"Failed to translate chunk, returning original: {type(e).__name__}: {e}")
             return text
 
-    async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None) -> str:
+    async def _translate_with_chunking(self, text: str, target_lang: str, iso_code: str = None, source_lang_code: str = "en") -> str:
         """Translate long text by splitting into chunks and translating separately."""
         chunks = self._split_text_into_chunks(text, max_chars=2000)
 
@@ -1213,7 +1307,7 @@ class ChatQnAService:
 
         # Translate chunks concurrently
         translated_chunks = await asyncio.gather(
-            *[self._translate_text_chunk(chunk, target_lang, iso_code) for chunk in chunks]
+            *[self._translate_text_chunk(chunk, target_lang, iso_code, source_lang_code=source_lang_code) for chunk in chunks]
         )
 
         return " ".join(translated_chunks)
@@ -1304,10 +1398,13 @@ class ChatQnAService:
 
                 # Attempt to detect language from the last user message
                 last_user_content = ""
-                for msg in reversed(full_chat_history):
-                    if msg.get("role") == "user":
-                        last_user_content = msg.get("content", "")
-                        break
+                if isinstance(full_chat_history, str):
+                    last_user_content = full_chat_history
+                else:
+                    for msg in reversed(full_chat_history):
+                        if msg.get("role") == "user":
+                            last_user_content = msg.get("content", "")
+                            break
 
                 if logflag:
                     logger.info(
@@ -1362,11 +1459,14 @@ class ChatQnAService:
                 logger.debug(
                     f"Original language detected: {original_language}. Proceeding with translation of chat history."
                 )
-            translated_history_string = await self._get_translated_history_string(full_chat_history, "English")
+            translated_history_string = await self._get_translated_history_string(full_chat_history, "English", source_lang_code=original_language.lower())
         else:
             # If already English, flatten without translation
-            parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
-            translated_history_string = " |<-MSG->| ".join(parts)
+            if isinstance(full_chat_history, str):
+                translated_history_string = full_chat_history
+            else:
+                parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
+                translated_history_string = " |<-MSG->| ".join(parts)
 
         if logflag:
             logger.debug(f"Translated History String: {translated_history_string}")

@@ -1,494 +1,549 @@
 ---
-prd_key: mobile-oidc
+prd_key: testing-framework
 stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete']
 status: complete
 inputDocuments:
-  - '_bmad-output/planning-artifacts/prd.md'
-  - 'GitLab Issue #613 - Migrate Flutter mobile app to Keycloak OIDC authentication'
-  - '_bmad-output/planning-artifacts/research/technical-identity-provider-integration-research-2026-03-26.md'
   - '_bmad-output/project-context.md'
   - 'docs/architecture.md'
-  - 'docs/keycloak-admin-guide.md'
-  - 'docs/external-idp-integration-guide.md'
   - 'docs/roadmap-sprint-20-to-25.md'
+  - 'docs/e2e-tests/README.md'
+  - 'docs/keycloak-admin-guide.md'
+  - 'docs/docker-compose-setup.md'
+  - 'docs/database-migrations.md'
+  - 'docs/LOGGING-ARCHITECTURE-EVALUATION.md'
+  - 'GitLab Issue #599 - Establish automated test suite for OPEA microservices'
+  - '_bmad-output/planning-artifacts/research/technical-identity-provider-integration-research-2026-03-26.md'
 documentCounts:
   briefs: 0
   research: 1
   brainstorming: 0
-  projectDocs: 4
+  projectDocs: 8
   gitlabIssues: 1
   projectContext: '_bmad-output/project-context.md'
 workflowType: 'prd'
-lastEdited: '2026-04-23'
-editHistory:
-  - date: '2026-04-23'
-    changes: 'Validation edit: removed impl leakage from 16 FRs, rewrote 9 NFRs with metrics/methods, added NFR10 accessibility, added Out of Scope section, added Mobile Accessibility domain note, updated Test Matrix with NFR references, updated Measurable Outcomes test coverage target'
 classification:
-  projectType: 'Mobile App (Flutter)'
+  projectType: 'Platform Infrastructure / Deployment Verification System'
   domain: 'Govtech — Digital Public Infrastructure (DPI)'
-  complexity: 'high'
-  projectContext: 'brownfield — migration auth mobile existant vers Keycloak OIDC'
+  complexity: 'Very High'
+  projectContext: 'Mixed (brownfield application code across 6 country deployments; greenfield quality infrastructure with zero CI/CD)'
+  scopeMatrix:
+    components:
+      - 'gov-chat-backend (Node.js/Express, CommonJS)'
+      - 'gov-chat-frontend (Vue 3, Options API)'
+      - 'genie-ai-overlay (4 Python/FastAPI OPEA microservices)'
+      - 'document-repository (Node.js)'
+      - 'genie_ai_mobile (Flutter/Dart)'
+    deploymentTargets: ['Docker Compose', 'Docker Swarm', 'Kubernetes']
+    testEcosystems: ['Jest', 'pytest', 'Vue Test Utils', 'Flutter test', 'Patrol', 'Playwright', 'fast-check', 'Hypothesis']
+    existingCoverage: 'Sparse — backend auth-only, frontend stores-only, OPEA zero, mobile service-layer-only, E2E auth-only, CI/CD zero'
+  testingPhilosophy: >
+    Interface-based: treat each layer and component as an interface with specific
+    environment and expected outputs. Organized by PCCQ pillars (Pipeline, Contract,
+    Configuration, Quality) rather than traditional test levels. Deterministic scaffolding
+    tests for contracts and configuration; probabilistic quality bounds for RAG outputs.
+    Existing test strategy covers dataprep, retriever, and LLM validation with RAGAS
+    framework metrics. El-Salvador branch as canonical test bed.
 ---
 
-# Product Requirements Document - genie-ai (Mobile OIDC Migration)
+# Product Requirements Document - genie-ai (Testing Framework)
 
-**Author:** Jerome
-**Date:** 2026-04-23
+**Author:** God
+**Date:** 2026-04-27
 
 ## Executive Summary
 
-GENIE.AI is an open-source generative AI framework for the public sector, deployed across multiple government institutions via a white-label model. The web frontend and backend have completed their migration to Keycloak OIDC (MR !36), but the Flutter mobile application was explicitly deferred. All legacy auth endpoints it depended on have been removed, rendering the mobile app non-functional. This PRD covers the migration of the Flutter mobile app to Keycloak OIDC, restoring authentication and aligning it with the architecture established for the rest of the system.
+GENIE.AI is an open-source sovereign RAG framework deployed across 6+ country projects for government digital public infrastructure. Each deployment is a unique configuration of the same codebase — different documents, languages, GPU profiles, and environment variables producing different behavior. This initiative establishes the automated quality assurance infrastructure that enables a small dev/QA team to confidently merge framework changes without risking regression across any active or future deployment.
 
-Each institutional deployment operates as an independent instance with its own Keycloak realm, backend, and dedicated app store presence. The mobile migration must support this white-label model: every deployment gets a dedicated Flutter build with its own app ID, OIDC client, deep link scheme, and backend URL — all compiled at build-time via Flutter flavors.
-
-The migration will implement the Authorization Code flow with PKCE (RFC 8252), using the system browser (ASWebAuthenticationSession on iOS, Chrome Custom Tabs on Android) rather than embedded webviews. This provides native SSO with the device browser, password manager/passkey compatibility, and ensures the app never handles user credentials directly. Each deployment will have its own Keycloak client configured as a public client with PKCE mandatory — no shared secrets between deployments.
+The primary consumers are the core development and QA team, who must validate that every framework version supports all deployed use cases and new use cases under development. The remit is comparable to OPEA and Haystack — providing the quality assurance foundation that makes a RAG framework trustworthy for citizen-facing government services. Automation is non-negotiable given the surface area: 5 components across 3 languages (Node.js, Python, Dart), 3 deployment targets (Docker Compose, Swarm, Kubernetes), 50+ environment variables with complex interdependencies, and probabilistic RAG outputs that cannot be validated through deterministic assertions alone.
 
 ### What Makes This Special
 
-This is not a simple auth library swap. It is building a **white-label OIDC authentication foundation** designed for sovereign, multi-tenant government deployments. Key differentiators:
+The system under test is not code — it is a *configured deployment*. Correctness is defined as: given configuration X and documents Y, the pipeline produces outputs within quality bounds Z across deployment target T. This demands a testing philosophy organized around four pillars rather than traditional test levels:
 
-- **Per-deployment isolation** — each institution gets its own Keycloak OIDC client, build, and app store presence. No shared credentials or configuration between deployments.
-- **State-of-the-art mobile OIDC** — Authorization Code + PKCE via system browser, following RFC 8252 and OAuth 2.1 best practices. No implicit grant, no embedded webviews, no client secrets in mobile code.
-- **Sovereign deployment compatibility** — works in air-gapped and restricted-network environments where Keycloak runs as a local identity provider.
-- **Token passthrough alignment** — the mobile app will use the same token validation architecture as the web frontend: Keycloak tokens validated directly at the backend via JWKS, with JIT user provisioning in ArangoDB.
+- **Pipeline integrity** — data flows correctly through each stage (extraction, chunking, embedding, retrieval, reranking, generation)
+- **Contract verification** — every interface between components honors its API contract
+- **Configuration validation** — the massive environment variable surface controls system behavior as documented
+- **Quality assurance** — RAG outputs meet RAGAS-based thresholds (faithfulness, relevance, context precision/recall) against known document sets
+
+An existing test strategy covers the AI/ML pipeline (dataprep extraction fidelity, retriever hybrid search optimization, LLM grounding and parameter tuning) with detailed parameter sweep matrices for GPU profiles. vLLM was selected as the inference engine to support multi-GPU sharding for large LLMs, though multi-GPU testing is out of scope for the current initiative due to resource constraints. The framework targets any CUDA-compatible GPU hardware (H100, A40, H200, RTX 6000 Ada, Tesla T4, and future-compatible devices), with the aspiration of eventual hardware-agnostic support beyond CUDA where technology permits.
+
+This PRD expands the existing AI/ML test foundation floor-to-ceiling: backend API contracts, frontend component behavior, document repository security, mobile service layer, authentication flows, and a CI/CD pipeline that orchestrates everything from zero. AI is leveraged for test generation and maintenance to maximize coverage with limited team resources.
 
 ## Project Classification
 
-| Dimension | Value |
-|-----------|-------|
-| Project Type | Mobile App (Flutter) |
+| Dimension | Classification |
+|-----------|---------------|
+| Project Type | Platform Infrastructure / Deployment Verification System |
 | Domain | Govtech — Digital Public Infrastructure (DPI) |
-| Complexity | High |
-| Project Context | Brownfield — migration of existing mobile auth to Keycloak OIDC |
-| Deployment Model | White-label, one dedicated build per institution |
+| Complexity | Very High |
+| Project Context | Mixed (brownfield application code across 6 country deployments; greenfield quality infrastructure with zero CI/CD) |
+| Components | gov-chat-backend (Node.js/Express), gov-chat-frontend (Vue 3), genie-ai-overlay (4 Python/FastAPI OPEA microservices), document-repository (Node.js), genie_ai_mobile (Flutter/Dart) |
+| Deployment Targets | Docker Compose, Docker Swarm, Kubernetes |
+| GPU Hardware | Any CUDA-compatible device (H100, A40, H200, RTX 6000 Ada, Tesla T4); multi-GPU sharding supported by vLLM but out of scope for initial testing |
+| Test Ecosystems | Jest, pytest, Vue Test Utils, Flutter test, Playwright |
+| Observability (Sprint 23) | MELT Provider API (Metrics, Events, Logs, Traces) — VictoriaMetrics + Grafana + OpenTelemetry; Issues #354, #355-#361, #589-#591 |
 
 ## Success Criteria
 
 ### User Success
 
-- A user opens the app, taps "Sign in", is redirected to the system browser showing the institution's Keycloak login page, and is back in the app with a valid session — with no confusion about why the browser opened.
-- Token refresh is transparent: when the access token expires, the refresh token is used silently. The user is never prompted to re-authenticate unless the Keycloak session itself has expired.
-- The login page reflects the institution's branding (Keycloak theme), providing a consistent trust signal.
-- On subsequent app launches, if the refresh token is still valid, the user is logged in immediately without any browser redirect.
+- A developer merges a PR and the CI pipeline runs the full test suite automatically, reporting pass/fail across all components within a configured time budget — no manual testing required
+- A QA engineer runs a single command to execute the full verification suite against a local Docker Compose environment, seeing clear pass/fail results for pipeline integrity, contract compliance, configuration validation, and RAG quality thresholds
+- A deployment engineer for a new country project runs the verification suite against their specific document corpus and configuration, receiving a quality report confirming the deployment is production-ready
+- When tests fail, the developer can trace the failure through the full request path using MELT distributed traces — a single trace ID linking logs across Kong, Backend, ChatQnA, Retriever, and LLM services
+- The team leverages AI-assisted test generation to produce new test cases from code changes, reducing the manual test authoring burden
 
 ### Business Success
 
-- The mobile app is functional again after being broken by the removal of legacy auth endpoints in MR !36.
-- A new institutional deployment can be onboarded in days: add a Flutter flavor config file + create a Keycloak client + publish the build — following a documented, repeatable process.
-- Issue #597 (SSE streaming for mobile) is unblocked — the OIDC migration provides a clean auth API that streaming can consume without rework.
-- The mobile app can be submitted to app stores (Google Play, Apple App Store) for each institution with its own identity.
+- Sprint 24 ChatQnA refactoring proceeds with regression safety — the test suite catches breaking changes before they reach any deployment
+- Sprint 24 agentic workflows (multi-step processes spanning multiple MCP servers) are debuggable through MELT distributed tracing
+- New country onboarding time decreases as the verification framework provides automated validation of deployment correctness
+- The framework serves as a quality gate for all merges, reducing production incidents caused by configuration drift or interface breakage across 6+ active country deployments
+- The test infrastructure positions GENIE.AI for DPG compliance verification as the project matures
 
 ### Technical Success
 
-- **Zero legacy**: all legacy auth code removed (`auth_proxy.dart`, `password_proxy.dart`, `register_screen.dart`, SHA-256 login hashing, plaintext password handling). `git grep` on legacy endpoints returns nothing.
-- **Secure token storage**: tokens stored in platform keystore/keychain (iOS Keychain, Android EncryptedSharedPreferences), never in plaintext `SharedPreferences`.
-- **Public client + PKCE**: each deployment's Keycloak client is configured as a public client with PKCE mandatory — no client secret in mobile code.
-- **SSL enforcement**: the `badCertificateCallback` bypass in `main.dart` is removed. Valid TLS certificates are enforced.
-- **Cross-platform parity**: the OIDC flow works identically on iOS and Android using the same `flutter_appauth` abstraction.
-- **Automated tests**: unit and integration tests cover login, silent refresh, logout, network errors, token expiry, and Keycloak session expiry.
+- CI/CD pipeline runs on every merge request: unit tests, contract tests, and configuration validation as mandatory gates
+- Integration tests run against deployed infrastructure (Docker Compose baseline) on a scheduled basis
+- RAG quality regression suite produces RAGAS scores against the El-Salvador test bed, flagging degradation before release
+- All 5 components have test coverage: backend (Jest), frontend (Vue Test Utils), OPEA microservices (pytest), document-repository (Jest), mobile (Flutter test)
+- Test execution is deterministic and reproducible — same inputs produce same results across runs
+- The test framework is adaptable to future GPU hardware and multi-GPU sharding configurations without architectural rework
+- Test instrumentation interoperates with the MELT Provider API (Sprint 23) — test frameworks consume structured JSON logs, distributed trace context, and metrics from the same telemetry pipeline that powers production observability
+
+### MELT Integration (Testing x Observability Synergy)
+
+The MELT framework (Sprint 23, Issues #354-#361, #589-#591) transforms testing from pass/fail assertions into full-lifecycle quality intelligence:
+
+**Testing enables MELT:** Test execution produces structured telemetry (results as events, assertion counts as metrics, traces as spans) feeding the same VictoriaMetrics + Grafana stack used for production monitoring.
+
+**MELT enables testing:** Distributed traces turn a failing E2E test from "request timed out" into "retriever span took 12s because ArangoDB query hit graph traversal depth 4." Structured JSON logs enable programmatic log assertion — assert on structure, not parse plain text.
+
+**MELT Provider API as test utility:** Test suites query MELTService post-execution to verify error logs were emitted for expected failures, trace spans completed within latency thresholds, and metrics stayed within bounds.
+
+**Dependency alignment:** Issue #601 depends on "Sprint 22 test framework (test instrumentation)." The testing framework must establish instrumentation hooks that Sprint 23 builds upon — test fixtures producing trace context, assertion helpers validating log output, metric collection patterns feeding VictoriaMetrics.
 
 ### Measurable Outcomes
 
-| Metric | Target |
-|--------|--------|
-| Silent token refresh latency | < 2 seconds (user should not notice) |
-| Legacy auth code remaining | 0 files, 0 endpoints |
-| Supported deployment flavors | 1 at MVP, 2+ at Growth |
-| SSL bypass (`badCertificateCallback`) | Removed in MVP |
-| Test coverage for auth flows | Login, refresh, logout, error, expiry scenarios; unit tests achieve minimum 80% line coverage on auth service layer |
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Component test coverage (floor-to-ceiling) | All 5 components with test suites | Test files exist and pass for each component |
+| CI pipeline gate coverage | Unit + contract + config validation on every MR | Pipeline runs and blocks on failure |
+| RAG quality regression | RAGAS scores within thresholds (Faithfulness >0.95, Relevance >0.85, Context Precision >0.80, Context Recall >0.90) | Automated scoring against El-Salvador test bed |
+| Configuration validation | All env vars documented, defaults validated, interdependencies checked | Static analysis + integration verification |
+| Deployment target verification | Tests pass against Docker Compose baseline | Automated test matrix |
+| Test execution time (unit + contract) | <10 minutes total | CI pipeline timing |
+| E2E test execution time | <30 minutes | CI pipeline timing |
+| MELT-ready test output | Test results consumable as structured events via OTel | Test framework emits OTel-compatible telemetry |
+
+## Product Scope
+
+### MVP - Minimum Viable Product
+
+- CI/CD pipeline (GitLab CI) with unit test, contract test, and configuration validation gates
+- Backend test suite: API route contracts, service layer unit tests, middleware tests
+- Frontend test suite: component tests for critical UI flows, store/service tests
+- OPEA microservice test suite: pytest for retriever, dataprep, reranker, core (interface tests with mocked dependencies); Hypothesis property-based tests for parsers; golden/master tests for pipeline outputs
+- Document-repository test suite: route handler tests, middleware tests
+- OpenAPI schema validation: express-openapi-validator (backend), openapi-typescript-codegen (frontend typed client), pytest schema checks (OPEA)
+- Configuration validation suite: env template schema validation, docker-compose var coverage
+- Mobile test suite: existing service-layer tests integrated into CI
+- Test instrumentation patterns: structured log assertions, trace context propagation in test fixtures (MELT-ready hooks for Sprint 23)
+
+### Growth Features (Post-MVP)
+
+- RAG quality regression suite with RAGAS scoring against El-Salvador test bed
+- Integration tests against deployed Docker Compose environment
+- Swarm deployment target verification
+- E2E Playwright expansion beyond auth flows (chatbot, document upload, admin)
+- AI-assisted test generation and maintenance tooling
+- Kubernetes deployment target verification
+- Performance benchmarking (latency, throughput) per the existing test strategy
+- MELT-powered test diagnostics: query traces/logs/metrics from test runs via MELT Provider API
+- Test health dashboards in Grafana alongside service health dashboards
+- Mutation testing (Stryker) on a scheduled basis for test quality measurement
+
+### Vision (Future)
+
+- Multi-GPU sharding test coverage
+- Hardware-agnostic GPU testing (beyond CUDA where technology permits)
+- Country-specific test beds with per-deployment RAG quality verification
+- Automated test generation from OpenAPI specs and code changes
+- Chaos engineering tests for deployment resilience
+- SBOM/SLSA compliance test integration
+- Contract testing with OpenAPI for inter-service boundaries
+- MELT-driven continuous quality validation: metrics from test runs feed anomaly detection, alerting on degradation trends, and automated regression detection without explicit test cases
 
 ## User Journeys
 
-### Journey 1: Maria — First Login on Mobile (Happy Path)
+### Journey 1: Developer Merges a Feature Branch (Happy Path)
 
-Maria is a policy analyst who uses GENIE.AI daily on her desktop. Her institution has just rolled out the mobile app. She installs it from the App Store, opens it, and sees a branded splash screen followed by the login screen.
+**Alex** is a backend developer who just finished refactoring the ChatQnA service interface. They push to a feature branch and open a merge request.
 
-She taps "Sign in". The system browser opens, showing her institution's Keycloak login page — the same one she knows from the web. She enters her credentials (or uses her saved password/passkey from the browser). The browser closes and she's back in the app, authenticated. Her conversation history syncs from the backend and she starts chatting immediately.
+The CI pipeline triggers automatically. Within minutes, Alex sees the pipeline status: backend unit tests pass, contract tests pass, configuration validation passes. But the OPEA microservice integration test fails — the retriever is returning a different response shape after the refactor. Alex clicks into the failing test, sees the exact assertion that failed and the actual vs. expected response. They fix the interface mismatch, push again, and the full pipeline goes green. They merge with confidence.
 
-**Key moment:** The "it just works" realization — same Keycloak, same credentials, seamless transition from desktop to mobile.
+### Journey 2: QA Engineer Validates a Release Candidate (Edge Case)
 
-**What could go wrong:** Weak network causes the browser redirect to hang — the app shows a clear "connection error" state with a retry button, not a blank screen or an infinite spinner.
+**Sam** is preparing the v2.x release for the El-Salvador deployment. They run the full verification suite locally against Docker Compose. The RAG quality regression suite executes 100 queries against the El-Salvador document corpus. The RAGAS report shows Faithfulness at 0.96, Answer Relevance at 0.87 — both above threshold. But Context Precision drops to 0.78, below the 0.80 target. Sam investigates: a recent chunking parameter change in dataprep caused slightly broader retrieval. They flag this for the team, document the regression, and the release proceeds with a known issue tracked for the next sprint.
 
-### Journey 2: Maria — Silent Token Refresh
+### Journey 3: DevOps Engineer Onboards a New Country (Operations)
 
-Maria hasn't used the app in two days. She opens it again. The access token has expired, but the refresh token is still valid. The app silently exchanges the refresh token for a new access token — no browser redirect, no user interaction. She sees her chat interface immediately.
+**Priya** is setting up GENIE.AI for a new government deployment in Southeast Asia. The documents are in a mix of English and the local language, and the GPU hardware is an A40.
 
-**Key moment:** She didn't even notice the re-authentication happened.
+Priya follows the installation guide, configures the `.env` file for the A40 profile, and runs the configuration validation suite. It flags two issues: `VLLM_MAX_MODEL_LEN` is set to 32768 (too high for the A40's 48GB with the selected model), and `DOCUMENT_INGESTION_LANGUAGE` is set to `en` but the document corpus includes local-language files. Priya corrects both, validation passes, and she proceeds with document ingestion and quality verification.
 
-**Edge case — App returning from background:** Maria left the app open in the background for 3 hours. The refresh token has expired. When she returns, `AppLifecycleState.resumed` triggers a proactive token check. The refresh fails. The app clears local tokens and transitions smoothly to the login screen with a message: "Your session has expired. Please sign in again." No crash, no blank screen.
+### Journey 4: Developer Debugs a Multi-Service Failure (MELT-Enabled Troubleshooting)
 
-**Edge case — Token valid locally but rejected by backend:** Maria has a valid access token in keystore, but the admin has deleted her Keycloak account since her last refresh. She makes an API call, the backend returns 401. The app attempts a silent refresh. The refresh also fails (user deleted). The app clears tokens and shows the login screen.
+**Marcus** sees that an E2E test for the full RAG pipeline is failing intermittently — "request timed out after 30s."
 
-### Journey 3: Maria — Admin Revokes Her Session
+After Sprint 23's MELT rollout, Marcus doesn't just see a timeout. The test framework captures the OTel trace context from the failed request. Marcus queries the MELT Provider API and sees the full trace waterfall: Kong forwarded in 5ms, Backend processed in 12ms, ChatQnA received the request, but the Retriever span shows a 28s ArangoDB query hitting a graph traversal depth of 4. The test fixture had stale test data that created an unexpectedly deep graph. Marcus updates the fixture, the test passes consistently, and the trace data is archived as part of the test report.
 
-Maria has changed departments. Chen (the functional admin) updates her Keycloak roles. Maria has the app in the foreground. On the next API call, the backend validates her token (still technically valid). However, when her token expires and the app attempts a refresh, Keycloak rejects it (session revoked). The app clears local tokens and shows the login screen.
+### Journey 5: Team Lead Reviews Test Health Dashboard (MELT-Enabled Visibility)
 
-**Proactive detection:** When the app returns to foreground (`AppLifecycleState.resumed`), it can optionally call the Keycloak userinfo endpoint to verify the session is still active, catching revoked sessions before the user encounters an API error.
-
-### Journey 4: Maria — Logout
-
-Maria taps "Sign out" in the app. The app clears local tokens from keystore/keychain. The app also initiates Keycloak logout via the `end_session_endpoint` (front-channel logout), so the Keycloak session is terminated. If Maria taps "Sign in" immediately after, the browser opens the Keycloak login page — she is not automatically re-authenticated.
-
-### Journey 5: Maria — Unstable Network During Login
-
-Maria is on a weak 3G connection. She taps "Sign in", the browser opens, she authenticates successfully, but the redirect callback to the app fails mid-way (timeout, lost packet). The app never receives the deep link with the authorization code. The app remains on the login screen — not stuck on a spinner, but ready for another attempt. Maria taps "Sign in" again. The browser opens, Keycloak recognizes her active session (SSO), and the callback succeeds this time.
-
-### Journey 6: Maria — Password Reset
-
-Maria has forgotten her password. On the Keycloak login page in the browser, she taps "Forgot password". Keycloak sends her a reset link by email. She taps the link on her phone. The deep link opens the Keycloak password reset flow in the browser (not intercepted by the app). She sets a new password, then navigates back to the app and signs in with her new credentials.
-
-### Journey 7: Amadou — Onboarding a New Deployment
-
-Amadou's agency wants its own branded mobile app in the Play Store. He follows the deployment guide: copies the Flutter flavor template, fills in the agency's app ID, Keycloak URL, backend URL, and deep link scheme. He creates a new Keycloak client (`genie-mobile-agencyX`) as a public client with PKCE enabled. He builds the flavor, tests the login flow on both iOS and Android, and submits to the store.
-
-**Key moment:** The entire onboarding takes under a day — copy template, fill values, build, test, ship.
-
-**What could go wrong:** The deep link scheme conflicts with another app on the test device. The guide documents how to choose unique, reverse-DNS-formatted schemes.
-
-### Journey 8: Amadou — Air-Gapped Deployment
-
-Amadou deploys GENIE.AI in a fully offline government facility. No external IdP — Keycloak runs as the local identity provider. He builds the mobile app flavor pointing to the internal Keycloak URL. The device must be on the internal network (corporate WiFi or VPN) so the system browser can reach Keycloak. He configures local DNS resolution for the Keycloak hostname. The system browser opens the Keycloak login page served from the internal network. Login works identically to a connected deployment.
-
-**Key moment:** OIDC works identically whether Keycloak is internet-facing or air-gapped.
-
-**Prerequisite:** The mobile device must have network access to the Keycloak server. The deployment guide must document this network requirement explicitly.
+**David** opens Grafana and sees the Test Health dashboard alongside Service Health — one pane of glass. The dashboard shows: 847 tests across 5 components, 99.4% pass rate over 7 days. One test is flaky — `retriever-hybrid-search` fails intermittently on Friday afternoons. The error logs panel shows the failure correlates with ArangoDB compaction cycles. David creates a task to add a retry decorator and isolate the test from compaction timing.
 
 ### Journey Requirements Summary
 
-| Journey | Reveals Requirements |
-|---------|---------------------|
-| Maria — First Login | System browser redirect, Keycloak SSO, branded splash screen, conversation sync |
-| Maria — Silent Refresh | Silent refresh via refresh token, background expiry detection (`AppLifecycleState`), 401 fallback chain |
-| Maria — Session Revoked | Proactive session validation on resume, graceful degradation |
-| Maria — Logout | Local token clearing + Keycloak front-channel logout (`end_session_endpoint`) |
-| Maria — Unstable Network | Deep link callback failure handling, retry without infinite spinner |
-| Maria — Password Reset | Deep link routing to browser (not app intercept), post-reset login flow |
-| Amadou — New Deployment | Flavor template system, Keycloak client creation, deep link uniqueness guide |
-| Amadou — Air-Gapped | Network prerequisite documentation, local DNS, no external dependency |
+| Journey | Key Capabilities |
+|---------|-----------------|
+| Developer merges feature | CI pipeline, per-component stages, fast feedback, clear failure reporting |
+| QA validates release | Local execution, RAGAS scoring, threshold comparison, regression tracking |
+| DevOps onboards country | Config validation, hardware-aware checks, env interdependency checks, corpus-specific verification |
+| Developer debugs failure | OTel trace context in tests, MELT Provider API diagnostics, trace-linked reporting |
+| Team lead reviews health | Test telemetry in Grafana, flaky test detection, execution time trends |
 
 ## Domain-Specific Requirements
 
-The GENIE.AI domain (Govtech — Digital Public Infrastructure) imposes constraints that the mobile OIDC migration inherits from the existing architecture. Most regulatory and sovereignty requirements are already addressed by the backend Keycloak integration (MR !36). The mobile migration must align with these existing constraints without introducing new compliance surfaces.
+### Compliance & Regulatory
 
-### App Store Compliance
+- DPG (Digital Public Goods) compliance — the framework must produce verification artifacts demonstrating reliability for sovereign deployments
+- SBOM/SLSA Level 2 supply chain security (on the roadmap for future sprints)
+- ISO 42001 (AI Management System) alignment from the GovStack AI Readiness Guide
+- OpenAPI 3.1 contract compliance for all service interfaces
+- RFC 9457 error format compliance (already enforced — `{ error, message, details }` format)
 
-Each institutional deployment requires its own app store presence (Google Play, Apple App Store). This introduces operational constraints:
+### Technical Constraints
 
-- **Apple Developer Enterprise Program** or per-client Apple Developer accounts may be required for institutional distribution
-- **Provisioning profiles and signing certificates** must be managed per deployment (build-time via flavors)
-- **App Store review** must be factored into deployment timelines — govtech apps may require additional justification or documentation during review
-- **Minimum OS version targets** must be set to support the oldest devices in use at government institutions
+- Keycloak OIDC authentication — tests validate JWT claims (`iss_sub`, `sub`, `iss`), not `_key`
+- ArangoDB multi-model database (document + graph + vector) — test fixtures handle graph relationships, vector embeddings, and edge collections
+- vLLM/TEI GPU-dependent services — tests account for GPU availability in CI (mock or conditional skip)
+- Kong API gateway — tests validate routing, rate limiting, and OTel plugin behavior
+- Docker Swarm placement constraints (`gateway=true`, `gpu=true`, `genieai=true` labels)
+- OpenTelemetry Collector as universal telemetry pipeline — test instrumentation is OTel-compatible
+- Multi-language telemetry parity — Node.js and Python JSON logs share a common schema for OTel ingestion
 
-### Mobile Security (OWASP Mobile Top 10)
+### GENIE.AI Overlay Architecture
 
-The mobile app handles authentication tokens and communicates with sensitive government systems. Key security requirements:
+The RAG backend is a custom overlay built on the OPEA framework, deviating significantly from standard OPEA component implementations. GENIE.AI implements a proprietary hybrid RAG approach combining vectors, graph RAG, and labels — with custom ingestion, custom dataprep, and custom retrieval pipelines:
 
-- **Token storage**: Platform keystore/keychain only (iOS Keychain, Android EncryptedSharedPreferences). Never plaintext `SharedPreferences`, never in files accessible to other apps.
-- **Certificate validation**: The existing `badCertificateCallback` bypass must be removed. Valid TLS certificate validation is mandatory. Certificate pinning is not required for MVP (it would complicate air-gapped deployments with self-signed certs) but should be evaluated for Growth.
-- **Obfuscation**: The app ID, client ID, and Keycloak URL are compiled into the binary and are discoverable via reverse engineering. This is acceptable for public clients (RFC 8252 — public clients have no secrets to protect) but the deployment guide should document this threat model.
-- **No sensitive data in logs**: Token values, credentials, and PII must never appear in Flutter debug logs or crash reports.
+- OPEA ServiceOrchestrator is the orchestration layer, but service implementations are GENIE.AI-specific
+- Contract tests validate against GENIE.AI's custom interfaces, not standard OPEA component contracts
+- Hybrid retrieval logic (vector similarity + ArangoDB graph traversal + label-based filtering) is custom with no OPEA equivalent
+- Ingestion and dataprep pipelines use custom extraction, chunking, labeling, and embedding strategies
+- Test coverage treats these custom components as first-class, not assuming OPEA compatibility
 
-### Mobile Accessibility
+### Domain-Specific Risks
 
-The Keycloak login page rendered in the system browser inherits WCAG 2.1 AA compliance from the institution's Keycloak theme configuration (server-side responsibility). Native Flutter UI screens (login screen, error states, session expired messages) should follow platform accessibility guidelines (VoiceOver on iOS, TalkBack on Android) as documented in NFR10. Full accessibility compliance is a Growth-phase objective — MVP includes accessibility labels on interactive elements and minimum touch targets.
+- RAG hallucination in citizen-facing government services — quality thresholds are a safety concern, not just a convenience
+- Configuration drift across 6 country deployments — a misconfigured env var can produce incorrect government service information
+- GPU resource contention between main LLM and translation model — OOM crashes affect citizen access
+- Custom overlay divergence from upstream OPEA — OPEA updates may break GENIE.AI-specific implementations without regression tests catching the breakage
 
-### Sovereignty & Data Residency
+## Innovation & Novel Patterns
 
-The OIDC mobile implementation must work identically in:
+### Detected Innovation Areas
 
-- **Connected deployments** — Keycloak reachable via public internet
-- **Air-gapped deployments** — Keycloak reachable only via internal network
-- **Hybrid deployments** — Keycloak behind VPN with selective external access
+**PCCQ Testing Philosophy** — Organizing tests by *what* they validate (Pipeline, Contract, Configuration, Quality) rather than *where* they run (unit, integration, e2e). Standard test pyramids don't map to systems where the same codebase produces different behavior based on environment variables and document corpora.
 
-The mobile app makes no assumptions about Keycloak reachability. All OIDC endpoints (authorization, token, userinfo, end_session) are discovered from the `.well-known/openid-configuration` document at runtime, using the Keycloak URL configured at build-time.
+**Testing Configured Deployments, Not Code** — The system under test is not code with fixed behavior, but a *configured deployment* where correctness means: given configuration X and documents Y, outputs are within quality bounds Z across deployment target T. Test fixtures must include env var profiles, document corpora, and deployment target configurations alongside code.
 
-## Platform & Deployment Requirements
+**Probabilistic Quality Gates with RAGAS** — RAGAS metrics (faithfulness >0.95, relevance >0.85, context precision >0.80, context recall >0.90) as automated pass/fail thresholds in a CI pipeline for a government RAG platform. Most RAG deployments rely on manual evaluation; this embeds quality validation into the merge workflow.
 
-### Platform Requirements
+**MELT x Testing Convergence** — Test framework and MELT observability platform share the same telemetry pipeline (OTel → VictoriaMetrics → Grafana). Test results are MELT events, test traces are MELT spans, test metrics are MELT metrics. Test health and service health share one pane of glass.
 
-| Requirement | Details |
-|-------------|---------|
-| Framework | Flutter 3.10+, Dart |
-| Minimum iOS | iOS 13+ (ASWebAuthenticationSession, PKCE support) |
-| Minimum Android | API 23+ (Android 6.0, EncryptedSharedPreferences) |
-| Target platforms | iOS and Android (parity required) |
-| Build system | Flutter flavors for per-deployment builds |
-| Auth library | `flutter_appauth` (wraps AppAuth-iOS / AppAuth-Android) |
-| Token storage | `flutter_secure_storage` (iOS Keychain, Android EncryptedSharedPreferences) |
+**AI-Leveraged Test Generation** — Using AI to generate and maintain tests across 5 components, 3 languages, and 3 deployment targets to compensate for limited team resources.
 
-> **Note on OS version policy:** iOS 13 and Android 6.0 are the technical minimums for the app's security mechanisms (PKCE, secure storage, system browser). However, older OS versions no longer receive security patches. Each institution's security policy may mandate a higher minimum OS version. The deployment guide should document this trade-off and recommend institutions enforce their own OS version policy via Mobile Device Management (MDM) if required.
+### Delivery Timeline
 
-### iOS Development Constraints
+- **Sprint 22 (current):** Testing framework foundation — CI/CD pipeline, component test suites, configuration validation, MELT-ready instrumentation hooks
+- **Sprint 23 (next):** Evolve alongside MELT observability platform — MELT-powered test diagnostics, Grafana test health dashboards, OTel trace context integration, AI-assisted test generation tooling
 
-The team does not currently have a dedicated macOS build machine or an Apple Developer account. This impacts the development workflow:
+### Validation Approach
 
-| Aspect | Status |
-|--------|--------|
-| Flutter code (cross-platform) | Developed and tested normally — shared codebase |
-| Android testing | Primary platform — continuous integration, device testing |
-| iOS build | Best-effort — built on a teammate's Mac when available |
-| iOS testing | Manual testing on a physical device (USB via Xcode) |
-| Apple Developer account | Not available — no TestFlight or App Store distribution |
-| iOS App Store submission | Growth phase (requires Apple Developer account) |
+- PCCQ pillars validated through the existing RAGAS-based test strategy for the AI/ML pipeline (dataprep, retriever, LLM)
+- Configuration-to-output quality validation proven against the El-Salvador test bed
+- MELT convergence validated through Sprint 23 integration — test telemetry flows through OTel → VictoriaMetrics → Grafana alongside production telemetry
+- AI-generated tests validated against human-authored baselines for coverage parity and false-positive rates
 
-**Impact on MVP:** The OIDC implementation is written in cross-platform Flutter code and uses `flutter_appauth` which abstracts platform differences. The code will be functionally correct for iOS, but continuous testing happens on Android. iOS validation is periodic, relying on teammate availability.
+### Risk Mitigation
 
-**Impact on Growth:** Acquiring an Apple Developer account (99$/year) and setting up macOS CI (GitLab macOS runner or shared Mac) enables TestFlight distribution and App Store submission. This is required before any institutional deployment on iOS.
+- PCCQ is a novel organizing principle — mitigated by mapping each pillar to concrete test types with clear examples
+- RAGAS thresholds are domain-specific — mitigated by starting with conservative thresholds and tuning against real country deployments
+- MELT convergence creates a Sprint 23 dependency — mitigated by designing MELT-ready hooks in Sprint 22 that function independently until Sprint 23's observability stack is available
+- AI-generated tests may produce false positives — mitigated by human review before integration into CI
 
-### Deep Link Architecture
+## Platform Infrastructure Specific Requirements
 
-Two distinct mechanisms are required, each serving a different purpose:
+### Technical Architecture
 
-| Mechanism | Purpose | Configuration |
-|-----------|---------|---------------|
-| **Custom URL Scheme** | OIDC callback (`/callback`) | Build-time per flavor (e.g., `com.itu.genieai:/callback`) |
-| **Universal Links (iOS) / App Links (Android)** | Password reset, email verification links | Requires server-side files: `apple-app-site-association` (iOS) and `assetlinks.json` (Android) hosted on the Keycloak domain |
+**Test Framework Architecture:** 6 independent test ecosystems (Jest, pytest, Vue Test Utils, Flutter test, Patrol, Playwright) orchestrated by a unified CI pipeline. Shared test infrastructure: fixtures, mocks, test data, configuration profiles. MELT-ready instrumentation hooks in all test frameworks. AI-assisted test generation tooling to maximize coverage with limited resources.
 
-Custom URL schemes are simpler to configure but less secure (any app can register the same scheme). Universal Links / App Links provide cryptographic domain verification but require hosting configuration files on each deployment's Keycloak domain. The deployment guide must document both setup procedures.
+**Contract Testing (OpenAPI Schema Validation):** Code-first approach — swagger-jsdoc annotations in route files generate the OpenAPI spec. express-openapi-validator reads the generated spec and validates requests/responses at runtime. OPEA FastAPI services auto-generate OpenAPI 3.1 from Pydantic models. openapi-typescript-codegen produces a typed frontend client from the backend spec. No manual yaml maintenance — the spec is always a derived artifact from code annotations.
 
-### Device Permissions
+**Property-Based Testing:** Generative testing for data transformation and validation logic — fast-check (JS) for backend config validators and data mappers, Hypothesis (Python) for dataprep parsers (chunking, extraction, labeling). Catches edge cases that example-based tests miss with zero manual test case authoring.
 
-| Permission | Purpose | Required | User Prompt |
-|------------|---------|----------|-------------|
-| Network access | OIDC flows, API calls | Yes | No (default) |
-| Keychain / Keystore | Secure token storage | Yes | No |
-| System browser access | ASWebAuthenticationSession / Chrome Custom Tabs | Yes | No |
-| Biometric (future) | Local app unlock | No (Vision) | Yes |
-| Push notifications (future) | Background token refresh | No (Vision) | Yes |
+**Golden/Master Testing (Growth):** Version-controlled golden files for RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses). A golden test runs the pipeline on a fixed input and compares against the stored output — any shape or value change is detected immediately. Complements RAGAS scoring with deterministic output verification.
 
-### Offline Mode
+**Visual Regression Testing:** Playwright screenshot comparison for critical frontend components (ChatBot, NavBar, UserProfile). Baseline screenshots stored in repository; CI detects pixel-level changes on every MR. Prevents unintended UI drift without manual visual review.
 
-Offline mode is not in scope for MVP. The app requires network connectivity to reach Keycloak and the backend API. MVP includes basic network error detection — if the device is offline, the app shows a static "No internet connection" message (no crash, no blank screen, no intelligent retry queue).
+**CI/CD Pipeline Architecture:** GitLab CI as pipeline orchestrator. Stages: lint → unit tests (per component) → contract tests → configuration validation → integration tests (scheduled). Mandatory gates on merge requests: lint, unit, contract, config validation. Scheduled gates: integration tests, RAG quality regression. JUnit XML report artifacts for all test runners.
 
-| Scenario | MVP Behavior |
-|----------|-------------|
-| Login without network | System browser fails to load Keycloak → app shows "No internet connection" |
-| Token refresh without network | Refresh request fails → app falls back to login screen |
-| API call without network | HTTP client reports error → app shows appropriate error state |
+**Configuration Testing Architecture:** Env template schema generation from the `env` file (50+ variables with interdependencies). Hardware profile validation (GPU type → valid parameter ranges for vLLM/TEI). Deployment target validation (Compose vs Swarm vs K8s configuration differences). Feature flag interdependency validation (`DEPLOY_OPEA=0/1` changes expected service topology).
 
-Offline mode with cached data and deferred sync is a Vision feature.
+**RAG Quality Testing Architecture:** El-Salvador branch as canonical test bed with curated document corpus and QA pairs. RAGAS metric computation pipeline (faithfulness, relevance, context precision, context recall). Quality threshold enforcement as CI gates for release candidates. Parameter sweep infrastructure per existing test strategy (chunk size, label thresholds, retrieval K values, graph traversal depth).
 
-### Push Notifications
+**Test Data Management:** Version-controlled test fixtures per component (mocks, stubs, factory data). Document corpus fixtures for RAG quality testing (multi-format: .txt, .md, .pdf, .xlsx, .docx). ArangoDB test database snapshots with controlled graph structures and vector embeddings. Environment-specific configuration profiles for deployment targets and GPU hardware.
 
-Push notifications are not in scope for MVP. Token refresh relies on the user opening the app (foreground) or returning to it (background → foreground via `AppLifecycleState.resumed`). Background token refresh via push-triggered wake-up is a Vision feature.
+### Component-Specific Test Requirements
 
-### Test Matrix
+**gov-chat-backend (Node.js/Express, CommonJS):** Jest with `__tests__/*.test.js` convention. Supertest for route handler integration tests (requires `createApp()` export from `index.js`). Mock ArangoDB, Redis, Keycloak, and OPEA service calls via `__tests__/mocks/`. API contract tests validating request/response schemas per route against OpenAPI 3.1 spec. fast-check for property-based tests on config validators, data mappers, and input sanitizers. express-openapi-validator for runtime request/response validation against the swagger-jsdoc generated spec.
 
-| Test Scenario | Android | iOS | Test Type | Verifies NFR |
-|---------------|---------|-----|-----------|-------------|
-| Login (happy path) | API 23 (min) + latest | When Mac available | Integration | FR1, FR2, FR3 |
-| Silent token refresh (< 2s p95) | API 23 (min) + latest | When Mac available | Integration | NFR1 |
-| Logout (local + Keycloak session termination) | API 23 (min) + latest | When Mac available | Integration | FR4 |
-| Token expiry (access + refresh) | API 23 + latest | Unit (Dart) | Unit | FR5, FR6, FR7 |
-| 401 → silent refresh → login fallback chain | API 23 + latest | Unit (Dart) | Unit | FR8 |
-| Network error during login | Latest | N/A | Integration | FR12, NFR4 |
-| Deep link callback failure + retry | Latest | N/A | Integration | FR13, NFR4 |
-| Password reset deep link routing | Latest | When Mac available | E2E | FR15, FR16 |
-| Session revoked detection on resume | Latest | When Mac available | Integration | FR6, FR7, NFR6 |
-| SSL certificate enforcement | Latest | Unit (Dart) | Unit | FR23 |
-| Auth state consistency (no stale auth) | Latest | Unit (Dart) | Unit | NFR6 |
-| Error state → defined terminal state within 2s | Latest | Unit (Dart) | Unit | NFR4, NFR5 |
-| Accessibility labels + touch targets | Latest | When Mac available | Unit | NFR10 |
-| No tokens/PII in logs | Latest | Unit (Dart) | Unit | FR25 |
-| Binary size increase < 8MB | Latest | N/A | Build comparison | NFR7 |
-| Unit test coverage ≥ 80% auth service | Latest | N/A | CI coverage report | FR29 |
+**gov-chat-frontend (Vue 3, Options API):** Jest + @vue/test-utils with `src/__tests__/*.test.js` convention. Component tests for critical UI flows (ChatBotComponent, NavBarComponent, UserProfileComponent). Vuex store tests (extend existing coverage). Service tests with mocked HTTP responses. Options API constraints: `mount()` with full store setup, no Composition API patterns. Playwright screenshot comparison for visual regression on critical components. openapi-typescript-codegen produces a typed HTTP client from the backend OpenAPI spec — type errors caught at build time.
 
-Unit tests are platform-agnostic (Dart) and run in CI for both platforms. Integration and E2E tests run continuously on Android; iOS testing is periodic and manual, depending on teammate Mac availability.
+**genie-ai-overlay (Python/FastAPI, OPEA custom overlay):** pytest with `tests/*.py` convention. httpx ASGI test client for FastAPI endpoint testing. Interface tests with mocked dependencies (ArangoDB, Redis, vLLM, TEI). Custom overlay-specific tests: hybrid retrieval logic (vector + graph + labels), custom ingestion pipeline, custom dataprep. Hypothesis for property-based tests on parsers (chunking, extraction, labeling, embedding dimension validation). Golden/master tests for RAG pipeline stage outputs with version-controlled baselines. OpenAPI schema validation for provider endpoints. Copyright headers required on all test files.
+
+**document-repository (Node.js):** Jest with Supertest for route handler tests. File upload/download/delete endpoint tests. ClamAV integration tests (EICAR test file). Metadata and label service tests (extend existing coverage to route integration).
+
+**genie_ai_mobile (Flutter/Dart):** flutter_test with existing service-layer tests (~104 tests) integrated into CI pipeline. `flutter test` execution in CI with result reporting. Patrol for E2E mobile tests (Growth phase).
+
+### Implementation Prerequisites
+
+- **Backend testability:** `components/gov-chat-backend/index.js` (1,193 lines) does not export `createApp()`. Route handler integration tests require this export. This refactor is a prerequisite task with its own tests.
+- **Existing test assessment:** 8 backend test files (auth-only), 8 frontend test files (stores-only, 0% components), 8 document-repository test files (helpers-only), 8 mobile test files (service-layer, good quality), 12 E2E Playwright specs (auth-only), 0 OPEA tests. Existing tests must be assessed (keep/extend/rewrite) before building new suites.
+- **GPU-dependent tests in CI:** Standard CI runners lack GPUs. OPEA interface tests use mocked dependencies; GPU integration tests run in scheduled pipelines against deployed infrastructure.
 
 ## Project Scoping & Phased Development
 
-### MVP Strategy & Philosophy
+### MVP Strategy
 
-**MVP Approach:** Problem-solving MVP — restore mobile authentication functionality that was broken by the removal of legacy auth endpoints in MR !36. The minimum viable product is an app that can authenticate against Keycloak, maintain a valid session, and make authenticated API calls to the backend. No feature expansion beyond auth migration.
+**MVP Approach:** Platform MVP — deliver the CI/CD pipeline foundation and per-component test suites that establish the quality gate for all merges. Without this, Sprint 24's ChatQnA refactoring and Sprint 23's MELT instrumentation have no regression safety net.
 
-**Core principle:** Every item in the MVP is either required for the auth flow to work or required for a production-grade migration (security fixes, legacy removal, deployment guide).
+**MVP Philosophy:** The minimum that makes a developer say "I can merge with confidence." Lint passes, unit tests pass, contract tests pass, configuration validation passes — all automated, all on every MR. Anything beyond that is Phase 2.
 
-### MVP Feature Set (Phase 1)
+### MVP Feature Set (Phase 1) — Sprint 22
 
-**Core User Journeys Supported:**
+**Core Journeys Supported:** Journey 1 (Developer merges feature), Journey 3 (DevOps onboards country — config validation only)
 
-| Journey | Status |
-|---------|--------|
-| Maria — First Login | MVP |
-| Maria — Silent Token Refresh | MVP |
-| Maria — Session Revoked | MVP (basic — on refresh failure) |
-| Maria — Logout | MVP |
-| Maria — Unstable Network | MVP (basic error state) |
-| Maria — Password Reset | MVP (deep link routing) |
-| Amadou — New Deployment | MVP (guide + template) |
-| Amadou — Air-Gapped | MVP (inherited from architecture) |
+1. **CI/CD Pipeline (GitLab CI):** Lint, unit test, contract test, configuration validation stages. JUnit XML artifacts. MR blocking on failure.
+2. **Backend Test Suite:** Prerequisite `createApp()` refactor. API route contracts (all route groups). Service layer unit tests (extend beyond auth). Middleware tests.
+3. **Frontend Test Suite:** Component tests (ChatBot, NavBar, UserProfile). Vuex store module tests. Service tests with mocked HTTP.
+4. **OPEA Microservice Test Suite:** pytest setup. Retriever interface tests (hybrid search, mocked ArangoDB). Dataprep interface tests (extraction, chunking). Reranker interface tests. Core type/protocol tests. Custom overlay-specific tests.
+5. **Document-Repository Test Suite:** Route handler tests (upload, download, search, delete). Security tests (ClamAV, file type validation). Extended service tests.
+6. **Configuration Validation Suite:** Env template schema validation. Docker-compose var coverage. Hardware profile parameter ranges. Feature flag interdependencies.
+7. **Mobile Test Suite:** Existing ~104 service-layer tests integrated into CI.
+8. **MELT-Ready Instrumentation Hooks:** Structured test output formats (JSON, JUnit XML). Trace context propagation patterns in fixtures. Log assertion helpers.
 
-**Must-Have Capabilities:**
+### Post-MVP Features (Phase 2) — Sprint 23
 
-- Authorization Code + PKCE via system browser (`flutter_appauth`)
-- Silent token refresh using refresh token
-- Logout (local tokens + Keycloak `end_session_endpoint`)
-- Secure token storage (`flutter_secure_storage` — Keychain / EncryptedSharedPreferences)
-- One working Flutter flavor (Android, primary platform)
-- Deployment onboarding guide (README: flavor template, Keycloak client setup, deep link config)
-- Complete legacy auth removal (`auth_proxy.dart`, `password_proxy.dart`, `register_screen.dart`, SHA-256 login)
-- SSL certificate enforcement (`badCertificateCallback` removed)
-- Custom URL scheme for OIDC callback (per flavor)
-- Universal Links / App Links for password reset and email verification
-- Basic network error detection (static "No internet connection" message)
-- AppLifecycleState handling (proactive token check on resume)
-- Auth API exposing tokens for downstream consumption (e.g., #597 SSE streaming)
-- Keycloak client per deployment (public client, PKCE mandatory)
-- Unit tests for auth flows (platform-agnostic Dart)
-- Integration tests on Android (login, refresh, logout, error scenarios)
+**Core Journeys Supported:** Journey 2 (QA validates release), Journey 4 (Developer debugs failure), Journey 5 (Team lead reviews health)
 
-### Post-MVP Features
+- RAG quality regression suite with RAGAS scoring (El-Salvador test bed)
+- Integration tests against deployed Docker Compose environment
+- Swarm deployment target verification
+- E2E Playwright expansion (chatbot, document upload, admin flows)
+- MELT-powered test diagnostics (query traces/logs/metrics via MELT Provider API)
+- Test health dashboards in Grafana alongside service health
+- AI-assisted test generation and maintenance tooling
+- Performance benchmarking per existing test strategy
 
-**Phase 2 (Growth):**
+### Expansion Features (Phase 3) — Sprint 24+
 
-- Second deployment validated (e.g., el-salvador branch)
-- Apple Developer account acquisition + TestFlight distribution
-- iOS App Store submission for institutional deployments
-- macOS CI setup (GitLab self-hosted runner) for automated iOS builds
-- Proactive session validation via Keycloak userinfo endpoint on app resume
-- E2E automated tests for both platforms
+- Kubernetes deployment target verification
+- Multi-GPU sharding test coverage
+- Country-specific test beds with per-deployment RAG quality verification
+- Automated test generation from OpenAPI specs and code changes
+- Chaos engineering tests for deployment resilience
+- SBOM/SLSA compliance test integration
+- Contract testing with OpenAPI for inter-service boundaries
+- MELT-driven continuous quality validation (anomaly detection, degradation trending)
 
-**Phase 3 (Vision):**
+### Risk Mitigation Strategy
 
-- Biometric re-authentication (Face ID / fingerprint) for local app unlock
-- Push notifications with background token refresh
-- Conditional access policies (per-client MFA requirements, step-up authentication)
-- Offline mode with cached data and deferred sync
-- Certificate pinning (evaluated against air-gapped deployment constraints)
+**Technical Risks:**
+- **Backend `index.js` refactor** — Extracting `createApp()` from 1,193 lines could introduce regressions. Mitigation: refactor is a prerequisite task with its own tests.
+- **GPU-dependent tests in CI** — Standard runners lack GPUs. Mitigation: OPEA interface tests use mocked dependencies; GPU integration tests run in scheduled pipelines.
+- **5 test ecosystem coordination** — Different runners, assertion libraries, report formats. Mitigation: GitLab CI orchestrates all; JUnit XML is universal report format; <10 min time budget keeps CI fast.
+- **Existing test debt** — Some tests may be outdated after refactoring. Mitigation: assess all existing tests (keep/extend/rewrite) before building new suites.
+
+**Resource Risks:**
+- **Limited team, no dedicated QA** — AI-assisted test generation must compensate. Mitigation: prioritize highest-ROI tests first (config validation, API contracts).
+- **Sprint 22 timeline** — Sprint ends May 31. Mitigation: MVP scope focused on CI pipeline + per-component unit/contract tests; RAG quality and integration tests defer to Sprint 23.
+
+**Dependency Risks:**
+- **Sprint 23 MELT dependency** — Issue #601 depends on Sprint 22 test instrumentation. Mitigation: MELT-ready hooks in Sprint 22 function independently until Sprint 23's stack is available.
+- **Sprint 24 ChatQnA refactoring** — Issue #599 blocks this work. Mitigation: backend test suite (especially ChatQnA contracts) is an MVP priority.
 
 ## Functional Requirements
 
-### Authentication
+### Continuous Integration & Pipeline Orchestration
 
-- FR1: A user can sign in to the app using their institution's Keycloak credentials via the device system browser
-- FR2: A user can complete the Authorization Code + PKCE flow without the app handling their credentials directly
-- FR3: A user who already has an active Keycloak session in their device browser is automatically authenticated (SSO) without re-entering credentials
-- FR4: A user can sign out, which clears local tokens and terminates the Keycloak session via the OIDC logout endpoint
+- FR1: The CI pipeline runs lint checks across all JavaScript, Python, and Dart components on every merge request
+- FR2: The CI pipeline executes unit tests for all 5 components (backend, frontend, OPEA microservices, document-repository, mobile) on every merge request
+- FR3: The CI pipeline executes contract tests validating API request/response schemas on every merge request
+- FR4: The CI pipeline executes configuration validation tests on every merge request
+- FR5: The CI pipeline blocks merge requests when any mandatory test stage fails
+- FR6: The CI pipeline produces JUnit XML test reports as artifacts for all test runners
+- FR7: The CI pipeline executes integration tests on a scheduled basis against deployed infrastructure
+- FR8: The CI pipeline executes RAG quality regression tests on a scheduled basis
 
-### Session Management
+### Backend Verification (gov-chat-backend)
 
-- FR5: The app silently refreshes the access token using the refresh token when the access token expires, without user interaction, and stores the new refresh token returned by Keycloak
-- FR6: The app checks token validity when the app returns to foreground (`AppLifecycleState.resumed`) and transitions to the login screen if the refresh token has expired
-- FR7: The app detects when a token refresh fails (expired refresh token or revoked session) and transitions to the login screen with an explanatory message
-- FR8: The app detects when an API call returns 401 and attempts a silent token refresh before falling back to the login screen
+- FR9: The test suite validates API route contracts for all route groups (auth, chat, analytics, admin, files, categories)
+- FR10: The test suite verifies service layer business logic for all backend services (not limited to auth)
+- FR11: The test suite validates middleware behavior (authentication, authorization, error handling, rate limiting)
+- FR12: The test suite tests route handlers via HTTP requests against an in-memory Express application
 
-### Token Storage & Access
+### Frontend Verification (gov-chat-frontend)
 
-- FR9: The app stores authentication tokens (access token, refresh token, ID token) in the platform secure storage
-- FR10: The app provides an auth state service that exposes the current authentication state (authenticated/unauthenticated), valid access token, and user identity claims to downstream consumers
-- FR11: The app automatically includes a valid access token as a Bearer token in the Authorization header of all API requests to the backend
+- FR13: The test suite validates component rendering and user interaction for critical UI components (ChatBot, NavBar, UserProfile)
+- FR14: The test suite verifies Vuex store state management for all store modules
+- FR15: The test suite validates HTTP service interactions with mocked API responses
+- FR16: The test suite verifies authentication state transitions and token management in the UI
 
-### Error Handling
+### OPEA Microservice Verification (genie-ai-overlay)
 
-- FR12: The app displays a "No internet connection" message within 500ms of network loss detection during login, token refresh, or API calls
-- FR13: The app recovers gracefully from a deep link callback failure (network timeout, lost packet) and allows the user to retry the login flow
-- FR14: The app displays a specific error state with a user-facing message and a recovery action within 2 seconds of any authentication operation failure, and never remains in an indefinite loading state for more than 10 seconds without user feedback
+- FR17: The test suite validates the retriever's hybrid search logic (vector similarity, graph traversal, label filtering) with mocked ArangoDB
+- FR18: The test suite validates the dataprep extraction pipeline (multi-format parsing, chunking, labeling) with mocked dependencies
+- FR19: The test suite validates the reranker's score validation and top-K constraint enforcement with mocked TEI
+- FR20: The test suite validates core type definitions, protocols, and constants
+- FR21: The test suite validates custom overlay interfaces that deviate from standard OPEA component contracts
 
-### Account Recovery
+### Document Repository Verification
 
-- FR15: A user can reset their password by tapping "Forgot password" on the Keycloak login page in the system browser
-- FR16: A password reset link received by email opens the Keycloak password reset flow in the system browser (not intercepted by the app)
+- FR22: The test suite validates file upload, download, search, and delete endpoint behavior
+- FR23: The test suite verifies security middleware (ClamAV virus scanning, file type validation, authentication)
+- FR24: The test suite validates metadata and label service business logic
 
-### Multi-Deployment Support
+### Mobile Verification (genie_ai_mobile)
 
-- FR17: Each institutional deployment has its own dedicated build with a unique app ID, Keycloak client, backend URL, and deep link scheme — all configured at build-time
-- FR18: Each deployment has its own Keycloak client configured for secure mobile authentication with no client secret in the app binary
-- FR19: A deployment operator can create a new deployment by following the documented guide (copy flavor template, create Keycloak client, build, test, ship)
+- FR25: The test suite executes existing service-layer tests (~104 tests) within the CI pipeline
+- FR26: The test suite reports Flutter test results in a CI-compatible format
+- FR27: The E2E mobile test suite covers critical user flows (login, chat, document access) via Patrol against a deployed environment (Growth phase)
 
-### Deep Link Configuration
+### Configuration Validation
 
-- FR20: The app registers a custom URL scheme per deployment for the OIDC authorization callback
-- FR21: The app handles incoming cryptographic domain-verified deep links for password reset and email verification
+- FR27: The validation suite verifies that all environment variables referenced in docker-compose are documented in the env template
+- FR28: The validation suite verifies that required environment variables have no undefined defaults
+- FR29: The validation suite detects conflicting or orphaned environment variable configurations
+- FR30: The validation suite validates environment variable values against hardware-specific parameter ranges (GPU profiles)
+- FR31: The validation suite verifies feature flag interdependencies (e.g., `DEPLOY_OPEA` affecting expected service topology)
 
-### OIDC Configuration
+### RAG Quality Verification
 
-- FR22: The app discovers OIDC endpoints (authorization, token, userinfo, end_session) from the identity provider's standard discovery document using the Keycloak URL configured at build-time
+- FR32: The quality suite executes predefined queries against a known document corpus and measures retrieval accuracy
+- FR33: The quality suite computes RAGAS metrics (faithfulness, answer relevance, context precision, context recall) for RAG pipeline outputs
+- FR34: The quality suite compares RAGAS scores against configurable thresholds and reports pass/fail
+- FR35: The quality suite validates RAG pipeline stage integrity (embedding dimensions, reranker top-K, retriever score thresholds)
 
-### Security
+### Test Data & Fixture Management
 
-- FR23: The app enforces valid TLS certificate validation for all network connections (no certificate bypass)
-- FR24: The app removes all legacy authentication code (custom login endpoints, password hashing, plaintext password handling)
-- FR25: The app does not store authentication tokens, credentials, or PII in plaintext storage or logs
+- FR36: The framework provides version-controlled test fixtures (mocks, stubs, factory data) for each component
+- FR37: The framework provides test document corpora in multiple formats (.txt, .md, .pdf, .xlsx, .docx) for RAG quality testing
+- FR38: The framework provides controlled ArangoDB test database states (graph structures, vector embeddings) for integration tests
+- FR39: The framework provides environment-specific configuration profiles for different deployment targets and GPU hardware
 
-### Deployment
+### MELT Integration (Sprint 23 Evolution)
 
-- FR26: The deployment guide documents the complete process for onboarding a new institutional deployment (deployment configuration, Keycloak client creation, deep link setup, build, test)
-- FR27: The deployment guide documents the network prerequisites for air-gapped deployments (device must reach Keycloak on internal network, DNS configuration)
-- FR28: The deployment guide documents the OS version policy trade-off (technical minimums vs. institutional security policies)
+- FR40: The test framework produces structured output (JSON, JUnit XML) consumable by the OpenTelemetry pipeline
+- FR41: The test framework propagates OTel trace context in test fixtures for distributed trace correlation
+- FR42: The test framework provides assertion helpers for validating structured JSON log output from services under test
+- FR43: Test execution results are queryable via the MELT Provider API for post-test diagnostics
+- FR44: Test health metrics (pass rates, execution times, flaky test detection) are visualizable in Grafana dashboards
 
-### Testing
+### AI-Assisted Test Generation
 
-- FR29: Unit tests cover the core auth logic (token refresh, session validation, error handling) in platform-agnostic code
-- FR30: Integration tests cover the login, token refresh, logout, and error scenarios on Android
-- FR31: The test suite runs in CI on Android for continuous validation
+- FR45: The framework leverages AI to generate test scaffolding (boilerplate test files, mock factories, fixture generators) from existing code
+- FR46: The framework leverages AI to suggest test cases based on code changes and API specifications
 
-## Key Architectural Decisions
+### Deployment Target Verification (Growth)
 
-The following decisions were made during this PRD and differ from the initial technical specification in GitLab Issue #613. These decisions are final and should guide implementation.
+- FR47: The verification suite validates service topology and placement constraints against a Docker Swarm deployment, verifying node labels (`gateway=true`, `gpu=true`, `genieai=true`) and healthcheck behavior
+- FR48: The verification suite validates service discovery, networking, and configuration against a Kubernetes deployment, verifying resource limits, health probes, and ConfigMap/Secret mounting
 
-### ADR1: Dedicated Keycloak Client Per Deployment
+### E2E Playwright Testing (Sprint 23)
 
-**Decision:** Each institutional deployment gets its own Keycloak OIDC client (e.g., `genie-mobile-itu`, `genie-mobile-agencyX`), configured as a public client with PKCE mandatory.
+- FR49: The E2E test suite covers chatbot interaction flows (send message, receive RAG response, conversation history) via Playwright against a deployed stack
+- FR50: The E2E test suite covers document upload, processing, and search flows (upload PDF, verify ingestion, search and retrieve) via Playwright against a deployed stack
 
-**#613 proposed:** Reuse the existing `genie-app` Keycloak client.
+### Performance Benchmarking (Growth)
 
-**Rationale:** Mobile apps are public clients — they cannot securely hold a client secret. Reusing `genie-app` (which has a secret for the web frontend) would require embedding that secret in the mobile binary, a security violation per RFC 8252. Additionally, each deployment has a different app ID and redirect URI, requiring distinct client configurations.
+- FR51: The benchmarking suite measures API endpoint latency (p50, p95, p99) and throughput under load using k6 or equivalent, producing baseline reports for regression detection
 
-### ADR2: System Browser for Authentication
+### Contract Testing (OpenAPI Schema Validation)
 
-**Decision:** Use the system browser (ASWebAuthenticationSession on iOS, Chrome Custom Tabs on Android) for the OIDC authorization flow, not an embedded webview.
+- FR52: express-openapi-validator validates backend requests and responses against the OpenAPI spec generated by swagger-jsdoc annotations; validation errors return RFC 9457 compliant error responses
+- FR53: openapi-typescript-codegen generates a typed HTTP client for the frontend from the backend OpenAPI spec; build fails on type mismatches
+- FR54: OPEA provider endpoints validate request/response schemas against their native FastAPI-generated OpenAPI 3.1 spec in pytest
 
-**#613 proposed:** Did not explicitly specify the browser mechanism.
+### Property-Based Testing
 
-**Rationale:** RFC 8252 (OAuth 2.0 for Native Apps) recommends the system browser for security (prevents credential phishing, shares cookies for SSO) and UX (password managers, passkeys, familiar interface). `flutter_appauth` wraps this natively on both platforms.
+- FR55: Backend config validators and data mappers use fast-check property-based tests generating random inputs, catching edge cases beyond manual examples
+- FR56: OPEA dataprep parsers (chunking, extraction, labeling) use Hypothesis property-based tests generating random document formats and content boundaries
 
-### ADR3: Build-Time Configuration via Flutter Flavors
+### Visual Regression Testing
 
-**Decision:** All deployment-specific configuration (app ID, Keycloak URL, client ID, backend URL, deep link scheme) is compiled at build-time via Flutter flavors. No runtime configuration.
+- FR57: Critical frontend components (ChatBot, NavBar, UserProfile) have baseline screenshots stored in the repository; Playwright screenshot comparison detects pixel-level changes on every merge request
 
-**Rationale:** Each deployment already requires a dedicated build for app store submission with its own branding and signing. Adding runtime configuration would add complexity without benefit. Build-time is more secure (values cannot be modified post-build) and simpler (no bootstrap endpoint, no config validation).
+### Mutation Testing (Growth)
 
-### ADR4: Android as Primary CI Platform
+- FR58: Stryker mutation testing runs on a scheduled basis (weekly), reporting mutation score per component; components below 80% mutation score generate a task for test improvement
 
-**Decision:** Continuous integration and automated testing run on Android. iOS builds and tests are periodic, manual, and depend on teammate Mac availability.
+### Golden/Master Testing (Growth)
 
-**Rationale:** The team does not have a dedicated macOS build machine or Apple Developer account. Flutter's cross-platform architecture ensures code correctness for iOS, but continuous validation is only possible on Android. iOS App Store distribution is deferred to the Growth phase.
+- FR59: RAG pipeline stage outputs (embedding vectors, retrieval results, reranker scores, LLM responses) have version-controlled golden files; CI compares pipeline output against golden on every change to the AI layer
 
 ## Non-Functional Requirements
 
 ### Performance
 
-- NFR1: Silent token refresh completes within 2 seconds for 95th percentile under normal network conditions, measured by automated integration test recording wall-clock time from refresh initiation to completion over 100 runs on a reference network (50ms RTT, 10Mbps)
-- NFR2: The login screen is displayed within 1 second of app launch when no valid session exists, measured by platform startup time instrumentation (cold start)
-- NFR3: The app processes the OIDC callback and establishes an authenticated session within 1 second of receiving the deep link redirect from the system browser, measured by timestamp delta between deep link intent received and auth state updated
+- NFR1: Unit and contract test stages complete in under 10 minutes total on every merge request
+- NFR2: Configuration validation completes in under 2 minutes as measured by CI pipeline job duration for the config-validation stage
+- NFR3: Full E2E test suite (Playwright) completes in under 30 minutes as measured by CI pipeline job duration for the e2e stage
+- NFR4: Individual component test suites execute in parallel with no inter-suite wait time, verified by CI pipeline logs showing concurrent job execution across component stages
+- NFR5: RAG quality regression suite completes in under 60 minutes against a deployed environment, measured by elapsed wall-clock time from suite start to RAGAS report generation
 
-### Reliability
+### Reliability & Determinism
 
-- NFR4: All authentication error states display a user-visible error message and a recovery action (retry button or return to login) within 2 seconds of error detection. The app transitions to one of three defined states after any auth error: login screen, error screen with retry, or authenticated screen. Verified by automated UI tests triggering each error condition and asserting message visibility within 2 seconds
-- NFR5: After any authentication error, the app is in one of three defined terminal states (login screen, error screen with recovery action, or authenticated screen). The app never remains in an intermediate loading state for more than 10 seconds without user feedback. Verified by state machine unit tests covering all error transitions
-- NFR6: The auth state service recalculates state on every token operation. An expired or invalid token immediately triggers a state transition to unauthenticated. Verified by unit tests asserting no combination of expired token + authenticated state is possible
+- NFR6: All unit and contract tests produce identical results across repeated executions with the same inputs (no flaky tests in mandatory CI gates)
+- NFR7: Test execution is independent of execution order — verified by running each component suite 3 times with randomized order (`jest --shuffle` / `pytest --random-order`) producing identical pass/fail results
+- NFR8: Tests requiring external services (ArangoDB, Redis, Keycloak, vLLM) use mocked dependencies in CI; real service integration runs only in scheduled pipelines against deployed infrastructure
+- NFR9: GPU-dependent tests are conditionally skipped in CI environments without GPU access, with each skipped test logged in JUnit XML as `<skipped>` element including skip reason
+
+### Maintainability
+
+- NFR11: Test code follows the same linting and formatting standards as production code (ESLint, Ruff, Flutter analyze)
+- NFR13: Mock and fixture definitions are centralized in `__tests__/mocks/` (backend, frontend) and `tests/` (Python) directories, not duplicated across test files
+- NFR14: AI-assisted test generation produces code that passes linting and follows project conventions
 
 ### Compatibility
 
-- NFR7: The app binary size increase from the OIDC migration is less than 8MB per platform (Android APK, iOS IPA) compared to the pre-migration build, measured by comparing release build output sizes before and after migration
-- NFR8: 100% of non-authentication user data (conversation history, preferences, cached content) is preserved across the app update, verified by pre/post update data comparison test on a reference device
+- NFR16: The CI pipeline operates identically across GitLab shared runners and self-hosted runners, verified by running the full pipeline on both runner types and comparing JUnit XML test results for zero-diff pass/fail outcomes
+- NFR17: All test runners produce JUnit XML reports in a format consumable by GitLab CI test reporting
+- NFR19: Python tests run on Python 3.10+; Node.js tests run on Node.js 18+; Dart tests run on Flutter 3.10+
+- NFR20: Test output formats are compatible with OpenTelemetry ingestion (structured JSON, trace context propagation) for MELT integration in Sprint 23
 
-### Observability
+### Language & Framework Constraints
 
-- NFR9: Authentication failures (login, refresh, logout) are logged at WARN level with the following fields: error_code, keycloak_endpoint, http_status, network_reachable, timestamp. Logs are accessible via device diagnostics (adb logcat / Xcode console) for 30 days. Verified by automated test injecting auth failures and asserting log output contains all required fields
+- NFR21: Backend tests use CommonJS module syntax exclusively (no ESM imports)
+- NFR22: Frontend component tests use Options API exclusively (no Composition API patterns)
+- NFR23: Python test files include ITU copyright headers as required by project convention
+- NFR24: All Python test code passes Ruff linting and formatting checks
 
-### Accessibility
+### Test Conventions
 
-- NFR10: All authentication screens support platform-native accessibility features (VoiceOver on iOS, TalkBack on Android). All interactive elements have accessibility labels. Minimum touch target size is 44x44 points (iOS) / 48x48dp (Android). Authentication state is not indicated by color alone. Verified by platform accessibility inspector tools (Accessibility Inspector on iOS, Accessibility Scanner on Android)
+Architectural principles governing test structure and maintenance — enforced through code review and CI lint checks, not through automated measurement:
 
-## Out of Scope
-
-The following items are explicitly excluded from this PRD and are deferred to Growth or Vision phases:
-
-- **Biometric re-authentication** (Face ID, fingerprint) — Vision phase
-- **Push notifications** — Vision phase (token refresh relies on foreground/background resume)
-- **Offline mode** with cached data and deferred sync — Vision phase
-- **Certificate pinning** — Growth phase (must be evaluated against air-gapped deployment constraints)
-- **End-to-end automated tests on iOS** — Growth phase (requires macOS CI and Apple Developer account)
-- **Multi-language app UI** — Flutter UI remains in English; i18n is handled server-side by Keycloak
-- **Custom authentication flows** beyond standard OIDC — all auth flows use Keycloak's standard OIDC endpoints
+- TC1: Test fixtures are version-controlled in the repository alongside production code; test databases use controlled snapshots with deterministic seeding
+- TC2: Test file structure mirrors the production code structure within each component — enforced during code review
+- TC3: Adding a new test for an existing feature requires changes in only the test file — shared fixtures and factory functions eliminate cross-file setup for standard cases
+- TC4: The test framework supports execution across deployment targets (Docker Compose baseline, Docker Swarm, Kubernetes); MVP targets Docker Compose, Swarm and K8s verification deferred to Growth phase

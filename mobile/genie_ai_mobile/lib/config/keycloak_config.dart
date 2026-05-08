@@ -40,6 +40,7 @@ class KeycloakConfig {
 }
 
 KeycloakConfig getConfig() {
+  // When adding a new deployment flavor, add a case below and import its config.
   const flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
   switch (flavor) {
     case 'itu':

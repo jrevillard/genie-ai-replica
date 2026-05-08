@@ -1,0 +1,5 @@
+#include "Generated.xcconfig"
+#include "Release.xcconfig"
+PRODUCT_BUNDLE_IDENTIFIER = com.example.genieAiMobile.staging
+APP_AUTH_REDIRECT_SCHEME = com.itu.genieai.staging
+ASSOCIATED_DOMAINS = applinks:genieai.itu.int

@@ -55,7 +55,7 @@ void main() {
     });
 
     test('error state with retryable true', () {
-      const state = AuthState.error(
+      final state = AuthState.error(
         message: 'Network unreachable',
         retryable: true,
       );
@@ -67,7 +67,7 @@ void main() {
     });
 
     test('error state with retryable false', () {
-      const state = AuthState.error(
+      final state = AuthState.error(
         message: 'Session expired',
         retryable: false,
       );
@@ -77,7 +77,7 @@ void main() {
     });
 
     test('error convenience constructor defaults retryable to false', () {
-      const state = AuthState.error(message: 'Some error');
+      final state = AuthState.error(message: 'Some error');
       expect(state.retryable, isFalse);
     });
 
@@ -107,6 +107,34 @@ void main() {
       expect(state.status, AuthStatus.authenticated);
       expect(state.userId, isNull);
       expect(state.displayName, isNull);
+    });
+
+    test('toString includes all fields', () {
+      const state = AuthState(
+        status: AuthStatus.error,
+        userId: 'u1',
+        displayName: 'Test',
+        errorMessage: 'fail',
+        retryable: true,
+      );
+      final s = state.toString();
+      expect(s, contains('error'));
+      expect(s, contains('u1'));
+      expect(s, contains('Test'));
+      expect(s, contains('fail'));
+      expect(s, contains('true'));
+    });
+
+    test('hashCode is consistent with equality', () {
+      const a = AuthState(status: AuthStatus.authenticated, userId: 'u1');
+      const b = AuthState(status: AuthStatus.authenticated, userId: 'u1');
+      expect(a.hashCode, equals(b.hashCode));
+    });
+
+    test('hashCode differs for different states', () {
+      const a = AuthState(status: AuthStatus.authenticated, userId: 'u1');
+      const b = AuthState(status: AuthStatus.authenticated, userId: 'u2');
+      expect(a.hashCode, isNot(equals(b.hashCode)));
     });
   });
 }

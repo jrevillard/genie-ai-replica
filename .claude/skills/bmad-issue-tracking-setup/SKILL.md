@@ -5,7 +5,7 @@ description: 'One-time setup for issue tracking integration. Use after installin
 
 # Issue Tracking Setup
 
-One-time setup for BMAD Issue Tracking integration. Deploys TOML overrides to `_bmad/custom/` and shared tasks to `_bmad/_config/custom/`.
+One-time setup for BMAD Issue Tracking integration. Deploys TOML overrides to `_bmad/custom/` and a shared task to `_bmad/_config/custom/`.
 
 ## Prerequisites
 
@@ -39,10 +39,14 @@ cp <path>/SKILL.md _bmad/_config/custom/bmad-bmm-issue-sync.md
 </step>
 
 <step n="3" goal="Deploy TOML overrides">
-<action>Copy all TOML files from the same module's `assets/custom/` directory to `_bmad/custom/`:</action>
+<action>Locate the TOML overrides. Check these locations in order:</action>
+1. `~/.bmad/cache/custom-modules/github.com/jrevillard/bmad-issue-tracking/skills/bmad-issue-tracking-setup/assets/custom/`
+2. Ask the user for the path to the cloned `bmad-issue-tracking` repo
+
+<action>Copy all TOML files to `_bmad/custom/`:</action>
 
 ```bash
-cp <path>/custom/*.toml _bmad/custom/
+cp <path>/*.toml _bmad/custom/
 ```
 
 <action>The following TOML files should now exist in `_bmad/custom/`:</action>
@@ -60,10 +64,8 @@ cp <path>/custom/*.toml _bmad/custom/
 <action>Verify each TOML file is valid by checking it contains a `[workflow]` section and at least one hook key (`on_complete`, `activation_steps_append`, etc.).</action>
 </step>
 
-<step n="4" goal="Configure issue_tracking in BMM config">
-<action>Check if `_bmad/bmm/config.yaml` already contains an `issue_tracking` block.</action>
-<check if="not found">
-  <action>Append the following block to `_bmad/bmm/config.yaml`:</action>
+<step n="4" goal="Configure issue_tracking">
+<action>Create `_bmad/custom/issue-tracking.yaml` with the following content (this file is independent from BMM and survives BMM updates):</action>
 
 ```yaml
 issue_tracking:
@@ -71,7 +73,6 @@ issue_tracking:
   platform: gitlab  # or github — configure in next step
   # host and project configured in step 5
 ```
-</check>
 </step>
 
 <step n="5" goal="Configure platform and connection">
@@ -81,13 +82,13 @@ issue_tracking:
 <check if="platform differs from git remote host">
   <output>NOTE: The issue tracker ({platform}) differs from the git remote ({git_host}). This is valid — e.g. code on GitLab but issues on GitHub.</output>
 </check>
-<action>Ask the user for the issue tracker host and project path. Set `issue_tracking.host` and `issue_tracking.project` in `_bmad/bmm/config.yaml`.</action>
+<action>Ask the user for the issue tracker host and project path. Set `issue_tracking.host` and `issue_tracking.project` in `_bmad/custom/issue-tracking.yaml`.</action>
 </step>
 
 <step n="6" goal="Verify CLI connectivity">
-<action>Run the platform auth check:</action>
-- GitLab: `glab auth status`
-- GitHub: `gh auth status`
+<action>Run the platform auth check (use `--hostname $HOST` for self-hosted instances):</action>
+- GitLab: `glab auth status --hostname $HOST`
+- GitHub: `gh auth status --hostname $HOST`
 
 <check if="auth fails">
   <output>WARN: CLI not authenticated. Issue tracking will fall back to file-system until authenticated.</output>
@@ -110,7 +111,7 @@ issue_tracking:
   <action>Set story pattern to `feat/{prd_key}/{story_key}`</action>
 </check>
 
-<action>Write `branch_patterns` under `issue_tracking` in `_bmad/bmm/config.yaml`:</action>
+<action>Write `branch_patterns` under `issue_tracking` in `_bmad/custom/issue-tracking.yaml`:</action>
 
 ```yaml
 issue_tracking:

@@ -9,14 +9,6 @@ class ApiService {
   final String baseUrl;
   final AuthLogger? _logger;
 
-  /// Exposes the underlying HTTP client for streaming requests.
-  /// This is the AuthInterceptor-wrapped client when using apiServiceProvider.
-  http.Client get httpClient => _httpClient;
-
-  // Backward-compatible: existing code calls ApiService(logger: logger).
-  // The logger parameter is accepted but http.Client defaults to a new instance
-  // and baseUrl defaults to config — this matches the old singleton behavior.
-  // TODO(epic-6): remove — all consumers migrated to apiServiceProvider
   ApiService({
     http.Client? httpClient,
     String? baseUrl,
@@ -25,43 +17,8 @@ class ApiService {
         baseUrl = baseUrl ?? getConfig().backendUrl,
         _logger = logger;
 
-  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
-  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
-  void setToken(String token) {
-    _logger?.logApiError(
-      httpStatus: 0,
-      endpoint: 'deprecated',
-      message: 'setToken() is deprecated — use AuthInterceptor',
-      source: 'ApiService.setToken',
-    );
-  }
-
-  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
-  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
-  void clearToken() {
-    _logger?.logApiError(
-      httpStatus: 0,
-      endpoint: 'deprecated',
-      message: 'clearToken() is deprecated — use AuthInterceptor',
-      source: 'ApiService.clearToken',
-    );
-  }
-
-  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
-  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
-  String? get accessToken => null;
-
-  // TODO(epic-6): remove — use AuthInterceptor via apiServiceProvider
-  @Deprecated('Epic 6 Story 6.1 will remove this. Use AuthInterceptor via apiServiceProvider.')
-  Map<String, String> getHeaders({String contentType = 'application/json'}) {
-    _logger?.logApiError(
-      httpStatus: 0,
-      endpoint: 'deprecated',
-      message: 'getHeaders() is deprecated — use AuthInterceptor',
-      source: 'ApiService.getHeaders',
-    );
-    return {'Content-Type': contentType};
-  }
+  /// Exposes the underlying HTTP client for streaming requests.
+  http.Client get httpClient => _httpClient;
 
   Future<http.Response> get(
     String endpoint, {

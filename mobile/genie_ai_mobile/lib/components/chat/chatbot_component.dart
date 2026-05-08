@@ -160,12 +160,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
-  // Bridging method for translations
-  String _t(String key, [String fallback = '']) {
-    // tr() handles the lookup globally
-    return tr(key);
-  }
-
   Future<void> _loadQuickHelpConfig() async {
     try {
       final String configString = await rootBundle.loadString(
@@ -590,11 +584,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     // Translate both
     final String visibleText = visibleTextKey.isNotEmpty
-        ? _t(visibleTextKey)
+        ? tr(visibleTextKey)
         : '';
     // If hiddenPromptKey is empty, fallback to visible text
     final String hiddenPrompt = hiddenPromptKey.isNotEmpty
-        ? _t(hiddenPromptKey)
+        ? tr(hiddenPromptKey)
         : visibleText;
 
     setState(() {
@@ -612,7 +606,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       barrierColor: Colors.black54,
       builder: (context) => ChatResponseFeedbackDialog(
         message: message,
-        translate: _t,
         onSubmit: (feedbackData) async {
           final String? queryId = message['queryId'] ?? message['id'];
 
@@ -1445,7 +1438,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                     as Map<String, dynamic>?;
                             final String titleKey =
                                 labelMap?['text']?.toString() ?? '';
-                            final String translatedTitle = _t(titleKey);
+                            final String translatedTitle = tr(titleKey);
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
 

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
+import 'package:genie_ai_mobile/services/auth/auth_logger.dart';
 import 'package:genie_ai_mobile/services/keycloak/keycloak_service.dart';
 
 class MockHttpClient extends http.BaseClient {
@@ -175,6 +176,22 @@ void main() {
         expect(a, equals(b));
       });
 
+      test('inequality on different authorizationEndpoint', () {
+        const a = OidcEndpoints(
+          authorizationEndpoint: 'http://a',
+          tokenEndpoint: 'http://b',
+          userinfoEndpoint: 'http://c',
+          endSessionEndpoint: 'http://d',
+        );
+        const b = OidcEndpoints(
+          authorizationEndpoint: 'http://x',
+          tokenEndpoint: 'http://b',
+          userinfoEndpoint: 'http://c',
+          endSessionEndpoint: 'http://d',
+        );
+        expect(a, isNot(equals(b)));
+      });
+
       test('has toString for debuggability', () {
         const endpoints = OidcEndpoints(
           authorizationEndpoint: 'http://auth',
@@ -184,6 +201,38 @@ void main() {
         );
         expect(endpoints.toString(), contains('http://auth'));
         expect(endpoints.toString(), contains('http://token'));
+      });
+
+      test('hashCode is consistent with equality', () {
+        const a = OidcEndpoints(
+          authorizationEndpoint: 'http://a',
+          tokenEndpoint: 'http://b',
+          userinfoEndpoint: 'http://c',
+          endSessionEndpoint: 'http://d',
+        );
+        const b = OidcEndpoints(
+          authorizationEndpoint: 'http://a',
+          tokenEndpoint: 'http://b',
+          userinfoEndpoint: 'http://c',
+          endSessionEndpoint: 'http://d',
+        );
+        expect(a.hashCode, equals(b.hashCode));
+      });
+
+      test('hashCode differs for different endpoints', () {
+        const a = OidcEndpoints(
+          authorizationEndpoint: 'http://a',
+          tokenEndpoint: 'http://b',
+          userinfoEndpoint: 'http://c',
+          endSessionEndpoint: 'http://d',
+        );
+        const b = OidcEndpoints(
+          authorizationEndpoint: 'http://x',
+          tokenEndpoint: 'http://b',
+          userinfoEndpoint: 'http://c',
+          endSessionEndpoint: 'http://d',
+        );
+        expect(a.hashCode, isNot(equals(b.hashCode)));
       });
     });
 
@@ -314,6 +363,336 @@ void main() {
 
         // Discovery was cached (callCount 1), endSession made 1 more call
         expect(callCount, equals(beforeCount + 1));
+      });
+    });
+
+    group('discoverEndpoints with logger', () {
+      test('logs failure on HTTP error', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final httpClient = MockHttpClient(MockHttpClientConfig(
+            statusCode: 500,
+            responseBody: 'Internal Server Error',
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: httpClient,
+            logger: logger,
+          );
+
+          await service.discoverEndpoints();
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          expect(files, hasLength(1));
+          final content = await files.first.readAsString();
+          expect(content, contains('DISCOVERY_HTTP_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs failure on SocketException', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final httpClient = MockHttpClient(MockHttpClientConfig(
+            throwException: SocketException('Network unreachable'),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: httpClient,
+            logger: logger,
+          );
+
+          await service.discoverEndpoints();
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('DISCOVERY_NETWORK_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs failure on ClientException', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final httpClient = MockHttpClient(MockHttpClientConfig(
+            throwException: http.ClientException('Connection refused'),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: httpClient,
+            logger: logger,
+          );
+
+          await service.discoverEndpoints();
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('DISCOVERY_CLIENT_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs failure on FormatException', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final httpClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: 'not-json',
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: httpClient,
+            logger: logger,
+          );
+
+          await service.discoverEndpoints();
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('DISCOVERY_PARSE_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs failure on TypeError (missing fields)', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          // Response with valid JSON but missing expected fields -> TypeError on cast
+          final httpClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: jsonEncode({'authorization_endpoint': 'http://a'}),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: httpClient,
+            logger: logger,
+          );
+
+          await service.discoverEndpoints();
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('DISCOVERY_PARSE_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs success on valid discovery', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final httpClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: jsonEncode(wellKnownResponse),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: httpClient,
+            logger: logger,
+          );
+
+          await service.discoverEndpoints();
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('Endpoint discovery started'));
+          expect(content, contains('Endpoint discovery successful'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+    });
+
+    group('endSession with logger', () {
+      test('logs failure on HTTP error', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final discoveryClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: jsonEncode(wellKnownResponse),
+          ));
+          final errorClient = MockHttpClient(MockHttpClientConfig(
+            statusCode: 400,
+            responseBody: 'Bad Request',
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
+            logger: logger,
+          );
+
+          await service.endSession(idTokenHint: 'token');
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('KEYCLOAK_LOGOUT_FAILED'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs failure on SocketException', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final discoveryClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: jsonEncode(wellKnownResponse),
+          ));
+          final errorClient = MockHttpClient(MockHttpClientConfig(
+            throwException: SocketException('Network unreachable'),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
+            logger: logger,
+          );
+
+          await service.endSession(idTokenHint: 'token');
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('KEYCLOAK_NETWORK_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs failure on ClientException', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final discoveryClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: jsonEncode(wellKnownResponse),
+          ));
+          final errorClient = MockHttpClient(MockHttpClientConfig(
+            throwException: http.ClientException('Connection reset'),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
+            logger: logger,
+          );
+
+          await service.endSession(idTokenHint: 'token');
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('KEYCLOAK_CLIENT_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs failure on generic exception', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final discoveryClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: jsonEncode(wellKnownResponse),
+          ));
+          final errorClient = MockHttpClient(MockHttpClientConfig(
+            throwException: Exception('Unexpected error'),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: _SequentialHttpClient([discoveryClient, errorClient]),
+            logger: logger,
+          );
+
+          await service.endSession(idTokenHint: 'token');
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('KEYCLOAK_LOGOUT_ERROR'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      test('logs success on valid endSession', () async {
+        final tempDir = Directory.systemTemp.createTempSync('kc_test_');
+        try {
+          final logger = AuthLogger(logDir: tempDir);
+          final httpClient = MockHttpClient(MockHttpClientConfig(
+            responseBody: jsonEncode(wellKnownResponse),
+          ));
+          final service = KeycloakService(
+            keycloakConfig: testConfig,
+            httpClient: httpClient,
+            logger: logger,
+          );
+
+          await service.endSession(idTokenHint: 'token');
+          await logger.flush();
+
+          final files = await tempDir
+              .list()
+              .where((e) => e is File && e.path.endsWith('.txt'))
+              .cast<File>()
+              .toList();
+          final content = await files.first.readAsString();
+          expect(content, contains('Keycloak end_session initiated'));
+          expect(content, contains('Keycloak end_session successful'));
+        } finally {
+          await tempDir.delete(recursive: true);
+        }
       });
     });
   });

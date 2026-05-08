@@ -6,7 +6,7 @@ description: 'Sync sprint-status.yaml entries to GitLab/GitHub Issues. Use when 
 # Sync Sprint Status to Issues (GitLab or GitHub)
 
 > Shared custom BMAD task — syncs `sprint-status.yaml` to GitLab Issues or GitHub Issues.
-> Reads `issue_tracking.platform` from `_bmad/bmm/config.yaml` to pick the CLI.
+> Reads `issue_tracking.platform` from `_bmad/custom/issue-tracking.yaml` to pick the CLI.
 > Issue-tracker-first with automatic file-system fallback when unavailable.
 
 ## Prerequisites
@@ -29,7 +29,7 @@ The AI parses JSON responses natively — no `jq` dependency.
 
 ## Platform Detection
 
-At the start of every step that runs CLI commands, determine the platform by reading `issue_tracking.platform` from `_bmad/bmm/config.yaml`. Valid values: `gitlab`, `github`.
+At the start of every step that runs CLI commands, determine the platform by reading `issue_tracking.platform` from `_bmad/custom/issue-tracking.yaml`. Valid values: `gitlab`, `github`.
 
 **Label separator convention:**
 - GitLab: double colon (`status::done`, `type::story`)
@@ -41,13 +41,13 @@ The task below uses `{sep}` as a placeholder. Replace with `::` for GitLab, `:` 
 | Operation | GitLab | GitHub |
 |---|---|---|
 | Auth check | `glab auth status --hostname $HOST` | `gh auth status [--hostname $HOST]` |
-| Create label | `glab label create -n "..." -c "..." -d "..." -R "$HOST/$PROJECT_PATH"` | `gh label create "..." --color "..." --description "..." -R "$OWNER/$REPO" [--hostname $HOST]` |
+| Create label | `glab label create -n "..." -c "..." -d "..." -R "$HOST/$PROJECT_PATH"` | `gh label create "..." --color "..." --description "..." -R "$HOST/$OWNER/$REPO"` |
 | Search issues | `glab api --paginate "projects/$PROJECT_ID/issues?search=...&labels=...&state=all&per_page=100" --hostname $HOST` | `gh api --paginate "repos/$OWNER/$REPO/issues?state=all&per_page=100&labels=..." [--hostname $HOST]` |
-| Create issue | `glab api --method POST "projects/$PROJECT_ID/issues" --hostname $HOST -f "title=..." -F "description=@/tmp/desc.md" -f "labels=..."` | `gh issue create --title "..." --body-file "/tmp/desc.md" --label "..." -R "$OWNER/$REPO" [--hostname $HOST]` |
-| Update issue | `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "title=..." -f "labels=..." -f "state_event=reopen"` | `gh issue edit {number} --title "..." --add-label "..." --remove-label "..." -R "$OWNER/$REPO" [--hostname $HOST]` |
-| Close issue | `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "state_event=close"` | `gh issue close {number} -R "$OWNER/$REPO" [--hostname $HOST]` |
-| Reopen issue | `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "state_event=reopen"` | `gh issue reopen {number} -R "$OWNER/$REPO" [--hostname $HOST]` |
-| Add comment | `glab api --method POST "projects/$PROJECT_ID/issues/$IID/notes" --hostname $HOST -F "body=@/tmp/comment.md"` | `gh issue comment {number} --body-file "/tmp/comment.md" -R "$OWNER/$REPO" [--hostname $HOST]` |
+| Create issue | `glab api --method POST "projects/$PROJECT_ID/issues" --hostname $HOST -f "title=..." -F "description=@/tmp/desc.md" -f "labels=..."` | `gh issue create --title "..." --body-file "/tmp/desc.md" --label "..." -R "$HOST/$OWNER/$REPO"` |
+| Update issue | `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "title=..." -f "labels=..." -f "state_event=reopen"` | `gh issue edit {number} --title "..." --add-label "..." --remove-label "..." -R "$HOST/$OWNER/$REPO"` |
+| Close issue | `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "state_event=close"` | `gh issue close {number} -R "$HOST/$OWNER/$REPO"` |
+| Reopen issue | `glab api --method PUT "projects/$PROJECT_ID/issues/$IID" --hostname $HOST -f "state_event=reopen"` | `gh issue reopen {number} -R "$HOST/$OWNER/$REPO"` |
+| Add comment | `glab api --method POST "projects/$PROJECT_ID/issues/$IID/notes" --hostname $HOST -F "body=@/tmp/comment.md"` | `gh issue comment {number} --body-file "/tmp/comment.md" -R "$HOST/$OWNER/$REPO"` |
 
 **Description file:** GitLab uses `-F "description=@/tmp/file.md"` (with `@` prefix). GitHub uses `--body-file "/tmp/file.md"` (no `@` prefix).
 
@@ -56,7 +56,7 @@ The task below uses `{sep}` as a placeholder. Replace with `::` for GitLab, `:` 
 <task>
 
 <step n="1" goal="Detect platform and project">
-<action>Check `issue_tracking` in `_bmad/bmm/config.yaml`:
+<action>Check `issue_tracking` in `_bmad/custom/issue-tracking.yaml`:
 - If the section does not exist, or `platform` is not set: output "Issue tracking not configured. Open a new session and run `/bmad-issue-tracking-setup` (step 5) to configure the platform. When done, come back here and say 'done' — the configuration will be re-verified and then continue these instructions." and stop.
 - If `branch_patterns` is not set: output "Branch strategy not configured. Open a new session and run `/bmad-issue-tracking-setup` (step 6b) to configure branch patterns. When done, come back here and say 'done' — the configuration will be re-verified and then continue these instructions." and stop.
 </action>
@@ -85,7 +85,7 @@ The task below uses `{sep}` as a placeholder. Replace with `::` for GitLab, `:` 
   <ask>Ask the user for the PRD key (e.g., "mobile-oidc"). Then offer to add it to the PRD frontmatter for next time.</ask>
 </check>
 <action>Read `planning_artifacts` and `story_location` paths from `bmm/config.yaml` (fields: `planning_artifacts` and `implementation_artifacts`)</action>
-<note>Store all detected values for use in subsequent steps. For GHE, all subsequent CLI commands must include `--hostname $HOST`.</note>
+<note>Store all detected values for use in subsequent steps. For GitLab, use `-R "$HOST/$PROJECT_PATH"` on subcommands (mr, label). For GitHub/GHE, use `-R "$HOST/$OWNER/$REPO"` on all `gh` subcommands.</note>
 </step>
 
 <step n="2" goal="Ensure labels exist">
@@ -193,15 +193,16 @@ The task below uses `{sep}` as a placeholder. Replace with `::` for GitLab, `:` 
 </step>
 
 <step n="5" goal="Mark draft PR ready when all epics are done">
+<action>Determine the default branch: `git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || git remote show origin 2>/dev/null | grep 'HEAD branch' | awk '{print $NF}'`.</action>
 <action>Check if all epics in sprint-status.yaml have status `done`:</action>
 <check if="all epics are done">
   <action>Find the draft PR/MR for the PRD branch (PRD branch → default branch):</action>
-  - **GitLab:** `glab mr list --source-branch {prd_branch} --target-branch {default_branch} --hostname $HOST`
-  - **GitHub:** `gh pr list --head {prd_branch} --base {default_branch} --json number`
+  - **GitLab:** `glab mr list --source-branch {prd_branch} --target-branch {default_branch} -R "$HOST/$PROJECT_PATH"`
+  - **GitHub:** `gh pr list --head {prd_branch} --base {default_branch} --json number -R "$HOST/$OWNER/$REPO"`
   <check if="draft PR/MR found">
     <action>Mark it as ready:</action>
-    - **GitLab:** `glab mr update {mr_iid} --ready --hostname $HOST`
-    - **GitHub:** `gh pr ready {pr_number}`
+    - **GitLab:** `glab mr update {mr_iid} --ready -R "$HOST/$PROJECT_PATH"`
+    - **GitHub:** `gh pr ready {pr_number} -R "$HOST/$OWNER/$REPO"`
     <output>All epics are done — draft PR/MR marked as ready for review.</output>
   </check>
 </check>

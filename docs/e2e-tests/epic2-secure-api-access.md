@@ -869,7 +869,7 @@ Validates that the backend can validate tokens from multiple Keycloak realms sim
 ### Prerequisites
 
 - Phase 0 complete (`$TOKEN` available)
-- **IMPORTANT**: `KEYCLOAK_ADDITIONAL_REALMS={"genie2":"genie-app"}` must be set in `.env` BEFORE deploying the stack. The additional realms must be created in Keycloak before the backend starts — see Phase 0, Step 0.6.
+- **IMPORTANT**: `KEYCLOAK_ADDITIONAL_REALMS=["genie2"]` must be set in `.env` BEFORE deploying the stack. The additional realms must be created in Keycloak before the backend starts — see Phase 0, Step 0.6.
 
 ### Test I.1 — Verify `genie2` Realm Exists and Create Test User
 

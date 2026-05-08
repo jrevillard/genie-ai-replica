@@ -94,12 +94,13 @@ void main() {
     });
 
     test('has e2e-specific values', () {
-      expect(e2eConfig.keycloakUrl, equals('http://localhost:8080'));
+      expect(e2eConfig.keycloakUrl, equals('https://localhost:8443/auth'));
       expect(e2eConfig.realm, equals('genie'));
-      expect(e2eConfig.realmUrl, equals('http://localhost:8080/realms/genie'));
+      expect(e2eConfig.realmUrl, equals('https://localhost:8443/auth/realms/genie'));
       expect(e2eConfig.clientId, equals('genie-mobile-e2e'));
       expect(e2eConfig.redirectScheme, equals('com.itu.genieai.e2e'));
-      expect(e2eConfig.backendUrl, equals('http://localhost:3000'));
+      expect(e2eConfig.backendUrl, equals('https://localhost:8443/api'));
+      expect(e2eConfig.allowInsecureConnections, isTrue);
     });
   });
 

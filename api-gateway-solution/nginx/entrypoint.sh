@@ -71,10 +71,11 @@ export KONG_PROXY_HOST="${KONG_PROXY_HOST:-kong}"
 export NGINX_FRONTEND_HOST="${NGINX_FRONTEND_HOST:-frontend}"
 export NGINX_FRONTEND_PORT="${NGINX_FRONTEND_PORT:-8090}"
 export NGINX_PERMISSIONS_POLICY="${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}"
+export NGINX_HTTPS_PORT="${NGINX_HTTPS_PORT:-443}"
 
 # Render nginx config from template
 echo "Rendering nginx config from template..."
-envsubst '${NGINX_PUBLIC_DOMAIN} ${CSP_CONNECT_SRC} ${KONG_PROXY_HOST} ${NGINX_FRONTEND_HOST} ${NGINX_FRONTEND_PORT} ${NGINX_PERMISSIONS_POLICY}' \
+envsubst '${NGINX_PUBLIC_DOMAIN} ${CSP_CONNECT_SRC} ${KONG_PROXY_HOST} ${NGINX_FRONTEND_HOST} ${NGINX_FRONTEND_PORT} ${NGINX_PERMISSIONS_POLICY} ${NGINX_HTTPS_PORT}' \
     < /etc/nginx/conf.d/default.conf.template \
     > /etc/nginx/conf.d/default.conf
 

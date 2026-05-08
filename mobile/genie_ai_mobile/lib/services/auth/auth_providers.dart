@@ -9,6 +9,8 @@ import 'auth_interceptor.dart';
 import 'auth_logger.dart';
 import 'auth_notifier.dart';
 import 'auth_state.dart';
+import 'connectivity_checker.dart';
+import 'insecure_http_client.dart';
 import 'token_storage.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) {
@@ -20,10 +22,12 @@ final authLoggerProvider = Provider<AuthLogger>((ref) {
 });
 
 final keycloakServiceProvider = Provider<KeycloakService>((ref) {
-  final client = http.Client();
+  final config = getConfig();
+  final http.Client client =
+      config.allowInsecureConnections ? InsecureHttpClient() : http.Client();
   ref.onDispose(client.close);
   return KeycloakService(
-    keycloakConfig: getConfig(),
+    keycloakConfig: config,
     httpClient: client,
     logger: ref.read(authLoggerProvider),
   );
@@ -37,7 +41,9 @@ final apiServiceProvider = Provider<ApiService>((ref) {
   final config = getConfig();
   final tokenStorage = ref.read(tokenStorageProvider);
   final logger = ref.read(authLoggerProvider);
-  final client = http.Client();
+  final client = config.allowInsecureConnections
+      ? InsecureHttpClient()
+      : http.Client();
 
   final interceptor = AuthInterceptor(
     inner: client,
@@ -60,3 +66,7 @@ final apiServiceProvider = Provider<ApiService>((ref) {
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(
   AuthNotifier.new,
 );
+
+final connectivityCheckerProvider = Provider<ConnectivityChecker>((ref) {
+  return RealConnectivityChecker();
+});

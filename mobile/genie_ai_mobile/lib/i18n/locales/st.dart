@@ -198,153 +198,11 @@ const Map<String, dynamic> stLocale = {
     "ZM": "Zambia",
     "ZW": "Zimbabwe",
   },
-  "verification": {
-    "verifying": "Re netefatsa imeile ya hao...",
-    "success": "Imeile e Netefalitswe ka Katleho!",
-    "failed": "Ho Netefatsa ho Hlotsoe",
-    "accountVerified":
-        "Ak'haonte ya hao e netefalitswe ka katleho. Hona jwale o ka kena ak'haonteng ya hao.",
-    "invalidLink":
-        "Sehoka sa netefatso ha se sebetse kapa se felletsoe ke nako.",
-    "missingToken": "Letshwao la netefatso le siyo.",
-    "generalError":
-        "Ho bile le phoso nakong ya netefatso. Ka kopo, leka hape hamorao.",
-    "proceedToLogin": "Tswela pele ho Kena",
-    "backToLogin": "Khutlela ho Kena",
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Etsa Phasewete e Ntjha",
-    "tokenLabel": "Letshwao la ho Seta Botjha",
-    "tokenPlaceholder": "Kenya letshwao la ho seta botjha",
-    "validateButton": "Netefatsa Letshwao",
-    "newPasswordLabel": "Phasewete e Ntjha",
-    "newPasswordPlaceholder": "Etsa phasewete e ntjha",
-    "confirmNewPasswordLabel": "Netefatsa Phasewete e Ntjha",
-    "confirmNewPasswordPlaceholder": "Netefatsa phasewete ya hao e ntjha",
-    "resetButton": "Seta Phasewete Botjha",
-    "processing": "Ho seta botjha...",
-    "rememberedPassword": "O hopotse phasewete ya hao?",
-    "backToLogin": "Khutlela ho Kena",
-    "supportMessage":
-        "O hloka thuso? Ikopanye le sehlopha sa rona sa tshehetso",
-    "passwordRequirements":
-        "Phasewete e tlameha ho ba le ditlhaku tse 8, ho be le nomoro e le 1, tlhaku e kgolo e le 1, le letshwao le le 1 le ikgethang",
-    "passwordsDoNotMatch": "Diphasewete ha di tshwane",
-    "resetSuccess": "Phasewete ya hao e setilwe botjha ka katleho",
-    "resetFailed": "Ho hlotsoe ho seta phasewete botjha. Ka kopo, leka hape.",
-    "noTokenProvided": "Ka kopo, fana ka letshwao la ho seta botjha",
-    "expiredToken":
-        "Letshwao lena le felletsoe ke nako. Ka kopo kopa le leng le letjha.",
-    "invalidToken": "Letshwao lena ha le sebetse kapa ha le tsejwe",
-    "validatingToken": "Ho netefatsa letshwao...",
-    "redirecting": "Re o isa leqepheng la ho kena...",
-    "passwordStrength": "Matla a Phasewete",
-    "strengthLabels": {
-      "veryWeak": "E fokolang haholo",
-      "weak": "E fokolang",
-      "fair": "E mahareng",
-      "good": "E ntle",
-      "strong": "E matla",
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Sebelisa ditlhaku tse 8 kapa ho feta",
-      "addUppercase": "Kenya ditlhaku tse kgolo",
-      "addLowercase": "Kenya ditlhaku tse nyane",
-      "addNumbers": "Kenya dinomoro",
-      "addSpecialChars": "Kenya matshwao a ikgethang",
-    },
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Seta Phasewete ya hao Botjha",
-    "emailLabel": "Aterese ya Imeile",
-    "emailPlaceholder": "Kenya imeile ya hao",
-    "resetButton": "Romela Sehoka sa ho Seta Botjha",
-    "processing": "Ho romela...",
-    "rememberPassword": "O hopotse phasewete ya hao?",
-    "backToLogin": "Khutlela ho Kena",
-    "supportMessage":
-        "O hloka thuso? Ikopanye le sehlopha sa rona sa tshehetso",
-    "invalidEmail": "Ka kopo, kenya aterese ya imeile e nepahetseng",
-    "resetRequestSuccess":
-        "Sehoka sa ho seta phasewete botjha se rometswe ho imeile ya hao",
-    "resetRequestFailed":
-        "Ho hlotsoe ho romela sehoka sa ho seta botjha. Ka kopo, leka hape.",
-    "checkEmail": "Ka kopo sheba imeile ya hao bakeng sa ditaelo tse ding.",
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Etsa Ak'haonte e Ntjha",
-    "username": "Lebitso la mosebedisi",
-    "usernamePlaceholder": "Kenya lebitso la mosebedisi",
-    "email": "Imeile",
-    "emailPlaceholder": "Kenya imeile ya hao",
-    "password": "Phasewete",
-    "passwordPlaceholder": "Etsa phasewete",
-    "confirmPassword": "Netefatsa Phasewete",
-    "confirmPasswordPlaceholder": "Netefatsa phasewete ya hao",
-    "acceptTerms": "Ke dumellana le",
-    "termsOfService": "Diheelo tsa Tshebeletso",
-    "registerButton": "Etsa Ak'haonte",
-    "processing": "Ho sebetsa...",
-    "alreadyHaveAccount": "O se o na le ak'haonte?",
-    "loginNow": "Kena jwale",
-    "privacyNotice":
-        "Ka ho ingodisa, o dumellana le Diheelo tsa rona tsa Tshebeletso le Pholisi ya Lekunutu",
-    "usernameMinLength":
-        "Lebitso la mosebedisi le tlameha ho ba le ditlhaku tse 3 kapa ho feta",
-    "invalidEmail": "Ka kopo, kenya aterese ya imeile e nepahetseng",
-    "passwordRequirements":
-        "Phasewete e tlameha ho ba le ditlhaku tse 8, ho be le nomoro e le 1, le tlhaku e kgolo e le 1",
-    "passwordsDoNotMatch": "Diphasewete ha di tshwane",
-    "mustAcceptTerms": "O tlameha ho dumellana le Diheelo tsa Tshebeletso",
-    "registrationFailed": "Ho ingodisa ho hlotsoe. Ka kopo, leka hape.",
-    "usernameExists": "Lebitso la mosebedisi le se le ntse le le teng",
-    "emailExists": "Imeile ena e se e ntse e le teng",
-    "registrationSuccess": "O Ingodisitse ka Katleho!",
-    "verificationEmailSent": "Imeile ya netefatso e rometswe ho {email}",
-    "checkEmailInstructions":
-        "Ka kopo sheba imeile ya hao mme o latele ditaelo ho netefatsa ak'haonte ya hao pele o kena.",
-    "backToLogin": "Khutlela ho Kena",
-    "noEmailReceived": "Ha o a fumana imeile?",
-    "resendVerification": "Romela imeile ya netefatso hape",
-    "verificationResent": "Imeile ya netefatso e rometswe hape",
-    "verificationResendFailed":
-        "Ho hlotsoe ho romela imeile ya netefatso hape. Ka kopo, leka hape.",
-    "usernameInvalidChars":
-        "Lebitso la mosebedisi le ka ba le ditlhaku, dinomoro, matshwao a tlasa, matheba le matshwao a ho tlosa feela",
-    "networkError":
-        "Phoso ya marang-rang. Ka kopo sheba kgokahanyo ya hao ebe o leka hape.",
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Lebitso la mosebedisi",
-    "password": "Phasewete",
-    "loginButton": "Kena",
-    "or": "kapa",
-    "savedAccounts": "Diak'haonte tse Bolokilweng",
-    "loginSuccess": "O kene ka katleho",
-    "loginError": "Ho kena ho hlotsoe. Ka kopo sheba dintlha tsa hao.",
-    "googleLogin": "Tswela pele ka Google",
-    "facebookLogin": "Tswela pele ka Facebook",
-    "rememberMe": "Nthopole",
-    "forgotPassword": "Lebetse phasewete?",
-    "noAccount": "Ha o na ak'haonte?",
-    "createAccount": "Etsa ak'haonte",
-    "registerNow": "Ingodise jwale",
-    "termsAndPolicy":
-        "Ka ho kena, o dumellana le Diheelo tsa rona tsa Tshebeletso le Pholisi ya Lekunutu",
-    "loggingIn": "Ho kena...",
-    "fieldsRequired": "Lebitso la mosebedisi le phasewete dia hlokahala",
-    "invalidCredentials": "Lebitso la mosebedisi kapa phasewete ha e nepahe",
-    "tooManyAttempts":
-        "O lekile ho kena makgetlo a mangata. Ka kopo, leka hape hamorao.",
-    "loginFailed": "Ho kena ho hlotsoe. Ka kopo, leka hape.",
-    "oauthNotImplemented":
-        "Ho kena ka marang-rang a setjhaba ha ho e so sebetse",
-    "savedLoginNotImplemented":
-        "Ho kena ka ak'haonte e bolokilweng ha ho e so sebetse",
+  "auth": {
+    "noInternetConnection": "Ha ho naenetso ea inthanete",
+    "networkUnreachable": "Netwɔke ha ho fihlelleha",
+    "authenticationFailed": "Tlhahiso e hloile",
+    "sessionExpired": "Sesene oa hau e qetile. Ka karetsa o tsena hape.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -649,10 +507,12 @@ const Map<String, dynamic> stLocale = {
     "emailAddress": "Aterese ya Imeile",
     "emailAddressPlaceholder": "Aterese ya imeile ya hao",
     "password": "Phasewete",
-    "changePassword": "Fetola Phasewete",
     "resetUserData": "Seta Dintlha tsa Mosebedisi Botjha",
     "resetUserDataDesc":
         "Sena se tla hlakola dintlha tsohle tsa profaele ya hao le nalane ya dipuisano.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Hlakola Ak'haonte",
     "deleteAccountDesc":
         "Sena se tla hlakola ak'haonte ya hao ka ho sa feleng le dintlha tsohle tse amanang le eona.",
@@ -711,8 +571,6 @@ const Map<String, dynamic> stLocale = {
     "enterValidEmail": "Ka kopo kenya aterese ya imeile e nepahetseng",
     "failedToUpdateEmail":
         "Ho hlotsoe ho ntjhafatsa imeile. Ka kopo leka hape.",
-    "passwordResetInitiated":
-        "Sehoka sa ho seta phasewete botjha se rometswe atereseng ya hao ya imeile.",
     "unableToLoadUser":
         "Ho hlotsoe ho fumana dintlha tsa mosebedisi. Ka kopo leka hape.",
     "retry": "Leka hape",

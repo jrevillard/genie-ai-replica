@@ -232,9 +232,23 @@ See Section 9 of the `env` template for all available variables. Key ones:
 | `KEYCLOAK_REALM` | `genie` | Realm name |
 | `KEYCLOAK_CLIENT_ID` | `genie-app` | OIDC client ID |
 | `KEYCLOAK_URL` | `https://<domain>/auth` | Public URL (auto-set from NGINX_PUBLIC_DOMAIN) |
-| `KEYCLOAK_ADDITIONAL_REALMS` | — | Additional realms (JSON format, optional) |
+| `NGINX_HTTPS_PORT` | `443` | HTTPS port — included in Keycloak redirect URIs and web origins via `KC_PUBLIC_ORIGIN` |
+| `KEYCLOAK_ADDITIONAL_REALMS` | — | Additional realms (JSON array of realm names, optional) |
+
+**Redirect URIs and web origins** are auto-derived from `NGINX_PUBLIC_DOMAIN` + `NGINX_HTTPS_PORT` into `KC_PUBLIC_ORIGIN` (e.g., `https://localhost:8443`). If you use a non-standard HTTPS port, set `NGINX_HTTPS_PORT` in `.env` — no manual Keycloak configuration needed.
 
 For external IdP integration (Google, Microsoft, etc.), see [External IdP Integration Guide](keycloak-admin-guide.md).
+
+### Keycloak behind the reverse proxy
+
+Keycloak runs behind the NGINX → Kong proxy chain with the `/auth` path prefix. The proxy headers are handled automatically:
+
+- **NGINX** sets `X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-Port` on `/auth/` requests
+- **Kong** adds `X-Forwarded-Prefix: /auth` via the `request-transformer` plugin and strips the `/auth` prefix before forwarding to Keycloak
+- **Kong** must trust nginx to preserve these headers — configured via `KONG_TRUSTED_IPS` (default: `172.16.0.0/12`, covers Docker bridge subnets)
+- **Keycloak** resolves its public URL dynamically from these headers (`KC_PROXY_HEADERS=xforwarded`, `KC_HOSTNAME=<hostname>`)
+
+This means Keycloak's OIDC discovery endpoint (`/auth/realms/genie/.well-known/openid-configuration`) returns the correct public URLs (scheme, host, port, path prefix) without hardcoding a full URL in `KC_HOSTNAME`.
 
 ## Step 9: Verify Deployment
 

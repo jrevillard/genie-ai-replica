@@ -276,7 +276,7 @@ docker pull opea/chatqna-ui:latest
 docker pull opea/nginx:latest
 docker pull ghcr.io/huggingface/text-embeddings-inference:1.9.3
 docker pull nginx:alpine
-docker pull quay.io/keycloak/keycloak:26.5.6
+docker pull quay.io/keycloak/keycloak:26.6.1
 docker pull adorsys/keycloak-config-cli:6.5.0-26
 
 # Tag and push (example for each)
@@ -332,6 +332,26 @@ To skip OPEA/AI services (no GPU required), set in `.env`:
 
 ```bash
 DEPLOY_OPEA=0
+```
+
+### Kong trusted IPs (required for Swarm)
+
+Kong must trust NGINX on the Docker network to preserve `X-Forwarded-*` headers (Proto, Host, Port, Prefix). Without this, Kong overwrites them with its own values, breaking Keycloak's OIDC discovery URLs.
+
+**Docker Compose** uses bridge networks (172.16.0.0/12 by default), but **Docker Swarm** uses overlay networks that typically allocate from `10.x.x.x` ranges. Verify your overlay subnet:
+
+```bash
+docker network inspect genieai_genieai_network --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+```
+
+Then set `KONG_TRUSTED_IPS` in `.env` accordingly:
+
+```bash
+# Docker Compose (bridge networks — 172.16-172.31)
+# KONG_TRUSTED_IPS=172.16.0.0/12
+
+# Docker Swarm (overlay networks — typically 10.x.x.x)
+# KONG_TRUSTED_IPS=10.0.0.0/8
 ```
 
 ## Step 7: Verify File Prerequisites
@@ -462,6 +482,8 @@ After verifying deployment, set up user accounts and roles. All user management 
 **Credentials**: username `admin`, password from `KEYCLOAK_ADMIN_PASSWORD` in `.env`.
 
 Select the **genie** realm (not `master`) after logging in.
+
+**Redirect URIs and web origins** are auto-derived from `NGINX_PUBLIC_DOMAIN` + `NGINX_HTTPS_PORT` into `KC_PUBLIC_ORIGIN` (e.g., `https://gateway.example.com:8443`). If you use a non-standard HTTPS port, set `NGINX_HTTPS_PORT` in `.env` — no manual Keycloak configuration needed.
 
 **GENIE realm admin user** (separate from master admin, used for frontend login):
 - **Username**: `genie-admin` (default, configurable via `GENIE_ADMIN_USERNAME`)

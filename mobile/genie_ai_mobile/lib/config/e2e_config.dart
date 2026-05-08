@@ -1,9 +1,10 @@
 import 'keycloak_config.dart';
 
 const e2eConfig = KeycloakConfig(
-  keycloakUrl: 'http://localhost:8080',
+  keycloakUrl: 'https://localhost:8443/auth',
   realm: 'genie',
   clientId: 'genie-mobile-e2e',
   redirectScheme: 'com.itu.genieai.e2e',
-  backendUrl: 'http://localhost:3000',
+  backendUrl: 'https://localhost:8443/api',
+  allowInsecureConnections: true,
 );

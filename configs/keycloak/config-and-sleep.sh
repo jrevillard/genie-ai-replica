@@ -10,14 +10,21 @@ for var in KEYCLOAK_ADMIN_PASSWORD KC_PROXY_CLIENT_SECRET KC_DATAPREP_CLIENT_SEC
   fi
 done
 
-# Run Keycloak config and create marker on success
-if java -jar /app/keycloak-config-cli.jar; then
-  touch /tmp/config-done
-  echo "Keycloak realm configured successfully. Keeping container alive for healthcheck..."
-else
-  echo "ERROR: Keycloak realm configuration failed." >&2
-  exit 1
-fi
+MAX_RETRIES=10
+RETRY_DELAY=10
+attempt=0
 
-# Keep container alive for healthcheck
-exec sleep infinity
+while [ $attempt -lt $MAX_RETRIES ]; do
+  attempt=$((attempt + 1))
+  echo "Attempt $attempt/$MAX_RETRIES: Running Keycloak realm configuration..."
+  if java -jar /app/keycloak-config-cli.jar; then
+    touch /tmp/config-done
+    echo "Keycloak realm configured successfully. Keeping container alive for healthcheck..."
+    exec sleep infinity
+  fi
+  echo "Keycloak realm configuration failed (attempt $attempt/$MAX_RETRIES). Retrying in ${RETRY_DELAY}s..." >&2
+  sleep $RETRY_DELAY
+done
+
+echo "ERROR: Keycloak realm configuration failed after $MAX_RETRIES attempts." >&2
+exit 1

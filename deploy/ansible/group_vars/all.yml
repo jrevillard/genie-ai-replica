@@ -50,6 +50,16 @@ nginx_public_domain: "localhost"
 nginx_http_port: "80"
 nginx_https_port: "443"
 
+# Kong trusted IPs for X-Forwarded-* header passthrough.
+# Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,
+# X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Prefix headers set by nginx.
+# Kong is NOT exposed to the host — only containers on the internal Docker network can reach it,
+# so IP spoofing from outside is not possible regardless of the CIDR range.
+# Docker Compose (bridge networks): 172.16.0.0/12 (covers 172.16-172.31)
+# Docker Swarm (overlay networks): 10.0.0.0/8 (default overlay subnet range)
+# Restrict further with: docker network inspect <network> to find the exact subnet.
+kong_trusted_ips: "10.0.0.0/8"
+
 # =============================================================================
 # SSL CERTIFICATES
 # =============================================================================

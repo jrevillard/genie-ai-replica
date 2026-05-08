@@ -259,6 +259,14 @@ HUGGING_FACE_HUB_TOKEN=
 # All external traffic routes through nginx (80/443).
 # To expose Kong directly for debugging, uncomment in docker-compose.yaml.
 
+# Kong trusted IPs for X-Forwarded-* header passthrough
+# Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,
+# X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Prefix headers set by nginx.
+# Without this, Kong overwrites them with its own (http/port 8000).
+# Default: 172.16.0.0/12 (covers Docker bridge subnets 172.16–172.31)
+# Restrict to your Docker network subnet for production.
+# KONG_TRUSTED_IPS=
+
 # Let's Encrypt certificate management (optional)
 # Set CERTBOT_EMAIL to enable automatic SSL certificate provisioning via Let's Encrypt.
 # Activation requires: CERTBOT_EMAIL + deployment flag (--profile letsencrypt / CERTBOT_REPLICAS)
@@ -309,6 +317,11 @@ HUGGING_FACE_HUB_TOKEN=
 # REQUIRED — app will not start without this value
 KEYCLOAK_URL=https://localhost/auth
 
+# Keycloak redirect URIs and web origins are auto-derived from NGINX_PUBLIC_DOMAIN + NGINX_HTTPS_PORT:
+#   KC_PUBLIC_ORIGIN=https://<NGINX_PUBLIC_DOMAIN>[:<NGINX_HTTPS_PORT>]
+# This is set internally in docker-compose.yaml (keycloak-config service).
+# If you use a non-standard HTTPS port (e.g. 8443), set NGINX_HTTPS_PORT in .env — no other changes needed.
+
 # Keycloak realm name
 # REQUIRED — app will not start without this value
 KEYCLOAK_REALM=genie
@@ -322,12 +335,12 @@ KEYCLOAK_CLIENT_ID=genie-app
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KEYCLOAK_CLIENT_SECRET=
 
-# Additional Keycloak realms for backend token validation (JSON map: realm-name -> client-id)
+# Additional Keycloak realms for backend token validation (JSON array of realm names)
 # Each additional realm must have a corresponding OIDC client configured in Keycloak admin console
 # with Authorization Code Flow + PKCE enabled and Valid Redirect URIs set to the frontend URL.
 # The frontend only authenticates against the primary realm (KEYCLOAK_REALM).
 # Users from additional realms authenticate via their own Keycloak login URL.
-# Example: KEYCLOAK_ADDITIONAL_REALMS={"partner-org":"partner-app","contractor":"contractor-app"}
+# Example: KEYCLOAK_ADDITIONAL_REALMS=["partner-org","contractor"]
 # KEYCLOAK_ADDITIONAL_REALMS=
 
 # Keycloak master admin password (REQUIRED — set a strong value)
@@ -387,6 +400,23 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 KC_DATAPREP_CLIENT_ID=dataprep-service-client
 KC_DATAPREP_CLIENT_SECRET=
 
+# Mobile OIDC client for institutional deployments (Flutter app)
+# Public client with PKCE — no client secret required (RFC 8252).
+# Change per deployment: each institution needs its own clientId and redirect scheme.
+# Used by: keycloak-config-cli (creates the mobile OIDC client in Keycloak at startup)
+# See: docs/mobile-deployment-guide.md (deployment onboarding guide)
+KC_MOBILE_CLIENT_ID=genie-mobile-itu
+
+# Mobile app custom URL scheme for OIDC callback redirect.
+# MUST match the following across all config layers (scheme coherence rule):
+#   1. redirectScheme in Dart flavor config (lib/config/flavors/*.dart)
+#   2. appAuthRedirectScheme in android/app/build.gradle manifestPlaceholders
+#   3. APP_AUTH_REDIRECT_SCHEME in iOS XCConfig (ios/Flutter/*.xcconfig)
+#   4. This variable in .env (used by keycloak-config-cli for Keycloak client redirectUris)
+# A mismatch causes silent OIDC callback failure — the browser redirects to the wrong
+# scheme and the app never receives the authorization code.
+KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
+
 # --- Realm properties (optional) ---
 # These control registration, email verification, password policy, and more.
 # Uncomment and override only if you need non-default behavior.
@@ -399,8 +429,10 @@ KC_DATAPREP_CLIENT_SECRET=
 # Requires SMTP configuration for verification emails to work.
 # KEYCLOAK_VERIFY_EMAIL=true
 
-# Allow "Forgot Password" flow (default: true)
-# Requires SMTP configuration for reset emails to work.
+# Allow "Forgot Password" flow on Keycloak login page.
+# Requires SMTP configuration (EMAIL_HOST, EMAIL_PORT, etc.) for reset emails to work.
+# Set to "false" to hide the "Forgot Password" link on the Keycloak login page.
+# Default is "true" via docker-compose.yaml keycloak-config service fallback.
 # KEYCLOAK_RESET_PASSWORD=true
 
 # Allow login with email address (default: true)

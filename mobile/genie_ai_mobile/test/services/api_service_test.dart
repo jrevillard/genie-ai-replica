@@ -60,32 +60,6 @@ void main() {
       expect(mockClient.callCount, equals(5));
     });
 
-    // ignore: deprecated_member_use
-    test('deprecated setToken() is a no-op — getHeaders returns no Authorization', () {
-      final api = ApiService();
-      // ignore: deprecated_member_use
-      api.setToken('should-be-ignored');
-      // ignore: deprecated_member_use
-      final headers = api.getHeaders();
-      expect(headers.containsKey('Authorization'), isFalse);
-    });
-
-    // ignore: deprecated_member_use
-    test('deprecated clearToken() is a no-op', () {
-      final api = ApiService();
-      // ignore: deprecated_member_use
-      api.clearToken();
-      // ignore: deprecated_member_use
-      expect(api.accessToken, isNull);
-    });
-
-    // ignore: deprecated_member_use
-    test('deprecated accessToken getter returns null', () {
-      final api = ApiService();
-      // ignore: deprecated_member_use
-      expect(api.accessToken, isNull);
-    });
-
     test('default constructor with no args works', () async {
       // This would normally call getConfig().backendUrl which requires flavor
       // For testing, just verify the constructor doesn't throw

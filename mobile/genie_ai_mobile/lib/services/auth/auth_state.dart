@@ -47,7 +47,7 @@ class AuthState {
         errorMessage = null,
         retryable = false;
 
-  const AuthState.error({required String message, this.retryable = false})
+  AuthState.error({required String message, this.retryable = false})
       : status = AuthStatus.error,
         userId = null,
         displayName = null,

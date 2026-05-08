@@ -19,14 +19,12 @@ import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 // AUTHENTICATION SCREEN IMPORTS
 // ===========================================================================
 import 'package:genie_ai_mobile/components/auth/oidc_login_screen.dart';
-import 'package:genie_ai_mobile/components/auth/register_screen.dart';
 import 'package:genie_ai_mobile/services/genie_ai_config.dart';
-import 'package:genie_ai_mobile/components/auth/registration_success_screen.dart';
-import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.dart';
-import 'package:genie_ai_mobile/components/auth/password_reset_confirm_screen.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 import 'package:genie_ai_mobile/services/auth/auth_state.dart';
+import 'package:app_links/app_links.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ===========================================================================
 // COMPONENT IMPORTS
@@ -39,8 +37,9 @@ import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
 import 'package:genie_ai_mobile/components/settings/about_screen.dart';
 
-/// SSL Override for local development to bypass self-signed certificate issues
-class MyHttpOverrides extends HttpOverrides {
+/// DEBUG ONLY: Bypasses TLS validation for local development with self-signed
+/// certificates. Tree-shaken in release builds — unused when kDebugMode is false.
+class _DebugHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
@@ -53,15 +52,21 @@ void main() async {
   // Ensure binding is initialized for rootBundle access
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Apply the HTTP overrides for development environment
-  if (!kIsWeb) {
-    HttpOverrides.global = MyHttpOverrides();
+  // DEBUG ONLY: Bypass TLS for local dev with self-signed certificates.
+  // kDebugMode is a compile-time constant — this entire block is
+  // tree-shaken from release builds.
+  if (kDebugMode && !kIsWeb) {
+    HttpOverrides.global = _DebugHttpOverrides();
   }
 
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends ConsumerStatefulWidget {
@@ -73,11 +78,91 @@ class MyApp extends ConsumerStatefulWidget {
 
 class _MyAppState extends ConsumerState<MyApp> {
   bool _isConfigLoaded = false;
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _appLinkSubscription;
 
   @override
   void initState() {
     super.initState();
+    _appLinks = AppLinks();
+
+    // Handle cold-start links (app launched from terminated state via universal link)
+    _appLinks.getInitialLink().then((Uri? link) {
+      if (link != null) {
+        _handleIncomingLink(link);
+      }
+    });
+
+    // Handle warm-start links (app already running in background)
+    _appLinkSubscription = _appLinks.uriLinkStream.listen(
+      _handleIncomingLink,
+      onError: (Object error) {
+        debugPrint('[APPLINKS] Stream error: $error');
+      },
+    );
+
     _loadAppConfiguration();
+  }
+
+  Future<void> _handleIncomingLink(Uri uri) async {
+    // DEBUG ONLY: E2E test-auth deep link — inject tokens directly into storage.
+    // kDebugMode is a compile-time constant — this block is tree-shaken in release.
+    // Path: genie-e2e-test://test-auth?access_token=...&id_token=...&refresh_token=...&expires_at=...
+    // Uses a dedicated scheme to avoid conflict with flutter_appauth's
+    // RedirectUriReceiverActivity which owns the appAuthRedirectScheme.
+    //
+    // NOTE: This bypasses AuthNotifier's normal state transition logic
+    // (authorize → token exchange → authenticated). It sets the state
+    // directly because invalidate() re-runs build() and crashes on late
+    // final fields. This is acceptable for E2E because the test-only
+    // deep link scheme cannot be triggered in production.
+    if (kDebugMode && uri.host == 'test-auth') {
+      final tokenStorage = ref.read(tokenStorageProvider);
+      final accessToken = uri.queryParameters['access_token'];
+      final idToken = uri.queryParameters['id_token'];
+      final refreshToken = uri.queryParameters['refresh_token'];
+      final expiresAt = uri.queryParameters['expires_at'];
+      if (accessToken != null && idToken != null && refreshToken != null) {
+        final expiration = expiresAt != null
+            ? DateTime.tryParse(expiresAt) ?? DateTime.now().add(const Duration(seconds: 300))
+            : DateTime.now().add(const Duration(seconds: 300));
+        await tokenStorage.saveTokens(
+          accessToken: accessToken,
+          idToken: idToken,
+          refreshToken: refreshToken,
+          accessTokenExpiration: expiration,
+        );
+        // Set authenticated state directly — avoid invalidate() which
+        // re-runs build() and crashes on late final fields.
+        ref.read(authProvider.notifier).state = const AuthState.authenticated();
+        debugPrint('[TEST-AUTH] Tokens injected via deep link, expiration: $expiration');
+      } else {
+        debugPrint('[TEST-AUTH] Missing token parameters in deep link');
+      }
+      return;
+    }
+
+    // OIDC callbacks use custom scheme (e.g., com.itu.genieai://callback)
+    // These are handled internally by flutter_appauth — do NOT process them here
+    if (uri.scheme != 'https') return;
+
+    // Non-OIDC HTTPS links (email verification, etc.) → open in system browser
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (launched) {
+        debugPrint('[APPLINKS] Launched system browser for: $uri');
+      } else {
+        debugPrint('[APPLINKS] Failed to launch browser for: $uri (no browser app available)');
+      }
+    } catch (e) {
+      debugPrint('[APPLINKS] Error launching browser: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _appLinkSubscription?.cancel();
+    super.dispose();
   }
 
   /// Loads the theme configuration from assets and initializes ThemeManager
@@ -155,7 +240,10 @@ class _MyAppState extends ConsumerState<MyApp> {
               ? MainScreen(
                   // TODO(Epic 2): accessToken is empty until AuthInterceptor
                   // provides real tokens to downstream components.
-                  user: {'id': authState.userId ?? '', 'accessToken': ''},
+                  user: {
+                    'id': authState.userId ?? '',
+                    'accessToken': '',
+                  },
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
                   onLogout: _onLogout,
@@ -165,23 +253,10 @@ class _MyAppState extends ConsumerState<MyApp> {
               : const OidcLoginScreen(),
           routes: {
             '/login': (context) => const OidcLoginScreen(),
-            '/register': (context) => const RegisterScreen(),
-            '/registration-success': (context) =>
-                const RegistrationSuccessScreen(),
-            '/password-reset': (context) => const PasswordResetInitiateScreen(),
-            '/profile': (context) =>
-                UserProfileScreen(user: {'id': authState.userId ?? ''}),
+            '/profile': (context) => UserProfileScreen(
+              user: {'id': authState.userId ?? ''},
+            ),
             '/about': (context) => const AboutScreen(),
-            '/password-reset-confirm': (context) {
-              final settings = ModalRoute.of(context)?.settings;
-              final String? token = settings?.arguments as String?;
-              if (token == null) {
-                return const Scaffold(
-                  body: Center(child: Text("Invalid or missing reset token")),
-                );
-              }
-              return PasswordResetConfirmScreen(token: token);
-            },
           },
         );
       },
@@ -358,13 +433,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           ignoring: !_isOnline,
                           child: Opacity(
                             opacity: _isOnline ? 1.0 : 0.5,
-                            child: ChatBotComponent(
-                              key: _chatBotKey,
-                              userId: widget.user['id'] ?? widget.user['_id'],
-                              onRefreshSidebar: _refreshSidebar,
-                              onRelatedDocumentsUpdate: _updateRelatedDocuments,
-                              httpClient: widget.httpClient,
-                              streamBaseUrl: widget.streamBaseUrl,
+                            child: KeyedSubtree(
+                              key: const Key('main_chat_bot'),
+                              child: ChatBotComponent(
+                                key: _chatBotKey,
+                                userId: widget.user['id'] ?? widget.user['_id'],
+                                onRefreshSidebar: _refreshSidebar,
+                                onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                                httpClient: widget.httpClient,
+                                streamBaseUrl: widget.streamBaseUrl,
+                              ),
                             ),
                           ),
                         ),

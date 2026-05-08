@@ -62,8 +62,9 @@ SYSTEM_PROMPT = (
 # vLLM Specific Settings
 # This is leveraging vllm-vllm-translation-guardrail service
 # These can be overridden via environment variables (e.g. from .env)
-VLLM_ENDPOINT = os.getenv("VLLM_TRANSLATION_ENDPOINT", "http://localhost:9031/v1/chat/completions")
-VLLM_COMPLETIONS_ENDPOINT = os.getenv("VLLM_TRANSLATION_ENDPOINT", "http://localhost:9031").rstrip("/v1/chat/completions") + "/v1/completions"
+_VLLM_TRANSLATION_BASE = os.getenv("VLLM_TRANSLATION_ENDPOINT", "http://localhost:9031")
+VLLM_ENDPOINT = f"{_VLLM_TRANSLATION_BASE}/v1/chat/completions"
+VLLM_COMPLETIONS_ENDPOINT = f"{_VLLM_TRANSLATION_BASE}/v1/completions"
 VLLM_MODEL = os.getenv("VLLM_TRANSLATION_MODEL_ID", "google/gemma-3-4b-it")
 IS_TRANSLATEGEMMA = "translategemma" in VLLM_MODEL.lower()
 
@@ -72,9 +73,8 @@ def build_translategemma_prompt(text: str, source_lang_code: str, target_lang_co
                                  source_lang_name: str = "English", target_lang_name: str = "English") -> str:
     """Build a prompt for TranslateGemma using the completions API.
 
-    vLLM v0.10.0 cannot pass structured content through the chat completions API
-    to TranslateGemma's Jinja2 template, so we apply the template manually and
-    use the /v1/completions endpoint instead.
+    Duplicated in genie-ai-overlay/chatqna/genieai_chatqna.py — keep in sync.
+    Keep in sync when updating the prompt.
     """
     return (
         f"<bos><start_of_turn>user\n"

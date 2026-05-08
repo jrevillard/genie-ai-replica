@@ -1076,9 +1076,7 @@ class ChatQnAService:
                                       source_lang_name: str = "English", target_lang_name: str = "English") -> str:
         """Build a prompt for TranslateGemma using the completions API.
 
-        vLLM v0.10.0 cannot pass structured content through the chat completions API
-        to TranslateGemma's Jinja2 template, so we apply the template manually and
-        use the /v1/completions endpoint instead.
+        Duplicated in document-translation/genieai_pdf_translator.py — keep in sync.
         """
         return (
             f"<bos><start_of_turn>user\n"
@@ -1096,7 +1094,6 @@ class ChatQnAService:
             f"text into {target_lang_name}:\n\n\n{text}"
             f"<end_of_turn>\n<start_of_turn>model\n"
         )
-
 
     async def _get_translated_history_string(self, history: list, target_language: str, source_lang_code: str = "en") -> str:
         """

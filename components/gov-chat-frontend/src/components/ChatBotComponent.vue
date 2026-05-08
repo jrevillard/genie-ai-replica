@@ -785,6 +785,9 @@ export default {
           queryData = {
             sessionId: this.currentSessionId || 'new-session',
             text: messageForBackend,
+            context: {
+              language: this.currentLocale.toUpperCase(),
+            },
             contextOption: contextOption,
             timestamp: new Date().toISOString()
           };

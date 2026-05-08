@@ -44,9 +44,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale for category names
+     *         description: Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: Dashboard analytics data
@@ -211,9 +210,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale for category names
+     *         description: Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: General analytics data
@@ -514,9 +512,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale
+     *         description: Language locale (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: Satisfaction gauge data
@@ -576,9 +573,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale
+     *         description: Language locale (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: Satisfaction heatmap data

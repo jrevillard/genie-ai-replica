@@ -102,8 +102,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    # --- ADDED THIS SECTION ---
+    # This injects the $FRONTEND_PORT variable from .env
+    # as a variable named $PORT inside the container
     environment:
       - PORT=${FRONTEND_PORT}
+    # --- UPDATED THIS SECTION ---
+    # This now reads the port from your .env file
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     depends_on:
@@ -149,7 +154,7 @@ services:
         condition: service_healthy
     environment:
       # Database config
-      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_URL=${ARANGO_URL}
       - ARANGO_PORT=${ARANGO_PORT}
       - ARANGO_DB=${ARANGO_DB}
       - ARANGO_USER=${ARANGO_USER}
@@ -168,10 +173,6 @@ services:
       - TRANSLATION_CACHE_HOST=${TRANSLATION_CACHE_HOST:-redis-cache}
       - TRANSLATION_CACHE_PORT=${TRANSLATION_CACHE_PORT:-6379}
       - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD}
-      - OPEA_HOST=genie-ai-chatqna-server
-      - OPEA_PORT=8888
-      - OPEA_PATH=/v1/chatqna
-      - CONTEXT_OPTION=single-message
       # GPU Translation Configuration (vLLM)
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
@@ -186,7 +187,7 @@ services:
     container_name: doc-repo-dev
     environment:
       # Database config
-      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_URL=${ARANGO_URL}
       - ARANGO_PORT=${ARANGO_PORT}
       - ARANGO_DB=${ARANGO_DB}
       - ARANGO_USER=${ARANGO_USER}
@@ -205,10 +206,11 @@ services:
       - doc_repo_uploads:/app/uploads
 
   clamav:
+    #image: mkodockx/docker-clamav:alpine
     image: clamav/clamav
     container_name: clamav
     ports:
-      - "3310:3310"
+      - "3310:3310"  # ClamAV daemon port
     networks:
       - genieai_network
 
@@ -224,7 +226,7 @@ services:
     command: ["--experimental-vector-index=true"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password \"${ARANGO_PASSWORD}\" --javascript.execute-string \"db._version();\""]
+      test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:${ARANGO_PORT} --server.username root --server.password \"${ARANGO_PASSWORD}\" --javascript.execute-string \"db._version();\""]
       interval: 10s
       timeout: 10s
       retries: 12
@@ -291,7 +293,7 @@ services:
       guardrail:
         condition: service_started
     ports:
-      - "${DATAPREP_PORT}:5000" # Wondering why the container port is 5000
+      - "${DATAPREP_PORT}:5000"
     env_file:
       - .env
     environment:
@@ -356,9 +358,9 @@ services:
       - .env
     environment:
       RETRIEVER_COMPONENT_NAME: ${RETRIEVER_COMPONENT_NAME}
-      ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT}
       ARANGO_URL: ${ARANGO_URL}
+      ARANGO_GRAPH_NAME: ${ARANGO_GRAPH_NAME}
       TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
     networks:
       - genieai_network
@@ -471,14 +473,14 @@ services:
               capabilities: [gpu]
     ports:
       - "${LLM_SERVER_PORT}:${LLM_SERVER_PORT}"
-    command: >
+    command: 
       --model ${VLLM_LLM_MODEL_ID}
-      --gpu_memory_utilization ${VLLM_GPU_UTIL:-0.6}
+      --gpu_memory_utilization ${VLLM_GPU_UTIL:-0.4}
       --served-model-name ${VLLM_LLM_MODEL_ID}
-      --max_model_len ${VLLM_MAX_MODEL_LEN:-4096}
-      --max_num_seqs 1024
-      --kv-cache-dtype auto
-      --dtype=${VLLM_DTYPE:-auto}
+      --max_model_len ${VLLM_MAX_MODEL_LEN:-2048}
+      --max_num_seqs 64
+      --dtype=${VLLM_DTYPE:-half}
+      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA
@@ -498,6 +500,7 @@ services:
 
   textgen:
     container_name: llm-textgen
+    # Corrected: Pulling the pre-built, versioned image
     image: opea/llm-textgen:latest
     depends_on:
       vllm:
@@ -514,7 +517,8 @@ services:
 
   vllm-translation-guardrail:
     container_name: vllm-vllm-translation-guardrail
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.10.0
+    # image: vllm/vllm-openai:latest
     deploy:
       resources:
         reservations:
@@ -524,19 +528,18 @@ services:
               capabilities: [gpu]
     ports:
       - "${VLLM_TRANSLATION_SERVICE_PORT}:${VLLM_TRANSLATION_SERVICE_PORT}"
-    command: >
+    command: 
       --model ${VLLM_TRANSLATION_MODEL_ID}
-      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.3}
+      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.4}
       --served-model-name ${VLLM_TRANSLATION_MODEL_ID}
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
-      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-auto}
-      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
+      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-fp8}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-half}
       --port ${VLLM_TRANSLATION_SERVICE_PORT}
-      --no-enable-chunked-prefill
-      --max-num-seqs 16
+      --max_num_seqs 64
+      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
     depends_on:
       vllm:
         condition: service_healthy
@@ -551,7 +554,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
-      start_period: 300s
+      start_period: 30s
 
   translation:
     image: opea/translation:latest
@@ -568,12 +571,13 @@ services:
 
   guardrail:
     container_name: llm-guardrail
+    # Corrected: Pulling the pre-built, versioned image
     image: opea/guardrails:latest
     environment:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
-      - GUARDRAILS_COMPONENT_NAME=OPEA_LLM_GUARD
+      - GUARDRAILS_COMPONENT_NAME=OPEA_GEMMA_GUARD
     ports:
       - "${GUARDRAIL_SERVICE_PORT}:${GUARDRAIL_SERVICE_PORT}"
     ipc: "host"
@@ -582,10 +586,12 @@ services:
     restart: "no"
   
   tei:
-    image: ghcr.io/huggingface/text-embeddings-inference:latest
-    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
+    # image: ghcr.io/huggingface/text-embeddings-inference:latest
+    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --auto-truncate"
+    # ROMAN: updated code (for review)
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --dtype float16 --max-batch-tokens 1024 --max-concurrent-requests 8"
+    # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
     runtime: nvidia
     ports:
       - "7000:80"
@@ -616,6 +622,7 @@ services:
 
   embedding:
     container_name: embedding
+    # Corrected: Pulling the pre-built, versioned image
     image: opea/embedding:latest
     depends_on:
       tei:
@@ -632,10 +639,13 @@ services:
     restart: "no"
 
   tei_reranker:
-    image: ghcr.io/huggingface/text-embeddings-inference:latest
-    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
+    # image: ghcr.io/huggingface/text-embeddings-inference:latest
+    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.8
     container_name: tei-reranker-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 32768 --max-concurrent-requests 256 --auto-truncate"
+      # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID}"
+    # ROMAN: updated code (for review)
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 1024 --max-concurrent-requests 8 --auto-truncate"
+    # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64 --auto-truncate"
     runtime: nvidia
     ports:
       - "7100:80"
@@ -654,6 +664,9 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
     depends_on:
       vllm-translation-guardrail:
+        condition: service_healthy
+      # ROMAN: new code (for review)
+      tei:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
@@ -695,4 +708,3 @@ networks:
   genieai_network:
     name: genieai_mvp_genieai_network
     driver: bridge
-

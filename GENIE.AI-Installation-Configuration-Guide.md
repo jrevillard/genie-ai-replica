@@ -215,17 +215,7 @@ You must complete the base installation before configuring the application servi
 
 Plaintext
 
-repository-root/
-├── docker-compose.yaml           # Swarm-compatible deployment (single source of truth)
-├── env                           # Configuration template (copy to .env)
-├── env.t4                        # GPU overrides for NVIDIA T4 (16GB VRAM)
-├── env.rtx6000                   # GPU overrides for RTX 6000 ADA (24GB VRAM)
-├── api-gateway-solution/
-│   └── new-config/               # Kong API gateway configuration
-├── configs/                      # Configuration files
-│   └── opea-config/              # OPEA service configurations
-├── secrets/ssl/                  # SSL/TLS certificates (NOT committed)
-└── genie-ai-overlay/             # OPEA microservices build overlays
+Stashed changes:Inko-Installation-Configuration-Guide.md
 
 ## Single-Node Installation
 
@@ -1794,3 +1784,4 @@ flutter build web
 1. Verify `genie-ai-config.json` is valid JSON
 2. Check that the config file is declared in `pubspec.yaml`
 3. Ensure the config loader is initialized in `main.dart`  
+

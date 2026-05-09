@@ -85,7 +85,7 @@ GENIE.AI/
 │   └── shared/                   # Shared libraries
 ├── mobile/                       # Mobile applications
 │   └── genie_ai_mobile/          # Flutter mobile app
-├── genie-ai-overlay/             # OPEA integration layer
+├── inko-overlay/             # OPEA integration layer
 │   ├── chatqna/                  # Chat microservice
 │   ├── core/                     # Core libraries and protocols
 │   ├── dataprep/                 # Data preparation service
@@ -187,10 +187,7 @@ See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full lo
 
 ### OPEA Integration
 
-- **[ChatQnA Service](genie-ai-overlay/chatqna/README.md)** - Chat microservice with multilingual support
-- **[Core Library](genie-ai-overlay/core/README.md)** - Service types, API protocols, and constants
-- **[Data Preparation](genie-ai-overlay/dataprep/README.md)** - Document ingestion and processing pipeline
-- **[Retriever Service](genie-ai-overlay/retriever/README.md)** - Hybrid vector-graph search
+Stashed changes
 
 ### Configuration
 

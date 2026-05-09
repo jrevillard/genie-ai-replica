@@ -149,7 +149,7 @@ services:
         condition: service_healthy
     environment:
       # Database config
-      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_URL=${ARANGO_URL}
       - ARANGO_PORT=${ARANGO_PORT}
       - ARANGO_DB=${ARANGO_DB}
       - ARANGO_USER=${ARANGO_USER}
@@ -168,10 +168,6 @@ services:
       - TRANSLATION_CACHE_HOST=${TRANSLATION_CACHE_HOST:-redis-cache}
       - TRANSLATION_CACHE_PORT=${TRANSLATION_CACHE_PORT:-6379}
       - TRANSLATION_CACHE_PASSWORD=${TRANSLATION_CACHE_PASSWORD}
-      - OPEA_HOST=genie-ai-chatqna-server
-      - OPEA_PORT=8888
-      - OPEA_PATH=/v1/chatqna
-      - CONTEXT_OPTION=single-message
       # GPU Translation Configuration (vLLM)
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
@@ -186,7 +182,7 @@ services:
     container_name: doc-repo-dev
     environment:
       # Database config
-      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_URL=${ARANGO_URL}
       - ARANGO_PORT=${ARANGO_PORT}
       - ARANGO_DB=${ARANGO_DB}
       - ARANGO_USER=${ARANGO_USER}

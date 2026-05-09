@@ -14,6 +14,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
+ENV WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=5 \
     CMD python -c "import requests; exit(0) if requests.get('http://localhost:8000/health', timeout=5).status_code == 200 else exit(1)"
 

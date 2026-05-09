@@ -1,11 +1,16 @@
 services:
   weather-mcp-standalone:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: weather-mcp-standalone
     ports:
-      - "8000:8000"
+      - "8100:8000"
+    volumes:
+      - ../warning_system_engine:/warning_system_engine:ro
     environment:
       - PYTHONUNBUFFERED=1
+      - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
       # Set these before running:
       # - GOOGLE_API_KEY=your_google_api_key
       # - MAPBOX_ACCESS_TOKEN=your_mapbox_token

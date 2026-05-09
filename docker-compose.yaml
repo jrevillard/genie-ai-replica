@@ -218,8 +218,11 @@ services:
     container_name: weather-mcp-standalone
     ports:
       - "${WEATHER_MCP_PORT}:8000"
+    volumes:
+      - ./components/warning_system_engine:/warning_system_engine:ro
     environment:
       - PYTHONUNBUFFERED=1
+      - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
       - PORT=${WEATHER_MCP_PORT}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}

@@ -4,11 +4,16 @@ FastAPI entry-point for the weather-mcp-service.
 Routes
   GET  /health                           — liveness check
   POST /query                            — on-demand natural-language weather query
-  GET  /risk/latest?location=&horizon=   — latest stored risk assessment for a location
-  POST /internal/run-pipeline            — manual trigger for the hourly ingestion pipeline
+  GET  /risk/latest?location=&horizon=   — latest stored risk assessment (written by Warning_system_engine)
+  GET  /potato/risk/latest?location=     — latest stored potato risk (written by Warning_system_engine)
+  GET  /geocode?location=                — resolve district name to lat/lon
 
   POST /mcp/tools/list                   — MCP tool registry (called by gov-chat-backend)
   POST /mcp/tools/call                   — execute named MCP tool
+
+Note: EWS scheduling, classification pipeline, and alert dispatch are owned by
+the Warning_system_engine container. This service reads risk data from the shared
+ArangoDB instance but does not write it.
 """
 import asyncio
 import logging
@@ -18,7 +23,7 @@ import re
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -72,14 +77,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Global singletons (set during lifespan startup)
 # ---------------------------------------------------------------------------
-mcp_manager:    Optional[MCPClientManager] = None
-weather_agent:  Optional[WeatherAgent]     = None
-storage_layer   = None
-data_ingestor   = None
-risk_engine     = None
-notifier        = None
-scheduler       = None
-potato_ews      = None
+mcp_manager:   Optional[MCPClientManager] = None
+weather_agent: Optional[WeatherAgent]     = None
+storage_layer  = None   # read-only: ArangoDB written by Warning_system_engine
 
 
 # ---------------------------------------------------------------------------
@@ -88,8 +88,7 @@ potato_ews      = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global mcp_manager, weather_agent
-    global storage_layer, data_ingestor, risk_engine, notifier, scheduler, potato_ews
+    global mcp_manager, weather_agent, storage_layer
 
     # ── MCP stdio sessions (Mapbox + BMD) ────────────────────────────────────
     try:
@@ -100,50 +99,24 @@ async def lifespan(app: FastAPI):
         logger.warning("[STARTUP] MCP sessions failed: %s — continuing without MCP", exc)
         mcp_manager = None
 
-    # ── Early warning infrastructure ─────────────────────────────────────────
+    # ── ArangoDB read client (risk data written by Warning_system_engine) ─────
     try:
         from storage import StorageLayer
-        from data_ingestor import DataIngestor
-        from risk_engine import RiskEngine
-        from notifier import Notifier
-
-        from short_term_potato_ews import PotatoShortTermEWS
-
         storage_layer = StorageLayer()
-        data_ingestor = DataIngestor()
-        risk_engine   = RiskEngine()
-        notifier      = Notifier(storage_layer)
-        potato_ews    = PotatoShortTermEWS(storage_layer)
-        logger.info("[STARTUP] Early warning infrastructure ready (potato EWS loaded)")
+        logger.info("[STARTUP] ArangoDB storage connected (read-only for risk queries)")
     except Exception as exc:
-        logger.warning(
-            "[STARTUP] Early warning infrastructure unavailable: %s — "
-            "storage/pipeline features disabled", exc
-        )
+        logger.warning("[STARTUP] ArangoDB unavailable: %s — /risk endpoints disabled", exc)
 
-    # ── WeatherAgent (depends on MCP + optionally storage) ───────────────────
+    # ── WeatherAgent ──────────────────────────────────────────────────────────
     if mcp_manager:
         weather_agent = WeatherAgent(mcp_manager, storage=storage_layer)
         logger.info("[STARTUP] WeatherAgent ready (storage=%s)", storage_layer is not None)
     else:
         logger.warning("[STARTUP] WeatherAgent not started — MCP unavailable")
 
-    # ── APScheduler ──────────────────────────────────────────────────────────
-    if storage_layer and data_ingestor:
-        try:
-            from scheduler import create_scheduler
-            scheduler = create_scheduler(storage_layer, data_ingestor, risk_engine, notifier, potato_ews)
-            scheduler.start()
-            logger.info("[STARTUP] Scheduler started")
-        except Exception as exc:
-            logger.warning("[STARTUP] Scheduler failed to start: %s", exc)
-
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
-    if scheduler and scheduler.running:
-        scheduler.shutdown(wait=False)
-        logger.info("[SHUTDOWN] Scheduler stopped")
     if mcp_manager:
         await mcp_manager.stop()
         logger.info("[SHUTDOWN] MCP sessions closed")
@@ -174,16 +147,14 @@ async def health():
         return JSONResponse(
             status_code=503,
             content={
-                "status": "unhealthy",
-                "reason": "agent not initialized",
+                "status":  "unhealthy",
+                "reason":  "agent not initialized",
                 "storage": storage_layer is not None,
-                "scheduler": scheduler is not None and scheduler.running,
             },
         )
     return {
-        "status":    "healthy",
-        "storage":   storage_layer is not None,
-        "scheduler": scheduler is not None and (scheduler.running if scheduler else False),
+        "status":  "healthy",
+        "storage": storage_layer is not None,
     }
 
 
@@ -367,49 +338,6 @@ async def get_potato_risk(
         assessment.pop(field, None)
     return assessment
 
-
-@app.post("/internal/run-potato-pipeline")
-async def trigger_potato_pipeline(background_tasks: BackgroundTasks):
-    """
-    Manually trigger potato EWS evaluation for all districts.
-    Runs in background — returns immediately.
-    """
-    if storage_layer is None or potato_ews is None:
-        return JSONResponse(
-            status_code=503,
-            content={"error": "Potato EWS not initialised"},
-        )
-
-    from scheduler import run_potato_ews_pipeline
-
-    background_tasks.add_task(run_potato_ews_pipeline, storage_layer, potato_ews)
-    return {"status": "potato_pipeline_started"}
-
-
-@app.post("/internal/run-pipeline")
-async def trigger_pipeline(background_tasks: BackgroundTasks):
-    """
-    Manually trigger the hourly ingestion + classification pipeline.
-    Runs in a FastAPI background task — returns immediately.
-    Used by ops tooling and integration tests.
-    """
-    if storage_layer is None or data_ingestor is None:
-        return JSONResponse(
-            status_code=503,
-            content={"error": "Pipeline not initialised — storage or ingestor unavailable"},
-        )
-
-    from scheduler import run_hourly_pipeline
-
-    background_tasks.add_task(
-        run_hourly_pipeline,
-        storage_layer,
-        data_ingestor,
-        risk_engine,
-        notifier,
-        potato_ews,
-    )
-    return {"status": "pipeline_started", "message": "Hourly pipeline running in background"}
 
 
 # ---------------------------------------------------------------------------

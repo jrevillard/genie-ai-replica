@@ -254,18 +254,18 @@ class WeatherAgent:
 
     @staticmethod
     def _wind_emoji(speed_kmh: float) -> str:
-        if speed_kmh >= 62:   return "🌪️"   # storm / cyclone
+        if speed_kmh >= 62:   return "💨"   # storm / cyclone
         if speed_kmh >= 30:   return "💨"    # strong / windy
-        if speed_kmh >= 15:   return "🌬️"   # breezy
-        return "😌"                           # calm
+        if speed_kmh >= 15:   return "💨"   # breezy
+        return "💨"                           # calm
 
     @staticmethod
     def _soil_emoji(sm: float) -> str:
         """sm is volumetric water content in m³/m³."""
-        if sm >= 0.40:  return "🌊"   # saturated
-        if sm >= 0.25:  return "💧"   # wet / field capacity
-        if sm >= 0.10:  return "🌱"   # moist — good for crops
-        return "🌵"                    # dry / drought risk
+        if sm >= 0.40:  return " saturated 🌊"   # saturated
+        if sm >= 0.25:  return "wet 💧"   # wet / field capacity
+        if sm >= 0.10:  return "moist 🌱"   # moist — good for crops
+        return "dry 🌵"                    # dry / drought risk
 
     @staticmethod
     def _build_forecast_strip(days: list) -> str:
@@ -302,7 +302,7 @@ class WeatherAgent:
 
             lines.append(
                 f"- {sky_emoji} **{date_label}** — {t_min}–{t_max}°C"
-                f" · 💧 {rain:.0f}mm ({prob}%){wind_part}{soil_part}"
+                f" · 💧{prob}%{wind_part}{soil_part}"
             )
         return "---\n\n**Daily outlook:**\n" + "\n".join(lines)
 
@@ -349,7 +349,8 @@ class WeatherAgent:
             f"Data covers {n_days} days:\n"
             f"{day_summary}\n"
             f"{risk_context}\n"
-            "Write 2–4 sentences summarising temperatures, rain, and one practical tip. "
+            "Write 2–4 sentences summarising temperatures, rain, and one practical agriculture tip. "
+            "In the same 2–4 sentences, also mention that the data sources are Bangladesh Agro-Meteorological Information Service (BAMIS) and the Open-Meteo Weather API. "
             "Do NOT mention any number of days or time period — just describe the conditions and advice."
         )
 

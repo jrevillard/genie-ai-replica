@@ -2,14 +2,18 @@
 StorageLayer — ArangoDB persistence for the early warning system.
 
 Collections (created on first run if absent):
-  weather_forecasts   — UnifiedForecast documents  (recommended TTL: 30 days)
-  risk_assessments    — RiskAssessment documents   (recommended TTL: 90 days)
-  alerts_sent         — Deduplication log           (recommended TTL: 7 days)
+  weather_forecasts    — UnifiedForecast documents        (recommended TTL: 30 days)
+  risk_assessments     — RiskAssessment documents         (recommended TTL: 90 days)
+  alerts_sent          — Deduplication log                (recommended TTL: 7 days)
+  seasonal_forecasts   — Copernicus SEAS5 monthly outlook (recommended TTL: 180 days)
+  seasonal_assessments — Long-term potato risk per month  (recommended TTL: 180 days)
 
 Upsert keys:
-  weather_forecasts : "{location}__{source}__{horizon}"   (normalised)
-  risk_assessments  : "{location}__{horizon}"             (normalised)
-  alerts_sent       : auto-generated (_key omitted on insert)
+  weather_forecasts    : "{location}__{source}__{horizon}"
+  risk_assessments     : "{location}__{horizon}"
+  seasonal_forecasts   : "{location}__copernicus__long"
+  seasonal_assessments : "{location}__{crop}__{YYYY_MM}"
+  alerts_sent          : auto-generated
 """
 import logging
 import os
@@ -22,7 +26,13 @@ from models import RiskAssessment, UnifiedForecast
 
 logger = logging.getLogger(__name__)
 
-_COLLECTIONS = ("weather_forecasts", "risk_assessments", "alerts_sent")
+_COLLECTIONS = (
+    "weather_forecasts",
+    "risk_assessments",
+    "alerts_sent",
+    "seasonal_forecasts",
+    "seasonal_assessments",
+)
 
 
 def _norm_key(s: str) -> str:
@@ -371,3 +381,93 @@ class StorageLayer:
             "forecast_date": forecast_date,
             "sent_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    # ------------------------------------------------------------------
+    # Seasonal forecasts  (Copernicus SEAS5)
+    # ------------------------------------------------------------------
+
+    def upsert_seasonal_forecast(self, doc: dict) -> str:
+        """
+        Upsert a Copernicus seasonal forecast document.
+        Key: {location}__copernicus__long
+        """
+        key = _norm_key(f"{doc['location']}__copernicus__long")
+        col = self._db.collection("seasonal_forecasts")
+        full_doc = {"_key": key, **doc}
+        try:
+            if col.has(key):
+                col.replace(full_doc)
+            else:
+                col.insert(full_doc)
+        except (DocumentInsertError, DocumentReplaceError) as exc:
+            logger.error("[STORAGE] upsert_seasonal_forecast failed for %s: %s", key, exc)
+            raise
+        return key
+
+    def get_seasonal_forecast(self, location: str) -> dict | None:
+        """Return the stored Copernicus outlook for a location, or None."""
+        key = _norm_key(f"{location}__copernicus__long")
+        col = self._db.collection("seasonal_forecasts")
+        if not col.has(key):
+            return None
+        try:
+            return dict(col.get(key))
+        except Exception as exc:
+            logger.warning("[STORAGE] get_seasonal_forecast failed for %s: %s", location, exc)
+            return None
+
+    # ------------------------------------------------------------------
+    # Seasonal assessments  (long-term potato risk per month)
+    # ------------------------------------------------------------------
+
+    def upsert_seasonal_assessment(self, assessment: dict) -> str:
+        """
+        Upsert a long-term monthly potato risk assessment.
+        Key: {location}__{crop}__{YYYY_MM}  e.g. dhaka__potato__2026_06
+        """
+        month_key = assessment["target_month"].replace("-", "_")
+        key = _norm_key(f"{assessment['location']}__{assessment['crop']}__{month_key}")
+        col = self._db.collection("seasonal_assessments")
+        full_doc = {"_key": key, **assessment}
+        try:
+            if col.has(key):
+                col.replace(full_doc)
+            else:
+                col.insert(full_doc)
+        except (DocumentInsertError, DocumentReplaceError) as exc:
+            logger.error("[STORAGE] upsert_seasonal_assessment failed for %s: %s", key, exc)
+            raise
+        return key
+
+    def get_seasonal_assessment(
+        self, location: str, crop: str, target_month: str
+    ) -> dict | None:
+        """Return a stored monthly seasonal assessment, or None."""
+        month_key = target_month.replace("-", "_")
+        key = _norm_key(f"{location}__{crop}__{month_key}")
+        col = self._db.collection("seasonal_assessments")
+        if not col.has(key):
+            return None
+        try:
+            return dict(col.get(key))
+        except Exception as exc:
+            logger.warning("[STORAGE] get_seasonal_assessment failed for %s: %s", key, exc)
+            return None
+
+    def get_active_seasonal_assessments(
+        self, location: str, crop: str, min_tier: int = 1
+    ) -> list[dict]:
+        """Return all seasonal assessments for a location+crop at or above min_tier."""
+        aql = """
+            FOR doc IN seasonal_assessments
+              FILTER doc.location == @location
+                AND  doc.crop     == @crop
+                AND  doc.tier     >= @min_tier
+              SORT doc.target_month ASC
+              RETURN doc
+        """
+        cursor = self._db.aql.execute(
+            aql,
+            bind_vars={"location": location, "crop": crop, "min_tier": min_tier},
+        )
+        return [dict(d) for d in cursor]

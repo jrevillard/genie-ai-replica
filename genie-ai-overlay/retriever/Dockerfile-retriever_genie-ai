@@ -34,6 +34,9 @@ RUN ./fix_dependencies.sh ${REQ_PATH}
 # This installs the *real* 'docarray' package
 RUN pip install --no-cache-dir -r ${REQ_PATH}
 
+# Step C2: Additional GENIE-AI retriever dependencies
+RUN pip install --no-cache-dir rank_bm25
+
 # Step D: Fix docarray circular import
 # Reverting to the original, correct "rename hack".
 # 1. Rename the conflicting local file to avoid name collision.

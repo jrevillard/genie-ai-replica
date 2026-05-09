@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import dataclass
 
-_DEFAULT_PROFILE_PATH = os.path.join(os.path.dirname(__file__), "data", "crop_profiles.json")
+_DEFAULT_PROFILE_PATH = os.path.join(os.path.dirname(__file__), "data", "example_crop_profile.json")
 
 
 @dataclass(frozen=True)

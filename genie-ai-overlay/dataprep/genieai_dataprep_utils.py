@@ -79,28 +79,52 @@ except ImportError:
     
 
 ### Docling document loader ############################################################
-# Serves as a more heavy and robust tool for extracting content from more complex PDF files
-async def load_with_docling(doc_path: str) -> str:
+# Uses HybridChunker to preserve heading hierarchy and page numbers.
+# Returns list[dict] with keys: text, headings, page_numbers.
+# The heading path is prepended to each chunk's text before embedding so the
+# vector representation carries section context, not just decontextualised fragments.
+
+async def load_with_docling(doc_path: str) -> list:
     """
-    Asynchronously processes any Docling-supported file (PDF, DOCX, PPTX,
-    HTML, images, etc.) and returns its content as RAG-ready Markdown.
+    Convert a file with Docling and chunk it using HybridChunker.
+
+    Returns a list of dicts:
+        {
+            "text":         str,        # chunk body text (headings NOT prepended yet)
+            "headings":     list[str],  # section heading hierarchy above this chunk
+            "page_numbers": list[int],  # page(s) the chunk spans (1-based)
+        }
     """
+    from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
+
     def process_doc():
-        # .convert() handles parsing, layout analysis, table extraction, and OCR
         result = docling_converter.convert(doc_path)
-        # Exporting to Markdown for enhanced readability.
-        return result.document.export_to_markdown()
+        chunker = HybridChunker()
+        chunks = []
+        for chunk in chunker.chunk(result.document):
+            # Collect unique page numbers from all doc_items in this chunk
+            page_nos = sorted({
+                prov.page_no
+                for item in chunk.meta.doc_items
+                for prov in item.prov
+            })
+            chunks.append({
+                "text":         chunk.text,
+                "headings":     chunk.meta.headings or [],
+                "page_numbers": page_nos,
+            })
+        return chunks
 
     loop = asyncio.get_running_loop()
-    content = await loop.run_in_executor(None, process_doc)
-    return content
+    return await loop.run_in_executor(None, process_doc)
+
 
 async def docling_document_loader(doc_path):
     # Support for PDF, DOCX, PPTX, XLSX, HTML, Markdown, and Text
     supported_extensions = (
         ".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc"
     )
-    
+
     if doc_path.endswith(supported_extensions):
         return await load_with_docling(doc_path)
     else:

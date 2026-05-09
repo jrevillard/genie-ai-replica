@@ -27,6 +27,8 @@ Env overrides (all optional):
   ARANGO_PASSWORD     default: test
   WEATHER_MCP_URL     default: http://localhost:8100   (host-mapped port)
   BACKEND_URL         default: http://localhost:3000   (Node.js backend)
+  TWILIO_*           Twilio env vars used only when --send-sms is passed
+  EMERGENCY_CONTACT_NUMBERS comma-separated SMS recipients, e.g. +8801...
 """
 import argparse
 import json
@@ -44,7 +46,38 @@ _SERVICE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SERVICE_DIR not in sys.path:
     sys.path.insert(0, _SERVICE_DIR)
 
-load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
+_COMPONENTS_DIR = os.path.dirname(_SERVICE_DIR)
+_WARNING_ENGINE_DIR = os.getenv(
+    "WARNING_SYSTEM_ENGINE_DIR",
+    os.path.join(_COMPONENTS_DIR, "warning_system_engine"),
+)
+
+
+def _ensure_warning_engine_importable():
+    """
+    The potato EWS implementation lives in components/warning_system_engine.
+    Add that directory only when the fallback needs it, so normal weather-MCP
+    imports continue to resolve from weather-mcp-service.
+    """
+    if not os.path.isdir(_WARNING_ENGINE_DIR):
+        raise ModuleNotFoundError(
+            "components/warning_system_engine is not available from this runtime. "
+            "Run this script from the repo checkout, set WARNING_SYSTEM_ENGINE_DIR, "
+            "or use the warning-system-engine container to run the potato pipeline."
+        )
+    if _WARNING_ENGINE_DIR in sys.path:
+        sys.path.remove(_WARNING_ENGINE_DIR)
+    sys.path.insert(0, _WARNING_ENGINE_DIR)
+
+
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
+
+
+def _load_warning_engine_env():
+    """Load Twilio/backend settings from the mounted warning engine env file."""
+    _ensure_warning_engine_importable()
+    load_dotenv(dotenv_path=Path(_WARNING_ENGINE_DIR) / ".env", override=False)
+
 
 if not os.getenv("ARANGO_URL"):
     os.environ["ARANGO_URL"] = "http://localhost:8529"
@@ -224,6 +257,7 @@ def trigger_ews_via_api(weather_mcp_url, district):
 
 def trigger_ews_locally(storage, district):
     """Run EWS in-process as fallback when the service is not reachable."""
+    _ensure_warning_engine_importable()
     from short_term_potato_ews import PotatoShortTermEWS
     from potato_profile import load_potato_thresholds
     ews = PotatoShortTermEWS(storage, load_potato_thresholds())
@@ -255,46 +289,31 @@ def verify_mcp_api(weather_mcp_url, district):
 # Step 4 — verify via Node.js backend proxy
 # ---------------------------------------------------------------------------
 
-def _running_in_container():
-    return os.path.exists("/.dockerenv")
-
-
-def _backend_url_candidates(backend_url):
+def verify_backend_api(backend_url, district):
     candidates = []
 
     def add(url):
         if not url:
             return
-        url = url.rstrip("/")
+        url = url.strip().rstrip("/")
         if url and url not in candidates:
             candidates.append(url)
 
     add(backend_url)
+    add(os.getenv("BACKEND_SERVICE_URL"))
+    add(os.getenv("AUTH_SERVICE_URL"))
 
     parsed = urlparse(backend_url)
     if parsed.scheme and parsed.hostname and not parsed.port and not parsed.path:
         add(f"{parsed.scheme}://{parsed.hostname}:3000")
 
-    if _running_in_container():
+    if os.path.exists("/.dockerenv"):
         add("http://backend:3000")
         add("http://gov-chat-backend:3000")
         add("http://kong:8010")
 
-    return candidates
-
-
-def _looks_like_frontend_404(resp):
-    content_type = resp.headers.get("content-type", "")
-    body = resp.text[:200].lstrip().lower()
-    return (
-        resp.status_code == 404
-        and ("text/html" in content_type or body.startswith("<!doctype") or body.startswith("<html") or body.startswith("<!--"))
-    )
-
-
-def verify_backend_api(backend_url, district):
     attempts = []
-    for candidate in _backend_url_candidates(backend_url):
+    for candidate in candidates:
         try:
             resp = _http.get(
                 f"{candidate}/api/weather/potato-risk",
@@ -310,7 +329,6 @@ def verify_backend_api(backend_url, district):
                 data = resp.json()
                 data["_backend_url"] = candidate
                 return True, data
-
             # 401 means the route exists and the backend is running — auth is
             # handled by the frontend (sends its own token). Count as reachable.
             if resp.status_code == 401:
@@ -319,12 +337,6 @@ def verify_backend_api(backend_url, district):
                     "url": candidate,
                     "note": "route exists, auth required (expected)",
                 }
-
-            # Common docker-exec case: BACKEND_URL points at the public
-            # frontend host, so /api/weather/potato-risk returns the static
-            # app's HTML 404. Keep trying Docker-internal backend names.
-            if _looks_like_frontend_404(resp):
-                attempt["note"] = "looks like frontend/static 404; trying next backend candidate"
         except Exception as exc:
             attempts.append({"url": candidate, "error": str(exc)})
 
@@ -349,7 +361,15 @@ def main():
     parser.add_argument("--backend-url",
                         default=os.getenv("BACKEND_URL", "http://localhost:3000"),
                         help="Node.js backend base URL (default: http://localhost:3000)")
+    parser.add_argument("--send-sms", action="store_true",
+                        help="also send the displayed potato pop-out message via Twilio SMS")
+    parser.add_argument("--sms-to",
+                        default=os.getenv("EMERGENCY_CONTACT_NUMBERS", ""),
+                        help="comma-separated recipient numbers; overrides EMERGENCY_CONTACT_NUMBERS for this run")
     args = parser.parse_args()
+
+    if args.send_sms and args.sms_to:
+        os.environ["EMERGENCY_CONTACT_NUMBERS"] = args.sms_to
 
     scenario = SCENARIOS[args.scenario]
     today    = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -450,6 +470,34 @@ def main():
     print(f"  Disease  : {disease or '[]'}")
     print(f"\n  Pop-out message:")
     print(f"  \033[1m{message or '(none — Normal tier)'}\033[0m")
+
+    if args.send_sms:
+        section("Optional Twilio SMS")
+        if tier < 2:
+            tick("warn", "SMS not sent", "tier is below warning threshold")
+        elif not message:
+            tick("warn", "SMS not sent", "assessment has no display message")
+        else:
+            try:
+                _load_warning_engine_env()
+                missing = [
+                    name for name in (
+                        "TWILIO_ACCOUNT_SID",
+                        "TWILIO_AUTH_TOKEN",
+                        "TWILIO_PHONE_FROM",
+                        "EMERGENCY_CONTACT_NUMBERS",
+                    )
+                    if not os.getenv(name)
+                ]
+                if missing:
+                    tick("warn", "SMS not sent", f"missing env: {', '.join(missing)}")
+                else:
+                    from notifier import Notifier
+                    sms_ok = Notifier(storage).dispatch_potato_sms(assessment, message=message)
+                    tick(sms_ok, "Twilio SMS sent" if sms_ok else "Twilio SMS not sent",
+                         "using the exact pop-out message text")
+            except Exception as exc:
+                tick(False, f"Twilio SMS failed: {exc}")
 
     # ── Frontend instructions ─────────────────────────────────────────────────
     section("How to see the pop-out in the browser")

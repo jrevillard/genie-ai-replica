@@ -29,4 +29,4 @@ python-arango==7.9.1
 APScheduler==3.10.4
 
 # Optional — Twilio SMS / voice (install if TWILIO_ACCOUNT_SID is set):
-# twilio==9.0.0
+twilio==9.0.0

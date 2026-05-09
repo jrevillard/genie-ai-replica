@@ -268,25 +268,82 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Core Pipeline Steps ---
 
-    async def _load_and_chunk(self, doc_path: DocPath) -> List[str]:
+    async def _load_and_chunk(self, doc_path: DocPath) -> List[dict]:
+        """
+        Extract and chunk a document.
+
+        Returns List[dict] with keys:
+            text         – chunk body, headings prepended for better embeddings
+            headings     – raw heading list (stored in ArangoDB metadata)
+            page_numbers – page list (stored in ArangoDB metadata)
+
+        For non-Docling paths (plain text, fallback) headings and page_numbers are [].
+        """
         path = doc_path.path
-        
-        # --- FIX: Expanded Docling Support ---
-        # Added .docx, .pptx, .xlsx, .md, .txt, .html support
+
         docling_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
-        
+
         if path.endswith(docling_extensions) and CONTENT_EXTRACTION_METHOD == "docling":
-            logger.info(f"Using Docling for file: {path}")
-            content = await docling_document_loader(path)
-        else:
-            logger.info(f"Using Standard Loader for file: {path}")
-            content = await document_loader(path)
+            logger.info(f"Using Docling+HybridChunker for file: {path}")
+            # Returns list[dict]: {text, headings, page_numbers}
+            raw_chunks = await docling_document_loader(path)
+
+            if not raw_chunks:
+                return []
+
+            enriched = []
+            for chunk in raw_chunks:
+                text     = chunk.get("text", "")
+                headings = chunk.get("headings") or []
+                pages    = chunk.get("page_numbers") or []
+
+                if not is_valid_content(text):
+                    continue
+
+                # Prepend heading breadcrumb so the embedding captures section context.
+                # E.g. "Pest Management > BPH Control\n\n<chunk body>"
+                if headings:
+                    heading_prefix = " > ".join(headings)
+                    embedded_text = f"{heading_prefix}\n\n{text}"
+                else:
+                    embedded_text = text
+
+                enriched.append({
+                    "text":         embedded_text,
+                    "headings":     headings,
+                    "page_numbers": pages,
+                })
+
+            return enriched
+
+        # ── Non-Docling path ────────────────────────────────────────────────────
+        logger.info(f"Using Standard Loader for file: {path}")
+        content = await document_loader(path)
 
         if not content:
             return []
 
         if path.endswith(".html"):
             text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=[("h1", "H1"), ("h2", "H2")])
+            docs = text_splitter.split_text(content)
+            plain_chunks = [d.page_content if hasattr(d, "page_content") else str(d) for d in docs]
+        elif path.endswith(".md"):
+            md_splitter = MarkdownHeaderTextSplitter(
+                headers_to_split_on=[("#", "H1"), ("##", "H2"), ("###", "H3")],
+                strip_headers=False,
+            )
+            md_docs = md_splitter.split_text(content)
+            for doc in md_docs:
+                h1 = doc.metadata.get("H1", "")
+                if h1 and not doc.page_content.lstrip().startswith("# "):
+                    doc.page_content = f"# {h1}\n{doc.page_content}"
+            secondary_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=doc_path.chunk_size,
+                chunk_overlap=doc_path.chunk_overlap,
+                separators=get_separators(),
+            )
+            docs = secondary_splitter.split_documents(md_docs)
+            plain_chunks = [d.page_content for d in docs]
         else:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=doc_path.chunk_size,
@@ -294,52 +351,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 add_start_index=True,
                 separators=get_separators(),
             )
-
-        if isinstance(content, list):
-            raw_chunks = []
-            for item in content:
-                item_str = str(item)
-                if len(item_str) > doc_path.chunk_size:
-                    result = text_splitter.split_text(item_str)
-                    if result and hasattr(result[0], 'page_content'):
-                        raw_chunks.extend(r.page_content for r in result)
-                    else:
-                        raw_chunks.extend(result)
-                else:
-                    raw_chunks.append(item_str)
-            plain_chunks = raw_chunks
-        else:
-            if path.endswith(".html"):
-                docs = text_splitter.split_text(content)
-            elif path.endswith(".md"):
-                # Split at markdown header boundaries so each section (e.g. "## October - Week 43")
-                # becomes its own chunk. strip_headers=False keeps the section header in the chunk
-                # text. The parent H1 title ends up only in metadata, so we re-inject it into each
-                # child chunk's text — otherwise weekly data chunks contain no crop/region context
-                # and retrieval fails for queries like "vegetative growth of potato in dhaka".
-                # A secondary RecursiveCharacterTextSplitter pass caps oversized sections for long
-                # prose MDs — safe fallback so any markdown type is handled correctly.
-                md_splitter = MarkdownHeaderTextSplitter(
-                    headers_to_split_on=[("#", "H1"), ("##", "H2"), ("###", "H3")],
-                    strip_headers=False,
-                )
-                md_docs = md_splitter.split_text(content)
-                for doc in md_docs:
-                    h1 = doc.metadata.get("H1", "")
-                    if h1 and not doc.page_content.lstrip().startswith("# "):
-                        doc.page_content = f"# {h1}\n{doc.page_content}"
-                secondary_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=doc_path.chunk_size,
-                    chunk_overlap=doc_path.chunk_overlap,
-                    separators=get_separators(),
-                )
-                docs = secondary_splitter.split_documents(md_docs)
-            else:
-                docs = text_splitter.create_documents([content])
+            docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]
 
-        valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
-        return valid_chunks
+        # Wrap plain strings into dicts so the rest of the pipeline is uniform
+        return [
+            {"text": c, "headings": [], "page_numbers": []}
+            for c in plain_chunks
+            if is_valid_content(c)
+        ]
 
     async def _run_guardrail(self, plain_chunks: List[str]) -> Dict[str, Any]:
         if not GUARDRAIL_ENABLED:
@@ -495,22 +515,31 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": selected})
         return results
 
-    async def _apply_labels(self, plain_chunks: List[str], all_labels: List[str], file_labels: List[str], file_id: str):
+    async def _apply_labels(self, chunks: List[dict], all_labels: List[str], file_labels: List[str], file_id: str):
+        """
+        chunks is List[dict] with keys: text, headings, page_numbers.
+        Returns the same list with a 'labels' key added to each dict.
+        """
+        # Extract plain text strings for the labeling functions (unchanged internals)
+        plain_texts = [c["text"] for c in chunks]
+
         if not all_labels:
             await self._write_ingestion_log(file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels.")
-            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks]
+            labelled = [{"text": t, "labels": file_labels if file_labels else []} for t in plain_texts]
+        elif LABELING_STRATEGY == "embedding":
+            labelled = await asyncio.to_thread(self._label_with_embedding, plain_texts, all_labels)
+        elif LABELING_STRATEGY == "bm25":
+            labelled = await asyncio.to_thread(self._label_with_bm25, plain_texts, all_labels)
+        else:
+            labelled = await self._label_with_llm(plain_texts, all_labels, file_labels, file_id)
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
-        
-        if LABELING_STRATEGY == "embedding":
-            # Offload CPU-bound embedding calculations to a thread
-            return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
-        elif LABELING_STRATEGY == "bm25":
-            # Offload CPU-bound BM25 calculations to a thread
-            return await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
-        else:
-            # Default to LLM (with retry fix and advisory logic)
-            return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
+
+        # Merge labels back into the original dicts (preserving headings + page_numbers)
+        for i, chunk in enumerate(chunks):
+            chunk["labels"] = labelled[i]["labels"]
+
+        return chunks
 
     # --- Main Ingestion Logic (Async + Batched) ---
     
@@ -604,7 +633,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
 
                 # 3. Guardrail Check
-                gr_result = await self._run_guardrail(chunks)
+                gr_result = await self._run_guardrail([c["text"] for c in chunks])
                 if not gr_result["success"]:
                     await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
                     raise Exception("Guardrail Violation")
@@ -624,7 +653,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "file_id": input.file_id,
                             "file_path": input.storage_path,
                             "chunk_index": i,
-                            "chunk_labels": doc["labels"]
+                            "chunk_labels": doc["labels"],
+                            "headings": doc.get("headings", []),
+                            "page_numbers": doc.get("page_numbers", []),
                         }
                     ))
 

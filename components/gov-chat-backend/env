@@ -46,6 +46,15 @@ APP_NAME=Genie AI
 FRONTEND_URL=https://genie-ai.itu.int/
 OPENWEATHERMAP_API_KEY=b115ccced35ade4c9a1077b6e5a210dd
 
+# Firebase Admin / FCM notifications
+# Option A: put firebase-service-account.json in ./secrets and set:
+# GOOGLE_APPLICATION_CREDENTIALS=/opt/genie/firebase-service-account.json
+# Option B: provide the full service account JSON as one environment value:
+# FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+GOOGLE_APPLICATION_CREDENTIALS=
+FIREBASE_SERVICE_ACCOUNT_JSON=
+NOTIFICATION_BROADCAST_SECRET=
+
 # Frontend Translation Service configuration
 TRANSLATION_THREADS=4
 TRANSLATION_BATCHES=5

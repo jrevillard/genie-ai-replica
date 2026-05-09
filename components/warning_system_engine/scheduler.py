@@ -22,6 +22,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 if TYPE_CHECKING:
     from copernicus_fetcher import CopernicusFetcher
+    from drought_ews import DroughtEWS
     from long_term_potato_ews import LongTermPotatoEWS
     from notifier import Notifier
     from risk_engine import RiskEngine
@@ -265,17 +266,74 @@ async def _dispatch_seasonal_alerts(
 
 
 # ---------------------------------------------------------------------------
+# Drought pipeline  (daily 07:00 UTC — after short-term 05:00 and long-term 06:00)
+# ---------------------------------------------------------------------------
+
+async def run_drought_pipeline(
+    storage:               "StorageLayer",
+    drought_ews:           "DroughtEWS",
+    notifier:              "Notifier",
+    drought_monitoring_url: str,
+) -> dict:
+    """
+    Daily pipeline:
+      1. POST to drought_monitoring /run/all  (blocking, may take several minutes)
+      2. Read stored drought_assessments from ArangoDB
+      3. Dispatch notifications for tier >= 2 (deduplicated)
+    """
+    import asyncio
+    import requests as _req
+
+    logger.info("[DROUGHT_PIPELINE] Starting drought pipeline (url=%s)", drought_monitoring_url)
+
+    # Step 1: trigger drought_monitoring (run in executor — blocks for GEE calls)
+    fetch_result: dict = {}
+    try:
+        fetch_result = await asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: _req.post(
+                f"{drought_monitoring_url}/run/all",
+                timeout=1800,  # 30 min — GEE can be slow for 20 districts
+            ).json(),
+        )
+        logger.info("[DROUGHT_PIPELINE] Fetch result: %s", fetch_result)
+    except Exception as exc:
+        logger.error("[DROUGHT_PIPELINE] drought_monitoring unreachable: %s", exc)
+        fetch_result = {"error": str(exc), "stored": 0}
+
+    if fetch_result.get("error") == "gee_not_configured":
+        logger.warning("[DROUGHT_PIPELINE] GEE not configured in drought_monitoring — skipping alerts")
+        return {"status": "skipped", "reason": "gee_not_configured", **fetch_result}
+
+    # Step 2: dispatch alerts from stored assessments
+    alert_result = await asyncio.get_running_loop().run_in_executor(
+        None, lambda: drought_ews.dispatch_alerts(notifier)
+    )
+
+    result = {
+        "status":   "ok" if fetch_result.get("error") is None else "partial",
+        "stored":   fetch_result.get("stored", 0),
+        "errors":   fetch_result.get("errors", 0),
+        **alert_result,
+    }
+    logger.info("[DROUGHT_PIPELINE] Done: %s", result)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Scheduler factory
 # ---------------------------------------------------------------------------
 
 def create_scheduler(
-    storage:       "StorageLayer",
+    storage:               "StorageLayer",
     ingestor,
-    risk_engine:   "RiskEngine",
-    notifier:      "Notifier",
-    potato_ews:    "PotatoShortTermEWS | None" = None,
-    copernicus:    "CopernicusFetcher | None"   = None,
-    long_term_ews: "LongTermPotatoEWS | None"   = None,
+    risk_engine:           "RiskEngine",
+    notifier:              "Notifier",
+    potato_ews:            "PotatoShortTermEWS | None" = None,
+    copernicus:            "CopernicusFetcher | None"   = None,
+    long_term_ews:         "LongTermPotatoEWS | None"   = None,
+    drought_ews:           "DroughtEWS | None"          = None,
+    drought_monitoring_url: str                          = "",
 ) -> AsyncIOScheduler:
     """
     Build and return a configured APScheduler instance.
@@ -353,6 +411,41 @@ def create_scheduler(
         logger.info(
             "[SCHEDULER] Jobs: daily_pipeline (05:00 UTC) + startup catch-up. "
             "Long-term pipeline skipped (CDS not configured or disabled)."
+        )
+
+    # ── Drought pipeline ──────────────────────────────────────────────────
+    if drought_ews is not None and drought_monitoring_url:
+        dr_args = [storage, drought_ews, notifier, drought_monitoring_url]
+
+        scheduler.add_job(
+            run_drought_pipeline,
+            trigger=CronTrigger(hour=7, minute=0, timezone="UTC"),
+            args=dr_args,
+            id="drought_pipeline",
+            name="Drought pipeline (07:00 UTC daily)",
+            replace_existing=True,
+            misfire_grace_time=86400,
+            max_instances=1,
+        )
+
+        scheduler.add_job(
+            run_drought_pipeline,
+            trigger="date",
+            run_date=datetime.now(timezone.utc) + timedelta(seconds=120),
+            args=dr_args,
+            id="startup_drought",
+            name="Startup drought catch-up (120 s delay)",
+            replace_existing=True,
+            max_instances=1,
+        )
+
+        logger.info(
+            "[SCHEDULER] Drought pipeline registered (07:00 UTC daily + startup catch-up)"
+        )
+    else:
+        logger.info(
+            "[SCHEDULER] Drought pipeline skipped "
+            "(DROUGHT_MONITORING_URL not set or drought_ews not initialized)."
         )
 
     return scheduler

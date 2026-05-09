@@ -339,6 +339,56 @@ async def get_potato_risk(
     return assessment
 
 
+@app.get("/drought/risk/latest")
+async def get_drought_risk(
+    location: str = Query(..., description="Bangladesh district name (e.g. 'Dhaka')"),
+):
+    """
+    Return the most recent stored drought assessment for a district.
+    Written by drought_monitoring, read here for frontend polling.
+    Returns tier=0 (Normal) if no assessment has been stored yet.
+    """
+    if storage_layer is None:
+        return JSONResponse(status_code=503, content={"error": "Storage unavailable"})
+
+    assessment = storage_layer.get_drought_assessment(location)
+    if assessment is None:
+        return {
+            "location":     location,
+            "drought_level": "NORMAL",
+            "tier":          0,
+            "tier_label":    "Normal",
+            "triggers":      [],
+            "message":       "",
+        }
+
+    for field in ("_key", "_id", "_rev"):
+        assessment.pop(field, None)
+    return assessment
+
+
+_DROUGHT_REPORTS_DIR = pathlib.Path(os.getenv("DROUGHT_REPORTS_DIR", "/app/drought_reports"))
+
+
+@app.get("/drought/report/{filename}")
+async def serve_drought_report(filename: str):
+    """
+    Serve a drought PDF report from the shared volume.
+    The drought_monitoring container writes to the same named volume.
+    """
+    safe_name   = pathlib.Path(filename).name
+    report_path = _DROUGHT_REPORTS_DIR / safe_name
+
+    if not report_path.exists() or report_path.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return FileResponse(
+        str(report_path),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+    )
+
+
 
 # ---------------------------------------------------------------------------
 # MCP HTTP routes  (called by gov-chat-backend tool registry)

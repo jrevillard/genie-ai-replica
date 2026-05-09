@@ -18,6 +18,8 @@ services:
       - ARANGO_USER=root
       - ARANGO_PASSWORD=test
       - LOG_LEVEL=INFO
+      - BACKEND_API_URL=${BACKEND_API_URL:-http://backend:3000}
+      - NOTIFICATION_BROADCAST_SECRET=${NOTIFICATION_BROADCAST_SECRET:-}
     networks:
       - mewa-net
     depends_on:

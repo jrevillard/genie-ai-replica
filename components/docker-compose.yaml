@@ -4,6 +4,8 @@ volumes:
   redis_data:
   doc_repo_uploads: {}
   arango_data:
+  drought_reports: {}
+
 services:
   arango-vector-db:
     image: arangodb/arangodb:3.12.4
@@ -61,8 +63,13 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./gov-chat-backend/Uploads:/app/Uploads
+      - ./secrets:/opt/genie:ro
     environment:
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
+      # Firebase Admin / FCM notifications
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      - NOTIFICATION_BROADCAST_SECRET=${NOTIFICATION_BROADCAST_SECRET:-}
       # Translation Service Configuration
       - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-cpu}
       - TRANSLATION_CPU_MODEL_ID=${TRANSLATION_CPU_MODEL_ID:-Xenova/nllb-200-distilled-600M}
@@ -83,7 +90,7 @@ services:
         condition: service_healthy
     networks:
       - chatqna_default
-  
+
   document-repository:
     build:
       context: .
@@ -100,7 +107,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - doc_repo_uploads:/app/uploads
-  
+
   clamav:
     image: clamav/clamav
     container_name: clamav
@@ -108,7 +115,48 @@ services:
       - "3310:3310" # ClamAV daemon port
     networks:
       - chatqna_default
-  
+
+  drought-monitoring:
+    build:
+      context: ./drought_monitoring
+      dockerfile: dockerfile
+    container_name: drought-monitoring
+    volumes:
+      # GEE credentials — run `earthengine authenticate` on the host first
+      - ${HOME}/.config/earthengine:/root/.config/earthengine:ro
+      # Shared PDF reports volume — also mounted by weather-mcp-standalone (read-only)
+      - drought_reports:/app/reports
+    environment:
+      - GEE_PROJECT=${GEE_PROJECT:-mewa-493916}
+      - DROUGHT_REPORTS_DIR=/app/reports
+      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      - arango-vector-db
+    restart: unless-stopped
+    networks:
+      - chatqna_default
+    # No host port — internal service only (called by warning_system_engine)
+
+  warning-system-engine:
+    build:
+      context: ./warning_system_engine
+      dockerfile: Dockerfile
+    container_name: warning-system-engine
+    env_file:
+      - ./warning_system_engine/.env
+    environment:
+      - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
+    depends_on:
+      - arango-vector-db
+      - drought-monitoring
+    restart: unless-stopped
+    networks:
+      - chatqna_default
+
   weather-mcp-standalone:
     build:
       context: ./weather-mcp-service
@@ -117,9 +165,12 @@ services:
       - "8000:8000"
     volumes:
       - ./warning_system_engine:/warning_system_engine:ro
+      # Read-only mount of drought PDF reports for serving via /drought/report/
+      - drought_reports:/app/drought_reports:ro
     environment:
       - PYTHONUNBUFFERED=1
       - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
+      - DROUGHT_REPORTS_DIR=/app/drought_reports
       # Add these in .env or here
       # - GOOGLE_API_KEY=your_google_api_key
       # - MAPBOX_ACCESS_TOKEN=your_mapbox_token

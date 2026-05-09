@@ -22,7 +22,7 @@ from models import RiskAssessment, UnifiedForecast
 
 logger = logging.getLogger(__name__)
 
-_COLLECTIONS = ("weather_forecasts", "risk_assessments", "alerts_sent")
+_COLLECTIONS = ("weather_forecasts", "risk_assessments", "alerts_sent", "drought_assessments")
 
 
 def _norm_key(s: str) -> str:
@@ -353,6 +353,22 @@ class StorageLayer:
             },
         )
         return len(list(cursor)) > 0
+
+    # ------------------------------------------------------------------
+    # Drought assessments  (read-only — written by drought_monitoring)
+    # ------------------------------------------------------------------
+
+    def get_drought_assessment(self, location: str) -> dict | None:
+        """Return the stored drought assessment for a location, or None."""
+        key = _norm_key(f"{location}__drought")
+        col = self._db.collection("drought_assessments")
+        if not col.has(key):
+            return None
+        try:
+            return dict(col.get(key))
+        except Exception as exc:
+            logger.warning("[STORAGE] get_drought_assessment failed for %s: %s", location, exc)
+            return None
 
     def record_crop_alert_sent(
         self,

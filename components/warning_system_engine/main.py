@@ -47,6 +47,20 @@ async def run() -> None:
     notifier    = Notifier(storage)
     potato_ews  = PotatoShortTermEWS(storage)
 
+    # ── Drought monitoring (optional — requires DROUGHT_MONITORING_URL) ──
+    drought_ews            = None
+    drought_monitoring_url = os.getenv("DROUGHT_MONITORING_URL", "")
+
+    if drought_monitoring_url:
+        try:
+            from drought_ews import DroughtEWS
+            drought_ews = DroughtEWS(storage)
+            logger.info("[MAIN] DroughtEWS ready — url=%s", drought_monitoring_url)
+        except ImportError as exc:
+            logger.warning("[MAIN] DroughtEWS import failed (%s) — drought pipeline disabled", exc)
+    else:
+        logger.info("[MAIN] DROUGHT_MONITORING_URL not set — drought pipeline disabled")
+
     # ── Long-term components (optional — requires CDS credentials) ────────
     copernicus    = None
     long_term_ews = None
@@ -73,12 +87,16 @@ async def run() -> None:
         potato_ews=potato_ews,
         copernicus=copernicus,
         long_term_ews=long_term_ews,
+        drought_ews=drought_ews,
+        drought_monitoring_url=drought_monitoring_url,
     )
     scheduler.start()
     logger.info(
         "[MAIN] Scheduler started — short-term: daily 05:00 UTC | "
-        "long-term: Mon 06:00 UTC (Copernicus=%s)",
+        "long-term: Mon 06:00 UTC (Copernicus=%s) | "
+        "drought: daily 07:00 UTC (DroughtEWS=%s)",
         copernicus is not None,
+        drought_ews is not None,
     )
 
     stop_event = asyncio.Event()

@@ -32,6 +32,7 @@ _COLLECTIONS = (
     "alerts_sent",
     "seasonal_forecasts",
     "seasonal_assessments",
+    "drought_assessments",
 )
 
 
@@ -453,6 +454,68 @@ class StorageLayer:
         except Exception as exc:
             logger.warning("[STORAGE] get_seasonal_assessment failed for %s: %s", key, exc)
             return None
+
+    # ------------------------------------------------------------------
+    # Drought assessments  (written by drought_monitoring service)
+    # ------------------------------------------------------------------
+
+    def get_drought_assessment(self, location: str) -> dict | None:
+        """Return the stored drought assessment for a location, or None."""
+        key = _norm_key(f"{location}__drought")
+        col = self._db.collection("drought_assessments")
+        if not col.has(key):
+            return None
+        try:
+            return dict(col.get(key))
+        except Exception as exc:
+            logger.warning("[STORAGE] get_drought_assessment failed for %s: %s", location, exc)
+            return None
+
+    def get_all_drought_assessments(self, min_tier: int = 0) -> list[dict]:
+        """Return all drought assessments at or above min_tier, newest first."""
+        aql = """
+            FOR doc IN drought_assessments
+              FILTER doc.tier >= @min_tier
+              SORT doc.assessed_at DESC
+              RETURN doc
+        """
+        cursor = self._db.aql.execute(aql, bind_vars={"min_tier": min_tier})
+        return [dict(d) for d in cursor]
+
+    def was_drought_alert_sent(
+        self,
+        location: str,
+        tier: int,
+        within_hours: int = 12,
+    ) -> bool:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=within_hours)
+        ).isoformat()
+        aql = """
+            FOR doc IN alerts_sent
+              FILTER doc.location == @location
+                AND  doc.alert_type == "drought"
+                AND  doc.tier       >= @tier
+                AND  doc.sent_at    >= @cutoff
+              LIMIT 1
+              RETURN 1
+        """
+        cursor = self._db.aql.execute(
+            aql, bind_vars={"location": location, "tier": tier, "cutoff": cutoff}
+        )
+        return len(list(cursor)) > 0
+
+    def record_drought_alert_sent(
+        self, location: str, tier: int, channel: str
+    ) -> None:
+        col = self._db.collection("alerts_sent")
+        col.insert({
+            "location":   location,
+            "alert_type": "drought",
+            "tier":       tier,
+            "channel":    channel,
+            "sent_at":    datetime.now(timezone.utc).isoformat(),
+        })
 
     def get_active_seasonal_assessments(
         self, location: str, crop: str, min_tier: int = 1

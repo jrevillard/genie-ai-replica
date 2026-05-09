@@ -147,6 +147,53 @@ module.exports = (weatherService) => {
     }
   });
 
+  /**
+   * GET /api/weather/drought-risk?location=Dhaka
+   * Returns the latest stored drought assessment for a district.
+   * Proxies to weather-mcp-standalone /drought/risk/latest.
+   */
+  router.get('/drought-risk', async (req, res) => {
+    const { location } = req.query;
+    if (!location) {
+      return res.status(400).json({ message: 'location query parameter is required' });
+    }
+    try {
+      const resp = await axios.get(`${WEATHER_MCP_URL}/drought/risk/latest`, {
+        params: { location },
+        timeout: 5000,
+      });
+      res.json(resp.data);
+    } catch (err) {
+      if (err.response?.status === 404) {
+        return res.json({ location, drought_level: 'NORMAL', tier: 0, tier_label: 'Normal', triggers: [], message: '' });
+      }
+      logger.error(`[DROUGHT_RISK] Proxy error for ${location}: ${err.message}`);
+      res.status(502).json({ message: 'Unable to fetch drought risk data' });
+    }
+  });
+
+  /**
+   * GET /api/weather/drought-report/:filename
+   * Streams a drought PDF report from weather-mcp-standalone.
+   */
+  router.get('/drought-report/:filename', async (req, res) => {
+    const { filename } = req.params;
+    try {
+      const resp = await axios.get(
+        `${WEATHER_MCP_URL}/drought/report/${encodeURIComponent(filename)}`,
+        { responseType: 'stream', timeout: 15000 }
+      );
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      resp.data.pipe(res);
+    } catch (err) {
+      if (err.response?.status === 404) return res.status(404).json({ message: 'Report not found' });
+      logger.error(`[DROUGHT_REPORT] Proxy error for ${filename}: ${err.message}`);
+      res.status(502).json({ message: 'Unable to fetch drought report' });
+    }
+  });
+
   router.get('/geocode', async (req, res) => {
     const { location } = req.query;
     if (!location) return res.status(400).json({ message: 'location query parameter is required' });

@@ -141,6 +141,7 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./components/gov-chat-backend/Uploads:/app/Uploads
+      - ./secrets:/opt/genie:ro
     env_file:
       - .env
     depends_on:
@@ -161,6 +162,10 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC}
       - PORT=${BACKEND_PORT}
+      # Firebase Admin / FCM notifications
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      - NOTIFICATION_BROADCAST_SECRET=${NOTIFICATION_BROADCAST_SECRET:-}
       # Translation Service Configuration
       - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-cpu}
       - TRANSLATION_CPU_MODEL_ID=${TRANSLATION_CPU_MODEL_ID:-Xenova/nllb-200-distilled-600M}

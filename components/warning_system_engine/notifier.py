@@ -189,6 +189,47 @@ class Notifier:
         )
         return False
 
+    def dispatch_drought_alert(self, assessment: dict) -> bool:
+        """Broadcast a drought EWS alert through the backend token registry."""
+        tier = int(assessment.get("tier", 0) or 0)
+        if tier < 2:
+            return False
+
+        location     = assessment.get("location", "")
+        tier_label   = assessment.get("tier_label", "Warning")
+        drought_level = assessment.get("drought_level", "MODERATE")
+        message      = assessment.get("message", "Drought conditions detected")
+        report_filename = assessment.get("report_filename", "")
+
+        payload = {
+            "type":       "drought_alert",
+            "title":      f"Drought {tier_label} — {location}",
+            "body":       message[:240],
+            "location":   location,
+            "districts":  [location] if location else [],
+            "crops":      [],
+            "alertTypes": ["drought_alert", "weather_warning"],
+            "tier":       tier,
+            "tierLabel":  tier_label,
+            "data": {
+                "type":            "drought_alert",
+                "tier":            str(tier),
+                "tier_label":      tier_label,
+                "location":        location,
+                "drought_level":   drought_level,
+                "triggers":        json.dumps(assessment.get("triggers", [])),
+                "report_filename": report_filename,
+            },
+        }
+        if self._post_notification_broadcast(payload, f"drought alert for {location}"):
+            return True
+
+        logger.warning(
+            "[NOTIFY] Backend notification URL not configured — drought alert for %s not pushed",
+            location,
+        )
+        return False
+
     def dispatch_potato_sms(self, assessment: dict, message: str | None = None) -> bool:
         """Send the potato EWS display message as an SMS via Twilio."""
         tier = int(assessment.get("tier", 0) or 0)

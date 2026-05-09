@@ -5,6 +5,10 @@ node_modules/
 *.log
 logs
 *.log.gz
+secrets/
+components/secrets/
+firebase-service-account.json
+*-firebase-adminsdk-*.json
 dist/
 build/
 english_g2.zip

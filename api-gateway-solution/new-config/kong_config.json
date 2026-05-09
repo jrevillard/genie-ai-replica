@@ -5,7 +5,7 @@
       "name": "express-api",
       "id": "453cb927-f3d0-4b68-8791-3165dc046719",
       "protocol": "http",
-      "host": "backend",
+      "host": "e2e-62-158",
       "port": 3000,
       "path": null,
       "connect_timeout": 60000,
@@ -23,8 +23,8 @@
       "name": "document-repository",
       "id": "e1a2b3c4-d5e6-4f78-9a0b-1c2d3e4f5a6b",
       "protocol": "http",
-      "host": "document-repository",
-      "port": 3001,
+      "host": "e2e-62-158",
+      "port": 3000,
       "path": null,
       "connect_timeout": 60000,
       "read_timeout": 60000,
@@ -64,7 +64,7 @@
       "paths": ["/api"],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
@@ -858,7 +858,7 @@
   "targets": [
     {
       "id": "7feebc25-b694-408b-a60f-f93493549f71",
-      "target": "backend:3000",
+      "target": "e2e-62-158:3000",
       "weight": 100,
       "upstream": {"id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"}
     }

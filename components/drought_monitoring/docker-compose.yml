@@ -1,0 +1,16 @@
+services:
+  drought-alert:
+    build: .
+
+    volumes:
+      # Earth Engine auth (read-only, correct)
+      - ${USERPROFILE}/.config/earthengine:/root/.config/earthengine:ro
+
+      # ✔ ADD THIS: output folder shared with your laptop
+      - ./output:/app/output
+
+    command: >
+      --lat 23.8
+      --lon 90.4
+      --days 20
+      --project your-project-id

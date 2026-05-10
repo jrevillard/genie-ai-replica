@@ -116,7 +116,7 @@ services:
     networks:
       - chatqna_default
 
-  drought-monitoring:
+  drought_monitoring:
     build:
       context: ./drought_monitoring
       dockerfile: dockerfile

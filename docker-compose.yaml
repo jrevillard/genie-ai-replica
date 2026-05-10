@@ -28,6 +28,7 @@ volumes:
   nginx_conf:
   redis_data:
   doc_repo_uploads: {}
+  drought_reports: {}
 
 services:
 
@@ -216,6 +217,51 @@ services:
     networks:
       - genieai_network
   
+  drought-monitoring:
+    build:
+      context: ./components/drought_monitoring
+      dockerfile: dockerfile
+    container_name: drought-monitoring
+    volumes:
+      - ${HOME}/.config/earthengine:/root/.config/earthengine:ro
+      - drought_reports:/app/reports
+    environment:
+      - GEE_PROJECT=${GEE_PROJECT:-mewa-493916}
+      - DROUGHT_REPORTS_DIR=/app/reports
+      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - genieai_network
+
+  warning-system-engine:
+    build:
+      context: ./components/warning_system_engine
+      dockerfile: Dockerfile
+    container_name: warning-system-engine
+    env_file:
+      - .env
+    environment:
+      - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
+      - ARANGO_URL=${ARANGO_URL}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+      drought-monitoring:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - genieai_network
+
   weather-mcp-standalone:
     build:
       context: ./components/weather-mcp-service
@@ -225,9 +271,11 @@ services:
       - "${WEATHER_MCP_PORT}:8000"
     volumes:
       - ./components/warning_system_engine:/warning_system_engine:ro
+      - drought_reports:/app/drought_reports:ro
     environment:
       - PYTHONUNBUFFERED=1
       - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
+      - DROUGHT_REPORTS_DIR=/app/drought_reports
       - PORT=${WEATHER_MCP_PORT}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}

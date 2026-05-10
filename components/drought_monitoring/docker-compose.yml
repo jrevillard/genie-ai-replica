@@ -1,16 +1,15 @@
 services:
-  drought-alert:
+  drought-monitoring:
     build: .
-
+    ports:
+      - "8001:8001"
     volumes:
-      # Earth Engine auth (read-only, correct)
-      - ${USERPROFILE}/.config/earthengine:/root/.config/earthengine:ro
-
-      # ✔ ADD THIS: output folder shared with your laptop
-      - ./output:/app/output
-
-    command: >
-      --lat 23.8
-      --lon 90.4
-      --days 20
-      --project your-project-id
+      - ${HOME}/.config/earthengine:/root/.config/earthengine:ro
+      - ./reports:/app/reports
+    environment:
+      - GEE_PROJECT=${GEE_PROJECT:-mewa-493916}
+      - ARANGO_URL=${ARANGO_URL:-http://localhost:8529}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-test}
+      - DROUGHT_REPORTS_DIR=/app/reports

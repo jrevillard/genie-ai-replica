@@ -26,6 +26,14 @@ jest.mock('../services/user-provisioning-service', () => ({
   markUserAsDeleted: (...args) => mockMarkUserAsDeleted(...args)
 }));
 
+const mockAuthLegacyVerify = jest.fn();
+const mockAuthGetUserById = jest.fn();
+jest.mock('../services/auth-service', () => ({
+  initialized: true,
+  verifyToken: (...args) => mockAuthLegacyVerify(...args),
+  getUserById: (...args) => mockAuthGetUserById(...args)
+}));
+
 const { keycloakAuthMiddleware, isPublicRoute, PUBLIC_PATHS } = require('../middleware/keycloak-auth-middleware');
 
 describe('isPublicRoute', () => {
@@ -101,6 +109,9 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     mockProvisionUser.mockReset();
     mockCheckUserStatusInKeycloak.mockReset();
     mockMarkUserAsDeleted.mockReset();
+    mockAuthLegacyVerify.mockReset();
+    mockAuthGetUserById.mockReset();
+    mockAuthLegacyVerify.mockResolvedValue(null);
   });
 
   it('should return 401 TOKEN_INVALID when no Authorization header is present', async () => {
@@ -270,6 +281,7 @@ describe('keycloakAuthMiddleware.authenticate', () => {
 
     await keycloakAuthMiddleware.authenticate(req, res, next);
 
+    expect(mockAuthLegacyVerify).toHaveBeenCalledWith('invalid-token');
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({
       error: 'TOKEN_INVALID',
@@ -277,6 +289,28 @@ describe('keycloakAuthMiddleware.authenticate', () => {
       details: {}
     });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should call next() with legacy JWT when Keycloak rejects and AuthService accepts', async () => {
+    req.headers.authorization = 'Bearer legacy-jwt';
+    const err = new Error('Unknown issuer');
+    err.code = 'TOKEN_INVALID';
+    mockVerifyToken.mockRejectedValue(err);
+    mockAuthLegacyVerify.mockResolvedValue({ userId: '2130443', loginName: 'Admin', email: 'a@a.com' });
+    mockAuthGetUserById.mockResolvedValue({
+      _key: '2130443',
+      email: 'a@a.com',
+      deleted: false
+    });
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(mockAuthLegacyVerify).toHaveBeenCalledWith('legacy-jwt');
+    expect(mockAuthGetUserById).toHaveBeenCalledWith('2130443');
+    expect(next).toHaveBeenCalled();
+    expect(req.user._key).toBe('2130443');
+    expect(req.user.iss_sub).toBe('legacy#2130443');
+    expect(req.claims.iss_sub).toBe('legacy#2130443');
   });
 
   it('should call next() and set req.user from ArangoDB provisioning result', async () => {
@@ -623,7 +657,7 @@ describe('requireAdmin', () => {
     });
   });
 
-  it('should return 403 when user.roles is missing', async () => {
+  it('should return 403 when user.roles is missing and legacy role is not admin', async () => {
     req.user = {
       _key: 'users/789',
       iss_sub: 'http://localhost:8080/realms/genie#789',
@@ -641,6 +675,20 @@ describe('requireAdmin', () => {
       message: 'Admin access required',
       details: {}
     });
+  });
+
+  it('should allow access when user has legacy role Admin without roles array', () => {
+    req.user = {
+      _key: '2130443',
+      iss_sub: 'legacy#2130443',
+      email: 'admin@example.com',
+      role: 'Admin'
+    };
+
+    keycloakAuthMiddleware.requireAdmin(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it('should return 403 when user.roles is not an array', async () => {

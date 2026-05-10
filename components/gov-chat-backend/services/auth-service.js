@@ -85,11 +85,17 @@ class AuthService {
         logger.info('verificationTokens collection already exists, skipping creation');
       }
 
-      await Promise.all([
-        this.users.ensureIndex({ type: 'persistent', fields: ['loginName'], unique: true }),
-        this.users.ensureIndex({ type: 'persistent', fields: ['email'], unique: true }),
-      ]);
-      logger.info('Indexes ensured for users collection');
+      // Sparse unique: many Keycloak users have no loginName (migration 004); non-sparse unique
+      // would treat them as duplicate nulls and fail index creation (see Arango error 1210).
+      // Email is not unique at DB layer — Keycloak can repeat email across realms (migrations 002/003).
+      await this.users.ensureIndex({
+        type: 'persistent',
+        fields: ['loginName'],
+        unique: true,
+        sparse: true,
+        name: 'idx_users_loginName_unique_sparse'
+      });
+      logger.info('Indexes ensured for users collection (loginName sparse unique only)');
 
       logger.info('Auth service initialized successfully');
     } catch (error) {

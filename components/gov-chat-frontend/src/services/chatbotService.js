@@ -41,10 +41,11 @@ export default {
 
       return response.data;
     } catch (error) {
+      const body = error.data ?? error.response?.data;
       console.error(
         'Error submitting query:',
         error.message,
-        error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data'
+        body != null ? JSON.stringify(body, null, 2) : '(no response body — see error.data for HttpService shape)'
       );
       throw error;
     }

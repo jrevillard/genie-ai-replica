@@ -283,7 +283,7 @@ export default {
     logMessages: {
       connectionTimeout: 'বাহ্যিক প্রদানকারীর সাথে সংযোগ টাইমআউট',
       lowDiskSpace: 'ডিস্ক স্পেস ১০% থ্রেশহোল্ডের নিচে',
-      userRoleUpdated: 'admin@huduma.ai এর জন্য ব্যবহারকারীর ভূমিকা আপডেট করা হয়েছে'
+      userRoleUpdated: "admin{'@'}huduma.ai এর জন্য ব্যবহারকারীর ভূমিকা আপডেট করা হয়েছে"
     },
     userName: 'নাম',
     userEmail: 'ইমেল',

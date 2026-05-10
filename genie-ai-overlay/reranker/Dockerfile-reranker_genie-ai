@@ -35,7 +35,7 @@ COPY --from=opea_base /src/comps/ /app/comps/
 ARG REQ_PATH=/app/comps/rerankings/src/requirements.txt
 
 # Step B: Copy and Run the Dependency Patch
-COPY --chmod=0755 inko-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
 RUN ./fix_dependencies.sh ${REQ_PATH}
 
 # Step C: Install fixed dependencies AND custom requirements
@@ -52,11 +52,11 @@ RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.p
 
 # Step E: "Overlay" custom GENIE-AI files
 # 1. Place the custom reranker class into the integrations folder
-#COPY inko-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py
-COPY inko-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py
+#COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py
+COPY genie-ai-overlay/reranker/genieai_tei_reranker.py /app/comps/rerankings/src/integrations/genieai_tei_reranker.py
 
 # 2. Overwrite the default microservice entrypoint with modified version
-COPY inko-overlay/reranker/genieai_reranking_microservice.py /app/comps/rerankings/src/opea_reranking_microservice.py
+COPY genie-ai-overlay/reranker/genieai_reranking_microservice.py /app/comps/rerankings/src/opea_reranking_microservice.py
 
 # Step F: Run the new microservice entry point from its new location
 CMD ["python", "comps/rerankings/src/opea_reranking_microservice.py"]

@@ -283,7 +283,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Nako e fedile ya kgokahano ho mofani wa kantle',
       lowDiskSpace: 'Sebaka sa polokelo se ka tlase ho 10%',
-      userRoleUpdated: 'Karolo ya mosebedisi e ntlafalitswe bakeng sa admin@huduma.ai'
+      userRoleUpdated: "Karolo ya mosebedisi e ntlafalitswe bakeng sa admin{'@'}huduma.ai"
     },
     userName: 'Lebitso',
     userEmail: 'Imeile',

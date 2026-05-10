@@ -286,7 +286,7 @@ export default {
     logMessages: {
       connectionTimeout: '外部提供商连接超时',
       lowDiskSpace: '磁盘空间低于 10% 阈值',
-      userRoleUpdated: '用户角色更新为 admin@huduma.ai'
+      userRoleUpdated: "用户角色更新为 admin{'@'}huduma.ai"
     },
     userName: '姓名',
     userEmail: '电子邮件',

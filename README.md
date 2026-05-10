@@ -85,7 +85,7 @@ GENIE.AI/
 │   └── shared/                   # Shared libraries
 ├── mobile/                       # Mobile applications
 │   └── genie_ai_mobile/          # Flutter mobile app
-├── inko-overlay/             # OPEA integration layer
+├── genie-ai-overlay/       # OPEA integration layer
 │   ├── chatqna/                  # Chat microservice
 │   ├── core/                     # Core libraries and protocols
 │   ├── dataprep/                 # Data preparation service

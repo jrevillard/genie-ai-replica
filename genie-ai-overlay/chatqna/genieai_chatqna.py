@@ -17,7 +17,7 @@ from comps.cores.proto.genieai_api_protocol import (
     ChatCompletionRequest,
 )
 from fastapi import Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from langdetect import detect
 from transformers import AutoTokenizer
 
@@ -26,6 +26,11 @@ logflag = os.getenv("LOGFLAG", True)
 
 
 MEGA_SERVICE_PORT = int(os.getenv("MEGA_SERVICE_PORT", 8888))
+CHATQNA_SKIP_BEARER_JWT_VALIDATION = os.getenv("CHATQNA_SKIP_BEARER_JWT_VALIDATION", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 GUARDRAIL_SERVICE_HOST_IP = os.getenv("GUARDRAIL_SERVICE_HOST_IP", "0.0.0.0")
 GUARDRAIL_SERVICE_PORT = int(os.getenv("GUARDRAIL_SERVICE_PORT", 80))
 TRANSLATION_SERVICE_HOST_IP = os.getenv("TRANSLATION_SERVICE_HOST_IP", "0.0.0.0")
@@ -815,6 +820,30 @@ class ChatQnAService:
                 return key
         return None
 
+    @staticmethod
+    def _normalize_chat_messages(messages):
+        """Coerce ``messages`` to either a plain string or a list of role/content dicts.
+
+        Single-message integrations send ``messages`` as a string. Conversation mode
+        sends a list of dicts. A list of bare strings (invalid OpenAI shape but seen in
+        the wild) is normalized to user messages so ``msg.get`` loops never see str.
+        """
+        if isinstance(messages, str):
+            return messages
+        if not isinstance(messages, list):
+            return str(messages)
+        if not messages:
+            return messages
+        out = []
+        for m in messages:
+            if isinstance(m, str):
+                out.append({"role": "user", "content": m})
+            elif isinstance(m, dict):
+                out.append(m)
+            else:
+                out.append({"role": "user", "content": str(m)})
+        return out
+
     async def fetch_file_metadata(self, file_id: str) -> dict:
         """
         Fetch metadata for a file by calling the relevant API.
@@ -1124,7 +1153,12 @@ class ChatQnAService:
         for message in reversed(history):
             if logflag:
                 logger.debug(f"Examining message: {message}")
-            message_chars = len(message["content"])
+            if isinstance(message, str):
+                message_chars = len(message)
+            elif isinstance(message, dict):
+                message_chars = len(message.get("content", ""))
+            else:
+                message_chars = len(str(message))
             if current_chars + message_chars > max_translation_chars:
                 break
             messages_to_process.append(message)
@@ -1134,9 +1168,14 @@ class ChatQnAService:
 
         flattened_history_parts = []
         for message in messages_to_process:
-            role = message.get("role", "unknown").upper()
-            content = message.get("content", "")
-            flattened_history_parts.append(f"{role}: {content}")
+            if isinstance(message, str):
+                flattened_history_parts.append(f"USER: {message}")
+            elif isinstance(message, dict):
+                role = message.get("role", "unknown").upper()
+                content = message.get("content", "")
+                flattened_history_parts.append(f"{role}: {content}")
+            else:
+                flattened_history_parts.append(f"USER: {str(message)}")
 
         flattened_history_string = " |<-MSG->| ".join(flattened_history_parts)
 
@@ -1320,15 +1359,25 @@ class ChatQnAService:
         if authorization and authorization.startswith("Bearer "):
             token_str = authorization[7:]
 
-            # Defense-in-depth: validate token via JWKS
-            from keycloak_token_validator import validate_token
+            if CHATQNA_SKIP_BEARER_JWT_VALIDATION:
+                logger.warning(
+                    "CHATQNA_SKIP_BEARER_JWT_VALIDATION is enabled — skipping Keycloak JWKS validation "
+                    "(use only for local / legacy-JWT stacks without Keycloak)"
+                )
+                self.user_profile_client.set_token(token_str)
+            else:
+                # Defense-in-depth: validate token via JWKS (Keycloak RS256; legacy HS256 fails here)
+                from keycloak_token_validator import validate_token
 
-            claims = await validate_token(token_str)
-            if claims is None:
-                logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
-                return {"error": "Unauthorized", "message": "Token validation failed"}
+                claims = await validate_token(token_str)
+                if claims is None:
+                    logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
+                    return JSONResponse(
+                        status_code=401,
+                        content={"error": "Unauthorized", "message": "Token validation failed"},
+                    )
 
-            self.user_profile_client.set_token(token_str)
+                self.user_profile_client.set_token(token_str)
         else:
             logger.warning("No Authorization header in request — service-to-service calls will fail")
 
@@ -1362,7 +1411,7 @@ class ChatQnAService:
         if logflag:
             logger.debug(f"Incoming Chat Request: {chat_request}")
 
-        full_chat_history = chat_request.messages
+        full_chat_history = self._normalize_chat_messages(chat_request.messages)
         # Check both context.language and the direct language field
         original_language = None
         if chat_request.context and chat_request.context.language:
@@ -1402,8 +1451,11 @@ class ChatQnAService:
                     last_user_content = full_chat_history
                 else:
                     for msg in reversed(full_chat_history):
-                        if msg.get("role") == "user":
+                        if isinstance(msg, dict) and msg.get("role") == "user":
                             last_user_content = msg.get("content", "")
+                            break
+                        if isinstance(msg, str):
+                            last_user_content = msg
                             break
 
                 if logflag:
@@ -1465,7 +1517,14 @@ class ChatQnAService:
             if isinstance(full_chat_history, str):
                 translated_history_string = full_chat_history
             else:
-                parts = [f"{msg.get('role', '').upper()}: {msg.get('content', '')}" for msg in full_chat_history]
+                parts = []
+                for msg in full_chat_history:
+                    if isinstance(msg, str):
+                        parts.append(f"USER: {msg}")
+                    elif isinstance(msg, dict):
+                        parts.append(f"{msg.get('role', '').upper()}: {msg.get('content', '')}")
+                    else:
+                        parts.append(f"USER: {str(msg)}")
                 translated_history_string = " |<-MSG->| ".join(parts)
 
         if logflag:

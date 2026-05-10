@@ -253,7 +253,7 @@ services:
       # Set the context to the root of the GENIE-AI repo
       context: .
       # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./inko-overlay/http-service/Dockerfile-http-service_genie-ai
+      dockerfile: ./genie-ai-overlay/http-service/Dockerfile-http-service_genie-ai
     container_name: http-service
     env_file:
       - .env
@@ -274,7 +274,7 @@ services:
       # Set the context to the root of the GENIE-AI repo
       context: .
       # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./inko-overlay/dataprep/Dockerfile-dataprep_genie-ai
+      dockerfile: ./genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
       args:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
         OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
@@ -338,7 +338,7 @@ services:
       # Set the context to the root of the GENIE-AI repo
       context: .
       # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./inko-overlay/retriever/Dockerfile-retriever_genie-ai
+      dockerfile: ./genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
       args:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
         OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
@@ -369,7 +369,7 @@ services:
       # Set the context to the root of the GENIE-AI repo
       context: .
       # Point to our new, custom multi-stage Dockerfile
-      dockerfile: ./inko-overlay/chatqna/Dockerfile-chatqna_genie-ai
+      dockerfile: ./genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
       args:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
         OPEA_REPO_URL: ${OPEA_EXAMPLES_URL}
@@ -407,6 +407,7 @@ services:
       TRANSLATION_SERVICE_PORT: ${VLLM_TRANSLATION_SERVICE_PORT}
       DOC_REPO_URL: ${DOC_REPO_URL}
       GET_AUTH_TOKEN_URL: ${GET_AUTH_TOKEN_URL}
+      CHATQNA_SKIP_BEARER_JWT_VALIDATION: ${CHATQNA_SKIP_BEARER_JWT_VALIDATION:-}
     networks:
       - genieai_network
     ipc: "host"
@@ -667,7 +668,7 @@ services:
   reranker:
     build:
       context: .
-      dockerfile: ./inko-overlay/reranker/Dockerfile-reranker_genie-ai
+      dockerfile: ./genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
       args:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
         OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}

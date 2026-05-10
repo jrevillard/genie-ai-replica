@@ -2,7 +2,40 @@
 
 const keycloakAuthService = require('../services/keycloak-auth-service');
 const userProvisioningService = require('../services/user-provisioning-service');
+const authService = require('../services/auth-service');
 const { logger } = require('../shared-lib');
+
+/**
+ * Accept HS256 JWT from /api/auth/login when Keycloak is absent or the token is not an OIDC access token.
+ * @param {string} token
+ * @param {Object} req
+ * @returns {Promise<boolean>} true if req.user / req.claims were set
+ */
+async function tryLegacyJwtAuth(token, req) {
+  if (!authService.initialized) {
+    logger.warn('[KeycloakAuth Middleware] AuthService not initialized; skipping legacy JWT');
+    return false;
+  }
+  const legacyDecoded = await authService.verifyToken(token);
+  if (!legacyDecoded) {
+    return false;
+  }
+  const user = await authService.getUserById(legacyDecoded.userId);
+  if (!user) {
+    return false;
+  }
+  if (user.deleted === true) {
+    return false;
+  }
+  const issSub = user.iss_sub || `legacy#${user._key}`;
+  req.user = { ...user, iss_sub: issSub };
+  req.claims = {
+    ...legacyDecoded,
+    iss_sub: issSub
+  };
+  logger.debug(`[KeycloakAuth Middleware] Legacy JWT accepted for user ${user._key}`);
+  return true;
+}
 
 /**
  * Public routes that do not require authentication
@@ -53,11 +86,13 @@ function extractBearerToken(req) {
 }
 
 /**
- * Keycloak Auth Middleware — validates Keycloak tokens on protected routes
+ * Keycloak Auth Middleware — validates OIDC (Keycloak) JWTs on protected routes, with a
+ * fallback to the legacy HS256 JWT issued by /api/auth/login so local / minimal Docker stacks
+ * work without a Keycloak container.
  */
 const keycloakAuthMiddleware = {
   /**
-   * Authenticate request using Keycloak JWT
+   * Authenticate request using Keycloak JWT or legacy app JWT
    * @param {Object} req - Express request
    * @param {Object} res - Express response
    * @param {Function} next - Express next middleware
@@ -153,6 +188,11 @@ const keycloakAuthMiddleware = {
           });
         }
 
+        // Keycloak missing, misconfigured, or token is the legacy app JWT (no OIDC issuer)
+        if (await tryLegacyJwtAuth(token, req)) {
+          return next();
+        }
+
         return res.status(401).json({
           error: 'TOKEN_INVALID',
           message: 'Token verification failed',
@@ -177,8 +217,15 @@ const keycloakAuthMiddleware = {
    */
   requireAdmin(req, res, next) {
     const roles = req.user && req.user.roles;
-    if (!roles || !Array.isArray(roles) || !roles.includes('admin')) {
-      logger.warn(`[requireAdmin] Access denied for ${req.user?.iss_sub || 'unknown'} — roles: ${JSON.stringify(roles)}`);
+    const roleField = req.user && req.user.role;
+    const hasLegacyRole =
+      typeof roleField === 'string' && roleField.toLowerCase() === 'admin';
+    const hasRolesArray =
+      Array.isArray(roles) && roles.some((r) => String(r).toLowerCase() === 'admin');
+    if (!hasLegacyRole && !hasRolesArray) {
+      logger.warn(
+        `[requireAdmin] Access denied for ${req.user?.iss_sub || 'unknown'} — role: ${roleField}, roles: ${JSON.stringify(roles)}`
+      );
       return res.status(403).json({
         error: 'FORBIDDEN',
         message: 'Admin access required',

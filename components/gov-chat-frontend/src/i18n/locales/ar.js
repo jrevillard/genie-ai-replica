@@ -285,7 +285,7 @@ export default {
     logMessages: {
       connectionTimeout: 'انتهاء مهلة الاتصال بالمزود الخارجي',
       lowDiskSpace: 'مساحة القرص أقل من عتبة 10%',
-      userRoleUpdated: 'تم تحديث دور المستخدم لـ admin@huduma.ai'
+      userRoleUpdated: "تم تحديث دور المستخدم لـ admin{'@'}huduma.ai"
     },
     userName: 'الاسم',
     userEmail: 'البريد الإلكتروني',

@@ -286,7 +286,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Verbindungszeitüberschreitung zum externen Anbieter',
       lowDiskSpace: 'Festplattenspeicher unter 10% Schwellenwert',
-      userRoleUpdated: 'Benutzerrolle für admin@huduma.ai aktualisiert'
+      userRoleUpdated: "Benutzerrolle für admin{'@'}huduma.ai aktualisiert"
     },
     userName: 'Name',
     userEmail: 'E-Mail',

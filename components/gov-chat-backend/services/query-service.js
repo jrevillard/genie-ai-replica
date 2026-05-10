@@ -73,7 +73,20 @@ class QueryService {
         if (msg.status === 'success') {
           resolve(msg.data);
         } else {
-          reject(new Error(msg.error ? msg.error.message : 'Worker execution failed'));
+          const e = msg.error || {};
+          let detail = e.message || 'Worker execution failed';
+          if (e.code && e.code !== 'UNKNOWN') {
+            detail += ` [${e.code}]`;
+          }
+          if (e.response && e.response.status) {
+            detail += ` (upstream HTTP ${e.response.status})`;
+          }
+          const err = new Error(detail);
+          if (e.response && e.response.status) {
+            err.upstreamStatus = e.response.status;
+            err.upstreamData = e.response.data;
+          }
+          reject(err);
         }
         worker.terminate();
       });
@@ -387,7 +400,7 @@ class QueryService {
 
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+        const opeaHost = process.env.OPEA_HOST || 'genie-ai-chatqna-server';
         const opeaPort = process.env.OPEA_PORT || '8888';
         const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
@@ -444,9 +457,17 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       }
 
-      // Record the query in analytics
+      // Record the query in analytics (non-fatal — do not fail the chat response if analytics is down)
       if (this.analyticsService) {
-        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        try {
+          await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        } catch (analyticsErr) {
+          logger.error('QueryService.analytics_record_failed', {
+            queryId,
+            error: analyticsErr.message,
+            stack: analyticsErr.stack
+          });
+        }
       }
 
       const totalDuration = Date.now() - startTime;
@@ -469,7 +490,9 @@ class QueryService {
       logger.error('QueryService.create_query_failed', {
         error: error.message,
         stack: error.stack,
-        durationMs: totalDuration
+        durationMs: totalDuration,
+        upstreamStatus: error.upstreamStatus,
+        upstreamData: error.upstreamData
       });
       throw error;
     }

@@ -312,6 +312,9 @@ HUGGING_FACE_HUB_TOKEN=
 #
 # **Flags** (behavior toggles):
 #   - CHATQNA_ENFORCE_ABSTENTION: Whether to enforce abstention (default: true)
+#   - CHATQNA_SKIP_BEARER_JWT_VALIDATION: If true, ChatQnA skips Keycloak JWKS checks on
+#     the Authorization Bearer token (needed for legacy HS256 JWTs when Keycloak is absent).
+#     Do not enable on production stacks that rely on Keycloak for ChatQnA auth.
 #
 # To customize: Uncomment and set values below. To change built-in defaults,
 # edit the Python code in genie-ai-overlay/chatqna/ or genie-ai-overlay/dataprep/
@@ -319,6 +322,7 @@ HUGGING_FACE_HUB_TOKEN=
 # CHATQNA_SYSTEM_PROMPT="You are a helpful assistant..."
 # CHATQNA_ABSTENTION_INSTRUCTIONS="If no information found in the context..."
 # CHATQNA_ENFORCE_ABSTENTION="false"
+# CHATQNA_SKIP_BEARER_JWT_VALIDATION="true"
 # LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
 
 # =============================================================================

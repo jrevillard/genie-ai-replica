@@ -80,7 +80,12 @@ async def validate_token(token: str) -> dict | None:
         header = jwt.get_unverified_header(token)
         kid = header.get("kid")
         if not kid:
-            logger.warning("Token missing kid header")
+            logger.warning(
+                "Token missing kid header (typical for legacy HS256 app JWTs). "
+                "Keycloak RS256 tokens include kid for JWKS. If this stack uses legacy "
+                "login without Keycloak-issued tokens for ChatQnA, set "
+                "CHATQNA_SKIP_BEARER_JWT_VALIDATION=true on the ChatQnA service (see env template)."
+            )
             return None
 
         keys = await _fetch_jwks()

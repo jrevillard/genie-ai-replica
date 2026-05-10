@@ -21,12 +21,39 @@
  * - ARANGO_PASSWORD (required)
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../../../.env') });
-const { Database } = require('arangojs');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 
-const MIGRATIONS_DIR = path.join(__dirname, 'scripts', 'migrations');
+/** Walk parents to find repo-root `.env` (this file lives at .../scripts/migrations/). */
+function resolveEnvFilePath() {
+  let dir = __dirname;
+  for (let i = 0; i < 12; i++) {
+    const candidate = path.join(dir, '.env');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return null;
+}
+
+const envPath = resolveEnvFilePath();
+if (envPath) {
+  require('dotenv').config({ path: envPath });
+} else {
+  require('dotenv').config();
+}
+
+const { Database } = require('arangojs');
+
+// Same folder when run from repo; Docker copies migrations to ./scripts/migrations with run-migrations.js in /app
+const MIGRATIONS_DIR = fs.existsSync(path.join(__dirname, '001-create-collections.js'))
+  ? __dirname
+  : path.join(__dirname, 'scripts', 'migrations');
 const COLLECTION_NAME = 'schema_migrations';
 
 async function main() {

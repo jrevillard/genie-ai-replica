@@ -287,7 +287,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Tempo limite de conexão com provedor externo',
       lowDiskSpace: 'Espaço em disco abaixo de 10% do limite',
-      userRoleUpdated: 'Função do usuário atualizada para admin@huduma.ai'
+      userRoleUpdated: "Função do usuário atualizada para admin{'@'}huduma.ai"
     },
     userName: 'Nome',
     userEmail: 'E-mail',

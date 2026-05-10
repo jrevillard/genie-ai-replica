@@ -165,8 +165,16 @@ export default {
           this.errorKey = 'weatherGeolocationUnsupported';
         }
       } catch (error) {
-        console.warn('Weather fetch error:', error);
-        this.errorKey = 'weatherErrorDefault';
+        const code = error && typeof error.code === 'number' ? error.code : null;
+        if (code === 1) {
+          this.errorKey = 'weatherGeolocationPermissionDenied';
+        } else if (code === 2) {
+          this.errorKey = 'weatherPositionUnavailable';
+        } else if (code === 3) {
+          this.errorKey = 'weatherGeolocationTimeout';
+        } else {
+          this.errorKey = 'weatherErrorDefault';
+        }
       } finally {
         this.isLoading = false;
       }

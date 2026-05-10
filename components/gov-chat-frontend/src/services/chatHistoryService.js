@@ -303,13 +303,14 @@ class ChatHistoryService {
    */
   async getUserFolders(options = {}) {
     try {
+      const opts = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
       const params = {};
 
-      if ('includeArchived' in options) {
-        params.includeArchived = options.includeArchived;
+      if ('includeArchived' in opts) {
+        params.includeArchived = opts.includeArchived;
       }
-      if ('parentFolderId' in options && options.parentFolderId !== undefined) {
-        params.parentFolderId = options.parentFolderId;
+      if ('parentFolderId' in opts && opts.parentFolderId !== undefined) {
+        params.parentFolderId = opts.parentFolderId;
       }
 
       const response = await httpService.get('/chat/folders', { params });

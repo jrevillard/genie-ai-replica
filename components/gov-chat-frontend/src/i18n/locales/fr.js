@@ -286,7 +286,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Délai de connexion dépassé pour le fournisseur externe',
       lowDiskSpace: 'Espace disque inférieur au seuil de 10%',
-      userRoleUpdated: "Rôle de l'utilisateur mis à jour pour admin@huduma.ai"
+      userRoleUpdated: "Rôle de l'utilisateur mis à jour pour admin{'@'}huduma.ai"
     },
     userName: 'Nom',
     userEmail: 'Email',

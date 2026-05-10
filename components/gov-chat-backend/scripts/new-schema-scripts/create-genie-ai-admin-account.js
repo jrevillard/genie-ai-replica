@@ -1,123 +1,146 @@
-// Import the ArangoDB driver
-const { Database } = require('arangojs');
-const readline = require('readline');
-
-// --- Admin User Data ---
-// The basic admin user object to be created.
-const adminUser = {
-  "loginName": "Admin",
-  "email": "admin@admin.com",
-  "encPassword": "$2b$10$/84cIgD6IhXCTMFGP7Tjn.2btwbqgUtqbbucuiyEh91dwc2pF./Aa",
-  "emailVerified": true,
-  "createdAt": "2025-04-15T16:40:05.829Z",
-  "updatedAt": "2025-10-07T06:37:32.681Z",
-  "personalIdentification": {
-    "fullName": "Admin",
-    "dob": "",
-    "gender": "",
-    "nationality": "",
-    "maritalStatus": ""
-  },
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTQwIiwiaWF0IjoxNzU5ODE4NTk0LCJleHAiOjE3NTk5MDQ5OTR9.Q_D7mCXORPTCfFu0RTjUFMNtgx-PKjEr4WNrfxyCv3Q",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTQwIiwidG9rZW5WZXJzaW9uIjozLCJpYXQiOjE3NTk4MTg1OTQsImV4cCI6MTc2MDQyMzM5NH0.yu4Rif5ieMbWpcHRZUeK8g5Pj7TBgD9BeRfNDdfPDrU",
-  "role": "Admin"
-};
+'use strict';
 
 /**
- * Asks a question in the console and returns the user's answer.
- * @param {string} query - The question to display to the user.
- * @returns {Promise<string>} The user's answer.
+ * Creates or restores a legacy local-login admin row in Arango `users`.
+ *
+ * Why this exists: migration 004 removes `loginName` / `encPassword` for Keycloak
+ * users. If you still use the Vue login form (`POST /api/auth/login`), those fields
+ * must exist and `encPassword` must be bcrypt( sha256_hex( plain_password ) ) — same
+ * as registration (see authService.hashPassword + AuthService.hashPassword).
+ *
+ * Run from backend package root so `bcrypt` / `arangojs` resolve:
+ *   cd components/gov-chat-backend
+ *   ARANGO_URL=http://127.0.0.1:8529 ARANGO_DB=genie-ai ARANGO_PASSWORD=... \
+ *     ADMIN_PLAIN_PASSWORD='YourNewPassword1' node scripts/new-schema-scripts/create-genie-ai-admin-account.js
+ *
+ * Or omit ADMIN_PLAIN_PASSWORD to be prompted (input is visible — use env in production).
  */
+
+const path = require('path');
+const crypto = require('crypto');
+const readline = require('readline');
+
+const backendRoot = path.join(__dirname, '..', '..');
+const bcrypt = require(require.resolve('bcrypt', { paths: [backendRoot] }));
+const { Database } = require(require.resolve('arangojs', { paths: [backendRoot] }));
+
+const DEFAULT_LOGIN = process.env.ADMIN_LOGIN_NAME || 'Admin';
+const DEFAULT_EMAIL = process.env.ADMIN_EMAIL || 'admin@admin.com';
+
 function askQuestion(query) {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
+    output: process.stdout
   });
-
-  return new Promise(resolve => rl.question(query, ans => {
-    rl.close();
-    resolve(ans);
-  }));
+  return new Promise(resolve =>
+    rl.question(query, ans => {
+      rl.close();
+      resolve(ans);
+    })
+  );
 }
 
+function encPasswordForApp(plain) {
+  const shaHex = crypto.createHash('sha256').update(plain, 'utf8').digest('hex');
+  return bcrypt.hash(shaHex, 10);
+}
 
-/**
- * Main function to connect to ArangoDB and create the admin user.
- */
 async function createAdminUser() {
-  
-  // Read configuration from environment variables, with defaults
   const dbConfig = {
-    url: process.env.ARANGO_URL || "http://127.0.0.1:8529",
-    databaseName: process.env.ARANGO_DATABASE || "node-services",
+    url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
+    databaseName: process.env.ARANGO_DB || process.env.ARANGO_DATABASE || 'genie-ai',
     auth: {
-      username: process.env.ARANGO_USER || "root",
-      password: process.env.ARANGO_PASSWORD || "your-database-password"
-    },
+      username: process.env.ARANGO_USER || 'root',
+      password: process.env.ARANGO_PASSWORD
+    }
   };
 
-  // --- Confirmation Prompt ---
-  console.log('--- Admin User Creation Script ---');
-  console.log('This script will create an Admin user in the database.');
-  console.log('\nDatabase configuration to be used:');
+  if (!dbConfig.auth.password) {
+    console.error('ERROR: ARANGO_PASSWORD is required.');
+    process.exit(1);
+  }
+
+  console.log('--- Legacy admin login restore / create ---');
+  console.log('Sets loginName + encPassword (Vue-compatible) + emailVerified on one user.');
+  console.log('\nDatabase configuration:');
   console.log(`  URL:      ${dbConfig.url}`);
   console.log(`  Database: ${dbConfig.databaseName}`);
   console.log(`  User:     ${dbConfig.auth.username}`);
-  
-  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+  console.log(`  Match:    loginName="${DEFAULT_LOGIN}" OR email="${DEFAULT_EMAIL}"`);
 
+  const answer = await askQuestion('\nProceed? (Y/n) ');
   if (answer.toLowerCase() !== 'y') {
-    console.log('Operation cancelled by user. Exiting.');
+    console.log('Cancelled.');
     process.exit(0);
   }
-  // --- End Confirmation Prompt ---
 
-  console.log("\nConnecting to ArangoDB...");
-  const db = new Database(dbConfig);
-
-  try {
-    // Verify that the database exists
-    const dbExists = await db.exists();
-    if (!dbExists) {
-      console.error(`Error: Database "${dbConfig.databaseName}" does not exist.`);
-      return;
-    }
-    console.log(`Successfully connected to database: "${dbConfig.databaseName}"`);
-
-    const usersCollection = db.collection("users");
-
-    // 1. Check if the user already exists
-    console.log(`Checking for existing user with loginName: "${adminUser.loginName}"...`);
-    const cursor = await db.query({
-      query: `
-        FOR user IN users
-        FILTER user.loginName == @loginName
-        LIMIT 1
-        RETURN user
-      `,
-      bindVars: { loginName: adminUser.loginName }
-    });
-
-    const existingUser = await cursor.next();
-
-    if (existingUser) {
-      // 2a. If user exists, do nothing
-      console.log(`User "${adminUser.loginName}" already exists. No action taken.`);
-    } else {
-      // 2b. If user does not exist, create it
-      console.log(`User "${adminUser.loginName}" not found. Creating new user...`);
-      const result = await usersCollection.save(adminUser, { returnNew: true });
-      console.log("Successfully created new admin user:");
-      console.log(result.new);
-    }
-
-  } catch (err) {
-    console.error("An error occurred:", err.message);
+  let plain = process.env.ADMIN_PLAIN_PASSWORD;
+  if (!plain || !plain.length) {
+    plain = await askQuestion('Enter new admin password (plain text, min 8 chars, mixed rules as your UI): ');
   }
+  if (!plain || plain.length < 8) {
+    console.error('Password too short or empty.');
+    process.exit(1);
+  }
+
+  const hashed = await encPasswordForApp(plain);
+  const db = new Database(dbConfig);
+  const exists = await db.exists();
+  if (!exists) {
+    console.error(`Database "${dbConfig.databaseName}" does not exist.`);
+    process.exit(1);
+  }
+
+  const users = db.collection('users');
+  const cursor = await db.query(
+    `FOR u IN users
+       FILTER u.loginName == @login OR u.email == @email
+       LIMIT 1
+       RETURN u`,
+    { login: DEFAULT_LOGIN, email: DEFAULT_EMAIL }
+  );
+  const existing = await cursor.next();
+  const now = new Date().toISOString();
+
+  if (existing) {
+    await users.update(existing._key, {
+      loginName: DEFAULT_LOGIN,
+      email: DEFAULT_EMAIL,
+      encPassword: hashed,
+      emailVerified: true,
+      updatedAt: now,
+      role: 'Admin',
+      roles: ['admin', 'user']
+    });
+    console.log(`Updated user _key=${existing._key} with legacy login fields (password reset).`);
+  } else {
+    const doc = {
+      loginName: DEFAULT_LOGIN,
+      email: DEFAULT_EMAIL,
+      encPassword: hashed,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+      role: 'Admin',
+      roles: ['admin', 'user'],
+      personalIdentification: {
+        fullName: DEFAULT_LOGIN,
+        dob: '',
+        gender: '',
+        nationality: '',
+        maritalStatus: ''
+      }
+    };
+    const meta = await users.save(doc, { returnNew: true });
+    console.log('Created new admin user:', meta.new._key);
+  }
+
+  console.log('\nDone. Log in via /login with login name:', DEFAULT_LOGIN, 'and the password you set.');
 }
 
-// Run the script if executed directly
 if (require.main === module) {
-    createAdminUser();
+  createAdminUser().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
 }
-

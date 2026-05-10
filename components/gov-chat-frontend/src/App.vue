@@ -1,14 +1,8 @@
 // src/App.vue
 <template>
-  <div
-    id="app"
-    :class="{ 'sidebar-collapsed': !isSidebarOpen }"
-    :data-theme="theme"
-  >
+  <div id="app" :class="{ 'sidebar-collapsed': !isSidebarOpen }" :data-theme="theme">
     <!-- Fallback loading state -->
-    <div v-if="isLoading" class="loading-screen">
-      Loading...
-    </div>
+    <div v-if="isLoading" class="loading-screen">Loading...</div>
 
     <!-- Public routes (no auth required) -->
     <router-view v-else-if="!isLoading && $route.meta.requiresAuth === false" :theme="theme" />
@@ -23,13 +17,13 @@
       <!-- Top navigation bar -->
       <nav-bar-component
         :is-sidebar-open="isSidebarOpen"
-        @toggleSidebar="toggleSidebar"
-        @openAnalytics="showAnalytics = true"
-        @openProfile="showUserProfile = true"
-        @openSettings="showSettings = true"
+        :config="$config"
+        @toggle-sidebar="toggleSidebar"
+        @open-analytics="showAnalytics = true"
+        @open-profile="showUserProfile = true"
+        @open-settings="showSettings = true"
         @logout="handleLogout"
         @open-admin="showAdminDashboard = true"
-        :config="$config"
       />
 
       <div class="main-container">
@@ -43,40 +37,21 @@
       </div>
 
       <!-- Modal Dialogs -->
-      <unified-analytics-component
-        v-if="showAnalytics"
-        @close="showAnalytics = false"
-      />
-      <user-profile-component
-        v-if="showUserProfile"
-        @cancel="showUserProfile = false"
-        @save="handleProfileSave"
-      />
-      <settings-component
-        v-if="showSettings"
-        @close="showSettings = false"
-        @themeChanged="handleThemeChange"
-      />
-      <AdminDashboard
-        v-if="showAdminDashboard"
-        @close="showAdminDashboard = false"
-      />
+      <unified-analytics-component v-if="showAnalytics" @close="showAnalytics = false" />
+      <user-profile-component v-if="showUserProfile" @cancel="showUserProfile = false" @save="handleProfileSave" />
+      <settings-component v-if="showSettings" @close="showSettings = false" @theme-changed="handleThemeChange" />
+      <AdminDashboard v-if="showAdminDashboard" @close="showAdminDashboard = false" />
     </template>
 
     <!-- Login screen for unauthenticated users on auth-required routes -->
     <login-screen
       v-else-if="!isLoading && !isAuthenticated && $route.meta.requiresAuth !== false"
-      @login-success="handleLoginSuccess"
       :theme="theme"
+      @login-success="handleLoginSuccess"
     />
 
     <!-- Global notification component -->
-    <div
-      v-if="notification.visible"
-      class="notification"
-      :class="notification.type"
-      @click="hideNotification"
-    >
+    <div v-if="notification.visible" class="notification" :class="notification.type" @click="hideNotification">
       {{ notification.message }}
     </div>
 
@@ -86,21 +61,20 @@
 </template>
 
 <script>
-import NavBarComponent from "./components/NavBarComponent.vue";
-import SideBarComponent from "./components/SideBarComponent.vue";
-import UnifiedAnalyticsComponent from "./components/UnifiedAnalytics.vue";
-import UserProfileComponent from "./components/UserProfileComponent.vue";
-import SettingsComponent from "./components/SettingsComponent.vue";
-import LoginScreen from "./components/LoginScreen.vue";
-import AdminDashboard from "./components/AdminDashboard.vue";
-import SplashScreen from "./components/SplashScreen.vue";
-import { mapGetters } from "vuex";
-import { eventBus } from "./eventBus.js";
-import chatHistoryService from "./services/chatHistoryService";
-import userService from "./services/userService";
+import NavBarComponent from './components/NavBarComponent.vue';
+import SideBarComponent from './components/SideBarComponent.vue';
+import UnifiedAnalyticsComponent from './components/UnifiedAnalytics.vue';
+import UserProfileComponent from './components/UserProfileComponent.vue';
+import SettingsComponent from './components/SettingsComponent.vue';
+import LoginScreen from './components/LoginScreen.vue';
+import AdminDashboard from './components/AdminDashboard.vue';
+import SplashScreen from './components/SplashScreen.vue';
+import { mapGetters } from 'vuex';
+import { eventBus } from './eventBus.js';
+import chatHistoryService from './services/chatHistoryService';
 
 export default {
-  name: "App",
+  name: 'App',
   components: {
     NavBarComponent,
     SideBarComponent,
@@ -109,7 +83,7 @@ export default {
     SettingsComponent,
     LoginScreen,
     AdminDashboard,
-    SplashScreen,
+    SplashScreen
   },
 
   data() {
@@ -119,93 +93,90 @@ export default {
       showUserProfile: false,
       showSettings: false,
       showAdminDashboard: false,
-      theme: "light",
+      theme: 'light',
       notification: {
         visible: false,
-        message: "",
-        type: "success",
-        timer: null,
+        message: '',
+        type: 'success',
+        timer: null
       },
       showSplash: false,
-      isLoading: true,
+      isLoading: true
     };
   },
   computed: {
     // --- ADDED THIS GETTER ---
-    ...mapGetters(["isAuthenticated", "currentUser"]),
+    ...mapGetters(['isAuthenticated', 'currentUser'])
   },
   watch: {
     isAuthenticated(newVal) {
       if (newVal) {
-        console.log("isAuthenticated changed to true, loading folders and triggering splash");
+        console.log('isAuthenticated changed to true, loading folders and triggering splash');
         this.loadFoldersOnAuth();
         // Show splash screen with a slight delay to ensure DOM readiness
         setTimeout(() => {
           this.showSplash = true;
-          console.log("Splash screen displayed");
+          console.log('Splash screen displayed');
           // Auto-hide splash after 3 seconds
           setTimeout(() => {
             this.showSplash = false;
-            console.log("Splash screen hidden");
+            console.log('Splash screen hidden');
           }, 3000);
         }, 100);
       }
     },
     showSplash(newVal) {
-      console.log("showSplash changed to:", newVal);
-    },
+      console.log('showSplash changed to:', newVal);
+    }
   },
   // --- REPLACED YOUR MOUNTED HOOK WITH THIS ---
   async mounted() {
-    console.log("App.vue mounted");
-    
+    console.log('App.vue mounted');
+
     try {
       // Wait for the auth state to be determined
-      await this.$store.dispatch("initAuth");
-      console.log("initAuth completed, isAuthenticated:", this.isAuthenticated);
+      await this.$store.dispatch('initAuth');
+      console.log('initAuth completed, isAuthenticated:', this.isAuthenticated);
 
       // If authenticated, ALSO wait for critical data to load
       // This "await" is critical
       if (this.isAuthenticated) {
-        console.log("User is authenticated, now loading folders...");
+        console.log('User is authenticated, now loading folders...');
         await this.loadFoldersOnAuth();
-        console.log("Folders loaded.");
+        console.log('Folders loaded.');
       }
-      
+
       // Only set loading to false AFTER all essential data is ready
       this.isLoading = false;
-
     } catch (error) {
-      console.error("Critical initAuth or loadFolders failed:", error);
+      console.error('Critical initAuth or loadFolders failed:', error);
       this.isLoading = false; // Still stop loading on error
       this.showNotification({
-        message: "Failed to initialize application",
-        type: "error",
-        duration: 5000,
+        message: 'Failed to initialize application',
+        type: 'error',
+        duration: 5000
       });
     }
 
     // The rest of your original mounted hook
-    const savedSidebarState = localStorage.getItem("sidebarOpen");
+    const savedSidebarState = localStorage.getItem('sidebarOpen');
     if (savedSidebarState !== null) {
-      this.isSidebarOpen = savedSidebarState === "true";
+      this.isSidebarOpen = savedSidebarState === 'true';
     }
 
     this.initTheme();
     this.initFontSize();
     this.checkScreenSize();
-    window.addEventListener("resize", this.checkScreenSize);
+    window.addEventListener('resize', this.checkScreenSize);
     this.setupSystemThemeListener();
-    eventBus.$on("notification:show", this.showNotification);
+    eventBus.$on('notification:show', this.showNotification);
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.checkScreenSize);
+    window.removeEventListener('resize', this.checkScreenSize);
     if (this.systemThemeListener) {
-      window
-        .matchMedia("(prefers-color-scheme: dark)")
-        .removeEventListener("change", this.systemThemeListener);
+      window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener);
     }
-    eventBus.$off("notification:show", this.showNotification);
+    eventBus.$off('notification:show', this.showNotification);
   },
   methods: {
     showNotification(payload) {
@@ -215,10 +186,10 @@ export default {
       this.notification = {
         visible: true,
         message: payload.message,
-        type: payload.type || "success",
-        timer: null,
+        type: payload.type || 'success',
+        timer: null
       };
-      console.log("Showing notification:", payload);
+      console.log('Showing notification:', payload);
       this.notification.timer = setTimeout(() => {
         this.hideNotification();
       }, payload.duration || 3000);
@@ -229,58 +200,51 @@ export default {
         clearTimeout(this.notification.timer);
         this.notification.timer = null;
       }
-      console.log("Notification hidden");
+      console.log('Notification hidden');
     },
 
     initTheme() {
-      const currentTheme =
-        document.documentElement.getAttribute("data-theme") || "light";
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
       this.theme = currentTheme;
-      console.log("App component synchronized theme to:", this.theme);
+      console.log('App component synchronized theme to:', this.theme);
     },
 
     initFontSize() {
       try {
-        const fontSize = localStorage.getItem("fontSize");
+        const fontSize = localStorage.getItem('fontSize');
         if (fontSize) {
-          document.documentElement.style.fontSize = `${
-            parseInt(fontSize) / 50
-          }rem`;
+          document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`;
         }
       } catch (e) {
-        console.warn("Unable to get font size preference:", e);
+        console.warn('Unable to get font size preference:', e);
       }
     },
 
     setupSystemThemeListener() {
-      if (this.theme === "system" && window.matchMedia) {
-        this.systemThemeListener = (e) => {
-          document.documentElement.setAttribute("data-theme", "system");
-          document.body.setAttribute("data-theme", "system");
-          console.log("System theme changed");
+      if (this.theme === 'system' && window.matchMedia) {
+        this.systemThemeListener = (_e) => {
+          document.documentElement.setAttribute('data-theme', 'system');
+          document.body.setAttribute('data-theme', 'system');
+          console.log('System theme changed');
         };
-        window
-          .matchMedia("(prefers-color-scheme: dark)")
-          .addEventListener("change", this.systemThemeListener);
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', this.systemThemeListener);
       }
     },
 
     handleThemeChange(newTheme) {
-      console.log("Theme changed to:", newTheme);
+      console.log('Theme changed to:', newTheme);
       this.theme = newTheme;
-      document.documentElement.setAttribute("data-theme", newTheme);
-      document.body.setAttribute("data-theme", newTheme);
+      document.documentElement.setAttribute('data-theme', newTheme);
+      document.body.setAttribute('data-theme', newTheme);
       try {
-        localStorage.setItem("theme", newTheme);
+        localStorage.setItem('theme', newTheme);
       } catch (e) {
-        console.warn("Unable to save theme preference:", e);
+        console.warn('Unable to save theme preference:', e);
       }
-      if (newTheme === "system") {
+      if (newTheme === 'system') {
         this.setupSystemThemeListener();
       } else if (this.systemThemeListener) {
-        window
-          .matchMedia("(prefers-color-scheme: dark)")
-          .removeEventListener("change", this.systemThemeListener);
+        window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener);
         this.systemThemeListener = null;
       }
     },
@@ -289,101 +253,82 @@ export default {
     async loadFoldersOnAuth() {
       try {
         // This will now correctly get the user from Vuex
-        const user = this.currentUser; 
-        console.log("loadFoldersOnAuth: Current user from store:", user);
+        const user = this.currentUser;
+        console.log('loadFoldersOnAuth: Current user from store:', user);
 
         const userId = user?._key || user?.id;
         if (!userId) {
           // This should no longer happen because of the mounted hook's await
-          console.warn("loadFoldersOnAuth called, but user not ready.");
-          return; 
+          console.warn('loadFoldersOnAuth called, but user not ready.');
+          return;
         }
 
-        const response = await chatHistoryService.getUserFolders(userId);
-        console.log("loadFoldersOnAuth: getUserFolders response:", response);
-        let foldersArray = Array.isArray(response)
-          ? response
-          : response?.folders || [];
+        const response = await chatHistoryService.getUserFolders();
+        console.log('loadFoldersOnAuth: getUserFolders response:', response);
+        const foldersArray = Array.isArray(response) ? response : response?.folders || [];
         const processedFolders = foldersArray
           .filter((folder) => folder && (folder._key || folder.id))
           .map((folder) => ({
             id: folder._key || folder.id,
-            name: folder.name || "Unnamed Folder",
-            description: folder.description || "",
+            name: folder.name || 'Unnamed Folder',
+            description: folder.description || '',
             isDefault: folder.isDefault || false,
-            createdAt: folder.createdAt || new Date().toISOString(),
+            createdAt: folder.createdAt || new Date().toISOString()
           }));
         const defaultFolder = {
-          id: "default",
-          name: "All Chats",
+          id: 'default',
+          name: 'All Chats',
           isDefault: true,
-          createdAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
         };
         const allFolders = [defaultFolder, ...processedFolders];
-        await this.$store.dispatch("chatHistory/setFolders", allFolders);
-        console.log(
-          "loadFoldersOnAuth: Dispatched setFolders with:",
-          allFolders
-        );
-        const vuexFolders = this.$store.getters["chatHistory/getAllFolders"];
-        console.log(
-          "loadFoldersOnAuth: Vuex folders after dispatch:",
-          vuexFolders
-        );
+        await this.$store.dispatch('chatHistory/setFolders', allFolders);
+        console.log('loadFoldersOnAuth: Dispatched setFolders with:', allFolders);
+        const vuexFolders = this.$store.getters['chatHistory/getAllFolders'];
+        console.log('loadFoldersOnAuth: Vuex folders after dispatch:', vuexFolders);
       } catch (error) {
-        console.error("loadFoldersOnAuth: Error loading folders:", error);
+        console.error('loadFoldersOnAuth: Error loading folders:', error);
         const defaultFolder = {
-          id: "default",
-          name: "All Chats",
+          id: 'default',
+          name: 'All Chats',
           isDefault: true,
-          createdAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
         };
-        await this.$store.dispatch("chatHistory/setFolders", [defaultFolder]);
-        console.log(
-          "loadFoldersOnAuth: Fallback to default folder:",
-          defaultFolder
-        );
+        await this.$store.dispatch('chatHistory/setFolders', [defaultFolder]);
+        console.log('loadFoldersOnAuth: Fallback to default folder:', defaultFolder);
         this.showNotification({
-          message: "Failed to load folders. Using default folder.",
-          type: "error",
-          duration: 5000,
+          message: 'Failed to load folders. Using default folder.',
+          type: 'error',
+          duration: 5000
         });
       }
     },
 
     handleLoginSuccess(userData) {
-      console.log("handleLoginSuccess: Received userData:", userData);
-      document.documentElement.setAttribute("data-theme", this.theme);
-      document.body.setAttribute("data-theme", this.theme);
+      console.log('handleLoginSuccess: Received userData:', userData);
+      document.documentElement.setAttribute('data-theme', this.theme);
+      document.body.setAttribute('data-theme', this.theme);
       this.loadFoldersOnAuth();
     },
 
     async handleLogout() {
       try {
-        await this.$store.dispatch("logout");
-        await this.$store.dispatch("chatHistory/clearFolders");
-        console.log("handleLogout: Folders cleared from Vuex store");
+        await this.$store.dispatch('logout');
+        await this.$store.dispatch('chatHistory/clearFolders');
+        console.log('handleLogout: Folders cleared from Vuex store');
         try {
-          localStorage.removeItem("chatHistory");
-          console.log("handleLogout: Cleared chatHistory from localStorage");
+          localStorage.removeItem('chatHistory');
+          console.log('handleLogout: Cleared chatHistory from localStorage');
         } catch (e) {
-          console.error(
-            "handleLogout: Error clearing chatHistory from localStorage:",
-            e
-          );
+          console.error('handleLogout: Error clearing chatHistory from localStorage:', e);
         }
       } catch (error) {
-        console.error("handleLogout: Error during logout:", error);
+        console.error('handleLogout: Error during logout:', error);
         try {
-          localStorage.removeItem("chatHistory");
-          console.log(
-            "handleLogout: Cleared chatHistory from localStorage on error"
-          );
+          localStorage.removeItem('chatHistory');
+          console.log('handleLogout: Cleared chatHistory from localStorage on error');
         } catch (e) {
-          console.error(
-            "handleLogout: Error clearing chatHistory from localStorage:",
-            e
-          );
+          console.error('handleLogout: Error clearing chatHistory from localStorage:', e);
         }
       }
     },
@@ -391,9 +336,9 @@ export default {
     toggleSidebar() {
       this.isSidebarOpen = !this.isSidebarOpen;
       try {
-        localStorage.setItem("sidebarOpen", this.isSidebarOpen.toString());
+        localStorage.setItem('sidebarOpen', this.isSidebarOpen.toString());
       } catch (e) {
-        console.warn("Unable to save sidebar state:", e);
+        console.warn('Unable to save sidebar state:', e);
       }
     },
 
@@ -404,14 +349,14 @@ export default {
     },
 
     handleProfileSave(profileData) {
-      console.log("Profile saved:", profileData);
+      console.log('Profile saved:', profileData);
       this.showUserProfile = false;
     },
 
     openAdminDashboard() {
       this.showAdminDashboard = true;
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -424,8 +369,9 @@ export default {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
-    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue',
+    sans-serif;
   line-height: 1.6;
   color: var(--text-primary, #333);
   background-color: var(--bg-primary, #f5f7fa);

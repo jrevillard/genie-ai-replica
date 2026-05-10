@@ -24,7 +24,7 @@
       "id": "e1a2b3c4-d5e6-4f78-9a0b-1c2d3e4f5a6b",
       "protocol": "http",
       "host": "document-repository",
-      "port": 3000,
+      "port": 3001,
       "path": null,
       "connect_timeout": 60000,
       "read_timeout": 60000,
@@ -850,11 +850,12 @@
         "name": "document-repository"
       },
       "paths": [
-        "/api/files"
+        "/api/files",
+        "/api/files/"
       ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 1,
+      "regex_priority": 100,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
@@ -880,11 +881,12 @@
         "name": "document-repository"
       },
       "paths": [
-        "/api/labels"
+        "/api/labels",
+        "/api/labels/"
       ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 1,
+      "regex_priority": 100,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,

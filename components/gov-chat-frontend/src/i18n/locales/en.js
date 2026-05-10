@@ -284,7 +284,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Connection timeout to external provider',
       lowDiskSpace: 'Disk space below 10% threshold',
-      userRoleUpdated: 'User role updated for admin@huduma.ai'
+      userRoleUpdated: "User role updated for admin{'@'}huduma.ai"
     },
     userName: 'Name',
     userEmail: 'Email',
@@ -651,11 +651,29 @@ export default {
     toggleSidebar: 'Toggle sidebar',
     changeLanguage: 'Change language',
     administration: 'Administration',
+    systemStatus: 'System Status',
     languages: {
       english: 'English',
       french: 'French',
       swahili: 'Swahili'
     }
+  },
+  systemStatus: {
+    title: 'System Status',
+    services: 'services',
+    operational: 'Operational',
+    degraded: 'Degraded',
+    outage: 'Outage',
+    nextDeadline: 'Next deadline',
+    days: 'days',
+    viewDetails: 'View details',
+    allOperational: 'All systems operational',
+    someIssues: 'Some issues detected',
+    majorIssues: 'Major issues',
+    checking: 'Checking status…'
+  },
+  deadlines: {
+    taxFiling: 'Tax filing'
   },
   services: {
     eCitizen: 'eCitizen Portal',
@@ -690,6 +708,10 @@ export default {
     weatherLocationLoading: 'Loading location...',
     weatherErrorDefault: 'Unable to retrieve weather data.',
     weatherGeolocationUnsupported: 'Geolocation not supported by your browser.',
+    weatherGeolocationPermissionDenied: 'Location access was denied. Allow location for this site to see weather.',
+    weatherGeolocationTimeout: 'Location request timed out. Try again or check your connection.',
+    weatherPositionUnavailable: 'Your location could not be determined.',
+    weatherAuthRequired: 'Sign in to load weather for your area.',
     weatherRefresh: 'Refresh Weather',
     weatherConditions: {
       clear: 'Clear',
@@ -902,6 +924,7 @@ export default {
     resetUserData: 'Reset User Data',
     resetUserDataDesc: 'This will clear all your profile data and chat history.',
     standardAccount: 'Standard Account',
+    administratorAccount: 'Administrator account',
     cancel: 'Cancel',
     account: {
       title: 'Account',
@@ -1579,6 +1602,134 @@ export default {
       duplicate: 'File "{fileName}" has already been added.',
       uploadSuccess: 'Successfully uploaded {fileName}',
       uploadFailed: 'Failed to upload {fileName}.'
+    }
+  },
+  app: {
+    name: 'GENIE.AI'
+  },
+  login: {
+    title: 'GENIE.AI',
+    username: 'Username',
+    password: 'Password',
+    rememberMe: 'Remember me',
+    forgotPassword: 'Forgot password?',
+    loggingIn: 'Signing in...',
+    loginButton: 'Sign in',
+    noAccount: 'No account yet?',
+    registerNow: 'Register now',
+    or: 'or',
+    savedAccounts: 'Saved accounts',
+    fieldsRequired: 'Please enter your username and password.',
+    invalidCredentials: 'Invalid username or password.',
+    tooManyAttempts: 'Too many attempts. Please try again later.',
+    loginFailed: 'Sign-in failed. Please try again.',
+    oauthNotImplemented: 'This sign-in method is not available yet.',
+    savedLoginNotImplemented: 'Saved account sign-in is not available yet.'
+  },
+  register: {
+    title: 'GENIE.AI',
+    appTitle: 'GENIE.AI',
+    createAccount: 'Create an account',
+    username: 'Username',
+    usernamePlaceholder: 'Choose a username',
+    email: 'Email',
+    emailPlaceholder: "your.email{'@'}example.com",
+    password: 'Password',
+    passwordPlaceholder: 'Create a password',
+    confirmPassword: 'Confirm password',
+    confirmPasswordPlaceholder: 'Repeat your password',
+    acceptTerms: 'I accept the',
+    termsOfService: 'Terms of Service',
+    processing: 'Creating account...',
+    registerButton: 'Register',
+    alreadyHaveAccount: 'Already have an account?',
+    loginNow: 'Sign in',
+    privacyNotice: 'By registering you agree to our Terms of Service and Privacy Policy.',
+    registrationSuccess: 'Registration successful',
+    verificationEmailSent: 'We sent a verification email to {email}.',
+    checkEmailInstructions: 'Open the link in that message to verify your account before signing in.',
+    backToLogin: 'Back to sign in',
+    noEmailReceived: 'Did not receive the email?',
+    resendingVerification: 'Sending again...',
+    resendVerification: 'Resend verification email',
+    verificationResent: 'Verification email sent again.',
+    verificationResendFailed: 'Could not resend verification email. Please try again.',
+    passwordsDoNotMatch: 'Passwords do not match.',
+    usernameMinLength: 'Username must be at least 3 characters.',
+    usernameInvalidChars: 'Username may only contain letters, numbers, and underscores.',
+    invalidEmail: 'Please enter a valid email address.',
+    passwordRequirements: 'Password must meet the stated requirements (length and character types).',
+    mustAcceptTerms: 'You must accept the Terms of Service to register.',
+    usernameExists: 'This username is already taken.',
+    emailExists: 'An account with this email already exists.',
+    registrationFailed: 'Registration failed. Please try again.',
+    networkError: 'Network error. Check your connection and try again.'
+  },
+  verification: {
+    verifying: 'Verifying your email...',
+    success: 'Email verified',
+    accountVerified: 'Your account has been verified. You can sign in now.',
+    proceedToLogin: 'Continue to sign in',
+    failed: 'Verification failed',
+    invalidLink: 'This verification link is invalid or has expired. Request a new one from sign in.',
+    backToLogin: 'Back to sign in',
+    alreadyUsed: 'This verification link has already been used.',
+    expired: 'This verification link has expired.',
+    missingToken: 'Verification token is missing.',
+    generalError: 'Something went wrong. Please try again later.'
+  },
+  passwordReset: {
+    appTitle: 'GENIE.AI',
+    resetPassword: 'Reset password',
+    resetRequestSuccess: 'If an account exists for that email, reset instructions were sent.',
+    checkEmail: 'Please check your email for further instructions.',
+    emailLabel: 'Email address',
+    emailPlaceholder: 'Enter your email address',
+    processing: 'Sending...',
+    resetButton: 'Send reset link',
+    rememberPassword: 'Remember your password?',
+    backToLogin: 'Back to sign in',
+    supportMessage: 'Need help? Contact your administrator or support.',
+    invalidEmail: 'Please enter a valid email address.'
+  },
+  passwordResetConfirm: {
+    resetSuccess: 'Password reset successfully.',
+    redirecting: 'Redirecting to sign in...',
+    tokenLabel: 'Reset token',
+    tokenPlaceholder: 'Enter your reset token',
+    validatingToken: 'Validating your token...',
+    validateButton: 'Validate token',
+    newPasswordLabel: 'New password',
+    newPasswordPlaceholder: 'Enter your new password',
+    passwordStrength: 'Password strength',
+    confirmNewPasswordLabel: 'Confirm new password',
+    confirmNewPasswordPlaceholder: 'Confirm your new password',
+    processing: 'Processing...',
+    resetButton: 'Reset password',
+    rememberedPassword: 'Remember your password?',
+    backToLogin: 'Back to sign in',
+    supportMessage: 'If you need assistance, please contact support.',
+    noTokenProvided: 'Please enter a reset token.',
+    expiredToken: 'This reset token has expired.',
+    usedToken: 'This reset token has already been used.',
+    invalidToken: 'Invalid reset token.',
+    validationError: 'Could not validate the token. Please try again.',
+    passwordTooWeak: 'Password is too weak. Choose a stronger password.',
+    passwordsDoNotMatch: 'Passwords do not match.',
+    resetFailed: 'Password reset failed. Please try again.',
+    strengthLabels: {
+      veryWeak: 'Very weak',
+      weak: 'Weak',
+      fair: 'Fair',
+      good: 'Good',
+      strong: 'Strong'
+    },
+    passwordSuggestions: {
+      atLeast8Chars: 'Use at least 8 characters.',
+      addUppercase: 'Add an uppercase letter.',
+      addLowercase: 'Add a lowercase letter.',
+      addNumbers: 'Add a number.',
+      addSpecialChars: 'Add a special character.'
     }
   }
 };

@@ -286,7 +286,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Тайм-аут соединения с внешним провайдером',
       lowDiskSpace: 'Место на диске ниже порога 10%',
-      userRoleUpdated: 'Роль пользователя обновлена для admin@huduma.ai'
+      userRoleUpdated: "Роль пользователя обновлена для admin{'@'}huduma.ai"
     },
     userName: 'Имя',
     userEmail: 'Электронная почта',

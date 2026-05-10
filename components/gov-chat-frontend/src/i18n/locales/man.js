@@ -283,7 +283,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Taa banta-diilaa to mang joona',
       lowDiskSpace: 'Maradaa koto dooyata tambi 10%',
-      userRoleUpdated: 'Moo-kiliya jukuto yailamata admin@huduma.ai ye'
+      userRoleUpdated: "Moo-kiliya jukuto yailamata admin{'@'}huduma.ai ye"
     },
     userName: 'Toh',
     userEmail: 'Imeeloo',

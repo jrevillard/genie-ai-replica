@@ -54,7 +54,7 @@
               {{ userData.email || 'email@example.com' }}
             </div>
             <div class="account-type">
-              {{ userData.accountType || translate('settings.standardAccount', 'Standard Account') }}
+              {{ userData.accountType || translate('settings.standardAccount') }}
             </div>
           </div>
         </div>
@@ -484,6 +484,23 @@ export default {
         cancelText: this.translate('settings.cancel', 'Cancel')
       };
     },
+    accountTypeLabel(userData) {
+      if (!userData) {
+        return this.translate('settings.standardAccount');
+      }
+      const roleStr = userData.role || '';
+      if (typeof roleStr === 'string' && roleStr.toLowerCase() === 'admin') {
+        return this.translate('settings.administratorAccount');
+      }
+      const roles = userData.roles;
+      if (Array.isArray(roles) && roles.some((r) => String(r).toLowerCase() === 'admin')) {
+        return this.translate('settings.administratorAccount');
+      }
+      if (Array.isArray(roles) && roles.length) {
+        return roles.join(', ');
+      }
+      return this.translate('settings.standardAccount');
+    },
     async fetchUserData() {
       console.log('[SETTINGS] Fetching user data...');
       this.isLoading = true;
@@ -506,7 +523,7 @@ export default {
             userData.username ||
             this.translate('settings.user'),
           email: userData.email || '',
-          accountType: (userData.roles && userData.roles.join(', ')) || this.translate('settings.standardAccount'),
+          accountType: this.accountTypeLabel(userData),
           createdAt: userData.createdAt || ''
         };
         console.log('[SETTINGS] userData updated:', this.userData);
@@ -525,7 +542,7 @@ export default {
             name:
               fallbackUser.name || fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
-            accountType: (fallbackUser.roles && fallbackUser.roles.join(', ')) || this.translate('settings.account'),
+            accountType: this.accountTypeLabel(fallbackUser),
             createdAt: fallbackUser.createdAt || ''
           };
           console.log('[SETTINGS] Fallback userData set:', this.userData);

@@ -67,10 +67,10 @@ RUN sed -i "s/unstructured\[all-docs\]/unstructured/" ${REQ_PATH} && \
 
 # Step D: Copy and Run the Dependency Patch and the utils.py patch
 # This removes other unused, broken dependencies (pathway, graspologic)
-COPY --chmod=0755 inko-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
 RUN ./fix_dependencies.sh ${REQ_PATH}
 # Copy custom utils to its new correct location (matches your structure)
-COPY inko-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
 
 # Step E: Install *fixed and pruned* dependencies
 # This will now succeed as it's installing a much smaller set of packages.
@@ -105,15 +105,15 @@ RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.p
 # Step I: "Overlay" our custom GENIE-AI files
 # These paths are relative to the build context (our repo root)
 # 1. Copy our new subclass (Section 2.1) and the loader
-COPY inko-overlay/dataprep/genieai_dataprep_arangodb.py /app/comps/dataprep/src/integrations/genieai_dataprep_arangodb.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py /app/comps/dataprep/src/integrations/genieai_dataprep_arangodb.py
 
-COPY inko-overlay/dataprep/genieai_dataprep_loader.py /app/comps/dataprep/src/genieai_dataprep_loader.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_loader.py /app/comps/dataprep/src/genieai_dataprep_loader.py
 
 # 2. Overwrite OPEA's entry point with our new one
-COPY inko-overlay/dataprep/genieai_dataprep_microservice.py /app/comps/dataprep/src/genieai_dataprep_microservice.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_microservice.py /app/comps/dataprep/src/genieai_dataprep_microservice.py
 
 # 3. Overwrite the OPEA API protocol with our custom version
-COPY inko-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
+COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
 # Step J: Lighten library load & Fix Duplicate Registration
 # 1. Comment out unused integrations in the *base* OPEA microservice.

@@ -6,11 +6,12 @@ const { logger } = require('../shared-lib');
 module.exports = (chatHistoryService) => {
   // Helper function to extract user ID from the JWT-authenticated request
   const extractUserId = (req) => {
-    if (!req.user?.iss_sub) {
-      logger.warn('No user context — JWT middleware should have populated req.user.iss_sub');
+    const issSub = req.user?.iss_sub || req.claims?.iss_sub;
+    if (!issSub) {
+      logger.warn('No user context — iss_sub missing on req.user and req.claims');
       return null;
     }
-    return req.user.iss_sub;
+    return issSub;
   };
 
   // Apply authentication middleware to all routes

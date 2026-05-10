@@ -69,7 +69,12 @@ app.use(
 // CORS configuration
 app.use(
   cors({
-    origin: appConfig.allowedOrigins || ['http://localhost:3000', 'http://localhost:3001'],
+    origin: appConfig.allowedOrigins || [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:8090',
+      'http://127.0.0.1:8090'
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
     credentials: true

@@ -285,7 +285,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Waktu koneksi ke penyedia eksternal habis',
       lowDiskSpace: 'Ruang disk di bawah ambang batas 10%',
-      userRoleUpdated: 'Peran pengguna diperbarui untuk admin@huduma.ai'
+      userRoleUpdated: "Peran pengguna diperbarui untuk admin{'@'}huduma.ai"
     },
     userName: 'Nama',
     userEmail: 'Email',

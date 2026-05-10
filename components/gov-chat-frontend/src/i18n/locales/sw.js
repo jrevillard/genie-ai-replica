@@ -286,7 +286,7 @@ export default {
     logMessages: {
       connectionTimeout: 'Muda wa kuunganisha umekwisha kwa mtoa huduma wa nje',
       lowDiskSpace: 'Nafasi ya diski chini ya kiwango cha 10%',
-      userRoleUpdated: 'Wajibu wa mtumiaji umesasishwa kwa admin@huduma.ai'
+      userRoleUpdated: "Wajibu wa mtumiaji umesasishwa kwa admin{'@'}huduma.ai"
     },
     userName: 'Jina',
     userEmail: 'Barua pepe',

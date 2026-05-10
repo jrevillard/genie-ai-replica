@@ -45,6 +45,7 @@ yarn-error.log*
 data/logs/
 data/database_backups/
 data/huggingface/
+data/models*
 
 # Database backups
 database_backups/

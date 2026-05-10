@@ -25,16 +25,10 @@ class HttpService {
     this.retryDelay = 2000; // Delay for 401/403 retries in ms
 
     // Add request interceptor
-    this.axios.interceptors.request.use(
-      this.handleRequest.bind(this),
-      this.handleRequestError.bind(this)
-    );
+    this.axios.interceptors.request.use(this.handleRequest.bind(this), this.handleRequestError.bind(this));
 
     // Add response interceptor
-    this.axios.interceptors.response.use(
-      this.handleResponse.bind(this),
-      this.handleResponseError.bind(this)
-    );
+    this.axios.interceptors.response.use(this.handleResponse.bind(this), this.handleResponseError.bind(this));
   }
 
   /**
@@ -71,6 +65,74 @@ class HttpService {
       base += '/';
     }
     return `${base}${cleanEndpoint}`;
+  }
+
+  /**
+   * Base URL for document-repository file APIs (GET/POST /api/files/...).
+   * When unset, falls back to {@link #baseUrl} (works behind Kong when /api/files is routed).
+   * Set {@link window.APP_CONFIG.filesApiUrl} or VUE_APP_FILES_API_URL for direct doc-repo (e.g. http://host:3001/api).
+   * @returns {string}
+   */
+  getFilesApiBase() {
+    const fromWindow =
+      typeof window !== 'undefined' && window.APP_CONFIG && typeof window.APP_CONFIG.filesApiUrl === 'string'
+        ? window.APP_CONFIG.filesApiUrl.trim()
+        : '';
+    const fromEnv = (process.env.VUE_APP_FILES_API_URL || '').trim();
+    const explicit = fromWindow || fromEnv;
+    if (explicit) {
+      return explicit.replace(/\/$/, '');
+    }
+    return this.baseUrl.replace(/\/$/, '');
+  }
+
+  getUrlForFiles(endpoint) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    let base = this.getFilesApiBase();
+    if (!base.endsWith('/') && cleanEndpoint) {
+      base += '/';
+    }
+    return `${base}${cleanEndpoint}`;
+  }
+
+  async getFiles(endpoint, params = {}, options = {}) {
+    try {
+      const url = this.getUrlForFiles(endpoint);
+      const config = {
+        ...options,
+        params: params.params || params
+      };
+      return await this.axios.get(url, config);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  async postFiles(endpoint, data = {}, options = {}) {
+    try {
+      const url = this.getUrlForFiles(endpoint);
+      return await this.axios.post(url, data, options);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  async patchFiles(endpoint, data = {}, options = {}) {
+    try {
+      const url = this.getUrlForFiles(endpoint);
+      return await this.axios.patch(url, data, options);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  async deleteFiles(endpoint, options = {}) {
+    try {
+      const url = this.getUrlForFiles(endpoint);
+      return await this.axios.delete(url, options);
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   /**
@@ -126,7 +188,7 @@ class HttpService {
    * @param {string} token - New access token
    */
   onTokenRefreshed(token) {
-    this.refreshSubscribers.forEach(callback => callback(token));
+    this.refreshSubscribers.forEach((callback) => callback(token));
     this.refreshSubscribers = [];
   }
 
@@ -147,7 +209,18 @@ class HttpService {
 
       // Handle all 401/403 responses immediately
       if ([401, 403].includes(status)) {
-        console.debug(`[HttpService] Unauthorized request detected for ${originalRequest.url} (status: ${status})`);
+        const reqUrl = originalRequest?.url || '(unknown)';
+        const errBody = error.response?.data;
+        // Loud log: full page reload clears the console unless "Preserve log" is on — this line explains the bounce.
+        console.warn(
+          '[HttpService] Unauthorized — session cleared, redirecting to /login?error=unauthorized.',
+          '\n  Request:',
+          originalRequest?.method || 'GET',
+          reqUrl,
+          '\n  Response:',
+          errBody,
+          '\n  Hint: password login issues a legacy JWT; routes behind Keycloak (e.g. services/categories) need a Keycloak access token.'
+        );
 
         // Clear all user-related localStorage data
         localStorage.removeItem('user');
@@ -157,7 +230,6 @@ class HttpService {
 
         // Redirect to login if not already there
         if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
-          console.log(`[HttpService] Redirecting to /login?error=unauthorized from ${originalRequest.url}`);
           window.location.href = '/login?error=unauthorized';
         }
 
@@ -184,11 +256,13 @@ class HttpService {
         }
 
         originalRequest._retryCount += 1;
-        console.debug(`[HttpService] Retry attempt ${originalRequest._retryCount} for ${originalRequest.url} (status: ${status})`);
+        console.debug(
+          `[HttpService] Retry attempt ${originalRequest._retryCount} for ${originalRequest.url} (status: ${status})`
+        );
 
         if (this.isRefreshing) {
           return new Promise((resolve) => {
-            this.subscribeTokenRefresh(token => {
+            this.subscribeTokenRefresh((token) => {
               originalRequest.headers.Authorization = `Bearer ${token}`;
               resolve(this.axios(originalRequest));
             });
@@ -215,7 +289,7 @@ class HttpService {
               this.onTokenRefreshed(newToken);
               this.isRefreshing = false;
 
-              await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+              await new Promise((resolve) => setTimeout(resolve, this.retryDelay));
               return this.axios(originalRequest);
             } catch (e) {
               console.error('Error parsing user data during token refresh:', e);
@@ -240,11 +314,12 @@ class HttpService {
         }
       }
 
+      const data = error.response.data;
       const errorData = {
         status,
         statusText: error.response.statusText,
-        data: error.response.data,
-        message: error.response.data?.message || 'An error occurred'
+        data,
+        message: data?.message || error.message || 'An error occurred'
       };
 
       console.error('API response error:', errorData);
@@ -363,8 +438,8 @@ class HttpService {
     return this.axios.put(noCacheUrl, noCacheData, {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate, private',
-        'Pragma': 'no-cache',
-        'Expires': '-1',
+        Pragma: 'no-cache',
+        Expires: '-1',
         'X-Requested-With': 'XMLHttpRequest',
         'X-Timestamp': timestamp
       }

@@ -16,7 +16,7 @@ export default {
       formData.append('context', context);
       formData.append('entityId', entityId);
 
-      const response = await httpService.post('files/upload', formData, {
+      const response = await httpService.postFiles('/files/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -47,7 +47,7 @@ export default {
       formData.append('context', context);
       formData.append('entityId', entityId);
 
-      const response = await httpService.post('files/upload-multiple', formData, {
+      const response = await httpService.postFiles('/files/upload-multiple', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -66,7 +66,7 @@ export default {
    * @returns {String} File URL
    */
   getFileUrl(fileId) {
-    return `${httpService.baseUrl}/files/${fileId}`;
+    return httpService.getUrlForFiles(`files/${fileId}`);
   },
 
   /**
@@ -76,7 +76,7 @@ export default {
    */
   async deleteFile(fileId) {
     try {
-      const response = await httpService.delete(`files/${fileId}`);
+      const response = await httpService.deleteFiles(`/files/${fileId}`);
       return response.data;
     } catch (error) {
       console.error('Error deleting file:', error);
@@ -91,7 +91,7 @@ export default {
    */
   async getFileMetadata(fileId) {
     try {
-      const response = await httpService.get(`files/${fileId}/metadata`);
+      const response = await httpService.getFiles(`/files/${fileId}/metadata`);
       return response.data;
     } catch (error) {
       console.error('Error getting file metadata:', error);
@@ -107,7 +107,7 @@ export default {
    */
   async getEntityFiles(entityId, context) {
     try {
-      const response = await httpService.get('files', {
+      const response = await httpService.getFiles('/files', {
         params: { entityId, context }
       });
 
@@ -126,7 +126,7 @@ export default {
    */
   getPreviewUrl(fileId, options = {}) {
     const { width, height, quality } = options;
-    let url = `${httpService.baseUrl}/files/${fileId}/preview`;
+    let url = httpService.getUrlForFiles(`files/${fileId}/preview`);
 
     const params = new URLSearchParams();
     if (width) params.append('width', width);

@@ -4,6 +4,8 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const { logger } = require('../shared-lib');
 
 module.exports = (queryService) => {
+  const queryUserId = (req) => req.user?.iss_sub || req.claims?.iss_sub;
+
   // Apply authentication middleware to all routes
   router.use(keycloakAuthMiddleware.authenticate);
 
@@ -180,7 +182,7 @@ module.exports = (queryService) => {
    */
   router.post('/', async (req, res) => {
     try {
-      const userId = req.user?.iss_sub;
+      const userId = queryUserId(req);
       if (!userId) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
       }
@@ -189,8 +191,38 @@ module.exports = (queryService) => {
       const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization });
       res.status(201).json(query);
     } catch (error) {
-      logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      const upstream = error.upstreamStatus;
+      logger.error(`Error creating query: ${error.message}`, {
+        stack: error.stack,
+        upstreamStatus: upstream,
+        upstreamData: error.upstreamData
+      });
+      const status =
+        upstream === 401 ? 401
+          : upstream === 404 ? 404
+            : upstream === 400 || upstream === 422 ? 400
+              : upstream >= 500 ? 502
+                : typeof upstream === 'number' && upstream >= 400 ? upstream
+                  : 500;
+      let upstreamDetail;
+      if (error.upstreamData !== undefined && error.upstreamData !== null) {
+        try {
+          const s = typeof error.upstreamData === 'string'
+            ? error.upstreamData
+            : JSON.stringify(error.upstreamData);
+          upstreamDetail = s.length > 4000 ? `${s.slice(0, 4000)}…` : s;
+        } catch {
+          upstreamDetail = String(error.upstreamData).slice(0, 4000);
+        }
+      }
+      const body = { message: error.message };
+      if (upstream !== undefined) {
+        body.upstreamStatus = upstream;
+      }
+      if (upstreamDetail !== undefined) {
+        body.upstreamDetail = upstreamDetail;
+      }
+      res.status(status).json(body);
     }
   });
 
@@ -525,7 +557,7 @@ module.exports = (queryService) => {
    */
   router.get('/', async (req, res) => {
     try {
-      const userId = req.user?.iss_sub;
+      const userId = queryUserId(req);
       if (!userId) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
       }

@@ -86,6 +86,28 @@ storage_layer  = None   # read-only: ArangoDB written by Warning_system_engine
 # Lifespan
 # ---------------------------------------------------------------------------
 
+async def _ingestor_loop(ingestor, storage):
+    """Fetch fresh forecasts for all districts on startup, then repeat every hour."""
+    while True:
+        try:
+            forecasts = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: ingestor.ingest_short_term(forecast_days=7)
+            )
+            stored = 0
+            for fc in forecasts:
+                try:
+                    storage.upsert_forecast(fc)
+                    stored += 1
+                except Exception as exc:
+                    logger.warning("[INGESTOR] Failed to store %s: %s", fc.location, exc)
+            logger.info("[INGESTOR] Refresh complete — %d/%d districts stored", stored, len(forecasts))
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.error("[INGESTOR] Ingestion run failed: %s", exc)
+        await asyncio.sleep(3600)  # 1 hour
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global mcp_manager, weather_agent, storage_layer
@@ -114,9 +136,22 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("[STARTUP] WeatherAgent not started — MCP unavailable")
 
+    # ── Forecast ingestor (runs immediately then every hour) ──────────────────
+    _ingestor_task = None
+    if storage_layer is not None:
+        try:
+            from data_ingestor import DataIngestor
+            _ingestor = DataIngestor()
+            _ingestor_task = asyncio.create_task(_ingestor_loop(_ingestor, storage_layer))
+            logger.info("[STARTUP] Forecast ingestor started — will refresh every hour")
+        except Exception as exc:
+            logger.warning("[STARTUP] Forecast ingestor failed to start: %s", exc)
+
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
+    if _ingestor_task is not None:
+        _ingestor_task.cancel()
     if mcp_manager:
         await mcp_manager.stop()
         logger.info("[SHUTDOWN] MCP sessions closed")
@@ -169,6 +204,216 @@ _BULLETIN_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 _PUBLIC_IMAGE_BASE = os.getenv("PUBLIC_API_BASE", "/api/weather/bulletin-image")
+
+_DROUGHT_MONITORING_URL = os.getenv("DROUGHT_MONITORING_URL", "")
+_DROUGHT_KEYWORDS = re.compile(
+    r"\b(drought|soil[\s\-]?moisture|dry[\s\-]?season|water[\s\-]?stress|"
+    r"drought[\s\-]?risk|drought[\s\-]?forecast|drought[\s\-]?outlook|seasonal[\s\-]?risk)\b",
+    re.IGNORECASE,
+)
+
+# Matches runner.py DISTRICT_COORDS
+_DROUGHT_DISTRICT_COORDS: dict[str, tuple[float, float]] = {
+    "Dhaka":        (23.8103,  90.4125),
+    "Chittagong":   (22.3569,  91.7832),
+    "Sylhet":       (24.8949,  91.8687),
+    "Rajshahi":     (24.3745,  88.6042),
+    "Khulna":       (22.8456,  89.5403),
+    "Barisal":      (22.7010,  90.3535),
+    "Rangpur":      (25.7439,  89.2752),
+    "Mymensingh":   (24.7471,  90.4203),
+    "Comilla":      (23.4607,  91.1809),
+    "Jessore":      (23.1667,  89.2167),
+    "Bogra":        (24.8465,  89.3773),
+    "Dinajpur":     (25.6279,  88.6338),
+    "Pabna":        (24.0064,  89.2372),
+    "Tangail":      (24.2513,  89.9167),
+    "Faridpur":     (23.6070,  89.8429),
+    "Noakhali":     (22.8696,  91.0995),
+    "Brahmanbaria": (23.9608,  91.1115),
+    "Cox's Bazar":  (21.4272,  92.0058),
+    "Chandpur":     (23.2333,  90.6500),
+    "Narsingdi":    (23.9174,  90.7150),
+}
+
+
+def _find_drought_district(query: str) -> tuple[str, float, float] | None:
+    """Return (canonical_name, lat, lon) for first district found in query, or None."""
+    q = query.lower()
+    for name, (lat, lon) in _DROUGHT_DISTRICT_COORDS.items():
+        if name.lower() in q:
+            return name, lat, lon
+    return None
+
+
+def _parse_horizon_days(query: str) -> int:
+    """Parse 'next week/2 weeks/3 weeks/month' from query. Default: 30 (seasonal)."""
+    q = query.lower()
+    if re.search(r"\b(month|30\s*days?)\b", q):
+        return 30
+    if re.search(r"\b(three\s*weeks?|3\s*weeks?|21\s*days?)\b", q):
+        return 21
+    if re.search(r"\b(two\s*weeks?|2\s*weeks?|fortnight|14\s*days?)\b", q):
+        return 14
+    if re.search(r"\b(week|7\s*days?)\b", q):
+        return 7
+    return 30
+
+
+def _assess_drought_forecast_logic(
+    district_name: str,
+    lat: float,
+    lon: float,
+    horizon_days: int,
+) -> dict:
+    """
+    Call drought_monitoring /run/district and return structured result dict.
+    Keys: answer (markdown), tier, tier_label, drought_level, triggers,
+          trend, report_filename, message, error (only on failure).
+    """
+    import requests as _req
+
+    horizon_days = min(max(horizon_days, 7), 30)
+
+    if not _DROUGHT_MONITORING_URL:
+        return {
+            "error": "Drought forecasting service not configured.",
+            "tier": 0, "tier_label": "Unknown", "triggers": [], "report_filename": "",
+        }
+
+    try:
+        resp = _req.post(
+            f"{_DROUGHT_MONITORING_URL}/run/district",
+            json={"location": district_name, "lat": lat, "lon": lon, "days": horizon_days},
+            timeout=180,
+        )
+        if not resp.ok:
+            return {
+                "error": f"Drought service error {resp.status_code}",
+                "tier": 0, "tier_label": "Unknown", "triggers": [], "report_filename": "",
+            }
+        data = resp.json()
+    except Exception as exc:
+        logger.error("[DROUGHT_FORECAST] /run/district failed for %s: %s", district_name, exc)
+        return {
+            "error": str(exc),
+            "tier": 0, "tier_label": "Unknown", "triggers": [], "report_filename": "",
+        }
+
+    tier            = data.get("tier", 0)
+    tier_label      = data.get("tier_label", "Normal")
+    drought_level   = data.get("drought_level", "NORMAL")
+    message         = data.get("message", "")
+    trend           = data.get("trend", "STABLE")
+    trend_run_days  = data.get("trend_run_days", 0)
+    triggers        = data.get("triggers", [])
+    report_filename = data.get("report_filename", "")
+
+    if horizon_days <= 7:
+        horizon_label = "next week"
+    elif horizon_days <= 14:
+        horizon_label = "next 2 weeks"
+    elif horizon_days <= 21:
+        horizon_label = "next 3 weeks"
+    else:
+        horizon_label = "next month"
+
+    level_icon = {"NORMAL": "🟢", "WATCH": "🟡", "MODERATE": "🟠", "SEVERE": "🔴"}.get(drought_level, "⚪")
+    trend_icon = {"WORSENING": "📈", "IMPROVING": "📉", "STABLE": "➡️"}.get(trend, "➡️")
+    trend_str  = trend + (f" for {trend_run_days} consecutive days" if trend_run_days >= 2 else "")
+
+    lines = [
+        f"## Drought Outlook — {district_name} ({horizon_label})",
+        "",
+        f"**Status:** {level_icon} **{drought_level}** ({tier_label})",
+        f"**Trend:** {trend_icon} {trend_str}",
+        "",
+        message,
+    ]
+
+    if triggers:
+        lines += ["", "**Stressed indicators:**"]
+        for t in triggers:
+            lines.append(f"- {t}")
+
+    if tier == 0:
+        lines += ["", "No drought stress detected — soil moisture and vegetation within safe ranges."]
+    elif tier == 1:
+        lines += ["", "⚠️ Early watch — conditions are slightly stressed. Continue monitoring."]
+    elif tier == 2:
+        lines += ["", "⚠️ **Warning level** — consider water conservation and crop protection."]
+    elif tier >= 3:
+        lines += ["", "🚨 **Severe drought** — act immediately. Prioritise irrigation and crop protection."]
+
+    if report_filename:
+        report_url = f"/api/weather/drought-report/{report_filename}"
+        lines += ["", f"📄 [View Full Drought Report]({report_url})"]
+
+    return {
+        "answer":          "\n".join(lines),
+        "tier":            tier,
+        "tier_label":      tier_label,
+        "drought_level":   drought_level,
+        "triggers":        triggers,
+        "trend":           trend,
+        "report_filename": report_filename,
+        "message":         message,
+    }
+
+
+def _build_drought_answer_from_stored(district: str, stored: dict, requested_horizon: int) -> str:
+    """Format a stored ArangoDB drought assessment into a chatbot-ready markdown answer."""
+    tier            = stored.get("tier", 0)
+    tier_label      = stored.get("tier_label", "Normal")
+    drought_level   = stored.get("drought_level", "NORMAL")
+    message         = stored.get("message", "")
+    trend           = stored.get("trend", "STABLE")
+    trend_run_days  = stored.get("trend_run_days", 0)
+    triggers        = stored.get("triggers", [])
+    report_filename = stored.get("report_filename", "")
+    window_days     = stored.get("window_days", 7)
+
+    if requested_horizon <= 7:
+        horizon_label = "next week"
+    elif requested_horizon <= 14:
+        horizon_label = "next 2 weeks"
+    elif requested_horizon <= 21:
+        horizon_label = "next 3 weeks"
+    else:
+        horizon_label = "next month"
+
+    level_icon = {"NORMAL": "🟢", "WATCH": "🟡", "MODERATE": "🟠", "SEVERE": "🔴"}.get(drought_level, "⚪")
+    trend_icon = {"WORSENING": "📈", "IMPROVING": "📉", "STABLE": "➡️"}.get(trend, "➡️")
+    trend_str  = trend + (f" for {trend_run_days} consecutive days" if trend_run_days >= 2 else "")
+
+    lines = [
+        f"## Drought Outlook — {district} ({horizon_label})",
+        "",
+        f"**Status:** {level_icon} **{drought_level}** ({tier_label})",
+        f"**Trend:** {trend_icon} {trend_str}",
+        "",
+        message,
+    ]
+
+    if triggers:
+        lines += ["", "**Stressed indicators:**"]
+        for t in triggers:
+            lines.append(f"- {t}")
+
+    if tier == 0:
+        lines += ["", "No drought stress detected — soil moisture and vegetation within safe ranges."]
+    elif tier == 1:
+        lines += ["", "⚠️ Early watch — conditions are slightly stressed. Continue monitoring."]
+    elif tier == 2:
+        lines += ["", "⚠️ **Warning level** — consider water conservation and crop protection."]
+    elif tier >= 3:
+        lines += ["", "🚨 **Severe drought** — act immediately. Prioritise irrigation and crop protection."]
+
+    if report_filename:
+        lines += ["", f"📄 [View Full Drought Report](/api/weather/drought-report/{report_filename})"]
+
+    lines += ["", f"*Based on {window_days}-day satellite assessment. Updated daily.*"]
+    return "\n".join(lines)
 
 
 def _build_bulletin_answer() -> str:
@@ -262,6 +507,72 @@ async def query(request: QueryRequest):
             "triggers":   [],
             "buffer":     None,
             "location":   "Bangladesh",
+            "forecast":   {},
+        }
+
+    if _DROUGHT_KEYWORDS.search(request.query) and (storage_layer or _DROUGHT_MONITORING_URL):
+        district_info = _find_drought_district(request.query)
+        district, lat, lon = district_info if district_info else ("Dhaka", 23.8103, 90.4125)
+        horizon_days = _parse_horizon_days(request.query)
+
+        # Path 1: try on-demand GEE assessment (custom horizon, fresh data)
+        gee_result = None
+        if _DROUGHT_MONITORING_URL:
+            import asyncio as _asyncio
+            gee_result = await _asyncio.get_event_loop().run_in_executor(
+                None, lambda: _assess_drought_forecast_logic(district, lat, lon, horizon_days)
+            )
+            if "error" in gee_result:
+                logger.warning("[QUERY] On-demand GEE failed (%s) — trying stored assessment", gee_result["error"])
+                gee_result = None
+
+        if gee_result is not None:
+            return {
+                "answer":     gee_result["answer"],
+                "risk_tier":  gee_result["tier"],
+                "risk_label": gee_result["tier_label"],
+                "advisory":   gee_result.get("message", ""),
+                "triggers":   gee_result.get("triggers", []),
+                "buffer":     None,
+                "location":   district,
+                "forecast":   {},
+            }
+
+        # Path 2: fall back to stored assessment in ArangoDB (populated by daily scheduler)
+        if storage_layer:
+            stored = storage_layer.get_drought_assessment(district)
+            if stored:
+                logger.info("[QUERY] Using stored drought assessment for %s", district)
+                return {
+                    "answer":     _build_drought_answer_from_stored(district, stored, horizon_days),
+                    "risk_tier":  stored.get("tier", 0),
+                    "risk_label": stored.get("tier_label", "Normal"),
+                    "advisory":   stored.get("message", ""),
+                    "triggers":   stored.get("triggers", []),
+                    "buffer":     None,
+                    "location":   district,
+                    "forecast":   {},
+                }
+
+        # Path 3: nothing available — return a clear message, not a weather fallback
+        return {
+            "answer": (
+                f"## Drought Outlook — {district}\n\n"
+                "Drought assessment data is not yet available for this district.\n\n"
+                "The drought monitoring pipeline runs daily at 07:00 UTC and requires "
+                "Google Earth Engine satellite credentials. Once configured, assessments "
+                "are stored and available instantly.\n\n"
+                "For an immediate test assessment, an administrator can run:\n"
+                "```\n"
+                f"python3 scripts/test_drought_alert_flow.py --scenario moderate --district {district}\n"
+                "```"
+            ),
+            "risk_tier":  0,
+            "risk_label": "Normal",
+            "advisory":   "",
+            "triggers":   [],
+            "buffer":     None,
+            "location":   district,
             "forecast":   {},
         }
 
@@ -394,7 +705,7 @@ async def serve_drought_report(filename: str):
 # MCP HTTP routes  (called by gov-chat-backend tool registry)
 # ---------------------------------------------------------------------------
 
-TOOL_DEFINITION = {
+_WEATHER_FORECAST_TOOL = {
     "type": "function",
     "function": {
         "name": "retrieve_weather_forecast",
@@ -427,10 +738,46 @@ TOOL_DEFINITION = {
     },
 }
 
+_DROUGHT_FORECAST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "assess_drought_forecast",
+        "description": (
+            "Generates an on-demand drought risk assessment for a Bangladesh district "
+            "using NASA SMAP satellite data (soil moisture, evapotranspiration, surface runoff) "
+            "and NOAA VIIRS NDVI vegetation index. "
+            "Use when the user asks about drought risk, seasonal drought outlook, "
+            "soil moisture conditions, or crop water stress for the coming week or month. "
+            "Returns risk level (NORMAL/WATCH/MODERATE/SEVERE), trend direction, stressed "
+            "indicators, and a downloadable PDF report link. Maximum horizon: 30 days."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "district_name": {
+                    "type": "string",
+                    "description": "Bangladesh district name (e.g. 'Dhaka', 'Rajshahi', 'Khulna')",
+                },
+                "horizon_days": {
+                    "type": "integer",
+                    "description": (
+                        "Assessment window in days: 7=next week, 14=next two weeks, "
+                        "21=next three weeks, 30=next month (seasonal). Maximum 30."
+                    ),
+                    "default": 30,
+                },
+            },
+            "required": ["district_name"],
+        },
+    },
+}
+
+TOOL_DEFINITIONS = [_WEATHER_FORECAST_TOOL, _DROUGHT_FORECAST_TOOL]
+
 
 @app.post("/mcp/tools/list")
 async def mcp_tools_list():
-    return {"tools": [TOOL_DEFINITION]}
+    return {"tools": TOOL_DEFINITIONS}
 
 
 @app.post("/mcp/tools/call")
@@ -446,5 +793,30 @@ async def mcp_tools_call(request: Request):
             parameters=args.get("parameters", []),
         )
         return {"content": [{"type": "text", "text": result_str}]}
+
+    if name == "assess_drought_forecast":
+        district_name = args.get("district_name", "Dhaka")
+        horizon_days  = int(args.get("horizon_days", 30))
+
+        district_info = _find_drought_district(district_name)
+        if district_info:
+            district, lat, lon = district_info
+        else:
+            # Fallback: check exact key match
+            coords = _DROUGHT_DISTRICT_COORDS.get(district_name)
+            if coords:
+                district, lat, lon = district_name, coords[0], coords[1]
+            else:
+                return {"content": [{"type": "text", "text": f"District '{district_name}' not found in supported Bangladesh districts."}]}
+
+        import asyncio as _asyncio
+        result = await _asyncio.get_event_loop().run_in_executor(
+            None, lambda: _assess_drought_forecast_logic(district, lat, lon, horizon_days)
+        )
+
+        if "error" in result:
+            return {"content": [{"type": "text", "text": f"Drought assessment failed: {result['error']}"}]}
+
+        return {"content": [{"type": "text", "text": result["answer"]}]}
 
     return {"error": {"code": "unknown_tool", "message": f"Tool '{name}' not found"}}

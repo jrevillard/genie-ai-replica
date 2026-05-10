@@ -171,6 +171,7 @@ services:
       - PYTHONUNBUFFERED=1
       - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
       - DROUGHT_REPORTS_DIR=/app/drought_reports
+      - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
       # Add these in .env or here
       # - GOOGLE_API_KEY=your_google_api_key
       # - MAPBOX_ACCESS_TOKEN=your_mapbox_token

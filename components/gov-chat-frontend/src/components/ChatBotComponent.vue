@@ -7,7 +7,8 @@
       :lon="mapLocation.lon"
       :name="mapLocation.name"
       :zoom="mapLocation.zoom"
-      @back="mapMode = false"
+      :geojsonLayers="geoLayers"
+      @back="mapMode = false; geoLayers = []"
     />
 
     <!-- Main chatbot container -->
@@ -405,6 +406,7 @@ export default {
       hiddenPromptForNextMessage: null,
       mapMode: false,
       mapLocation: null,
+      geoLayers: [],
     };
   },
 
@@ -522,6 +524,20 @@ export default {
 
   methods: {
     ...mapActions("chatHistory", ["createChat", "updateChat"]),
+
+    _computeGeojsonBbox(geojson) {
+      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+      const visit = (coords) => {
+        if (typeof coords[0] === 'number') {
+          if (coords[0] < minLng) minLng = coords[0];
+          if (coords[0] > maxLng) maxLng = coords[0];
+          if (coords[1] < minLat) minLat = coords[1];
+          if (coords[1] > maxLat) maxLat = coords[1];
+        } else { coords.forEach(visit); }
+      };
+      (geojson.features || []).forEach(f => { if (f.geometry?.coordinates) visit(f.geometry.coordinates); });
+      return [minLng, minLat, maxLng, maxLat];
+    },
 
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
     async loadServiceCategories() {
@@ -998,6 +1014,44 @@ export default {
         this.chatMessages.push(botMessage);
         if (result.sessionId) {
           this.currentSessionId = result.sessionId;
+        }
+
+        // Auto-open map for field delineation or flood analysis results
+        if (result.metadata) {
+          const layers = [];
+          const fd = result.metadata.field_delineation;
+          const fa = result.metadata.flood_analysis;
+
+          if (fd?.fields_geojson?.features?.length) {
+            layers.push({
+              id: 'field-boundaries',
+              geojson: fd.fields_geojson,
+              fillColor: '#22c55e',
+              lineColor: '#16a34a',
+              fillOpacity: 0.4,
+              label: `Field boundaries (${fd.field_count ?? fd.fields_geojson.features.length})`,
+            });
+          }
+          if (fa?.flood_geojson?.features?.length) {
+            layers.push({
+              id: 'flood-areas',
+              geojson: fa.flood_geojson,
+              fillColor: '#3b82f6',
+              lineColor: '#1d4ed8',
+              fillOpacity: 0.5,
+              label: 'Flood extent',
+            });
+          }
+
+          if (layers.length) {
+            const allFeatures = layers.flatMap(l => l.geojson.features || []);
+            const bbox = this._computeGeojsonBbox({ features: allFeatures });
+            const centerLon = (bbox[0] + bbox[2]) / 2;
+            const centerLat = (bbox[1] + bbox[3]) / 2;
+            this.mapLocation = { lat: centerLat, lon: centerLon, name: layers.map(l => l.label).join(' · '), zoom: 12 };
+            this.geoLayers = layers;
+            this.mapMode = true;
+          }
         }
       } catch (error) {
         // --- Error State Update ---

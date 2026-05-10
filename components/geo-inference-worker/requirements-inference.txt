@@ -1,0 +1,6 @@
+huggingface_hub>=0.20.0
+einops>=0.7.0
+timm>=0.9.0
+terratorch
+pyyaml>=6.0.0
+matplotlib>=3.8.0

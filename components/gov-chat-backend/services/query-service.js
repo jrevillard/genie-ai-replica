@@ -463,7 +463,11 @@ class QueryService {
           'will it rain', 'will it be hot', 'will it be cold', 'how hot will', 'how cold will',
         ];
         const WEATHER_HARD      = ['rainfall', 'storm', 'flood', 'cyclone', 'monsoon', 'typhoon',
-          'bulletin', 'agrometeorological', 'agromet', 'agri advisory', 'national bulletin', 'advisory bulletin'];
+          'bulletin', 'agrometeorological', 'agromet', 'agri advisory', 'national bulletin', 'advisory bulletin',
+          // geo-inference routing — delineation and satellite flood detection
+          'delineat', 'field boundar', 'farm boundar', 'plot boundar', 'field segment',
+          'flood detection', 'flood mapping', 'flood map', 'flood extent', 'flood zone',
+          'satellite flood', 'inundation map', 'detect flood', 'map flood', 'prithvi'];
         const AGRO_TERMS        = [
           'soil', 'crop', 'plant', 'pest', 'disease', 'seed', 'harvest', 'fertilizer',
           'worm', 'insect', 'fungus', 'larvae', 'larva', 'bacteria', 'bacterial', 'viral',
@@ -507,19 +511,41 @@ class QueryService {
 
         if (isWeatherQuery) {
           logger.info(`[WEATHER] Weather query detected — routing to weather-mcp-service: "${lastUserMsg}"`);
+          // Geo-inference queries (delineation, flood) can take 3-10 minutes; regular
+          // weather forecasts complete in <5 s. Use a long timeout for the former.
+          const GEO_KEYWORDS = ['delineat', 'field boundar', 'farm boundar', 'flood detection',
+            'flood map', 'flood extent', 'satellite flood', 'inundation', 'prithvi'];
+          const lowerQuery = lastUserMsg.toLowerCase();
+          const isGeoQuery = GEO_KEYWORDS.some(kw => lowerQuery.includes(kw));
+          const wxTimeout  = isGeoQuery ? 660000 : 30000;   // 11 min for geo, 30 s for weather
+          if (isGeoQuery) logger.info('[WEATHER] Geo-inference query — using 11-minute timeout');
           try {
-            const wResp = await axios.post(`${weatherMcpUrl}/query`, { query: lastUserMsg }, { timeout: 30000 });
+            const wResp = await axios.post(`${weatherMcpUrl}/query`, { query: lastUserMsg }, { timeout: wxTimeout });
             opeaResponseContent = wResp.data.answer;
             opeaMetadata = {
               source_documents: [],
               confidence_score: 1.0,
               weather: true,
-              location: wResp.data.location,
-              forecast: wResp.data.forecast
+              location:          wResp.data.location         ?? null,
+              forecast:          wResp.data.forecast         ?? null,
+              field_delineation: wResp.data.field_delineation ?? null,
+              flood_analysis:    wResp.data.flood_analysis    ?? null,
+              risk_tier:         wResp.data.risk_tier         ?? null,
+              risk_label:        wResp.data.risk_label        ?? null,
             };
           } catch (wErr) {
             logger.error(`[WEATHER] weather-mcp-service call failed: ${wErr.message}`);
-            opeaResponseContent = "I'm sorry, I couldn't fetch the weather information right now. Please try again later.";
+            // Surface a more specific message when the geo-inference-worker is the failure point
+            const errBody = wErr.response?.data?.detail || wErr.response?.data || '';
+            const errStr  = typeof errBody === 'string' ? errBody : JSON.stringify(errBody);
+            const isGeoErr = isGeoQuery ||
+                             errStr.includes('geo') || errStr.includes('delineat') ||
+                             errStr.includes('flood') || errStr.includes('inference') ||
+                             wErr.response?.status === 502 ||
+                             wErr.code === 'ECONNABORTED';   // axios timeout
+            opeaResponseContent = isGeoErr
+              ? `The geospatial inference service is not available right now. Make sure the **geo-inference-worker** container is running.\n\n_Error: ${errStr || wErr.message}_`
+              : "I'm sorry, I couldn't fetch the weather information right now. Please try again later.";
             opeaMetadata = { source_documents: [], confidence_score: 0, weather: true };
           }
           opeaResponseTime = Date.now() - opeaStartTime;

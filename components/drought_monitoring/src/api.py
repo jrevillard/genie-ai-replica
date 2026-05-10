@@ -100,7 +100,7 @@ def run_district(req: DistrictRunRequest):
     if not gee_configured():
         raise HTTPException(
             status_code=503,
-            detail="GEE credentials not configured. Run `earthengine authenticate`.",
+            detail="GEE credentials not configured. Mount a service account JSON at /app/secrets/credentials.json.",
         )
 
     try:
@@ -109,8 +109,8 @@ def run_district(req: DistrictRunRequest):
         raise HTTPException(status_code=503, detail=f"ArangoDB unavailable: {exc}")
 
     try:
-        gee_project = os.getenv("GEE_PROJECT", "mewa-493916")
-        ee.Initialize(project=gee_project)
+        from utils.gee_auth import initialize_gee
+        initialize_gee()
         assessment = _run_one_district(
             storage, req.location, req.lat, req.lon, req.days, _REPORTS_DIR
         )

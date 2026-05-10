@@ -221,6 +221,32 @@ _SEASONAL_KEYWORDS = re.compile(
     r"\bmonsoon\s+(?:season|forecast|outlook)\b)",
     re.IGNORECASE,
 )
+_DELINEATION_KEYWORDS = re.compile(
+    r"(?:\bdelineat(?:e|ion)\b|"
+    r"\bfield\s+boundar(?:y|ies)\b|"
+    r"\bfarm\s+boundar(?:y|ies)\b|"
+    r"\bplot\s+boundar(?:y|ies)\b|"
+    r"\bshow\s+(?:field|farm)\s+boundar(?:y|ies)\b|"
+    r"\bmap\s+(?:my\s+)?(?:field|farm|land)\b|"
+    r"\bsegment\s+(?:field|farm|land|agriculture)\b)",
+    re.IGNORECASE,
+)
+_FLOOD_DETECTION_KEYWORDS = re.compile(
+    r"(?:\bflood\s+(?:detection|mapping|segmentation|map|satellite|extent|zone|area)\b|"
+    r"\bdetect\s+flood(?:ing|s)?\b|"
+    r"\bmap\s+flood(?:ing|s)?\b|"
+    r"\bsatellite\s+flood\b|"
+    r"\binundation\s+(?:map|area|extent|detection)\b|"
+    r"\bprithvi\b)",
+    re.IGNORECASE,
+)
+# Coordinate extractor for delineation queries — matches "lat 23.5 lon 90.3",
+# "latitude 23.5, longitude 90.3", "lat=23.5 lon=90.3", etc.
+_LAT_LON_RE = re.compile(
+    r"lat(?:itude)?\s*[=:]?\s*(-?\d+(?:\.\d+)?)\s*[,\s]+\s*lon(?:gitude)?\s*[=:]?\s*(-?\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+_GEO_INFERENCE_URL = os.getenv("GEO_INFERENCE_URL", "").rstrip("/")
 
 # Matches runner.py DISTRICT_COORDS
 _DROUGHT_DISTRICT_COORDS: dict[str, tuple[float, float]] = {
@@ -650,6 +676,139 @@ async def query(request: QueryRequest):
       location    — display name
       forecast    — raw BMD / stored forecast data
     """
+    # ── Field boundary delineation (geo-inference-worker) ────────────────────
+    if _DELINEATION_KEYWORDS.search(request.query):
+        if not _GEO_INFERENCE_URL:
+            return {
+                "answer": (
+                    "Field boundary delineation is not currently enabled. "
+                    "Start the geo-inference-worker service and set `GEO_INFERENCE_URL` to use this feature."
+                ),
+                "risk_tier": 0, "risk_label": "Normal", "advisory": "",
+                "triggers": [], "buffer": None, "location": "", "forecast": {},
+            }
+        m = _LAT_LON_RE.search(request.query)
+        if m is None:
+            return {
+                "answer": (
+                    "To delineate field boundaries I need explicit coordinates in your query. "
+                    "Try: *\"Delineate field boundaries at latitude 23.5 longitude 90.3\"*"
+                ),
+                "risk_tier": 0, "risk_label": "Normal", "advisory": "",
+                "triggers": [], "buffer": None, "location": "", "forecast": {},
+            }
+        lat, lon = float(m.group(1)), float(m.group(2))
+        logger.info("[QUERY] Field delineation — lat=%.4f  lon=%.4f", lat, lon)
+        import requests as _req
+        try:
+            resp = _req.post(
+                f"{_GEO_INFERENCE_URL}/delineate",
+                json={"latitude": lat, "longitude": lon},
+                timeout=600,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        except Exception as exc:
+            logger.error("[QUERY] Delineation worker error: %s", exc)
+            raise HTTPException(status_code=502, detail=f"Geo inference worker error: {exc}")
+        field_count = result.get("field_count", 0)
+        return {
+            "answer": (
+                f"Found **{field_count} agricultural field boundaries** near "
+                f"({lat:.4f}°N, {lon:.4f}°E). "
+                f"Source: {result.get('source', 'gee')}. "
+                "The field polygons are shown on the map."
+            ),
+            "risk_tier": 0, "risk_label": "Normal", "advisory": "",
+            "triggers": [], "buffer": None,
+            "location": f"{lat:.4f},{lon:.4f}",
+            "forecast": {},
+            "field_delineation": {
+                "field_count":    field_count,
+                "fields_geojson": result.get("fields_geojson"),
+                "source":         result.get("source"),
+            },
+        }
+
+    # ── Satellite flood detection (geo-inference-worker + Prithvi-EO-2.0) ────
+    if _FLOOD_DETECTION_KEYWORDS.search(request.query):
+        if not _GEO_INFERENCE_URL:
+            return {
+                "answer": (
+                    "Satellite flood detection is not currently enabled. "
+                    "Start the geo-inference-worker service and set `GEO_INFERENCE_URL` to use this feature."
+                ),
+                "risk_tier": 0, "risk_label": "Normal", "advisory": "",
+                "triggers": [], "buffer": None, "location": "", "forecast": {},
+            }
+        district_info = _find_drought_district(request.query)
+        if district_info:
+            district, lat, lon = district_info
+        else:
+            m = _LAT_LON_RE.search(request.query)
+            if m is None:
+                return {
+                    "answer": (
+                        "To run flood detection I need a district name or coordinates. "
+                        "Try: *\"Show flood map for Dhaka\"* or "
+                        "*\"Flood detection at latitude 23.5 longitude 90.3\"*"
+                    ),
+                    "risk_tier": 0, "risk_label": "Normal", "advisory": "",
+                    "triggers": [], "buffer": None, "location": "", "forecast": {},
+                }
+            lat, lon = float(m.group(1)), float(m.group(2))
+            district = f"{lat:.4f},{lon:.4f}"
+        logger.info("[QUERY] Flood detection — district=%s  lat=%.4f  lon=%.4f", district, lat, lon)
+        import requests as _req
+        try:
+            resp = _req.post(
+                f"{_GEO_INFERENCE_URL}/flood-segment",
+                json={"latitude": lat, "longitude": lon},
+                timeout=600,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+        except Exception as exc:
+            logger.error("[QUERY] Flood worker error: %s", exc)
+            raise HTTPException(status_code=502, detail=f"Geo inference worker error: {exc}")
+        fraction  = result.get("flood_fraction", 0.0)
+        flood_pct = fraction * 100
+        if flood_pct >= 20:
+            tier, label = 3, "High Risk"
+            advisory = "Significant flood extent detected via satellite. Consider evacuation advisories."
+        elif flood_pct >= 5:
+            tier, label = 2, "Moderate Risk"
+            advisory = "Moderate flooding detected. Monitor situation closely."
+        elif flood_pct >= 1:
+            tier, label = 1, "Low Risk"
+            advisory = "Minor flooded areas detected in the satellite image."
+        else:
+            tier, label = 0, "Normal"
+            advisory = "No significant flooding detected in the analyzed area."
+        return {
+            "answer": (
+                f"## Satellite Flood Analysis — {district}\n\n"
+                f"**{flood_pct:.1f}%** of the analyzed area is classified as flooded/water "
+                f"by the Prithvi-EO-2.0 model (IBM × NASA, Sen1Floods11).\n\n"
+                f"{advisory}\n\n"
+                f"*Source: Copernicus Sentinel-2 (GEE) + Prithvi-EO-2.0-300M*"
+            ),
+            "risk_tier":  tier,
+            "risk_label": label,
+            "advisory":   advisory,
+            "triggers":   ["flood_detected"] if fraction >= 0.01 else [],
+            "buffer":     None,
+            "location":   district,
+            "forecast":   {},
+            "flood_analysis": {
+                "flood_fraction":    fraction,
+                "flood_pixel_count": result.get("flood_pixel_count"),
+                "valid_pixel_count": result.get("valid_pixel_count"),
+                "flood_geojson":     result.get("flood_geojson"),
+            },
+        }
+
+    # ── Seasonal long-term outlook (Copernicus SEAS5) ─────────────────────────
     if _SEASONAL_KEYWORDS.search(request.query) and storage_layer:
         district_info = _find_drought_district(request.query)
         district = district_info[0] if district_info else "Dhaka"

@@ -71,8 +71,8 @@ _LEVEL_PLAIN = {
 
 
 def gee_configured() -> bool:
-    creds = Path.home() / ".config" / "earthengine" / "credentials"
-    return creds.exists() or bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+    from utils.gee_auth import is_gee_configured
+    return is_gee_configured()
 
 
 def _bbox_area_km2(bbox: list[float]) -> float:
@@ -119,7 +119,7 @@ def run_all_districts(
     if not gee_configured():
         logger.warning(
             "[RUNNER] GEE credentials not found — drought pipeline skipped. "
-            "Run `earthengine authenticate` or set GOOGLE_APPLICATION_CREDENTIALS."
+            "Mount a service account JSON at /app/secrets/credentials.json."
         )
         return {
             "error": "gee_not_configured",
@@ -128,11 +128,9 @@ def run_all_districts(
             "errors": 0,
         }
 
-    gee_project = project or os.getenv("GEE_PROJECT", "mewa-493916")
-
     try:
-        import ee  # type: ignore
-        ee.Initialize(project=gee_project)
+        from utils.gee_auth import initialize_gee
+        gee_project = initialize_gee(project)
         logger.info("[RUNNER] GEE initialized — project=%s", gee_project)
     except Exception as exc:
         logger.error("[RUNNER] GEE initialization failed: %s", exc)

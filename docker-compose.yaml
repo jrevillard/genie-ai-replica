@@ -29,6 +29,7 @@ volumes:
   redis_data:
   doc_repo_uploads: {}
   drought_reports: {}
+  geo_inference_models: {}   # SAM + Prithvi-EO-2.0 checkpoints — persisted across container restarts
 
 services:
 
@@ -223,7 +224,7 @@ services:
       dockerfile: dockerfile
     container_name: drought-monitoring
     volumes:
-      - ${HOME}/.config/earthengine:/root/.config/earthengine:ro
+      - ./secrets:/app/secrets:ro
       - drought_reports:/app/reports
     environment:
       - GEE_PROJECT=${GEE_PROJECT:-mewa-493916}
@@ -266,6 +267,28 @@ services:
     networks:
       - genieai_network
 
+  geo-inference-worker:
+    build:
+      context: ./components/geo-inference-worker
+      dockerfile: Dockerfile
+    container_name: geo-inference-worker
+    runtime: nvidia
+    volumes:
+      - ./secrets:/app/secrets:ro              # GEE service account JSON
+      - geo_inference_models:/app/models       # SAM + Prithvi-EO-2.0 cached models
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - GEE_PROJECT_ID=${GEE_PROJECT_ID:-mewa-493916}
+      - GPU_INFERENCE=true
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    env_file:
+      - .env
+    networks:
+      - genieai_network
+    restart: unless-stopped
+
   weather-mcp-standalone:
     build:
       context: ./components/weather-mcp-service
@@ -281,11 +304,14 @@ services:
       - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
       - DROUGHT_REPORTS_DIR=/app/drought_reports
       - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
+      - GEO_INFERENCE_URL=http://geo-inference-worker:8001
       - PORT=${WEATHER_MCP_PORT}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
     env_file:
       - .env
+    depends_on:
+      - geo-inference-worker
     networks:
       - genieai_network
     restart: unless-stopped

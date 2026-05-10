@@ -32,3 +32,4 @@ data/models--*/blobs/**
 .venv/**
 **/__pycache__/
 *.pyc
+google-cloud-sdk/

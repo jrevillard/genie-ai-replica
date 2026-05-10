@@ -355,6 +355,22 @@ class StorageLayer:
         return len(list(cursor)) > 0
 
     # ------------------------------------------------------------------
+    # Seasonal forecasts  (read-only — written by warning_system_engine)
+    # ------------------------------------------------------------------
+
+    def get_seasonal_forecast(self, location: str) -> dict | None:
+        """Return the Copernicus SEAS5 seasonal outlook for a district, or None."""
+        key = _norm_key(f"{location}__copernicus__long")
+        col = self._db.collection("seasonal_forecasts")
+        if not col.has(key):
+            return None
+        try:
+            return dict(col.get(key))
+        except Exception as exc:
+            logger.warning("[STORAGE] get_seasonal_forecast failed for %s: %s", location, exc)
+            return None
+
+    # ------------------------------------------------------------------
     # Drought assessments  (read-only — written by drought_monitoring)
     # ------------------------------------------------------------------
 

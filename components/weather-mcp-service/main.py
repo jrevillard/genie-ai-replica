@@ -211,6 +211,16 @@ _DROUGHT_KEYWORDS = re.compile(
     r"drought[\s\-]?risk|drought[\s\-]?forecast|drought[\s\-]?outlook|seasonal[\s\-]?risk)\b",
     re.IGNORECASE,
 )
+_SEASONAL_KEYWORDS = re.compile(
+    r"(?:\b[2-6]\s*months?\b|"
+    r"\bnext\s+(?:few|couple\s+of?|coming)\s+months?\b|"
+    r"\bcoming\s+months?\b|"
+    r"\bseasonal\s+(?:forecast|outlook|weather|climate)\b|"
+    r"\blong.?term\s+(?:forecast|outlook|weather)\b|"
+    r"\bclimate\s+(?:outlook|forecast)\b|"
+    r"\bmonsoon\s+(?:season|forecast|outlook)\b)",
+    re.IGNORECASE,
+)
 
 # Matches runner.py DISTRICT_COORDS
 _DROUGHT_DISTRICT_COORDS: dict[str, tuple[float, float]] = {
@@ -258,6 +268,148 @@ def _parse_horizon_days(query: str) -> int:
     if re.search(r"\b(week|7\s*days?)\b", q):
         return 7
     return 30
+
+
+def _parse_seasonal_months(query: str) -> int:
+    """Extract requested number of months from a seasonal query. Default: 3."""
+    m = re.search(r"\b([2-6])\s*months?\b", query, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    return 3
+
+
+def _build_seasonal_answer(district: str, doc: dict, requested_months: int) -> str:
+    """
+    Format a Copernicus SEAS5 seasonal forecast document into a chatbot-ready
+    markdown summary. Always attributes to Copernicus — never BAMIS/Open-Meteo.
+    """
+    from calendar import month_name as _month_name
+
+    outlook: list[dict] = doc.get("outlook", [])
+    issue_month: str    = doc.get("issue_month", "")
+    fetched_at: str     = doc.get("fetched_at", "")[:10]
+
+    # Limit to what the user asked for (and what we have)
+    months_to_show = min(requested_months, len(outlook))
+    rows = outlook[:months_to_show]
+
+    if not rows:
+        return (
+            f"## Seasonal Outlook — {district}\n\n"
+            "Copernicus SEAS5 seasonal data has been fetched but contains no monthly records. "
+            "This is unexpected — please check the warning_system_engine logs."
+        )
+
+    # Format issue label
+    issue_label = ""
+    if issue_month:
+        try:
+            y, mo = issue_month.split("-")
+            issue_label = f"{_month_name[int(mo)]} {y}"
+        except Exception:
+            issue_label = issue_month
+
+    # Build the month-by-month table
+    table_rows = []
+    for rec in rows:
+        vm = rec.get("valid_month", "")
+        try:
+            y, mo = vm.split("-")
+            month_label = f"{_month_name[int(mo)]} {y}"
+        except Exception:
+            month_label = vm
+
+        temp  = f"{rec['mean_temp_c']:.1f}°C" if rec.get("mean_temp_c") is not None else "—"
+        rain  = f"{rec['total_precip_mm']:.0f} mm" if rec.get("total_precip_mm") is not None else "—"
+        wind  = f"{rec['mean_wind_kmh']:.0f} km/h" if rec.get("mean_wind_kmh") is not None else "—"
+        humid = f"{rec['estimated_rh_pct']:.0f}%" if rec.get("estimated_rh_pct") is not None else "—"
+        table_rows.append(f"| {month_label} | {temp} | {rain} | {wind} | {humid} |")
+
+    table = "\n".join([
+        "| Month | Avg Temp | Monthly Rain | Wind | Humidity |",
+        "|-------|----------|--------------|------|----------|",
+        *table_rows,
+    ])
+
+    # Derive a brief narrative from the data
+    temps  = [r["mean_temp_c"]   for r in rows if r.get("mean_temp_c")    is not None]
+    rains  = [r["total_precip_mm"] for r in rows if r.get("total_precip_mm") is not None]
+    humids = [r["estimated_rh_pct"] for r in rows if r.get("estimated_rh_pct") is not None]
+
+    narrative_parts = []
+    if temps:
+        t_min, t_max = round(min(temps), 1), round(max(temps), 1)
+        narrative_parts.append(
+            f"Temperatures will range between **{t_min}°C and {t_max}°C**."
+        )
+    if rains:
+        r_max_idx = rains.index(max(rains))
+        wettest_month = rows[r_max_idx].get("valid_month", "")
+        try:
+            y, mo = wettest_month.split("-")
+            wettest_label = _month_name[int(mo)]
+        except Exception:
+            wettest_label = wettest_month
+        narrative_parts.append(
+            f"The wettest month is expected to be **{wettest_label}** "
+            f"({max(rains):.0f} mm)."
+        )
+    if humids:
+        avg_h = sum(humids) / len(humids)
+        if avg_h >= 80:
+            narrative_parts.append(
+                f"Humidity will be consistently high (~{avg_h:.0f}%) — "
+                "elevated disease pressure on susceptible crops should be expected."
+            )
+
+    narrative = " ".join(narrative_parts)
+
+    # Agricultural notes based on rainfall levels
+    agri_notes = []
+    if rains:
+        heavy_months = [
+            rows[i].get("valid_month", "") for i, r in enumerate(rains) if r >= 200
+        ]
+        if heavy_months:
+            labels = []
+            for vm in heavy_months:
+                try:
+                    y, mo = vm.split("-")
+                    labels.append(_month_name[int(mo)])
+                except Exception:
+                    labels.append(vm)
+            agri_notes.append(
+                f"- Ensure good field drainage during the heavy-rainfall months "
+                f"({', '.join(labels)}) to prevent waterlogging."
+            )
+        if max(rains) < 50:
+            agri_notes.append(
+                "- Low rainfall forecast — plan supplemental irrigation well in advance."
+            )
+    if humids and sum(humids) / len(humids) >= 80:
+        agri_notes.append(
+            "- High humidity throughout — monitor crops for fungal disease and late blight."
+        )
+
+    agri_section = (
+        "\n**Agricultural Advisory**\n" + "\n".join(agri_notes)
+        if agri_notes else ""
+    )
+
+    source_line = (
+        f"*Source: Copernicus SEAS5 seasonal forecast (ECMWF)"
+        + (f" — issued {issue_label}" if issue_label else "")
+        + (f", retrieved {fetched_at}" if fetched_at else "")
+        + "*"
+    )
+
+    return (
+        f"## Seasonal Weather Outlook — {district} (next {months_to_show} month{'s' if months_to_show > 1 else ''})\n\n"
+        f"{source_line}\n\n"
+        f"{table}\n\n"
+        f"{narrative}"
+        f"{agri_section}"
+    )
 
 
 def _assess_drought_forecast_logic(
@@ -498,6 +650,42 @@ async def query(request: QueryRequest):
       location    — display name
       forecast    — raw BMD / stored forecast data
     """
+    if _SEASONAL_KEYWORDS.search(request.query) and storage_layer:
+        district_info = _find_drought_district(request.query)
+        district = district_info[0] if district_info else "Dhaka"
+        requested_months = _parse_seasonal_months(request.query)
+        doc = storage_layer.get_seasonal_forecast(district)
+        if doc:
+            logger.info("[QUERY] Serving Copernicus seasonal outlook for %s (%d months)", district, requested_months)
+            return {
+                "answer":     _build_seasonal_answer(district, doc, requested_months),
+                "risk_tier":  0,
+                "risk_label": "Normal",
+                "advisory":   "",
+                "triggers":   [],
+                "buffer":     None,
+                "location":   district,
+                "forecast":   {},
+            }
+        logger.info("[QUERY] Seasonal data not yet available for %s — returning unavailable notice", district)
+        return {
+            "answer": (
+                f"## Seasonal Weather Outlook — {district}\n\n"
+                "The long-term seasonal forecast for this district is not yet available. "
+                "It is generated once per week from the **Copernicus SEAS5** model (ECMWF) "
+                "and will be ready after the first scheduled weekly run.\n\n"
+                "For short-term weather (next 1–7 days), please ask something like: "
+                f"*\"What is the weather forecast for {district} this week?\"*"
+            ),
+            "risk_tier":  0,
+            "risk_label": "Normal",
+            "advisory":   "",
+            "triggers":   [],
+            "buffer":     None,
+            "location":   district,
+            "forecast":   {},
+        }
+
     if _BULLETIN_KEYWORDS.search(request.query):
         return {
             "answer":     _build_bulletin_answer(),

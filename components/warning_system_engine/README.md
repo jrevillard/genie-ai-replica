@@ -21,8 +21,10 @@ Standalone Docker container that owns the full early warning pipeline for the ME
 │  │   (FastAPI + WeatherAgent) │◄─────────────────────────────────────────┐    │
 │  │                            │  /risk/latest                            │    │
 │  │   • Natural-language       │  /potato/risk/latest                     │    │
-│  │     weather queries        │  /geocode                                │    │
+│  │     weather queries        │  /seasonal (Copernicus)                  │    │
 │  │   • MCP tool server        │                                          │    │
+│  │   • Data ingestion         │                                          │    │
+│  │     (Open-Meteo / BMD)     │                                          │    │
 │  └────────────────────────────┘                                          │    │
 │                                                               ┌──────────┴──┐  │
 │                                                               │  ArangoDB   │  │
@@ -33,53 +35,73 @@ Standalone Docker container that owns the full early warning pipeline for the ME
 │  │                            │                              │  risk_      │  │
 │  │   • Daily EWS pipeline     │                              │  assessments│  │
 │  │   • Weekly Copernicus      │                              │  seasonal_  │  │
-│  │   • Push / SMS alerts      │                              │  forecasts  │  │
-│  └────────────────────────────┘                              │  seasonal_  │  │
-│          ▲             ▲                                      │  assessments│  │
-│          │             │                                      │  alerts_    │  │
-│   Open-Meteo     Copernicus CDS                              │  sent       │  │
-│   BMD (BAMIS)    (SEAS5 ECMWF)                               └─────────────┘  │
+│  │   • Hourly BAMIS watcher   │                              │  forecasts  │  │
+│  │   • Push / SMS alerts      │                              │  seasonal_  │  │
+│  └────────────────────────────┘                              │  assessments│  │
+│          ▲             ▲                                      │  alerts_    │  │
+│          │             │                                      │  sent       │  │
+│   Copernicus CDS   BAMIS special                             │  special_   │  │
+│   (SEAS5 ECMWF)    bulletins                                 │  bulletins  │  │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key separation:** `weather-mcp-service` only reads risk data from ArangoDB. It never classifies, never schedules, never notifies. All of that belongs to `warning_system_engine`. This prevents duplicate scheduling, ArangoDB race conditions, and double notifications.
+**Key separation:** `weather-mcp-service` owns data ingestion (Open-Meteo, BMD/BAMIS scraping) and HTTP endpoints. `warning_system_engine` owns risk classification, EWS logic, scheduling, and alert dispatch. The two services communicate exclusively through ArangoDB — no direct HTTP dependency between them.
 
 ---
 
-## File Structure
+## Package Structure
 
 ```
 warning_system_engine/
-├── main.py                  — Entrypoint; wires up all components, starts scheduler
-├── scheduler.py             — APScheduler jobs: daily + weekly pipelines
 │
-├── risk_engine.py           — Stateless Tier 0–4 general weather classifier
-├── short_term_potato_ews.py — Deterministic 48-hour potato risk evaluator
-├── long_term_potato_ews.py  — Deterministic 5-month seasonal potato risk evaluator
-│
-├── copernicus_fetcher.py    — Downloads SEAS5 NetCDF from Copernicus CDS, parses, stores
-├── crop_profile_loader.py   — Reads example_crop_profile.json; stage / baseline helpers
-│
-├── potato_profile.py        — Potato threshold constants (short-term)
-├── potato_risk_engine.py    — Per-day potato rule evaluation (short-term)
-│
-├── notifier.py              — Alert dispatch: log / FCM push / Twilio SMS / voice / webhook
-├── storage.py               — ArangoDB persistence layer (all collections)
-├── models.py                — Pydantic schemas: UnifiedForecast, RiskAssessment, etc.
+├── app/
+│   ├── main.py                          — Entrypoint: wires all components, starts scheduler
+│   │
+│   ├── core/
+│   │   ├── models.py                    — Pydantic schemas: UnifiedForecast, RiskAssessment, …
+│   │   ├── storage.py                   — ArangoDB persistence layer (all collections)
+│   │   ├── risk_engine.py               — Stateless Tier 0–4 general weather classifier
+│   │   ├── notifier.py                  — Alert dispatch: FCM push / Twilio SMS / voice / webhook
+│   │   ├── scheduler.py                 — APScheduler jobs: all pipelines and timings
+│   │   └── crop_profile_loader.py       — Reads example_crop_profile.json; stage/baseline helpers
+│   │
+│   ├── integrations/
+│   │   ├── copernicus/
+│   │   │   └── fetcher.py               — Downloads SEAS5 NetCDF from Copernicus CDS, parses, stores
+│   │   └── bamis/
+│   │       └── special_bulletin.py      — Hourly scraper for BAMIS special weather bulletins
+│   │
+│   ├── workflows/
+│   │   ├── short_term/
+│   │   │   └── potato_ews.py            — Deterministic 48-hour potato risk evaluator
+│   │   └── long_term/
+│   │       ├── potato_ews.py            — Deterministic 5-month seasonal potato risk evaluator
+│   │       └── drought_ews.py           — Reads drought_assessments; dispatches drought alerts
+│   │
+│   └── crops/
+│       └── potato/
+│           ├── profile.py               — Potato threshold constants and dataclass
+│           └── risk_engine.py           — Per-day potato rule evaluation (short-term)
 │
 ├── data/
-│   ├── example_crop_profile.json  — Weekly baselines + thresholds for potato (Dhaka)
-│   └── bamis_metadata.json        — BMD/BAMIS station reference data
+│   ├── example_crop_profile.json        — Weekly baselines + thresholds for potato (Dhaka)
+│   └── bamis_metadata.json              — BMD/BAMIS station reference data
 │
-├── requirements.txt
+├── scripts/
+│   ├── test_potato_ews.py               — End-to-end smoke test for potato EWS + frontend pop-out
+│   ├── POTATO_EWS_TEST_GUIDE.md         — Guide for running the test script
+│   ├── enrich_crop_profile.py           — Builds crop profiles from BAMIS metadata (one profile)
+│   └── enrich_crop_profiles.py          — Builds all crop × region profiles from BAMIS metadata
+│
 ├── Dockerfile
 ├── docker-compose.yml
+├── requirements.txt
 └── .env.example
 ```
 
 ---
 
-## Two Pipelines
+## Four Pipelines
 
 ### 1. Short-Term Pipeline (daily, 05:00 UTC)
 
@@ -120,7 +142,7 @@ Evaluates the 7-day forecast window for all 20 Bangladesh districts.
                     └─────────────────────────────────────────────┘
 ```
 
-**Standalone mode:** Since `weather-mcp-service` owns data ingestion, the engine reads forecasts already stored in `weather_forecasts` by the Open-Meteo ingestor in `weather-mcp-service`. If the collection is empty or stale (>30 h), the district is skipped for that run.
+**Standalone mode:** The engine reads forecasts already stored in `weather_forecasts` by the Open-Meteo ingestor running inside `weather-mcp-service`. If the collection is empty or stale (>30 h), the district is skipped for that run.
 
 #### General Risk Tier Table
 
@@ -136,9 +158,9 @@ Multi-hazard escalation (IPC rule): two independent Tier-2+ triggers on the same
 
 #### Potato-Specific Short-Term Check
 
-`PotatoShortTermEWS` runs after the general risk pass and writes a separate `risk_assessments` document keyed as `{location}__short__potato`.
+`app/workflows/short_term/potato_ews.py` runs after the general risk pass and writes a separate `risk_assessments` document keyed as `{location}__short__potato`.
 
-It evaluates today + tomorrow against `potato_profile.py` thresholds:
+It evaluates today + tomorrow against thresholds in `app/crops/potato/profile.py`:
 
 - Max temperature, min temperature
 - Late blight detection: humidity > 80 % + temperature 15–22 °C
@@ -191,6 +213,8 @@ Fetches the ECMWF SEAS5 5-month seasonal outlook for all districts, compares it 
                     └─────────────────────────────────────────────────────┘
 ```
 
+The stored `seasonal_forecasts` documents are read by `weather-mcp-service` to answer chatbot queries like "how will the weather be over the next 4 months?" — attributed to Copernicus, never to BAMIS or Open-Meteo.
+
 **Graceful degradation:** If `CDSAPI_KEY` is not set and `~/.cdsapirc` does not exist, `CopernicusFetcher._cds_configured()` returns `False`. `fetch_and_store()` returns `{"error": "cds_not_configured"}` immediately and the scheduler never registers the long-term jobs. Short-term continues normally.
 
 **Season filtering:** `CropProfileLoader.stages_for_month()` returns an empty list for months outside the potato growing season (roughly June–September in Bangladesh). The engine skips those months with zero ArangoDB writes, making the off-season pass cost-free.
@@ -224,9 +248,34 @@ where `T` and `Td` are in °C. Tagged `copernicus_partial` in `rule_support` bec
 
 ---
 
+### 3. Drought Pipeline (daily, 07:00 UTC)
+
+Runs after the short-term pipeline. Calls `drought_monitoring` (a separate container) to trigger GEE-based soil moisture and vegetation analysis, then reads the stored results and dispatches alerts for assessments at severity MODERATE or above.
+
+```
+  drought_monitoring  ──POST /run/all──►  ArangoDB drought_assessments
+                                                        │
+  app/workflows/long_term/drought_ews.py ──────────────►│ read + dispatch
+                                                        │
+                                               Notifier.dispatch()
+                                               (tier ≥ 2 → FCM push)
+```
+
+Requires `DROUGHT_MONITORING_URL` env var. Skipped silently if not set.
+
+---
+
+### 4. BAMIS Special Bulletin Watcher (hourly)
+
+`app/integrations/bamis/special_bulletin.py` scrapes the BAMIS special bulletin archive every hour, stores newly detected bulletins in `special_bulletins`, and pushes each new bulletin exactly once via the notifier.
+
+Requires `BAMIS_SPECIAL_BULLETIN_ENABLED=true` (default). Can be disabled via env var.
+
+---
+
 ## Notification System
 
-`Notifier` dispatches alerts through multiple channels keyed by tier. Each dispatch is deduplicated via a 12-hour window in `alerts_sent`.
+`app/core/notifier.py` dispatches alerts through multiple channels keyed by tier. Each dispatch is deduplicated via a 12-hour window in `alerts_sent`.
 
 ```
 Tier 0  Normal     →  structured log only
@@ -246,13 +295,15 @@ All channels are opt-in via env vars. Missing keys are logged and skipped gracef
 
 The engine creates these collections on first run if they do not exist.
 
-| Collection           | Document key pattern                     | TTL (recommended) | Written by            | Read by                  |
-|----------------------|------------------------------------------|--------------------|----------------------|--------------------------|
-| `weather_forecasts`  | `{location}__{source}__short`            | 30 days            | weather-mcp-service  | warning_system_engine    |
-| `risk_assessments`   | `{location}__short` or `{location}__short__{crop}` | 90 days | warning_system_engine | weather-mcp-service |
-| `alerts_sent`        | auto                                     | 7 days             | warning_system_engine | warning_system_engine    |
-| `seasonal_forecasts` | `{location}__copernicus__long`           | 180 days           | warning_system_engine | warning_system_engine    |
-| `seasonal_assessments` | `{location}__{crop}__{YYYY_MM}`        | 180 days           | warning_system_engine | weather-mcp-service (future) |
+| Collection             | Document key pattern                       | TTL (recommended) | Written by              | Read by                       |
+|------------------------|--------------------------------------------|-------------------|-------------------------|-------------------------------|
+| `weather_forecasts`    | `{location}__{source}__short`              | 30 days           | weather-mcp-service     | warning_system_engine         |
+| `risk_assessments`     | `{location}__short` or `…__short__{crop}`  | 90 days           | warning_system_engine   | weather-mcp-service           |
+| `alerts_sent`          | auto                                       | 7 days            | warning_system_engine   | warning_system_engine         |
+| `seasonal_forecasts`   | `{location}__copernicus__long`             | 180 days          | warning_system_engine   | weather-mcp-service (chatbot) |
+| `seasonal_assessments` | `{location}__{crop}__{YYYY_MM}`            | 180 days          | warning_system_engine   | weather-mcp-service           |
+| `drought_assessments`  | `{location}__drought`                      | 30 days           | drought_monitoring      | warning_system_engine         |
+| `special_bulletins`    | hash of bulletin content                   | 90 days           | warning_system_engine   | warning_system_engine         |
 
 Example documents:
 
@@ -281,7 +332,25 @@ Example documents:
   "forecast_source": "open_meteo"
 }
 
-// seasonal_assessments — long-term potato
+// seasonal_forecasts — Copernicus SEAS5 monthly outlook
+{
+  "_key": "dhaka__copernicus__long",
+  "location": "Dhaka",
+  "issue_month": "2026-05",
+  "months_ahead": 5,
+  "fetched_at": "2026-05-05T06:00:00Z",
+  "outlook": [
+    {
+      "valid_month": "2026-06",
+      "mean_temp_c": 31.2,
+      "total_precip_mm": 285.0,
+      "mean_wind_kmh": 12.3,
+      "estimated_rh_pct": 82.4
+    }
+  ]
+}
+
+// seasonal_assessments — long-term potato risk
 {
   "_key": "dhaka__potato__2026_11",
   "location": "Dhaka",
@@ -295,11 +364,6 @@ Example documents:
     "temperature": "copernicus_ready",
     "precipitation": "copernicus_ready",
     "humidity": "copernicus_partial"
-  },
-  "rag_query_payload": {
-    "crop": "potato",
-    "keywords": ["potato", "dhaka", "germination", "heat stress", "high temperature"],
-    "query_hint": "potato germination vegetative stage management Dhaka 2026-11"
   }
 }
 ```
@@ -309,15 +373,17 @@ Example documents:
 ## Scheduler Summary
 
 ```
-Startup (main.py starts)
+Startup (app/main.py starts)
         │
-        ├── +10 s ──► short-term catch-up (run_daily_pipeline)
-        │
-        └── +60 s ──► long-term catch-up (run_long_term_pipeline)  ← only if CDS configured
-                       (gives short-term time to run first)
+        ├── +10 s  ──► short-term catch-up    (run_daily_pipeline)
+        ├── +30 s  ──► BAMIS bulletin check   (run_bamis_special_bulletin_pipeline)
+        ├── +60 s  ──► long-term catch-up     (run_long_term_pipeline)    ← only if CDS configured
+        └── +120 s ──► drought catch-up       (run_drought_pipeline)      ← only if DROUGHT_MONITORING_URL set
 
-Every day   05:00 UTC ──► run_daily_pipeline
-Every Mon   06:00 UTC ──► run_long_term_pipeline  ← only if CDS configured
+Every day        05:00 UTC ──► run_daily_pipeline
+Every day        07:00 UTC ──► run_drought_pipeline        ← only if DROUGHT_MONITORING_URL set
+Every Mon        06:00 UTC ──► run_long_term_pipeline      ← only if CDS configured
+Every hour                 ──► run_bamis_special_bulletin_pipeline
 ```
 
 `misfire_grace_time=86400` means if the container was down at the scheduled time, APScheduler will still run the job when it comes back up, as long as it missed by less than 24 hours.
@@ -361,7 +427,13 @@ Top-level structure:
 }
 ```
 
-`CropProfileLoader` provides typed accessors over this structure — `stages_for_month()`, `baseline_for_month()`, `temp_thresholds()`, etc. — so `LongTermPotatoEWS` never parses JSON directly.
+`app/core/crop_profile_loader.py` provides typed accessors — `stages_for_month()`, `baseline_for_month()`, `temp_thresholds()` — so `app/workflows/long_term/potato_ews.py` never parses JSON directly.
+
+To regenerate the profile from raw BAMIS data:
+```bash
+cd warning_system_engine
+python3 scripts/enrich_crop_profiles.py --crop potato --region dhaka
+```
 
 ---
 
@@ -369,37 +441,39 @@ Top-level structure:
 
 All configuration is via environment variables (copy `.env.example` to `.env`).
 
-| Variable                      | Required | Default                                    | Description                                     |
-|-------------------------------|----------|--------------------------------------------|------------------------------------------------ |
-| `ARANGO_URL`                  | Yes      | `http://arango-vector-db:8529`             | ArangoDB host                                   |
-| `ARANGO_DB_NAME`              | Yes      | `genie-ai`                                 | Database name                                   |
-| `ARANGO_USER`                 | Yes      | `root`                                     | ArangoDB user                                   |
-| `ARANGO_PASSWORD`             | Yes      | `test`                                     | ArangoDB password                               |
-| `CDSAPI_URL`                  | No       | `https://cds.climate.copernicus.eu/api`    | Copernicus CDS endpoint                         |
-| `CDSAPI_KEY`                  | No       | —                                          | CDS API key — long-term pipeline disabled if absent |
-| `COPERNICUS_MONTHS_AHEAD`     | No       | `5`                                        | Months of SEAS5 to fetch (max 6)                |
-| `FCM_SERVER_KEY`              | No       | —                                          | Firebase Cloud Messaging server key             |
-| `TWILIO_ACCOUNT_SID`          | No       | —                                          | Twilio credentials for SMS                      |
-| `TWILIO_AUTH_TOKEN`           | No       | —                                          | Twilio auth token                               |
-| `TWILIO_PHONE_FROM`           | No       | —                                          | Twilio sender phone number                      |
-| `EMERGENCY_CONTACT_NUMBERS`   | No       | —                                          | Comma-separated numbers for SMS/voice           |
-| `BROADCAST_WEBHOOK_URL`       | No       | —                                          | Government alert broadcast endpoint (Tier 4)    |
-| `NOTIFICATION_BROADCAST_URL`  | No       | —                                          | Backend notification endpoint (overrides auto)  |
-| `BACKEND_API_URL`             | No       | —                                          | Base URL for gov-chat-backend (auto-resolves broadcast URL) |
-| `NOTIFICATION_BROADCAST_SECRET` | No    | —                                          | Shared secret for backend broadcast auth        |
-| `LOG_LEVEL`                   | No       | `INFO`                                     | Python log level                                |
+| Variable                        | Required | Default                                 | Description                                          |
+|---------------------------------|----------|-----------------------------------------|------------------------------------------------------|
+| `ARANGO_URL`                    | Yes      | `http://arango-vector-db:8529`          | ArangoDB host                                        |
+| `ARANGO_DB_NAME`                | Yes      | `genie-ai`                              | Database name                                        |
+| `ARANGO_USER`                   | Yes      | `root`                                  | ArangoDB user                                        |
+| `ARANGO_PASSWORD`               | Yes      | —                                       | ArangoDB password                                    |
+| `DROUGHT_MONITORING_URL`        | No       | —                                       | URL of drought_monitoring container; drought pipeline disabled if absent |
+| `CDSAPI_URL`                    | No       | `https://cds.climate.copernicus.eu/api` | Copernicus CDS endpoint                              |
+| `CDSAPI_KEY`                    | No       | —                                       | CDS API key — long-term pipeline disabled if absent  |
+| `COPERNICUS_MONTHS_AHEAD`       | No       | `5`                                     | Months of SEAS5 to fetch (max 6)                     |
+| `BAMIS_SPECIAL_BULLETIN_ENABLED`| No       | `true`                                  | Enable/disable hourly BAMIS bulletin watcher         |
+| `FCM_SERVER_KEY`                | No       | —                                       | Firebase Cloud Messaging server key                  |
+| `TWILIO_ACCOUNT_SID`            | No       | —                                       | Twilio credentials for SMS                           |
+| `TWILIO_AUTH_TOKEN`             | No       | —                                       | Twilio auth token                                    |
+| `TWILIO_PHONE_FROM`             | No       | —                                       | Twilio sender phone number                           |
+| `EMERGENCY_CONTACT_NUMBERS`     | No       | —                                       | Comma-separated numbers for SMS/voice                |
+| `BROADCAST_WEBHOOK_URL`         | No       | —                                       | Government alert broadcast endpoint (Tier 4)         |
+| `NOTIFICATION_BROADCAST_URL`    | No       | —                                       | Backend notification endpoint (overrides auto)       |
+| `BACKEND_API_URL`               | No       | —                                       | Base URL for gov-chat-backend (auto-resolves broadcast URL) |
+| `NOTIFICATION_BROADCAST_SECRET` | No       | —                                       | Shared secret for backend broadcast auth             |
+| `LOG_LEVEL`                     | No       | `INFO`                                  | Python log level                                     |
 
 ---
 
 ## Running
 
-### With Docker Compose (part of the full stack)
+### With Docker Compose (full stack)
 
-The engine is included in `components/docker-compose.yaml` and shares the `arango-vector-db` network with `weather-mcp-service`.
+The engine is included in the root `docker-compose.yaml` and shares the `genieai_network` with `weather-mcp-service` and `arango-vector-db`.
 
 ```bash
-cd /root/mewa_v2/components
-docker compose up warning_system_engine
+# From the repo root
+docker compose up -d --build warning-system-engine
 ```
 
 ### Standalone (development)
@@ -409,26 +483,42 @@ cd /root/mewa_v2/components/warning_system_engine
 cp .env.example .env
 # Edit .env — set ARANGO_URL, ARANGO_PASSWORD
 # Optionally set CDSAPI_KEY for long-term pipeline
+# Optionally set DROUGHT_MONITORING_URL for drought pipeline
 
 pip install -r requirements.txt
-python -m main
+python -m app.main
 ```
+
+### Test the Potato EWS end-to-end
+
+```bash
+# From the host (requires ArangoDB reachable at localhost:8529)
+cd components/warning_system_engine
+python3 scripts/test_potato_ews.py --scenario heat --district Dhaka
+
+# Or from inside the container
+docker exec -it warning-system-engine python3 /app/scripts/test_potato_ews.py --scenario combined
+```
+
+See `scripts/POTATO_EWS_TEST_GUIDE.md` for full scenario reference.
 
 ---
 
 ## Relationship to weather-mcp-service
 
-| Concern                        | warning_system_engine     | weather-mcp-service           |
-|-------------------------------|---------------------------|-------------------------------|
-| Ingest Open-Meteo / BMD data  | No                        | Yes (data_ingestor.py)        |
-| Classify weather risk (tier)  | Yes (risk_engine.py)      | No                            |
-| Classify potato risk          | Yes (short + long term)   | No                            |
-| Fetch Copernicus SEAS5        | Yes (copernicus_fetcher)  | No                            |
-| Schedule jobs                 | Yes (APScheduler)         | No                            |
-| Send push / SMS alerts        | Yes (notifier.py)         | No                            |
-| Serve HTTP endpoints          | No                        | Yes (FastAPI)                 |
-| Answer natural-language queries | No                      | Yes (WeatherAgent + MCP)      |
-| Read `risk_assessments`       | Writes                    | Reads via /risk/latest        |
-| Read `seasonal_assessments`   | Writes                    | Reads (planned endpoint)      |
-
-The two services communicate exclusively through ArangoDB. There is no direct HTTP dependency between them, so either can restart independently without disrupting the other.
+| Concern                          | warning_system_engine                          | weather-mcp-service                      |
+|----------------------------------|------------------------------------------------|------------------------------------------|
+| Ingest Open-Meteo / BMD data     | No                                             | Yes (`data_ingestor.py`, hourly)         |
+| Classify weather risk (tier)     | Yes (`app/core/risk_engine.py`)                | No                                       |
+| Classify potato risk (short)     | Yes (`app/workflows/short_term/potato_ews.py`) | No                                       |
+| Classify potato risk (long)      | Yes (`app/workflows/long_term/potato_ews.py`)  | No                                       |
+| Fetch Copernicus SEAS5           | Yes (`app/integrations/copernicus/fetcher.py`) | No                                       |
+| Watch BAMIS special bulletins    | Yes (`app/integrations/bamis/special_bulletin.py`) | No                                   |
+| Schedule jobs                    | Yes (`app/core/scheduler.py`)                  | No                                       |
+| Send push / SMS alerts           | Yes (`app/core/notifier.py`)                   | No                                       |
+| Serve HTTP endpoints             | No                                             | Yes (FastAPI)                            |
+| Answer natural-language queries  | No                                             | Yes (WeatherAgent + MCP)                 |
+| Write `risk_assessments`         | Yes                                            | No                                       |
+| Write `seasonal_forecasts`       | Yes                                            | No                                       |
+| Read `seasonal_forecasts`        | No                                             | Yes (chatbot seasonal queries)           |
+| Read `weather_forecasts`         | Yes (EWS input)                                | Yes (agent context)                      |

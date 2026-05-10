@@ -704,7 +704,7 @@ async function initializeServices() {
   const services = {};
 
   // Import services individually with error handling
-  let userProfileService, adminDashboardService, analyticsService, queryService;
+  let authService, sessionService, userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, logsService;
   let databaseOperationsService, weatherService, securityScanService, translationService;
 
@@ -726,6 +726,8 @@ async function initializeServices() {
   };
 
   try {
+    authService = await importService('AuthService', './services/auth-service');
+    sessionService = await importService('SessionService', './services/session-service');
     userProfileService = await importService('UserProfileService', './services/user-profile-service');
     adminDashboardService = await importService('AdminDashboardService', './services/admin-dashboard-service');
     analyticsService = await importService('AnalyticsService', './services/analytics-service');
@@ -744,6 +746,8 @@ async function initializeServices() {
 
     logger.info('Constructing service map');
     const serviceMap = {
+      authService: { instance: authService, name: 'AuthService' },
+      sessionService: { instance: sessionService, name: 'SessionService' },
       serviceCategoryService: { instance: serviceCategoryService, name: 'ServiceCategoryService' },
       userProfileService: { instance: userProfileService, name: 'UserProfileService' },
       adminDashboardService: { instance: adminDashboardService, name: 'AdminDashboardService' },
@@ -791,6 +795,8 @@ async function initializeServices() {
     // Initialize services with detailed error logging and optional service handling
     logger.info('Initializing services');
     const initPromises = [
+      { service: services.sessionService, name: 'SessionService' },
+      { service: services.authService, name: 'AuthService', preInit: () => services.authService.setSessionService(services.sessionService) },
       { service: services.serviceCategoryService, name: 'ServiceCategoryService' },
       { service: services.userProfileService, name: 'UserProfileService' },
       { service: services.adminDashboardService, name: 'AdminDashboardService' },
@@ -960,7 +966,8 @@ async function startApp() {
     { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService, keycloakAuth: true },
     { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService, keycloakAuth: true },
     { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService, keycloakAuth: true },
-    { file: 'auth-routes', paths: ['/api/auth'], service: null },
+    { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService },
+    { file: 'auth-routes', paths: ['/api/auth'], service: services.authService },
     { file: 'logger-routes', paths: ['/api/logger'], service: null, keycloakAuth: true },
     { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService, keycloakAuth: true },
     { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService, keycloakAuth: true },
@@ -1035,9 +1042,6 @@ async function startApp() {
         routeInstance = routeModule(config.service, analyticsController);
       } else if (config.file === 'admin-routes') {
         routeInstance = routeModule(config.service, config.extraService);
-      } else if (config.file === 'auth-routes') {
-        // auth-routes exports a plain router (no factory function)
-        routeInstance = routeModule;
       } else {
         routeInstance = routeModule(config.service);
       }
@@ -1113,7 +1117,7 @@ async function startApp() {
   });
 
   // Error handling middleware
-  app.use((err, req, res) => {
+  app.use((err, req, res, next) => {
     logger.error(`Error processing ${req.method} ${req.url}:`, {
       error: err.message || 'Unknown error',
       stack: err.stack || 'No stack trace',

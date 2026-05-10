@@ -1,82 +1,5 @@
 import axios from 'axios';
-import keycloakAuthService from './keycloakAuthService';
-import notificationService from './notificationService';
-
-/**
- * Default error messages for fallback when backend message is missing
- *
- * WHY HARDCODED STRINGS INSTEAD OF I18N?
- * ============================================
- * httpService.js is a plain ES module (not a Vue component), which means:
- * - It has NO access to Vue's i18n system (this.$t() or translate())
- * - It cannot use Vue's composition API or inject/provide
- * - It must have synchronous access to messages at module load time
- * - i18n translation keys are defined in src/i18n/locales/*.js for:
- *   1. Documentation purposes (this serves as the source of truth for message semantics)
- *   2. Potential future use in Vue-based error pages
- *   3. Consistency across all 14 supported languages
- *
- * ARCHITECTURE NOTES:
- * - The i18n system (vue-i18n) is only available within Vue component context
- * - Plain ES modules like httpService.js use hardcoded constants for runtime messages
- * - This is a deliberate architectural decision, not an oversight
- * - When backend returns a message, we use it; when missing, we use these fallbacks
- */
-const DEFAULT_MESSAGES = {
-  tokenExpired: 'Your session has expired. Please log in again.',
-  tokenInvalid: 'Your session is invalid. Please log in again.',
-  insufficientRoles: 'You lack required permissions. Contact your administrator.',
-  serviceUnavailable: 'Authentication service is temporarily unavailable. Please try again later.',
-  provisioningFailed: 'A system error occurred. Please try again later.',
-  default: 'An error occurred'
-};
-
-/**
- * Parse standardized backend error response format
- * Extracts error code and message, never includes details field
- * @param {Object} errorResponse - Backend error response { error, message, details }
- * @returns {Object} Parsed error { code, message }
- */
-function parseAuthError(errorResponse) {
-  if (!errorResponse || typeof errorResponse !== 'object') {
-    return {
-      code: 'UNKNOWN_ERROR',
-      message: DEFAULT_MESSAGES.default
-    };
-  }
-
-  const code = errorResponse.error || 'UNKNOWN_ERROR';
-  let message = errorResponse.message;
-
-  // Use fallback message if backend message is missing
-  if (!message) {
-    switch (code) {
-      case 'TOKEN_EXPIRED':
-        message = DEFAULT_MESSAGES.tokenExpired;
-        break;
-      case 'TOKEN_INVALID':
-        message = DEFAULT_MESSAGES.tokenInvalid;
-        break;
-      case 'INSUFFICIENT_ROLES':
-        message = DEFAULT_MESSAGES.insufficientRoles;
-        break;
-      case 'AUTH_SERVICE_UNAVAILABLE':
-        message = DEFAULT_MESSAGES.serviceUnavailable;
-        break;
-      case 'PROVISIONING_FAILED':
-        message = DEFAULT_MESSAGES.provisioningFailed;
-        break;
-      default:
-        message = DEFAULT_MESSAGES.default;
-    }
-  }
-
-  // NEVER include details field in parsed result
-  return {
-    code,
-    message
-  };
-}
+import AuthService from './authService';
 
 /**
  * Base service for handling HTTP requests
@@ -87,20 +10,45 @@ class HttpService {
    * Initialize the HTTP service
    */
   constructor() {
-    // Cloud-native: Read from runtime config (generated at container startup)
-    // Falls back to build-time env var for backward compatibility
-    this.baseUrl = window.APP_CONFIG?.apiUrl || process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
+    this.baseUrl = process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
+    console.log('VUE_APP_API_URL=', process.env.VUE_APP_API_URL);
 
     this.axios = axios;
 
     // Configure axios
     this.axios.defaults.headers.common['Content-Type'] = 'application/json';
 
+    // Token refresh state
+    this.isRefreshing = false;
+    this.refreshSubscribers = [];
+    this.maxRetries = 2; // Limit interceptor retries to avoid overlap with authService
+    this.retryDelay = 2000; // Delay for 401/403 retries in ms
+
     // Add request interceptor
-    this.axios.interceptors.request.use(this.handleRequest.bind(this), this.handleRequestError.bind(this));
+    this.axios.interceptors.request.use(
+      this.handleRequest.bind(this),
+      this.handleRequestError.bind(this)
+    );
 
     // Add response interceptor
-    this.axios.interceptors.response.use(this.handleResponse.bind(this), this.handleResponseError.bind(this));
+    this.axios.interceptors.response.use(
+      this.handleResponse.bind(this),
+      this.handleResponseError.bind(this)
+    );
+  }
+
+  /**
+   * Refresh token with retry handling delegated to AuthService
+   * @returns {Promise} Token refresh response
+   */
+  async refreshToken() {
+    try {
+      const response = await AuthService.refreshToken();
+      return response;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      throw error;
+    }
   }
 
   /**
@@ -126,24 +74,22 @@ class HttpService {
   }
 
   /**
-   * Parse standardized backend error response format
-   * Exposed as instance method for testing
-   * @param {Object} errorResponse - Backend error response { error, message, details }
-   * @returns {Object} Parsed error { code, message }
-   */
-  parseAuthError(errorResponse) {
-    return parseAuthError(errorResponse);
-  }
-
-  /**
    * Handle request interceptor
    * @param {Object} config - Request configuration
    * @returns {Object} Modified request configuration
    */
   handleRequest(config) {
-    const token = keycloakAuthService.getAccessToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const user = localStorage.getItem('user');
+    if (user) {
+      try {
+        const userData = JSON.parse(user);
+        if (userData.accessToken) {
+          config.headers.Authorization = `Bearer ${userData.accessToken}`;
+          console.debug(`[HttpService] Added Authorization header for ${config.url}`);
+        }
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+      }
     }
     return config;
   }
@@ -168,66 +114,140 @@ class HttpService {
   }
 
   /**
-   * Handle response error interceptor with token refresh and Keycloak redirect
+   * Subscribe to token refresh
+   * @param {Function} callback - Function to call after token refresh
+   */
+  subscribeTokenRefresh(callback) {
+    this.refreshSubscribers.push(callback);
+  }
+
+  /**
+   * Notify subscribers about token refresh completion
+   * @param {string} token - New access token
+   */
+  onTokenRefreshed(token) {
+    this.refreshSubscribers.forEach(callback => callback(token));
+    this.refreshSubscribers = [];
+  }
+
+  /**
+   * Handle response error interceptor with token refresh and login redirect
    * @param {Error} error - Response error
    * @returns {Promise} Rejected promise with error or retried request
    */
   async handleResponseError(error) {
+    console.debug(`[HttpService] Handling response error for ${error.config?.url}:`, {
+      status: error.response?.status,
+      data: error.response?.data
+    });
+
     if (error.response) {
       const status = error.response.status;
-      const { statusText } = error.response;
       const originalRequest = error.config;
 
-      // Handle 401 — attempt silent token refresh then retry once
-      if (status === 401 && !originalRequest._retryCount) {
-        originalRequest._retryCount = 1;
+      // Handle all 401/403 responses immediately
+      if ([401, 403].includes(status)) {
+        console.debug(`[HttpService] Unauthorized request detected for ${originalRequest.url} (status: ${status})`);
 
-        try {
-          const refreshedUser = await keycloakAuthService.signinSilent();
+        // Clear all user-related localStorage data
+        localStorage.removeItem('user');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        console.debug('[HttpService] Cleared localStorage user data');
 
-          if (refreshedUser?.access_token) {
-            originalRequest.headers.Authorization = `Bearer ${refreshedUser.access_token}`;
-            return this.axios(originalRequest);
-          }
-        } catch (refreshError) {
-          console.error('[HttpService] Token refresh failed:', refreshError.message);
-        }
-
-        // Refresh failed or no token — redirect to Keycloak login
-        if (typeof window !== 'undefined') {
-          await keycloakAuthService.login();
+        // Redirect to login if not already there
+        if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
+          console.log(`[HttpService] Redirecting to /login?error=unauthorized from ${originalRequest.url}`);
+          window.location.href = '/login?error=unauthorized';
         }
 
         return Promise.reject({
           status,
-          statusText,
+          statusText: error.response.statusText,
           data: error.response.data,
           message: error.response.data?.message || 'Unauthorized access'
         });
       }
 
-      // Non-auth errors or already retried
+      // Retry logic for 401/403 with refresh token
+      if ([401, 403].includes(status) && !originalRequest._retryCount) {
+        originalRequest._retryCount = originalRequest._retryCount || 0;
+
+        if (originalRequest._retryCount >= this.maxRetries) {
+          console.error(`[HttpService] Max retries (${this.maxRetries}) reached for ${originalRequest.url}`);
+          AuthService.clearUserData();
+          if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
+            console.log('[HttpService] Redirecting to login due to max retries');
+            window.location.href = '/login?error=session_expired';
+          }
+          return Promise.reject(error);
+        }
+
+        originalRequest._retryCount += 1;
+        console.debug(`[HttpService] Retry attempt ${originalRequest._retryCount} for ${originalRequest.url} (status: ${status})`);
+
+        if (this.isRefreshing) {
+          return new Promise((resolve) => {
+            this.subscribeTokenRefresh(token => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(this.axios(originalRequest));
+            });
+          });
+        }
+
+        this.isRefreshing = true;
+
+        try {
+          const response = await this.refreshToken();
+          const newToken = response.data.accessToken;
+
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            try {
+              const userData = JSON.parse(userStr);
+              userData.accessToken = newToken;
+              userData.refreshToken = response.data.refreshToken || userData.refreshToken;
+              localStorage.setItem('user', JSON.stringify(userData));
+
+              this.axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+
+              this.onTokenRefreshed(newToken);
+              this.isRefreshing = false;
+
+              await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+              return this.axios(originalRequest);
+            } catch (e) {
+              console.error('Error parsing user data during token refresh:', e);
+            }
+          }
+
+          throw new Error('No user data available');
+        } catch (refreshError) {
+          console.error('Token refresh error:', refreshError);
+          this.isRefreshing = false;
+          AuthService.clearUserData();
+          localStorage.removeItem('user');
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          console.debug('[HttpService] Cleared localStorage after refresh failure');
+
+          if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
+            console.log('[HttpService] Redirecting to login due to refresh failure');
+            window.location.href = '/login?error=refresh_failed';
+          }
+          return Promise.reject(refreshError);
+        }
+      }
+
       const errorData = {
         status,
-        statusText,
+        statusText: error.response.statusText,
         data: error.response.data,
         message: error.response.data?.message || 'An error occurred'
       };
 
-      // Parse error for structured handling
-      const parsedError = parseAuthError(error.response.data);
-
-      // Emit user-facing error notification for all non-401 errors
-      // (401 errors redirect to Keycloak login — the redirect IS the user feedback)
-      notificationService.error(parsedError.message);
-
-      // Log only safe information (status, statusText, message) — NOT raw data or details
-      console.error('API response error:', {
-        status,
-        statusText,
-        message: parsedError.message
-      });
-
+      console.error('API response error:', errorData);
       return Promise.reject(errorData);
     } else if (error.request) {
       console.error('Network error - no response received:', error.request);
@@ -343,8 +363,8 @@ class HttpService {
     return this.axios.put(noCacheUrl, noCacheData, {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate, private',
-        Pragma: 'no-cache',
-        Expires: '-1',
+        'Pragma': 'no-cache',
+        'Expires': '-1',
         'X-Requested-With': 'XMLHttpRequest',
         'X-Timestamp': timestamp
       }

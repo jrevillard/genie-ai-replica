@@ -1,12 +1,33 @@
-// src/utils/userUtils.js - Shared user utility functions
+// src/utils/userUtils.js - local-auth user utility functions
 
-/**
- * Extract a user ID from a user object.
- * Uses the OIDC iss_sub composite key (iss#sub).
- * @param {Object} user - User object from Vuex store
- * @returns {string|undefined}
- */
-export function getUserId(user) {
-  if (!user) return undefined;
-  return user.iss_sub;
+export function getCurrentUser() {
+  try {
+    const raw = localStorage.getItem('user')
+    return raw ? JSON.parse(raw) : null
+  } catch (error) {
+    console.error('[userUtils] Failed to parse current user:', error)
+    return null
+  }
+}
+
+export function getUserId() {
+  const user = getCurrentUser()
+  return (
+    user?._key ||
+    user?.id ||
+    user?.userId ||
+    user?._id?.split('/').pop() ||
+    null
+  )
+}
+
+export function getLoginName() {
+  const user = getCurrentUser()
+  return user?.loginName || user?.username || user?.email || null
+}
+
+export default {
+  getCurrentUser,
+  getUserId,
+  getLoginName
 }

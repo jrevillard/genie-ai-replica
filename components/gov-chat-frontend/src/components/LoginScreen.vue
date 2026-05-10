@@ -344,7 +344,33 @@ export default {
           return
         }
 
-        const result = await userService.login(this.username, this.password)
+        const encoder = new TextEncoder()
+        const data = encoder.encode(this.password)
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', data)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const encPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            loginName: this.username,
+            encPassword
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error(`Login failed with status ${response.status}`)
+        }
+
+        const result = await response.json()
+
+        if (result && result.accessToken) {
+          localStorage.setItem('user', JSON.stringify(result))
+        }
 
         if (!result || !result.accessToken) {
           this.error = this.$t('login.invalidCredentials')
@@ -382,7 +408,7 @@ export default {
           }
         }
 
-        this.$store.dispatch('initAuth')
+        await this.$store.dispatch('initAuth')
         this.$store.commit('setUser', result)
 
         // Emit login success event

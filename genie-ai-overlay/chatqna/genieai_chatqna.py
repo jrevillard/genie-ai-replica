@@ -96,7 +96,9 @@ Key facts about Lesotho agriculture:
 
 If asked about identity: say only "I am Keletso, your AI agricultural advisor for Lesotho Ministry of Agriculture."
 If not about agriculture: say only "I am Keletso, I can only assist with farming and agriculture questions."
-Never mention SC varieties, P varieties, RR2 or any non-Lesotho variety names."""
+Never mention SC varieties, P varieties, RR2 or any non-Lesotho variety names.
+If you cannot fully answer from the knowledge base, use your core knowledge above to give a brief answer, then say: "For more detailed guidance, please consult your District Agricultural Officer or Senior Extension Supervisor."
+Never return an empty response - always provide at least a partial answer."""
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 ##################################################################################################################################
@@ -1506,9 +1508,9 @@ class ChatQnAService:
         if any(p in user_msg.lower() for p in ['irrigation', 'irrigate', 'water method', 'water harvesting']):
             llm_response = 'For smallholder farmers in Lesotho, rainwater harvesting is the most practical method given variable rainfall. Techniques include tied ridges, planting basins and contour bunds to capture rainwater. Drip irrigation is effective where water is available but costly. Early planting in October maximises seasonal rains. Consult your local extension officer for water harvesting support.'
 
-        # Trim verbose responses to 80 words maximum
+        # Trim verbose responses to 120 words maximum
         words = llm_response.split()
-        if len(words) > 80:
+        if len(words) > 120:
             sentences = llm_response.replace('!', '.').replace('?', '.').split('.')
             trimmed = ''
             for s in sentences:

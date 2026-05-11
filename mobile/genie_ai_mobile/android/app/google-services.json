@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1041668070412",
+    "project_id": "bangladesh-ews",
+    "storage_bucket": "bangladesh-ews.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1041668070412:android:b98297142ffc10ede3e229",
+        "android_client_info": {
+          "package_name": "com.example.genie_ai_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwhq-OL6x8jswuzTaXVDHqtSn37K_YRh4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

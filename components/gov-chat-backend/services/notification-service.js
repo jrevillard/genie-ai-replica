@@ -1,4 +1,5 @@
 const axios = require('axios');
+const admin = require('firebase-admin');
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 
@@ -10,6 +11,7 @@ class NotificationService {
     this.broadcasts = null;
     this.initialized = false;
     this.fcmServerKey = process.env.FCM_SERVER_KEY || '';
+    this.firebaseAdminReady = false;
   }
 
   async init() {
@@ -24,6 +26,8 @@ class NotificationService {
     await this.deviceTokens.ensureIndex({ type: 'persistent', fields: ['fcmToken'], unique: true, sparse: true });
     await this.deviceTokens.ensureIndex({ type: 'persistent', fields: ['userId'] });
     await this.deviceTokens.ensureIndex({ type: 'persistent', fields: ['active'] });
+
+    this._initFirebaseAdmin();
 
     this.initialized = true;
     logger.info('[NOTIFICATIONS] NotificationService initialized');
@@ -90,12 +94,12 @@ class NotificationService {
       targetCount: tokens.length,
       matchedUserIds: [...new Set(devices.map((device) => device.userId).filter(Boolean))],
       createdAt: now,
-      status: this.fcmServerKey ? 'pending' : 'skipped_no_fcm_key',
+      status: this.firebaseAdminReady || this.fcmServerKey ? 'pending' : 'skipped_no_sender',
     };
     const saved = await this.broadcasts.save(logDoc, { returnNew: true });
 
-    if (!this.fcmServerKey) {
-      logger.warn('[NOTIFICATIONS] FCM_SERVER_KEY not set; broadcast stored but not sent', {
+    if (!this.firebaseAdminReady && !this.fcmServerKey) {
+      logger.warn('[NOTIFICATIONS] Firebase Admin credentials/FCM_SERVER_KEY not set; broadcast stored but not sent', {
         broadcastKey: saved.new._key,
         targetCount: tokens.length,
       });
@@ -204,7 +208,61 @@ class NotificationService {
       .filter(Boolean);
   }
 
+  _initFirebaseAdmin() {
+    if (admin.apps.length > 0) {
+      this.firebaseAdminReady = true;
+      return;
+    }
+
+    try {
+      const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+      if (serviceAccountJson) {
+        admin.initializeApp({
+          credential: admin.credential.cert(JSON.parse(serviceAccountJson)),
+        });
+      } else {
+        admin.initializeApp({
+          credential: admin.credential.applicationDefault(),
+        });
+      }
+      this.firebaseAdminReady = true;
+      logger.info('[NOTIFICATIONS] Firebase Admin SDK initialized');
+    } catch (error) {
+      this.firebaseAdminReady = false;
+      logger.warn('[NOTIFICATIONS] Firebase Admin SDK not initialized; legacy FCM fallback may be used', {
+        error: error.message,
+      });
+    }
+  }
+
   async _sendFcmChunk(tokens, alert) {
+    if (this.firebaseAdminReady) {
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens,
+        notification: {
+          title: alert.title,
+          body: alert.body,
+        },
+        data: Object.fromEntries(Object.entries(alert.data || {}).map(([key, value]) => [key, String(value ?? '')])),
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: 'high_importance_channel',
+          },
+        },
+      });
+
+      const failedTokens = [];
+      response.responses.forEach((result, index) => {
+        if (!result.success) failedTokens.push(tokens[index]);
+      });
+
+      return {
+        success: response.successCount,
+        failedTokens,
+      };
+    }
+
     const payload = {
       registration_ids: tokens,
       priority: 'high',

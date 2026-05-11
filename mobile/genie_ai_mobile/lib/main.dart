@@ -12,6 +12,8 @@ import 'package:flutter_localizations/flutter_localizations.dart'; // REQUIRED F
 // ===========================================================================
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:genie_ai_mobile/firebase_options.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
@@ -47,6 +49,12 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('[NOTIF] Background message received: ${message.messageId}');
+}
+
 void main() async {
   // Ensure binding is initialized for rootBundle access
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +62,10 @@ void main() async {
   // Initialize Firebase & Notifications
   try {
     if (!kIsWeb) {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       await NotificationService.init();
     }
   } catch (e) {
@@ -124,6 +135,9 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _user = user;
     });
+    if (!kIsWeb) {
+      unawaited(NotificationService.registerDeviceForUser(user));
+    }
   }
 
   void _handleLogout() {

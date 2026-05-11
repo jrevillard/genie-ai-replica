@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/services/service_tree_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
@@ -7,11 +8,13 @@ import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SE
 class ServiceTreePanel extends StatefulWidget {
   final String locale;
   final Function(Map<String, dynamic> selection) onSelectionChange;
+  final http.Client? httpClient;
 
   const ServiceTreePanel({
     super.key,
     this.locale = 'en',
     required this.onSelectionChange,
+    this.httpClient,
   });
 
   @override
@@ -19,8 +22,17 @@ class ServiceTreePanel extends StatefulWidget {
 }
 
 class _ServiceTreePanelState extends State<ServiceTreePanel> {
-  // Service Proxy
-  final ServiceTreeProxy _serviceTreeProxy = ServiceTreeProxy();
+  // Service Proxy — lazily created on first use since it needs widget.httpClient
+  ServiceTreeProxy? __serviceTreeProxy;
+  ServiceTreeProxy get _serviceTreeProxy =>
+      __serviceTreeProxy ??= ServiceTreeProxy(httpClient: widget.httpClient);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reset proxy if httpClient changes (e.g., on re-login)
+    __serviceTreeProxy = null;
+  }
 
   // Input Controller
   final TextEditingController _searchController = TextEditingController();

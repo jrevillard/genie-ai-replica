@@ -382,6 +382,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ? null
           : SidebarComponent(
               user: widget.user,
+              httpClient: widget.httpClient,
               onServiceSelected: _onServiceSelected,
               onConversationSelected: _onConversationSelected,
             ),

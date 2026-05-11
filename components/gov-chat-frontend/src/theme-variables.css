@@ -1,60 +1,105 @@
-/* theme-variables.css - FIXED to ensure consistent button colors across themes with mode-specific secondary buttons and switch colors */
+/* theme-variables.css - MEWA design tokens and theme variables */
 
 /* Default (light) theme variables - applied to the root level */
 :root {
+  /* MEWA palette */
+  --mewa-primary: var(--theme-primary-color, #5E8EA6);
+  --mewa-primary-light: var(--theme-primary-light, #A3C4D4);
+  --mewa-primary-muted: var(--theme-primary-muted, #D0DFE6);
+  --mewa-primary-dark: var(--theme-primary-dark, #3A6B82);
+  --mewa-primary-deep: var(--theme-secondary-color, #1F4A5E);
+  --mewa-obsidian: var(--theme-text-color, #141517);
+  --mewa-parchment: var(--theme-background-color, #F5F2EC);
+  --mewa-sandstone: var(--theme-sandstone, #B5AFA5);
+  --mewa-paper: var(--theme-paper, #FDFCFA);
+  --mewa-fog: var(--theme-fog, #E3DED6);
+  --mewa-basalt: var(--theme-basalt, #1E2024);
+  --mewa-dune: var(--theme-dune, #C9A96E);
+  --mewa-canopy: var(--theme-canopy, #6B9E7A);
+  --mewa-terra: var(--theme-terra, #BF6A5A);
+
+  /* Typography */
+  --font-display: "DM Serif Display", Georgia, serif;
+  --font-body: "DM Sans", -apple-system, "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Spacing */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-8: 64px;
+  --space-12: 96px;
+  --space-16: 128px;
+
+  /* Shape, elevation, and motion */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow-sm: 0 1px 3px rgba(20, 21, 23, 0.04);
+  --shadow-md: 0 4px 16px rgba(20, 21, 23, 0.08);
+  --shadow-lg: 0 8px 32px rgba(20, 21, 23, 0.12);
+  --transition-micro: 180ms ease-out;
+  --transition-state: 250ms ease-in-out;
+  --transition-enter: 500ms cubic-bezier(0.25, 0.1, 0.25, 1);
+
   /* Base colors */
-  --bg-primary: #f5f7fa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f0f2f5;
-  --bg-dialog: #ffffff;
-  --bg-input: #ffffff;
+  --bg-primary: var(--mewa-parchment);
+  --bg-secondary: var(--mewa-paper);
+  --bg-tertiary: var(--mewa-primary-muted);
+  --bg-dialog: var(--mewa-paper);
+  --bg-input: var(--mewa-paper);
 
   /* Navbar gradient relies on dynamically set variables */
   --bg-navbar: linear-gradient(135deg, var(--navbar-gradient-start), var(--navbar-gradient-end));
-  --bg-sidebar: #f0f2f5;
-  --bg-card: #ffffff;
+  --bg-sidebar: var(--mewa-fog);
+  --bg-card: var(--mewa-paper);
 
   /* Button colors */
-  --bg-button-primary: var(--accent-color, #4E97D1); /* Use accent color, fallback to Huduma blue */
-  --bg-button-primary-hover: var(--accent-hover, #3a7da0); /* Hover shade */
-  --bg-button-secondary: #d1d5db; /* Neutral gray for light mode */
-  --bg-button-secondary-hover: #b9bfc9; /* Slightly darker gray for hover */
+  --bg-button-primary: var(--accent-color, var(--mewa-primary));
+  --bg-button-primary-hover: var(--accent-hover, var(--mewa-primary-dark));
+  --bg-button-secondary: var(--mewa-fog);
+  --bg-button-secondary-hover: var(--mewa-primary-muted);
 
   /* Text colors */
-  --text-primary: #333333;
-  --text-secondary: #4d4d4d;
-  --text-tertiary: #767676;
-  --text-navbar: #ffffff;
-  --text-muted: #6c757d;
-  --text-button-primary: #ffffff;
-  --text-button-secondary: #333333; /* Dark text for light background */
+  --text-primary: var(--mewa-obsidian);
+  --text-secondary: var(--mewa-primary-deep);
+  --text-tertiary: var(--mewa-sandstone);
+  --text-navbar: var(--mewa-paper);
+  --text-muted: var(--mewa-sandstone);
+  --text-button-primary: var(--mewa-paper);
+  --text-button-secondary: var(--mewa-obsidian);
 
   /* Borders */
-  --border-color: #dcdfe4;
-  --border-light: #e5e7eb;
-  --border-input: #dcdfe4;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --border-color: var(--mewa-fog);
+  --border-light: var(--mewa-primary-muted);
+  --border-input: var(--mewa-sandstone);
 
   /* Accent colors rely on dynamically set variables */
-  --accent-color: var(--accent-color, #4E97D1); /* Fallback to Huduma blue */
-  --accent-hover: var(--accent-hover, #3a7da0);
-  --accent-color-secondary: var(--accent-color-secondary, #2C5F8A); /* Secondary accent from config */
+  --accent-color: var(--mewa-primary);
+  --accent-hover: var(--mewa-primary-dark);
+  --accent-color-secondary: var(--mewa-primary-deep);
+  --primary: var(--mewa-primary);
+  --primary-hover: var(--mewa-primary-dark);
+  --secondary: var(--mewa-primary-deep);
 
   /* Status colors */
-  --status-operational: #10b981;
-  --status-degraded: #f59e0b;
-  --status-outage: #ef4444;
+  --status-operational: var(--mewa-canopy);
+  --status-degraded: var(--mewa-dune);
+  --status-outage: var(--mewa-terra);
+  --status-error: var(--mewa-terra);
+  --success: var(--mewa-canopy);
+  --warning: var(--mewa-dune);
+  --danger: var(--mewa-terra);
 
   /* Form elements */
-  --slider-track: #e9ecef;
-  --slider-thumb: var(--bg-button-primary, #4E97D1); /* Use primary color for consistency */
-  --switch-track-off: #d0d0d0;
-  --switch-track-on: var(--bg-button-primary, #4E97D1); /* Use primary color for active state */
-  --switch-thumb: #ffffff;
+  --slider-track: var(--mewa-fog);
+  --slider-thumb: var(--bg-button-primary, var(--mewa-primary));
+  --switch-track-off: var(--mewa-sandstone);
+  --switch-track-on: var(--bg-button-primary, var(--mewa-primary));
+  --switch-thumb: var(--mewa-paper);
 }
 
 /* Dark theme variables - applied ONLY when [data-theme="dark"] is present */
@@ -62,51 +107,41 @@ html[data-theme="dark"],
 body[data-theme="dark"],
 [data-theme="dark"] {
   /* Base colors */
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #252525;
-  --bg-tertiary: #2a2a2a;
-  --bg-dialog: #2a2a2a;
-  --bg-input: #333333;
+  --bg-primary: var(--mewa-obsidian);
+  --bg-secondary: var(--mewa-basalt);
+  --bg-tertiary: #26323a;
+  --bg-dialog: var(--mewa-basalt);
+  --bg-input: #26323a;
 
   /* Navbar gradient relies on dynamically set variables, same as light mode */
   --bg-navbar: linear-gradient(135deg, var(--navbar-gradient-start), var(--navbar-gradient-end));
-  --bg-sidebar: #252525;
-  --bg-card: #2a2a2a;
+  --bg-sidebar: var(--mewa-basalt);
+  --bg-card: #24272c;
 
   /* Button colors - no override for primary to keep it consistent with light mode */
-  --bg-button-secondary: #4b5563; /* Dark gray for dark mode */
-  --bg-button-secondary-hover: #6b7280; /* Slightly lighter gray for hover */
+  --bg-button-secondary: #33424a;
+  --bg-button-secondary-hover: var(--mewa-primary-deep);
 
   /* Text colors */
-  --text-primary: #f0f0f0;
-  --text-secondary: #b3b3b3;
-  --text-tertiary: #8c8c8c;
-  --text-navbar: #ffffff;
-  --text-muted: #9ca3af;
-  --text-button-primary: #ffffff;
-  --text-button-secondary: #e0e0e0; /* Light text for dark background */
+  --text-primary: var(--mewa-paper);
+  --text-secondary: var(--mewa-primary-light);
+  --text-tertiary: var(--mewa-sandstone);
+  --text-navbar: var(--mewa-paper);
+  --text-muted: var(--mewa-sandstone);
+  --text-button-primary: var(--mewa-paper);
+  --text-button-secondary: var(--mewa-paper);
 
   /* Borders */
-  --border-color: #3a3a3a;
-  --border-light: #333333;
-  --border-input: #3a3a3a;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
-
-  /* Status colors remain the same for consistency */
-  --status-operational: #10b981;
-  --status-degraded: #f59e0b;
-  --status-outage: #ef4444;
+  --border-color: #30363a;
+  --border-light: #2a3033;
+  --border-input: #44535b;
 
   /* Form elements */
-  --slider-track: #3a3a3a;
-  --slider-thumb: var(--bg-button-primary, #4E97D1); /* Use primary color */
-  --switch-track-off: #4d4d4d;
-  --switch-track-on: var(--bg-button-primary, #4E97D1); /* Use primary color */
-  --switch-thumb: #ffffff;
+  --slider-track: #30363a;
+  --slider-thumb: var(--bg-button-primary, var(--mewa-primary));
+  --switch-track-off: #44535b;
+  --switch-track-on: var(--bg-button-primary, var(--mewa-primary));
+  --switch-thumb: var(--mewa-paper);
 }
 
 /* System theme support */
@@ -115,50 +150,40 @@ body[data-theme="dark"],
   body[data-theme="system"],
   [data-theme="system"] {
     /* Base colors */
-    --bg-primary: #1e1e1e;
-    --bg-secondary: #252525;
-    --bg-tertiary: #2a2a2a;
-    --bg-dialog: #2a2a2a;
-    --bg-input: #333333;
+    --bg-primary: var(--mewa-obsidian);
+    --bg-secondary: var(--mewa-basalt);
+    --bg-tertiary: #26323a;
+    --bg-dialog: var(--mewa-basalt);
+    --bg-input: #26323a;
 
     /* Navbar gradient */
     --bg-navbar: linear-gradient(135deg, var(--navbar-gradient-start), var(--navbar-gradient-end));
-    --bg-sidebar: #252525;
-    --bg-card: #2a2a2a;
+    --bg-sidebar: var(--mewa-basalt);
+    --bg-card: #24272c;
 
     /* Button colors - no override for primary */
-    --bg-button-secondary: #4b5563;
-    --bg-button-secondary-hover: #6b7280;
+    --bg-button-secondary: #33424a;
+    --bg-button-secondary-hover: var(--mewa-primary-deep);
 
     /* Text colors */
-    --text-primary: #f0f0f0;
-    --text-secondary: #b3b3b3;
-    --text-tertiary: #8c8c8c;
-    --text-navbar: #ffffff;
-    --text-muted: #9ca3af;
-    --text-button-primary: #ffffff;
-    --text-button-secondary: #e0e0e0;
+    --text-primary: var(--mewa-paper);
+    --text-secondary: var(--mewa-primary-light);
+    --text-tertiary: var(--mewa-sandstone);
+    --text-navbar: var(--mewa-paper);
+    --text-muted: var(--mewa-sandstone);
+    --text-button-primary: var(--mewa-paper);
+    --text-button-secondary: var(--mewa-paper);
 
     /* Borders */
-    --border-color: #3a3a3a;
-    --border-light: #333333;
-    --border-input: #3a3a3a;
-
-    /* Shadows */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
-
-    /* Status colors */
-    --status-operational: #10b981;
-    --status-degraded: #f59e0b;
-    --status-outage: #ef4444;
+    --border-color: #30363a;
+    --border-light: #2a3033;
+    --border-input: #44535b;
 
     /* Form elements */
-    --slider-track: #3a3a3a;
-    --slider-thumb: var(--bg-button-primary, #4E97D1);
-    --switch-track-off: #4d4d4d;
-    --switch-track-on: var(--bg-button-primary, #4E97D1);
-    --switch-thumb: #ffffff;
+    --slider-track: #30363a;
+    --slider-thumb: var(--bg-button-primary, var(--mewa-primary));
+    --switch-track-off: #44535b;
+    --switch-track-on: var(--bg-button-primary, var(--mewa-primary));
+    --switch-thumb: var(--mewa-paper);
   }
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework with dual-prompt mechanism for quick help buttons",
+  "title": "MEWA Framework Configuration",
+  "description": "Configuration file for customizing the MEWA chatbot framework with dual-prompt mechanism for quick help buttons",
   "type": "object",
   "properties": {
     "app": {
@@ -11,7 +11,7 @@
         "title": {
           "type": "string",
           "description": "Main application title displayed in the UI",
-          "default": "GENIE.AI"
+          "default": "MEWA"
         },
         "icon": {
           "type": "object",
@@ -49,22 +49,22 @@
         "primaryColor": {
           "type": "string",
           "description": "Primary color for buttons and accents",
-          "default": "#4E97D1"
+          "default": "#6B9E7A"
         },
         "secondaryColor": {
           "type": "string",
           "description": "Secondary color for accents and highlights",
-          "default": "#2C5F8A"
+          "default": "#1F4A5E"
         },
         "backgroundColor": {
           "type": "string",
           "description": "Background color for main content area",
-          "default": "#f5f7fa"
+          "default": "#F5F2EC"
         },
         "textColor": {
           "type": "string",
           "description": "Primary text color",
-          "default": "#333333"
+          "default": "#141517"
         },
         "navbar": {
           "type": "object",
@@ -73,17 +73,17 @@
             "gradientStart": {
               "type": "string",
               "description": "Start color for navbar gradient",
-              "default": "#4E97D1"
+              "default": "#1F4A5E"
             },
             "gradientEnd": {
               "type": "string",
               "description": "End color for navbar gradient",
-              "default": "#2C5F8A"
+              "default": "#1F4A5E"
             },
             "textColor": {
               "type": "string",
               "description": "Navbar text/icon color",
-              "default": "#ffffff"
+              "default": "#FDFCFA"
             }
           }
         }
@@ -105,12 +105,12 @@
             "welcomeMessage": {
               "type": "string",
               "description": "Custom welcome message for the chatbot",
-              "default": "Welcome to GENIE.AI!"
+              "default": "Welcome to MEWA!"
             },
             "botName": {
               "type": "string",
               "description": "Name of the chatbot",
-              "default": "Genie"
+              "default": "MEWA"
             },
             "quickHelp": {
               "type": "object",
@@ -231,27 +231,38 @@
     "theme"
   ],
   "app": {
-    "title": "GENIE.AI",
+    "title": "MEWA",
     "icon": {
       "type": "file",
       "value": "/config/genie-ai-icon-light.svg"
     }
   },
   "theme": {
-    "primaryColor": "#4682B4",
-    "secondaryColor": "#5F9EA0",
-    "backgroundColor": "#D3E0EA",
-    "textColor": "#1C2526",
+    "primaryColor": "#6B9E7A",
+    "primaryLight": "#A3C4D4",
+    "primaryMuted": "#D0DFE6",
+    "primaryDark": "#3A6B82",
+    "primaryDeep": "#1F4A5E",
+    "secondaryColor": "#1F4A5E",
+    "backgroundColor": "#F5F2EC",
+    "textColor": "#141517",
+    "paper": "#FDFCFA",
+    "fog": "#E3DED6",
+    "sandstone": "#B5AFA5",
+    "basalt": "#1E2024",
+    "dune": "#C9A96E",
+    "canopy": "#6B9E7A",
+    "terra": "#BF6A5A",
     "navbar": {
-      "gradientStart": "#4682B4",
-      "gradientEnd": "#5F9EA0",
-      "textColor": "#F0F8FF"
+      "gradientStart": "#1F4A5E",
+      "gradientEnd": "#1F4A5E",
+      "textColor": "#FDFCFA"
     }
   },
   "features": {
     "chat": {
       "welcomeMessage": "Welcome! I'm MEWA, your agricultural early warning assistant for Bangladesh. How can I help you today?",
-      "botName": "GENIE.AI",
+      "botName": "MEWA",
       "quickHelp": {
         "buttons": []
       }

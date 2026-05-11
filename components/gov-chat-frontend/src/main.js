@@ -7,7 +7,7 @@
  * - Logging all messages for each locale (only in development mode)
  * - Logging the active locale before and after mount
  * - Theme system integration - Synchronized with ThemeManager.js
- * - Loading genie-ai-config.json from /config folder for GENIE.AI framework customization
+ * - Loading genie-ai-config.json from /config folder for MEWA framework customization
  *****************************************************************************************************/
 
 import { createApp } from 'vue'
@@ -25,27 +25,27 @@ import { themeManager } from './utils/ThemeManager'; // Updated import path
 import './theme-variables.css'
 import './theme-components.css'
 
-// Fetch configuration for GENIE.AI framework with fallback defaults
+// Fetch configuration for MEWA framework with fallback defaults
 let config = {
   app: {
-    title: 'Huduma AI',
-    icon: { type: 'file', value: '/config/huduma-icon.svg' }
+    title: 'MEWA',
+    icon: { type: 'file', value: '/config/genie-ai-icon-light.svg' }
   },
   theme: {
-    primaryColor: '#4E97D1',
-    secondaryColor: '#2C5F8A',
-    backgroundColor: '#f5f7fa',
-    textColor: '#333333',
+    primaryColor: '#5E8EA6',
+    secondaryColor: '#1F4A5E',
+    backgroundColor: '#F5F2EC',
+    textColor: '#141517',
     navbar: {
-      gradientStart: '#4E97D1',
-      gradientEnd: '#2C5F8A',
-      textColor: '#ffffff'
+      gradientStart: '#1F4A5E',
+      gradientEnd: '#1F4A5E',
+      textColor: '#FDFCFA'
     }
   },
   features: {
     chat: {
-      welcomeMessage: 'Welcome to Huduma AI, your public service assistant!',
-      botName: 'Huduma'
+      welcomeMessage: "Welcome! I'm MEWA, your agricultural early warning assistant for Bangladesh. How can I help you today?",
+      botName: 'MEWA'
     }
   },
   custom: {}
@@ -61,36 +61,49 @@ export async function loadConfig() {
     console.log('Configuration loaded:', config);
     console.log('Quick Help config:', config.features?.chat?.quickHelp);
 
-    // Dynamically set CSS variables based on config (FIX: Added for success case)
-    const root = document.documentElement;
-    if (config.theme) {
-      if (config.theme.navbar) {
-        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
-        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
-        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
-      }
-      root.style.setProperty('--accent-color', config.theme.primaryColor);
-      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
-      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
-    }
+    applyConfiguredTheme(config.theme);
   } catch (error) {
     console.error('Error loading config:', error);
     console.warn('Using default configuration');
 
-    // Set default CSS variables
-    const root = document.documentElement;
-    if (config.theme) {
-      if (config.theme.navbar) {
-        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
-        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
-        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
-      }
-      root.style.setProperty('--accent-color', config.theme.primaryColor);
-      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
-      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
-    }
+    applyConfiguredTheme(config.theme);
   }
   return config;
+}
+
+function applyConfiguredTheme(theme = {}) {
+  const root = document.documentElement;
+  const primary = theme.primaryColor || '#6B9E7A';
+  const secondary = theme.secondaryColor || '#1F4A5E';
+  const background = theme.backgroundColor || '#F5F2EC';
+  const text = theme.textColor || '#141517';
+
+  root.style.setProperty('--theme-primary-color', primary);
+  root.style.setProperty('--theme-secondary-color', secondary);
+  root.style.setProperty('--theme-background-color', background);
+  root.style.setProperty('--theme-text-color', text);
+
+  root.style.setProperty('--accent-color', primary);
+  root.style.setProperty('--accent-hover', theme.primaryDark || adjustColor(primary, -20));
+  root.style.setProperty('--accent-color-secondary', secondary);
+
+  root.style.setProperty('--theme-primary-light', theme.primaryLight || '#A3C4D4');
+  root.style.setProperty('--theme-primary-muted', theme.primaryMuted || '#D0DFE6');
+  root.style.setProperty('--theme-primary-dark', theme.primaryDark || '#3A6B82');
+  root.style.setProperty('--theme-primary-deep', theme.primaryDeep || secondary);
+  root.style.setProperty('--theme-paper', theme.paper || '#FDFCFA');
+  root.style.setProperty('--theme-fog', theme.fog || '#E3DED6');
+  root.style.setProperty('--theme-sandstone', theme.sandstone || '#B5AFA5');
+  root.style.setProperty('--theme-basalt', theme.basalt || '#1E2024');
+  root.style.setProperty('--theme-dune', theme.dune || '#C9A96E');
+  root.style.setProperty('--theme-canopy', theme.canopy || '#6B9E7A');
+  root.style.setProperty('--theme-terra', theme.terra || '#BF6A5A');
+
+  if (theme.navbar) {
+    root.style.setProperty('--navbar-gradient-start', theme.navbar.gradientStart || primary);
+    root.style.setProperty('--navbar-gradient-end', theme.navbar.gradientEnd || secondary);
+    root.style.setProperty('--navbar-text-color', theme.navbar.textColor || '#FDFCFA');
+  }
 }
 
 // Helper function to adjust color brightness (for hover states)
@@ -206,7 +219,7 @@ initializeTheme();
 // Create the Vue app
 const app = createApp(App)
 
-// Make config available globally for GENIE.AI framework customization (e.g., title, icon, navbar colors)
+// Make config available globally for MEWA framework customization (e.g., title, icon, navbar colors)
 app.config.globalProperties.$config = config;
 
 // Use router, i18n, and store

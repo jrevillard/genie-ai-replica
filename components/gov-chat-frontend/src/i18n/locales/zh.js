@@ -210,7 +210,7 @@ export default {
     backToLogin: '返回登录'
   },
   admin: {
-    huduma: 'Genie AI',
+    huduma: 'MEWA',
     dashboard: '仪表板',
     system: '系统',
     settings: '设置',
@@ -580,7 +580,7 @@ export default {
     }
   },
   passwordResetConfirm: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     resetPassword: '创建新密码',
     tokenLabel: '重置令牌',
     tokenPlaceholder: '输入重置令牌',
@@ -620,7 +620,7 @@ export default {
     }
   },
   passwordReset: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     resetPassword: '重置您的密码',
     emailLabel: '电子邮件地址',
     emailPlaceholder: '输入您的电子邮件',
@@ -635,7 +635,7 @@ export default {
     checkEmail: '请检查您的电子邮件以获取进一步指示。'
   },
   register: {
-    appTitle: "Genie AI",
+    appTitle: "MEWA",
     createAccount: "创建新账户",
     username: "用户名",
     usernamePlaceholder: "输入用户名",
@@ -672,7 +672,7 @@ export default {
     networkError: '网络错误。请检查您的连接并重试。'
   },
   login: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     username: '用户名',
     password: '密码',
     loginButton: '登录',
@@ -809,7 +809,7 @@ export default {
     satisfactionRate: '满意率',
     satisfactionAnalysis: '用户满意度分析'
   },
-  brandName: 'Genie AI：您的数字政府助手',
+  brandName: 'MEWA：您的数字政府助手',
   nav: {
     systemStatus: '系统状态',
     menu: '菜单',
@@ -1474,23 +1474,23 @@ export default {
     findJobsUserPrompt: "目前有哪些政府工作机会？",
 
     // System Prompts (Hidden from User - detailed prompts sent to LLM)
-    applyForIDPrompt: "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+    applyForIDPrompt: "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'MEWA'.",
 
-    payTaxesPrompt: "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+    payTaxesPrompt: "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'MEWA'.",
 
-    startBusinessPrompt: "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+    startBusinessPrompt: "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'MEWA'.",
 
-    findHealthcarePrompt: "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+    findHealthcarePrompt: "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'MEWA'.",
 
-    educationServicesPrompt: "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+    educationServicesPrompt: "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'MEWA'.",
 
-    transportLicensesPrompt: "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+    transportLicensesPrompt: "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'MEWA'.",
 
-    housingProgramsPrompt: "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+    housingProgramsPrompt: "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'MEWA'.",
 
-    findJobsPrompt: "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+    findJobsPrompt: "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'MEWA'.",
 
-    justChatPrompt: "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+    justChatPrompt: "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'MEWA'."
   },
   common: {
     cancel: '取消',

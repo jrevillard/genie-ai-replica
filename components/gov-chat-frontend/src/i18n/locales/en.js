@@ -210,7 +210,7 @@ export default {
     backToLogin: 'Back to Login'
   },
   admin: {
-    huduma: 'Genie AI',
+    huduma: 'MEWA',
     dashboard: 'Dashboard',
     system: 'System',
     settings: 'Settings',
@@ -580,7 +580,7 @@ export default {
     }
   },
   passwordResetConfirm: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     resetPassword: 'Create New Password',
     tokenLabel: 'Reset Token',
     tokenPlaceholder: 'Enter reset token',
@@ -620,7 +620,7 @@ export default {
     }
   },
   passwordReset: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     resetPassword: 'Reset Your Password',
     emailLabel: 'Email Address',
     emailPlaceholder: 'Enter your email',
@@ -635,7 +635,7 @@ export default {
     checkEmail: 'Please check your email for further instructions.'
   },
   register: {
-    appTitle: "Genie AI",
+    appTitle: "MEWA",
     createAccount: "Create New Account",
     username: "Username",
     usernamePlaceholder: "Enter a username",
@@ -672,7 +672,7 @@ export default {
     networkError: 'Network error. Please check your connection and try again.'
   },
   login: {
-    appTitle: 'Genie AI',
+    appTitle: 'MEWA',
     username: 'Username',
     password: 'Password',
     loginButton: 'Login',
@@ -809,7 +809,7 @@ export default {
     satisfactionRate: 'Satisfaction Rate',
     satisfactionAnalysis: 'User Satisfaction Analysis'
   },
-  brandName: 'Genie AI: Your Digital Government Assistant',
+  brandName: 'MEWA: Your Digital Government Assistant',
   nav: {
     systemStatus: 'System Status',
     menu: 'Menu',

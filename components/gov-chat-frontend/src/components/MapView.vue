@@ -32,7 +32,7 @@ export default {
     mapboxgl.accessToken = process.env.VUE_APP_MAPBOX_TOKEN || '';
     this.map = new mapboxgl.Map({
       container: this.$refs.mapContainer,
-      style: 'mapbox://styles/mapbox/satellite-v12',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
       center: [this.lon, this.lat],
       zoom: this.zoom,
     });
@@ -105,8 +105,12 @@ export default {
         const fillId = `${id}-fill`;
         const lineId = `${id}-line`;
 
+        // JSON round-trip strips Vue reactive getters/setters so Mapbox's
+        // structured-clone (worker transfer) succeeds without errors.
+        const plainGeojson = JSON.parse(JSON.stringify(geojson));
+
         if (!this.map.getSource(id)) {
-          this.map.addSource(id, { type: 'geojson', data: geojson });
+          this.map.addSource(id, { type: 'geojson', data: plainGeojson });
         }
         if (!this.map.getLayer(fillId)) {
           this.map.addLayer({ id: fillId, type: 'fill', source: id,
@@ -119,7 +123,7 @@ export default {
 
         this._renderedLayerIds.push(fillId, lineId);
 
-        const bbox = this._computeBbox(geojson);
+        const bbox = this._computeBbox(plainGeojson);
         if (bbox) bboxes.push(bbox);
       });
 

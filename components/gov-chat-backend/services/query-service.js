@@ -665,9 +665,13 @@ class QueryService {
         } // end else (non-weather path)
       }
 
-      // Record the query in analytics
+      // Record the query in analytics — non-fatal so large geo responses don't kill the reply
       if (this.analyticsService) {
-        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        try {
+          await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        } catch (analyticsErr) {
+          logger.warn('QueryService.analytics_record_failed', { queryId, error: analyticsErr.message });
+        }
       }
 
       const totalDuration = Date.now() - startTime;

@@ -95,7 +95,7 @@ Key facts about Lesotho agriculture:
 - Fall Armyworm: ragged leaf damage and frass in whorl. Control with early planting and pesticides.
 
 If asked about identity: say only "I am Keletso, your AI agricultural advisor for Lesotho Ministry of Agriculture."
-If not about agriculture: say only "I am Keletso, I can only assist with farming and agriculture questions."
+If asked about any person, individual, or name: say only "I am Keletso, I can only assist with farming and agriculture questions." Never fabricate information about people. Always respond in English only, regardless of the language of the question. Never use markdown formatting like ## in responses.
 Never mention SC varieties, P varieties, RR2 or any non-Lesotho variety names.
 If you cannot fully answer from the knowledge base, use your core knowledge above to give a brief answer, then say: "For more detailed guidance, please consult your District Agricultural Officer or Senior Extension Supervisor."
 Never return an empty response - always provide at least a partial answer."""
@@ -1274,10 +1274,11 @@ class ChatQnAService:
                     'pan 3m', 'pan 12', 'pan 4m', 'kranskop', 'pinto', 'advice', 'npk', 'nitrogen', 'phosphorus', 'potassium', 'nutrient', 'deficiency',
                     'advise', 'recommend', 'help', 'farmer', 'hectare', 'acre',
                     'visit', 'field day', 'training', 'workshop', 'demo plot',
-                    'who are you', 'what are you', 'keletso', 'introduce', 'your name', 'who is']
+                    'who are you', 'what are you', 'keletso', 'introduce', 'your name']
                 _ql = last_user_content.lower() if last_user_content else ''
                 _is_agri = any(kw in _ql for kw in _agri)
-                _blocked = not _is_agri
+                _person_question = any(kw in _ql for kw in ['who is ', 'who was ', 'tell me about ', 'wer ist ', 'qui est '])
+                _blocked = not _is_agri or _person_question
                 if _blocked:
                     from fastapi.responses import JSONResponse as _JR
                     return _JR(content={"response": "I am Keletso, your agricultural advisor for Lesotho. I can only assist with farming and agriculture questions. Please ask me about crops, pests, weather or farming programs.", "metadata": {"source_documents": [], "confidence_score": 0.0}})

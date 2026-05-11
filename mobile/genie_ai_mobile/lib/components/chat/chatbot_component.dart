@@ -1091,16 +1091,18 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
                   itemCount:
-                      _messages.length + (_isLoading && !_isStreaming ? 1 : 0),
+                      _messages.length + (_isLoading || _isStreaming ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (index == _messages.length && _isLoading) {
+                    if (index == _messages.length && (_isLoading || _isStreaming)) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Row(
                           children: [
                             const CircularProgressIndicator(strokeWidth: 2),
                             const SizedBox(width: 12),
-                            Text(tr('chatbot.thinking')),
+                            Text(_isStreaming
+                                ? tr('chatbot.generating')
+                                : tr('chatbot.thinking')),
                           ],
                         ),
                       );

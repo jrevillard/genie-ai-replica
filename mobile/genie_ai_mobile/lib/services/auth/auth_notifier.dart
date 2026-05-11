@@ -25,7 +25,6 @@ AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
 enum _FailedOperation { none, authorize, refreshToken, validateTokens }
 
 class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
-  static const Duration authorizeTimeout = Duration(seconds: 30);
   static const Duration refreshTokenTimeout = Duration(seconds: 15);
   static const Duration discoveryTimeout = Duration(seconds: 10);
 
@@ -190,15 +189,6 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
               allowInsecureConnections:
                   _keycloakService.keycloakConfig.allowInsecureConnections,
             ),
-          )
-          .timeout(
-            authorizeTimeout,
-            onTimeout: () {
-              throw TimeoutException(
-                'Authorization timed out',
-                authorizeTimeout,
-              );
-            },
           );
 
       final expiration = tokenResponse.accessTokenExpirationDateTime ??

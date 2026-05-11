@@ -44,6 +44,71 @@ class NavBarComponent extends StatelessWidget {
     }
   }
 
+  void _openProfile(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
+    );
+  }
+
+  void _openSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: SettingsComponent(user: user),
+      ),
+    );
+  }
+
+  void _showMoreMenu(BuildContext context, bool isOnline) {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  enabled: isOnline,
+                  leading: Icon(
+                    Icons.person_outline,
+                    color: isOnline ? null : Colors.grey,
+                  ),
+                  title: Text(
+                    'Profile',
+                    style: TextStyle(color: isOnline ? null : Colors.grey),
+                  ),
+                  onTap: isOnline
+                      ? () {
+                          Navigator.pop(sheetContext);
+                          _openProfile(context);
+                        }
+                      : null,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.settings_outlined),
+                  title: const Text('Settings'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _openSettings(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic> themeColors = ThemeManager().getColors();
@@ -166,68 +231,16 @@ class NavBarComponent extends StatelessWidget {
                 builder: (context, snapshot) {
                   final bool isOnline = snapshot.data ?? false;
 
-                  return PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert, color: contentColor),
+                  return IconButton(
+                    visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints.tightFor(
                       width: 40,
                       height: 40,
                     ),
+                    icon: Icon(Icons.more_vert, color: contentColor),
                     tooltip: "More",
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'profile':
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => UserProfileScreen(user: user),
-                            ),
-                          );
-                          break;
-                        case 'settings':
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            useSafeArea: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (ctx) => FractionallySizedBox(
-                              heightFactor: 0.9,
-                              child: SettingsComponent(user: user),
-                            ),
-                          );
-                          break;
-                      }
-                    },
-                    itemBuilder: (BuildContext context) =>
-                        <PopupMenuEntry<String>>[
-                          PopupMenuItem<String>(
-                            value: 'profile',
-                            enabled: isOnline, // DISABLE PROFILE IF OFFLINE
-                            child: ListTile(
-                              leading: Icon(
-                                Icons.person_outline,
-                                color: isOnline ? null : Colors.grey,
-                              ),
-                              title: Text(
-                                'Profile',
-                                style: TextStyle(
-                                  color: isOnline ? null : Colors.grey,
-                                ),
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                            ),
-                          ),
-                          const PopupMenuItem<String>(
-                            value: 'settings',
-                            child: ListTile(
-                              leading: Icon(Icons.settings_outlined),
-                              title: Text('Settings'),
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                            ),
-                          ),
-                        ],
+                    onPressed: () => _showMoreMenu(context, isOnline),
                   );
                 },
               ),

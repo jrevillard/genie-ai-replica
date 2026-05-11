@@ -695,6 +695,7 @@ async function initializeServices() {
   let authService, userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, sessionService, logsService;
   let databaseOperationsService, weatherService, securityScanService, translationService, notificationService;
+  let databaseOperationsService, weatherService, securityScanService, translationService, notificationService;
 
   const importService = async (name, path) => {
     logger.info(`Importing service: ${name}`);
@@ -728,6 +729,7 @@ async function initializeServices() {
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
     notificationService = await importService('NotificationService', './services/notification-service');
+    notificationService = await importService('NotificationService', './services/notification-service');
 
     logger.info('Constructing service map');
     const serviceMap = {
@@ -743,6 +745,8 @@ async function initializeServices() {
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
+      translationService: { instance: translationService, name: 'TranslationService' },
+      notificationService: { instance: notificationService, name: 'NotificationService' }
       translationService: { instance: translationService, name: 'TranslationService' },
       notificationService: { instance: notificationService, name: 'NotificationService' }
     };
@@ -793,6 +797,8 @@ async function initializeServices() {
       { service: services.logsService, name: 'LogsService' },
       // Marked optional: true to prevent boot failure on rate limits
       { service: services.weatherService, name: 'WeatherService', optional: true },
+      { service: services.translationService, name: 'TranslationService' },
+      { service: services.notificationService, name: 'NotificationService' }
       { service: services.translationService, name: 'TranslationService' },
       { service: services.notificationService, name: 'NotificationService' }
     ];

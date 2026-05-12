@@ -60,17 +60,6 @@ OPEA_HOST=e2e-109-198
 OPEA_PORT=8888
 CONTEXT_OPTION=conversation-with-context-labels
 
-# Weather MCP Service — keyword router
-# When true: queries containing weather keywords bypass OPEA and go to weather-mcp-service /query
-WEATHER_ENABLED=true
-WEATHER_MCP_URL=http://weather-mcp-service:8000  # Docker service name; use http://localhost:8000 for local dev
-
-# vLLM tool-calling loop (disabled — OPEA port 9000 does not support tool_choice: "auto")
-TOOLS_ENABLED=false
-VLLM_URL=http://91.203.132.198:9000/v1/chat/completions
-VLLM_MODEL=ibm-granite/granite-3.3-2b-instruct
-MAX_TOOL_ROUNDS=5
-
 #CORS configuration
 CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
 CSP_CONNECT_SRC="'self' http://localhost:3000 http://localhost:8090 ws://localhost:8090 wss://*.ssdcloudindia.net *.ssdcloudindia.net https://api.open-meteo.com https://ipapi.co https://nominatim.openstreetmap.org wss://genie-ai.itu.int:443'"

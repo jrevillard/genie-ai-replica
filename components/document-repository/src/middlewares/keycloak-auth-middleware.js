@@ -137,8 +137,13 @@ const authenticateToken = async (req, res, next) => {
 
     // Validate azp (authorized party) — the client that requested the token.
     // Keycloak 26+ sets aud=account for access tokens; azp holds the actual client ID.
-    const expectedClientId = appConfig.security.keycloakClientId;
-    if (decoded.azp && decoded.azp !== expectedClientId) {
+    // Accept both the user-facing client (KEYCLOAK_CLIENT_ID) and service-account
+    // clients (e.g. KC_DATAPREP_CLIENT_ID used by dataprep for status callbacks).
+    const allowedAzp = [
+      appConfig.security.keycloakClientId,
+      process.env.KC_DATAPREP_CLIENT_ID
+    ].filter(Boolean);
+    if (decoded.azp && !allowedAzp.includes(decoded.azp)) {
       return res.status(401).json({
         error: 'TOKEN_INVALID',
         message: 'Token audience validation failed',

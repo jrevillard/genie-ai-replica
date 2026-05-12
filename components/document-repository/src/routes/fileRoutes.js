@@ -787,7 +787,7 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.addIngestionLog);
+router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.addIngestionLog);
 
 /**
  * @swagger

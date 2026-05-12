@@ -473,6 +473,7 @@ services:
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}/auth
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
+      - KC_DATAPREP_CLIENT_ID=${KC_DATAPREP_CLIENT_ID:-dataprep-service-client}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     # Internal only - no host port mapping needed
     # ports:

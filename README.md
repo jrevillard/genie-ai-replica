@@ -49,6 +49,21 @@ No API keys needed to evaluate — `.env.defaults` bootstraps the full stack. Re
 
 ---
 
+## Mobile app (Android)
+
+A Flutter patient-facing app that connects to the AMINA backend.
+
+**Key features**
+- 💬 **AI chat** — text and voice messages to the Amina agent, with TTS playback
+- 💊 **Rx scanner** — photograph a prescription to log medications via OCR
+- 📈 **Vitals log** — record and review blood pressure, glucose, weight, etc.
+- 👨‍👩‍👧 **Caregiver circle** — browse the caregiver directory, apply, and manage assigned caregivers
+- 🔐 **Secure auth** — JWT stored in FlutterSecureStorage; session expiry handled automatically
+
+**Tech stack:** Flutter 3 · Riverpod · Dio · flutter\_secure\_storage · shared\_preferences
+**Minimum device:** Android 9 (API 28) · 1 GB RAM · 720×1280
+
+
 ## Services
 
 | Service | URL | Container |

@@ -1,6 +1,6 @@
-# 🌾 Bangladesh Weather Advisor — Production Data Pipeline
+# 🌾 Bangladesh Weather Advisor — STATUS: NOT READY FOR DEPLOYMENT! FULL PROTOTYPE REQUIRES MORE TIME POST-DEADLINE
 
-> **ITU GENIE.AI GenAI-for-Good Challenge 2025**
+> **GENIE.AI GenAI-for-Good Challenge 2026**
 > *Team Climate-CHP • American University of Beirut (AUB)*
 
 An end-to-end data pipeline that aggregates **11 heterogeneous climate,

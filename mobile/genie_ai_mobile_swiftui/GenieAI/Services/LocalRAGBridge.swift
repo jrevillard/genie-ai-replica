@@ -127,6 +127,27 @@ class LocalRAGBridge {
         try await ragService.indexDocument(document)
     }
 
+    /// Index a document with an explicit ID (so we can remove it later by the
+    /// same ID). Used by the offline-library indexer to keep the local vector
+    /// store in sync with the on-disk cache.
+    func indexDocument(id: String, title: String, content: String, metadata: [String: String] = [:]) async throws {
+        Self.logger.info("Indexing document id=\(id) title=\(title) contentLength=\(content.count)")
+        let document = RAGDocument(id: id, title: title, content: content, metadata: metadata)
+        try await ragService.indexDocument(document)
+    }
+
+    /// Remove a previously-indexed document from the local vector store.
+    func removeDocument(id: String) async {
+        Self.logger.info("Removing document id=\(id)")
+        await ragService.removeDocument(id)
+    }
+
+    /// Wipe the local vector store. Useful when re-indexing from scratch.
+    func clearIndex() async {
+        Self.logger.info("Clearing local index")
+        await ragService.clearIndex()
+    }
+
     /// Number of indexed chunks
     var indexedChunkCount: Int {
         get async {

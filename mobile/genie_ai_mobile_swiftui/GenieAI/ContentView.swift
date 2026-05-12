@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var showHistorySheet = false
     @State private var showServicesSheet = false
     @State private var showInfoSheet = false
+    @State private var showLibrarySheet = false
     @State private var showSettings = false
     @State private var showProfile = false
     @State private var currentConversation: Conversation?
@@ -147,6 +148,14 @@ struct ContentView: View {
                         .hapticOnTap(theme: theme)
                         .accessibilityLabel("Knowledge Areas")
 
+                        Button {
+                            showLibrarySheet = true
+                        } label: {
+                            Image(systemName: "arrow.down.doc")
+                        }
+                        .hapticOnTap(theme: theme)
+                        .accessibilityLabel("Offline Library")
+
                         Button(action: startNewChat) {
                             Image(systemName: "plus.message")
                         }
@@ -215,6 +224,23 @@ struct ContentView: View {
                     }
                     .tint(theme.primaryColor)
                 }
+                .sheet(isPresented: $showLibrarySheet) {
+                    NavigationStack {
+                        OfflineLibraryView()
+                            .navigationTitle("Offline Library")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button { showLibrarySheet = false } label: {
+                                        Image(systemName: "checkmark")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .accessibilityLabel(Text("Done"))
+                                }
+                            }
+                    }
+                    .tint(theme.primaryColor)
+                }
                 .sheet(isPresented: $showSettings) {
                     SettingsView()
                 }
@@ -257,6 +283,14 @@ struct ContentView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     connectivityToggle
 
+                    Button {
+                        showLibrarySheet = true
+                    } label: {
+                        Image(systemName: "arrow.down.doc")
+                    }
+                    .hapticOnTap(theme: theme)
+                    .accessibilityLabel("Offline Library")
+
                     Button(action: startNewChat) {
                         Image(systemName: "plus.message")
                     }
@@ -272,6 +306,23 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showProfile) {
                 UserProfileView()
+            }
+            .sheet(isPresented: $showLibrarySheet) {
+                NavigationStack {
+                    OfflineLibraryView()
+                        .navigationTitle("Offline Library")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button { showLibrarySheet = false } label: {
+                                    Image(systemName: "checkmark")
+                                        .fontWeight(.semibold)
+                                }
+                                .accessibilityLabel(Text("Done"))
+                            }
+                        }
+                }
+                .tint(theme.primaryColor)
             }
             .overlay(alignment: .bottom) {
                 offlineToast

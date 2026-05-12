@@ -715,7 +715,7 @@ All platforms must have identical localized strings for every supported language
 ---
 
 ## 15. Local RAG & On-Device AI
-<!-- SwiftUI: local_rag_swift/ (Swift Package), GenieAI/Services/LocalRAGBridge.swift -->
+<!-- SwiftUI: local_rag_swift/ (Swift Package), GenieAI/Services/LocalRAGBridge.swift, GenieAI/Services/RemoteFilesService.swift, GenieAI/Services/OfflineLibraryService.swift, GenieAI/Services/LocalRAGIndexer.swift, GenieAI/Views/OfflineLibrary/OfflineLibraryView.swift -->
 
 The application supports on-device AI-powered chat when offline via a local Retrieval-Augmented Generation (RAG) pipeline. This is implemented as a standalone Swift Package (`LocalRAG`) that is integrated into the SwiftUI app.
 

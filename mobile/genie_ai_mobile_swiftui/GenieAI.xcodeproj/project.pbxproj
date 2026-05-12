@@ -38,6 +38,9 @@
 		F0A1B2C3D4E5F6A7B8C9D0E1 /* FAQ.md in Resources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */; };
 		LOCALRAG0001 /* LocalRAGBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LOCALRAG0002 /* LocalRAGBridge.swift */; };
 		LOCALRAG0004 /* LocalRAG in Frameworks */ = {isa = PBXBuildFile; productRef = LOCALRAG0003 /* LocalRAG */; };
+		OFFLINE0001 /* RemoteFilesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OFFLINE0002 /* RemoteFilesService.swift */; };
+		OFFLINE0003 /* OfflineLibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OFFLINE0004 /* OfflineLibraryService.swift */; };
+		OFFLINE0005 /* LocalRAGIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = OFFLINE0006 /* LocalRAGIndexer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +75,9 @@
 		D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+GlassStyle.swift"; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FAQ.md; sourceTree = "<group>"; };
 		LOCALRAG0002 /* LocalRAGBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRAGBridge.swift; sourceTree = "<group>"; };
+		OFFLINE0002 /* RemoteFilesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteFilesService.swift; sourceTree = "<group>"; };
+		OFFLINE0004 /* OfflineLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineLibraryService.swift; sourceTree = "<group>"; };
+		OFFLINE0006 /* LocalRAGIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRAGIndexer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -81,6 +87,7 @@
 		D09719872F34B31600E0EE08 /* Settings */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Settings; sourceTree = "<group>"; };
 		D097198C2F34B31600E0EE08 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Shared; sourceTree = "<group>"; };
 		D09719912F34B31600E0EE08 /* Sidebar */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Sidebar; sourceTree = "<group>"; };
+		OFFLINE0100 /* OfflineLibrary */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = OfflineLibrary; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -151,6 +158,9 @@
 				D09719682F34B30300E0EE08 /* ConnectivityService.swift */,
 				A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */,
 				LOCALRAG0002 /* LocalRAGBridge.swift */,
+				OFFLINE0006 /* LocalRAGIndexer.swift */,
+				OFFLINE0004 /* OfflineLibraryService.swift */,
+				OFFLINE0002 /* RemoteFilesService.swift */,
 				D097196A2F34B30300E0EE08 /* ServiceTreeService.swift */,
 				D097196B2F34B30300E0EE08 /* ThemeManager.swift */,
 				D097196C2F34B30300E0EE08 /* UserService.swift */,
@@ -164,6 +174,7 @@
 			children = (
 				D097197C2F34B31600E0EE08 /* Auth */,
 				D09719822F34B31600E0EE08 /* Chat */,
+				OFFLINE0100 /* OfflineLibrary */,
 				D09719842F34B31600E0EE08 /* Profile */,
 				D09719872F34B31600E0EE08 /* Settings */,
 				D097198C2F34B31600E0EE08 /* Shared */,
@@ -212,6 +223,7 @@
 			fileSystemSynchronizedGroups = (
 				D097197C2F34B31600E0EE08 /* Auth */,
 				D09719822F34B31600E0EE08 /* Chat */,
+				OFFLINE0100 /* OfflineLibrary */,
 				D09719842F34B31600E0EE08 /* Profile */,
 				D09719872F34B31600E0EE08 /* Settings */,
 				D097198C2F34B31600E0EE08 /* Shared */,
@@ -316,6 +328,9 @@
 				D09719D02F34B40000E0EE08 /* PasswordValidator.swift in Sources */,
 				D09719D22F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift in Sources */,
 				LOCALRAG0001 /* LocalRAGBridge.swift in Sources */,
+				OFFLINE0001 /* RemoteFilesService.swift in Sources */,
+				OFFLINE0003 /* OfflineLibraryService.swift in Sources */,
+				OFFLINE0005 /* LocalRAGIndexer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

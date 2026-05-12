@@ -1,0 +1,665 @@
+[
+  {
+    "name": "ConsultationRecord",
+    "kind": "vertex",
+    "records": 3902,
+    "fields": [
+      "ended_at",
+      "followup_scheduled",
+      "id",
+      "messages",
+      "patient_id",
+      "recommendations",
+      "session_id",
+      "started_at",
+      "summary",
+      "symptoms_reported",
+      "tools_used",
+      "triage_level"
+    ]
+  },
+  {
+    "name": "AuditEventVertex",
+    "kind": "vertex",
+    "records": 1289,
+    "fields": [
+      "action",
+      "actor_id_hash",
+      "actor_type",
+      "created_at",
+      "event_id",
+      "event_type",
+      "metadata_safe",
+      "outcome",
+      "reason_code",
+      "request_id",
+      "resource",
+      "session_hash",
+      "subject_id_hash",
+      "subject_type",
+      "trace_id"
+    ]
+  },
+  {
+    "name": "PatientVertex",
+    "kind": "vertex",
+    "records": 1053,
+    "fields": [
+      "age",
+      "allergies",
+      "bp_readings",
+      "conditions",
+      "consultation_count",
+      "created_at",
+      "email",
+      "gender",
+      "glucose_readings",
+      "id",
+      "key_facts",
+      "last_consultation",
+      "medications",
+      "name",
+      "phone",
+      "pin_hash",
+      "pin_salt",
+      "preferred_language",
+      "region",
+      "updated_at"
+    ]
+  },
+  {
+    "name": "CommunityAuditLog",
+    "kind": "document",
+    "records": 965,
+    "fields": [
+      "action",
+      "audit_id",
+      "category",
+      "data_snapshot",
+      "updated_at",
+      "updated_by"
+    ]
+  },
+  {
+    "name": "ObservatoryAudit",
+    "kind": "document",
+    "records": 780,
+    "fields": [
+      "event_type",
+      "failure_reason",
+      "ip_address",
+      "session_id",
+      "staff_id",
+      "success",
+      "timestamp",
+      "user_agent"
+    ]
+  },
+  {
+    "name": "chunks",
+    "kind": "vertex",
+    "records": 721,
+    "fields": [
+      "category_labels",
+      "chunk_id",
+      "doc_id",
+      "embedding",
+      "graph_enriched",
+      "source",
+      "text",
+      "title"
+    ]
+  },
+  {
+    "name": "MemoryVertex",
+    "kind": "vertex",
+    "records": 401,
+    "fields": [
+      "content",
+      "created_at",
+      "embedding",
+      "id",
+      "importance",
+      "metadata",
+      "patient_id",
+      "type"
+    ]
+  },
+  {
+    "name": "HasMemory",
+    "kind": "edge",
+    "records": 397,
+    "fields": []
+  },
+  {
+    "name": "IntentClassificationLog",
+    "kind": "vertex",
+    "records": 359,
+    "fields": [
+      "classified_intent",
+      "created_at",
+      "log_id",
+      "message",
+      "miss_signals",
+      "override_correction_id",
+      "patient_id",
+      "session_id",
+      "stripped_message",
+      "suspected_miss",
+      "turn_type",
+      "was_overridden"
+    ]
+  },
+  {
+    "name": "CommunityData",
+    "kind": "document",
+    "records": 263,
+    "fields": [
+      "category",
+      "data",
+      "doc_id",
+      "updated_at",
+      "updated_by"
+    ]
+  },
+  {
+    "name": "HasConsultation",
+    "kind": "edge",
+    "records": 207,
+    "fields": []
+  },
+  {
+    "name": "InboxItemVertex",
+    "kind": "vertex",
+    "records": 120,
+    "fields": [
+      "action_url",
+      "attachment_mime",
+      "attachment_name",
+      "attachment_size",
+      "attachment_token",
+      "body",
+      "created_at",
+      "expires_at",
+      "inbox_id",
+      "kind",
+      "metadata",
+      "patient_id",
+      "read",
+      "read_at",
+      "severity",
+      "source",
+      "source_id",
+      "title"
+    ]
+  },
+  {
+    "name": "DHIS2AuditVertex",
+    "kind": "vertex",
+    "records": 92,
+    "fields": [
+      "audit_id",
+      "dhis2_response",
+      "logged_at",
+      "period",
+      "push_action",
+      "success",
+      "totals",
+      "triggered_by",
+      "value_count",
+      "warnings"
+    ]
+  },
+  {
+    "name": "ApiAuditLog",
+    "kind": "vertex",
+    "records": 59,
+    "fields": [
+      "blocked",
+      "caller_id",
+      "chain_hash",
+      "endpoint",
+      "ip_hash",
+      "jailbreak_pattern",
+      "jailbreak_severity",
+      "latency_ms",
+      "log_id",
+      "method",
+      "prev_chain_hash",
+      "request_size",
+      "response_size",
+      "security_flags",
+      "status_code",
+      "timestamp"
+    ]
+  },
+  {
+    "name": "IntentSuspectedMiss",
+    "kind": "vertex",
+    "records": 36,
+    "fields": [
+      "correction_intent",
+      "correction_message",
+      "created_at",
+      "miss_id",
+      "original_intent",
+      "original_message",
+      "patient_id",
+      "reviewed",
+      "session_id",
+      "signals"
+    ]
+  },
+  {
+    "name": "CaregiverPatientEdge",
+    "kind": "edge",
+    "records": 34,
+    "fields": [
+      "caregiver_id",
+      "consent_date",
+      "granted_by",
+      "is_revoked",
+      "note",
+      "patient_id",
+      "permissions",
+      "revoked_at"
+    ]
+  },
+  {
+    "name": "TrackerPushAuditVertex",
+    "kind": "vertex",
+    "records": 24,
+    "fields": [
+      "audit_id",
+      "consent_version",
+      "dry_run",
+      "enrollment_uid",
+      "error_message",
+      "events_count",
+      "forced",
+      "logged_at",
+      "patient_id",
+      "success",
+      "tei_uid",
+      "triggered_by"
+    ]
+  },
+  {
+    "name": "LiteracyProfileVertex",
+    "kind": "vertex",
+    "records": 23,
+    "fields": [
+      "created_at",
+      "current_mode",
+      "declared_level",
+      "patient_id",
+      "reviewer_note",
+      "status",
+      "updated_at",
+      "verified_at",
+      "verified_by",
+      "verified_level"
+    ]
+  },
+  {
+    "name": "TrainingConsentAuditVertex",
+    "kind": "vertex",
+    "records": 21,
+    "fields": [
+      "actor",
+      "actor_id",
+      "actor_role",
+      "audit_id",
+      "consent_version",
+      "logged_at",
+      "new_value",
+      "old_value",
+      "reason"
+    ]
+  },
+  {
+    "name": "CaregiverVertex",
+    "kind": "vertex",
+    "records": 17,
+    "fields": [
+      "accepting_patients",
+      "bio",
+      "caregiver_id",
+      "created_at",
+      "is_directory_visible",
+      "languages",
+      "last_login",
+      "max_patients",
+      "name",
+      "patient_limit",
+      "phone",
+      "pin_hash",
+      "pin_salt",
+      "region",
+      "relationship",
+      "specialization",
+      "specialty_tags",
+      "years_experience"
+    ]
+  },
+  {
+    "name": "TrainingConsentVertex",
+    "kind": "vertex",
+    "records": 15,
+    "fields": [
+      "actor_id",
+      "actor_role",
+      "consent_id",
+      "decided",
+      "updated_at",
+      "value",
+      "version"
+    ]
+  },
+  {
+    "name": "ObservatoryStaff",
+    "kind": "document",
+    "records": 13,
+    "fields": [
+      "created_at",
+      "date_of_birth",
+      "email",
+      "facility",
+      "full_name",
+      "must_change_password",
+      "nin",
+      "password_hash",
+      "phone",
+      "professional_reg",
+      "region",
+      "role",
+      "staff_id",
+      "start_date",
+      "status",
+      "updated_at"
+    ]
+  },
+  {
+    "name": "ConsentAuditVertex",
+    "kind": "vertex",
+    "records": 11,
+    "fields": [
+      "actor",
+      "audit_id",
+      "consent_version",
+      "logged_at",
+      "new_value",
+      "old_value",
+      "patient_id",
+      "reason",
+      "scope"
+    ]
+  },
+  {
+    "name": "Patient",
+    "kind": "document",
+    "records": 10,
+    "fields": [
+      "age",
+      "allergies",
+      "conditions",
+      "emergency_contact",
+      "gender",
+      "last_bp",
+      "last_glucose",
+      "medications",
+      "name",
+      "patient_id",
+      "phone",
+      "region"
+    ]
+  },
+  {
+    "name": "CaregiverConsentRecord",
+    "kind": "vertex",
+    "records": 7,
+    "fields": [
+      "accepted_at",
+      "caregiver_id",
+      "checkbox_count",
+      "checkboxes_accepted",
+      "consent_type",
+      "created_at",
+      "digital_signature_hash",
+      "guardian_consent",
+      "guardian_signature_hash",
+      "mandinka_viewed",
+      "method",
+      "notice_version",
+      "policy_version",
+      "record_id",
+      "role",
+      "scroll_completed"
+    ]
+  },
+  {
+    "name": "CompactionSummary",
+    "kind": "vertex",
+    "records": 4,
+    "fields": [
+      "chars_after",
+      "chars_before",
+      "created_at",
+      "id",
+      "range_count",
+      "session_id",
+      "summarizer_model",
+      "summary_text",
+      "tokens_after",
+      "tokens_before",
+      "trigger_type",
+      "version"
+    ]
+  },
+  {
+    "name": "EducationCertificateVertex",
+    "kind": "vertex",
+    "records": 3,
+    "fields": [
+      "cert_id",
+      "declared_level",
+      "filename",
+      "mime_type",
+      "patient_id",
+      "reviewed_at",
+      "reviewer",
+      "reviewer_note",
+      "size_bytes",
+      "status",
+      "storage_path",
+      "uploaded_at"
+    ]
+  },
+  {
+    "name": "IntentCorrection",
+    "kind": "vertex",
+    "records": 1,
+    "fields": [
+      "classified_intent",
+      "corrected_intent",
+      "correction_id",
+      "count",
+      "created_at",
+      "expires_at",
+      "kill_reason",
+      "pattern",
+      "pattern_hash",
+      "reviewer_id",
+      "source",
+      "status",
+      "updated_at",
+      "weight"
+    ]
+  },
+  {
+    "name": "IntentOverrideAudit",
+    "kind": "vertex",
+    "records": 1,
+    "fields": [
+      "audit_id",
+      "correction_id",
+      "correction_source",
+      "correction_weight",
+      "created_at",
+      "message",
+      "original_intent",
+      "overridden_to",
+      "session_id"
+    ]
+  },
+  {
+    "name": "CaregiverSuspensionVertex",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "Chunk",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "ClinicalInsight",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "ClinicalStateSnapshot",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "CohortInsight",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "Consultation",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "DHIS2ReferralVertex",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "DialogueStateSnapshot",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "HasCompaction",
+    "kind": "edge",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "HasConsent",
+    "kind": "edge",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "InteractionEvent",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "OutcomeRecord",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "PolicyAcceptanceVertex",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "Protocol",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "TranslationMetric",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "categories",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "chunk_entities",
+    "kind": "edge",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "conversations",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "document_chunks",
+    "kind": "edge",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "documents",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "entities",
+    "kind": "vertex",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "messages",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "queries",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "relationships",
+    "kind": "edge",
+    "records": 0,
+    "fields": []
+  },
+  {
+    "name": "users",
+    "kind": "document",
+    "records": 0,
+    "fields": []
+  }
+]

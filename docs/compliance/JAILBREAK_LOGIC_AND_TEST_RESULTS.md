@@ -288,4 +288,3 @@ components/api-gateway/tests/test_jailbreak_detector.py  NEW  (650+ lines, 65 as
 docs/compliance/JAILBREAK_LOGIC_AND_TEST_RESULTS.md  NEW  (this document)
 ```
 
-No commit, no push — sitting in working tree pending your review.

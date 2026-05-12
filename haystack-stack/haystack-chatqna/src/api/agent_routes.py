@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Response as FastAPIResponse
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import json
 import base64
 import logging
@@ -873,10 +873,13 @@ async def agent_voice_chat(
     session_id: str = Form(default="voice_default"),
     patient_id: Optional[str] = Form(default=None),
     phone: Optional[str] = Form(default=None),
+    lang: Optional[str] = Form(default=None),
 ):
-    """Voice agent endpoint: STT -> Agent -> TTS. Returns text + audio availability."""
+    """Voice agent endpoint: STT -> Agent -> TTS. Returns text + audio availability.
+    TTS goes through the language dispatcher (services.tts) so Mandinka
+    replies are routed to MMS instead of being mispronounced by Piper-EN."""
     from src.services.stt_whisper import transcribe
-    from src.services.tts_piper import synthesize
+    from src.services.tts import synthesize
     import re
 
     # Step 1: STT
@@ -914,8 +917,11 @@ async def agent_voice_chat(
     clean = re.sub(r'#{1,6}\s*', '', clean, flags=re.MULTILINE)
     clean = clean.replace('*', '').replace('#', '').strip()
 
-    # Step 3: TTS
-    tts_audio = await synthesize(clean)
+    # Step 3: TTS — explicit `lang` param wins; otherwise fall back to the
+    # language the agent detected from the STT transcript so the spoken
+    # reply matches the user's language.
+    effective_lang = lang or result.get("detected_language") or "en"
+    tts_audio = await synthesize(clean, lang=effective_lang)
 
     return {
         "transcript": transcript,
@@ -925,6 +931,7 @@ async def agent_voice_chat(
         "is_emergency": result.get("is_emergency", False),
         "has_audio": tts_audio is not None and len(tts_audio) > 100,
         "session_id": session_id,
+        "lang": effective_lang,
     }
 
 
@@ -934,10 +941,13 @@ async def agent_voice_chat_audio(
     session_id: str = Form(default="voice_default"),
     patient_id: Optional[str] = Form(default=None),
     phone: Optional[str] = Form(default=None),
+    lang: Optional[str] = Form(default=None),
 ):
-    """Voice agent endpoint that returns TTS audio directly as WAV."""
+    """Voice agent endpoint that returns TTS audio directly as WAV.
+    TTS goes through the language dispatcher (services.tts) so Mandinka
+    replies are routed to MMS instead of being mispronounced by Piper-EN."""
     from src.services.stt_whisper import transcribe
-    from src.services.tts_piper import synthesize
+    from src.services.tts import synthesize
     import re
 
     audio_bytes = await file.read()
@@ -968,17 +978,28 @@ async def agent_voice_chat_audio(
     clean = re.sub(r'#{1,6}\s*', '', clean, flags=re.MULTILINE)
     clean = clean.replace('*', '').replace('#', '').strip()
 
-    tts_audio = await synthesize(clean)
+    # Explicit `lang` form param wins, else fall back to agent-detected language.
+    effective_lang = lang or result.get("detected_language") or "en"
+    tts_audio = await synthesize(clean, lang=effective_lang)
     if not tts_audio:
         raise HTTPException(status_code=500, detail="TTS failed")
+
+    # Bug 2 fix: URL-encode the transcript so non-ASCII (Mandinka, emoji,
+    # etc.) doesn't crash Starlette's latin-1 header encoder, and so any
+    # \r\n in untrusted Whisper output can't inject extra headers. Cap at
+    # 1500 chars to stay well under typical proxy header-size limits.
+    from urllib.parse import quote as _url_quote
+    safe_transcript = _url_quote(transcript[:1500], safe="")
 
     return Response(
         content=tts_audio,
         media_type="audio/wav",
         headers={
-            "X-Transcript": transcript,
+            "X-Transcript": safe_transcript,
+            "X-Transcript-Encoding": "url",
             "X-Triage-Level": result.get("triage_level") or "",
             "X-Is-Emergency": str(result.get("is_emergency", False)),
+            "X-Lang": effective_lang,
         },
     )
 
@@ -1220,6 +1241,13 @@ class GenerateDocRequest(BaseModel):
     patient_name: Optional[str] = None
     format: str = "preview"  # preview | pdf | docx
     language: Optional[str] = "en"  # "en" | "ma" — when "ma", content + chrome are translated before render
+    # Optional client-supplied messages as a fallback when the Redis
+    # session history is empty or short. This is the same pattern the
+    # /chat/export-pdf endpoint already uses — covers the case where
+    # abuse-defense short-circuited the agent (so user/agent turns
+    # rendered in the UI never got persisted to Redis), and the case
+    # of an expired session. List of {role, content} dicts.
+    messages: Optional[List[Dict[str, Any]]] = None
 
 
 @router.post("/document/generate")
@@ -1260,10 +1288,22 @@ async def generate_document(req: GenerateDocRequest):
     except Exception:
         pass
 
-    # Get conversation messages from Redis
-    messages = await agent.memory_manager.get_session_messages(req.session_id)
+    # Get conversation messages from Redis. Fall back to client-supplied
+    # messages when the session history is empty / short — this covers
+    # the abuse-defense short-circuit case where the agent endpoint
+    # returns a response without persisting the exchange (e.g. warn,
+    # session_terminate). Same pattern as /chat/export-pdf above.
+    messages = await agent.memory_manager.get_session_messages(req.session_id) or []
+    if len(messages) < 2 and req.messages:
+        messages = [
+            {"role": m.get("role", "user"), "content": m.get("content", "")}
+            for m in req.messages if (m or {}).get("content")
+        ]
     if not messages or len(messages) < 2:
-        raise HTTPException(status_code=400, detail="Not enough conversation to generate a document. Chat with Amina first.")
+        raise HTTPException(
+            status_code=400,
+            detail="Not enough conversation to generate a document. Chat with Amina first.",
+        )
 
     # Get patient context
     memory = agent.sessions.get(req.session_id)

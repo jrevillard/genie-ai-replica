@@ -50,7 +50,11 @@ async def transcribe(audio_bytes: bytes, filename: str = "audio.ogg") -> Optiona
             )
 
         if resp.status_code != 200:
-            log.error("whisper_failed", status=resp.status_code, body=resp.text[:200])
+            # %-formatting (not kwargs) — stdlib logger rejects unknown kwargs
+            # with TypeError at _log(). Pre-fix this line raised TypeError on
+            # every Whisper non-200, hiding the real status + body in logs.
+            log.error("whisper_failed status=%s body=%s",
+                      resp.status_code, resp.text[:200])
             return None
 
         data = resp.json()
@@ -67,7 +71,7 @@ async def transcribe(audio_bytes: bytes, filename: str = "audio.ogg") -> Optiona
                         break
 
         transcript = text.strip()
-        log.info("stt_done", chars=len(transcript))
+        log.info("stt_done chars=%d", len(transcript))
         return transcript if transcript else None
 
     except httpx.TimeoutException:
@@ -113,7 +117,7 @@ def _normalize_audio(audio_bytes: bytes, filename: str) -> Optional[bytes]:
             return f.read()
 
     except Exception as e:
-        log.error("normalize_failed", error=str(e))
+        log.error("normalize_failed error=%s", e)
         return None
     finally:
         for p in [in_path, out_path]:

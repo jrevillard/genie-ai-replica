@@ -53,6 +53,23 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
+# ── Chrome UA injection (Cloudflare Bot Fight Mode workaround) ─────────────
+# Production targets are fronted by Cloudflare with bot-protection on.
+# Default `requests` UA (`python-requests/X.Y`) trips the JS challenge and
+# we get HTTP 403 with "Just a moment..." HTML. Inject a real Chrome UA
+# once at the api layer so every existing requests.get/post/put/delete call
+# below picks it up without per-callsite changes.
+_DEFAULT_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+_orig_api_request = requests.api.request
+def _api_request_with_ua(method, url, **kw):
+    headers = dict(kw.pop("headers", None) or {})
+    headers.setdefault("User-Agent", _DEFAULT_UA)
+    return _orig_api_request(method, url, headers=headers, **kw)
+requests.api.request = _api_request_with_ua
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -100,6 +117,11 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--api",      default=os.getenv("API",      "http://localhost:8000"))
 ap.add_argument("--mc",       default=os.getenv("MC",       "http://localhost:8020"))
 ap.add_argument("--frontend", default=os.getenv("FRONTEND", "http://localhost:5173"))
+ap.add_argument("--mode",     default=os.getenv("MODE", "auto"),
+                choices=["auto", "dev", "prod"],
+                help="dev: assume Vite dev server + repo on disk. "
+                     "prod: skip Vite source-fetch + filesystem checks. "
+                     "auto: detect from --frontend hostname.")
 ap.add_argument("--email",    default="beginner@demo.aminacare")
 ap.add_argument("--password", default="Demo2026")
 args = ap.parse_args()
@@ -107,6 +129,21 @@ args = ap.parse_args()
 API      = args.api.rstrip("/")
 MC       = args.mc.rstrip("/")
 FE       = args.frontend.rstrip("/")
+
+# Resolve mode. Prod targets serve compiled bundles only — fetching a
+# source path like /src/inbox/inboxApi.js returns 404 (not a real bug).
+# Auto-detect from URL: amina-design.com / *.pages.dev / *.workers.dev
+# all imply a Cloudflare Pages / Workers static deployment.
+def _is_prod_target(url: str) -> bool:
+    u = (url or "").lower()
+    return ("amina-design.com" in u
+            or ".pages.dev"    in u
+            or ".workers.dev"  in u)
+
+if args.mode == "auto":
+    MODE = "prod" if _is_prod_target(FE) else "dev"
+else:
+    MODE = args.mode
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -720,6 +757,14 @@ def section_dhis2_history(patient_jwt: str) -> None:
 
 def section_frontend_assets() -> None:
     banner("H. Frontend modules (Vite dev)")
+    # Prod-target skip: Cloudflare Pages serves bundled assets only;
+    # source-file paths like /src/inbox/inboxApi.js don't exist in the
+    # built output. The test only makes sense against a Vite dev server.
+    if MODE == "prod":
+        warn(f"--mode=prod ({FE}): bundled assets only; skipping "
+             f"{len(FRONTEND_MODULES) + len(FRONTEND_LOCALES)} module-fetch checks")
+        return
+
     # Quick bail if Vite isn't up — earlier section already fails/warns.
     try:
         requests.get(f"{FE}/", timeout=4)
@@ -747,8 +792,22 @@ def section_frontend_assets() -> None:
 def section_i18n() -> None:
     banner("I. i18n locales")
     here = Path(__file__).resolve()
-    # Test file is at haystack-chatqna/; frontend locales live elsewhere.
-    frontend_root = here.parents[2] / "components" / "frontend"
+    # Walk ancestors until we find a sibling components/frontend dir.
+    # Original code used here.parents[2] which assumed a fixed depth —
+    # that broke when the script is run from inside a container at /app
+    # (only 1 level deep, IndexError on parents[2]).
+    frontend_root = None
+    for p in [here] + list(here.parents):
+        candidate = p / "components" / "frontend"
+        if candidate.is_dir():
+            frontend_root = candidate
+            break
+
+    if frontend_root is None:
+        warn("components/frontend not found in any ancestor — skipping i18n section "
+             "(expected when running from /app inside the container, where the "
+             "frontend source isn't mounted)")
+        return
     locale_dir = frontend_root / "src" / "i18n" / "locales"
 
     if not locale_dir.exists():

@@ -68,13 +68,21 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
 # CORS middleware - allows frontend to call backend
 # NOTE: allow_credentials=True REQUIRES explicit origins (cannot use "*").
 # The cookie-based session persistence depends on this.
+#
+# Origin policy:
+#   * localhost:517[3-5]  - dev (Vite default + AMINA convention)
+#   * amina-design.com    - production frontend on Cloudflare Pages
+#   * *.pages.dev         - per-PR preview deployments (regex)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173", "http://127.0.0.1:5173",
         "http://localhost:5174", "http://127.0.0.1:5174",
         "http://localhost:5175", "http://127.0.0.1:5175",
+        "https://amina-design.com",
+        "https://www.amina-design.com",
     ],
+    allow_origin_regex=r"https://[a-z0-9-]+\.amina-design\.pages\.dev",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -116,6 +124,23 @@ app.include_router(abuse_admin_router, prefix="/api/v1")
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "haystack-chatqna"}
+
+
+# Prometheus scrape endpoint. The chain-exhausted counter (ADR 0001) lives
+# in llm_provider_policy.py and registers itself on the default registry.
+# Other modules with prometheus_client metrics share the same registry.
+try:
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    from fastapi.responses import Response
+
+    @app.get("/metrics")
+    def metrics():
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+except Exception as _prom_err:  # pragma: no cover
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "prometheus_client not available — /metrics disabled: %s", _prom_err
+    )
 
 
 # Auto-create ArcadeDB schema on startup 
@@ -173,6 +198,30 @@ async def startup_event():
         print("✅ ArcadeDB Community schema initialized")
     except Exception as e:
         print(f"⚠️ Community schema init warning: {e}")
+
+    # DHIS2 health probe - runs the 4 probes from dhis2_health.get_health()
+    # and prints a clear banner. CRITICAL log lines fire automatically on
+    # any FAIL so monitoring picks it up. Boot is NOT blocked - DHIS2 is
+    # optional and chat works without it.
+    try:
+        from src.services import dhis2_health as _dh
+        report = _dh.get_health(force_refresh=True)
+        if report["overall"] == "skipped":
+            print("ℹ️  DHIS2 sync skipped (DHIS2_BASE_URL=disabled)")
+        elif report["overall"] == "ok":
+            print(f"✅ DHIS2 health probe OK ({report['dataset_id']} @ {report['base_url']})")
+        elif report["overall"] == "warn":
+            print(f"⚠️ DHIS2 health WARN — see /api/v1/dhis2/health")
+            for p in report["probes"]:
+                if p["status"] in ("warn", "fail"):
+                    print(f"   - {p['name']}: {p['detail']}")
+        else:  # fail
+            print(f"❌ DHIS2 health FAIL — see /api/v1/dhis2/health")
+            for p in report["probes"]:
+                if p["status"] in ("warn", "fail"):
+                    print(f"   - {p['name']}: {p['detail']}")
+    except Exception as e:
+        print(f"⚠️ DHIS2 health probe could not run: {e}")
 
     # Initialize self-learning schema (InteractionEvent, ClinicalInsight)
     try:

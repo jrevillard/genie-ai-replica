@@ -54,15 +54,28 @@ def _get_redis():
 
 
 def _require_patient(creds: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Patient JWT only — also admits ADMIN_PATIENT_EMAILS admins.
+
+    The admin-impersonation flow (env var ADMIN_PATIENT_EMAILS) stamps
+    `role=admin` on a real PatientVertex login so the operator can see
+    the full patient surface from one account. That means admin tokens
+    have a valid PatientVertex `sub` and SHOULD be allowed through
+    patient-scoped endpoints — the directory in particular renders
+    blank with 0 caregivers if we reject them. Caregivers are still
+    blocked: their tokens use caregiver_id not patient_id, so any
+    downstream patient-scoped query would mis-attribute work.
+    """
     if not creds:
         raise HTTPException(401, "Authentication required")
     try:
         payload = jwt.decode(creds.credentials, settings.JWT_SECRET, algorithms=["HS256"])
-        if payload.get("role") in ("admin", "caregiver"):
+        if payload.get("role") == "caregiver":
             raise HTTPException(403, "Patients only")
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(401, "Token expired")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(401, "Invalid token")
 

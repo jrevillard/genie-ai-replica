@@ -27,6 +27,27 @@ try:
 except Exception as e:
     _log.warning("RAG tuning failed to load (non-fatal): %s", e)
 
+# Bug 9 fix — Mandinka TTS strict-translation overlay.
+# Without this monkey-patch, services.tts.synthesize() silently falls back
+# to English on translator failure, so lang="ma" requests get MMS-Mandinka
+# *speaking English phonemes* — exactly the "Mandinka TTS is broken" bug
+# the overlay was built to solve. Previously you had to flip the uvicorn
+# entry point to src.main_with_tts_mandinka_fix:app to activate it; this
+# inline install lets the existing main_with_rag_tuning entry point
+# benefit too. Mirrors the patch in src.main_with_tts_mandinka_fix.
+try:
+    from src.services import tts as _tts_module
+    from src.services import tts_mandinka_fix as _tts_fix
+    _tts_module.synthesize     = _tts_fix.synthesize_wav     # type: ignore[attr-defined]
+    _tts_module.synthesize_ogg = _tts_fix.synthesize_ogg     # type: ignore[attr-defined]
+    # Diagnostic + v2 endpoints (/tts/diag, /tts/diag/translate, /tts/v2)
+    from src.api.tts_mandinka_routes import router as _tts_diag_router
+    app.include_router(_tts_diag_router, prefix="/api/v1")
+    _log.info("Mandinka TTS strict-translation overlay installed "
+              "(/tts now strict, /tts/diag + /tts/v2 mounted)")
+except Exception as e:
+    _log.warning("Mandinka TTS overlay failed to load (non-fatal): %s", e)
+
 try:
     from src.api.clinical_outcome_routes import router as _outcome_router
     app.include_router(_outcome_router, prefix="/api/v1")

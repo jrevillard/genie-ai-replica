@@ -111,3 +111,18 @@ def discover_orgunit_children(request: Request, parent_id: str, page_size: int =
 def current_mapping(request: Request):
     _require_admin(request)
     return dhis2_history.current_mapping()
+
+
+# ── Live health probe ──────────────────────────────────────────────────────
+#
+# Runs the 4 probes from src.services.dhis2_health (base reachable, dataset
+# exists in /discover, dataset detail returns >0 elements + org units,
+# element map resolves at least one ID against the live dataset).
+#
+# Result is cached in-process for 60s (see dhis2_health._TTL_S). Pass
+# ?force=true to bypass.
+@router.get("/health")
+def dhis2_health(request: Request, force: bool = False):
+    _require_admin(request)
+    from src.services import dhis2_health as _dh
+    return _dh.get_health(force_refresh=force)

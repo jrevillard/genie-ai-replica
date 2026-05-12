@@ -97,20 +97,69 @@ async def _rate_limit_middleware(request: Request, call_next):
         )
     return await call_next(request)
 
-# CORS — the UNICC frontend lives on :5174; allow it explicitly so the
-# 'shield' badge can poll /security/status without being blocked.
+# CORS — gateway is the public-facing perimeter. Allow:
+#   * dev origins (localhost:5173-5175)
+#   * production frontend on amina-design.com (apex + www)
+#   * Cloudflare Pages preview URLs *.amina-design.pages.dev
+#
+# allow_credentials=True is required because the SPA stores its session
+# in a cookie (the JWT bearer is also sent from JS) and the browser
+# refuses to attach it cross-origin without the explicit flag.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        "http://localhost:5174", "http://127.0.0.1:5174",
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:5175", "http://127.0.0.1:5175",
+        "https://amina-design.com",
+        "https://www.amina-design.com",
     ],
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_origin_regex=r"https://[a-z0-9-]+\.amina-design\.pages\.dev",
+    allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
 )
+
+
+# ── Security response headers ────────────────────────────────────────
+#
+# These are added on every response so downstream clients (browsers,
+# native apps, audit tools) get a consistent posture. They're
+# defense-in-depth: Cloudflare also enforces TLS, but headers must
+# also come from the origin to be honored when bypass paths exist
+# (e.g., direct curl to api.amina-design.com).
+#
+#   Strict-Transport-Security : pin HTTPS for 1 year, include subdomains.
+#                                 The "preload" claim signals intent to be
+#                                 added to the HSTS preload list.
+#   X-Content-Type-Options    : block MIME-sniffing attacks.
+#   X-Frame-Options           : prevent clickjacking via <iframe>.
+#   Referrer-Policy           : leak only origin to cross-site links.
+#   Permissions-Policy        : drop privileges we don't use.
+#   Cross-Origin-Resource-Policy : allow cross-origin fetch from
+#                                 amina-design.com (not "*"; we use the
+#                                 CORS middleware to whitelist origins).
+#
+# We deliberately DO NOT set Content-Security-Policy here because the
+# frontend is on a different origin (amina-design.com); a CSP on API
+# responses would only affect responses rendered as HTML, which we
+# never do.
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains; preload",
+    )
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options",        "DENY")
+    response.headers.setdefault("Referrer-Policy",        "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "geolocation=(self), microphone=(self), camera=(), payment=()",
+    )
+    response.headers.setdefault("Cross-Origin-Resource-Policy", "cross-origin")
+    return response
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -669,6 +718,27 @@ async def startup():
         await audit.bootstrap_schema()
     except Exception as e:
         logger.warning("startup: schema bootstrap deferred to first write (%s)", e)
+
+
+# ── Catch-all transparent proxy (Step 6) ─────────────────────────────
+#
+# After all specific routes (security/status, public/chat, public/translate,
+# admin/*) have been registered, mount a wildcard reverse proxy that
+# forwards any other request straight to haystack-chatqna. This means a
+# single tunnel target (api.amina-design.com -> amina-gateway:8443) is
+# enough: the gateway owns the perimeter for jailbreak-protected paths,
+# and transparently forwards everything else (auth, caregiver, agent,
+# inbox, alerts, voice).
+#
+# Order matters: this MUST be the last route registered. FastAPI matches
+# in declaration order so specific paths still win first.
+@app.api_route(
+    "/{full_path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    include_in_schema=False,
+)
+async def transparent_proxy(full_path: str, request: Request):
+    return await proxy.transparent_forward(request, full_path)
 
 
 @app.on_event("shutdown")

@@ -45,6 +45,41 @@ from fastapi import HTTPException
 
 logger = logging.getLogger("llm_provider_policy")
 
+
+# ── Prometheus: chain-exhausted counter ────────────────────────────
+# Single counter at the one point where the entire fallback chain has
+# failed. ADR 0001 specifies this as the trigger for revisiting the
+# local-vLLM build decision. Per-tier failure counters are deliberately
+# omitted — they're noise; chain exhaustion is signal.
+try:
+    from prometheus_client import Counter as _PromCounter
+    _METRIC_CHAIN_EXHAUSTED = _PromCounter(
+        "amina_llm_chain_exhausted_total",
+        "LLM fallback chain fully exhausted (every tier failed for a single chat request)",
+        ["last_tier", "failure_reason", "request_kind"],
+    )
+except Exception:
+    _METRIC_CHAIN_EXHAUSTED = None
+
+
+def _classify_failure(err_str: str) -> str:
+    """Bucket an exception string into one of a small set of reasons,
+    so the counter's label cardinality stays bounded."""
+    s = (err_str or "").lower()
+    if "timeout" in s or "timed out" in s:
+        return "timeout"
+    if "rate" in s and "limit" in s:
+        return "rate_limit"
+    if "429" in s:
+        return "rate_limit"
+    if "401" in s or "403" in s or "unauthorized" in s or "forbidden" in s:
+        return "auth_failed"
+    if "5" in s and any(code in s for code in ("500", "502", "503", "504")):
+        return "server_error"
+    if "connect" in s or "dns" in s or "resolve" in s or "refused" in s:
+        return "connect_error"
+    return "unknown"
+
 # ── Env-driven policy ─────────────────────────────────────────────
 def _env(name: str, default: str = "") -> str:
     return (os.environ.get(name) or default).strip().lower()
@@ -288,6 +323,21 @@ async def _patched_process_message(self, *args, **kwargs):
     meta["latency_ms"] = int((time.perf_counter() - started) * 1000)
     if last_err:
         meta["provider_error_summary"] = (str(last_err) or last_err.__class__.__name__)[:200]
+
+    # Chain-exhausted Prometheus counter — see ADR 0001. Labels are bounded:
+    # last_tier ∈ FALLBACK_CHAIN, failure_reason ∈ classifier output,
+    # request_kind ∈ {guest, auth}. Wrapped in try so a metrics-side bug
+    # never prevents the user from seeing the safe-template response.
+    if _METRIC_CHAIN_EXHAUSTED is not None:
+        try:
+            _METRIC_CHAIN_EXHAUSTED.labels(
+                last_tier=chain[-1] if chain else "none",
+                failure_reason=_classify_failure(meta["provider_error_summary"] or ""),
+                request_kind=meta["context"],
+            ).inc()
+        except Exception as _e:
+            logger.warning("[llm_policy] chain_exhausted counter inc failed: %s", _e)
+
     logger.error(
         "[llm_policy] all providers failed: chain=%s last_err=%s",
         chain, meta["provider_error_summary"],

@@ -204,15 +204,18 @@ async def voice_chat_endpoint(
     history: Optional[str] = Form(default="[]"),
     user_age: Optional[int] = Form(default=30),
     user_gender: Optional[str] = Form(default="person"),
+    lang: Optional[str] = Form(default="en"),
 ):
     """
     Full voice pipeline:
     1. Whisper STT -> transcript
     2. Haystack RAG -> LLM answer
-    3. Piper TTS -> audio response
+    3. TTS dispatcher -> audio response (Piper for English, MMS for Mandinka)
     """
     from src.services.stt_whisper import transcribe
-    from src.services.tts_piper import synthesize
+    # Use the dispatcher in services.tts (not tts_piper directly) so Mandinka
+    # callers get MMS instead of English Piper mispronouncing the reply.
+    from src.services.tts import synthesize
 
     # Step 1: STT
     audio_bytes = await file.read()
@@ -282,8 +285,8 @@ async def voice_chat_endpoint(
         print(f"Voice-chat LLM error: {e}")
         raise HTTPException(status_code=500, detail=f"LLM pipeline error: {str(e)}")
 
-    # Step 4: TTS
-    tts_audio = await synthesize(answer)
+    # Step 4: TTS — route by language so Mandinka users hear MMS, not Piper
+    tts_audio = await synthesize(answer, lang=(lang or "en"))
 
     return {
         "transcript": transcript,
@@ -298,10 +301,12 @@ async def voice_chat_audio_endpoint(
     history: Optional[str] = Form(default="[]"),
     user_age: Optional[int] = Form(default=30),
     user_gender: Optional[str] = Form(default="person"),
+    lang: Optional[str] = Form(default="en"),
 ):
-    """Same as /voice-chat but returns TTS audio directly as WAV."""
+    """Same as /voice-chat but returns TTS audio directly as WAV.
+    Uses the language dispatcher so Mandinka requests synthesise via MMS."""
     from src.services.stt_whisper import transcribe
-    from src.services.tts_piper import synthesize
+    from src.services.tts import synthesize
 
     audio_bytes = await file.read()
     transcript = await transcribe(audio_bytes, file.filename or "audio.ogg")
@@ -344,15 +349,25 @@ async def voice_chat_audio_endpoint(
     answer = raw_reply.text if hasattr(raw_reply, "text") else str(raw_reply)
     answer = _strip_markdown(answer)  # <- NEW: strip markdown
 
-    tts_audio = await synthesize(answer)
+    tts_audio = await synthesize(answer, lang=(lang or "en"))
     if not tts_audio:
         raise HTTPException(status_code=500, detail="TTS failed")
+
+    # Bug 2 fix: HTTP headers are latin-1 only. Raw transcripts in Mandinka or
+    # any non-ASCII language used to crash Starlette with UnicodeEncodeError;
+    # untrusted Whisper output also opened a header-injection path. URL-encode
+    # the transcript so any byte (including \r\n) becomes ASCII-safe %XX.
+    # Frontends decode with decodeURIComponent. Cap at 1500 chars so the header
+    # stays under typical proxy limits.
+    from urllib.parse import quote as _url_quote
+    safe_transcript = _url_quote(transcript[:1500], safe="")
 
     return Response(
         content=tts_audio,
         media_type="audio/wav",
         headers={
-            "X-Transcript": transcript,
+            "X-Transcript": safe_transcript,
+            "X-Transcript-Encoding": "url",
             "X-Answer-Length": str(len(answer)),
         },
     )

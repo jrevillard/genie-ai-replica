@@ -116,6 +116,14 @@ class ScribeSession:
     last_action:  str
     last_error:   str
     title_hint:   str
+    # Cached artifact IDs (populated by finalize_session). When the session
+    # is in status="finalized", a second /finalize call returns these
+    # cached IDs instead of re-rendering the PDF + duplicating the inbox
+    # item. See `finalize_session` for the idempotency contract.
+    inbox_item_id: str = ""
+    file_token:    str = ""
+    file_expires:  str = ""
+    signed_by:     str = ""
 
     @classmethod
     def from_raw(cls, raw: Dict[str, str]) -> "ScribeSession":
@@ -140,25 +148,33 @@ class ScribeSession:
             last_action=raw.get("last_action", ""),
             last_error=raw.get("last_error", ""),
             title_hint=raw.get("title_hint", ""),
+            inbox_item_id=raw.get("inbox_item_id", ""),
+            file_token=raw.get("file_token", ""),
+            file_expires=raw.get("file_expires", ""),
+            signed_by=raw.get("signed_by", ""),
         )
 
     def to_raw(self) -> Dict[str, str]:
         return {
-            "session_id":  self.session_id,
-            "patient_id":  self.patient_id,
-            "actor_id":    self.actor_id,
-            "actor_role":  self.actor_role,
-            "status":      self.status,
-            "created_at":  self.created_at,
-            "updated_at":  self.updated_at,
-            "audio_path":  self.audio_path,
-            "audio_bytes": str(self.audio_bytes),
-            "transcript":  self.transcript,
-            "language":    self.language,
-            "soap_draft":  json.dumps(self.soap_draft, ensure_ascii=False),
-            "last_action": self.last_action,
-            "last_error":  self.last_error,
-            "title_hint":  self.title_hint,
+            "session_id":    self.session_id,
+            "patient_id":    self.patient_id,
+            "actor_id":      self.actor_id,
+            "actor_role":    self.actor_role,
+            "status":        self.status,
+            "created_at":    self.created_at,
+            "updated_at":    self.updated_at,
+            "audio_path":    self.audio_path,
+            "audio_bytes":   str(self.audio_bytes),
+            "transcript":    self.transcript,
+            "language":      self.language,
+            "soap_draft":    json.dumps(self.soap_draft, ensure_ascii=False),
+            "last_action":   self.last_action,
+            "last_error":    self.last_error,
+            "title_hint":    self.title_hint,
+            "inbox_item_id": self.inbox_item_id,
+            "file_token":    self.file_token,
+            "file_expires":  self.file_expires,
+            "signed_by":     self.signed_by,
         }
 
     def public(self) -> Dict[str, Any]:
@@ -176,6 +192,10 @@ class ScribeSession:
             "last_action":     self.last_action,
             "last_error":      self.last_error,
             "title_hint":      self.title_hint,
+            "inbox_item_id":   self.inbox_item_id,
+            "file_token":      self.file_token,
+            "file_expires":    self.file_expires,
+            "signed_by":       self.signed_by,
         }
 
 
@@ -245,32 +265,100 @@ def _save(s: ScribeSession) -> None:
 
 
 def _set_status(s: ScribeSession, status: str, action: str, error: str = "") -> None:
+    """Update status fields ONLY — does NOT clobber audio_bytes.
+
+    Bug 3 race-fix: append_chunk owns audio_bytes via Redis HINCRBY (atomic).
+    A full HSET via _save() would overwrite the atomic counter with a stale
+    local-snapshot value when two chunk requests interleave. By splitting
+    status writes from the full save, the counter survives concurrent
+    appends correctly. The four fields touched here are owned by the
+    "session writer" and are safe to last-writer-wins.
+    """
     if status not in VALID_STATUSES:
         logger.warning(f"scribe: unknown status {status!r}")
     s.status = status
     s.last_action = action
     s.last_error = error or ""
-    _save(s)
+    s.updated_at = _now_iso()
+    try:
+        r = _redis_client()
+        k = REDIS_KEY_PREFIX + s.session_id
+        r.hset(k, mapping={
+            "status":      s.status,
+            "last_action": s.last_action,
+            "last_error":  s.last_error,
+            "updated_at":  s.updated_at,
+        })
+        r.expire(k, SESSION_TTL_SECONDS)
+    except Exception as e:
+        logger.error(f"scribe: _set_status failed for {s.session_id}: {e}")
+        raise
 
 
 # ── Chunk append ─────────────────────────────────────────────────────────────
 
 def append_chunk(session_id: str, data: bytes) -> ScribeSession:
+    """Race-safe chunk append (Bug 3 fix).
+
+    Two interleaved chunk uploads on the same session previously corrupted
+    the audio_bytes counter (both read N, both wrote N+local_len → counter
+    only reflected the last writer). Worse, the MAX_AUDIO_MB cap could be
+    bypassed by racing because both requests passed the limit check on the
+    same stale snapshot.
+
+    The fix:
+      * audio_bytes is mutated only via Redis HINCRBY (atomic increment)
+      * status updates use _set_status which writes only status fields
+        (does NOT clobber audio_bytes)
+      * the limit check happens AFTER the increment with rollback on excess
+      * the file write is guarded by fcntl.flock so concurrent appends
+        can't interleave bytes mid-write
+    """
     s = get_session(session_id)
     if not s:
         raise ValueError("session not found")
     if s.status in ("finalized", "transcribing", "drafting"):
         raise ValueError(f"cannot append while status={s.status}")
-    if not data:
-        return s
+    # Bug 7: empty-body check is owned by the route ([scribe_routes.py]
+    # rejects with 400 before we get here). No defensive duplicate needed.
     if len(data) > MAX_CHUNK_MB * 1024 * 1024:
         raise ValueError(f"chunk too large ({len(data) // (1024*1024)} MB, max {MAX_CHUNK_MB})")
-    if (s.audio_bytes + len(data)) > MAX_AUDIO_MB * 1024 * 1024:
-        raise ValueError(f"session total audio exceeds {MAX_AUDIO_MB} MB")
 
-    with open(s.audio_path, "ab") as f:
-        f.write(data)
-    s.audio_bytes += len(data)
+    # Atomic counter mutation via Redis. If two chunks race, both
+    # increments land independently and the post-increment total is
+    # authoritative for the limit check.
+    r = _redis_client()
+    k = REDIS_KEY_PREFIX + session_id
+    new_total = int(r.hincrby(k, "audio_bytes", len(data)))
+    cap_bytes = MAX_AUDIO_MB * 1024 * 1024
+    if new_total > cap_bytes:
+        # Roll back our slice and reject. Other concurrent requests are
+        # unaffected — their increments persist independently.
+        r.hincrby(k, "audio_bytes", -len(data))
+        raise ValueError(f"session total audio exceeds {MAX_AUDIO_MB} MB")
+    r.expire(k, SESSION_TTL_SECONDS)
+
+    # File write with exclusive lock so concurrent appends can't
+    # interleave bytes inside a single write call. POSIX flock is held
+    # only for this one write, then released — fast and Linux-only
+    # (perfect inside our docker container).
+    try:
+        import fcntl
+        with open(s.audio_path, "ab") as f:
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                f.write(data)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except Exception:
+        # Roll back the counter so disk size and counter stay in sync.
+        try:
+            r.hincrby(k, "audio_bytes", -len(data))
+        except Exception:
+            pass
+        raise
+
+    s.audio_bytes = new_total
     _set_status(s, "recording", "chunk_appended")
     return s
 
@@ -281,12 +369,26 @@ SOAP_SECTIONS = ("subjective", "objective", "assessment", "plan")
 
 
 async def finish_session(session_id: str) -> ScribeSession:
-    """Run STT + LLM SOAP generation. Returns the session in ready_for_review."""
+    """Run STT + LLM SOAP generation. Returns the session in ready_for_review.
+
+    Bug 6 fix: idempotent across status checkpoints. Two parallel /finish
+    calls used to both pass the (status != finalized) check and both run
+    STT + LLM — wasted compute and confused logs. Now:
+      * finalized           → return current state (caller already finalized)
+      * ready_for_review    → return current state (already drafted, no redo)
+      * transcribing|drafting → raise (in progress, caller should poll)
+      * recording|init      → proceed normally
+    """
     s = get_session(session_id)
     if not s:
         raise ValueError("session not found")
-    if s.status == "finalized":
+    if s.status in ("finalized", "ready_for_review"):
+        # Idempotent — work is already done.
         return s
+    if s.status in ("transcribing", "drafting"):
+        # Another /finish is already executing; tell the caller to poll
+        # instead of double-running STT/LLM.
+        raise ValueError(f"finish already in progress (status={s.status})")
     if not s.audio_bytes or not os.path.exists(s.audio_path):
         _set_status(s, "error", "finish", "no audio")
         raise ValueError("no audio captured")
@@ -294,9 +396,17 @@ async def finish_session(session_id: str) -> ScribeSession:
     # --- STT ---
     _set_status(s, "transcribing", "finish")
     try:
+        # Bug 8 fix: shared lock on the file read so an in-flight chunk
+        # write (LOCK_EX in append_chunk) finishes before STT starts
+        # reading. Without it, finish could read a truncated tail.
+        import fcntl
         from src.services import stt_whisper
         with open(s.audio_path, "rb") as f:
-            audio = f.read()
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                audio = f.read()
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         transcript = await stt_whisper.transcribe(audio, filename=os.path.basename(s.audio_path))
     except Exception as e:
         _set_status(s, "error", "finish", f"stt_exception: {type(e).__name__}: {e}")
@@ -397,6 +507,81 @@ def _extract_soap_json(s: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+# ── Orphan file cleanup (Bug 5) ──────────────────────────────────────────────
+
+def cleanup_orphan_audio_files(grace_seconds: int = 3600) -> Dict[str, int]:
+    """Delete audio files in SCRIBE_DIR whose Redis session has expired.
+
+    Why this exists:
+      create_session touches a file on disk, then sets a Redis session with
+      a 2-hour TTL. Most sessions never reach finalize (user starts a
+      recording, abandons it). Once Redis expires the session record, the
+      file becomes invisible to the API but persists on disk forever.
+
+      Live evidence at the time of writing: 27 .webm files on disk vs 1
+      active Redis session. With real recordings (1-60 MB each), this is
+      unbounded disk growth.
+
+    Strategy:
+      1. List every <session_id>.webm in SCRIBE_DIR
+      2. Probe Redis for the session record
+      3. If the record is gone AND the file mtime is older than
+         `grace_seconds` (default 1h, well above the 2h TTL), delete it
+      4. Files that still have a live Redis session are always preserved
+
+    Returns a counter dict {scanned, kept, removed, errors}.
+    """
+    counter = {"scanned": 0, "kept": 0, "removed": 0, "errors": 0}
+    if not os.path.isdir(SCRIBE_DIR):
+        return counter
+    try:
+        r = _redis_client()
+    except Exception as e:
+        logger.error(f"scribe cleanup: redis unreachable: {e}")
+        counter["errors"] += 1
+        return counter
+
+    cutoff = datetime.now(timezone.utc).timestamp() - max(0, grace_seconds)
+
+    for name in os.listdir(SCRIBE_DIR):
+        if not name.endswith(".webm"):
+            continue
+        counter["scanned"] += 1
+        path = os.path.join(SCRIBE_DIR, name)
+        sid  = name[:-len(".webm")]
+        try:
+            still_alive = bool(r.exists(REDIS_KEY_PREFIX + sid))
+            mtime = os.path.getmtime(path)
+        except Exception as e:
+            logger.warning(f"scribe cleanup: stat/probe failed for {name}: {e}")
+            counter["errors"] += 1
+            continue
+
+        if still_alive:
+            counter["kept"] += 1
+            continue
+        if mtime > cutoff:
+            # Recent file with no session — could be an in-flight create_session
+            # that hasn't written its Redis record yet. Wait one cycle.
+            counter["kept"] += 1
+            continue
+        try:
+            os.unlink(path)
+            counter["removed"] += 1
+            logger.info(f"scribe cleanup: removed orphan {name} "
+                        f"(age={int(datetime.now(timezone.utc).timestamp() - mtime)}s)")
+        except OSError as e:
+            logger.warning(f"scribe cleanup: unlink failed for {name}: {e}")
+            counter["errors"] += 1
+
+    logger.info(
+        "scribe cleanup: scanned=%d kept=%d removed=%d errors=%d (grace=%ds)",
+        counter["scanned"], counter["kept"], counter["removed"], counter["errors"],
+        grace_seconds,
+    )
+    return counter
+
+
 # ── Finalize: PDF + Inbox item ───────────────────────────────────────────────
 
 def finalize_session(
@@ -408,12 +593,34 @@ def finalize_session(
     """
     Render the edited draft as a PDF, push an InboxItem, return (session,
     {inbox_item, file_token, download_url}). Session moves to `finalized`.
+
+    Idempotent (Improvement B): if the session is already in
+    status=`finalized`, the cached artifact IDs (inbox_item_id,
+    file_token, file_expires) are returned as-is. The PDF is NOT
+    regenerated and the inbox item is NOT duplicated. The clinician
+    has already signed; subsequent /finalize calls are no-ops by
+    design — edits passed on a retry are ignored.
     """
     s = get_session(session_id)
     if not s:
         raise ValueError("session not found")
     if s.status == "finalized":
-        raise ValueError("already finalized")
+        # Idempotent path. Return whatever artifacts were cached on the
+        # session at first finalize. If the cache is empty (very old
+        # session pre-dating Improvement B), surface that explicitly so
+        # ops can investigate rather than silently returning stub data.
+        if s.file_token:
+            return s, {
+                "inbox_item":         {"item_id": s.inbox_item_id},
+                "file_token":         s.file_token,
+                "file_expires":       s.file_expires,
+                "already_finalized":  True,
+            }
+        raise ValueError(
+            "already finalized but artifact IDs missing on session — "
+            "this session was finalized before Improvement B; check "
+            "the inbox directly via /api/v1/inbox/list?patient_id=…"
+        )
 
     # Merge edits into the draft so the PDF reflects exactly what the
     # clinician signed.
@@ -495,9 +702,24 @@ def finalize_session(
         ttl_days=365,
     )
 
+    # Cache the artifact IDs on the session so a retry call returns the
+    # same response without re-rendering the PDF or duplicating the inbox
+    # item (Improvement B). inbox_service.create_item returns a dict
+    # keyed by `inbox_id` (not `item_id` / `id`) — see [inbox_service.py
+    # line ~170 record dict]. We accept all three so the code is robust
+    # to any future renames.
+    s.inbox_item_id = (item.get("inbox_id")
+                       or item.get("item_id")
+                       or item.get("id")
+                       or "")
+    s.file_token    = issued.get("token", "")
+    s.file_expires  = str(issued.get("expires_at", ""))
+    s.signed_by     = signed_by_name or ""
+    _save(s)
+
     _set_status(s, "finalized", "finalize")
     return s, {
-        "inbox_item":    item,
-        "file_token":    issued["token"],
-        "file_expires":  issued["expires_at"],
+        "inbox_item":   item,
+        "file_token":   issued["token"],
+        "file_expires": issued["expires_at"],
     }

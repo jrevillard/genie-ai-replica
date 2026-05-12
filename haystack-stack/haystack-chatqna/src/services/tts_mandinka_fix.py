@@ -33,6 +33,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from typing import Optional, Tuple
 
 import httpx
@@ -76,30 +77,86 @@ class MandinkaTTSError(RuntimeError):
 # carries Mandinka-only diacritics (ŋ ñ ɛ ɔ ɲ) we override both.
 _MANDINKA_DIACRITICS = frozenset("ŋñɛɔɲŊÑƐƆƝ")
 
+# A small whitelist of Mandinka-only indicator words / phrases. Each entry
+# must satisfy two rules:
+#   1. Zero overlap with English vocabulary (no false positives on EN text)
+#   2. Common enough in health-context Mandinka to be useful (so we catch
+#      pure-ASCII Mandinka that happens to omit diacritics in casual typing)
+# Word-boundary regex ensures partial-string matches inside English words
+# (e.g., "barakaa" will not match "Barbarakaa Foundation" — boundaries
+# wouldn't fire, but more importantly it won't match "Bara" in English).
+# The list is deliberately tiny; expand only with strong evidence.
+_MANDINKA_INDICATOR_WORDS = (
+    "nyaadi",     # "how" / "how is..."
+    "saama",      # "morning / good morning"
+    "kunuŋ",      # "yesterday" (also already triggers on diacritic)
+    "barakaa",    # "thank you"
+    "wo lon",     # "that day"
+    "alikuum",    # "alikum salaam" greeting reply
+    "i ka mu ke", # "I do this" — distinctly Mandinka VP
+    "ka mu",      # auxiliary, very Mandinka-specific in this form
+)
+_MANDINKA_WORD_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(w) for w in _MANDINKA_INDICATOR_WORDS) + r")\b",
+    re.IGNORECASE,
+)
+
 
 def _text_looks_mandinka(text: str) -> bool:
-    """Fast + boring: is there at least one Mandinka-only diacritic?
+    """Two-tier conservative detector.
 
-    We intentionally DON'T lean on the translator's probabilistic detector
-    here. TTS is a point-of-no-return — once we send this through the
-    wrong model the user just hears garbage. A single ŋ/ɛ/ɔ is near-
-    zero false-positive evidence; anything fancier risks misrouting
-    Mandinka-transliterated-in-ASCII text and we'd rather under-trigger."""
+    Tier 1 (high confidence) — any Mandinka-only diacritic (ŋ ñ ɛ ɔ ɲ).
+    Tier 2 (high confidence) — any whole-word match in our hand-picked
+                               Mandinka indicator list (no English overlap).
+
+    Both tiers are designed to UNDER-trigger rather than over-trigger:
+    misrouting English to MMS-Mandinka produces garbled audio that's
+    worse UX than the alternative (Mandinka-in-ASCII slipping through to
+    Piper-EN). Callers who *know* the language should pass an explicit
+    lang= or use the new `force_lang=` escape hatch on the synthesize
+    helpers, both of which bypass content sniffing entirely.
+    """
     if not text:
         return False
-    return any(c in _MANDINKA_DIACRITICS for c in text)
+    if any(c in _MANDINKA_DIACRITICS for c in text):
+        return True
+    if _MANDINKA_WORD_RE.search(text):
+        return True
+    return False
 
 
-def _resolve_effective_lang(text: str, lang: str, source_lang: str) -> Tuple[str, str]:
+def _resolve_effective_lang(
+    text: str,
+    lang: str,
+    source_lang: str,
+    *,
+    force_lang: Optional[str] = None,
+) -> Tuple[str, str]:
     """Return (effective_lang, effective_source_lang) after content sniffing.
 
     Rules:
-      - If text clearly contains Mandinka diacritics, force lang="ma" and
-        source_lang="ma" (skip translation, synth directly).
+      - `force_lang` (when provided): SKIP all content sniffing. Honoured
+        verbatim. Use this when the caller has high-confidence language
+        information from the user (e.g., explicit UI toggle).
+      - If text clearly contains Mandinka markers (diacritics or
+        unambiguous indicator words), force lang="ma" and source_lang="ma"
+        (skip translation, synthesise directly).
       - Otherwise honour whatever the caller sent.
 
-    This is what unblocks the "I clicked the Mandinka button but it spoke
-    English" case without requiring any frontend change."""
+    This unblocks both directions of the "lang header disagrees with
+    text" problem: content sniffing for the casual case, force_lang for
+    the case where the caller is sure and the sniffer would otherwise
+    second-guess them.
+    """
+    if force_lang:
+        forced = force_lang.strip().lower()
+        # Default the source to the forced language too (most common
+        # case: text and target are the same).
+        forced_src = (source_lang or force_lang).strip().lower()
+        log.info("tts_fix.force_lang lang=%r src=%r (sniff bypassed)",
+                 forced, forced_src)
+        return forced, forced_src
+
     canonical_src = (source_lang or "").strip().lower()
     canonical_lang = (lang or "").strip().lower()
 
@@ -208,8 +265,15 @@ async def _mms_synthesise_with_retry(
 
 
 # ── Public: robust synthesize_* (drop-in replacements) ───────────────
+_MA_LANG_SET = {"ma", "mnk", "mandinka", "mand", "man", "mnk_latn", "mnk-latn"}
+
+
 async def synthesize_wav(
-    text: str, lang: str = "ma", source_lang: str = "en",
+    text: str,
+    lang: str = "ma",
+    source_lang: str = "en",
+    *,
+    force_lang: Optional[str] = None,
 ) -> Optional[bytes]:
     """WAV for web players. Mirrors services.tts.synthesize signature.
 
@@ -217,14 +281,19 @@ async def synthesize_wav(
       - On translator failure we raise MandinkaTTSError (caller converts to
         HTTP 4xx/5xx with a useful body) instead of returning raw English
         audio disguised as Mandinka.
-      - MMS calls tolerate cold start via retry + longer timeout."""
+      - MMS calls tolerate cold start via retry + longer timeout.
+
+    `force_lang` (kwarg-only): when set, SKIPS content sniffing entirely
+    and honours the caller's language verbatim. Useful when the frontend
+    has an explicit user-language toggle and KNOWS what the text is."""
     text = (text or "").strip()
     if not text:
         return None
 
-    effective_lang, effective_src = _resolve_effective_lang(text, lang, source_lang)
-    if effective_lang in {"ma", "mnk", "mandinka", "mand", "man",
-                          "mnk_latn", "mnk-latn"}:
+    effective_lang, effective_src = _resolve_effective_lang(
+        text, lang, source_lang, force_lang=force_lang,
+    )
+    if effective_lang in _MA_LANG_SET:
         ma_text = await _translate_to_mandinka_strict(text, effective_src)
         return await _mms_synthesise_with_retry(ma_text, fmt="wav")
 
@@ -235,16 +304,23 @@ async def synthesize_wav(
 
 
 async def synthesize_ogg(
-    text: str, lang: str = "ma", source_lang: str = "en",
+    text: str,
+    lang: str = "ma",
+    source_lang: str = "en",
+    *,
+    force_lang: Optional[str] = None,
 ) -> Optional[bytes]:
-    """OGG Opus for IVR / Telegram / WhatsApp voice notes."""
+    """OGG Opus for IVR / Telegram / WhatsApp voice notes.
+
+    `force_lang` (kwarg-only): see synthesize_wav."""
     text = (text or "").strip()
     if not text:
         return None
 
-    effective_lang, effective_src = _resolve_effective_lang(text, lang, source_lang)
-    if effective_lang in {"ma", "mnk", "mandinka", "mand", "man",
-                          "mnk_latn", "mnk-latn"}:
+    effective_lang, effective_src = _resolve_effective_lang(
+        text, lang, source_lang, force_lang=force_lang,
+    )
+    if effective_lang in _MA_LANG_SET:
         ma_text = await _translate_to_mandinka_strict(text, effective_src)
         return await _mms_synthesise_with_retry(ma_text, fmt="ogg")
 

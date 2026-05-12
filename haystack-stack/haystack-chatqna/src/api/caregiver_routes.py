@@ -1071,6 +1071,7 @@ async def caregiver_voice_chat(
     file:       UploadFile = File(...),
     patient_id: str        = Form(default=""),
     session_id: str        = Form(default=""),
+    lang:       Optional[str] = Form(default=None),
     caregiver: dict = Depends(_require_caregiver),
 ):
     """
@@ -1084,7 +1085,10 @@ async def caregiver_voice_chat(
     """
     import base64
     from src.services.stt_whisper import transcribe
-    from src.services.tts_piper import synthesize
+    # Language-aware TTS dispatcher (services.tts) instead of tts_piper
+    # directly — caregivers default to English but language-switching
+    # patients in shared sessions need MMS fallback for Mandinka.
+    from src.services.tts import synthesize
     from src.services.caregiver_amina_service import caregiver_amina_chat
 
     # ── 1. Read and transcribe audio ──────────────────────────────────────────
@@ -1124,7 +1128,11 @@ async def caregiver_voice_chat(
         lines = [l.strip() for l in response_text.split("\n") if l.strip() and "**" not in l]
         tts_text = " ".join(lines[:3])[:400]
 
-    audio_bytes_out = await synthesize(tts_text)
+    # Use explicit `lang` form param if provided, otherwise prefer the
+    # language the caregiver service detected (caregiver flows are mostly
+    # English; this handles the rare Mandinka caregiver case correctly).
+    effective_lang = lang or result.get("detected_language") or "en"
+    audio_bytes_out = await synthesize(tts_text, lang=effective_lang)
     has_audio = bool(audio_bytes_out and len(audio_bytes_out) > 100)
     audio_b64 = base64.b64encode(audio_bytes_out).decode() if has_audio else ""
 
@@ -1674,7 +1682,8 @@ async def get_care_plan(
     """
     Tier 4 — Return the current care plan for a patient.
     Care plans are auto-generated when the caregiver generates a SOAP report.
-    If no plan exists yet, returns 404.
+    If no plan exists yet, returns {"plan": null, "status": "not_yet_generated"}
+    so the UI can render an empty state without throwing a console 404.
     """
     _assert_patient_access(caregiver, patient_id)
 
@@ -1685,7 +1694,12 @@ async def get_care_plan(
     r = redis_lib.Redis(host=cfg.REDIS_HOST, port=cfg.REDIS_PORT, decode_responses=True)
     plan = _get_plan(patient_id, r)
     if not plan:
-        raise HTTPException(404, "No care plan found for this patient. Generate a clinical report first.")
+        return {
+            "plan": None,
+            "status": "not_yet_generated",
+            "message": "No care plan yet. Generate a clinical report to create one.",
+            "patient_id": patient_id,
+        }
 
     return {
         "plan_id":          plan.plan_id,

@@ -1740,7 +1740,7 @@ Return ONLY JSON:
             # The context compactor auto-compresses older turns when the budget fills up,
             # so the conversation can run indefinitely without quality loss.
             _MODEL_BUDGETS = {
-                "amina":   (20_000, 900,           6),
+                "amina":   (20_000, 400,           6),
                 "groq":    (10_000, min(_base_out, 500), 4),
                 "mistral": (10_000, min(_base_out, 500), 4),
                 "gemini":  (22_000, _gemini_max,   6),
@@ -1759,6 +1759,24 @@ Return ONLY JSON:
                 # 4K context window. No RAG (LoRA already knows health guidelines).
                 # Patient profile injected compactly at the top of the user turn.
                 # Direct advice tone — no intake questioning.
+                #
+                # Context compactor lookup runs HERE at the top of the
+                # branch (before any inner if/else) so the long-session
+                # auto-compression is unmistakably part of the LoRA path.
+                # The fetched _pinned_summary is appended to _LORA_SYS once
+                # the system prompt is built below; maybe_schedule_compaction
+                # runs at the bottom of the branch — both calls live inside
+                # the LoRA branch, so the conversation can run indefinitely
+                # without exceeding the 8K window.
+                from src.services.context_compactor import (
+                    get_summary_for_session,
+                    maybe_schedule_compaction,
+                )
+                try:
+                    _pinned_summary = await get_summary_for_session(session_id)
+                except Exception:
+                    _pinned_summary = None
+
                 if _pacing_instruction and _turn_type == "structured_plan":
                     _LORA_SYS = (
                         "You are AMINA, a Gambian CHW who knows this patient personally. "
@@ -1817,17 +1835,10 @@ Return ONLY JSON:
                     if _context_block.strip() else
                     f"Patient says: \"{message}\"\n\nRespond as AMINA:"
                 )
-                # ── Context compactor integration (auto-refresh on overflow) ──
-                # Before building the LoRA prompt, check if we have a pinned
-                # compact_summary of older turns from a prior background run.
-                # If yes, prepend it to the system prompt so LoRA has full
-                # conversational continuity without exceeding its 8K window.
-                try:
-                    from src.services.context_compactor import get_summary_for_session
-                    _pinned_summary = await get_summary_for_session(session_id)
-                except Exception:
-                    _pinned_summary = None
-
+                # _pinned_summary was fetched at the top of this branch
+                # (see hoisted compactor block above). If non-empty, prepend
+                # it to the system prompt so LoRA has full conversational
+                # continuity without exceeding its 8K window.
                 if _pinned_summary:
                     _LORA_SYS = (
                         _LORA_SYS

@@ -107,7 +107,19 @@ def send_patient_alert(
     severity: str = "info",           # info | warning | emergency
     telegram_chat_id: Optional[str] = None,
 ) -> dict:
-    """Push alert to patient's Redis queue and optionally to Telegram."""
+    """Push alert to patient's Redis queue + inbox + optionally Telegram.
+
+    Three sinks, intentionally:
+      * Redis queue  — drives the live top-banner toast / emergency overlay
+                       in the patient SPA. Polled every 10 s with clear=false
+                       and drained on dismiss via /alerts/read.
+      * Inbox item   — durable record. Survives toast dismissal, refreshes,
+                       and tab switches. Visible in the inbox bell.
+      * Telegram     — out-of-band push if the patient has linked a chat_id.
+
+    Inbox failures are swallowed (logged) — an inbox-schema hiccup must
+    never block the live alert from reaching the patient.
+    """
     alert = {
         "alert_id":       f"PA_{uuid.uuid4().hex[:8].upper()}",
         "from_caregiver": caregiver_name,
@@ -122,6 +134,35 @@ def send_patient_alert(
     r.lpush(key, json.dumps(alert))
     r.ltrim(key, 0, 49)          # keep last 50
     r.expire(key, 86400 * 7)     # 7-day TTL
+
+    # Inbox sink — persistent record viewable from the bell.
+    try:
+        from src.services import inbox_service as _inbox
+
+        title_prefix = {"emergency": "Emergency",
+                        "warning":   "Health alert",
+                        "info":      "Message"}.get(severity, "Message")
+        _inbox.create_item(
+            patient_id=patient_id,
+            kind="caregiver_ping",
+            title=f"{title_prefix} from {caregiver_name}",
+            body=message,
+            severity=severity,
+            source="caregiver",
+            source_id=f"alert:{alert['alert_id']}",
+            metadata={"alert_id": alert["alert_id"],
+                      "from_caregiver": caregiver_name,
+                      "sent_at": alert["sent_at"]},
+        )
+        alert["inbox_persisted"] = True
+    except Exception as exc:
+        # Best-effort. The toast still fires from redis.
+        import logging
+        logging.getLogger(__name__).warning(
+            "patient_alert_service: inbox push failed for %s: %s",
+            patient_id, exc,
+        )
+        alert["inbox_persisted"] = False
 
     # Telegram push
     tg_ok = False

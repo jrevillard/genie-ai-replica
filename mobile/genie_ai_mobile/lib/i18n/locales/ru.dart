@@ -1055,6 +1055,7 @@ const Map<String, dynamic> ruLocale = {
     "exportError":
         "Не удалось экспортировать чат. Пожалуйста, попробуйте снова.",
     "thinking": "Genie думает...",
+    "generating": "Генерация ответа...",
     "contextPrefix": "Контекст:",
     "removeContext": "Удалить контекст",
     "dialogs": {

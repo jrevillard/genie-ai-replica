@@ -1060,6 +1060,7 @@ const Map<String, dynamic> stLocale = {
     "exportSuccess": "Puisano e rometsoe ka katleho",
     "exportError": "Ho hlotsoe ho romela puisano. Ka kopo leka hape.",
     "thinking": "Genie oa nahana...",
+    "generating": "Generating response...",
     "contextPrefix": "Moelelo:",
     "removeContext": "Tlosa Moelelo",
     "dialogs": {

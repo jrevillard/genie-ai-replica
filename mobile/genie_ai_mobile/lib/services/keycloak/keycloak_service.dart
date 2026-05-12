@@ -81,21 +81,11 @@ class KeycloakService {
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
-      // Dev mode: rewrite localhost URLs so Chrome Custom Tab on the emulator
-      // reaches the host at 10.0.2.2 instead of the emulator's own loopback.
-      String rewriteLocalhost(String url) {
-        if (keycloakConfig.allowInsecureConnections) {
-          return url.replaceAll('://localhost', '://10.0.2.2');
-        }
-        return url;
-      }
-
       _cachedEndpoints = OidcEndpoints(
-        authorizationEndpoint:
-            rewriteLocalhost(json['authorization_endpoint'] as String),
-        tokenEndpoint: rewriteLocalhost(json['token_endpoint'] as String),
-        userinfoEndpoint: rewriteLocalhost(json['userinfo_endpoint'] as String),
-        endSessionEndpoint: rewriteLocalhost(json['end_session_endpoint'] as String),
+        authorizationEndpoint: json['authorization_endpoint'] as String,
+        tokenEndpoint: json['token_endpoint'] as String,
+        userinfoEndpoint: json['userinfo_endpoint'] as String,
+        endSessionEndpoint: json['end_session_endpoint'] as String,
       );
       _logger?.logAuthEvent(
         message: 'Endpoint discovery successful',

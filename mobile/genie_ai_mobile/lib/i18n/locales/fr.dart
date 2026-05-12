@@ -1066,6 +1066,7 @@ const Map<String, dynamic> frLocale = {
     "exportSuccess": "Chat exporté avec succès",
     "exportError": "Échec de l'exportation du chat. Veuillez réessayer.",
     "thinking": "Genie réfléchit...",
+    "generating": "Génération de la réponse...",
     "contextPrefix": "Contexte :",
     "removeContext": "Retirer le contexte",
     "dialogs": {

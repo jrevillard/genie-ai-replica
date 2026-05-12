@@ -1059,6 +1059,7 @@ const Map<String, dynamic> bnLocale = {
     "exportError":
         "চ্যাট এক্সপোর্ট করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
     "thinking": "জিনি ভাবছে...",
+    "generating": "প্রতিক্রিয়া তৈরি হচ্ছে...",
     "contextPrefix": "কনটেক্সট:",
     "removeContext": "কনটেক্সট সরান",
     "dialogs": {

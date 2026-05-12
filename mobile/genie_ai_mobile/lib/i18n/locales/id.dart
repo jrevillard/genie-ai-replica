@@ -1052,6 +1052,7 @@ const Map<String, dynamic> idLocale = {
     "exportSuccess": "Obrolan berhasil diekspor",
     "exportError": "Gagal mengekspor obrolan. Silakan coba lagi.",
     "thinking": "Genie sedang berpikir...",
+    "generating": "Menghasilkan respons...",
     "contextPrefix": "Konteks:",
     "removeContext": "Hapus Konteks",
     "dialogs": {

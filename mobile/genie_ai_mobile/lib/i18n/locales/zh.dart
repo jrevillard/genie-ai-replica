@@ -950,6 +950,7 @@ const Map<String, dynamic> zhLocale = {
     "exportSuccess": "聊天导出成功",
     "exportError": "导出聊天失败。请重试。",
     "thinking": "Genie 正在思考...",
+    "generating": "正在生成回复...",
     "contextPrefix": "上下文：",
     "removeContext": "移除上下文",
     "dialogs": {

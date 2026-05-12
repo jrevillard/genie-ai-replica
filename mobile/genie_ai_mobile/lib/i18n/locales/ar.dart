@@ -1045,6 +1045,7 @@ const Map<String, dynamic> arLocale = {
     "exportSuccess": "تم تصدير المحادثة بنجاح",
     "exportError": "فشل تصدير المحادثة. يرجى المحاولة مرة أخرى.",
     "thinking": "جيني يفكر...",
+    "generating": "جاري إنشاء الاستجابة...",
     "contextPrefix": "السياق:",
     "removeContext": "إزالة السياق",
     "dialogs": {

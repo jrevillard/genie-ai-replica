@@ -1045,6 +1045,7 @@ const Map<String, dynamic> thLocale = {
     "exportSuccess": "ส่งออกแชทสำเร็จ",
     "exportError": "ส่งออกแชทล้มเหลว โปรดลองอีกครั้ง",
     "thinking": "Genie กำลังคิด...",
+    "generating": "กำลังสร้างคำตอบ...",
     "contextPrefix": "บริบท:",
     "removeContext": "นำบริบทออก",
     "dialogs": {

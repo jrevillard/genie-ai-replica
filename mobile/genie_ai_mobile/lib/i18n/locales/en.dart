@@ -1057,6 +1057,7 @@ const Map<String, dynamic> enLocale = {
     "exportSuccess": "Chat exported successfully",
     "exportError": "Failed to export chat. Please try again.",
     "thinking": "Genie is thinking...",
+    "generating": "Generating response...",
     "contextPrefix": "Context:",
     "removeContext": "Remove Context",
     "dialogs": {

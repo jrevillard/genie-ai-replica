@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
 import 'package:genie_ai_mobile/components/sidebar/chat_folders_panel.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
@@ -10,12 +11,14 @@ class SidebarComponent extends StatefulWidget {
 
   final Function(Map<String, dynamic>)? onServiceSelected;
   final Function(String)? onConversationSelected;
+  final http.Client? httpClient;
 
   const SidebarComponent({
     super.key,
     required this.user,
     this.onServiceSelected,
     this.onConversationSelected,
+    this.httpClient,
   });
 
   @override
@@ -206,6 +209,7 @@ class _SidebarComponentState extends State<SidebarComponent>
                     controller: _tabController,
                     children: [
                       ServiceTreePanel(
+                        httpClient: widget.httpClient,
                         onSelectionChange: (selection) {
                           debugPrint(
                             "[SIDEBAR] Service selection changed: $selection",

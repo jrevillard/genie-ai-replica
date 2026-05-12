@@ -498,6 +498,13 @@ KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai
 # Add them to docker-compose.yaml under keycloak-config environment section.
 
 # =============================================================================
+# SECTION 9C: SSE STREAMING (OPTIONAL)
+# =============================================================================
+# Defaults in code — uncomment to override.
+# OPEA_STREAMING=false
+# CHATQNA_STREAM_TIMEOUT=300000
+
+# =============================================================================
 # SECTION 10: GPU-SPECIFIC CONFIGURATION
 # =============================================================================
 # These variables override GPU memory utilization and model settings.

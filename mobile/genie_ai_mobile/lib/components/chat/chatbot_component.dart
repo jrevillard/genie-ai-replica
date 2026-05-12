@@ -11,8 +11,10 @@ import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
+import 'package:genie_ai_mobile/services/sse_parser.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -23,12 +25,23 @@ class ChatBotComponent extends StatefulWidget {
   final VoidCallback onRefreshSidebar;
   final Function(List<dynamic>) onRelatedDocumentsUpdate;
   final VoidCallback? onChatStateChanged;
+
+  /// AuthInterceptor-wrapped client for streaming requests.
+  /// When null, the component falls back to non-streaming mode.
+  final http.Client? httpClient;
+
+  /// Base URL for the backend API (e.g. 'https://example.com/api').
+  /// Required when [httpClient] is provided for streaming support.
+  final String? streamBaseUrl;
+
   const ChatBotComponent({
     super.key,
     required this.userId,
     required this.onRefreshSidebar,
     required this.onRelatedDocumentsUpdate,
     this.onChatStateChanged,
+    this.httpClient,
+    this.streamBaseUrl,
   });
 
   @override
@@ -47,6 +60,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   List<Map<String, dynamic>> get messages => _messages;
   bool get isQuickHelpVisible => _showQuickHelpOverlay;
   bool _isLoading = false;
+  bool _isStreaming = false;
+  StreamSubscription<SseEvent>? _streamSubscription;
+
+  bool get _canStream => httpClient != null && streamBaseUrl != null;
+  http.Client? get httpClient => widget.httpClient;
+  String? get streamBaseUrl => widget.streamBaseUrl;
 
   // Dirty State Tracking
   int _lastSavedMessageCount = 0;
@@ -111,6 +130,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   @override
   void dispose() {
+    _streamSubscription?.cancel();
     _scrollController.dispose();
     _inputController.dispose();
     _inputFocusNode.dispose();
@@ -329,12 +349,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _sendMessage(String text, {String? hiddenPrompt}) async {
-    if (text.trim().isEmpty || _isLoading) return;
+    if (text.trim().isEmpty || _isLoading || _isStreaming) return;
 
     final userMessage = {
       'role': 'user',
-      'content': text.trim(), // Visible to user in UI
-      'actualContent': hiddenPrompt ?? text.trim(), // Hidden Prompt for LLM
+      'content': text.trim(),
+      'actualContent': hiddenPrompt ?? text.trim(),
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': false,
     };
@@ -348,30 +368,172 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     _scrollToBottom();
     _updateQuickHelpVisibility();
 
+    final String sessionId =
+        _currentConversationId ?? 'session_${widget.userId}';
+
+    final List<Map<String, dynamic>> messagesForApi = _messages.map((m) {
+      return {'role': m['role'], 'content': m['actualContent'] ?? m['content']};
+    }).toList();
+
+    final String currentLanguage = I18nService().currentLocale.languageCode;
+
+    final commonParams = {
+      'sessionId': sessionId,
+      'messages': messagesForApi,
+      'userId': widget.userId,
+      'categoryId': _selectedCategoryId,
+      'contextLabels': _selectedCategoryName,
+      'language': currentLanguage,
+    };
+
+    if (_canStream) {
+      _sendStreaming(commonParams);
+    } else {
+      _sendNonStreaming(commonParams);
+    }
+  }
+
+  void _sendStreaming(Map<String, dynamic> params) async {
+    await _streamSubscription?.cancel();
+    _streamSubscription = null;
+
+    final int assistantIndex = _messages.length;
+
+    // Insert placeholder assistant message for streaming content
+    setState(() {
+      _isLoading = false;
+      _isStreaming = true;
+      _messages.add({
+        'role': 'assistant',
+        'content': '',
+        'timestamp': DateTime.now().toIso8601String(),
+        'isSaved': false,
+      });
+    });
+    _scrollToBottom();
+
+    Map<String, dynamic>? metadata;
+    String? queryId;
+
     try {
-      final String sessionId =
-          _currentConversationId ?? 'session_${widget.userId}';
-
-      final List<Map<String, dynamic>> messagesForApi = _messages.map((m) {
-        return {
-          'role': m['role'],
-          // Send actualContent (hidden prompt) to the LLM if it exists, else content
-          'content': m['actualContent'] ?? m['content'],
-        };
-      }).toList();
-
-      final String currentLanguage = I18nService().currentLocale.languageCode;
-
-      final response = await _chatBotProxy.submitQuery(
-        sessionId: sessionId,
-        messages: messagesForApi,
-        userId: widget.userId,
-        categoryId: _selectedCategoryId,
-        contextLabels: _selectedCategoryName,
-        language: currentLanguage,
+      final stream = _chatBotProxy.submitQueryStream(
+        httpClient: httpClient!,
+        baseUrl: streamBaseUrl!,
+        sessionId: params['sessionId'],
+        messages: params['messages'],
+        userId: params['userId'],
+        categoryId: params['categoryId'],
+        contextLabels: params['contextLabels'],
+        language: params['language'],
       );
 
-      final String? queryId = response['queryId'];
+      _streamSubscription = stream.listen(
+        (event) {
+          if (!mounted) return;
+
+          switch (event) {
+            case SseChunkEvent(:final content):
+              setState(() {
+                final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
+                msg['content'] = (msg['content'] as String) + content;
+                _messages[assistantIndex] = msg;
+              });
+              _scrollToBottom();
+
+            case SseMetadataEvent(:final sourceDocuments, :final confidenceScore):
+              metadata = {
+                'source_documents': sourceDocuments,
+                'confidence_score': confidenceScore,
+              };
+
+            case SseTranslationEvent(:final content):
+              setState(() {
+                final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
+                msg['content'] = content;
+                _messages[assistantIndex] = msg;
+              });
+
+            case SseDoneEvent(queryId: final id):
+              queryId = id;
+
+            case SseErrorEvent(:final message):
+              debugPrint("[CHATBOT] Stream error: $message");
+              NotificationService.error(tr('chatbot.processingError'));
+          }
+        },
+        onError: (error) {
+          if (!mounted) return;
+
+          if (error is StreamingDisabledException) {
+            debugPrint("[CHATBOT] Streaming disabled, falling back to non-streaming");
+            setState(() {
+              _isStreaming = false;
+              if (_messages.length > assistantIndex) {
+                _messages.removeAt(assistantIndex);
+              }
+              _isLoading = true;
+            });
+            _sendNonStreaming(params);
+            return;
+          }
+
+          debugPrint("[CHATBOT] Stream error: $error");
+          setState(() => _isStreaming = false);
+          NotificationService.error(tr('chatbot.processingError'));
+        },
+        onDone: () {
+          if (!mounted) return;
+
+          final List<dynamic> newDocs =
+              metadata?['sources'] ?? metadata?['source_documents'] ?? [];
+
+          setState(() {
+            final msg = Map<String, dynamic>.from(_messages[assistantIndex]);
+            msg['id'] = queryId;
+            msg['queryId'] = queryId;
+            msg['sources'] = newDocs;
+            msg['confidence'] = metadata?['confidence_score'];
+            msg['metadata'] = metadata;
+            msg['isSaved'] = false;
+            _messages[assistantIndex] = msg;
+            _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
+            _isStreaming = false;
+          });
+
+          widget.onRelatedDocumentsUpdate(_relatedDocuments);
+          _scrollToBottom();
+          _updateQuickHelpVisibility();
+        },
+        cancelOnError: false,
+      );
+    } on StreamingDisabledException {
+      debugPrint("[CHATBOT] Streaming disabled, falling back to non-streaming");
+      setState(() {
+        _isStreaming = false;
+        if (_messages.length > assistantIndex) {
+          _messages.removeAt(assistantIndex);
+        }
+        _isLoading = true;
+      });
+      _sendNonStreaming(params);
+    } catch (e) {
+      debugPrint("[CHATBOT] Stream setup error: $e");
+      setState(() => _isStreaming = false);
+      NotificationService.error(tr('chatbot.processingError'));
+    }
+  }
+
+  void _sendNonStreaming(Map<String, dynamic> params) async {
+    try {
+      final response = await _chatBotProxy.submitQuery(
+        sessionId: params['sessionId'],
+        messages: params['messages'],
+        userId: params['userId'],
+        categoryId: params['categoryId'],
+        contextLabels: params['contextLabels'],
+        language: params['language'],
+      );
+
       final Map<String, dynamic>? metadata = response['metadata'];
 
       final assistantMessage = {
@@ -954,16 +1116,19 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                 child: ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
-                  itemCount: _messages.length + (_isLoading ? 1 : 0),
+                  itemCount:
+                      _messages.length + (_isLoading || _isStreaming ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (index == _messages.length && _isLoading) {
+                    if (index == _messages.length && (_isLoading || _isStreaming)) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Row(
                           children: [
                             const CircularProgressIndicator(strokeWidth: 2),
                             const SizedBox(width: 12),
-                            Text(tr('chatbot.thinking')),
+                            Text(_isStreaming
+                                ? tr('chatbot.generating')
+                                : tr('chatbot.thinking')),
                           ],
                         ),
                       );
@@ -1167,7 +1332,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         IconButton(
                           icon: const Icon(Icons.send),
                           color: colors['primary'],
-                          onPressed: _isLoading
+                          onPressed: _isLoading || _isStreaming
                               ? null
                               : () => _sendMessage(_inputController.text),
                         ),

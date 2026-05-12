@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -118,7 +119,9 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     }
 
     if (expiration != null && expiration.isAfter(DateTime.now())) {
-      state = const AuthState.authenticated();
+      final idToken = await _tokenStorage.getIdToken();
+      final userId = extractIssSub(idToken);
+      state = AuthState.authenticated(userId: userId);
       _authLogger.logAuthEvent(
         message: 'Authenticated from stored tokens',
         source: 'AuthNotifier._initializeAuth',
@@ -222,7 +225,8 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         message: 'Authorization successful',
         source: 'AuthNotifier.authorize',
       );
-      state = const AuthState.authenticated();
+      final userId = extractIssSub(tokenResponse.idToken);
+      state = AuthState.authenticated(userId: userId);
     } on FlutterAppAuthUserCancelledException {
       if (!ref.mounted) return;
       _lastFailedOperation = _FailedOperation.none;
@@ -421,7 +425,8 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         message: 'Token refresh successful',
         source: 'AuthNotifier.refreshToken',
       );
-      state = const AuthState.authenticated();
+      final userId = extractIssSub(tokenResponse.idToken) ?? state.userId;
+      state = AuthState.authenticated(userId: userId);
     } on FormatException catch (e) {
       _authLogger.logAuthFailure(
         errorCode: 'REFRESH_MALFORMED_RESPONSE',
@@ -559,5 +564,22 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       return;
     }
     await authorize();
+  }
+
+  static String? extractIssSub(String? idToken) {
+    if (idToken == null || idToken.isEmpty) return null;
+    try {
+      final parts = idToken.split('.');
+      if (parts.length < 2) return null;
+      final payload = base64Url.normalize(parts[1]);
+      final json =
+          jsonDecode(utf8.decode(base64Url.decode(payload))) as Map<String, dynamic>;
+      final iss = json['iss'] as String?;
+      final sub = json['sub'] as String?;
+      if (iss == null || sub == null) return null;
+      return '$iss#$sub';
+    } catch (_) {
+      return null;
+    }
   }
 }

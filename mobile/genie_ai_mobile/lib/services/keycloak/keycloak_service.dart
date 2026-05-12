@@ -80,6 +80,7 @@ class KeycloakService {
         return null;
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
+
       _cachedEndpoints = OidcEndpoints(
         authorizationEndpoint: json['authorization_endpoint'] as String,
         tokenEndpoint: json['token_endpoint'] as String,

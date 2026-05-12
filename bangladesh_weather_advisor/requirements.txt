@@ -1,0 +1,35 @@
+# ============================================================
+# Bangladesh Weather Advisor — Production Pipeline Dependencies
+# ============================================================
+# Install:  pip install -r requirements.txt
+# ============================================================
+
+# ── Core data processing ────────────────────────────────────
+pandas>=2.0
+numpy>=1.24
+scipy>=1.11                # Gamma distribution fitting for SPI/SPEI
+pyarrow>=14.0              # Parquet I/O
+
+# ── Geospatial ──────────────────────────────────────────────
+geopandas>=0.14
+shapely>=2.0
+
+# ── Google Earth Engine ─────────────────────────────────────
+earthengine-api>=0.1.390
+geemap>=0.30               # GeoDataFrame ↔ EE FeatureCollection helpers
+
+# ── Web scraping (BMD / BAMIS) ──────────────────────────────
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=4.9                  # Fast HTML parser for pandas.read_html
+pdfplumber>=0.10           # PDF table/text extraction
+
+# ── Storage — BigQuery (optional) ───────────────────────────
+# google-cloud-bigquery>=3.14
+# pandas-gbq>=0.20
+
+# ── Storage — ArangoDB (optional) ───────────────────────────
+# python-arango>=7.9
+
+# ── Visualisation (notebooks only) ──────────────────────────
+matplotlib>=3.7

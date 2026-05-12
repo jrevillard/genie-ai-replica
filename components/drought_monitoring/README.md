@@ -199,27 +199,29 @@ GEE is the only external dependency that requires manual setup. Without
 credentials, the service still starts and `/health` works, but `/run/*` returns
 `gee_not_configured`.
 
-### Host Authentication
+### Container Authentication
 
-```bash
-pip install earthengine-api
-earthengine authenticate
-ls ~/.config/earthengine/
-# credentials
+The FastAPI container uses a service account JSON file. Place the key at one of
+these paths inside the container:
+
+```text
+/app/secrets/credentials.json
+/app/secrets/service-account.json
 ```
 
-### Docker Credential Mount
-
-The full-stack compose file mounts host credentials read-only:
+The root full-stack compose mounts `./secrets` read-only:
 
 ```yaml
 drought-monitoring:
   volumes:
-    - ${HOME}/.config/earthengine:/root/.config/earthengine:ro
+    - ./secrets:/app/secrets:ro
 ```
 
-The service checks `~/.config/earthengine/credentials` or
-`GOOGLE_APPLICATION_CREDENTIALS`.
+So the usual host path is:
+
+```text
+./secrets/credentials.json
+```
 
 ### GEE Project
 
@@ -231,12 +233,16 @@ GEE_PROJECT=mewa-493916
 
 Override it in the root `.env` if you use another GEE-enabled project.
 
-### Service Account Option
+### Local CLI Authentication
 
-For non-interactive deployments, mount a service account JSON key and set:
+The `drought-alert` command-line entrypoint uses normal Earth Engine local
+credentials. For local CLI use, authenticate once on the host:
 
-```env
-GOOGLE_APPLICATION_CREDENTIALS=/path/in/container/service-account-key.json
+```bash
+pip install earthengine-api
+earthengine authenticate
+ls ~/.config/earthengine/
+# credentials
 ```
 
 ## Running Locally
@@ -284,10 +290,10 @@ Run the service in the full stack:
 docker compose up drought-monitoring
 ```
 
-Run the CLI image directly:
+Run the CLI command through the image:
 
 ```bash
-docker compose run --rm drought-alert \
+docker compose run --rm drought-monitoring drought-alert \
   --lat 23.8 --lon 90.4 --days 7 --project my-gee-project
 ```
 
@@ -417,7 +423,6 @@ The drought forecast is also exposed as an MCP tool named
 | `ARANGO_DB_NAME` | `genie-ai` | Database name |
 | `ARANGO_USER` | `root` | ArangoDB user |
 | `ARANGO_PASSWORD` | required | ArangoDB password |
-| `GOOGLE_APPLICATION_CREDENTIALS` | unset | Optional service account JSON path |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 
 ### `warning_system_engine`

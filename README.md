@@ -55,7 +55,6 @@ A Flutter patient-facing app that connects to the AMINA backend.
 
 **Key features**
 - 💬 **AI chat** — text and voice messages to the Amina agent, with TTS playback
-- 💊 **Rx scanner** — photograph a prescription to log medications via OCR
 - 📈 **Vitals log** — record and review blood pressure, glucose, weight, etc.
 - 👨‍👩‍👧 **Caregiver circle** — browse the caregiver directory, apply, and manage assigned caregivers
 - 🔐 **Secure auth** — JWT stored in FlutterSecureStorage; session expiry handled automatically

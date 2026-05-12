@@ -886,6 +886,7 @@ services:
       VLLM_MODEL_ID: ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       VLLM_ENDPOINT: http://vllm:8000
       TEI_EMBEDDING_ENDPOINT: http://tei:80
+      HUGGINGFACEHUB_API_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
@@ -977,6 +978,7 @@ services:
       VLLM_ENDPOINT: http://vllm:8000
       TEI_EMBEDDING_ENDPOINT: http://tei:80
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+      HUGGINGFACEHUB_API_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
     networks:
       - genieai_network
     healthcheck:

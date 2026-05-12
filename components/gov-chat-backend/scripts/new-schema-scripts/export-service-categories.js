@@ -707,7 +707,7 @@ async function validateExportedData(filePath) {
     const invalidCategories = [];
     
     exportData.data.serviceCategories.forEach((doc, index) => {
-      const missingFields = categoryRequiredFields.filter(field => !doc.hasOwnProperty(field));
+      const missingFields = categoryRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field));
       if (missingFields.length > 0) {
         invalidCategories.push({ index, missingFields });
       }
@@ -718,7 +718,7 @@ async function validateExportedData(filePath) {
     const invalidServices = [];
     
     exportData.data.services.forEach((doc, index) => {
-      const missingFields = serviceRequiredFields.filter(field => !doc.hasOwnProperty(field));
+      const missingFields = serviceRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field));
       if (missingFields.length > 0) {
         invalidServices.push({ index, missingFields });
       }
@@ -730,7 +730,7 @@ async function validateExportedData(filePath) {
     
     if (exportData.data.categoryServices) {
       exportData.data.categoryServices.forEach((doc, index) => {
-        const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        const missingFields = edgeRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field));
         if (missingFields.length > 0) {
           invalidEdges.push({ index, missingFields });
         }
@@ -743,7 +743,7 @@ async function validateExportedData(filePath) {
     
     if (exportData.data.serviceCategoryTranslations) {
       exportData.data.serviceCategoryTranslations.forEach((doc, index) => {
-        const missingFields = categoryTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        const missingFields = categoryTranslationRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field));
         if (missingFields.length > 0) {
           invalidCategoryTranslations.push({ index, missingFields });
         }
@@ -755,7 +755,7 @@ async function validateExportedData(filePath) {
     
     if (exportData.data.serviceCategoryTranslationsEdge) {
       exportData.data.serviceCategoryTranslationsEdge.forEach((doc, index) => {
-        const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        const missingFields = edgeRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field));
         if (missingFields.length > 0) {
           invalidCategoryTranslationEdges.push({ index, missingFields });
         }
@@ -768,7 +768,7 @@ async function validateExportedData(filePath) {
     
     if (exportData.data.serviceTranslations) {
       exportData.data.serviceTranslations.forEach((doc, index) => {
-        const missingFields = serviceTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        const missingFields = serviceTranslationRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field));
         if (missingFields.length > 0) {
           invalidServiceTranslations.push({ index, missingFields });
         }
@@ -780,7 +780,7 @@ async function validateExportedData(filePath) {
     
     if (exportData.data.serviceTranslationsEdge) {
       exportData.data.serviceTranslationsEdge.forEach((doc, index) => {
-        const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        const missingFields = edgeRequiredFields.filter(field => !Object.prototype.hasOwnProperty.call(doc, field));
         if (missingFields.length > 0) {
           invalidServiceTranslationEdges.push({ index, missingFields });
         }

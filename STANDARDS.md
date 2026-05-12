@@ -276,8 +276,8 @@ These standards apply to all JavaScript code, both frontend (Vue) and backend (N
 
   - **Tooling**:
 
-      - **Formatter**: `black` must be used to auto-format all Python code.
-      - **Linter**: `flake8` or a similar linter must be used to check for style and logical errors.
+      - **Formatter**: `ruff format` must be used to auto-format all Python code.
+      - **Linter**: `ruff check` must be used to check for style and logical errors.
 
   - **Dependency Management**: Use `pip` with a `requirements.txt` file. The file should be generated with pinned versions (`pip freeze > requirements.txt`).
 

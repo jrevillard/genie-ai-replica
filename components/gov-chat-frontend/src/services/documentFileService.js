@@ -15,10 +15,7 @@ const documentFileService = {
    */
   async getFiles(params) {
     try {
-      const response = await httpService.get('/files', { params });
-
-      // <-- ADD THIS LINE to inspect the raw API response
-      console.log('[documentFileService] Raw API Response:', response);
+      const response = await httpService.getFiles('/files', { params });
 
       return response.data;
     } catch (error) {
@@ -34,13 +31,12 @@ const documentFileService = {
    */
   async getFileMetadata(fileId) {
     try {
-      const response = await httpService.get(`/files/${fileId}`);
+      const response = await httpService.getFiles(`/files/${fileId}`);
 
       // This is the key change:
       // Instead of returning the whole response.data object,
       // we extract and return the nested 'data' property which contains the file.
       return response.data.data;
-
     } catch (error) {
       console.error(`Error fetching metadata for file ${fileId}:`, error);
       throw error;
@@ -54,8 +50,8 @@ const documentFileService = {
    */
   async uploadFile(formData) {
     try {
-      const response = await httpService.post('/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const response = await httpService.postFiles('/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       return response.data;
     } catch (error) {
@@ -71,7 +67,7 @@ const documentFileService = {
    */
   async uploadLink(url) {
     try {
-      const response = await httpService.post('/files/upload-link', { url });
+      const response = await httpService.postFiles('/files/upload-link', { url });
       return response.data;
     } catch (error) {
       console.error('Error uploading link:', error);
@@ -87,7 +83,7 @@ const documentFileService = {
    */
   async updateFile(fileId, updates) {
     try {
-      const response = await httpService.patch(`/files/${fileId}`, updates);
+      const response = await httpService.patchFiles(`/files/${fileId}`, updates);
       return response.data;
     } catch (error) {
       console.error(`Error updating file ${fileId}:`, error);
@@ -102,10 +98,25 @@ const documentFileService = {
    */
   async deleteFile(fileId) {
     try {
-      const response = await httpService.delete(`/files/${fileId}`);
+      const response = await httpService.deleteFiles(`/files/${fileId}`);
       return response.data;
     } catch (error) {
       console.error(`Error deleting file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Deletes multiple files (Admin). Body: { fileIds }.
+   * @param {string[]} fileIds - file_id values (not Arango _key).
+   * @returns {Promise<Object>}
+   */
+  async deleteMultipleFiles(fileIds) {
+    try {
+      const response = await httpService.deleteFiles('/files', { data: { fileIds } });
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting files in batch:', error);
       throw error;
     }
   },
@@ -118,7 +129,7 @@ const documentFileService = {
   async ingestFile(fileId) {
     try {
       // This corresponds to the backend route: POST /api/files/:fileId/ingest
-      const response = await httpService.post(`/files/${fileId}/ingest`);
+      const response = await httpService.postFiles(`/files/${fileId}/ingest`);
       return response.data;
     } catch (error) {
       console.error(`Error ingesting file ${fileId}:`, error);
@@ -133,7 +144,7 @@ const documentFileService = {
    */
   async ingestMultipleFiles(fileIds) {
     try {
-      const response = await httpService.post('/files/ingest', { fileIds });
+      const response = await httpService.postFiles('/files/ingest', { fileIds });
       return response.data;
     } catch (error) {
       console.error('Error ingesting multiple files:', error);
@@ -148,7 +159,7 @@ const documentFileService = {
    */
   async retractMultipleFiles(fileIds) {
     try {
-      const response = await httpService.post('/files/retract', { fileIds });
+      const response = await httpService.postFiles('/files/retract', { fileIds });
       return response.data;
     } catch (error) {
       console.error('Error retracting multiple files:', error);
@@ -164,7 +175,7 @@ const documentFileService = {
   async getIngestionLogs(fileId) {
     try {
       // This corresponds to the backend route: GET /api/files/:fileId/ingestion-log
-      const response = await httpService.get(`/files/${fileId}/ingestion-log`);
+      const response = await httpService.getFiles(`/files/${fileId}/ingestion-log`);
       return response.data; // Assumes backend returns { success: true, data: [...] }
     } catch (error) {
       console.error(`Error fetching ingestion logs for file ${fileId}:`, error);
@@ -184,7 +195,7 @@ const documentFileService = {
    */
   async scheduleSiteCrawl(options) {
     try {
-      const response = await httpService.post('/files/crawl/schedule', options);
+      const response = await httpService.postFiles('/files/crawl/schedule', options);
       return response.data;
     } catch (error) {
       console.error('Error scheduling site crawl:', error);
@@ -199,7 +210,7 @@ const documentFileService = {
    */
   async getCrawlJob(fileId) {
     try {
-      const response = await httpService.get(`/files/${fileId}/crawl-job`);
+      const response = await httpService.getFiles(`/files/${fileId}/crawl-job`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching crawl job for file ${fileId}:`, error);
@@ -214,7 +225,7 @@ const documentFileService = {
    */
   async getCrawlMetrics(fileId) {
     try {
-      const response = await httpService.get(`/files/${fileId}/crawl-metrics`);
+      const response = await httpService.getFiles(`/files/${fileId}/crawl-metrics`);
       // Expected return: { success: true, data: { ...metrics } }
       return response.data;
     } catch (error) {
@@ -230,7 +241,7 @@ const documentFileService = {
    */
   async getCrawlLogs(fileId) {
     try {
-      const response = await httpService.get(`/files/${fileId}/crawl-log`);
+      const response = await httpService.getFiles(`/files/${fileId}/crawl-log`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching crawl logs for file ${fileId}:`, error);
@@ -245,14 +256,14 @@ const documentFileService = {
    */
   async killCrawl(fileId) {
     try {
-      const response = await httpService.post(`/files/${fileId}/kill-crawl`);
+      const response = await httpService.postFiles(`/files/${fileId}/kill-crawl`);
       return response.data;
     } catch (error) {
       console.error(`Error sending kill signal for file ${fileId}:`, error);
       throw error;
     }
   },
-  
+
   /**
    * Sends a kill signal to a running ingestion task.
    * @param {string} fileId - The ID of the file associated with the ingestion job.
@@ -260,7 +271,7 @@ const documentFileService = {
    */
   async killIngestion(fileId) {
     try {
-      const response = await httpService.post(`/files/${fileId}/kill-ingest`);
+      const response = await httpService.postFiles(`/files/${fileId}/kill-ingest`);
       return response.data;
     } catch (error) {
       console.error(`Error killing ingestion for ${fileId}:`, error);

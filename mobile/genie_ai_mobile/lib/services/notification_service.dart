@@ -10,10 +10,15 @@ class NotificationEvent {
 }
 
 class NotificationService {
-  static final StreamController<NotificationEvent> _controller = StreamController.broadcast();
+  static final StreamController<NotificationEvent> _controller =
+      StreamController.broadcast();
   static Stream<NotificationEvent> get events => _controller.stream;
 
-  static void show(String msg, {NotificationType type = NotificationType.success, int dur = 3000}) {
+  static void show(
+    String msg, {
+    NotificationType type = NotificationType.success,
+    int dur = 3000,
+  }) {
     _controller.add(NotificationEvent(msg, type, dur));
   }
 

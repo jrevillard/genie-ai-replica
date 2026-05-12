@@ -228,7 +228,7 @@ Please run the schema creation script first to set up the database structure:
    */
   async writeToDatabase(data) {
     console.log('\nAttempting to write data to the database...');
-    let result = {
+    const result = {
       inserted: { categories: 0, services: 0, edges: 0 },
       skipped: { categories: 0, services: 0 },
       errors: []
@@ -264,7 +264,7 @@ Please run the schema creation script first to set up the database structure:
           LIMIT 1
           RETURN doc
         `);
-        let existingCategory = await existingCatCursor.next();
+        const existingCategory = await existingCatCursor.next();
         let currentCategoryKey;
 
         if (existingCategory) {

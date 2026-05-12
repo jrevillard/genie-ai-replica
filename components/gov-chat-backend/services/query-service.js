@@ -1,10 +1,36 @@
 require('dotenv').config();
-const axios = require('axios');
-const { Database, aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
+const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
+const { NotFoundError } = require('../middleware/errors');
+const { extractAgriculturalIntent } = require('./agricultural-query-intent-service');
+
+/**
+ * Merge client-provided taxonomy_filters with extractor output (union array fields).
+ * @param {object|null|undefined} base - From frontend / API
+ * @param {object|null|undefined} extra - From extractAgriculturalIntent
+ * @returns {object|null}
+ */
+function mergeTaxonomyFilters(base, extra) {
+  const keys = new Set([...Object.keys(base || {}), ...Object.keys(extra || {})]);
+  const out = {};
+  for (const k of keys) {
+    const a = base && base[k];
+    const b = extra && extra[k];
+    if (Array.isArray(a) || Array.isArray(b)) {
+      const merged = [...new Set([...(Array.isArray(a) ? a : a ? [a] : []), ...(Array.isArray(b) ? b : b ? [b] : [])])];
+      if (merged.length) {
+        out[k] = merged;
+      }
+    } else if (b != null && b !== '') {
+      out[k] = b;
+    } else if (a != null && a !== '') {
+      out[k] = a;
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 class QueryService {
   constructor() {
@@ -65,7 +91,7 @@ class QueryService {
    * @param {Object} payload - The request payload
    * @returns {Promise<Object>} The worker result
    */
-  runOPEAWorker(url, payload) {
+  runOPEAWorker(url, payload, headers = null) {
     return new Promise((resolve, reject) => {
       const workerPath = path.join(__dirname, './opea-worker.js');
       const worker = new Worker(workerPath);
@@ -74,7 +100,20 @@ class QueryService {
         if (msg.status === 'success') {
           resolve(msg.data);
         } else {
-          reject(new Error(msg.error ? msg.error.message : 'Worker execution failed'));
+          const e = msg.error || {};
+          let detail = e.message || 'Worker execution failed';
+          if (e.code && e.code !== 'UNKNOWN') {
+            detail += ` [${e.code}]`;
+          }
+          if (e.response && e.response.status) {
+            detail += ` (upstream HTTP ${e.response.status})`;
+          }
+          const err = new Error(detail);
+          if (e.response && e.response.status) {
+            err.upstreamStatus = e.response.status;
+            err.upstreamData = e.response.data;
+          }
+          reject(err);
         }
         worker.terminate();
       });
@@ -88,7 +127,7 @@ class QueryService {
         if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
       });
 
-      worker.postMessage({ url, payload });
+      worker.postMessage({ url, payload, headers });
     });
   }
 
@@ -103,7 +142,7 @@ class QueryService {
     const lastMessage = queryData.messages[queryData.messages.length - 1].content.toLowerCase();
 
     let response = `This is a general mock response. You asked about "${lastMessage}" within the context of "${categoryLabel}".`;
-    let metadata = {
+    const metadata = {
       source_documents: [],
       confidence_score: Math.random() * (0.98 - 0.85) + 0.85,
     };
@@ -215,17 +254,22 @@ class QueryService {
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
    */
-  async createQuery(queryData) {
+  async createQuery(queryData, headers = null) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
       logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
-      const backendMode = process.env.CONTEXT_OPTION || 'single-message';
+      const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
       logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
+      const parsedHistoryCap = Number.parseInt(process.env.CHATQNA_HISTORY_MAX_MESSAGES, 10);
+      const HISTORY_MAX_MESSAGES = Number.isFinite(parsedHistoryCap) && parsedHistoryCap > 0
+        ? parsedHistoryCap
+        : 10;
+
       logger.info('[DEBUG] Starting validation of incoming data...');
-      let missingFields = [];
+      const missingFields = [];
 
       if (!queryData.userId) {
         logger.warn('[DEBUG] Validation FAILED: userId is missing.');
@@ -292,11 +336,34 @@ class QueryService {
       }
       logger.info('[DEBUG] All validations passed successfully.');
 
+      // Cap forwarded history to the last N entries so ChatQnA always sees recent context but no runaway payloads.
+      if (Array.isArray(queryData.messages) && queryData.messages.length > HISTORY_MAX_MESSAGES) {
+        const before = queryData.messages.length;
+        queryData.messages = queryData.messages.slice(-HISTORY_MAX_MESSAGES);
+        logger.info(
+          `[DEBUG] Trimmed history from ${before} to ${queryData.messages.length} messages (cap=${HISTORY_MAX_MESSAGES}).`
+        );
+      }
+
       // Derive text from the last message for backward compatibility and analytics
       const lastMessage = queryData.messages[queryData.messages.length - 1];
       const queryText = lastMessage ? lastMessage.content : '';
       if (!queryText) {
         logger.warn('No extractable text from messages; analytics may be affected.');
+      }
+
+      const agIntent = extractAgriculturalIntent(queryText || '');
+      const mergedTaxonomyFilters = mergeTaxonomyFilters(
+        queryData.context && queryData.context.taxonomy_filters,
+        agIntent.taxonomy_filters
+      );
+      if (agIntent.comparative_regions && agIntent.comparative_regions.length >= 2) {
+        logger.info('QueryService.agricultural_intent_comparative', {
+          regions: agIntent.comparative_regions
+        });
+      }
+      if (mergedTaxonomyFilters) {
+        logger.debug('QueryService.agricultural_taxonomy_filters', { mergedTaxonomyFilters });
       }
 
       // Resolve categoryLabel to categoryId if not provided
@@ -388,7 +455,8 @@ class QueryService {
 
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+        // Prefer Compose service DNS (chatqna-xeon-backend-server). .env may set OPEA_HOST=127.0.0.1 for host-run backend.
+        const opeaHost = process.env.OPEA_HOST || 'chatqna-xeon-backend-server';
         const opeaPort = process.env.OPEA_PORT || '8888';
         const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
@@ -404,7 +472,22 @@ class QueryService {
 
           opeaPayload = {
             messages: queryText,
-            stream: false
+            stream: false,
+            context: {
+              language: queryData.context?.language,
+              // Sidebar / Query Context must reach ChatQnA even in single-message mode (legacy CONTEXT_OPTION).
+              ...(queryData.context?.categoryLabel
+                ? { categoryLabel: queryData.context.categoryLabel }
+                : {}),
+              ...(Array.isArray(queryData.context?.serviceLabels) && queryData.context.serviceLabels.length > 0
+                ? { serviceLabels: queryData.context.serviceLabels }
+                : {}),
+              ...(mergedTaxonomyFilters ? { taxonomy_filters: mergedTaxonomyFilters } : {}),
+              ...(agIntent.comparative_regions ? { comparative_regions: agIntent.comparative_regions } : {}),
+              ...(queryData.context?.topicFocusInstructions
+                ? { topicFocusInstructions: queryData.context.topicFocusInstructions }
+                : {})
+            },
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
@@ -413,18 +496,21 @@ class QueryService {
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: queryData.context.language,
+              ...(mergedTaxonomyFilters ? { taxonomy_filters: mergedTaxonomyFilters } : {}),
+              ...(agIntent.comparative_regions ? { comparative_regions: agIntent.comparative_regions } : {}),
+              ...(queryData.context?.topicFocusInstructions
+                ? { topicFocusInstructions: queryData.context.topicFocusInstructions }
+                : {})
             },
-            user_id: queryData.userId,
             stream: false
           };
         }
-
         logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, headers);
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;
@@ -443,9 +529,17 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       }
 
-      // Record the query in analytics
+      // Record the query in analytics (non-fatal — do not fail the chat response if analytics is down)
       if (this.analyticsService) {
-        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        try {
+          await this.analyticsService.recordQuery(await this.queries.document(queryId));
+        } catch (analyticsErr) {
+          logger.error('QueryService.analytics_record_failed', {
+            queryId,
+            error: analyticsErr.message,
+            stack: analyticsErr.stack
+          });
+        }
       }
 
       const totalDuration = Date.now() - startTime;
@@ -468,7 +562,9 @@ class QueryService {
       logger.error('QueryService.create_query_failed', {
         error: error.message,
         stack: error.stack,
-        durationMs: totalDuration
+        durationMs: totalDuration,
+        upstreamStatus: error.upstreamStatus,
+        upstreamData: error.upstreamData
       });
       throw error;
     }
@@ -491,10 +587,14 @@ class QueryService {
         throw new Error('Feedback rating is required');
       }
 
-      // Prepare feedback object
+      // Prepare feedback object. Always coerce the rating to a number so AQL
+      // numeric comparisons (rating >= 4 / rating <= 2) classify it correctly
+      // — older records sometimes stored it as a string.
+      const numericRating = Number(feedback.rating);
       const userFeedback = {
-        rating: feedback.rating,
+        rating: Number.isFinite(numericRating) ? numericRating : feedback.rating,
         comment: feedback.comment || '',
+        thumbFeedback: feedback.thumbFeedback || null,
         providedAt: new Date().toISOString()
       };
 
@@ -524,6 +624,53 @@ class QueryService {
       return updatedQuery.new;
     } catch (error) {
       logger.error('QueryService.add_feedback_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Attach (or update) an expert-curated correct answer to a query. Used by
+   * admins from the Feedback insights page to record the answer the AI should
+   * have given for queries that received negative feedback or that the AI
+   * couldn't answer.
+   *
+   * @param {String} queryId - Query ID
+   * @param {Object} payload - { text, providedBy? }
+   * @returns {Promise<Object>} The updated query
+   */
+  async setExpertAnswer(queryId, payload = {}) {
+    const startTime = Date.now();
+    try {
+      logger.info('QueryService.set_expert_answer_start', { queryId });
+      const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+      if (!text) {
+        throw new Error('Expert answer text is required');
+      }
+
+      const expertAnswer = {
+        text,
+        providedAt: new Date().toISOString(),
+        providedBy: payload.providedBy || null
+      };
+
+      const updatedQuery = await this.queries.update(
+        queryId,
+        { expertAnswer },
+        { returnNew: true }
+      );
+
+      logger.info('QueryService.expert_answer_saved', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
+      return updatedQuery.new;
+    } catch (error) {
+      logger.error('QueryService.set_expert_answer_failed', {
         queryId,
         error: error.message,
         stack: error.stack,
@@ -709,7 +856,7 @@ class QueryService {
     try {
       logger.info('QueryService.search_queries_start', { criteria, limit, offset });
 
-      let filterConditions = [];
+      const filterConditions = [];
 
       if (criteria.userId) {
         filterConditions.push(aql`q.userId == ${criteria.userId}`);
@@ -1193,7 +1340,7 @@ class QueryService {
 
       if (!query) {
         logger.warn('QueryService.query_not_found', { queryId });
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       const conversation = await this.chatHistoryService.createConversationFromQuery(
@@ -1315,7 +1462,7 @@ class QueryService {
       });
 
       if (error.name === 'ArangoError' && error.errorNum === 1202) {
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       throw error;
@@ -1352,7 +1499,7 @@ class QueryService {
 
       if (!message) {
         logger.warn('QueryService.message_not_found', { messageId });
-        throw new Error('Message not found');
+        throw new NotFoundError('Message not found');
       }
 
       const link = await this.chatHistoryService.linkQueryToConversation(

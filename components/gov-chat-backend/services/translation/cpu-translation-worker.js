@@ -161,6 +161,6 @@ process.on('uncaughtException', (error) => {
   });
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   logger.error(`[CPU-WORKER] Unhandled rejection: ${reason}`);
 });

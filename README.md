@@ -85,11 +85,10 @@ GENIE.AI/
 │   └── shared/                   # Shared libraries
 ├── mobile/                       # Mobile applications
 │   └── genie_ai_mobile/          # Flutter mobile app
-├── genie-ai-overlay/             # OPEA integration layer
+├── genie-ai-overlay/       # OPEA integration layer
 │   ├── chatqna/                  # Chat microservice
 │   ├── core/                     # Core libraries and protocols
 │   ├── dataprep/                 # Data preparation service
-│   ├── http-service/             # HTTP client wrapper
 │   ├── retriever/                # Hybrid vector-graph retriever
 │   └── reranker/                 # Reranking microservice
 ├── api-gateway-solution/         # API Gateway (Kong/NGINX)
@@ -111,11 +110,10 @@ GENIE.AI/
 ├── GENIE.AI-Data-Labelling-Strategy.md           # Data labeling strategy
 ├── UNICC-ITU-Genie-AI Code Management Process.md # Development workflow
 ├── proposed-repo-structure-changes.md            # Repository architecture
-├── docker-compose.yaml          # Main Docker Compose configuration
-├── docker-compose-t4.yaml       # T4 GPU variant configuration
-├── docker-compose-RTX6000-ADA.yaml # RTX 6000 ADA GPU variant
+├── docker-compose.yaml          # Dual-mode Docker Compose (compose up + Swarm)
 ├── env                          # Environment configuration (main)
-├── env-T4                       # Environment configuration (T4 variant)
+├── env.t4                       # GPU overrides for NVIDIA T4 (16GB VRAM)
+├── env.rtx6000                  # GPU overrides for RTX 6000 ADA (24GB VRAM)
 └── package.json                 # Node.js dependencies and scripts
 ```
 
@@ -123,8 +121,7 @@ GENIE.AI/
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Kubernetes (optional, for production)
+- Docker and Docker Compose (v2+ with Swarm support)
 - NVIDIA GPU (for optimal performance)
 - Hugging Face API token
 
@@ -135,26 +132,35 @@ git clone https://github.com/your-org/GENIE.AI.git
 cd GENIE.AI
 ```
 
-### 2. Start OPEA Infrastructure
+### 2. Configure Environment
 
 ```bash
-cd configs/opea-config
-export HUGGING_FACE_HUB_TOKEN=your_token_here
-docker-compose up -d
+cp env .env
+# Edit .env with your secrets (ARANGO_PASSWORD, KEYCLOAK_ADMIN_PASSWORD, etc.)
 ```
 
-### 3. Deploy GENIE.AI Services
+### 3. Start Services
 
 ```bash
-cd ../../components
-docker-compose up -d
+# Core services only
+docker compose up -d
+
+# Full stack with OPEA/AI services
+docker compose --profile opea up -d
 ```
+
+For GPU-specific overrides:
+```bash
+docker compose --env-file .env --env-file env.t4 --profile opea up -d
+```
+
+See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full local development guide and [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for Docker Swarm deployment.
 
 ### 4. Access Applications
 
-- **Web Interface**: http://localhost:8080
+- **Web Interface**: https://localhost/
 - **Mobile App**: See [mobile/genie_ai_mobile/README.md](mobile/genie_ai_mobile/README.md)
-- **API Documentation**: http://localhost:8080/api-docs
+- **API Documentation**: https://localhost/api-docs
 
 ## Documentation:
 
@@ -181,11 +187,7 @@ docker-compose up -d
 
 ### OPEA Integration
 
-- **[ChatQnA Service](genie-ai-overlay/chatqna/README.md)** - Chat microservice with multilingual support
-- **[Core Library](genie-ai-overlay/core/README.md)** - Service types, API protocols, and constants
-- **[Data Preparation](genie-ai-overlay/dataprep/README.md)** - Document ingestion and processing pipeline
-- **[HTTP Service](genie-ai-overlay/http-service/README.md)** - HTTP client wrapper and authentication
-- **[Retriever Service](genie-ai-overlay/retriever/README.md)** - Hybrid vector-graph search
+Stashed changes
 
 ### Configuration
 
@@ -202,10 +204,11 @@ docker-compose up -d
 GENIE.AI is built on a microservices architecture with the following layers:
 
 1. **Client Layer**: Web (Vue.js), Mobile (Flutter), API clients
-2. **API Gateway**: Kong/NGINX for routing, authentication, and rate limiting
-3. **Application Layer**: Backend services (Node.js/Express)
-4. **AI Layer**: OPEA microservices (LLM, Embeddings, Reranking)
-5. **Data Layer**: ArangoDB (graph + vector), file storage, Redis cache
+2. **Identity Provider**: Keycloak (OIDC, JWKS, JIT provisioning, service accounts)
+3. **API Gateway**: Kong/NGINX for routing, rate limiting, SSL termination
+4. **Application Layer**: Backend services (Node.js/Express)
+5. **AI Layer**: OPEA microservices (LLM, Embeddings, Reranking)
+6. **Data Layer**: ArangoDB (graph + vector), file storage, Redis cache
 
 ### Technology Stack
 
@@ -213,7 +216,8 @@ GENIE.AI is built on a microservices architecture with the following layers:
 |-------|-----------|
 | Frontend | Vue.js 3, Vite, Tailwind CSS |
 | Mobile | Flutter 3.10+ |
-| Backend | Node.js, Express, TypeScript |
+| Identity Provider | Keycloak 26 (OIDC, JWKS, service accounts) |
+| Backend | Node.js, Express |
 | AI/ML | OPEA, vLLM, TEI, ArangoDB |
 | Database | ArangoDB 3.12+ (multi-model) |
 | API Gateway | Kong, NGINX |
@@ -224,7 +228,7 @@ GENIE.AI is built on a microservices architecture with the following layers:
 - **Multilingual Support**: 11+ languages with automatic translation
 - **RAG Pipeline**: Hybrid vector-graph retrieval for context-aware responses
 - **Multi-Platform**: Web, mobile (Android, iOS, Windows, macOS, Linux)
-- **Authentication**: JWT-based with role-based access control
+- **Authentication**: Keycloak OIDC with JWKS token validation, role-based access control, and JIT user provisioning
 - **Analytics**: Comprehensive usage and performance analytics
 - **Document Management**: Secure file upload, processing, and knowledge base integration
 - **Admin Dashboard**: System monitoring, user management, and security scanning
@@ -251,25 +255,16 @@ GENIE.AI is built on a microservices architecture with the following layers:
 
 2. **Configure Environment**:
    ```bash
-   # Create .env files for each component
-   cp components/gov-chat-backend/.env.example components/gov-chat-backend/.env
+   cp env .env
    # Edit .env with your configuration
    ```
 
 3. **Start Services**:
    ```bash
-   # Start OPEA services first
-   cd configs/opea-config
-   docker-compose up -d
-
-   # Start backend
-   cd ../../components/gov-chat-backend
-   npm start
-
-   # Start frontend
-   cd ../gov-chat-frontend
-   npm run serve
+   docker compose up -d
    ```
+
+See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full local development guide.
 
 ### Testing
 
@@ -289,27 +284,38 @@ flutter test
 
 ## Deployment:
 
-### Docker Deployment
+### Docker Compose (Local Development)
 
 ```bash
-# Build all services
-docker-compose -f components/docker-compose.yaml build
+cp env .env
 
-# Deploy all services
-docker-compose -f components/docker-compose.yaml up -d
+# Core services only
+docker compose up -d
+
+# Full stack with OPEA/AI services
+docker compose --profile opea up -d
 ```
 
-### Kubernetes Deployment
+See [docs/docker-compose-setup.md](docs/docker-compose-setup.md) for the full guide.
+
+### Docker Swarm Deployment
+
+GENIE.AI is deployed using Docker Swarm. See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) for the complete guide.
 
 ```bash
-# Apply Kubernetes manifests
-kubectl apply -f k8s/
+# Deploy the stack
+set -a && source .env && set +a
+docker stack deploy -c docker-compose.yaml genieai
 
-# Check deployment status
-kubectl get pods -n genie-ai
+# With GPU-specific settings:
+set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
 ```
 
-See individual component READMEs for detailed deployment instructions.
+### Removing the Deployment
+
+```bash
+docker stack rm genieai
+```
 
 ## Project Documentation:
 

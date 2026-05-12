@@ -5,7 +5,7 @@
       "name": "express-api",
       "id": "453cb927-f3d0-4b68-8791-3165dc046719",
       "protocol": "http",
-      "host": "e2e-109-51",
+      "host": "backend",
       "port": 3000,
       "path": null,
       "connect_timeout": 60000,
@@ -23,7 +23,7 @@
       "name": "document-repository",
       "id": "e1a2b3c4-d5e6-4f78-9a0b-1c2d3e4f5a6b",
       "protocol": "http",
-      "host": "e2e-109-51",
+      "host": "document-repository",
       "port": 3001,
       "path": null,
       "connect_timeout": 60000,
@@ -35,15 +35,21 @@
       "tls_verify": null,
       "tls_verify_depth": null,
       "ca_certificates": null,
-      "tags": ["new"]
+      "tags": [
+        "new"
+      ]
     }
   ],
   "routes": [
     {
       "name": "api-fallback",
       "id": "f2146b63-2c99-491d-b999-274cd629912f",
-      "service": {"name": "express-api"},
-      "paths": ["/api"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api"
+      ],
       "strip_path": false,
       "preserve_host": true,
       "regex_priority": 0,
@@ -51,28 +57,124 @@
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
       "snis": null,
       "sources": null,
       "destinations": null,
-      "tags": null
+      "tags": null,
+      "plugins": [
+        {
+          "name": "request-transformer",
+          "id": "0b261d22-dc08-4917-a055-1a766a35948a",
+          "enabled": true,
+          "config": {
+            "add": {
+              "headers": [
+                "X-Kong-Proxy: true"
+              ]
+            }
+          }
+        },
+        {
+          "name": "rate-limiting",
+          "id": "13e146bb-0dff-4bfa-a9ca-95b8189ffb03",
+          "enabled": true,
+          "config": {
+            "minute": 1000,
+            "hour": 10000,
+            "policy": "local",
+            "limit_by": "consumer"
+          }
+        },
+        {
+          "name": "cors",
+          "id": "2ea9bc50-0b87-4c47-a834-d0e1576b61e9",
+          "enabled": true,
+          "config": {
+            "origins": [
+              "*"
+            ],
+            "methods": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "OPTIONS"
+            ],
+            "headers": [
+              "Accept",
+              "Accept-Version",
+              "Content-Length",
+              "Content-MD5",
+              "Content-Type",
+              "Date",
+              "X-Auth-Token",
+              "Authorization"
+            ],
+            "credentials": true,
+            "max_age": 3600
+          }
+        },
+        {
+          "name": "file-log",
+          "id": "54117e7d-fb6e-49a8-bb93-472d76ed392e",
+          "enabled": false,
+          "config": {
+            "path": "/var/log/kong/api.log",
+            "reopen": true
+          }
+        },
+        {
+          "name": "response-transformer",
+          "id": "aa355c64-6061-452d-9cf7-ab8ae8a54600",
+          "enabled": true,
+          "config": {
+            "add": {
+              "headers": [
+                "X-Powered-By: Kong",
+                "X-Kong-Proxy-Latency: ${latency}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "request-termination",
+          "id": "ee709c44-60aa-48aa-b091-ca7feaf7230c",
+          "enabled": false,
+          "config": {
+            "status_code": 503,
+            "message": "API is currently under maintenance. Please try again later."
+          }
+        }
+      ]
     },
     {
       "name": "auth-route",
       "id": "7602e7f1-e312-44ed-a38c-8e82679c2c50",
-      "service": {"name": "express-api"},
-      "paths": ["/api/auth"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/auth"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -84,17 +186,26 @@
     {
       "name": "auth-refresh-route",
       "id": "898b5b34-0d52-4cae-b4f4-c42655a55952",
-      "service": {"name": "express-api"},
-      "paths": ["/api/auth/refresh-token"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/auth/refresh-token"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
-      "methods": ["POST"],
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "methods": [
+        "POST"
+      ],
       "hosts": null,
       "headers": null,
       "snis": null,
@@ -105,17 +216,26 @@
     {
       "name": "auth-login-route",
       "id": "a19f9d61-ed62-4185-a826-9f3e07547498",
-      "service": {"name": "express-api"},
-      "paths": ["/api/auth/login"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/auth/login"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
-      "methods": ["POST"],
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "methods": [
+        "POST"
+      ],
       "hosts": null,
       "headers": null,
       "snis": null,
@@ -126,16 +246,23 @@
     {
       "name": "user-route",
       "id": "752ee750-73d9-4cbe-8a65-37fa07ea7531",
-      "service": {"name": "express-api"},
-      "paths": ["/api/users"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/users"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -147,16 +274,23 @@
     {
       "name": "user-admin-route",
       "id": "b7c9d2a3-8e4f-4d8a-9b7c-5d6e8f9a0b1c",
-      "service": {"name": "express-api"},
-      "paths": ["/api/users/admin/users"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/users/admin/users"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -168,16 +302,23 @@
     {
       "name": "session-route",
       "id": "58777b89-a66d-438a-a399-b7d3bc67990e",
-      "service": {"name": "express-api"},
-      "paths": ["/api/sessions"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/sessions"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -189,16 +330,23 @@
     {
       "name": "query-route",
       "id": "66937bee-3067-400c-b0e8-d7a0b8d22e08",
-      "service": {"name": "express-api"},
-      "paths": ["/api/queries"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/queries"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -210,16 +358,23 @@
     {
       "name": "service-route",
       "id": "d23b9c0d-f610-4935-a405-1f5af97c1a66",
-      "service": {"name": "express-api"},
-      "paths": ["/api/services"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/services"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -231,16 +386,23 @@
     {
       "name": "service-category-route",
       "id": "dd49c426-668a-4b40-bf52-6a7cbb75741f",
-      "service": {"name": "express-api"},
-      "paths": ["/api/service-categories"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/service-categories"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -252,16 +414,23 @@
     {
       "name": "database-operations-route",
       "id": "5d65894d-43df-4846-8d0e-d311d1ff073d",
-      "service": {"name": "express-api"},
-      "paths": ["/api/database"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/database"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -273,16 +442,23 @@
     {
       "name": "analytics-route",
       "id": "c62e46b7-da5e-475b-83ce-a8b95df08325",
-      "service": {"name": "express-api"},
-      "paths": ["/api/analytics"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/analytics"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -294,16 +470,23 @@
     {
       "name": "logger-route",
       "id": "9db8116a-c8ec-4fe0-82aa-043ec1f1b636",
-      "service": {"name": "express-api"},
-      "paths": ["/api/logger"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/logger"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -315,16 +498,23 @@
     {
       "name": "security-route",
       "id": "4e807fb3-4f67-4151-86f8-63582cb51820",
-      "service": {"name": "express-api"},
-      "paths": ["/api/security"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/security"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -336,16 +526,23 @@
     {
       "name": "admin-route",
       "id": "35eb882b-1b68-4a30-872a-9f322d21a034",
-      "service": {"name": "express-api"},
-      "paths": ["/api/admin"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/admin"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -357,16 +554,23 @@
     {
       "name": "chat-history-route",
       "id": "d32c41a5-5d79-4ec6-a033-68a8a3f61adf",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -405,7 +609,9 @@
               "DELETE",
               "OPTIONS"
             ],
-            "origins": ["*"]
+            "origins": [
+              "*"
+            ]
           }
         },
         {
@@ -432,7 +638,7 @@
         {
           "name": "file-log",
           "id": "c2ac47f0-12d2-4d91-a12d-84538fe2344a",
-          "enabled": true,
+          "enabled": false,
           "config": {
             "custom_fields_by_lua": null,
             "reopen": true,
@@ -444,16 +650,23 @@
     {
       "name": "folder-main-route",
       "id": "a3c0222c-150a-4cd5-98e8-6ee3f5f3a3b7",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat/folders"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat/folders"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -465,16 +678,23 @@
     {
       "name": "folder-search-route",
       "id": "18bce79e-0626-4ece-86b7-77695f34adf6",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat/folders/search"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat/folders/search"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -486,16 +706,23 @@
     {
       "name": "folder-shared-route",
       "id": "68f7a4f9-673e-45e6-858b-989f72539cc5",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat/folders/shared"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat/folders/shared"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -507,16 +734,23 @@
     {
       "name": "folder-reorder-route",
       "id": "4ea1f274-2400-4d03-9fae-fbf31972621d",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat/folders/reorder"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat/folders/reorder"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -528,16 +762,23 @@
     {
       "name": "folder-detail-route",
       "id": "8e30fbdb-0c65-41b9-942d-feb3f9396596",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat/folders/(?!shared$|search$|reorder$).*"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat/folders/(?!shared$|search$|reorder$).*"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -549,16 +790,23 @@
     {
       "name": "conversation-move-route",
       "id": "775bba9e-e8b4-4141-a532-462ed094410e",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat/conversations/.*/move"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat/conversations/.*/move"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -570,16 +818,23 @@
     {
       "name": "conversation-folder-route",
       "id": "f6bf67f8-f115-4dda-9da9-259d550ba309",
-      "service": {"name": "express-api"},
-      "paths": ["/api/chat/conversations/.*/folder"],
+      "service": {
+        "name": "express-api"
+      },
+      "paths": [
+        "/api/chat/conversations/.*/folder"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 1,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
@@ -591,44 +846,64 @@
     {
       "name": "files-route",
       "id": "f0e1d2c3-b4a5-4e6f-8d7c-9b8a7f6e5d4c",
-      "service": {"name": "document-repository"},
-      "paths": ["/api/files"],
+      "service": {
+        "name": "document-repository"
+      },
+      "paths": [
+        "/api/files",
+        "/api/files/"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 100,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
       "snis": null,
       "sources": null,
       "destinations": null,
-      "tags": ["new"]
+      "tags": [
+        "new"
+      ]
     },
     {
       "name": "labels-route",
       "id": "a9b8c7d6-e5f4-4a3b-9c8d-7e6f5d4c3b2a",
-      "service": {"name": "document-repository"},
-      "paths": ["/api/labels"],
+      "service": {
+        "name": "document-repository"
+      },
+      "paths": [
+        "/api/labels",
+        "/api/labels/"
+      ],
       "strip_path": false,
       "preserve_host": true,
-      "regex_priority": 0,
+      "regex_priority": 100,
       "path_handling": "v0",
       "request_buffering": true,
       "response_buffering": true,
       "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
+      "protocols": [
+        "http",
+        "https"
+      ],
       "methods": null,
       "hosts": null,
       "headers": null,
       "snis": null,
       "sources": null,
       "destinations": null,
-      "tags": ["new"]
+      "tags": [
+        "new"
+      ]
     }
   ],
   "plugins": [
@@ -643,156 +918,6 @@
         "upstream_health_metrics": true,
         "per_consumer": false,
         "status_code_metrics": true
-      }
-    },
-    {
-      "name": "request-transformer",
-      "id": "0b261d22-dc08-4917-a055-1a766a35948a",
-      "enabled": true,
-      "service": {"name": "express-api"},
-      "config": {
-        "rename": {
-          "querystring": [],
-          "headers": [],
-          "body": []
-        },
-        "remove": {
-          "querystring": [],
-          "headers": [],
-          "body": []
-        },
-        "http_method": null,
-        "append": {
-          "querystring": [],
-          "headers": [],
-          "body": []
-        },
-        "add": {
-          "querystring": [],
-          "headers": ["X-Kong-Proxy: true"],
-          "body": []
-        },
-        "replace": {
-          "uri": null,
-          "body": [],
-          "querystring": [],
-          "headers": []
-        }
-      }
-    },
-    {
-      "name": "rate-limiting",
-      "id": "13e146bb-0dff-4bfa-a9ca-95b8189ffb03",
-      "enabled": true,
-      "service": {"name": "express-api"},
-      "config": {
-        "minute": 1000,
-        "hour": 10000,
-        "policy": "local",
-        "limit_by": "consumer",
-        "header_name": null,
-        "hide_client_headers": false,
-        "redis_timeout": 2000,
-        "redis_database": 0,
-        "redis_ssl": false,
-        "redis_ssl_verify": false,
-        "fault_tolerant": true,
-        "sync_rate": -1,
-        "error_code": 429,
-        "error_message": "API rate limit exceeded"
-      }
-    },
-    {
-      "name": "cors",
-      "id": "2ea9bc50-0b87-4c47-a834-d0e1576b61e9",
-      "enabled": true,
-      "service": {"name": "express-api"},
-      "config": {
-        "preflight_continue": false,
-        "credentials": true,
-        "max_age": 3600,
-        "private_network": false,
-        "exposed_headers": null,
-        "headers": [
-          "Accept",
-          "Accept-Version",
-          "Accept-Language",
-          "Content-Length",
-          "Content-MD5",
-          "Content-Type",
-          "Date",
-          "X-Auth-Token",
-          "Authorization",
-          "X-Requested-With"
-        ],
-        "methods": [
-          "GET",
-          "POST",
-          "PUT",
-          "PATCH",
-          "DELETE",
-          "OPTIONS"
-        ],
-        "origins": ["*"]
-      }
-    },
-    {
-      "name": "file-log",
-      "id": "54117e7d-fb6e-49a8-bb93-472d76ed392e",
-      "enabled": true,
-      "service": {"name": "express-api"},
-      "config": {
-        "custom_fields_by_lua": null,
-        "reopen": true,
-        "path": "/var/log/kong/api.log"
-      }
-    },
-    {
-      "name": "response-transformer",
-      "id": "aa355c64-6061-452d-9cf7-ab8ae8a54600",
-      "enabled": true,
-      "service": {"name": "express-api"},
-      "config": {
-        "rename": {
-          "json": [],
-          "headers": []
-        },
-        "remove": {
-          "json": [],
-          "headers": []
-        },
-        "append": {
-          "json_types": [],
-          "json": [],
-          "headers": []
-        },
-        "add": {
-          "json_types": [],
-          "json": [],
-          "headers": [
-            "X-Powered-By: Kong",
-            "X-Kong-Proxy-Latency: ${latency}"
-          ]
-        },
-        "replace": {
-          "json_types": [],
-          "json": [],
-          "headers": []
-        }
-      }
-    },
-    {
-      "name": "request-termination",
-      "id": "ee709c44-60aa-48aa-b091-ca7feaf7230c",
-      "enabled": false,
-      "service": {"name": "express-api"},
-      "config": {
-        "body": null,
-        "trigger": null,
-        "echo": false,
-        "content_type": null,
-        "status_code": 503,
-        "message": "API is currently under maintenance. Please try again later."
       }
     }
   ],
@@ -809,7 +934,10 @@
         "active": {
           "concurrency": 10,
           "healthy": {
-            "http_statuses": [200, 302],
+            "http_statuses": [
+              200,
+              302
+            ],
             "interval": 0,
             "successes": 0
           },
@@ -819,7 +947,16 @@
           "https_verify_certificate": true,
           "type": "http",
           "unhealthy": {
-            "http_statuses": [429, 404, 500, 501, 502, 503, 504, 505],
+            "http_statuses": [
+              429,
+              404,
+              500,
+              501,
+              502,
+              503,
+              504,
+              505
+            ],
             "http_failures": 0,
             "interval": 0,
             "tcp_failures": 0,
@@ -829,14 +966,35 @@
         "passive": {
           "healthy": {
             "http_statuses": [
-              200, 201, 202, 203, 204, 205, 206, 207, 208, 226,
-              300, 301, 302, 303, 304, 305, 306, 307, 308
+              200,
+              201,
+              202,
+              203,
+              204,
+              205,
+              206,
+              207,
+              208,
+              226,
+              300,
+              301,
+              302,
+              303,
+              304,
+              305,
+              306,
+              307,
+              308
             ],
             "successes": 0
           },
           "type": "http",
           "unhealthy": {
-            "http_statuses": [429, 500, 503],
+            "http_statuses": [
+              429,
+              500,
+              503
+            ],
             "http_failures": 0,
             "tcp_failures": 0,
             "timeouts": 0
@@ -849,9 +1007,11 @@
   "targets": [
     {
       "id": "7feebc25-b694-408b-a60f-f93493549f71",
-      "target": "e2e-109-51:3000",
+      "target": "backend:3000",
       "weight": 100,
-      "upstream": {"id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"}
+      "upstream": {
+        "id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"
+      }
     }
   ]
 }

@@ -1,0 +1,79 @@
+---
+# GENIE.AI - Shared configuration (all environments)
+# Environment-specific config goes in group_vars/<env>.yml
+# Environment-specific secrets go in group_vars/<env>.vault (Ansible Vault encrypted)
+
+# =============================================================================
+# DEPLOYMENT PATHS
+# =============================================================================
+deploy_dir: /opt/genieai
+data_dir: ./data
+
+# =============================================================================
+# DOCKER / NVIDIA — VERSION PINNING
+# =============================================================================
+# Packages are held via dpkg --set-selections to prevent accidental upgrades.
+# To upgrade: change the pin, unhold, run apt upgrade, re-hold.
+docker_version_pin: "5:28.5.*"
+docker_hold_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - docker-ce-rootless-extras
+nvidia_version_pin: "1.18.*"
+nvidia_hold_packages:
+  - nvidia-container-toolkit
+  - nvidia-container-toolkit-base
+  - libnvidia-container-tools
+  - libnvidia-container1
+
+# =============================================================================
+# STACK CONFIGURATION
+# =============================================================================
+stack_name: genieai
+compose_file: docker-compose.yaml
+deploy_stabilization_timeout: 900
+deploy_opea: "1"
+registry_port: "5000"
+
+# =============================================================================
+# REPOSITORY
+# =============================================================================
+repo_url: https://opensource.unicc.org/un/itu/genie-ai.git
+repo_branch: main
+
+# =============================================================================
+# API GATEWAY (defaults)
+# =============================================================================
+nginx_public_domain: "localhost"
+nginx_http_port: "80"
+nginx_https_port: "443"
+
+# Kong trusted IPs for X-Forwarded-* header passthrough.
+# Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,
+# X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Prefix headers set by nginx.
+# Kong is NOT exposed to the host — only containers on the internal Docker network can reach it,
+# so IP spoofing from outside is not possible regardless of the CIDR range.
+# Docker Compose (bridge networks): 172.16.0.0/12 (covers 172.16-172.31)
+# Docker Swarm (overlay networks): 10.0.0.0/8 (default overlay subnet range)
+# Restrict further with: docker network inspect <network> to find the exact subnet.
+kong_trusted_ips: "10.0.0.0/8"
+
+# Browser-openable API origin for ChatQnA source-document links (metadata.url). Must match how users reach /api
+# (e.g. https://your.domain or http://host:8010 via Kong). Unset = ChatQnA uses BACKEND_SERVICE_URL (often
+# http://backend:3000), which does not resolve in the browser.
+# backend_public_url: "https://localhost"
+
+# =============================================================================
+# SSL CERTIFICATES
+# =============================================================================
+# self_signed_certs: true   -> generate self-signed certs if none exist
+# self_signed_certs: false  -> fail if no certs provided in files/certificates/<env>/
+self_signed_certs: true
+
+# =============================================================================
+# TEARDOWN OPTIONS
+# =============================================================================
+teardown_remove_volumes: false
+teardown_remove_registry: false

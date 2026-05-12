@@ -5,18 +5,26 @@ const config = {
       baseUrl: process.env.API_BASE_URL || 'http://localhost:3000/api',
       healthEndpoint: '/health',
       endpoints: [
-        '/api/users',
+        '/api/me',
         '/api/queries',
         '/api/logs',
-        '/api/sessions',
         '/api/admin/system-health',
         '/api/admin/logs',
         '/api/admin/security-metrics',
-        '/api/analytics/dashboard',
-        '/api/auth/me'
+        '/api/analytics/dashboard'
       ]
     },
-    
+
+    // Keycloak configuration
+    keycloak: {
+      url: process.env.KEYCLOAK_URL,
+      realm: process.env.KEYCLOAK_REALM,
+      additionalRealms: (() => {
+        try { return JSON.parse(process.env.KEYCLOAK_ADDITIONAL_REALMS || '[]'); }
+        catch { return []; }
+      })()
+    },
+
     // Security scan configuration
     security: {
       hiddenFiles: [
@@ -28,5 +36,5 @@ const config = {
       ]
     }
   };
-  
+
   module.exports = config;

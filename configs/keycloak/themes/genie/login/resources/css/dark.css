@@ -1,0 +1,86 @@
+/* GENIE.AI Keycloak Login Theme — Dark Mode (PatternFly v5 variable overrides) */
+/* Activated by upstream keycloak.v2 darkMode=true */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* ── Primary ── */
+    --pf-v5-global--primary-color--100: #4E97D1;
+    --pf-v5-global--primary-color--200: #5aa8e0;
+    --pf-v5-global--primary-color--300: #6ab5e8;
+    --pf-v5-global--primary-color--400: #4E97D1;
+    --pf-v5-global--primary-color--500: #4E97D1;
+
+    /* ── Background ── */
+    --pf-v5-global--BackgroundColor--100: #1e1e1e;
+    --pf-v5-global--BackgroundColor--200: #252525;
+
+    /* ── Text ── */
+    --pf-v5-global--Color--100: #f0f0f0;
+    --pf-v5-global--Color--200: #b3b3b3;
+    --pf-v5-global--Color--300: #9ca3af;
+    --pf-v5-global--Color--400: #9ca3af;
+
+    /* ── Borders ── */
+    --pf-v5-global--BorderColor--100: #3a3a3a;
+    --pf-v5-global--BorderColor--200: #3a3a3a;
+    --pf-v5-global--BorderColor--300: #3a3a3a;
+
+    /* ── Status Colors ── */
+    --pf-v5-global--success-color--100: #10b981;
+    --pf-v5-global--warning-color--100: #f59e0b;
+    --pf-v5-global--danger-color--100: #ef4444;
+    --pf-v5-global--danger-color--200: #ef4444;
+
+    /* ── Link ── */
+    --pf-v5-global--link--Color: #4E97D1;
+    --pf-v5-global--link--Color--hover: #5aa8e0;
+
+    /* ── Login-specific ── */
+    --pf-v5-c-login__main-header--BorderTopColor: #4E97D1;
+    --pf-v5-c-login__main-body--BackgroundColor: #252525;
+    --pf-v5-c-login__main-header--BackgroundColor: #252525;
+
+    /* ── Button overrides ── */
+    --pf-v5-c-button--m-primary--BackgroundColor: #4E97D1;
+    --pf-v5-c-button--m-primary--hover--BackgroundColor: #5aa8e0;
+    --pf-v5-c-button--m-primary--active--BackgroundColor: #6ab5e8;
+    --pf-v5-c-button--m-primary--focus--BackgroundColor: #4E97D1;
+    --pf-v5-c-button--m-secondary--BorderColor: #4E97D1;
+    --pf-v5-c-button--m-secondary--Color: #4E97D1;
+
+    /* ── Form control ── */
+    --pf-v5-c-form-control--BackgroundColor: #333333;
+    --pf-v5-c-form-control--BorderColor: #3a3a3a;
+    --pf-v5-c-form-control--Color: #f0f0f0;
+    --pf-v5-c-form-control--focus--BorderColor: #4E97D1;
+    --pf-v5-c-form-control--focus--BoxShadowColor: rgba(78, 151, 209, 0.25);
+
+    /* ── Page background ── */
+    --pf-v5-c-page--BackgroundColor: #1e1e1e;
+  }
+
+  /* ── Page background ── */
+  body {
+    background-color: #1e1e1e;
+  }
+
+  #keycloak-bg {
+    background-color: #1e1e1e;
+  }
+
+  .pf-v5-c-login__main {
+    background-color: #252525;
+  }
+
+  #kc-header-wrapper {
+    color: #4E97D1;
+  }
+
+  #kc-page-title {
+    color: #f0f0f0;
+  }
+
+  #kc-footer-wrapper {
+    color: #9ca3af;
+  }
+}

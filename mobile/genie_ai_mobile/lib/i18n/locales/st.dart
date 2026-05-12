@@ -196,135 +196,13 @@ const Map<String, dynamic> stLocale = {
     "VN": "Vietnam",
     "YE": "Yemen",
     "ZM": "Zambia",
-    "ZW": "Zimbabwe"
+    "ZW": "Zimbabwe",
   },
-  "verification": {
-    "verifying": "Re netefatsa imeile ya hao...",
-    "success": "Imeile e Netefalitswe ka Katleho!",
-    "failed": "Ho Netefatsa ho Hlotsoe",
-    "accountVerified": "Ak'haonte ya hao e netefalitswe ka katleho. Hona jwale o ka kena ak'haonteng ya hao.",
-    "invalidLink": "Sehoka sa netefatso ha se sebetse kapa se felletsoe ke nako.",
-    "missingToken": "Letshwao la netefatso le siyo.",
-    "generalError": "Ho bile le phoso nakong ya netefatso. Ka kopo, leka hape hamorao.",
-    "proceedToLogin": "Tswela pele ho Kena",
-    "backToLogin": "Khutlela ho Kena"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Etsa Phasewete e Ntjha",
-    "tokenLabel": "Letshwao la ho Seta Botjha",
-    "tokenPlaceholder": "Kenya letshwao la ho seta botjha",
-    "validateButton": "Netefatsa Letshwao",
-    "newPasswordLabel": "Phasewete e Ntjha",
-    "newPasswordPlaceholder": "Etsa phasewete e ntjha",
-    "confirmNewPasswordLabel": "Netefatsa Phasewete e Ntjha",
-    "confirmNewPasswordPlaceholder": "Netefatsa phasewete ya hao e ntjha",
-    "resetButton": "Seta Phasewete Botjha",
-    "processing": "Ho seta botjha...",
-    "rememberedPassword": "O hopotse phasewete ya hao?",
-    "backToLogin": "Khutlela ho Kena",
-    "supportMessage": "O hloka thuso? Ikopanye le sehlopha sa rona sa tshehetso",
-    "passwordRequirements": "Phasewete e tlameha ho ba le ditlhaku tse 8, ho be le nomoro e le 1, tlhaku e kgolo e le 1, le letshwao le le 1 le ikgethang",
-    "passwordsDoNotMatch": "Diphasewete ha di tshwane",
-    "resetSuccess": "Phasewete ya hao e setilwe botjha ka katleho",
-    "resetFailed": "Ho hlotsoe ho seta phasewete botjha. Ka kopo, leka hape.",
-    "noTokenProvided": "Ka kopo, fana ka letshwao la ho seta botjha",
-    "expiredToken": "Letshwao lena le felletsoe ke nako. Ka kopo kopa le leng le letjha.",
-    "invalidToken": "Letshwao lena ha le sebetse kapa ha le tsejwe",
-    "validatingToken": "Ho netefatsa letshwao...",
-    "redirecting": "Re o isa leqepheng la ho kena...",
-    "passwordStrength": "Matla a Phasewete",
-    "strengthLabels": {
-      "veryWeak": "E fokolang haholo",
-      "weak": "E fokolang",
-      "fair": "E mahareng",
-      "good": "E ntle",
-      "strong": "E matla"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Sebelisa ditlhaku tse 8 kapa ho feta",
-      "addUppercase": "Kenya ditlhaku tse kgolo",
-      "addLowercase": "Kenya ditlhaku tse nyane",
-      "addNumbers": "Kenya dinomoro",
-      "addSpecialChars": "Kenya matshwao a ikgethang"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Seta Phasewete ya hao Botjha",
-    "emailLabel": "Aterese ya Imeile",
-    "emailPlaceholder": "Kenya imeile ya hao",
-    "resetButton": "Romela Sehoka sa ho Seta Botjha",
-    "processing": "Ho romela...",
-    "rememberPassword": "O hopotse phasewete ya hao?",
-    "backToLogin": "Khutlela ho Kena",
-    "supportMessage": "O hloka thuso? Ikopanye le sehlopha sa rona sa tshehetso",
-    "invalidEmail": "Ka kopo, kenya aterese ya imeile e nepahetseng",
-    "resetRequestSuccess": "Sehoka sa ho seta phasewete botjha se rometswe ho imeile ya hao",
-    "resetRequestFailed": "Ho hlotsoe ho romela sehoka sa ho seta botjha. Ka kopo, leka hape.",
-    "checkEmail": "Ka kopo sheba imeile ya hao bakeng sa ditaelo tse ding."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Etsa Ak'haonte e Ntjha",
-    "username": "Lebitso la mosebedisi",
-    "usernamePlaceholder": "Kenya lebitso la mosebedisi",
-    "email": "Imeile",
-    "emailPlaceholder": "Kenya imeile ya hao",
-    "password": "Phasewete",
-    "passwordPlaceholder": "Etsa phasewete",
-    "confirmPassword": "Netefatsa Phasewete",
-    "confirmPasswordPlaceholder": "Netefatsa phasewete ya hao",
-    "acceptTerms": "Ke dumellana le",
-    "termsOfService": "Diheelo tsa Tshebeletso",
-    "registerButton": "Etsa Ak'haonte",
-    "processing": "Ho sebetsa...",
-    "alreadyHaveAccount": "O se o na le ak'haonte?",
-    "loginNow": "Kena jwale",
-    "privacyNotice": "Ka ho ingodisa, o dumellana le Diheelo tsa rona tsa Tshebeletso le Pholisi ya Lekunutu",
-    "usernameMinLength": "Lebitso la mosebedisi le tlameha ho ba le ditlhaku tse 3 kapa ho feta",
-    "invalidEmail": "Ka kopo, kenya aterese ya imeile e nepahetseng",
-    "passwordRequirements": "Phasewete e tlameha ho ba le ditlhaku tse 8, ho be le nomoro e le 1, le tlhaku e kgolo e le 1",
-    "passwordsDoNotMatch": "Diphasewete ha di tshwane",
-    "mustAcceptTerms": "O tlameha ho dumellana le Diheelo tsa Tshebeletso",
-    "registrationFailed": "Ho ingodisa ho hlotsoe. Ka kopo, leka hape.",
-    "usernameExists": "Lebitso la mosebedisi le se le ntse le le teng",
-    "emailExists": "Imeile ena e se e ntse e le teng",
-    "registrationSuccess": "O Ingodisitse ka Katleho!",
-    "verificationEmailSent": "Imeile ya netefatso e rometswe ho {email}",
-    "checkEmailInstructions": "Ka kopo sheba imeile ya hao mme o latele ditaelo ho netefatsa ak'haonte ya hao pele o kena.",
-    "backToLogin": "Khutlela ho Kena",
-    "noEmailReceived": "Ha o a fumana imeile?",
-    "resendVerification": "Romela imeile ya netefatso hape",
-    "verificationResent": "Imeile ya netefatso e rometswe hape",
-    "verificationResendFailed": "Ho hlotsoe ho romela imeile ya netefatso hape. Ka kopo, leka hape.",
-    "usernameInvalidChars": "Lebitso la mosebedisi le ka ba le ditlhaku, dinomoro, matshwao a tlasa, matheba le matshwao a ho tlosa feela",
-    "networkError": "Phoso ya marang-rang. Ka kopo sheba kgokahanyo ya hao ebe o leka hape."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Lebitso la mosebedisi",
-    "password": "Phasewete",
-    "loginButton": "Kena",
-    "or": "kapa",
-    "savedAccounts": "Diak'haonte tse Bolokilweng",
-    "loginSuccess": "O kene ka katleho",
-    "loginError": "Ho kena ho hlotsoe. Ka kopo sheba dintlha tsa hao.",
-    "googleLogin": "Tswela pele ka Google",
-    "facebookLogin": "Tswela pele ka Facebook",
-    "rememberMe": "Nthopole",
-    "forgotPassword": "Lebetse phasewete?",
-    "noAccount": "Ha o na ak'haonte?",
-    "createAccount": "Etsa ak'haonte",
-    "registerNow": "Ingodise jwale",
-    "termsAndPolicy": "Ka ho kena, o dumellana le Diheelo tsa rona tsa Tshebeletso le Pholisi ya Lekunutu",
-    "loggingIn": "Ho kena...",
-    "fieldsRequired": "Lebitso la mosebedisi le phasewete dia hlokahala",
-    "invalidCredentials": "Lebitso la mosebedisi kapa phasewete ha e nepahe",
-    "tooManyAttempts": "O lekile ho kena makgetlo a mangata. Ka kopo, leka hape hamorao.",
-    "loginFailed": "Ho kena ho hlotsoe. Ka kopo, leka hape.",
-    "oauthNotImplemented": "Ho kena ka marang-rang a setjhaba ha ho e so sebetse",
-    "savedLoginNotImplemented": "Ho kena ka ak'haonte e bolokilweng ha ho e so sebetse"
+  "auth": {
+    "noInternetConnection": "Ha ho naenetso ea inthanete",
+    "networkUnreachable": "Netwɔke ha ho fihlelleha",
+    "authenticationFailed": "Tlhahiso e hloile",
+    "sessionExpired": "Sesene oa hau e qetile. Ka karetsa o tsena hape.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -343,8 +221,8 @@ const Map<String, dynamic> stLocale = {
       "swahili": "Seswahili",
       "german": "Sejeremane",
       "spanish": "Sepanishe",
-      "arabic": "Searabia"
-    }
+      "arabic": "Searabia",
+    },
   },
   "systemStatus": {
     "title": "Boemo ba Tshebeletso",
@@ -358,20 +236,20 @@ const Map<String, dynamic> stLocale = {
     "checking": "Ho hlahloba...",
     "nextDeadline": "Nako ya ho qetela e latelang",
     "days": "matsatsi",
-    "viewDetails": "Sheba Dintlha"
+    "viewDetails": "Sheba Dintlha",
   },
   "services": {
     "eCitizen": "Phothale ya eCitizen",
     "taxFiling": "Sistimi ya ho Pata Lekgetho",
     "idApplication": "Kopo ya ID",
     "businessReg": "Ngoliso ya Kgwebo",
-    "drivingLicense": "Laesense ya ho Kganna"
+    "drivingLicense": "Laesense ya ho Kganna",
   },
   "deadlines": {
     "taxFiling": "Nako ya ho Pata Lekgetho",
     "businessRenewal": "Ntjhafatso ya Laesense ya Kgwebo",
     "idRenewal": "Ntjhafatso ya Bukana ya ID",
-    "vehicleRegistration": "Nako ya ho Ngodisa Koloi"
+    "vehicleRegistration": "Nako ya ho Ngodisa Koloi",
   },
   "sidebar": {
     "governmentServices": "Dibaka tsa Tsebo",
@@ -385,20 +263,25 @@ const Map<String, dynamic> stLocale = {
     "moveChatTo": "Tsamaisa Puisano Ho",
     "selectFolder": "Kgetha Sephuthedi",
     "deleteChat": "Hlakola Puisano",
-    "deleteChatConfirm": "Na o na le bonnete ba hore o batla ho hlakola puisano ee?",
+    "deleteChatConfirm":
+        "Na o na le bonnete ba hore o batla ho hlakola puisano ee?",
     "deleteChatWarning": "Ketso ena e ke ke ya etsolloa.",
     "renameChat": "Reha Puisano Lebitso hape",
     "chatTitle": "Sehlooho sa Puisano",
     "chatTitlePlaceholder": "Kenya sehlooho sa puisano ena",
     "deleteFolder": "Hlakola Sephuthedi",
-    "deleteFolderConfirm": "Na o na le bonnete ba hore o batla ho hlakola sephuthedi sa '{name}'?",
-    "chatsMoveWarning": "Dipuisano tsohle tse fapaneng le sephuthedi sena di tla iswa sephutheding sa mantlha.",
-    "weatherError": "Ho hlotsoe ho fumana dintlha tsa lemo. Ka kopo, leka hape.",
+    "deleteFolderConfirm":
+        "Na o na le bonnete ba hore o batla ho hlakola sephuthedi sa '{name}'?",
+    "chatsMoveWarning":
+        "Dipuisano tsohle tse fapaneng le sephuthedi sena di tla iswa sephutheding sa mantlha.",
+    "weatherError":
+        "Ho hlotsoe ho fumana dintlha tsa lemo. Ka kopo, leka hape.",
     "weatherTitle": "Ditebello tsa Lemo",
     "weatherLoading": "Ho jarolla dintlha tsa lemo...",
     "weatherLocationLoading": "Ho jarolla sebaka...",
     "weatherErrorDefault": "Ho hlotsoe ho fumana dintlha tsa lemo.",
-    "weatherGeolocationUnsupported": "Sehlwaele sa sebaka ha se sebetse sebatling sena sa hao.",
+    "weatherGeolocationUnsupported":
+        "Sehlwaele sa sebaka ha se sebetse sebatling sena sa hao.",
     "weatherRefresh": "Ntjhafatsa Lemo",
     "weatherConditions": {
       "clear": "Ho hlakile",
@@ -408,10 +291,11 @@ const Map<String, dynamic> stLocale = {
       "rain": "Pula",
       "shower": "Dipula tsa modupi",
       "thunderstorm": "Sefefo sa letadima",
-      "snow": "Lehlwa"
+      "snow": "Lehlwa",
     },
     "folders": "Diphuthedi",
-    "emptyFolder": "Sephuthedi sena se letho. Tsamaisa dipuisano mona ho tswa ho lenane la dipuisano.",
+    "emptyFolder":
+        "Sephuthedi sena se letho. Tsamaisa dipuisano mona ho tswa ho lenane la dipuisano.",
     "title": "Dintlha le Lisebelisoa",
     "noChats": "Ha ho dipuisano tsa morao tjena",
     "relatedDocs": "Ditokomane tse Amanang",
@@ -421,7 +305,7 @@ const Map<String, dynamic> stLocale = {
       "all": "Dipuisano Tsohle",
       "folders": "Diphuthedi",
       "starred": "Tse Lenyedisoang",
-      "archived": "Tse Bolokiloeng"
+      "archived": "Tse Bolokiloeng",
     },
     "savedChats": "Dipuisano tse Bolokilweng",
     "chats": "Dipuisano",
@@ -429,13 +313,17 @@ const Map<String, dynamic> stLocale = {
     "noFolder": "Ha ho Sephuthedi",
     "starredChats": "Dipuisano tse Lenyedisoang",
     "archivedChats": "Dipuisano tse Bolokiloeng",
-    "noStarredChats": "Ha ho dipuisano tse lenyedisitsweng ha jwale. Lenyedisa puisano ho e kenya mona.",
+    "noStarredChats":
+        "Ha ho dipuisano tse lenyedisitsweng ha jwale. Lenyedisa puisano ho e kenya mona.",
     "noArchivedChats": "Ha ho dipuisano tse bolokiloeng ha jwale.",
     "noSearchResults": "Ha ho dipuisano tse fumanweng bakeng sa \"{term}\"",
     "loadingChats": "Ho jarolla dipuisano...",
-    "errorLoadingConversations": "Ho hlotsoe ho jarolla dipuisano. Ka kopo, leka hape.",
-    "errorLoadingUser": "Dintlha tsa mosebedisi ha dia fella. Ka kopo jarolla leqephe hape.",
-    "errorNoUser": "Dintlha tsa mosebedisi di siyo. Ka kopo jarolla leqephe hape.",
+    "errorLoadingConversations":
+        "Ho hlotsoe ho jarolla dipuisano. Ka kopo, leka hape.",
+    "errorLoadingUser":
+        "Dintlha tsa mosebedisi ha dia fella. Ka kopo jarolla leqephe hape.",
+    "errorNoUser":
+        "Dintlha tsa mosebedisi di siyo. Ka kopo jarolla leqephe hape.",
     "retry": "Leka hape",
     "message": "molaetsa",
     "messages": "melaetsa",
@@ -477,7 +365,7 @@ const Map<String, dynamic> stLocale = {
     "noConversations": "Ha ho dipuisano tse fumanweng",
     "noStarred": "Ha ho dipuisano tse lenyedisitsoeng",
     "noArchived": "Ha ho dipuisano tse bolokiloeng",
-    "folderEmptyState": "Sephuthedi se letho"
+    "folderEmptyState": "Sephuthedi se letho",
   },
   "leftPanel": {
     "cat1": {
@@ -487,8 +375,8 @@ const Map<String, dynamic> stLocale = {
         "Dikarata tsa ID tsa Naha",
         "Dipasa",
         "Ditifikeiti tsa lenyalo le mafu",
-        "Ngoliso ea bakhethi"
-      ]
+        "Ngoliso ea bakhethi",
+      ],
     },
     "cat2": {
       "name": "2. Bophelo bo Botle le Litšebeletso tsa Sechaba",
@@ -497,8 +385,8 @@ const Map<String, dynamic> stLocale = {
         "Mananeo a ente",
         "Inshorense ea bophelo bo botle",
         "Melemo ea bokooa",
-        "Thuso ea thepa le lijo"
-      ]
+        "Thuso ea thepa le lijo",
+      ],
     },
     "cat3": {
       "name": "3. Thuto le ho Ithuta",
@@ -506,8 +394,8 @@ const Map<String, dynamic> stLocale = {
         "Dikolo tsa sechaba le diyunivesithi",
         "Liphallelo le mekitlane ea baithuti",
         "Mananeo a thuto ea batho ba baholo",
-        "Lisebelisoa tsa ho ithuta inthaneteng"
-      ]
+        "Lisebelisoa tsa ho ithuta inthaneteng",
+      ],
     },
     "cat4": {
       "name": "4. Litšebeletso tsa Mesebetsi le Basebetsi",
@@ -515,8 +403,8 @@ const Map<String, dynamic> stLocale = {
         "Mosebetsi oa ho batla le melemo ea ho hloka mosebetsi",
         "Ts'ireletso ea basebetsi le litokelo tsa basebetsi",
         "Melawana ya polokeho mosebetsing",
-        "Koetliso ea litsebo le borutehi"
-      ]
+        "Koetliso ea litsebo le borutehi",
+      ],
     },
     "cat5": {
       "name": "5. Lekhetho le Lekeno",
@@ -524,8 +412,8 @@ const Map<String, dynamic> stLocale = {
         "Ho pataloa ha lekhetho la lekeno le dipuseletso",
         "Patalo ya lekhetho la thepa",
         "Ho ikobela lekhetho la kgwebo",
-        "Mekitlane ea thepa e tsoang linaheng tse ling"
-      ]
+        "Mekitlane ea thepa e tsoang linaheng tse ling",
+      ],
     },
     "cat6": {
       "name": "6. Tshireletso ya Sechaba le Toka",
@@ -533,8 +421,8 @@ const Map<String, dynamic> stLocale = {
         "Ditshebeletso tsa seponesa le maemo a tshohanyetso",
         "Ditshebeletso tsa lekhotla le thuso ea molao",
         "Ho tlaleha botlokotsebe",
-        "Melao ea ts'ireletso ea bareki"
-      ]
+        "Melao ea ts'ireletso ea bareki",
+      ],
     },
     "cat7": {
       "name": "7. Lipalangoang le Motsamao",
@@ -542,8 +430,8 @@ const Map<String, dynamic> stLocale = {
         "Lilaesense tsa ho kganna le ngoliso ya dikoloi",
         "Dipalangoang tsa sechaba le meralo",
         "Ho tlola melao ya sephethephethe le ditefiso",
-        "Mananeo a polokeho ditseleng"
-      ]
+        "Mananeo a polokeho ditseleng",
+      ],
     },
     "cat8": {
       "name": "8. Matlo le Ntshetsopele ya Ditoropo",
@@ -551,8 +439,8 @@ const Map<String, dynamic> stLocale = {
         "Thuso ea matlo a sechaba",
         "Ngoliso ea thepa le litlaleho tsa mobu",
         "Mekitlane ea matlo le lithuso",
-        "Melawana le mangolo a tumello a meaho"
-      ]
+        "Melawana le mangolo a tumello a meaho",
+      ],
     },
     "cat9": {
       "name": "9. Lisebelisoa le Tikoloho",
@@ -560,8 +448,8 @@ const Map<String, dynamic> stLocale = {
         "Ditshebeletso tsa metsi le motlakase",
         "Tsamaiso ea litšila le ho qhibilihisoa botjha",
         "Melawana ya tikoloho",
-        "Mekhwa ea matla a ka nchafatsoang"
-      ]
+        "Mekhwa ea matla a ka nchafatsoang",
+      ],
     },
     "cat10": {
       "name": "10. Kgwebo le Khoebo",
@@ -569,8 +457,8 @@ const Map<String, dynamic> stLocale = {
         "Ngoliso ea kgwebo le lilaesense",
         "Melawana ya khoebo le mangolo a tumello",
         "Lithuso tsa dikgwebo tse nyenyane",
-        "Ts'ehetso ea e-commerce le dikgwebo tsa digital"
-      ]
+        "Ts'ehetso ea e-commerce le dikgwebo tsa digital",
+      ],
     },
     "cat11": {
       "name": "11. Tšireletso ea Sechaba le Lipenchene",
@@ -578,8 +466,8 @@ const Map<String, dynamic> stLocale = {
         "Melemo ea penshene",
         "Tsamaiso ea letlotlo la penshene",
         "Melemo ea baphonyohi",
-        "Lipenchene tsa bokooa"
-      ]
+        "Lipenchene tsa bokooa",
+      ],
     },
     "cat12": {
       "name": "12. Sechaba le Boikarabelo",
@@ -587,9 +475,9 @@ const Map<String, dynamic> stLocale = {
         "Ho vouta le dikgetho",
         "Maikutlo a sechaba le ditletlebo tsa baahi",
         "Boithaopo le mananeo a sechaba",
-        "Ho nka karolo hoa mmuso wa lehae"
-      ]
-    }
+        "Ho nka karolo hoa mmuso wa lehae",
+      ],
+    },
   },
   "settings": {
     "title": "Dihlopho",
@@ -605,7 +493,7 @@ const Map<String, dynamic> stLocale = {
     "languages": {
       "english": "Senyesemane",
       "french": "Sefora",
-      "swahili": "Seswahili"
+      "swahili": "Seswahili",
     },
     "theme": "Mookotaba (Theme)",
     "themes": {"light": "Lesedi", "dark": "Lefifi", "system": "Sistimi"},
@@ -619,11 +507,15 @@ const Map<String, dynamic> stLocale = {
     "emailAddress": "Aterese ya Imeile",
     "emailAddressPlaceholder": "Aterese ya imeile ya hao",
     "password": "Phasewete",
-    "changePassword": "Fetola Phasewete",
     "resetUserData": "Seta Dintlha tsa Mosebedisi Botjha",
-    "resetUserDataDesc": "Sena se tla hlakola dintlha tsohle tsa profaele ya hao le nalane ya dipuisano.",
+    "resetUserDataDesc":
+        "Sena se tla hlakola dintlha tsohle tsa profaele ya hao le nalane ya dipuisano.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Hlakola Ak'haonte",
-    "deleteAccountDesc": "Sena se tla hlakola ak'haonte ya hao ka ho sa feleng le dintlha tsohle tse amanang le eona.",
+    "deleteAccountDesc":
+        "Sena se tla hlakola ak'haonte ya hao ka ho sa feleng le dintlha tsohle tse amanang le eona.",
     "edit": "Fetola",
     "standardAccount": "Ak'haonte e Tlwaelehileng",
     "confirmEmailChange": "Netefatsa Phetoho ya Imeile",
@@ -631,70 +523,88 @@ const Map<String, dynamic> stLocale = {
     "cancel": "Hlakola",
     "account": {
       "title": "Ak'haonte",
-      "resetDescription": "Sena se tla hlakola dintlha tsohle tsa profaele ya hao le nalane ya dipuisano.",
-      "confirmReset": "Na o na le bonnete ba hore o batla ho seta dintlha tsohle tsa hao botjha? Sena se ke ke sa etsolloa.",
-      "resetComplete": "Dintlha tsa hao di setilwe botjha."
+      "resetDescription":
+          "Sena se tla hlakola dintlha tsohle tsa profaele ya hao le nalane ya dipuisano.",
+      "confirmReset":
+          "Na o na le bonnete ba hore o batla ho seta dintlha tsohle tsa hao botjha? Sena se ke ke sa etsolloa.",
+      "resetComplete": "Dintlha tsa hao di setilwe botjha.",
     },
     "language": {"title": "Puo", "selectLabel": "Puo ya Ponahatso"},
     "appearance": {
       "title": "Ponahalo",
       "lightTheme": "Lesedi",
       "darkTheme": "Lefifi",
-      "systemTheme": "Sistimi"
+      "systemTheme": "Sistimi",
     },
-    "confirmDeleteAccount": "Na o na le bonnete ba hore o batla ho hlakola ak'haonte ya hao? Ketso ena e ke ke ya etsolloa.",
+    "confirmDeleteAccount":
+        "Na o na le bonnete ba hore o batla ho hlakola ak'haonte ya hao? Ketso ena e ke ke ya etsolloa.",
     "confirmAccountDeletion": "Netefatsa ho Hlakolwa ha Ak'haonte",
-    "accountDeletionWarning": "Temoso: Ketso ena ke ya ka ho sa feleng mme e ke ke ya etsolloa. Dintlha tsohle tsa hao di tla hlakolwa ka ho sa feleng.",
+    "accountDeletionWarning":
+        "Temoso: Ketso ena ke ya ka ho sa feleng mme e ke ke ya etsolloa. Dintlha tsohle tsa hao di tla hlakolwa ka ho sa feleng.",
     "deletionReason": "Lebaka la ho hlakola (ha ho tlamehe):",
-    "deletionReasonPlaceholder": "Ke eng e entseng hore o etse qeto ya ho hlakola ak'haonte ya hao?",
+    "deletionReasonPlaceholder":
+        "Ke eng e entseng hore o etse qeto ya ho hlakola ak'haonte ya hao?",
     "enterPasswordConfirm": "Kenya phasewete ya hao ho netefatsa:",
     "currentPasswordPlaceholder": "Phasewete ya hao ya hona jwale",
     "deleting": "Ho hlakola...",
     "permanentlyDeleteAccount": "Hlakola Ak'haonte",
     "accountDeletedSuccess": "Ak'haonte ya hao e hlakotswe ka katleho.",
     "incorrectPassword": "Phasewete e fosahetseng",
-    "accountDeletionFailed": "Ho hlotsoe ho hlakola ak'haonte. Ka kopo leka hape hamorao.",
+    "accountDeletionFailed":
+        "Ho hlotsoe ho hlakola ak'haonte. Ka kopo leka hape hamorao.",
     "confirmChange": "Netefatsa Phetoho",
     "processing": "Ho sebetsa...",
-    "userDataReset": "Dintlha tsa profaele ya hao di setilwe botjha ka katleho.",
-    "failedToResetUserData": "Ho hlotsoe ho seta dintlha tsa profaele ya hao botjha. Ka kopo leka hape hamorao.",
+    "userDataReset":
+        "Dintlha tsa profaele ya hao di setilwe botjha ka katleho.",
+    "failedToResetUserData":
+        "Ho hlotsoe ho seta dintlha tsa profaele ya hao botjha. Ka kopo leka hape hamorao.",
     "changingEmailTo": "Ho fetola imeile ya hao ho isa ho",
     "will": "e tla",
     "logOutSystem": "Ho o ntshetsa kantle ho sistimi",
-    "sendVerificationLink": "Romela sehoka sa netefatso ho imeile ya hao e ntjha",
+    "sendVerificationLink":
+        "Romela sehoka sa netefatso ho imeile ya hao e ntjha",
     "requireVerification": "Hloka netefatso pele o ka kena hape",
-    "checkNewEmailVerification": "Ka kopo sheba imeile ya hao e ntjha bakeng sa ditaelo tsa netefatso.",
+    "checkNewEmailVerification":
+        "Ka kopo sheba imeile ya hao e ntjha bakeng sa ditaelo tsa netefatso.",
     "unableToVerifyEmail": "Ho hlotsoe ho netefatsa imeile. Ka kopo leka hape.",
     "emailAlreadyInUse": "Imeile e se e ntse e sebediswa",
     "enterValidEmail": "Ka kopo kenya aterese ya imeile e nepahetseng",
-    "failedToUpdateEmail": "Ho hlotsoe ho ntjhafatsa imeile. Ka kopo leka hape.",
-    "passwordResetInitiated": "Sehoka sa ho seta phasewete botjha se rometswe atereseng ya hao ya imeile.",
-    "unableToLoadUser": "Ho hlotsoe ho fumana dintlha tsa mosebedisi. Ka kopo leka hape.",
+    "failedToUpdateEmail":
+        "Ho hlotsoe ho ntjhafatsa imeile. Ka kopo leka hape.",
+    "unableToLoadUser":
+        "Ho hlotsoe ho fumana dintlha tsa mosebedisi. Ka kopo leka hape.",
     "retry": "Leka hape",
     "user": "Mosebedisi",
     "loadingUserInfo": "Ho jarolla dintlha tsa mosebedisi...",
     "resetUserDataTitle": "Seta Dintlha tsa Mosebedisi Botjha",
-    "confirmResetUserData": "Na o na le bonnete ba hore o batla ho seta dintlha tsohle tsa profaele botjha? Sena se tla hlakola dintlha tsohle tsa profaele le nalane ya dipuisano, empa e tla boloka dintlha tsa ak'haonte.",
+    "confirmResetUserData":
+        "Na o na le bonnete ba hore o batla ho seta dintlha tsohle tsa profaele botjha? Sena se tla hlakola dintlha tsohle tsa profaele le nalane ya dipuisano, empa e tla boloka dintlha tsa ak'haonte.",
     "reset": "Seta Botjha",
-    "deleteAccountTitle": "Hlakola Ak'haonte"
+    "deleteAccountTitle": "Hlakola Ak'haonte",
   },
   "userProfile": {
     "title": "Profaele ya Mosebedisi",
-    "privacyInfo": "Ka ho fana ka dintlha tse ding, o tla fumana dikarabo tse nepahetseng le tse nang le moelelo ho tswa ho lenaneo. Ka kopo sheba rona",
+    "privacyInfo":
+        "Ka ho fana ka dintlha tse ding, o tla fumana dikarabo tse nepahetseng le tse nang le moelelo ho tswa ho lenaneo. Ka kopo sheba rona",
     "privacyPolicyLink": "Pholisi ya Lekunutu",
     "tabComingSoon": "Karolo ena e ntse e etsoa 'me e tla fumaneha haufinyane.",
     "saveSuccess": "Profaele e bolokilwe ka katleho",
     "loadError": "Phoso ya ho jarolla dintlha tsa profaele",
     "saveError": "Phoso ho boloka profaele",
     "confirmSaveTitle": "Boloka Profaele",
-    "confirmSave": "Na o na le bonnete ba hore o batla ho boloka diphetoho tsee?",
-    "confirmCancel": "O na le diphetoho tse sa bolokwang. Na o na le bonnete ba hore o batla ho hlakola?",
-    "confirmLeave": "Na o na le bonnete ba hore o batla ho tswa? Diphetoho tse sa bolokwang di tla lahleha.",
+    "confirmSave":
+        "Na o na le bonnete ba hore o batla ho boloka diphetoho tsee?",
+    "confirmCancel":
+        "O na le diphetoho tse sa bolokwang. Na o na le bonnete ba hore o batla ho hlakola?",
+    "confirmLeave":
+        "Na o na le bonnete ba hore o batla ho tswa? Diphetoho tse sa bolokwang di tla lahleha.",
     "confirmDiscardChanges": "O batla ho lahla diphetoho tse sa bolokwang?",
     "uploadPhoto": "Kenya Senepe",
     "uploadFile": "Kenya Faele",
-    "photoRequirements": "Senepe se tlameha ho hlakisa sefahleho sa hao se feletseng, 'me e be sa morao tjena",
-    "biometricRequirements": "Ke lifaele tsa dintlha tsa semmuso tsa biometric feela tse amoheloang",
+    "photoRequirements":
+        "Senepe se tlameha ho hlakisa sefahleho sa hao se feletseng, 'me e be sa morao tjena",
+    "biometricRequirements":
+        "Ke lifaele tsa dintlha tsa semmuso tsa biometric feela tse amoheloang",
     "documentUpload": "Ho Kenya Tokomane",
     "validationTitle": "Ka kopo lokisa liphoso tse latelang:",
     "profileIcon": "Setshwantsho sa Profaele",
@@ -718,7 +628,7 @@ const Map<String, dynamic> stLocale = {
       "tab9": "Ts'ireletso ea Sechaba & Boiketlo",
       "tab10": "Litlaleho tsa Botlokotsebe & Molao",
       "tab11": "Lipalangoang & Motsamao",
-      "tab12": "Boikarabelo & Lipolotiki"
+      "tab12": "Boikarabelo & Lipolotiki",
     },
     "tabsShort": {
       "personal": "Tsa Hao",
@@ -732,14 +642,14 @@ const Map<String, dynamic> stLocale = {
       "social": "Sechaba",
       "criminal": "Botlokotsebe",
       "transport": "Lipalangoang",
-      "civic": "Boikarabelo"
+      "civic": "Boikarabelo",
     },
     "actions": {
       "cancel": "Hlakola",
       "save": "Boloka Profaele",
       "previous": "E fetileng",
       "next": "E latelang",
-      "saving": "Ho boloka..."
+      "saving": "Ho boloka...",
     },
     "fields": {
       "fullName": "Mabitso kaofela (ho kenyeletsa mabitso a mang)",
@@ -813,7 +723,7 @@ const Map<String, dynamic> stLocale = {
       "electionHistory": "Nalane ea ho nka karolo dikgethong",
       "partyMembership": "Ho ba setho sa mokha oa lipolotiki",
       "militaryStatus": "Tshebeletso ea sesole kapa boemo ba conscription",
-      "publicServiceRoles": "Mesebetsi ea sechaba"
+      "publicServiceRoles": "Mesebetsi ea sechaba",
     },
     "placeholders": {
       "fullName": "Kenya mabitso a hao kaofela a molao",
@@ -823,7 +733,7 @@ const Map<String, dynamic> stLocale = {
       "searchDisciplines": "Batla makala...",
       "selectDiscipline": "Kgetha lekala",
       "searchDegrees": "Batla likhato...",
-      "selectDegree": "Kgetha tekanyo"
+      "selectDegree": "Kgetha tekanyo",
     },
     "validation": {
       "nameRequired": "Lebitso le feletseng lea hlokahala",
@@ -833,8 +743,9 @@ const Map<String, dynamic> stLocale = {
       "invalidFormat": "Mofuta o fosahetseng bakeng sa {field}",
       "futureDate": "Letsatsi ha le tlameha ho ba kamoso",
       "invalidSelection": "Ka kopo etsa kgetho e nepahetseng",
-      "passwordLength": "Phasewete e tlameha ho ba le ditlhaku tse 8 kapa ho feta",
-      "matchError": "Masimo ha a tshwane"
+      "passwordLength":
+          "Phasewete e tlameha ho ba le ditlhaku tse 8 kapa ho feta",
+      "matchError": "Masimo ha a tshwane",
     },
     "errors": {
       "savingFailed": "Ho hlotsoe ho boloka profaele",
@@ -843,7 +754,7 @@ const Map<String, dynamic> stLocale = {
       "invalidFileType": "Mofuta oa faele o fosahetseng",
       "fileTooLarge": "Faele e kholo haholo",
       "countryLoadError": "Phoso ho jarolla linaha",
-      "countryUpdateError": "Phoso ho ntjhafatsa naha"
+      "countryUpdateError": "Phoso ho ntjhafatsa naha",
     },
     "notifications": {
       "saveSuccess": "Profaele e bolokilwe ka katleho",
@@ -856,20 +767,23 @@ const Map<String, dynamic> stLocale = {
       "formChanged": "O na le diphetoho tse sa bolokwang",
       "sessionExpired": "Thuto ea hao e felile, ka kopo kena hape",
       "profileUpdated": "Profaele ea hao e ntjhafalitsoe",
-      "profileIncomplete": "Profaele ya hao ha e a fella"
+      "profileIncomplete": "Profaele ya hao ha e a fella",
     },
     "instructions": {
-      "fullNameHelp": "Kenya mabitso a hao a felletseng a molao joalo ka ha a hlaha ditokomaneng tsa hao tsa semmuso",
+      "fullNameHelp":
+          "Kenya mabitso a hao a felletseng a molao joalo ka ha a hlaha ditokomaneng tsa hao tsa semmuso",
       "dobHelp": "Kenya letsatsi la hao la tlhaho ka mokgwa wa MM/DD/YYYY",
-      "uploadPhotoHelp": "Kenya senepe sa morao tjena. Faele e lokela ho ba JPG, PNG, kapa GIF mme e be tlas'a 2MB",
-      "passwordHelp": "Phasewete e tlameha ho ba le ditlhaku tse 8 ho be le tlhaku e kgolo e le nngwe, nomoro e le nngwe, le letshwao le le leng le ikgethang",
+      "uploadPhotoHelp":
+          "Kenya senepe sa morao tjena. Faele e lokela ho ba JPG, PNG, kapa GIF mme e be tlas'a 2MB",
+      "passwordHelp":
+          "Phasewete e tlameha ho ba le ditlhaku tse 8 ho be le tlhaku e kgolo e le nngwe, nomoro e le nngwe, le letshwao le le leng le ikgethang",
       "documentHelp": "Mekhwa e amoheloang: PDF, JPG, PNG (boholo ke 5MB)",
       "requiredFields": "Mabokose a tšoailoeng ka * a ea hlokahala",
       "selectFromList": "Ka kopo kgetha e nngwe ho tswa lenaneng",
       "nextTab": "Tswela pele ho ea karolong e latelang",
       "previousTab": "Khutlela karolong e fetileng",
       "saveInstructions": "Tobetsa Boloka ho boloka dintlha tsa hao",
-      "cancelInstructions": "Tobetsa Hlakola ho lahla diphetoho"
+      "cancelInstructions": "Tobetsa Hlakola ho lahla diphetoho",
     },
     "completionStatus": {
       "notStarted": "Ha ea Qaloa",
@@ -877,26 +791,26 @@ const Map<String, dynamic> stLocale = {
       "complete": "E Phethetsoe",
       "percentComplete": "{percent}% e phethetsoe",
       "tabsCompleted": "Likarolo tse {completed} ho tse {total} di phethetsoe",
-      "tabComplete": "Karolo e phethetsoe!"
+      "tabComplete": "Karolo e phethetsoe!",
     },
     "gender": {
       "male": "Monna",
       "female": "Mosali",
       "other": "Tse ding",
-      "preferNot": "Ha ke batle ho bua"
+      "preferNot": "Ha ke batle ho bua",
     },
     "maritalStatus": {
       "single": "O lesoha",
       "married": "O nyetse/O nyetsoe",
       "divorced": "O hlalane",
       "widowed": "Mohlolohali",
-      "other": "Tse ding"
+      "other": "Tse ding",
     },
     "residencyStatuses": {
       "citizen": "Moahi",
       "permanentResident": "Moahi oa Ka Mehla",
       "temporaryResident": "Moahi oa Nakoana",
-      "other": "Tse ding"
+      "other": "Tse ding",
     },
     "employmentStatuses": {
       "employed": "O hiriloe",
@@ -905,7 +819,7 @@ const Map<String, dynamic> stLocale = {
       "student": "Moithuti",
       "retired": "Ka pensheneng",
       "homemaker": "Mosali oa Lapa",
-      "other": "Tse ding"
+      "other": "Tse ding",
     },
     "educationLevels": {
       "primary": "Thuto ea Poraemari",
@@ -917,14 +831,14 @@ const Map<String, dynamic> stLocale = {
       "master": "Lengolo la Bobeli (Master)",
       "doctoral": "Lengolo le Phahameng (Doctoral)",
       "professional": "Lengolo la Basebetsi (Professional)",
-      "other": "Tse ding"
+      "other": "Tse ding",
     },
     "proficiencyLevels": {
       "native": "Senatla (Matsoalloa)",
       "fluent": "O bua hantle",
       "advanced": "Haholo",
       "intermediate": "Mahareng",
-      "basic": "Tse qalang"
+      "basic": "Tse qalang",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -935,7 +849,7 @@ const Map<String, dynamic> stLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "E sa tsejweng"
+      "unknown": "E sa tsejweng",
     },
     "languages": {
       "english": "Senyesemane",
@@ -950,7 +864,7 @@ const Map<String, dynamic> stLocale = {
       "russian": "Serussia",
       "hindi": "Sehindi",
       "urdu": "Se-Urdu",
-      "other": "Tse ding"
+      "other": "Tse ding",
     },
     "yesNo": {"yes": "E", "no": "Che"},
     "select": "Ka kopo kgetha",
@@ -1057,7 +971,7 @@ const Map<String, dynamic> stLocale = {
       "Bongaka ba Liphoofolo",
       "Ntlafatso ea Web",
       "Baololoji ea Liphoofolo tsa hlaha",
-      "Zoology"
+      "Zoology",
     ],
     "degreeOptions": [
       "Lengolo le Tlaase (Associate)",
@@ -1087,7 +1001,7 @@ const Map<String, dynamic> stLocale = {
       "Setifikeiti sa Koetliso",
       "Setifikeiti sa Morutuoa",
       "Diploma ea Post-Graduate",
-      "Ngodisa e Kholo (Post-Doctoral)"
+      "Ngodisa e Kholo (Post-Doctoral)",
     ],
     "aria": {
       "tabList": "Likarolo tsa profaele",
@@ -1096,8 +1010,8 @@ const Map<String, dynamic> stLocale = {
       "closeButton": "Koala fomo ea profaele",
       "saveButton": "Boloka dintlha tsa profaele",
       "requiredField": "Bokose le hlokahalang",
-      "dropdownSelect": "Kgetha e nngwe"
-    }
+      "dropdownSelect": "Kgetha e nngwe",
+    },
   },
   "chatbot": {
     "placeholder": "Ngola potso ea hao mona...",
@@ -1105,7 +1019,8 @@ const Map<String, dynamic> stLocale = {
     "fileReceived": "Faele e amohetsoe ka katleho.",
     "fileUploadError": "Phoso ho kenya faele.",
     "processingError": "Phoso ho sebetsana le kopo ea hao.",
-    "welcomeMessage": "Re a u amohela! Nka u thusa joang kajeno ka litšebeletso tsa 'muso oa Kenya?",
+    "welcomeMessage":
+        "Re a u amohela! Ke mona ho thusa balimi ba Lesotho ka mabele, diphoofolo, mobu le leholimo. Nka u thusa joang?",
     "attachFile": "Hlomathisa Faele",
     "fileTooLarge": "Faele e kholo haholo. Boholo ke {maxSize}.",
     "saveChat": "Boloka Puisano",
@@ -1115,7 +1030,8 @@ const Map<String, dynamic> stLocale = {
     "selectFolder": "Kgetha Sephuthedi",
     "newChat": "Puisano e Ntjha",
     "clearContext": "Hlakola moelelo o fetileng 'me u qale puisano e ncha",
-    "unsavedChanges": "O na le diphetoho tse sa bolokwang. Na u na le bonnete ba hore u batla ho qala puisano e ncha?",
+    "unsavedChanges":
+        "O na le diphetoho tse sa bolokwang. Na u na le bonnete ba hore u batla ho qala puisano e ncha?",
     "whatCanIHelp": "Nka u thusa joang kajeno?",
     "justChat": "Bua feela",
     "queryContext": "Moelelo oa Potso",
@@ -1130,7 +1046,8 @@ const Map<String, dynamic> stLocale = {
     "saveConfirmTitle": "Boloka Puisano e Teng",
     "saveConfirmMessage": "U batla ho boloka puisano ee e teng?",
     "loadConfirmTitle": "Jarolla Puisano e Teng",
-    "loadConfirmMessage": "U na le diphetoho tse sa bolokwang. U batla ho li lahla 'me u jarolle puisano e khethiloeng, kapa boloka puisano ea hona joale pele?",
+    "loadConfirmMessage":
+        "U na le diphetoho tse sa bolokwang. U batla ho li lahla 'me u jarolle puisano e khethiloeng, kapa boloka puisano ea hona joale pele?",
     "loadAndDiscard": "Jarolla 'me u Lahle",
     "saveAndLoad": "Boloka le ho Jarolla",
     "saveAndStartNew": "Boloka 'me u Qale e Ncha",
@@ -1147,9 +1064,11 @@ const Map<String, dynamic> stLocale = {
     "removeContext": "Tlosa Moelelo",
     "dialogs": {
       "newChatTitle": "Qala Puisano e Ncha?",
-      "newChatContent": "U na le diphetoho tse sa bolokwang. U batla ho qala puisano e ncha leha ho le joalo?",
+      "newChatContent":
+          "U na le diphetoho tse sa bolokwang. U batla ho qala puisano e ncha leha ho le joalo?",
       "loadChatTitle": "Jarolla Puisano?",
-      "loadChatContent": "U na le diphetoho tse sa bolokwang. U batla ho jarolla leha ho le joalo?",
+      "loadChatContent":
+          "U na le diphetoho tse sa bolokwang. U batla ho jarolla leha ho le joalo?",
       "saveTitle": "Boloka Puisano",
       "saveHint": "Kenya sehlooho sa puisano",
       "exportTitle": "Romela Puisano ho PDF",
@@ -1158,49 +1077,59 @@ const Map<String, dynamic> stLocale = {
         "discardAndNew": "Lahla 'me ebe e Ncha",
         "discardAndLoad": "Lahla le ho Jarolla",
         "saveFirst": "Boloka Pele",
-        "export": "Romela"
-      }
+        "export": "Romela",
+      },
     },
-    "shareWhatsApp": "Arolelana ho WhatsApp"
+    "shareWhatsApp": "Arolelana ho WhatsApp",
   },
   "quickhelp": {
-    "applyForID": "Etsa Kopo ea ID",
-    "payTaxes": "Lefang Lekhetho",
-    "startBusiness": "Qala Khoebo",
-    "findHealthcare": "Bophelo bo botle",
-    "educationServices": "Thuto",
-    "transportLicenses": "Dipalangoang",
-    "housingPrograms": "Matlo",
-    "findJobs": "Batla Mesebetsi",
+    "applyForID": "Poone le dilope",
+    "payTaxes": "Dinawa le ditlhôpu",
+    "startBusiness": "Mobu le borotho",
+    "findHealthcare": "Dipetsi le bokudi",
+    "educationServices": "Diphoofolo",
+    "transportLicenses": "Metsi le ho nontsha",
+    "housingPrograms": "Leholimo le lilemo",
+    "findJobs": "Ditsenyehelo le lithoakaneng",
     "justChat": "Bua feela",
 
-    "applyForIDPrompt": "Etsa eka u setsebi sa ngoliso ea baahi ba Kenya se thusang. Hlalosa mehato ea ho fumana karete ea ID ea Naha (Maisha Namba) kapa ho fumana e ncha. BOHLOKOA: Fana ka lenane le hlakileng la litokomane tse hlokahalang 'me u elelitse mosebedisi hore a etele Setsi sa Huduma. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
+    "applyForIDPrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Answer using ONLY what the knowledge base retrieval provides about farming in Lesotho. Focus on maize and cereals: planting times for highland vs lowland areas, varieties, rotation, storage. Never give Kenya civil registration, Huduma centres, Maisha Namba, or other non-Lesotho ID processes unless a retrieved document explicitly names them for comparison.",
+    "payTaxesPrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on beans, pulses, and legumes (planting, pests, soil). Do NOT answer with Kenya Revenue Authority, KRA, iTax, tax filing, or business registration unless that information appears in retrieved text about Lesotho or cross-border trade.",
+    "startBusinessPrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on soil health, compost, manure, liming, erosion control, and fertility for Lesotho's conditions. Do NOT give eCitizen, Kenya company registration, or business-name search steps unless retrieved documents mention them.",
+    "findHealthcarePrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on identifying crop pests and diseases, prevention, and safe management relevant to Lesotho. Do NOT answer with Kenya NHIF, SHIF, hospital insurance, or health USSD codes unless retrieved documents include them.",
+    "educationServicesPrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on livestock care (cattle, sheep, goats, poultry), feed, housing, and common diseases in Lesotho. Do NOT discuss Kenya's CBC, NEMIS, KUCCPS, or national exam systems unless retrieved text does.",
+    "transportLicensesPrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on irrigation, rainwater harvesting, soil moisture, and water conservation for crops in Lesotho. Do NOT give Kenya NTSA, eCitizen transport, Smart DL, or vehicle inspection steps unless retrieved documents include them.",
+    "housingProgramsPrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on seasonal planting calendars, frost risk, rainfall patterns, and climate considerations for Lesotho. Do NOT describe Kenya affordable housing, Boma Yangu, or urban mortgage programs unless retrieved documents mention them.",
+    "findJobsPrompt":
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on marketing produce, cooperatives, local buyers, and farmer groups in Lesotho. Do NOT give Kenya Public Service Commission, MyGov job portals, or civil-service recruitment unless retrieved text supports it.",
+    "justChatPrompt":
+        "You are Genie AI, a friendly assistant for people working the land in Lesotho. Be practical and respectful. If the user chats generally, keep the tone helpful but steer toward farming, livestock, soil, water, and climate in Lesotho. Do not present Kenya taxes, IDs, eCitizen, or other Kenya government services as default answers. Always rely on retrieved knowledge when answering factual questions about agriculture.",
 
-    "payTaxesPrompt": "Etsa eka u motataisi oa KRA (Tsamaiso ea Lekhetho ea Kenya). Hlalosa mokhoa oa ho khutlisa lekhetho, kopo ea KRA PIN, kapa ho seta phasewete botjha inthaneteng. BOHLOKOA: Hopotsa mosebelisi letsatsi la bo-30 Phuptjane mme u mo tataise ka Mokhoa oa ho filed Nil Returns. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "startBusinessPrompt": "Etsa eka u moeletsi oa likhoebo oa lits'ebeletso tsa eCitizen. Tataisa mosebedisi ho tloha ngolisong ea lebitso la khoebo le khamphani Kenya. BOHLOKOA: Hlalosa litšenyehelo tsa morao-rao tsa theko, 'me u lebise mosebelisi webosaeteng. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "findHealthcarePrompt": "Etsa eka u tsela ea lits'ebeletso tsa bophelo bo botle. Fana ka leseli ho qala ka NHIF ho ea ho SHIF. BOHLOKOA: Fana ka likhoutu tsa semmuso tsa USSD kapa lihokela bakeng sa ngoliso mme o hlalose menyetla ea bophelo bo botle ba sechaba. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "educationServicesPrompt": "Etsa eka u moeletsi oa thuto. Buisana ka thuto ea CBC, ngoliso ea NEMIS, kapa ho isoa yunivesithi ka KUCCPS. BOHLOKOA: Hlalosa hore batsoali ba ka hlahloba liphetho tsa litlhahlobo ka SMS ha e lokolloa. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "transportLicensesPrompt": "Etsa eka u motataisi oa lits'ebeletso tsa NTSA. Hlalosa tšebetso ea ntlafatso ea laesense ea ho khanna, tlhahlobo ea makoloi, kapa tsamaiso ea ak'haonte ea TIMS. BOHLOKOA: Tataisa mosebedisi. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "housingProgramsPrompt": "Etsa eka u moeletsi oa mananeo a matlo. Hlalosa ngoliso ea Lenaneo la Matlo a Theko e tlase (Boma Yangu). BOHLOKOA: Tataisa mosebelisi sebakeng sa Boma Yangu 'me u hlalose maemo a ho theoha. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "findJobsPrompt": "Etsa eka u mokoetlisi oa mosebetsi bakeng sa litšebeletso tsa sechaba. Tataisa mosebedisi ho theha profil. BOHLOKOA: Eletsa mosebedisi ho boloka litifikeiti mme ba shebe libaka tsa marang-rang tsa PSC. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "justChatPrompt": "Etsa eka u metsoalle ea lehae. E-ba le mosa 'me u ithute hantle ka setso le bophelo ba letsatsi le letsatsi ba Kenya. BOHLOKOA: Hopotsa mosebelisi matla a hau. MOLAO: Kamehla u itlhalose e le 'Genie AI'.",
-
-    "applyForIDUserPrompt": "Ke batla ho tseba ka ho etsa kopo ea karete ea ID ea Naha Kenya.",
-    "payTaxesUserPrompt": "Ke batla ho botsa ka ho patala lekhetho kapa ho kenya lekhetho la ka la KRA Kenya.",
-    "startBusinessUserPrompt": "Ke batla ho fumana ts'ebetso ea ho ngolisa khoebo e ncha kapa khamphani Kenya.",
-    "findHealthcareUserPrompt": "Ke batla ho botsa ka litsi tsa bophelo bo botle ba sechaba le inshorense (NHIF/SHIF) Kenya.",
-    "educationServicesUserPrompt": "Ke batla ho tseba ka dikolo le lits'ebeletso tsa thuto Kenya.",
-    "transportLicensesUserPrompt": "Ke batla ho botsa ka laesense ea ho khanna le lits'ebeletso tsa NTSA Kenya.",
-    "housingProgramsUserPrompt": "Ke batla ho tseba ka Lenaneo la Matlo a Theko e Tlaase (Boma Yangu) Kenya.",
-    "findJobsUserPrompt": "Ke batla ho botsa ka menyetla ea mosebetsi oa mmuso le likopo tsa PSC Kenya.",
-    "justChatUserPrompt": "Ke batla ho qoqa ka kakaretso mabapi le bophelo Kenya."
+    "applyForIDUserPrompt":
+        "Ke batla ho botsa ka poone le lilemo tse ntle tsa ho jala Lesotho.",
+    "payTaxesUserPrompt":
+        "Ke batla ho holisa dinawa le ditlhôpu tšimong ea ka.",
+    "startBusinessUserPrompt":
+        "Ke batla ho utloisisa mobu le borotho ba molemo Lesotho.",
+    "findHealthcareUserPrompt":
+        "Ke batla ho tseba dipetsi le bokudi bo boholo-holo tše bonahalang dimeleng.",
+    "educationServicesUserPrompt":
+        "Ke batla ho hlokomela diphoofolo tšimong ea ka.",
+    "transportLicensesUserPrompt":
+        "Ke batla ho laola metsi le ho nontša dikgopong tsa ka.",
+    "housingProgramsUserPrompt":
+        "Ke batla ho utloisisa lilemo le leholimo mabapi le peo le ho kotula.",
+    "findJobsUserPrompt":
+        "Ke batla ho rekisisa dimela tsa ka kapa ho kopana le balimi ba bang.",
+    "justChatUserPrompt":
+        "Ke batla ho botsa potso e kgololang temo Lesotho.",
   },
   "common": {
     "cancel": "Hlakola",
@@ -1216,7 +1145,7 @@ const Map<String, dynamic> stLocale = {
     "open": "Bula",
     "done": "E entswe",
     "confirm": "Netefatsa",
-    "edit": "Fetola"
+    "edit": "Fetola",
   },
   "feedback": {
     "title": "Maikutlo",
@@ -1230,22 +1159,23 @@ const Map<String, dynamic> stLocale = {
     "thankYouMessage": "Kea leboha ka maikutlo a hao!",
     "submitting": "Ho romela...",
     "error": "Ho bile le bothata. Ka kopo leka hape.",
-    "success": "Kea leboha ka maikutlo a hao!"
+    "success": "Kea leboha ka maikutlo a hao!",
   },
   "responseRating": {
     "title": "Re Thuse ho Ntlafatsa",
-    "note": "Maikutlo a hao a tla sebelisoa ho ntlafatsa lenaneo lena le dikarabo nakong e tlang.",
+    "note":
+        "Maikutlo a hao a tla sebelisoa ho ntlafatsa lenaneo lena le dikarabo nakong e tlang.",
     "chatbotResponse": "Karabo ea Chatbot:",
     "ratingLabels": {
       "1": "Ha e na thuso",
       "2": "E thusitse hanyenyane",
       "3": "E thusitse haholo",
       "4": "E bile le thuso e ntle",
-      "5": "E fetola bophelo"
+      "5": "E fetola bophelo",
     },
     "additionalComments": "Maikutlo a mang...",
     "submit": "Romela",
-    "cancel": "Hlakola"
+    "cancel": "Hlakola",
   },
   "upload": {"alt": "Kenya"},
   "uploadDialog": {
@@ -1256,19 +1186,22 @@ const Map<String, dynamic> stLocale = {
     "remove": "Tlosa",
     "uploading": "Ho kenya...",
     "notifications": {
-      "dropError": "Ke lifaele feela tse ka theoloang. Ka kopo sheba hore o ntse o hula faele e nepahetseng ho tsoa komporong ea hao.",
+      "dropError":
+          "Ke lifaele feela tse ka theoloang. Ka kopo sheba hore o ntse o hula faele e nepahetseng ho tsoa komporong ea hao.",
       "typeNotAllowed": "Mofuta oa faele oa \"{extension}\" ha oa lumelloa.",
-      "shortcutUnsupported": "Lifaele tse khaoletsang (.url) ha lia tšehetsoa. Ka kopo hula faele ea nnete.",
+      "shortcutUnsupported":
+          "Lifaele tse khaoletsang (.url) ha lia tšehetsoa. Ka kopo hula faele ea nnete.",
       "duplicate": "Faele \"{fileName}\" e se e kentswe.",
       "uploadSuccess": "{fileName} e kentsoe ka katleho",
-      "uploadFailed": "Ho hlotsoe ho kenya {fileName}."
-    }
+      "uploadFailed": "Ho hlotsoe ho kenya {fileName}.",
+    },
   },
   "about": {
     "title": "Mabapi",
     "version": "Mofuta",
-    "description": "Genie AI ke motataisi oa hao ea bohlale bakeng sa lits'ebeletso tsa mmuso le tlhahisoleseling.",
+    "description":
+        "Genie AI ke motataisi oa hao ea bohlale bakeng sa lits'ebeletso tsa mmuso le tlhahisoleseling.",
     "techStack": "Mahlale a morao-rao",
-    "copyright": "Litokelo tsohle li sirelelitsoe."
-  }
+    "copyright": "Litokelo tsohle li sirelelitsoe.",
+  },
 };

@@ -1,6 +1,380 @@
 require('dotenv').config();
-const { Database, aql } = require('arangojs');
+const crypto = require('crypto');
+const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { NotFoundError, ValidationError } = require('../middleware/errors');
+
+/**
+ * Taxonomy section → display title and fields (matches NormalizedTaxonomyPayload / agri_metadata schema).
+ * Used to build admin Knowledge Hierarchy groups from ingested document metadata.
+ */
+const DOCUMENT_METATAG_SECTIONS = [
+  {
+    key: 'Agriculture',
+    title: 'Agriculture (from documents)',
+    fields: [
+      'CropCategory',
+      'CropName',
+      'Varietal',
+      'Livestock',
+      'FarmingSystem',
+      'Season',
+      'ProductionScale',
+      'OrganicStatus',
+      'IrrigationType'
+    ]
+  },
+  {
+    key: 'Content',
+    title: 'Topics & document types (from documents)',
+    fields: ['Topic', 'SubTopic', 'DocumentType', 'UseCase', 'Audience', 'Methodology']
+  },
+  {
+    key: 'Location',
+    title: 'Location & geography (from documents)',
+    fields: ['Country', 'Region', 'District', 'Village', 'GeoScope']
+  },
+  {
+    key: 'Environment',
+    title: 'Environment & climate (from documents)',
+    fields: ['Climate', 'RainfallPattern', 'Altitude', 'Soil', 'WaterAvailability', 'AgroEcologicalZone']
+  },
+  {
+    key: 'Risk',
+    title: 'Pests, diseases & risks (from documents)',
+    fields: ['Pest', 'Disease', 'ClimateRisk', 'SoilRisk']
+  },
+  {
+    key: 'Economics',
+    title: 'Markets & economics (from documents)',
+    fields: ['MarketFocus', 'ValueChainStage', 'FinancialTopic']
+  },
+  {
+    key: 'Governance',
+    title: 'Programs & policy (from documents)',
+    fields: ['PolicyMentioned', 'NGOs', 'GovernmentBodies', 'Programs']
+  }
+];
+
+/** Short English labels for sidebar grouping (Knowledge Areas → From your documents). */
+const DOCUMENT_METATAG_FIELD_SIDEBAR_LABELS = {
+  CropCategory: 'Crop categories',
+  CropName: 'Crops & species names',
+  Varietal: 'Varieties',
+  Livestock: 'Livestock',
+  FarmingSystem: 'Farming systems',
+  Season: 'Seasons',
+  ProductionScale: 'Production scale & area',
+  OrganicStatus: 'Organic status',
+  IrrigationType: 'Irrigation',
+  Topic: 'Topics',
+  SubTopic: 'Sub-topics',
+  DocumentType: 'Document types',
+  UseCase: 'Use cases',
+  Audience: 'Audience',
+  Methodology: 'Methodology',
+  Country: 'Country',
+  Region: 'Region',
+  District: 'District',
+  Village: 'Village',
+  GeoScope: 'Geographic scope',
+  Climate: 'Climate & temperature',
+  RainfallPattern: 'Rainfall patterns',
+  Altitude: 'Altitude & elevation',
+  Soil: 'Soil',
+  WaterAvailability: 'Water availability',
+  AgroEcologicalZone: 'Agro-ecological zones',
+  Pest: 'Pests',
+  Disease: 'Diseases',
+  ClimateRisk: 'Climate risks',
+  SoilRisk: 'Soil risks',
+  MarketFocus: 'Markets',
+  ValueChainStage: 'Value chain',
+  FinancialTopic: 'Financial topics',
+  PolicyMentioned: 'Policy',
+  NGOs: 'NGOs',
+  GovernmentBodies: 'Government bodies',
+  Programs: 'Programs'
+};
+
+/**
+ * Map a free-text label to a taxonomy composite key `SectionKey:FieldName` when it is not in structured fields.
+ * @param {string} rawLabel
+ * @returns {string|null}
+ */
+function _inferMetatagCompositeKey(rawLabel) {
+  const s = String(rawLabel || '').trim();
+  if (!s) {
+    return null;
+  }
+  const t = s;
+  if (/\b(worm|weevil|borer|aphid|hopper|mite|grasshopper|locust)s?\b/i.test(t)) {
+    return 'Risk:Pest';
+  }
+  if (/\d+(\.\d+)?\s*°\s*c|℃|(\d+\s*(to|–|-)\s*\d+)\s*°\s*c/i.test(t)) {
+    return 'Environment:Climate';
+  }
+  if (/\bfeet\b|m\.?\s*a\.?\s*s\.?\s*l|masl|m\.a\.s\.l/i.test(t) || /\d[\d,\s]*\s*–\s*\d[\d,\s]*\s*m\./i.test(t)) {
+    return 'Environment:Altitude';
+  }
+  if (/\bha\b|hectare|hectares|acres?\b/i.test(t)) {
+    return 'Agriculture:ProductionScale';
+  }
+  if (/^\s*\*/.test(t)) {
+    return 'Agriculture:CropName';
+  }
+  if (/^[A-Z][a-z]+\s+[a-z]{3,}/.test(t) && !/\d/.test(t)) {
+    return 'Agriculture:CropName';
+  }
+  return null;
+}
+
+function _sidebarGroupTitle(compositeKey) {
+  if (compositeKey === '__other__') {
+    return 'Other terms';
+  }
+  const idx = compositeKey.indexOf(':');
+  if (idx === -1) {
+    return compositeKey;
+  }
+  const field = compositeKey.slice(idx + 1);
+  return DOCUMENT_METATAG_FIELD_SIDEBAR_LABELS[field] || field;
+}
+
+function _pickPreferredLabelVariant(variants) {
+  if (!variants || variants.length === 0) {
+    return '';
+  }
+  if (variants.length === 1) {
+    return variants[0];
+  }
+  return variants.reduce((best, cur) => {
+    if (cur.length !== best.length) {
+      return cur.length > best.length ? cur : best;
+    }
+    return cur.localeCompare(best, undefined, { sensitivity: 'base' }) < 0 ? cur : best;
+  });
+}
+
+/** Strip trailing commas/spaces from taxonomy display strings. */
+function _trimMetatagDisplay(s) {
+  return String(s || '')
+    .trim()
+    .replace(/,+$/g, '')
+    .trim();
+}
+
+/**
+ * Head phrase before first comma or parenthesis (list qualifiers / examples live after).
+ * @param {string} s
+ */
+function _primaryPhraseForMetatag(s) {
+  const t = _trimMetatagDisplay(s);
+  if (!t) {
+    return '';
+  }
+  const commaIdx = t.indexOf(',');
+  const parenIdx = t.indexOf('(');
+  let cut = t.length;
+  if (commaIdx !== -1) {
+    cut = Math.min(cut, commaIdx);
+  }
+  if (parenIdx !== -1) {
+    cut = Math.min(cut, parenIdx);
+  }
+  return _trimMetatagDisplay(t.slice(0, cut));
+}
+
+const _METATAG_TOKEN_STOPWORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'at',
+  'by',
+  'for',
+  'from',
+  'in',
+  'of',
+  'on',
+  'or',
+  'per',
+  'the',
+  'to',
+  'with'
+]);
+
+function _firstSignificantToken(phrase) {
+  const p = String(phrase || '').trim();
+  if (!p) {
+    return '';
+  }
+  const parts = p.toLowerCase().split(/\s+/).filter(Boolean);
+  for (const w of parts) {
+    const core = w.replace(/[^a-z0-9]/g, '');
+    if (core.length > 2 && !_METATAG_TOKEN_STOPWORDS.has(core)) {
+      return core;
+    }
+  }
+  const fallback = parts[0] || '';
+  return fallback.replace(/[^a-z0-9]/g, '') || p.toLowerCase();
+}
+
+/** Light singular stem for clustering (cereals → cereal, crops → crop). */
+function _singularizeTokenForCluster(w) {
+  const low = String(w || '').toLowerCase();
+  if (low.length <= 3) {
+    return low;
+  }
+  if (low.endsWith('ies') && low.length > 4) {
+    return `${low.slice(0, -3)}y`;
+  }
+  if (low.endsWith('s') && !low.endsWith('ss')) {
+    const prev = low.charAt(low.length - 2);
+    if (prev && !/[aeiou]/.test(prev)) {
+      return low.slice(0, -1);
+    }
+  }
+  return low;
+}
+
+function _clusterStemFromMetatag(s) {
+  const primary = _primaryPhraseForMetatag(s);
+  const tok = _firstSignificantToken(primary);
+  return _singularizeTokenForCluster(tok);
+}
+
+function _metatagGeneralityScore(s) {
+  const commas = (String(s).match(/,/g) || []).length;
+  const parens = (String(s).match(/[()]/g) || []).length;
+  const p = _primaryPhraseForMetatag(s);
+  return [commas + parens, String(s).length, p.length];
+}
+
+function _shouldGeneralizeMetatagBucket(variants) {
+  if (!variants || variants.length < 2) {
+    return false;
+  }
+  const primaries = variants.map((v) => _primaryPhraseForMetatag(v));
+  const lens = primaries.map((p) => p.length).filter((n) => n > 0);
+  if (lens.length < 2) {
+    return true;
+  }
+  const minL = Math.min(...lens);
+  const maxL = Math.max(...lens);
+  if (maxL - minL >= 4) {
+    return true;
+  }
+  if (variants.some((v) => /[,(]/.test(String(v)))) {
+    return true;
+  }
+  for (let i = 0; i < primaries.length; i++) {
+    for (let j = 0; j < primaries.length; j++) {
+      if (i === j) {
+        continue;
+      }
+      const a = primaries[i].toLowerCase();
+      const b = primaries[j].toLowerCase();
+      if (!a || !b) {
+        continue;
+      }
+      if (a.includes(b) || b.includes(a)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function _pickMostGeneralMetatagLabel(variants) {
+  return variants.reduce((best, cur) => {
+    const sb = _metatagGeneralityScore(best);
+    const sc = _metatagGeneralityScore(cur);
+    for (let i = 0; i < sb.length; i++) {
+      if (sc[i] !== sb[i]) {
+        return sc[i] < sb[i] ? cur : best;
+      }
+    }
+    return _pickPreferredLabelVariant([best, cur]) === cur ? cur : best;
+  });
+}
+
+/**
+ * Collapse near-duplicate taxonomy labels (e.g. "Cereals", "cereal food crop", "Cereals (maize, …)")
+ * to one most-general display string per first-token stem when qualifiers differ.
+ * @param {string[]} items
+ * @returns {string[]}
+ */
+function _collapseMetatagsToGeneralLabels(items) {
+  const base = (items || []).map((x) => _trimMetatagDisplay(x)).filter(Boolean);
+  if (base.length <= 1) {
+    return base;
+  }
+  const buckets = new Map();
+  for (const s of base) {
+    const stem = _clusterStemFromMetatag(s);
+    const k = stem.length < 3 ? `_literal_${s.toLowerCase()}` : stem;
+    if (!buckets.has(k)) {
+      buckets.set(k, []);
+    }
+    buckets.get(k).push(s);
+  }
+  const out = [];
+  for (const [, variants] of buckets) {
+    if (variants.length === 1) {
+      out.push(variants[0]);
+      continue;
+    }
+    if (!_shouldGeneralizeMetatagBucket(variants)) {
+      out.push(...variants);
+      continue;
+    }
+    out.push(_trimMetatagDisplay(_pickMostGeneralMetatagLabel(variants)));
+  }
+  return out;
+}
+
+/**
+ * One visible entry per concept: merges case variants (Bean / beans / Beans) and simple singular/plural
+ * (bean / beans) within the same group; then collapses stem-level duplicates to the most general label.
+ * @param {string[]} items
+ * @returns {string[]}
+ */
+function _dedupeMetatagDisplayStrings(items) {
+  const raw = (items || [])
+    .map((x) => _trimMetatagDisplay(x))
+    .filter(Boolean);
+  if (raw.length === 0) {
+    return [];
+  }
+  const ciBuckets = new Map();
+  for (const s of raw) {
+    const k = s.toLowerCase();
+    if (!ciBuckets.has(k)) {
+      ciBuckets.set(k, []);
+    }
+    ciBuckets.get(k).push(s);
+  }
+  const afterCi = [...ciBuckets.values()].map((variants) => _pickPreferredLabelVariant(variants));
+  const lowerSet = new Set(afterCi.map((x) => x.toLowerCase()));
+  const removeLower = new Set();
+  for (const low of lowerSet) {
+    if (low.length <= 3) {
+      continue;
+    }
+    const plural = `${low}s`;
+    if (lowerSet.has(plural)) {
+      removeLower.add(low);
+    }
+  }
+  const out = afterCi.filter((s) => !removeLower.has(s.toLowerCase()));
+  const collapsed = _collapseMetatagsToGeneralLabels(out);
+  return collapsed.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function _docMetaChildKey(sectionKey, label) {
+  const h = crypto.createHash('sha1').update(`${sectionKey}\0${label}`).digest('hex').slice(0, 12);
+  return `_dm_${sectionKey}_${h}`;
+}
 
 class ServiceCategoryService {
   constructor() {
@@ -99,9 +473,11 @@ class ServiceCategoryService {
         const categoryData = categories[i];
         // ... (skipping invalid category checks) ...
 
+        const categoryName = categoryData.name || `Category ${i + 1}`;
         const categoryDoc = {
           catCode: categoryData.catKey || `cat${i + 1}`,
-          order: i + 1
+          order: i + 1,
+          nameEN: categoryName
         };
 
         const newCategory = await this.serviceCategories.save(categoryDoc);
@@ -115,7 +491,7 @@ class ServiceCategoryService {
           _key: `${newCategory._key}_${upperLocale}`,
           serviceCategoryId: newCategory._key,
           languageCode: upperLocale,
-          translation: categoryData.name || `Category ${i + 1}`, // 'name' is the English value
+          translation: categoryName,
           isActive: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -194,11 +570,12 @@ class ServiceCategoryService {
         logger.info(`Processing service ${i + 1}/${services.length}: "${serviceName}"`);
 
         try {
-          // Create service document without name fields
+          // Create service document with nameEN for query-service compatibility
           const serviceDoc = {
             serviceCode: `service_${i + 1}`,
             categoryId: categoryKey,
-            order: i + 1
+            order: i + 1,
+            nameEN: serviceName
           };
 
           logger.info(`Creating service with serviceCode: ${serviceDoc.serviceCode}`);
@@ -258,6 +635,9 @@ class ServiceCategoryService {
   async createServiceWithTranslations(categoryKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
   
       // 1. Get the current maximum order number for services IN THIS CATEGORY
@@ -274,6 +654,7 @@ class ServiceCategoryService {
       // 2. Create the main service document
       const serviceDoc = {
         categoryId: categoryKey,
+        nameEN: payload.nameEN,
       };
       const newService = await this.services.save(serviceDoc);
       logger.info(`Service document created with key: ${newService._key}`);
@@ -306,6 +687,9 @@ class ServiceCategoryService {
   async updateServiceWithTranslations(serviceKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Updating service ${serviceKey} with name "${payload.nameEN}"`);
 
       // 1. Ensure the service exists (this will throw an error if not found)
@@ -322,6 +706,9 @@ class ServiceCategoryService {
       };
       await this.serviceTranslations.save(englishTranslationDoc, { overwrite: true });
       logger.info(`Upserted English translation for service ${serviceKey}`);
+
+      // 2b. Keep nameEN in sync on the parent service document
+      await this.services.update(serviceKey, { nameEN: payload.nameEN });
 
       // 3. Clear old non-English translations and save the new set
       await this.db.query(aql`
@@ -421,6 +808,7 @@ class ServiceCategoryService {
           catKey: category._key,
           catCode: category.catCode,
           name: categoryTranslation,
+          nameEN: category.nameEN,
           children: services
         }
     `;
@@ -436,7 +824,339 @@ class ServiceCategoryService {
     }
   }
 
-  // Add this new method to your ServiceCategoryService class
+  /**
+   * Recursively collect display strings from stored taxonomy metadata (nested lists of controlled labels).
+   * Skips confidence maps and primitive noise.
+   * @param {object} meta - taxonomyMetadata document
+   * @returns {string[]}
+   */
+  _collectTaxonomyDisplayStrings(meta) {
+    if (!meta || typeof meta !== 'object') {
+      return [];
+    }
+    const out = [];
+    const skipKeys = new Set(['fieldConfidence']);
+    const walk = (val) => {
+      if (val == null) {
+        return;
+      }
+      if (typeof val === 'string') {
+        const t = val.trim();
+        if (t) {
+          out.push(t);
+        }
+        return;
+      }
+      if (typeof val === 'number' || typeof val === 'boolean') {
+        return;
+      }
+      if (Array.isArray(val)) {
+        val.forEach(walk);
+        return;
+      }
+      if (typeof val === 'object') {
+        Object.keys(val).forEach((k) => {
+          if (skipKeys.has(k)) {
+            return;
+          }
+          walk(val[k]);
+        });
+      }
+    };
+    walk(meta);
+    return out;
+  }
+
+  /**
+   * Distinct manual labels and taxonomy terms from uploaded documents (excludes retracted files).
+   * Used by the chat sidebar "Knowledge Areas" supplement list.
+   * @returns {Promise<string[]>}
+   */
+  async getDistinctDocumentMetatags() {
+    await this.init();
+    try {
+      const query = aql`
+        FOR f IN files
+          FILTER !f.dataprep OR LOWER(TRIM(f.dataprep.status || '')) != 'retracted'
+          RETURN { labels: f.labels, taxonomy: f.taxonomyMetadata }
+      `;
+      const cursor = await this.db.query(query);
+      const rows = await cursor.all();
+      const bag = new Set();
+      for (const row of rows) {
+        if (Array.isArray(row.labels)) {
+          row.labels.forEach((lbl) => {
+            const s = String(lbl).trim();
+            if (s) {
+              bag.add(s);
+            }
+          });
+        }
+        if (row.taxonomy && typeof row.taxonomy === 'object') {
+          for (const s of this._collectTaxonomyDisplayStrings(row.taxonomy)) {
+            bag.add(s);
+          }
+        }
+      }
+      const sorted = _dedupeMetatagDisplayStrings(Array.from(bag));
+      logger.info(`Distinct document metatags collected: ${sorted.length} terms`);
+      return sorted;
+    } catch (error) {
+      const code = error.errorNum ?? error.errno;
+      const msg = String(error.message || '');
+      const collectionUnavailable =
+        code === 1202 ||
+        code === 1203 ||
+        /not found|unknown collection|no collection/i.test(msg);
+      if (collectionUnavailable) {
+        logger.warn(`Document metatags skipped (files query not available): ${msg}`);
+        return [];
+      }
+      logger.error(`Error collecting document metatags: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Group document metatags by taxonomy field (plus inferred buckets for upload labels and loose terms).
+   * Used by the chat sidebar "Knowledge Areas" panel under "From your documents".
+   * @returns {Promise<{ groups: Array<{ groupKey: string, groupName: string, items: string[] }> }>}
+   */
+  async getDocumentMetatagsGroupedForSidebar() {
+    await this.init();
+    try {
+      const query = aql`
+        FOR f IN files
+          FILTER !f.dataprep OR LOWER(TRIM(f.dataprep.status || '')) != 'retracted'
+          RETURN { labels: f.labels, taxonomy: f.taxonomyMetadata }
+      `;
+      const cursor = await this.db.query(query);
+      const rows = await cursor.all();
+
+      /** @type {Map<string, Set<string>>} */
+      const compositeSets = new Map();
+      const fromStructuredFieldsOnly = new Set();
+
+      const ensureSet = (ck) => {
+        let st = compositeSets.get(ck);
+        if (!st) {
+          st = new Set();
+          compositeSets.set(ck, st);
+        }
+        return st;
+      };
+
+      for (const row of rows) {
+        const tax = row.taxonomy;
+        if (tax && typeof tax === 'object') {
+          for (const { key: sectionKey, fields } of DOCUMENT_METATAG_SECTIONS) {
+            const block = tax[sectionKey];
+            if (!block || typeof block !== 'object') {
+              continue;
+            }
+            for (const field of fields) {
+              const arr = block[field];
+              if (!Array.isArray(arr)) {
+                continue;
+              }
+              const ck = `${sectionKey}:${field}`;
+              const set = ensureSet(ck);
+              for (const v of arr) {
+                const t = String(v).trim();
+                if (t) {
+                  set.add(t);
+                  fromStructuredFieldsOnly.add(t);
+                }
+              }
+            }
+          }
+        }
+        if (Array.isArray(row.labels)) {
+          for (const lbl of row.labels) {
+            const t = String(lbl).trim();
+            if (!t) {
+              continue;
+            }
+            const inferred = _inferMetatagCompositeKey(t);
+            const ck = inferred || '__other__';
+            ensureSet(ck).add(t);
+          }
+        }
+      }
+
+      for (const row of rows) {
+        const tax = row.taxonomy;
+        if (!tax || typeof tax !== 'object') {
+          continue;
+        }
+        for (const t of this._collectTaxonomyDisplayStrings(tax)) {
+          if (fromStructuredFieldsOnly.has(t)) {
+            continue;
+          }
+          const inferred = _inferMetatagCompositeKey(t);
+          const ck = inferred || '__other__';
+          ensureSet(ck).add(t);
+        }
+      }
+
+      const emitted = new Set();
+      /** @type {Array<{ groupKey: string, groupName: string, items: string[] }>} */
+      const groups = [];
+
+      for (const { key: sectionKey, fields } of DOCUMENT_METATAG_SECTIONS) {
+        for (const field of fields) {
+          const ck = `${sectionKey}:${field}`;
+          const set = compositeSets.get(ck);
+          if (!set || set.size === 0) {
+            continue;
+          }
+          emitted.add(ck);
+          groups.push({
+            groupKey: ck,
+            groupName: _sidebarGroupTitle(ck),
+            items: _dedupeMetatagDisplayStrings(Array.from(set))
+          });
+        }
+      }
+
+      const remaining = Array.from(compositeSets.keys())
+        .filter((k) => !emitted.has(k))
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+      for (const ck of remaining) {
+        const set = compositeSets.get(ck);
+        if (!set || set.size === 0) {
+          continue;
+        }
+        groups.push({
+          groupKey: ck,
+          groupName: _sidebarGroupTitle(ck),
+          items: _dedupeMetatagDisplayStrings(Array.from(set))
+        });
+      }
+
+      logger.info(`Document metatag sidebar groups: ${groups.length} group(s)`);
+      return { groups };
+    } catch (error) {
+      const code = error.errorNum ?? error.errno;
+      const msg = String(error.message || '');
+      const collectionUnavailable =
+        code === 1202 ||
+        code === 1203 ||
+        /not found|unknown collection|no collection/i.test(msg);
+      if (collectionUnavailable) {
+        logger.warn(`Document metatags grouped skipped: ${msg}`);
+        return { groups: [] };
+      }
+      logger.error(`Error building grouped document metatags: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Group distinct taxonomy terms and upload labels from `files` into top-level sections for the admin
+   * Knowledge Hierarchy (read-only synthetic categories; catKey prefix `_docmeta_`).
+   * @returns {Promise<Array<{ catKey: string, catCode: null, name: string, children: Array<{ _key: string, name: string }> }>>}
+   */
+  async getDocumentMetatagsHierarchyForAdmin() {
+    await this.init();
+    try {
+      const query = aql`
+        FOR f IN files
+          FILTER !f.dataprep OR LOWER(TRIM(f.dataprep.status || '')) != 'retracted'
+          RETURN { labels: f.labels, taxonomy: f.taxonomyMetadata }
+      `;
+      const cursor = await this.db.query(query);
+      const rows = await cursor.all();
+
+      /** @type {Record<string, Set<string>>} */
+      const bySection = {};
+      const manualLabels = new Set();
+
+      for (const row of rows) {
+        if (Array.isArray(row.labels)) {
+          for (const lbl of row.labels) {
+            const s = String(lbl).trim();
+            if (s) {
+              manualLabels.add(s);
+            }
+          }
+        }
+        const tax = row.taxonomy;
+        if (!tax || typeof tax !== 'object') {
+          continue;
+        }
+        for (const { key, fields } of DOCUMENT_METATAG_SECTIONS) {
+          const block = tax[key];
+          if (!block || typeof block !== 'object') {
+            continue;
+          }
+          if (!bySection[key]) {
+            bySection[key] = new Set();
+          }
+          for (const field of fields) {
+            const arr = block[field];
+            if (!Array.isArray(arr)) {
+              continue;
+            }
+            for (const v of arr) {
+              const s = String(v).trim();
+              if (s) {
+                bySection[key].add(s);
+              }
+            }
+          }
+        }
+      }
+
+      const out = [];
+      for (const { key, title } of DOCUMENT_METATAG_SECTIONS) {
+        const set = bySection[key];
+        if (!set || set.size === 0) {
+          continue;
+        }
+        const children = _dedupeMetatagDisplayStrings(Array.from(set)).map((name) => ({
+          _key: _docMetaChildKey(key, name),
+          name
+        }));
+        out.push({
+          catKey: `_docmeta_${key}`,
+          catCode: null,
+          name: title,
+          children
+        });
+      }
+
+      if (manualLabels.size > 0) {
+        const children = _dedupeMetatagDisplayStrings(Array.from(manualLabels)).map((name) => ({
+          _key: _docMetaChildKey('labels', name),
+          name
+        }));
+        out.push({
+          catKey: '_docmeta_labels',
+          catCode: null,
+          name: 'Document labels — upload (from documents)',
+          children
+        });
+      }
+
+      logger.info(`Document metatag hierarchy groups for admin: ${out.length}`);
+      return out;
+    } catch (error) {
+      const code = error.errorNum ?? error.errno;
+      const msg = String(error.message || '');
+      const collectionUnavailable =
+        code === 1202 ||
+        code === 1203 ||
+        /not found|unknown collection|no collection/i.test(msg);
+      if (collectionUnavailable) {
+        logger.warn(`Document metatag hierarchy skipped: ${msg}`);
+        return [];
+      }
+      logger.error(`Error building document metatag hierarchy: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
 
   /**
    * Get all categories with DETAILED services for the admin panel
@@ -481,14 +1201,24 @@ class ServiceCategoryService {
                   catKey: category._key,
                   catCode: category.catCode,
                   name: categoryTranslation,
+                  nameEN: category.nameEN,
                   children: services
               }
       `;
 
       const cursor = await this.db.query(query);
       const categories = await cursor.all();
-      logger.info(`Admin categories with detailed services retrieved successfully: ${categories.length} categories`);
-      return categories;
+      let docMetaGroups = [];
+      try {
+        docMetaGroups = await this.getDocumentMetatagsHierarchyForAdmin();
+      } catch (e) {
+        logger.warn(`Appending document metatags hierarchy failed (admin still gets manual categories): ${e.message}`);
+      }
+      const merged = [...categories, ...docMetaGroups];
+      logger.info(
+        `Admin categories with detailed services: ${categories.length} manual + ${docMetaGroups.length} document groups = ${merged.length} total`
+      );
+      return merged;
     } catch (error) {
       logger.error(`Error getting all admin categories with services: ${error.message}`, { stack: error.stack });
       throw error;
@@ -537,6 +1267,7 @@ class ServiceCategoryService {
           catKey: category._key,
           catCode: category.catCode,
           name: categoryTranslation,
+          nameEN: category.nameEN,
           children: services
         }
       `;
@@ -546,7 +1277,7 @@ class ServiceCategoryService {
 
       if (!result) {
         logger.warn(`Category ${categoryKey} not found`);
-        throw new Error(`Category ${categoryKey} not found`);
+        throw new NotFoundError(`Category ${categoryKey} not found`);
       }
 
       if (!result.name) {
@@ -798,6 +1529,9 @@ class ServiceCategoryService {
   async createCategory(payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Creating new category "${payload.nameEN}"`);
 
       // 1. Get the current maximum order number for categories
@@ -810,9 +1544,10 @@ class ServiceCategoryService {
       const newOrder = maxOrder + 1;
       logger.info(`Determined new category order: ${newOrder}`);
 
-      // 2. Create the category document with the correct order
+      // 2. Create the category document with the correct order and nameEN
       const categoryDoc = {
-        order: newOrder
+        order: newOrder,
+        nameEN: payload.nameEN
       };
       const newCategory = await this.serviceCategories.save(categoryDoc);
 
@@ -835,11 +1570,13 @@ class ServiceCategoryService {
   async updateCategoryWithTranslations(categoryKey, payload) {
     await this.init();
     try {
+      if (!payload.nameEN || typeof payload.nameEN !== 'string' || payload.nameEN.trim() === '') {
+        throw new ValidationError('nameEN is required and must be a non-empty string');
+      }
       logger.info(`Updating category ${categoryKey} with name "${payload.nameEN}"`);
 
       // 1. Update the main category document (if there are fields to update, otherwise this can be skipped)
       // For now, we'll assume the main document has no fields that change here.
-      const category = await this.serviceCategories.document(categoryKey);
 
       // 2. Update/create the English translation (upsert)
       const englishTranslationDoc = {
@@ -852,6 +1589,9 @@ class ServiceCategoryService {
       };
       await this.serviceCategoryTranslations.save(englishTranslationDoc, { overwrite: true });
       logger.info(`Upserted English translation for category ${categoryKey}`);
+
+      // 2b. Keep nameEN in sync on the parent category document
+      await this.serviceCategories.update(categoryKey, { nameEN: payload.nameEN });
 
       // 3. Update/create the other translations
       if (payload.translations && Array.isArray(payload.translations)) {

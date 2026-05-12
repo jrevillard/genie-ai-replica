@@ -3,48 +3,47 @@
   <div class="splash-screen" :class="{ 'fade-out': isFadingOut }">
     <div class="splash-content">
       <img
-        src="/config/splash.png"
-        alt="Splash Screen"
+        src="/config/splash-genie-ai-inko.png"
+        alt="GENIE.AI"
         class="splash-image"
         @error="handleImageError"
         @load="handleImageLoad"
       />
-      <div v-if="imageError" class="splash-fallback">
-        Splash Screen Fallback
-      </div>
+      <div v-if="imageError" class="splash-fallback">Splash Screen Fallback</div>
     </div>
   </div>
 </template>
 
 <script>
 export default {
-  name: "SplashScreen",
+  name: 'SplashScreen',
+  emits: ['splash-complete'],
   data() {
     return {
       isFadingOut: false,
-      imageError: false,
+      imageError: false
     };
   },
   mounted() {
-    console.log("SplashScreen.vue: Component mounted");
+    console.log('SplashScreen.vue: Component mounted');
     setTimeout(() => {
-      console.log("SplashScreen.vue: Starting fade-out after 5 seconds");
+      console.log('SplashScreen.vue: Starting fade-out after 5 seconds');
       this.isFadingOut = true;
       setTimeout(() => {
-        console.log("SplashScreen.vue: Fade-out complete, emitting splash-complete");
-        this.$emit("splash-complete");
+        console.log('SplashScreen.vue: Fade-out complete, emitting splash-complete');
+        this.$emit('splash-complete');
       }, 1000); // 1s fade-out duration
     }, 5000); // 5s display duration
   },
   methods: {
     handleImageLoad() {
-      console.log("SplashScreen.vue: SVG image loaded successfully");
+      console.log('SplashScreen.vue: SVG image loaded successfully');
     },
     handleImageError() {
-      console.error("SplashScreen.vue: Failed to load SVG image");
+      console.error('SplashScreen.vue: Failed to load SVG image');
       this.imageError = true;
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -86,7 +85,7 @@ export default {
 }
 
 /* Override for dark theme */
-#app[data-theme="dark"] .splash-screen {
+#app[data-theme='dark'] .splash-screen {
   background-color: rgba(30, 30, 30, 0.5); /* Semi-transparent dark background */
 }
 

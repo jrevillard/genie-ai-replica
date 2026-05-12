@@ -196,151 +196,13 @@ const Map<String, dynamic> ptLocale = {
     "VN": "Vietnã",
     "YE": "Iêmen",
     "ZM": "Zâmbia",
-    "ZW": "Zimbábue"
+    "ZW": "Zimbábue",
   },
-  "verification": {
-    "verifying": "Verificando seu e-mail...",
-    "success": "E-mail Verificado com Sucesso!",
-    "failed": "Falha na Verificação",
-    "accountVerified":
-        "Sua conta foi verificada com sucesso. Agora você pode entrar na sua conta.",
-    "invalidLink": "O link de verificação é inválido ou expirou.",
-    "missingToken": "O token de verificação está faltando.",
-    "generalError":
-        "Ocorreu um erro durante a verificação. Por favor, tente novamente mais tarde.",
-    "proceedToLogin": "Prosseguir para Login",
-    "backToLogin": "Voltar para Login"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Criar Nova Senha",
-    "tokenLabel": "Token de Redefinição",
-    "tokenPlaceholder": "Digite o token de redefinição",
-    "validateButton": "Validar Token",
-    "newPasswordLabel": "Nova Senha",
-    "newPasswordPlaceholder": "Crie uma nova senha",
-    "confirmNewPasswordLabel": "Confirmar Nova Senha",
-    "confirmNewPasswordPlaceholder": "Confirme sua nova senha",
-    "resetButton": "Redefinir Senha",
-    "processing": "Redefinindo...",
-    "rememberedPassword": "Lembrou sua senha?",
-    "backToLogin": "Voltar para Login",
-    "supportMessage": "Precisa de ajuda? Contate nossa equipe de suporte",
-    "passwordRequirements":
-        "A senha deve ter pelo menos 8 caracteres com pelo menos 1 número, 1 letra maiúscula e 1 caractere especial",
-    "passwordsDoNotMatch": "As senhas não coincidem",
-    "resetSuccess": "Sua senha foi redefinida com sucesso",
-    "resetFailed":
-        "Não foi possível redefinir a senha. Por favor, tente novamente.",
-    "noTokenProvided": "Por favor, forneça um token de redefinição",
-    "expiredToken":
-        "Este token de redefinição expirou. Por favor, solicite um novo.",
-    "invalidToken": "Token de redefinição inválido ou não reconhecido",
-    "validatingToken": "Validando token...",
-    "redirecting": "Redirecionando para a página de login...",
-    "passwordStrength": "Força da Senha",
-    "strengthLabels": {
-      "veryWeak": "Muito Fraca",
-      "weak": "Fraca",
-      "fair": "Razoável",
-      "good": "Boa",
-      "strong": "Forte"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Use pelo menos 8 caracteres",
-      "addUppercase": "Adicione letras maiúsculas",
-      "addLowercase": "Adicione letras minúsculas",
-      "addNumbers": "Adicione números",
-      "addSpecialChars": "Adicione caracteres especiais"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Redefinir Sua Senha",
-    "emailLabel": "Endereço de E-mail",
-    "emailPlaceholder": "Digite seu e-mail",
-    "resetButton": "Enviar Link de Redefinição",
-    "processing": "Enviando...",
-    "rememberPassword": "Lembrou sua senha?",
-    "backToLogin": "Voltar para Login",
-    "supportMessage": "Precisa de ajuda? Contate nossa equipe de suporte",
-    "invalidEmail": "Por favor, insira um endereço de e-mail válido",
-    "resetRequestSuccess":
-        "O link de redefinição de senha foi enviado para o seu e-mail",
-    "resetRequestFailed":
-        "Não foi possível enviar o link de redefinição de senha. Por favor, tente novamente.",
-    "checkEmail": "Por favor, verifique seu e-mail para mais instruções."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Criar Nova Conta",
-    "username": "Nome de Usuário",
-    "usernamePlaceholder": "Digite um nome de usuário",
-    "email": "E-mail",
-    "emailPlaceholder": "Digite seu e-mail",
-    "password": "Senha",
-    "passwordPlaceholder": "Crie uma senha",
-    "confirmPassword": "Confirmar Senha",
-    "confirmPasswordPlaceholder": "Confirme sua senha",
-    "acceptTerms": "Eu aceito os",
-    "termsOfService": "Termos de Serviço",
-    "registerButton": "Criar Conta",
-    "processing": "Processando...",
-    "alreadyHaveAccount": "Já tem uma conta?",
-    "loginNow": "Entrar",
-    "privacyNotice":
-        "Ao se registrar, você concorda com nossos Termos de Serviço e Política de Privacidade",
-    "usernameMinLength": "O nome de usuário deve ter pelo menos 3 caracteres",
-    "invalidEmail": "Por favor, insira um endereço de e-mail válido",
-    "passwordRequirements":
-        "A senha deve ter pelo menos 8 caracteres com pelo menos 1 número e 1 letra maiúscula",
-    "passwordsDoNotMatch": "As senhas não coincidem",
-    "mustAcceptTerms": "Você deve aceitar os Termos de Serviço",
-    "registrationFailed": "O registro falhou. Por favor, tente novamente.",
-    "usernameExists": "Nome de usuário já existe",
-    "emailExists": "E-mail já existe",
-    "registrationSuccess": "Registro Bem-sucedido!",
-    "verificationEmailSent":
-        "Um e-mail de verificação foi enviado para {email}",
-    "checkEmailInstructions":
-        "Por favor, verifique seu e-mail e siga as instruções para verificar sua conta antes de entrar.",
-    "backToLogin": "Voltar para Login",
-    "noEmailReceived": "Não recebeu um e-mail?",
-    "resendVerification": "Reenviar e-mail de verificação",
-    "verificationResent": "O e-mail de verificação foi reenviado",
-    "verificationResendFailed":
-        "Falha ao reenviar o e-mail de verificação. Por favor, tente novamente.",
-    "usernameInvalidChars":
-        "O nome de usuário pode conter apenas letras, números, sublinhados, pontos e hifens",
-    "networkError":
-        "Erro de rede. Por favor, verifique sua conexão e tente novamente."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Nome de Usuário",
-    "password": "Senha",
-    "loginButton": "Entrar",
-    "or": "ou",
-    "savedAccounts": "Contas Salvas",
-    "loginSuccess": "Login bem-sucedido",
-    "loginError": "Falha no login. Por favor, verifique suas credenciais.",
-    "googleLogin": "Continuar com Google",
-    "facebookLogin": "Continuar com Facebook",
-    "rememberMe": "Lembrar-me",
-    "forgotPassword": "Esqueceu a senha?",
-    "noAccount": "Não tem uma conta?",
-    "createAccount": "Criar conta",
-    "registerNow": "Registre-se agora",
-    "termsAndPolicy":
-        "Ao entrar, você concorda com nossos Termos de Serviço e Política de Privacidade",
-    "loggingIn": "Entrando...",
-    "fieldsRequired": "Nome de usuário e senha são obrigatórios",
-    "invalidCredentials": "Nome de usuário ou senha inválidos",
-    "tooManyAttempts":
-        "Muitas tentativas de login. Por favor, tente novamente mais tarde.",
-    "loginFailed": "Falha no login. Por favor, tente novamente.",
-    "oauthNotImplemented": "Login social ainda não implementado",
-    "savedLoginNotImplemented": "Login com conta salva ainda não implementado"
+  "auth": {
+    "noInternetConnection": "Sem conexão com a Internet",
+    "networkUnreachable": "Rede inacessível",
+    "authenticationFailed": "Falha na autenticação",
+    "sessionExpired": "Sua sessão expirou. Por favor, faça login novamente.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -359,8 +221,8 @@ const Map<String, dynamic> ptLocale = {
       "swahili": "Suaíli",
       "german": "Alemão",
       "spanish": "Espanhol",
-      "arabic": "Árabe"
-    }
+      "arabic": "Árabe",
+    },
   },
   "systemStatus": {
     "title": "Status do Serviço",
@@ -374,20 +236,20 @@ const Map<String, dynamic> ptLocale = {
     "checking": "Verificando...",
     "nextDeadline": "Próximo Prazo",
     "days": "dias",
-    "viewDetails": "Ver Detalhes"
+    "viewDetails": "Ver Detalhes",
   },
   "services": {
     "eCitizen": "Portal eCitizen",
     "taxFiling": "Sistema de Declaração de Impostos",
     "idApplication": "Solicitação de Identidade",
     "businessReg": "Registro de Empresas",
-    "drivingLicense": "Carteira de Motorista"
+    "drivingLicense": "Carteira de Motorista",
   },
   "deadlines": {
     "taxFiling": "Prazo para Declaração de Impostos",
     "businessRenewal": "Renovação de Licença Comercial",
     "idRenewal": "Renovação de Cartão de Identidade",
-    "vehicleRegistration": "Prazo para Registro de Veículo"
+    "vehicleRegistration": "Prazo para Registro de Veículo",
   },
   "sidebar": {
     "governmentServices": "Áreas de Conhecimento",
@@ -429,7 +291,7 @@ const Map<String, dynamic> ptLocale = {
       "rain": "Chuva",
       "shower": "Pancada de Chuva",
       "thunderstorm": "Tempestade",
-      "snow": "Neve"
+      "snow": "Neve",
     },
     "folders": "Pastas",
     "emptyFolder":
@@ -443,7 +305,7 @@ const Map<String, dynamic> ptLocale = {
       "all": "Todos os Chats",
       "folders": "Pastas",
       "starred": "Favoritos",
-      "archived": "Arquivados"
+      "archived": "Arquivados",
     },
     "savedChats": "Chats Salvos",
     "chats": "Chats",
@@ -502,7 +364,7 @@ const Map<String, dynamic> ptLocale = {
     "noConversations": "Nenhuma conversa encontrada",
     "noStarred": "Nenhuma conversa favorita",
     "noArchived": "Nenhuma conversa arquivada",
-    "folderEmptyState": "A pasta está vazia"
+    "folderEmptyState": "A pasta está vazia",
   },
   "leftPanel": {
     "cat1": {
@@ -512,8 +374,8 @@ const Map<String, dynamic> ptLocale = {
         "Carteiras de identidade nacional",
         "Passaportes",
         "Certidões de casamento e óbito",
-        "Registro de eleitores"
-      ]
+        "Registro de eleitores",
+      ],
     },
     "cat2": {
       "name": "2. Saúde e Serviços Sociais",
@@ -522,8 +384,8 @@ const Map<String, dynamic> ptLocale = {
         "Programas de vacinação",
         "Seguro de saúde",
         "Benefícios por invalidez",
-        "Assistência social e alimentar"
-      ]
+        "Assistência social e alimentar",
+      ],
     },
     "cat3": {
       "name": "3. Educação e Aprendizagem",
@@ -531,8 +393,8 @@ const Map<String, dynamic> ptLocale = {
         "Escolas públicas e universidades",
         "Bolsas de estudo e empréstimos estudantis",
         "Programas de educação de adultos",
-        "Recursos de aprendizagem online"
-      ]
+        "Recursos de aprendizagem online",
+      ],
     },
     "cat4": {
       "name": "4. Emprego e Serviços Trabalhistas",
@@ -540,8 +402,8 @@ const Map<String, dynamic> ptLocale = {
         "Busca de emprego e seguro-desemprego",
         "Proteção ao trabalhador e direitos trabalhistas",
         "Regulamentos de segurança no local de trabalho",
-        "Treinamento de habilidades e aprendizagem"
-      ]
+        "Treinamento de habilidades e aprendizagem",
+      ],
     },
     "cat5": {
       "name": "5. Impostos e Receita",
@@ -549,8 +411,8 @@ const Map<String, dynamic> ptLocale = {
         "Declaração de imposto de renda e reembolsos",
         "Pagamentos de imposto sobre a propriedade",
         "Conformidade fiscal empresarial",
-        "Alfândega e impostos de importação"
-      ]
+        "Alfândega e impostos de importação",
+      ],
     },
     "cat6": {
       "name": "6. Segurança Pública e Justiça",
@@ -558,8 +420,8 @@ const Map<String, dynamic> ptLocale = {
         "Polícia e serviços de emergência",
         "Tribunais e assistência jurídica",
         "Denúncia de crimes",
-        "Leis de proteção ao consumidor"
-      ]
+        "Leis de proteção ao consumidor",
+      ],
     },
     "cat7": {
       "name": "7. Transporte e Mobilidade",
@@ -567,8 +429,8 @@ const Map<String, dynamic> ptLocale = {
         "Carteiras de motorista e registro de veículos",
         "Transporte público e infraestrutura",
         "Violações de trânsito e multas",
-        "Programas de segurança no trânsito"
-      ]
+        "Programas de segurança no trânsito",
+      ],
     },
     "cat8": {
       "name": "8. Habitação e Desenvolvimento Urbano",
@@ -576,8 +438,8 @@ const Map<String, dynamic> ptLocale = {
         "Assistência à habitação pública",
         "Registro de propriedades e registros de terras",
         "Empréstimos e subsídios habitacionais",
-        "Zoneamento e licenças de construção"
-      ]
+        "Zoneamento e licenças de construção",
+      ],
     },
     "cat9": {
       "name": "9. Utilidades e Meio Ambiente",
@@ -585,8 +447,8 @@ const Map<String, dynamic> ptLocale = {
         "Serviços de água e eletricidade",
         "Gestão de resíduos e reciclagem",
         "Regulamentos ambientais",
-        "Iniciativas de energia renovável"
-      ]
+        "Iniciativas de energia renovável",
+      ],
     },
     "cat10": {
       "name": "10. Negócios e Comércio",
@@ -594,8 +456,8 @@ const Map<String, dynamic> ptLocale = {
         "Registro e licenciamento de empresas",
         "Regulamentos comerciais e licenças",
         "Subsídios e incentivos para pequenas empresas",
-        "E-commerce e suporte a negócios digitais"
-      ]
+        "E-commerce e suporte a negócios digitais",
+      ],
     },
     "cat11": {
       "name": "11. Previdência Social e Pensões",
@@ -603,8 +465,8 @@ const Map<String, dynamic> ptLocale = {
         "Benefícios de aposentadoria",
         "Gestão de fundos de pensão",
         "Benefícios para sobreviventes",
-        "Pensões por invalidez"
-      ]
+        "Pensões por invalidez",
+      ],
     },
     "cat12": {
       "name": "12. Comunidade e Engajamento Cívico",
@@ -612,9 +474,9 @@ const Map<String, dynamic> ptLocale = {
         "Votação e eleições",
         "Feedback público e reclamações de cidadãos",
         "Voluntariado e programas comunitários",
-        "Participação no governo local"
-      ]
-    }
+        "Participação no governo local",
+      ],
+    },
   },
   "settings": {
     "title": "Configurações",
@@ -630,7 +492,7 @@ const Map<String, dynamic> ptLocale = {
     "languages": {
       "english": "Inglês",
       "french": "Francês",
-      "swahili": "Suaíli"
+      "swahili": "Suaíli",
     },
     "theme": "Tema",
     "themes": {"light": "Claro", "dark": "Escuro", "system": "Sistema"},
@@ -644,10 +506,12 @@ const Map<String, dynamic> ptLocale = {
     "emailAddress": "Endereço de E-mail",
     "emailAddressPlaceholder": "Seu endereço de e-mail",
     "password": "Senha",
-    "changePassword": "Alterar Senha",
     "resetUserData": "Redefinir Dados do Usuário",
     "resetUserDataDesc":
         "Isso limpará todos os seus dados de perfil e histórico de chat.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Excluir Conta",
     "deleteAccountDesc":
         "Isso excluirá permanentemente sua conta e todos os dados associados.",
@@ -662,14 +526,14 @@ const Map<String, dynamic> ptLocale = {
           "Isso limpará todos os seus dados de perfil e histórico de chat.",
       "confirmReset":
           "Tem certeza de que deseja redefinir todos os seus dados? Isso não pode ser desfeito.",
-      "resetComplete": "Seus dados foram redefinidos."
+      "resetComplete": "Seus dados foram redefinidos.",
     },
     "language": {"title": "Idioma", "selectLabel": "Idioma de Exibição"},
     "appearance": {
       "title": "Aparência",
       "lightTheme": "Claro",
       "darkTheme": "Escuro",
-      "systemTheme": "Sistema"
+      "systemTheme": "Sistema",
     },
     "confirmDeleteAccount":
         "Tem certeza de que deseja excluir sua conta? Esta ação não pode ser desfeita.",
@@ -706,8 +570,6 @@ const Map<String, dynamic> ptLocale = {
     "enterValidEmail": "Por favor, insira um endereço de e-mail válido",
     "failedToUpdateEmail":
         "Falha ao atualizar o e-mail. Por favor, tente novamente.",
-    "passwordResetInitiated":
-        "Um link de redefinição de senha foi enviado para o seu endereço de e-mail.",
     "unableToLoadUser":
         "Não foi possível carregar as informações do usuário. Por favor, tente novamente.",
     "retry": "Tentar Novamente",
@@ -717,7 +579,7 @@ const Map<String, dynamic> ptLocale = {
     "confirmResetUserData":
         "Tem certeza de que deseja redefinir todos os seus dados de perfil? Isso limpará todas as informações do perfil e histórico de chat, mas manterá suas credenciais de conta.",
     "reset": "Redefinir",
-    "deleteAccountTitle": "Excluir Conta"
+    "deleteAccountTitle": "Excluir Conta",
   },
   "userProfile": {
     "title": "Perfil do Usuário",
@@ -765,7 +627,7 @@ const Map<String, dynamic> ptLocale = {
       "tab9": "Seguridade Social e Bem-Estar",
       "tab10": "Registros Criminais e Legais",
       "tab11": "Transporte e Mobilidade",
-      "tab12": "Participação Cívica e Política"
+      "tab12": "Participação Cívica e Política",
     },
     "tabsShort": {
       "personal": "Pessoal",
@@ -779,14 +641,14 @@ const Map<String, dynamic> ptLocale = {
       "social": "Social",
       "criminal": "Criminal",
       "transport": "Transporte",
-      "civic": "Cívico"
+      "civic": "Cívico",
     },
     "actions": {
       "cancel": "Cancelar",
       "save": "Salvar Perfil",
       "previous": "Anterior",
       "next": "Próximo",
-      "saving": "Salvando..."
+      "saving": "Salvando...",
     },
     "fields": {
       "fullName": "Nome completo (incluindo apelidos)",
@@ -861,7 +723,7 @@ const Map<String, dynamic> ptLocale = {
       "electionHistory": "Histórico de participação em eleições",
       "partyMembership": "Filiação a partido político",
       "militaryStatus": "Status de serviço militar ou recrutamento",
-      "publicServiceRoles": "Cargos no serviço público"
+      "publicServiceRoles": "Cargos no serviço público",
     },
     "placeholders": {
       "fullName": "Digite seu nome legal completo",
@@ -871,7 +733,7 @@ const Map<String, dynamic> ptLocale = {
       "searchDisciplines": "Pesquisar disciplinas...",
       "selectDiscipline": "Selecione uma disciplina",
       "searchDegrees": "Pesquisar graus...",
-      "selectDegree": "Selecione um grau"
+      "selectDegree": "Selecione um grau",
     },
     "validation": {
       "nameRequired": "Nome completo é obrigatório",
@@ -882,7 +744,7 @@ const Map<String, dynamic> ptLocale = {
       "futureDate": "A data não pode ser no futuro",
       "invalidSelection": "Por favor, faça uma seleção válida",
       "passwordLength": "A senha deve ter pelo menos 8 caracteres",
-      "matchError": "Os campos não coincidem"
+      "matchError": "Os campos não coincidem",
     },
     "errors": {
       "savingFailed": "Falha ao salvar perfil",
@@ -891,7 +753,7 @@ const Map<String, dynamic> ptLocale = {
       "invalidFileType": "Tipo de arquivo inválido",
       "fileTooLarge": "O arquivo é muito grande",
       "countryLoadError": "Erro ao carregar países",
-      "countryUpdateError": "Erro ao atualizar país"
+      "countryUpdateError": "Erro ao atualizar país",
     },
     "notifications": {
       "saveSuccess": "Perfil salvo com sucesso",
@@ -904,7 +766,7 @@ const Map<String, dynamic> ptLocale = {
       "formChanged": "Você tem alterações não salvas",
       "sessionExpired": "Sua sessão expirou, por favor entre novamente",
       "profileUpdated": "Seu perfil foi atualizado",
-      "profileIncomplete": "Seu perfil está incompleto"
+      "profileIncomplete": "Seu perfil está incompleto",
     },
     "instructions": {
       "fullNameHelp":
@@ -920,7 +782,7 @@ const Map<String, dynamic> ptLocale = {
       "nextTab": "Continuar para a próxima seção",
       "previousTab": "Retornar à seção anterior",
       "saveInstructions": "Clique em Salvar para armazenar suas informações",
-      "cancelInstructions": "Clique em Cancelar para descartar alterações"
+      "cancelInstructions": "Clique em Cancelar para descartar alterações",
     },
     "completionStatus": {
       "notStarted": "Não Iniciado",
@@ -928,26 +790,26 @@ const Map<String, dynamic> ptLocale = {
       "complete": "Completo",
       "percentComplete": "{percent}% completo",
       "tabsCompleted": "{completed} de {total} seções completadas",
-      "tabComplete": "Aba completada!"
+      "tabComplete": "Aba completada!",
     },
     "gender": {
       "male": "Masculino",
       "female": "Feminino",
       "other": "Outro",
-      "preferNot": "Prefiro não dizer"
+      "preferNot": "Prefiro não dizer",
     },
     "maritalStatus": {
       "single": "Solteiro(a)",
       "married": "Casado(a)",
       "divorced": "Divorciado(a)",
       "widowed": "Viúvo(a)",
-      "other": "Outro"
+      "other": "Outro",
     },
     "residencyStatuses": {
       "citizen": "Cidadão",
       "permanentResident": "Residente Permanente",
       "temporaryResident": "Residente Temporário",
-      "other": "Outro"
+      "other": "Outro",
     },
     "employmentStatuses": {
       "employed": "Empregado",
@@ -956,7 +818,7 @@ const Map<String, dynamic> ptLocale = {
       "student": "Estudante",
       "retired": "Aposentado",
       "homemaker": "Dona(o) de Casa",
-      "other": "Outro"
+      "other": "Outro",
     },
     "educationLevels": {
       "primary": "Ensino Primário",
@@ -968,14 +830,14 @@ const Map<String, dynamic> ptLocale = {
       "master": "Mestrado",
       "doctoral": "Doutorado",
       "professional": "Grau Profissional",
-      "other": "Outro"
+      "other": "Outro",
     },
     "proficiencyLevels": {
       "native": "Nativo",
       "fluent": "Fluente",
       "advanced": "Avançado",
       "intermediate": "Intermediário",
-      "basic": "Básico"
+      "basic": "Básico",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -986,7 +848,7 @@ const Map<String, dynamic> ptLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
     },
     "languages": {
       "english": "Inglês",
@@ -1001,7 +863,7 @@ const Map<String, dynamic> ptLocale = {
       "russian": "Russo",
       "hindi": "Hindi",
       "urdu": "Urdu",
-      "other": "Outro"
+      "other": "Outro",
     },
     "yesNo": {"yes": "Sim", "no": "Não"},
     "select": "Por favor, selecione",
@@ -1108,7 +970,7 @@ const Map<String, dynamic> ptLocale = {
       "Medicina Veterinária",
       "Desenvolvimento Web",
       "Biologia da Vida Selvagem",
-      "Zoologia"
+      "Zoologia",
     ],
     "degreeOptions": [
       "Grau de Associado",
@@ -1138,7 +1000,7 @@ const Map<String, dynamic> ptLocale = {
       "Certificado Vocacional",
       "Certificado de Pós-Graduação",
       "Diploma de Pós-Graduação",
-      "Pós-Doutorado"
+      "Pós-Doutorado",
     ],
     "aria": {
       "tabList": "Seções do formulário de perfil",
@@ -1147,8 +1009,8 @@ const Map<String, dynamic> ptLocale = {
       "closeButton": "Fechar formulário de perfil",
       "saveButton": "Salvar dados do perfil",
       "requiredField": "Campo obrigatório",
-      "dropdownSelect": "Selecione uma opção"
-    }
+      "dropdownSelect": "Selecione uma opção",
+    },
   },
   "chatbot": {
     "placeholder": "Digite sua consulta aqui...",
@@ -1157,7 +1019,7 @@ const Map<String, dynamic> ptLocale = {
     "fileUploadError": "Erro ao carregar arquivo.",
     "processingError": "Erro ao processar sua solicitação.",
     "welcomeMessage":
-        "Bem-vindo! Como posso ajudá-lo com os serviços do governo do Quênia hoje?",
+        "Bem-vindo! Estou aqui para ajudar agricultores de Lesoto com culturas, pecuária, solo e clima. O que gostaria de saber?",
     "attachFile": "Anexar Arquivo",
     "fileTooLarge": "O arquivo é muito grande. O tamanho máximo é {maxSize}.",
     "saveChat": "Salvar Chat",
@@ -1214,56 +1076,57 @@ const Map<String, dynamic> ptLocale = {
         "discardAndNew": "Descartar e Novo",
         "discardAndLoad": "Descartar e Carregar",
         "saveFirst": "Salvar Primeiro",
-        "export": "Exportar"
-      }
+        "export": "Exportar",
+      },
     },
-    "shareWhatsApp": "Compartilhar no WhatsApp"
+    "shareWhatsApp": "Compartilhar no WhatsApp",
   },
   "quickhelp": {
-    "applyForID": "Pedir ID",
-    "payTaxes": "Pagar Impostos",
-    "startBusiness": "Iniciar Negócio",
-    "findHealthcare": "Saúde",
-    "educationServices": "Educação",
-    "transportLicenses": "Transporte",
-    "housingPrograms": "Habitação",
-    "findJobs": "Encontrar Emprego",
-    "justChat": "Apenas Conversar",
+    "applyForID": "Milho e cereais",
+    "payTaxes": "Feijão e leguminosas",
+    "startBusiness": "Solo e fertilidade",
+    "findHealthcare": "Pragas e doenças",
+    "educationServices": "Pecuária",
+    "transportLicenses": "Água e irrigação",
+    "housingPrograms": "Clima e estações",
+    "findJobs": "Mercados e cooperativas",
+    "justChat": "Conversar",
     "applyForIDPrompt":
-        "Aja como um especialista útil em registo civil do Quénia. Explique os passos para obter uma Identidade Nacional (Maisha Namba) ou substituir uma perdida. IMPORTANTE: Forneça uma lista clara dos documentos necessários (ex: Certidão de Nascimento, cópias das identidades dos pais) e aconselhe o utilizador a visitar o Huduma Centre ou conservatória mais próxima. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Answer using ONLY what the knowledge base retrieval provides about farming in Lesotho. Focus on maize and cereals: planting times for highland vs lowland areas, varieties, rotation, storage. Never give Kenya civil registration, Huduma centres, Maisha Namba, or other non-Lesotho ID processes unless a retrieved document explicitly names them for comparison.",
     "payTaxesPrompt":
-        "Aja como um guia da KRA (Autoridade Tributária do Quénia). Explique o processo de entrega de declarações, pedido de PIN da KRA ou redefinição de palavra-passe no portal iTax. IMPORTANTE: Relembre o utilizador do prazo de 30 de junho para declarações anuais e guie-o sobre como entregar declarações a zeros (Nil returns) se não teve rendimentos. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on beans, pulses, and legumes (planting, pests, soil). Do NOT answer with Kenya Revenue Authority, KRA, iTax, tax filing, or business registration unless that information appears in retrieved text about Lesotho or cross-border trade.",
     "startBusinessPrompt":
-        "Aja como consultor de negócios para serviços eCitizen. Guie o utilizador através da reserva de nome comercial e registo de empresa no Quénia. IMPORTANTE: Explique os custos atuais para pesquisa de nome e registo, e direcione o utilizador para o portal oficial eCitizen para concluir a candidatura. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on soil health, compost, manure, liming, erosion control, and fertility for Lesotho's conditions. Do NOT give eCitizen, Kenya company registration, or business-name search steps unless retrieved documents mention them.",
     "findHealthcarePrompt":
-        "Aja como um navegador de serviços de saúde. Forneça informações sobre a transição do NHIF para o SHIF (Fundo de Seguro Social de Saúde) e como se registar. IMPORTANTE: Partilhe os códigos USSD oficiais (como *263#) ou links do site para registo e explique os benefícios da cobertura de saúde pública. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on identifying crop pests and diseases, prevention, and safe management relevant to Lesotho. Do NOT answer with Kenya NHIF, SHIF, hospital insurance, or health USSD codes unless retrieved documents include them.",
     "educationServicesPrompt":
-        "Aja como conselheiro educacional. Discuta o currículo CBC, registo NEMIS ou colocação universitária via KUCCPS. IMPORTANTE: Explique como os pais podem verificar os resultados dos exames nacionais por SMS ou portal KNEC quando forem lançados. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on livestock care (cattle, sheep, goats, poultry), feed, housing, and common diseases in Lesotho. Do NOT discuss Kenya's CBC, NEMIS, KUCCPS, or national exam systems unless retrieved text does.",
     "transportLicensesPrompt":
-        "Aja como um guia de serviços da NTSA. Explique o processo para renovação da carta de condução, inspeção de veículos ou gestão de conta TIMS. IMPORTANTE: Guie o utilizador sobre como fazer login no portal eCitizen NTSA para solicitar o seu Smart DL ou marcar uma inspeção de veículo. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on irrigation, rainwater harvesting, soil moisture, and water conservation for crops in Lesotho. Do NOT give Kenya NTSA, eCitizen transport, Smart DL, or vehicle inspection steps unless retrieved documents include them.",
     "housingProgramsPrompt":
-        "Aja como consultor de programas habitacionais. Explique o registo no Programa de Habitação Acessível (Boma Yangu) e o processo de contribuição voluntária. IMPORTANTE: Guie o utilizador para o portal Boma Yangu para ver projetos e explique os critérios de elegibilidade para alocação. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on seasonal planting calendars, frost risk, rainfall patterns, and climate considerations for Lesotho. Do NOT describe Kenya affordable housing, Boma Yangu, or urban mortgage programs unless retrieved documents mention them.",
     "findJobsPrompt":
-        "Aja como coach de carreira para a função pública. Guie o utilizador na criação de um perfil e candidatura a vagas através do portal da Comissão de Serviço Público (PSC). IMPORTANTE: Aconselhe o utilizador a manter os seus certificados académicos prontos e a verificar regularmente o site da PSC ou jornais locais para anúncios do MyGov. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on marketing produce, cooperatives, local buyers, and farmer groups in Lesotho. Do NOT give Kenya Public Service Commission, MyGov job portals, or civil-service recruitment unless retrieved text supports it.",
     "justChatPrompt":
-        "Aja como um companheiro local amigável. Seja educado, prestável e conhecedor da cultura queniana e da vida quotidiana. IMPORTANTE: Relembre o utilizador de que, embora possa conversar sobre qualquer coisa, o seu ponto forte é ajudá-lo a navegar nos serviços governamentais do Quénia como **IDs**, **Impostos** e **Registo de Negócios**. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+        "You are Genie AI, a friendly assistant for people working the land in Lesotho. Be practical and respectful. If the user chats generally, keep the tone helpful but steer toward farming, livestock, soil, water, and climate in Lesotho. Do not present Kenya taxes, IDs, eCitizen, or other Kenya government services as default answers. Always rely on retrieved knowledge when answering factual questions about agriculture.",
     "applyForIDUserPrompt":
-        "Quero saber como solicitar um cartão de Identidade Nacional no Quénia.",
+        "Quando devo plantar milho e a que devo estar atento em Lesoto?",
     "payTaxesUserPrompt":
-        "Quero perguntar sobre pagamento de impostos ou entrega das minhas declarações KRA no Quénia.",
+        "Como posso cultivar feijão e leguminosas com sucesso na minha quinta?",
     "startBusinessUserPrompt":
-        "Quero saber sobre como registar um novo negócio ou empresa no Quénia.",
+        "Que práticas de fertilidade do solo ou compostagem funcionam bem em Lesoto?",
     "findHealthcareUserPrompt":
-        "Quero perguntar sobre instalações de saúde pública e seguros (NHIF/SHIF) no Quénia.",
+        "Quais são sinais comuns de pragas ou doenças nas culturas?",
     "educationServicesUserPrompt":
-        "Quero saber sobre escolas e serviços educativos no Quénia.",
+        "Como cuido do gado numa pequena quinta?",
     "transportLicensesUserPrompt":
-        "Quero perguntar sobre cartas de condução e serviços NTSA no Quénia.",
+        "Como devo gerir a água ou a irrigação das culturas?",
     "housingProgramsUserPrompt":
-        "Quero saber sobre o Programa de Habitação Acessível (Boma Yangu) no Quénia.",
+        "Como as estações e o clima afetam a sementeira e a colheita?",
     "findJobsUserPrompt":
-        "Quero perguntar sobre oportunidades de emprego governamentais e candidaturas PSC no Quénia.",
-    "justChatUserPrompt": "Quero conversar em geral sobre a vida no Quénia."
+        "Como posso vender a minha produção ou contactar outros agricultores?",
+    "justChatUserPrompt":
+        "Gostava de fazer uma pergunta geral sobre agricultura em Lesoto.",
   },
   "common": {
     "cancel": "Cancelar",
@@ -1279,7 +1142,7 @@ const Map<String, dynamic> ptLocale = {
     "open": "Abrir",
     "done": "Concluído",
     "confirm": "Confirmar",
-    "edit": "Editar"
+    "edit": "Editar",
   },
   "feedback": {
     "title": "Feedback",
@@ -1293,7 +1156,7 @@ const Map<String, dynamic> ptLocale = {
     "thankYouMessage": "Obrigado pelo seu feedback!",
     "submitting": "Enviando...",
     "error": "Algo deu errado. Por favor, tente novamente.",
-    "success": "Obrigado pelo seu feedback!"
+    "success": "Obrigado pelo seu feedback!",
   },
   "responseRating": {
     "title": "Ajude-nos a Melhorar",
@@ -1305,11 +1168,11 @@ const Map<String, dynamic> ptLocale = {
       "2": "Pouco Útil",
       "3": "Moderadamente Útil",
       "4": "Muito Útil",
-      "5": "Mudança de Vida"
+      "5": "Mudança de Vida",
     },
     "additionalComments": "Comentários adicionais...",
     "submit": "Enviar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
   },
   "upload": {"alt": "Carregar"},
   "uploadDialog": {
@@ -1327,8 +1190,8 @@ const Map<String, dynamic> ptLocale = {
           "Arquivos de atalho (.url) não são suportados. Por favor, arraste o arquivo real.",
       "duplicate": "O arquivo \"{fileName}\" já foi adicionado.",
       "uploadSuccess": "Carregado com sucesso {fileName}",
-      "uploadFailed": "Falha ao carregar {fileName}."
-    }
+      "uploadFailed": "Falha ao carregar {fileName}.",
+    },
   },
   "about": {
     "title": "Sobre",
@@ -1336,6 +1199,6 @@ const Map<String, dynamic> ptLocale = {
     "description":
         "O Genie AI é o seu assistente inteligente para navegar pelos serviços e informações governamentais.",
     "techStack": "Tech Stack",
-    "copyright": "Todos os direitos reservados."
-  }
+    "copyright": "Todos os direitos reservados.",
+  },
 };

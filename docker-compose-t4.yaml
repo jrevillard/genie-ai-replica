@@ -67,8 +67,10 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      - KONG_DNS_STALE_TTL=${KONG_DNS_STALE_TTL:-5}
     ports:
-      - "8010:8010"  # Note that we had to change this port to 8010 because vLLM runs on 8000
+      - "8010:8000"
       - "8443:8443"
       - "8001:8001"
     volumes:
@@ -177,6 +179,8 @@ services:
       - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - VLLM_TRANSLATION_SERVICE_PORT=${VLLM_TRANSLATION_SERVICE_PORT:-9031}
+      - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
+      - OPEA_PORT=${OPEA_PORT:-8888}
     networks:
       - genieai_network
 
@@ -409,8 +413,18 @@ services:
       TRANSLATION_SERVICE_PORT: ${VLLM_TRANSLATION_SERVICE_PORT}
       DOC_REPO_URL: ${DOC_REPO_URL}
       GET_AUTH_TOKEN_URL: ${GET_AUTH_TOKEN_URL}
+      CHATQNA_SKIP_BEARER_JWT_VALIDATION: ${CHATQNA_SKIP_BEARER_JWT_VALIDATION:-}
+      BACKEND_SERVICE_URL: ${BACKEND_SERVICE_URL:-http://backend:3000}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-}
+      CHATQNA_CONFIDENCE_AGGREGATE: ${CHATQNA_CONFIDENCE_AGGREGATE:-}
+      CHATQNA_CONFIDENCE_SOURCED_FLOOR_ENABLED: ${CHATQNA_CONFIDENCE_SOURCED_FLOOR_ENABLED:-}
+      CHATQNA_CONFIDENCE_SOURCED_FLOOR: ${CHATQNA_CONFIDENCE_SOURCED_FLOOR:-}
+      CHATQNA_CONFIDENCE_SOURCED_GATE: ${CHATQNA_CONFIDENCE_SOURCED_GATE:-}
+      CHATQNA_RETRIEVAL_QUERY_NORMALIZE: ${CHATQNA_RETRIEVAL_QUERY_NORMALIZE:-}
     networks:
-      - genieai_network
+      genieai_network:
+        aliases:
+          - genie-ai-chatqna-server
     ipc: "host"
     restart: "no"
 

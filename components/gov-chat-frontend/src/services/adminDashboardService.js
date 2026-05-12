@@ -58,10 +58,12 @@ const adminDashboardService = {
     } catch (error) {
       console.error('Error fetching user stats:', error, {
         message: error.message,
-        response: error.response ? {
-          status: error.response.status,
-          data: error.response.data
-        } : null
+        response: error.response
+          ? {
+              status: error.response.status,
+              data: error.response.data
+            }
+          : null
       });
       throw error;
     }
@@ -98,7 +100,7 @@ const adminDashboardService = {
         vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
         vulnerabilityDetails: { critical: [], medium: [], low: [] },
         failedLoginDetails: [],
-        suspiciousDetails: [],
+        suspiciousDetails: []
       };
     }
   },
@@ -149,8 +151,8 @@ const adminDashboardService = {
         data: {
           timestamp: new Date().toISOString(),
           status: 'failed',
-          message: `Security scan failed: ${error.message}`,
-        },
+          message: `Security scan failed: ${error.message}`
+        }
       };
     }
   },
@@ -220,24 +222,27 @@ const adminDashboardService = {
         startDate = this.formatDate(today);
         endDate = this.formatDate(today);
         break;
-      case 'yesterday':
+      case 'yesterday': {
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
         startDate = this.formatDate(yesterday);
         endDate = this.formatDate(yesterday);
         break;
-      case 'week':
+      }
+      case 'week': {
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
         startDate = this.formatDate(weekAgo);
         endDate = this.formatDate(today);
         break;
-      case 'month':
+      }
+      case 'month': {
         const monthAgo = new Date(today);
         monthAgo.setDate(monthAgo.getDate() - 30);
         startDate = this.formatDate(monthAgo);
         endDate = this.formatDate(today);
         break;
+      }
       case 'custom':
         startDate = customStartDate;
         endDate = customEndDate;

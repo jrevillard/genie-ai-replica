@@ -254,8 +254,12 @@ const authMiddleware = {
         });
       }
 
-      // Check if user is admin: either one of the first 10 users OR has role "Admin"
-      const isAdmin = parseInt(user._key) <= 10 || user.role === 'Admin';
+      // Check if user is admin: early users, legacy role "Admin", or roles array (Keycloak-style)
+      const keyNum = parseInt(user._key, 10);
+      const hasAdminRole =
+        user.role === 'Admin' ||
+        (Array.isArray(user.roles) && user.roles.some((r) => String(r).toLowerCase() === 'admin'));
+      const isAdmin = (Number.isFinite(keyNum) && keyNum <= 10) || hasAdminRole;
 
       logger.info(`[ADMIN DEBUG] Checking role field: ${user.role}`);
       logger.info(`[ADMIN DEBUG] Checking user ID: ${user._key} <= 10: ${parseInt(user._key) <= 10}`);

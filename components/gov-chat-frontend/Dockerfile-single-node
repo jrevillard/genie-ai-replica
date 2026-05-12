@@ -30,10 +30,14 @@ RUN npm install -g http-server
 
 COPY --from=build /app/dist /app/dist
 
-# This is just metadata; the CMD determines the real port
+# Writes /app/dist/config.js (window.APP_CONFIG) from env — same as nginx-based Dockerfile.
+# Without this, /config.js is missing and http-server --proxy forwards the request to Kong,
+# which returns HTML → browser MIME error on the script tag.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8090
 
-# --- UPDATED THIS CMD ---
-# Replaced the hardcoded "-p 8090" with "${PORT:-8090}"
-# It now uses the PORT environment variable you pass from docker-compose
-CMD ["sh", "-c", "http-server /app/dist -p ${PORT:-8090} --proxy http://kong:8010? -H \"X-Test-Header: test-value\" -H \"Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src $VUE_APP_CSP_CONNECT_SRC; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data:;\""]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# PORT from compose; --proxy SPA fallback for client-side routes; -a listen on all interfaces
+CMD ["sh", "-c", "exec http-server /app/dist -a 0.0.0.0 -p ${PORT:-8090} --proxy http://kong:8000 -H \"Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src $VUE_APP_CSP_CONNECT_SRC; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data:;\""]

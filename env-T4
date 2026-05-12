@@ -30,7 +30,7 @@ KONG_DNS_ORDER="LAST,A,AAAA,CNAME"
 FRONTEND_PORT=8090
 APP_NAME=Genie AI
 VUE_APP_API_URL=https://<your-frontend-reverse-proxy>/api
-VUE_PROXY_HOST=kong:8010
+VUE_PROXY_HOST=kong:8000
 VUE_APP_CSP_CONNECT_SRC="'self' http://localhost https://localhost ws://localhost wss://localhost http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://.ssdcloudindia.net"
 CSP_CONNECT_SRC="'self' http://localhost https://localhost ws://localhost wss://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://.ssdcloudindia.net"
 CORS_ALLOWED_ORIGINS=http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?://.*.ssdcloudindia.net$$/
@@ -274,21 +274,23 @@ RERANKING_THRESHOLD=0.90
 
 # ========= VLLM SERVICE =========
 VLLM_ENDPOINT=http://vllm:8000
-# System prompt for responding to user queries based on retrieved content
-# The system prompt is appended by: 
-# (1) user profile info 
-# (2) chat history
-# (3) Content, returned by the re-ranker 
-CHATQNA_SYSTEM_PROMPT="
-<INSTRUCTIONS> 
-You are a friendly and polite information assistant. 
-Your task is to answer the user's latest question using only the content provided from the knowledge base. 
-Do not invent or assume information; if the answer is not in the provided content, inform the user that the information is unavailable. 
-Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses. 
-Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested.
-</INSTRUCTIONS>
-
-In line with the above instructions, generate a reply to the user's latest message in the chat history based on the relevant content provided. 
+# System prompt for ChatQnA. When UNSET/empty, the image uses Master Farmer Bot guardrails built into
+# genie-ai-overlay/chatqna/genieai_chatqna.py (_CHATQNA_SYSTEM_DEFAULT): closed KB, zero hallucination,
+# mandatory structure, Lesotho scope, safety, citations, emotional support pathway.
+# Override only for deployment-specific tweaks (paste full prompt in quotes or use secrets).
+# CHATQNA_SYSTEM_PROMPT=""
+# Enables or disables strict abstention behavior in the RAG pipeline.
+CHATQNA_ENFORCE_ABSTENTION=true
+# Custom instructions appended to the user prompt to guide the LLM's behavior
+# when no relevant documents are retrieved (or when context is insufficient)
+CHATQNA_ABSTENTION_INSTRUCTIONS="
+The knowledge base search did not return relevant or sufficient information. 
+You should clearly inform the user that you do not have enough verified information to answer their query. 
+Keep the response concise and transparent. Do not fabricate or infer missing details. 
+When appropriate, encourage the user to:
+- provide more specific details, or
+- rephrase their question, or
+- choose a different topic. 
 "
 
 # ========= VLLM INFERENCE CONFIG (T4 TUNED) =========

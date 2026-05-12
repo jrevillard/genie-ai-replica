@@ -196,146 +196,13 @@ const Map<String, dynamic> thLocale = {
     "VN": "เวียดนาม",
     "YE": "เยเมน",
     "ZM": "แซมเบีย",
-    "ZW": "ซิมบับเว"
+    "ZW": "ซิมบับเว",
   },
-  "verification": {
-    "verifying": "กำลังตรวจสอบอีเมลของคุณ...",
-    "success": "ยืนยันอีเมลสำเร็จ!",
-    "failed": "การตรวจสอบล้มเหลว",
-    "accountVerified":
-        "บัญชีของคุณได้รับการยืนยันเรียบร้อยแล้ว คุณสามารถเข้าสู่ระบบบัญชีของคุณได้ทันที",
-    "invalidLink": "ลิงก์ยืนยันไม่ถูกต้องหรือหมดอายุ",
-    "missingToken": "ไม่พบโทเค็นการยืนยัน",
-    "generalError":
-        "เกิดข้อผิดพลาดระหว่างการตรวจสอบ โปรดลองใหม่อีกครั้งในภายหลัง",
-    "proceedToLogin": "ดำเนินการเข้าสู่ระบบ",
-    "backToLogin": "กลับไปหน้าเข้าสู่ระบบ"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "สร้างรหัสผ่านใหม่",
-    "tokenLabel": "รีเซ็ตโทเค็น",
-    "tokenPlaceholder": "ป้อนโทเค็นรีเซ็ต",
-    "validateButton": "ตรวจสอบโทเค็น",
-    "newPasswordLabel": "รหัสผ่านใหม่",
-    "newPasswordPlaceholder": "สร้างรหัสผ่านใหม่",
-    "confirmNewPasswordLabel": "ยืนยันรหัสผ่านใหม่",
-    "confirmNewPasswordPlaceholder": "ยืนยันรหัสผ่านใหม่ของคุณ",
-    "resetButton": "รีเซ็ตรหัสผ่าน",
-    "processing": "กำลังรีเซ็ต...",
-    "rememberedPassword": "จำรหัสผ่านได้แล้ว?",
-    "backToLogin": "กลับไปหน้าเข้าสู่ระบบ",
-    "supportMessage": "ต้องการความช่วยเหลือ? ติดต่อทีมสนับสนุนของเรา",
-    "passwordRequirements":
-        "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร โดยมีตัวเลขอย่างน้อย 1 ตัว ตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว และอักขระพิเศษอย่างน้อย 1 ตัว",
-    "passwordsDoNotMatch": "รหัสผ่านไม่ตรงกัน",
-    "resetSuccess": "รหัสผ่านของคุณถูกรีเซ็ตเรียบร้อยแล้ว",
-    "resetFailed": "ไม่สามารถรีเซ็ตรหัสผ่านได้ โปรดลองอีกครั้ง",
-    "noTokenProvided": "โปรดระบุโทเค็นรีเซ็ต",
-    "expiredToken": "โทเค็นรีเซ็ตนี้หมดอายุแล้ว โปรดขอใหม่",
-    "invalidToken": "โทเค็นรีเซ็ตไม่ถูกต้องหรือไม่รู้จัก",
-    "validatingToken": "กำลังตรวจสอบโทเค็น...",
-    "redirecting": "กำลังเปลี่ยนเส้นทางไปหน้าเข้าสู่ระบบ...",
-    "passwordStrength": "ความรัดกุมของรหัสผ่าน",
-    "strengthLabels": {
-      "veryWeak": "อ่อนมาก",
-      "weak": "อ่อน",
-      "fair": "พอใช้",
-      "good": "ดี",
-      "strong": "รัดกุม"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "ใช้อย่างน้อย 8 ตัวอักษร",
-      "addUppercase": "เพิ่มตัวพิมพ์ใหญ่",
-      "addLowercase": "เพิ่มตัวพิมพ์เล็ก",
-      "addNumbers": "เพิ่มตัวเลข",
-      "addSpecialChars": "เพิ่มอักขระพิเศษ"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "รีเซ็ตรหัสผ่านของคุณ",
-    "emailLabel": "ที่อยู่อีเมล",
-    "emailPlaceholder": "ป้อนอีเมลของคุณ",
-    "resetButton": "ส่งลิงก์รีเซ็ต",
-    "processing": "กำลังส่ง...",
-    "rememberPassword": "จำรหัสผ่านได้แล้ว?",
-    "backToLogin": "กลับไปหน้าเข้าสู่ระบบ",
-    "supportMessage": "ต้องการความช่วยเหลือ? ติดต่อทีมสนับสนุนของเรา",
-    "invalidEmail": "โปรดป้อนที่อยู่อีเมลที่ถูกต้อง",
-    "resetRequestSuccess": "ลิงก์รีเซ็ตรหัสผ่านถูกส่งไปยังอีเมลของคุณแล้ว",
-    "resetRequestFailed": "ไม่สามารถส่งลิงก์รีเซ็ตรหัสผ่านได้ โปรดลองอีกครั้ง",
-    "checkEmail": "โปรดตรวจสอบอีเมลของคุณเพื่อดูคำแนะนำเพิ่มเติม"
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "สร้างบัญชีใหม่",
-    "username": "ชื่อผู้ใช้",
-    "usernamePlaceholder": "ป้อนชื่อผู้ใช้",
-    "email": "อีเมล",
-    "emailPlaceholder": "ป้อนอีเมลของคุณ",
-    "password": "รหัสผ่าน",
-    "passwordPlaceholder": "สร้างรหัสผ่าน",
-    "confirmPassword": "ยืนยันรหัสผ่าน",
-    "confirmPasswordPlaceholder": "ยืนยันรหัสผ่านของคุณ",
-    "acceptTerms": "ฉันยอมรับ",
-    "termsOfService": "เงื่อนไขการให้บริการ",
-    "registerButton": "สร้างบัญชี",
-    "processing": "กำลังดำเนินการ...",
-    "alreadyHaveAccount": "มีบัญชีอยู่แล้ว?",
-    "loginNow": "เข้าสู่ระบบ",
-    "privacyNotice":
-        "โดยการลงทะเบียน คุณยอมรับเงื่อนไขการให้บริการและนโยบายความเป็นส่วนตัวของเรา",
-    "usernameMinLength": "ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร",
-    "invalidEmail": "โปรดป้อนที่อยู่อีเมลที่ถูกต้อง",
-    "passwordRequirements":
-        "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร โดยมีตัวเลขอย่างน้อย 1 ตัว และตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว",
-    "passwordsDoNotMatch": "รหัสผ่านไม่ตรงกัน",
-    "mustAcceptTerms": "คุณต้องยอมรับเงื่อนไขการให้บริการ",
-    "registrationFailed": "การลงทะเบียนล้มเหลว โปรดลองอีกครั้ง",
-    "usernameExists": "ชื่อผู้ใช้นี้มีอยู่แล้ว",
-    "emailExists": "อีเมลนี้มีอยู่แล้ว",
-    "registrationSuccess": "ลงทะเบียนสำเร็จ!",
-    "verificationEmailSent": "อีเมลยืนยันถูกส่งไปยัง {email} แล้ว",
-    "checkEmailInstructions":
-        "โปรดตรวจสอบอีเมลของคุณและปฏิบัติตามคำแนะนำเพื่อยืนยันบัญชีของคุณก่อนเข้าสู่ระบบ",
-    "backToLogin": "กลับไปหน้าเข้าสู่ระบบ",
-    "noEmailReceived": "ไม่ได้รับอีเมล?",
-    "resendVerification": "ส่งอีเมลยืนยันอีกครั้ง",
-    "verificationResent": "ส่งอีเมลยืนยันอีกครั้งแล้ว",
-    "verificationResendFailed": "ส่งอีเมลยืนยันอีกครั้งล้มเหลว โปรดลองอีกครั้ง",
-    "usernameInvalidChars":
-        "ชื่อผู้ใช้ต้องประกอบด้วยตัวอักษร ตัวเลข ขีดล่าง จุด และขีดกลางเท่านั้น",
-    "networkError":
-        "ข้อผิดพลาดของเครือข่าย โปรดตรวจสอบการเชื่อมต่อของคุณและลองอีกครั้ง"
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "ชื่อผู้ใช้",
-    "password": "รหัสผ่าน",
-    "loginButton": "เข้าสู่ระบบ",
-    "or": "หรือ",
-    "savedAccounts": "บัญชีที่บันทึกไว้",
-    "loginSuccess": "เข้าสู่ระบบสำเร็จ",
-    "loginError": "เข้าสู่ระบบล้มเหลว โปรดตรวจสอบข้อมูลประจำตัวของคุณ",
-    "googleLogin": "ดำเนินการต่อด้วย Google",
-    "facebookLogin": "ดำเนินการต่อด้วย Facebook",
-    "rememberMe": "จดจำฉัน",
-    "forgotPassword": "ลืมรหัสผ่าน?",
-    "noAccount": "ยังไม่มีบัญชี?",
-    "createAccount": "สร้างบัญชี",
-    "registerNow": "ลงทะเบียนทันที",
-    "termsAndPolicy":
-        "โดยการเข้าสู่ระบบ คุณยอมรับเงื่อนไขการให้บริการและนโยบายความเป็นส่วนตัวของเรา",
-    "loggingIn": "กำลังเข้าสู่ระบบ...",
-    "fieldsRequired": "จำเป็นต้องระบุชื่อผู้ใช้และรหัสผ่าน",
-    "invalidCredentials": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
-    "tooManyAttempts":
-        "พยายามเข้าสู่ระบบมากเกินไป โปรดลองใหม่อีกครั้งในภายหลัง",
-    "loginFailed": "เข้าสู่ระบบล้มเหลว โปรดลองอีกครั้ง",
-    "oauthNotImplemented": "การเข้าสู่ระบบด้วยโซเชียลยังไม่เปิดให้บริการ",
-    "savedLoginNotImplemented":
-        "การเข้าสู่ระบบด้วยบัญชีที่บันทึกไว้ยังไม่เปิดให้บริการ"
+  "auth": {
+    "noInternetConnection": "ไม่มีการเชื่อมต่ออินเทอร์เน็ต",
+    "networkUnreachable": "ไม่สามารถเชื่อมต่อเครือข่ายได้",
+    "authenticationFailed": "การยืนยันตัวตนล้มเหลว",
+    "sessionExpired": "เซสชันของคุณหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -354,8 +221,8 @@ const Map<String, dynamic> thLocale = {
       "swahili": "สวาฮีลี",
       "german": "เยอรมัน",
       "spanish": "สเปน",
-      "arabic": "อาหรับ"
-    }
+      "arabic": "อาหรับ",
+    },
   },
   "systemStatus": {
     "title": "สถานะบริการ",
@@ -369,20 +236,20 @@ const Map<String, dynamic> thLocale = {
     "checking": "กำลังตรวจสอบ...",
     "nextDeadline": "กำหนดเส้นตายถัดไป",
     "days": "วัน",
-    "viewDetails": "ดูรายละเอียด"
+    "viewDetails": "ดูรายละเอียด",
   },
   "services": {
     "eCitizen": "พอร์ทัล eCitizen",
     "taxFiling": "ระบบยื่นภาษี",
     "idApplication": "การขอทำบัตรประชาชน",
     "businessReg": "การจดทะเบียนธุรกิจ",
-    "drivingLicense": "ใบอนุญาตขับขี่"
+    "drivingLicense": "ใบอนุญาตขับขี่",
   },
   "deadlines": {
     "taxFiling": "กำหนดเวลายื่นภาษี",
     "businessRenewal": "การต่ออายุใบอนุญาตประกอบธุรกิจ",
     "idRenewal": "การต่ออายุบัตรประชาชน",
-    "vehicleRegistration": "กำหนดเวลาต่อภาษีรถยนต์"
+    "vehicleRegistration": "กำหนดเวลาต่อภาษีรถยนต์",
   },
   "sidebar": {
     "governmentServices": "พื้นที่ความรู้",
@@ -420,7 +287,7 @@ const Map<String, dynamic> thLocale = {
       "rain": "ฝนตก",
       "shower": "ฝนปรอยๆ",
       "thunderstorm": "พายุฝนฟ้าคะนอง",
-      "snow": "หิมะตก"
+      "snow": "หิมะตก",
     },
     "folders": "โฟลเดอร์",
     "emptyFolder": "โฟลเดอร์นี้ว่างเปล่า ย้ายบทสนทนามาที่นี่จากเมนูแชท",
@@ -433,7 +300,7 @@ const Map<String, dynamic> thLocale = {
       "all": "แชททั้งหมด",
       "folders": "โฟลเดอร์",
       "starred": "ติดดาว",
-      "archived": "เก็บถาวร"
+      "archived": "เก็บถาวร",
     },
     "savedChats": "แชทที่บันทึกไว้",
     "chats": "แชท",
@@ -490,7 +357,7 @@ const Map<String, dynamic> thLocale = {
     "noConversations": "ไม่พบบทสนทนา",
     "noStarred": "ไม่มีบทสนทนาที่ติดดาว",
     "noArchived": "ไม่มีบทสนทนาที่เก็บถาวร",
-    "folderEmptyState": "โฟลเดอร์ว่างเปล่า"
+    "folderEmptyState": "โฟลเดอร์ว่างเปล่า",
   },
   "leftPanel": {
     "cat1": {
@@ -500,8 +367,8 @@ const Map<String, dynamic> thLocale = {
         "บัตรประชาชน",
         "หนังสือเดินทาง",
         "ทะเบียนสมรสและใบมรณบัตร",
-        "การลงทะเบียนผู้มีสิทธิเลือกตั้ง"
-      ]
+        "การลงทะเบียนผู้มีสิทธิเลือกตั้ง",
+      ],
     },
     "cat2": {
       "name": "2. การดูแลสุขภาพและบริการสังคม",
@@ -510,8 +377,8 @@ const Map<String, dynamic> thLocale = {
         "โครงการฉีดวัคซีน",
         "ประกันสุขภาพ",
         "สิทธิประโยชน์สำหรับผู้พิการ",
-        "สวัสดิการและความช่วยเหลือด้านอาหาร"
-      ]
+        "สวัสดิการและความช่วยเหลือด้านอาหาร",
+      ],
     },
     "cat3": {
       "name": "3. การศึกษาและการเรียนรู้",
@@ -519,8 +386,8 @@ const Map<String, dynamic> thLocale = {
         "โรงเรียนรัฐบาลและมหาวิทยาลัย",
         "ทุนการศึกษาและเงินกู้ยืมเพื่อการศึกษา",
         "โครงการการศึกษาผู้ใหญ่",
-        "แหล่งเรียนรู้ออนไลน์"
-      ]
+        "แหล่งเรียนรู้ออนไลน์",
+      ],
     },
     "cat4": {
       "name": "4. การจ้างงานและบริการแรงงาน",
@@ -528,8 +395,8 @@ const Map<String, dynamic> thLocale = {
         "การหางานและสิทธิประโยชน์การว่างงาน",
         "การคุ้มครองแรงงานและสิทธิแรงงาน",
         "กฎระเบียบความปลอดภัยในสถานที่ทำงาน",
-        "การฝึกอบรมทักษะและการฝึกงาน"
-      ]
+        "การฝึกอบรมทักษะและการฝึกงาน",
+      ],
     },
     "cat5": {
       "name": "5. ภาษีและรายได้",
@@ -537,8 +404,8 @@ const Map<String, dynamic> thLocale = {
         "การยื่นภาษีเงินได้และการขอคืนภาษี",
         "การชำระภาษีทรัพย์สิน",
         "การปฏิบัติตามภาษีธุรกิจ",
-        "ศุลกากรและอากรขาเข้า"
-      ]
+        "ศุลกากรและอากรขาเข้า",
+      ],
     },
     "cat6": {
       "name": "6. ความปลอดภัยสาธารณะและความยุติธรรม",
@@ -546,8 +413,8 @@ const Map<String, dynamic> thLocale = {
         "ตำรวจและบริการฉุกเฉิน",
         "ศาลและความช่วยเหลือทางกฎหมาย",
         "การรายงานอาชญากรรม",
-        "กฎหมายคุ้มครองผู้บริโภค"
-      ]
+        "กฎหมายคุ้มครองผู้บริโภค",
+      ],
     },
     "cat7": {
       "name": "7. การขนส่งและการสัญจร",
@@ -555,8 +422,8 @@ const Map<String, dynamic> thLocale = {
         "ใบขับขี่และการจดทะเบียนรถยนต์",
         "ระบบขนส่งสาธารณะและโครงสร้างพื้นฐาน",
         "การละเมิดกฎจราจรและค่าปรับ",
-        "โครงการความปลอดภัยทางถนน"
-      ]
+        "โครงการความปลอดภัยทางถนน",
+      ],
     },
     "cat8": {
       "name": "8. ที่อยู่อาศัยและการพัฒนาเมือง",
@@ -564,8 +431,8 @@ const Map<String, dynamic> thLocale = {
         "ความช่วยเหลือด้านที่อยู่อาศัยสาธารณะ",
         "การจดทะเบียนทรัพย์สินและที่ดิน",
         "สินเชื่อที่อยู่อาศัยและเงินอุดหนุน",
-        "การจัดโซนและใบอนุญาตก่อสร้าง"
-      ]
+        "การจัดโซนและใบอนุญาตก่อสร้าง",
+      ],
     },
     "cat9": {
       "name": "9. สาธารณูปโภคและสิ่งแวดล้อม",
@@ -573,8 +440,8 @@ const Map<String, dynamic> thLocale = {
         "บริการน้ำและไฟฟ้า",
         "การจัดการขยะและการรีไซเคิล",
         "กฎระเบียบด้านสิ่งแวดล้อม",
-        "โครงการพลังงานหมุนเวียน"
-      ]
+        "โครงการพลังงานหมุนเวียน",
+      ],
     },
     "cat10": {
       "name": "10. ธุรกิจและการค้า",
@@ -582,8 +449,8 @@ const Map<String, dynamic> thLocale = {
         "การจดทะเบียนธุรกิจและใบอนุญาต",
         "กฎระเบียบทางการค้าและใบอนุญาต",
         "เงินช่วยเหลือและแรงจูงใจสำหรับธุรกิจขนาดเล็ก",
-        "อีคอมเมิร์ซและการสนับสนุนธุรกิจดิจิทัล"
-      ]
+        "อีคอมเมิร์ซและการสนับสนุนธุรกิจดิจิทัล",
+      ],
     },
     "cat11": {
       "name": "11. ประกันสังคมและบำนาญ",
@@ -591,8 +458,8 @@ const Map<String, dynamic> thLocale = {
         "สิทธิประโยชน์เกษียณอายุ",
         "การจัดการกองทุนบำนาญ",
         "สิทธิประโยชน์สำหรับผู้รอดชีวิต",
-        "บำนาญทุพพลภาพ"
-      ]
+        "บำนาญทุพพลภาพ",
+      ],
     },
     "cat12": {
       "name": "12. ชุมชนและการมีส่วนร่วมของพลเมือง",
@@ -600,9 +467,9 @@ const Map<String, dynamic> thLocale = {
         "การลงคะแนนเสียงและการเลือกตั้ง",
         "ความคิดเห็นสาธารณะและการร้องเรียนของพลเมือง",
         "อาสาสมัครและโครงการชุมชน",
-        "การมีส่วนร่วมในรัฐบาลท้องถิ่น"
-      ]
-    }
+        "การมีส่วนร่วมในรัฐบาลท้องถิ่น",
+      ],
+    },
   },
   "settings": {
     "title": "การตั้งค่า",
@@ -618,7 +485,7 @@ const Map<String, dynamic> thLocale = {
     "languages": {
       "english": "อังกฤษ",
       "french": "ฝรั่งเศส",
-      "swahili": "สวาฮีลี"
+      "swahili": "สวาฮีลี",
     },
     "theme": "ธีม",
     "themes": {"light": "สว่าง", "dark": "มืด", "system": "ระบบ"},
@@ -632,10 +499,12 @@ const Map<String, dynamic> thLocale = {
     "emailAddress": "ที่อยู่อีเมล",
     "emailAddressPlaceholder": "ที่อยู่อีเมลของคุณ",
     "password": "รหัสผ่าน",
-    "changePassword": "เปลี่ยนรหัสผ่าน",
     "resetUserData": "รีเซ็ตข้อมูลผู้ใช้",
     "resetUserDataDesc":
         "การดำเนินการนี้จะล้างข้อมูลโปรไฟล์และประวัติการแชททั้งหมดของคุณ",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "ลบบัญชี",
     "deleteAccountDesc":
         "การดำเนินการนี้จะลบบัญชีของคุณและข้อมูลที่เกี่ยวข้องทั้งหมดอย่างถาวร",
@@ -650,14 +519,14 @@ const Map<String, dynamic> thLocale = {
           "การดำเนินการนี้จะล้างข้อมูลโปรไฟล์และประวัติการแชททั้งหมดของคุณ",
       "confirmReset":
           "คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตข้อมูลทั้งหมดของคุณ? การดำเนินการนี้ไม่สามารถย้อนกลับได้",
-      "resetComplete": "ข้อมูลของคุณถูกรีเซ็ตแล้ว"
+      "resetComplete": "ข้อมูลของคุณถูกรีเซ็ตแล้ว",
     },
     "language": {"title": "ภาษา", "selectLabel": "ภาษาที่แสดง"},
     "appearance": {
       "title": "ลักษณะที่ปรากฏ",
       "lightTheme": "สว่าง",
       "darkTheme": "มืด",
-      "systemTheme": "ระบบ"
+      "systemTheme": "ระบบ",
     },
     "confirmDeleteAccount":
         "คุณแน่ใจหรือไม่ว่าต้องการลบบัญชีของคุณ? การดำเนินการนี้ไม่สามารถย้อนกลับได้",
@@ -690,8 +559,6 @@ const Map<String, dynamic> thLocale = {
     "emailAlreadyInUse": "อีเมลถูกใช้งานแล้ว",
     "enterValidEmail": "โปรดป้อนที่อยู่อีเมลที่ถูกต้อง",
     "failedToUpdateEmail": "อัปเดตอีเมลล้มเหลว โปรดลองอีกครั้ง",
-    "passwordResetInitiated":
-        "ลิงก์รีเซ็ตรหัสผ่านถูกส่งไปยังที่อยู่อีเมลของคุณแล้ว",
     "unableToLoadUser": "ไม่สามารถโหลดข้อมูลผู้ใช้ได้ โปรดลองอีกครั้ง",
     "retry": "ลองใหม่",
     "user": "ผู้ใช้",
@@ -700,7 +567,7 @@ const Map<String, dynamic> thLocale = {
     "confirmResetUserData":
         "คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตข้อมูลโปรไฟล์ทั้งหมดของคุณ? การดำเนินการนี้จะล้างข้อมูลโปรไฟล์และประวัติการแชททั้งหมดของคุณ แต่จะเก็บข้อมูลการเข้าสู่ระบบบัญชีของคุณไว้",
     "reset": "รีเซ็ต",
-    "deleteAccountTitle": "ลบบัญชี"
+    "deleteAccountTitle": "ลบบัญชี",
   },
   "userProfile": {
     "title": "โปรไฟล์ผู้ใช้",
@@ -747,7 +614,7 @@ const Map<String, dynamic> thLocale = {
       "tab9": "ประกันสังคมและสวัสดิการ",
       "tab10": "ประวัติอาชญากรรมและกฎหมาย",
       "tab11": "การขนส่งและการสัญจร",
-      "tab12": "การมีส่วนร่วมของพลเมืองและการเมือง"
+      "tab12": "การมีส่วนร่วมของพลเมืองและการเมือง",
     },
     "tabsShort": {
       "personal": "ส่วนบุคคล",
@@ -761,14 +628,14 @@ const Map<String, dynamic> thLocale = {
       "social": "สังคม",
       "criminal": "อาชญากรรม",
       "transport": "การขนส่ง",
-      "civic": "พลเมือง"
+      "civic": "พลเมือง",
     },
     "actions": {
       "cancel": "ยกเลิก",
       "save": "บันทึกโปรไฟล์",
       "previous": "ก่อนหน้า",
       "next": "ถัดไป",
-      "saving": "กำลังบันทึก..."
+      "saving": "กำลังบันทึก...",
     },
     "fields": {
       "fullName": "ชื่อ-นามสกุล (รวมนามแฝง)",
@@ -842,7 +709,7 @@ const Map<String, dynamic> thLocale = {
       "electionHistory": "ประวัติการมีส่วนร่วมในการเลือกตั้ง",
       "partyMembership": "สมาชิกพรรคการเมือง",
       "militaryStatus": "สถานะทางทหารหรือการเกณฑ์ทหาร",
-      "publicServiceRoles": "บทบาทในบริการสาธารณะ"
+      "publicServiceRoles": "บทบาทในบริการสาธารณะ",
     },
     "placeholders": {
       "fullName": "ป้อนชื่อ-นามสกุลตามกฎหมายของคุณ",
@@ -852,7 +719,7 @@ const Map<String, dynamic> thLocale = {
       "searchDisciplines": "ค้นหาสาขาวิชา...",
       "selectDiscipline": "เลือกสาขาวิชา",
       "searchDegrees": "ค้นหาปริญญา...",
-      "selectDegree": "เลือกปริญญา"
+      "selectDegree": "เลือกปริญญา",
     },
     "validation": {
       "nameRequired": "จำเป็นต้องระบุชื่อ-นามสกุล",
@@ -863,7 +730,7 @@ const Map<String, dynamic> thLocale = {
       "futureDate": "วันที่ต้องไม่เป็นวันที่ในอนาคต",
       "invalidSelection": "โปรดทำการเลือกที่ถูกต้อง",
       "passwordLength": "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
-      "matchError": "ฟิลด์ไม่ตรงกัน"
+      "matchError": "ฟิลด์ไม่ตรงกัน",
     },
     "errors": {
       "savingFailed": "บันทึกโปรไฟล์ล้มเหลว",
@@ -872,7 +739,7 @@ const Map<String, dynamic> thLocale = {
       "invalidFileType": "ประเภทไฟล์ไม่ถูกต้อง",
       "fileTooLarge": "ไฟล์มีขนาดใหญ่เกินไป",
       "countryLoadError": "ข้อผิดพลาดในการโหลดประเทศ",
-      "countryUpdateError": "ข้อผิดพลาดในการอัปเดตประเทศ"
+      "countryUpdateError": "ข้อผิดพลาดในการอัปเดตประเทศ",
     },
     "notifications": {
       "saveSuccess": "บันทึกโปรไฟล์สำเร็จ",
@@ -885,7 +752,7 @@ const Map<String, dynamic> thLocale = {
       "formChanged": "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก",
       "sessionExpired": "เซสชันของคุณหมดอายุ โปรดเข้าสู่ระบบอีกครั้ง",
       "profileUpdated": "โปรไฟล์ของคุณได้รับการอัปเดตแล้ว",
-      "profileIncomplete": "โปรไฟล์ของคุณไม่สมบูรณ์"
+      "profileIncomplete": "โปรไฟล์ของคุณไม่สมบูรณ์",
     },
     "instructions": {
       "fullNameHelp":
@@ -901,7 +768,7 @@ const Map<String, dynamic> thLocale = {
       "nextTab": "ดำเนินการต่อไปยังส่วนถัดไป",
       "previousTab": "กลับไปยังส่วนก่อนหน้า",
       "saveInstructions": "คลิกบันทึกเพื่อจัดเก็บข้อมูลของคุณ",
-      "cancelInstructions": "คลิกยกเลิกเพื่อทิ้งการเปลี่ยนแปลง"
+      "cancelInstructions": "คลิกยกเลิกเพื่อทิ้งการเปลี่ยนแปลง",
     },
     "completionStatus": {
       "notStarted": "ยังไม่เริ่ม",
@@ -909,26 +776,26 @@ const Map<String, dynamic> thLocale = {
       "complete": "เสร็จสมบูรณ์",
       "percentComplete": "เสร็จสมบูรณ์ {percent}%",
       "tabsCompleted": "เสร็จสมบูรณ์ {completed} จาก {total} ส่วน",
-      "tabComplete": "แท็บเสร็จสมบูรณ์!"
+      "tabComplete": "แท็บเสร็จสมบูรณ์!",
     },
     "gender": {
       "male": "ชาย",
       "female": "หญิง",
       "other": "อื่นๆ",
-      "preferNot": "ไม่ต้องการระบุ"
+      "preferNot": "ไม่ต้องการระบุ",
     },
     "maritalStatus": {
       "single": "โสด",
       "married": "สมรส",
       "divorced": "หย่าร้าง",
       "widowed": "หม้าย",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "residencyStatuses": {
       "citizen": "พลเมือง",
       "permanentResident": "ผู้พำนักถาวร",
       "temporaryResident": "ผู้พำนักชั่วคราว",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "employmentStatuses": {
       "employed": "มีงานทำ",
@@ -937,7 +804,7 @@ const Map<String, dynamic> thLocale = {
       "student": "นักเรียน/นักศึกษา",
       "retired": "เกษียณอายุ",
       "homemaker": "พ่อบ้าน/แม่บ้าน",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "educationLevels": {
       "primary": "ประถมศึกษา",
@@ -949,14 +816,14 @@ const Map<String, dynamic> thLocale = {
       "master": "ปริญญาโท",
       "doctoral": "ปริญญาเอก",
       "professional": "ปริญญาวิชาชีพ",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "proficiencyLevels": {
       "native": "เจ้าของภาษา",
       "fluent": "คล่องแคล่ว",
       "advanced": "ขั้นสูง",
       "intermediate": "ปานกลาง",
-      "basic": "พื้นฐาน"
+      "basic": "พื้นฐาน",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -967,7 +834,7 @@ const Map<String, dynamic> thLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "ไม่ทราบ"
+      "unknown": "ไม่ทราบ",
     },
     "languages": {
       "english": "อังกฤษ",
@@ -982,7 +849,7 @@ const Map<String, dynamic> thLocale = {
       "russian": "รัสเซีย",
       "hindi": "ฮินดี",
       "urdu": "อูรดู",
-      "other": "อื่นๆ"
+      "other": "อื่นๆ",
     },
     "yesNo": {"yes": "ใช่", "no": "ไม่"},
     "select": "โปรดเลือก",
@@ -1089,7 +956,7 @@ const Map<String, dynamic> thLocale = {
       "สัตวแพทยศาสตร์",
       "การพัฒนาเว็บ",
       "ชีววิทยาสัตว์ป่า",
-      "สัตววิทยา"
+      "สัตววิทยา",
     ],
     "degreeOptions": [
       "อนุปริญญา",
@@ -1119,7 +986,7 @@ const Map<String, dynamic> thLocale = {
       "ใบรับรองวิชาชีพ",
       "ประกาศนียบัตรบัณฑิต",
       "อนุปริญญาบัณฑิต",
-      "หลังปริญญาเอก"
+      "หลังปริญญาเอก",
     ],
     "aria": {
       "tabList": "ส่วนของแบบฟอร์มโปรไฟล์",
@@ -1128,8 +995,8 @@ const Map<String, dynamic> thLocale = {
       "closeButton": "ปิดแบบฟอร์มโปรไฟล์",
       "saveButton": "บันทึกข้อมูลโปรไฟล์",
       "requiredField": "ฟิลด์ที่จำเป็น",
-      "dropdownSelect": "เลือกตัวเลือก"
-    }
+      "dropdownSelect": "เลือกตัวเลือก",
+    },
   },
   "chatbot": {
     "placeholder": "พิมพ์คำถามของคุณที่นี่...",
@@ -1138,7 +1005,7 @@ const Map<String, dynamic> thLocale = {
     "fileUploadError": "เกิดข้อผิดพลาดในการอัปโหลดไฟล์",
     "processingError": "เกิดข้อผิดพลาดในการประมวลผลคำขอของคุณ",
     "welcomeMessage":
-        "ยินดีต้อนรับ! ฉันจะช่วยคุณเกี่ยวกับบริการของรัฐบาลเคนยาได้อย่างไรในวันนี้?",
+        "ยินดีต้อนรับ! ฉันพร้อมช่วยเกษตรกรในเลโซโตเรื่องพืชผล ปศุสัตว์ ดิน และสภาพอากาศ วันนี้ต้องการความช่วยเหลือเรื่องอะไร?",
     "attachFile": "แนบไฟล์",
     "fileTooLarge": "ไฟล์มีขนาดใหญ่เกินไป ขนาดสูงสุดคือ {maxSize}",
     "saveChat": "บันทึกแชท",
@@ -1195,56 +1062,57 @@ const Map<String, dynamic> thLocale = {
         "discardAndNew": "ทิ้ง & ใหม่",
         "discardAndLoad": "ทิ้ง & โหลด",
         "saveFirst": "บันทึกก่อน",
-        "export": "ส่งออก"
-      }
+        "export": "ส่งออก",
+      },
     },
-    "shareWhatsApp": "แชร์ทาง WhatsApp"
+    "shareWhatsApp": "แชร์ทาง WhatsApp",
   },
   "quickhelp": {
-    "applyForID": "ทำบัตรประชาชน",
-    "payTaxes": "จ่ายภาษี",
-    "startBusiness": "เริ่มธุรกิจ",
-    "findHealthcare": "บริการสุขภาพ",
-    "educationServices": "การศึกษา",
-    "transportLicenses": "การขนส่ง",
-    "housingPrograms": "ที่อยู่อาศัย",
-    "findJobs": "หางาน",
+    "applyForID": "ข้าวโพดและธัญพืช",
+    "payTaxes": "ถั่วและพืชตระกูลถั่ว",
+    "startBusiness": "ดินและความอุดมสมบูรณ์",
+    "findHealthcare": "ศัตรูพืชและโรคพืช",
+    "educationServices": "ปศุสัตว์",
+    "transportLicenses": "น้ำและการชลประทาน",
+    "housingPrograms": "ฤดูกาลและสภาพอากาศ",
+    "findJobs": "ตลาดและสหกรณ์",
     "justChat": "คุยเล่น",
     "applyForIDPrompt":
-        "ทำหน้าที่เป็นผู้เชี่ยวชาญด้านทะเบียนราษฎร์ของเคนยา อธิบายขั้นตอนการขอรับบัตรประจำตัวประชาชนแห่งชาติ (Maisha Namba) หรือการขอทำบัตรใหม่กรณีสูญหาย ข้อสำคัญ: ระบุรายการเอกสารที่จำเป็นให้ชัดเจน (เช่น ใบสูติบัตร สำเนาบัตรประชาชนของบิดามารดา) และแนะนำให้ผู้ใช้ไปที่ Huduma Centre หรือสำนักงานนายทะเบียนราษฎร์ที่ใกล้ที่สุด กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Answer using ONLY what the knowledge base retrieval provides about farming in Lesotho. Focus on maize and cereals: planting times for highland vs lowland areas, varieties, rotation, storage. Never give Kenya civil registration, Huduma centres, Maisha Namba, or other non-Lesotho ID processes unless a retrieved document explicitly names them for comparison.",
     "payTaxesPrompt":
-        "ทำหน้าที่เป็นผู้นำทางของ KRA (สรรพากรเคนยา) อธิบายขั้นตอนการยื่นแบบภาษี การสมัครรหัส KRA PIN หรือการรีเซ็ตรหัสผ่านบนพอร์ทัล iTax ข้อสำคัญ: เตือนผู้ใช้เกี่ยวกับวันครบกำหนด 30 มิถุนายนสำหรับการยื่นแบบประจำปี และแนะนำวิธีการยื่นแบบแสดงรายการภาษีเป็นศูนย์ (Nil returns) หากไม่มีรายได้ กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on beans, pulses, and legumes (planting, pests, soil). Do NOT answer with Kenya Revenue Authority, KRA, iTax, tax filing, or business registration unless that information appears in retrieved text about Lesotho or cross-border trade.",
     "startBusinessPrompt":
-        "ทำหน้าที่เป็นที่ปรึกษาทางธุรกิจสำหรับบริการ eCitizen แนะนำผู้ใช้เกี่ยวกับการจองชื่อธุรกิจและการจดทะเบียนบริษัทในเคนยา ข้อสำคัญ: อธิบายค่าใช้จ่ายปัจจุบันสำหรับการค้นหาชื่อและการจดทะเบียน และนำทางผู้ใช้ไปยังพอร์ทัล eCitizen อย่างเป็นทางการเพื่อดำเนินการสมัคร กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on soil health, compost, manure, liming, erosion control, and fertility for Lesotho's conditions. Do NOT give eCitizen, Kenya company registration, or business-name search steps unless retrieved documents mention them.",
     "findHealthcarePrompt":
-        "ทำหน้าที่เป็นผู้นำทางด้านบริการสุขภาพ ให้ข้อมูลเกี่ยวกับการเปลี่ยนจาก NHIF เป็น SHIF (กองทุนประกันสุขภาพสังคม) และวิธีการลงทะเบียน ข้อสำคัญ: แจ้งรหัส USSD อย่างเป็นทางการ (เช่น *263#) หรือลิงก์เว็บไซต์สำหรับการลงทะเบียน และอธิบายประโยชน์ของความคุ้มครองสุขภาพภาครัฐ กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on identifying crop pests and diseases, prevention, and safe management relevant to Lesotho. Do NOT answer with Kenya NHIF, SHIF, hospital insurance, or health USSD codes unless retrieved documents include them.",
     "educationServicesPrompt":
-        "ทำหน้าที่เป็นที่ปรึกษาด้านการศึกษา พูดคุยเกี่ยวกับหลักสูตร CBC การลงทะเบียน NEMIS หรือการจัดสรรเข้ามหาวิทยาลัยผ่าน KUCCPS ข้อสำคัญ: อธิบายวิธีที่ผู้ปกครองสามารถตรวจสอบผลสอบระดับชาติผ่าน SMS หรือพอร์ทัล KNEC เมื่อมีการประกาศผล กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on livestock care (cattle, sheep, goats, poultry), feed, housing, and common diseases in Lesotho. Do NOT discuss Kenya's CBC, NEMIS, KUCCPS, or national exam systems unless retrieved text does.",
     "transportLicensesPrompt":
-        "ทำหน้าที่เป็นผู้นำทางบริการของ NTSA อธิบายขั้นตอนการต่ออายุใบขับขี่ การตรวจสภาพรถ หรือการจัดการบัญชี TIMS ข้อสำคัญ: แนะนำผู้ใช้เกี่ยวกับวิธีเข้าสู่ระบบพอร์ทัล eCitizen NTSA เพื่อสมัคร Smart DL หรือจองคิวตรวจสภาพรถ กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on irrigation, rainwater harvesting, soil moisture, and water conservation for crops in Lesotho. Do NOT give Kenya NTSA, eCitizen transport, Smart DL, or vehicle inspection steps unless retrieved documents include them.",
     "housingProgramsPrompt":
-        "ทำหน้าที่เป็นที่ปรึกษาโครงการที่อยู่อาศัย อธิบายการลงทะเบียนโครงการบ้านเอื้ออาทร (Boma Yangu) และขั้นตอนการสมทบเงินโดยสมัครใจ ข้อสำคัญ: นำทางผู้ใช้ไปยังพอร์ทัล Boma Yangu เพื่อดูโครงการและอธิบายเกณฑ์คุณสมบัติสำหรับการจัดสรร กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on seasonal planting calendars, frost risk, rainfall patterns, and climate considerations for Lesotho. Do NOT describe Kenya affordable housing, Boma Yangu, or urban mortgage programs unless retrieved documents mention them.",
     "findJobsPrompt":
-        "ทำหน้าที่เป็นโค้ชอาชีพสำหรับงานราชการ แนะนำผู้ใช้ในการสร้างโปรไฟล์และสมัครตำแหน่งงานว่างผ่านพอร์ทัลคณะกรรมการข้าราชการพลเรือน (PSC) ข้อสำคัญ: แนะนำให้ผู้ใช้เตรียมใบรับรองการศึกษาให้พร้อม และหมั่นตรวจสอบเว็บไซต์ PSC หรือหนังสือพิมพ์ท้องถิ่นสำหรับประกาศ MyGov กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on marketing produce, cooperatives, local buyers, and farmer groups in Lesotho. Do NOT give Kenya Public Service Commission, MyGov job portals, or civil-service recruitment unless retrieved text supports it.",
     "justChatPrompt":
-        "ทำหน้าที่เป็นเพื่อนชาวท้องถิ่นที่เป็นมิตร สุภาพ มีน้ำใจ และมีความรู้เกี่ยวกับวัฒนธรรมเคนยาและชีวิตประจำวัน ข้อสำคัญ: เตือนผู้ใช้ว่าแม้คุณจะคุยได้ทุกเรื่อง แต่จุดแข็งหลักของคุณคือการช่วยพวกเขานำทางบริการภาครัฐของเคนยา เช่น **บัตรประชาชน** **ภาษี** และ **การจดทะเบียนธุรกิจ** กฎ: เรียกแอปพลิเคชันว่า 'Genie AI' เสมอ",
+        "You are Genie AI, a friendly assistant for people working the land in Lesotho. Be practical and respectful. If the user chats generally, keep the tone helpful but steer toward farming, livestock, soil, water, and climate in Lesotho. Do not present Kenya taxes, IDs, eCitizen, or other Kenya government services as default answers. Always rely on retrieved knowledge when answering factual questions about agriculture.",
     "applyForIDUserPrompt":
-        "ฉันต้องการทราบเกี่ยวกับการสมัครทำบัตรประชาชนแห่งชาติในเคนยา",
+        "ฉันควรปลูกข้าวโพดเมื่อไร และควรระวังอะไรในเลโซโต?",
     "payTaxesUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับการจ่ายภาษีหรือการยื่นแบบ KRA ในเคนยา",
+        "ฉันจะปลูกถั่วและพืชตระกูลถั่วให้ประสบความสำเร็จในไร่ได้อย่างไร?",
     "startBusinessUserPrompt":
-        "ฉันต้องการทราบเกี่ยวกับการจดทะเบียนธุรกิจหรือบริษัทใหม่ในเคนยา",
+        "การดูแลดินหรือการทำ compost แบบใดเหมาะกับเลโซโต?",
     "findHealthcareUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับสถานพยาบาลของรัฐและประกันสุขภาพ (NHIF/SHIF) ในเคนยา",
+        "อาการของศัตรูพืชหรือโรคพืชทั่วไปมีลักษณะอย่างไร?",
     "educationServicesUserPrompt":
-        "ฉันต้องการทราบข้อมูลเกี่ยวกับโรงเรียนและบริการด้านการศึกษาในเคนยา",
+        "ฉันจะดูแลปศุสัตว์ในไร่เล็กได้อย่างไร?",
     "transportLicensesUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับใบขับขี่และบริการของ NTSA ในเคนยา",
+        "ฉันควรจัดการน้ำหรือการชลประทานของพืชอย่างไร?",
     "housingProgramsUserPrompt":
-        "ฉันต้องการทราบเกี่ยวกับโครงการบ้านเอื้ออาทร (Boma Yangu) ในเคนยา",
+        "ฤดูกาลและสภาพอากาศส่งผลต่อการปลูกและเก็บเกี่ยวอย่างไร?",
     "findJobsUserPrompt":
-        "ฉันต้องการสอบถามเกี่ยวกับโอกาสงานราชการและการสมัคร PSC ในเคนยา",
-    "justChatUserPrompt": "ฉันต้องการคุยเล่นทั่วไปเกี่ยวกับชีวิตในเคนยา"
+        "ฉันจะขายผลผลิตหรือติดต่อเกษตรกรรายอื่นได้อย่างไร?",
+    "justChatUserPrompt":
+        "ฉันอยากถามคำถามทั่วไปเกี่ยวกับการทำเกษตรในเลโซโต",
   },
   "common": {
     "cancel": "ยกเลิก",
@@ -1260,7 +1128,7 @@ const Map<String, dynamic> thLocale = {
     "open": "เปิด",
     "done": "เสร็จสิ้น",
     "confirm": "ยืนยัน",
-    "edit": "แก้ไข"
+    "edit": "แก้ไข",
   },
   "feedback": {
     "title": "ข้อเสนอแนะ",
@@ -1274,7 +1142,7 @@ const Map<String, dynamic> thLocale = {
     "thankYouMessage": "ขอบคุณสำหรับข้อเสนอแนะของคุณ!",
     "submitting": "กำลังส่ง...",
     "error": "เกิดข้อผิดพลาดบางอย่าง โปรดลองอีกครั้ง",
-    "success": "ขอบคุณสำหรับข้อเสนอแนะของคุณ!"
+    "success": "ขอบคุณสำหรับข้อเสนอแนะของคุณ!",
   },
   "responseRating": {
     "title": "ช่วยเราปรับปรุง",
@@ -1286,11 +1154,11 @@ const Map<String, dynamic> thLocale = {
       "2": "มีประโยชน์เล็กน้อย",
       "3": "มีประโยชน์ปานกลาง",
       "4": "มีประโยชน์มาก",
-      "5": "เปลี่ยนชีวิต"
+      "5": "เปลี่ยนชีวิต",
     },
     "additionalComments": "ความคิดเห็นเพิ่มเติม...",
     "submit": "ส่ง",
-    "cancel": "ยกเลิก"
+    "cancel": "ยกเลิก",
   },
   "upload": {"alt": "อัปโหลด"},
   "uploadDialog": {
@@ -1307,8 +1175,8 @@ const Map<String, dynamic> thLocale = {
       "shortcutUnsupported": "ไม่รองรับไฟล์ทางลัด (.url) โปรดลากไฟล์จริง",
       "duplicate": "เพิ่มไฟล์ \"{fileName}\" แล้ว",
       "uploadSuccess": "อัปโหลด {fileName} สำเร็จ",
-      "uploadFailed": "อัปโหลด {fileName} ล้มเหลว"
-    }
+      "uploadFailed": "อัปโหลด {fileName} ล้มเหลว",
+    },
   },
   "about": {
     "title": "เกี่ยวกับ",
@@ -1316,6 +1184,6 @@ const Map<String, dynamic> thLocale = {
     "description":
         "Genie AI คือผู้ช่วยอัจฉริยะของคุณในการเข้าถึงบริการและข้อมูลภาครัฐ",
     "techStack": "เทคโนโลยีที่ใช้",
-    "copyright": "สงวนลิขสิทธิ์"
-  }
+    "copyright": "สงวนลิขสิทธิ์",
+  },
 };

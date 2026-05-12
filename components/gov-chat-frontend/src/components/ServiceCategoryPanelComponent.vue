@@ -2,11 +2,7 @@
   <div class="category-panel">
     <h4>Public Services</h4>
     <ul>
-      <li
-        v-for="(category, index) in categories"
-        :key="index"
-        @click="selectCategory(category)"
-      >
+      <li v-for="(category, index) in categories" :key="index" @click="selectCategory(category)">
         <img :src="category.icon" alt="icon" class="icon" />
         <span>{{ category.name }}</span>
       </li>
@@ -17,6 +13,7 @@
 <script>
 export default {
   name: 'ServiceCategoryPanelComponent',
+  emits: ['selectCategory'],
   data() {
     return {
       categories: [
@@ -26,14 +23,14 @@ export default {
         { name: 'Building Services', icon: '/icons/building.png' }
         // etc.
       ]
-    }
+    };
   },
   methods: {
     selectCategory(category) {
-      this.$emit('selectCategory', category.name)
+      this.$emit('selectCategory', category.name);
     }
   }
-}
+};
 </script>
 
 <style scoped>
@@ -78,37 +75,36 @@ export default {
   letter-spacing: 0.5px;
 }
 
-[data-theme="dark"] .category-panel h4,
-html[data-theme="dark"] .category-panel h4 {
+[data-theme='dark'] .category-panel h4,
+html[data-theme='dark'] .category-panel h4 {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
-[data-theme="dark"] .toggle-icon {
+[data-theme='dark'] .toggle-icon {
   color: rgba(255, 255, 255, 0.6); /* Slightly muted for visual hierarchy */
 }
 
-[data-theme="dark"] .service-tree-list,
-[data-theme="dark"] .service-tree-list * {
+[data-theme='dark'] .service-tree-list,
+[data-theme='dark'] .service-tree-list * {
   color: rgba(255, 255, 255, 0.85) !important;
 }
-[data-theme="dark"] .node-name {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-[data-theme="dark"] .node-label {
+[data-theme='dark'] .node-name {
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
-[data-theme="dark"] .node-label:hover {
+[data-theme='dark'] .node-label {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-theme='dark'] .node-label:hover {
   background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-[data-theme="dark"] .toggle-icon {
+[data-theme='dark'] .toggle-icon {
   color: rgba(255, 255, 255, 0.6) !important;
 }
 
-[data-theme="dark"] .service-tree-panel h4 {
+[data-theme='dark'] .service-tree-panel h4 {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 </style>
-

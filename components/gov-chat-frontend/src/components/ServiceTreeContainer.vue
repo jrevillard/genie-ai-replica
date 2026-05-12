@@ -6,27 +6,23 @@
       <div class="spinner"></div>
       <p>{{ $t('loading.services', 'Loading services...') }}</p>
     </div>
-    
+
     <!-- Error state overlay (non-blocking) -->
     <div v-if="error" class="error-banner">
       <p>{{ error }}</p>
-      <button @click="loadCategories" class="retry-button">
+      <button class="retry-button" @click="loadCategories">
         {{ $t('error.retry', 'Retry') }}
       </button>
     </div>
-    
+
     <!-- Service Tree Panel Component -->
-    <ServiceTreePanelComponent
-      ref="serviceTree"
-      :key="componentKey"
-      @selection-change="handleSelectionChange"
-    />
+    <ServiceTreePanelComponent ref="serviceTree" :key="componentKey" @selection-change="handleSelectionChange" />
   </div>
 </template>
 
 <script>
 import ServiceTreePanelComponent from './ServiceTreePanelComponent.vue';
-import { serviceTreeService } from '../services';
+import { serviceTreeService, DOCUMENT_METATAGS_CAT_KEY } from '../services';
 import { eventBus } from '../eventBus.js';
 
 export default {
@@ -60,17 +56,19 @@ export default {
   },
   created() {
     this.loadCategories();
-    
+
     // Load user preferences if userId is provided
     if (this.userId) {
       this.loadUserPreferences();
     }
-    
+
     // Listen for external requests to reload the tree
     eventBus.$on('reload-service-tree', this.loadCategories);
+    eventBus.$on('knowledge-hierarchy-updated', this.loadCategories);
   },
   beforeUnmount() {
     eventBus.$off('reload-service-tree', this.loadCategories);
+    eventBus.$off('knowledge-hierarchy-updated', this.loadCategories);
   },
   methods: {
     /**
@@ -79,20 +77,38 @@ export default {
     async loadCategories() {
       this.isLoading = true;
       this.error = null;
-      
+
       try {
         // Get categories from service
         const categories = await serviceTreeService.getAllCategories(this.locale);
-        
+
+        const nodes = categories.map((cat) => {
+          const node = {
+            ...cat,
+            name:
+              cat.catKey === DOCUMENT_METATAGS_CAT_KEY
+                ? this.$t('sidebar.documentMetatags', 'From your documents')
+                : cat.name,
+            expanded: false
+          };
+          if (Array.isArray(node.metatagGroups)) {
+            node.metatagGroups = node.metatagGroups.map((g) => ({
+              ...g,
+              groupExpanded: g.groupExpanded !== false
+            }));
+          }
+          return node;
+        });
+
         // Force re-render of the component with new data
         this.componentKey += 1;
-        
+
         // Wait for the next tick to ensure the component is rendered
         this.$nextTick(() => {
           if (this.$refs.serviceTree) {
             // Set nodes on the tree component
-            this.$refs.serviceTree.nodes = categories;
-            
+            this.$refs.serviceTree.nodes = nodes;
+
             // If we have user preferences, restore selected nodes
             if (this.selectedServices && this.selectedServices.length > 0) {
               this.restoreSelectedServices();
@@ -106,17 +122,17 @@ export default {
         this.isLoading = false;
       }
     },
-    
+
     /**
      * Load user preferences for selected services
      */
     async loadUserPreferences() {
       if (!this.userId) return;
-      
+
       try {
         const selectedServices = await serviceTreeService.getUserSelectedServices(this.userId);
         this.selectedServices = selectedServices;
-        
+
         // If the component is already loaded, restore selections
         if (this.$refs.serviceTree) {
           this.restoreSelectedServices();
@@ -126,7 +142,7 @@ export default {
         // Non-critical error, can be ignored
       }
     },
-    
+
     /**
      * Restore selected services from saved preferences
      */
@@ -134,31 +150,29 @@ export default {
       if (!this.$refs.serviceTree || !this.selectedServices || this.selectedServices.length === 0) {
         return;
       }
-      
+
       // First expand the nodes that have selections
-      this.selectedServices.forEach(service => {
-        const nodeIndex = this.$refs.serviceTree.nodes.findIndex(
-          node => node.catKey === service.category
-        );
-        
+      this.selectedServices.forEach((service) => {
+        const nodeIndex = this.$refs.serviceTree.nodes.findIndex((node) => node.catKey === service.category);
+
         if (nodeIndex !== -1) {
           // Expand the node
           this.$refs.serviceTree.nodes[nodeIndex].expanded = true;
-          
+
           // Select the service
           const categoryKey = service.category;
           const serviceName = service.service;
-          
+
           // Find the index of the service
           const children = this.$refs.serviceTree.getCatChildren(categoryKey);
-          const childIndex = children.findIndex(child => child === serviceName);
-          
+          const childIndex = children.findIndex((child) => child === serviceName);
+
           if (childIndex !== -1) {
             // Initialize selection array if needed
             if (!this.$refs.serviceTree.selectedNodes[categoryKey]) {
               this.$refs.serviceTree.selectedNodes[categoryKey] = [];
             }
-            
+
             // Add to selection
             if (!this.$refs.serviceTree.selectedNodes[categoryKey].includes(childIndex)) {
               this.$refs.serviceTree.selectedNodes[categoryKey].push(childIndex);
@@ -167,7 +181,7 @@ export default {
         }
       });
     },
-    
+
     /**
      * Handle selection changes in the tree
      */
@@ -177,25 +191,25 @@ export default {
         this.selectedServices.push(selection);
       } else {
         this.selectedServices = this.selectedServices.filter(
-          s => !(s.category === selection.category && s.service === selection.service)
+          (s) => !(s.category === selection.category && s.service === selection.service)
         );
       }
-      
+
       // Emit event for parent components
       this.$emit('selection-change', this.selectedServices);
-      
+
       // Save user preferences if userId is provided
       if (this.userId) {
         this.saveUserPreferences();
       }
     },
-    
+
     /**
      * Save user preferences for selected services
      */
     async saveUserPreferences() {
       if (!this.userId) return;
-      
+
       try {
         await serviceTreeService.saveSelectedServices(this.userId, this.selectedServices);
       } catch (error) {
@@ -203,7 +217,7 @@ export default {
         // Non-critical error, can be ignored
       }
     },
-    
+
     /**
      * Get current selected services
      * @returns {Array} Selected services
@@ -211,7 +225,7 @@ export default {
     getSelectedServices() {
       return this.selectedServices;
     },
-    
+
     /**
      * Expand all nodes in the tree
      */
@@ -220,7 +234,7 @@ export default {
         this.$refs.serviceTree.toggleAllNodes(true);
       }
     },
-    
+
     /**
      * Collapse all nodes in the tree
      */
@@ -229,7 +243,7 @@ export default {
         this.$refs.serviceTree.toggleAllNodes(false);
       }
     },
-    
+
     /**
      * Search the tree
      * @param {String} query - Search query
@@ -278,7 +292,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   z-index: 90;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   font-size: 0.875rem; /* Explicit rem for clarity */
 }
 
@@ -289,7 +303,7 @@ export default {
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 3px solid #4E97D1;
+  border-top: 3px solid #4e97d1;
   width: 24px;
   height: 24px;
   animation: spin 1s linear infinite;
@@ -297,8 +311,12 @@ export default {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .retry-button {

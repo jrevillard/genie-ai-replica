@@ -26,72 +26,7 @@ The repository is organized to support modularity, shared libraries, and third-p
 
 ```plaintext
 /unicc-itu-genie-ai
-├── api-gateway-solution/        # API gateway configs (nginx, Kong, Keycloak)
-│   ├── nginx/                   # Nginx configuration files
-│   ├── kong-backups/            # Kong gateway backups
-│   ├── kong-postgres-backups/   # Kong PostgreSQL backups
-│   ├── new-config/              # New configuration files
-│   └── old-config/              # Legacy configuration files
-├── components/                  # Core applications
-│   ├── gov-chat-backend/        # Node.js backend
-│   │   ├── controllers/         # Request handlers
-│   │   ├── middleware/          # Express middleware
-│   │   ├── routes/              # API route definitions
-│   │   ├── services/            # Business logic
-│   │   ├── utils/               # Utility functions
-│   │   ├── design/              # Design documentation
-│   │   ├── scripts/             # Deployment scripts
-│   │   └── uploads/             # File upload storage
-│   ├── gov-chat-frontend/       # Vue 3 frontend
-│   │   ├── src/                 # Vue components and source code
-│   │   ├── public/              # Static assets
-│   │   ├── scripts/             # Build and deployment scripts
-│   │   └── dist/                # Built application files
-│   ├── document-repository/     # Document repository service
-│   │   ├── src/                 # Source code
-│   │   ├── scripts/             # Utility scripts
-│   │   └── uploads/             # Document storage
-│   ├── shared/                  # Shared libraries
-│   │   └── lib/                 # Common utilities
-│   ├── arangodb/                # ArangoDB database configurations
-│   └── google-translate-example/ # Translation service example
-├── configs/                     # Configuration files
-│   └── opea-config/             # OPEA and vLLM configurations
-│       └── vllm/                # vLLM specific configurations
-├── genie-ai-overlay/            # Custom OPEA extensions and overlays
-│   ├── chatqna/                 # ChatQnA component overlays
-│   ├── core/                    # Core OPEA overlays
-│   ├── dataprep/                # Data preparation overlays
-│   ├── http-service/            # HTTP service overlays
-│   ├── retriever/               # Retriever component overlays
-│   ├── reranker/                # Reranker component overlays
-│   └── build-patches/           # Build modification patches
-├── mobile/                      # Mobile applications
-│   └── genie_ai_mobile/         # Genie AI mobile app
-├── data/                        # Data storage and samples
-│   ├── el-salvador/             # Country-specific data
-│   ├── gambia/                  # Country-specific data
-│   ├── kenya/                   # Country-specific data
-│   └── lesotho/                 # Country-specific data
-├── docs/                        # Documentation
-├── tests/                       # End-to-end and integration tests
-├── logs/                        # Application logs
-├── .gitignore
-├── .claude/                     # Claude Code configuration
-├── CLA.md                       # Contributor License Agreement
-├── CONTRIBUTING.md              # Contribution guidelines
-├── STANDARDS.md                 # Coding standards and practices
-├── THIRD_PARTY.md               # Third-party integration guidelines
-├── GENIE.AI-Installation-Configuration-Guide.md # Installation guide
-├── GENIE.AI-Data-Labelling-Strategy.md # Data labeling strategy
-├── proposed-repo-structure-changes.md # Repository restructuring plan
-├── README.md                    # Project overview
-├── docker-compose.yaml          # Main Docker Compose configuration
-├── docker-compose-t4.yaml       # T4 GPU variant configuration
-├── docker-compose-RTX6000-ADA.yaml # RTX 6000 ADA GPU variant
-├── env                          # Environment configuration (main)
-├── env-T4                       # Environment configuration (T4 variant)
-└── package.json                 # Node.js dependencies and scripts
+Stashed changes:UNICC-ITU-Inko Code Management Process.md
 ```
 
 ## Roles and Responsibilities
@@ -231,17 +166,17 @@ For each team branch:
 
 ### Important Constraints
 
-#### 📖 Open Source Principles
+#### ?? Open Source Principles
 - All Developer role users can see all branches and all code
 - Team branches are NOT hidden from other teams
 - This aligns with open-source development principles
 
-#### 🔧 Shared Infrastructure Considerations
+#### ?? Shared Infrastructure Considerations
 - CI/CD pipelines may require team-specific configurations
 - Challenge cloud environments should be isolated per team
 - Consider environment variable scoping for team-specific deployments
 
-#### 🔄 Merge Request Process
+#### ?? Merge Request Process
 - Teams can create MRs from their branch to main
 - Only Maintainers can approve and merge MRs
 - Framework-compatible changes should be in separate feature branches
@@ -376,8 +311,7 @@ For each team branch:
 - Create a merge request:
   - UNICC ITU: From `feature/<description>` to `main`.
   - Long-term Parties: From `<party>/<description>` to `main` or their branch (e.g., `noor-al-tafsir`).
-  - Challenge Teams: From team branch (e.g., `agriculture-agriconnect-branch`) to `main`.
-  - Use GitLab’s merge request template, including:
+Stashed changes:UNICC-ITU-Inko Code Management Process.md
     - Description of changes
     - Related issue numbers
     - Testing performed
@@ -403,7 +337,7 @@ For each team branch:
   - Address feedback by pushing additional commits.
   - Ensure compliance with `STANDARDS.md` and `THIRD_PARTY.md`.
   - Re-request review after updates.
-- Merge approved changes to `main` via GitLab’s “Merge” button.
+- Merge approved changes to `main` via GitLab s  Merge  button.
 
 ### Conflict Resolution
 - **Merge Conflicts**:
@@ -514,7 +448,7 @@ All contributors must be familiar with:
   npm test
   ```
 - Add tests for new functionality in `/components` or `/tests`.
-- Validate cherry-picked changes don’t break existing code.
+- Validate cherry-picked changes don t break existing code.
 
 ### OPEA Integration
 - Monitor OPEA releases (`https://github.com/opea-project`).
@@ -522,7 +456,7 @@ All contributors must be familiar with:
   ```bash
   git checkout -b feature/opea-upgrade
   ```
-- Update `/configs/opea-config` and `/genie-ai-overlay` as needed.
+- Update `/configs/opea-config` and `/inko-overlay` as needed.
 - Document changes in root-level documentation files.
 
 ## Tools and Resources

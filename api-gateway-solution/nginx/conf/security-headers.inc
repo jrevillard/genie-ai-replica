@@ -1,0 +1,17 @@
+# security-headers.conf
+# Common Security Headers (included in each location block)
+# Domain-specific headers (CSP, CORS) are defined per-location in default.conf.template
+
+# Basic Security Headers
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header X-XSS-Protection "1; mode=block" always;
+
+# Strict Transport Security with preload
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+# Referrer Policy
+add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+# Permissions Policy (overridden per-location in default.conf.template)
+# add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;

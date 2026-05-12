@@ -196,145 +196,19 @@ const Map<String, dynamic> enLocale = {
     "VN": "Vietnam",
     "YE": "Yemen",
     "ZM": "Zambia",
-    "ZW": "Zimbabwe"
+    "ZW": "Zimbabwe",
   },
-  "verification": {
-    "verifying": "Verifying your email...",
-    "success": "Email Verified Successfully!",
-    "failed": "Verification Failed",
-    "accountVerified":
-        "Your account has been successfully verified. You can now log in to your account.",
-    "invalidLink": "The verification link is invalid or has expired.",
-    "missingToken": "Verification token is missing.",
-    "generalError":
-        "An error occurred during verification. Please try again later.",
-    "proceedToLogin": "Proceed to Login",
-    "backToLogin": "Back to Login"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Create New Password",
-    "tokenLabel": "Reset Token",
-    "tokenPlaceholder": "Enter reset token",
-    "validateButton": "Validate Token",
-    "newPasswordLabel": "New Password",
-    "newPasswordPlaceholder": "Create a new password",
-    "confirmNewPasswordLabel": "Confirm New Password",
-    "confirmNewPasswordPlaceholder": "Confirm your new password",
-    "resetButton": "Reset Password",
-    "processing": "Resetting...",
-    "rememberedPassword": "Remember your password?",
-    "backToLogin": "Back to Login",
-    "supportMessage": "Need help? Contact our support team",
-    "passwordRequirements":
-        "Password must be at least 8 characters with at least 1 number, 1 uppercase letter, and 1 special character",
-    "passwordsDoNotMatch": "Passwords do not match",
-    "resetSuccess": "Your password has been successfully reset",
-    "resetFailed": "Unable to reset password. Please try again.",
-    "noTokenProvided": "Please provide a reset token",
-    "expiredToken": "This reset token has expired. Please request a new one.",
-    "invalidToken": "Invalid or unrecognized reset token",
-    "validatingToken": "Validating token...",
-    "redirecting": "Redirecting to login page...",
-    "passwordStrength": "Password Strength",
-    "strengthLabels": {
-      "veryWeak": "Very Weak",
-      "weak": "Weak",
-      "fair": "Fair",
-      "good": "Good",
-      "strong": "Strong"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Use at least 8 characters",
-      "addUppercase": "Add uppercase letters",
-      "addLowercase": "Add lowercase letters",
-      "addNumbers": "Add numbers",
-      "addSpecialChars": "Add special characters"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Reset Your Password",
-    "emailLabel": "Email Address",
-    "emailPlaceholder": "Enter your email",
-    "resetButton": "Send Reset Link",
-    "processing": "Sending...",
-    "rememberPassword": "Remember your password?",
-    "backToLogin": "Back to Login",
-    "supportMessage": "Need help? Contact our support team",
-    "invalidEmail": "Please enter a valid email address",
-    "resetRequestSuccess": "Password reset link has been sent to your email",
-    "resetRequestFailed":
-        "Unable to send password reset link. Please try again.",
-    "checkEmail": "Please check your email for further instructions."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Create New Account",
-    "username": "Username",
-    "usernamePlaceholder": "Enter a username",
-    "email": "Email",
-    "emailPlaceholder": "Enter your email",
-    "password": "Password",
-    "passwordPlaceholder": "Create a password",
-    "confirmPassword": "Confirm Password",
-    "confirmPasswordPlaceholder": "Confirm your password",
-    "acceptTerms": "I accept the",
-    "termsOfService": "Terms of Service",
-    "registerButton": "Create Account",
-    "processing": "Processing...",
-    "alreadyHaveAccount": "Already have an account?",
-    "loginNow": "Log in",
-    "privacyNotice":
-        "By registering, you agree to our Terms of Service and Privacy Policy",
-    "usernameMinLength": "Username must be at least 3 characters",
-    "invalidEmail": "Please enter a valid email address",
-    "passwordRequirements":
-        "Password must be at least 8 characters with at least 1 number and 1 uppercase letter",
-    "passwordsDoNotMatch": "Passwords do not match",
-    "mustAcceptTerms": "You must accept the Terms of Service",
-    "registrationFailed": "Registration failed. Please try again.",
-    "usernameExists": "Username already exists",
-    "emailExists": "Email already exists",
-    "registrationSuccess": "Registration Successful!",
-    "verificationEmailSent": "A verification email has been sent to {email}",
-    "checkEmailInstructions":
-        "Please check your email and follow the instructions to verify your account before logging in.",
-    "backToLogin": "Back to Login",
-    "noEmailReceived": "Didn't receive an email?",
-    "resendVerification": "Resend verification email",
-    "verificationResent": "Verification email has been resent",
-    "verificationResendFailed":
-        "Failed to resend verification email. Please try again.",
-    "usernameInvalidChars":
-        "Username can only contain letters, numbers, underscores, dots and hyphens",
-    "networkError": "Network error. Please check your connection and try again."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Username",
-    "password": "Password",
-    "loginButton": "Login",
-    "or": "or",
-    "savedAccounts": "Saved Accounts",
-    "loginSuccess": "Login successful",
-    "loginError": "Login failed. Please check your credentials.",
-    "googleLogin": "Continue with Google",
-    "facebookLogin": "Continue with Facebook",
-    "rememberMe": "Remember me",
-    "forgotPassword": "Forgot password?",
-    "noAccount": "Don't have an account?",
-    "createAccount": "Create account",
-    "registerNow": "Register now",
-    "termsAndPolicy":
-        "By logging in, you agree to our Terms of Service and Privacy Policy",
-    "loggingIn": "Logging in...",
-    "fieldsRequired": "Username and password are required",
-    "invalidCredentials": "Invalid username or password",
-    "tooManyAttempts": "Too many login attempts. Please try again later.",
-    "loginFailed": "Login failed. Please try again.",
-    "oauthNotImplemented": "Social login is not yet implemented",
-    "savedLoginNotImplemented": "Saved account login is not yet implemented"
+  "auth": {
+    "noInternetConnection": "No internet connection",
+    "networkUnreachable": "Network unreachable",
+    "authenticationFailed": "Authentication failed",
+    "sessionExpired": "Your session has expired. Please sign in again.",
+    "timeout": "Request timed out. Please check your connection and try again.",
+    "retry": "Retry",
+    "signIn": "Sign in",
+    "error": "Authentication error",
+    "accessDenied": "Access denied. Please contact your administrator.",
+    "unknownError": "An unexpected error occurred. Please try again.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -353,8 +227,8 @@ const Map<String, dynamic> enLocale = {
       "swahili": "Swahili",
       "german": "German",
       "spanish": "Spanish",
-      "arabic": "Arabic"
-    }
+      "arabic": "Arabic",
+    },
   },
   "systemStatus": {
     "title": "Service Status",
@@ -368,20 +242,20 @@ const Map<String, dynamic> enLocale = {
     "checking": "Checking...",
     "nextDeadline": "Next Deadline",
     "days": "days",
-    "viewDetails": "View Details"
+    "viewDetails": "View Details",
   },
   "services": {
     "eCitizen": "eCitizen Portal",
     "taxFiling": "Tax Filing System",
     "idApplication": "ID Application",
     "businessReg": "Business Registration",
-    "drivingLicense": "Driving License"
+    "drivingLicense": "Driving License",
   },
   "deadlines": {
     "taxFiling": "Tax Filing Deadline",
     "businessRenewal": "Business License Renewal",
     "idRenewal": "ID Card Renewal",
-    "vehicleRegistration": "Vehicle Registration Deadline"
+    "vehicleRegistration": "Vehicle Registration Deadline",
   },
   "sidebar": {
     "governmentServices": "Knowledge Areas",
@@ -420,7 +294,7 @@ const Map<String, dynamic> enLocale = {
       "rain": "Rain",
       "shower": "Shower",
       "thunderstorm": "Thunderstorm",
-      "snow": "Snow"
+      "snow": "Snow",
     },
     "folders": "Folders",
     "emptyFolder":
@@ -434,7 +308,7 @@ const Map<String, dynamic> enLocale = {
       "all": "All Chats",
       "folders": "Folders",
       "starred": "Starred",
-      "archived": "Archived"
+      "archived": "Archived",
     },
     "savedChats": "Saved Chats",
     "chats": "Chats",
@@ -492,7 +366,7 @@ const Map<String, dynamic> enLocale = {
     "noConversations": "No conversations found",
     "noStarred": "No starred conversations",
     "noArchived": "No archived conversations",
-    "folderEmptyState": "Folder is empty"
+    "folderEmptyState": "Folder is empty",
   },
   "leftPanel": {
     "cat1": {
@@ -502,8 +376,8 @@ const Map<String, dynamic> enLocale = {
         "National ID cards",
         "Passports",
         "Marriage and death certificates",
-        "Voter registration"
-      ]
+        "Voter registration",
+      ],
     },
     "cat2": {
       "name": "2. Healthcare & Social Services",
@@ -512,8 +386,8 @@ const Map<String, dynamic> enLocale = {
         "Vaccination programs",
         "Health insurance",
         "Disability benefits",
-        "Welfare and food assistance"
-      ]
+        "Welfare and food assistance",
+      ],
     },
     "cat3": {
       "name": "3. Education & Learning",
@@ -521,8 +395,8 @@ const Map<String, dynamic> enLocale = {
         "Public schools and universities",
         "Scholarships and student loans",
         "Adult education programs",
-        "Online learning resources"
-      ]
+        "Online learning resources",
+      ],
     },
     "cat4": {
       "name": "4. Employment & Labor Services",
@@ -530,8 +404,8 @@ const Map<String, dynamic> enLocale = {
         "Job search and unemployment benefits",
         "Worker protections and labor rights",
         "Workplace safety regulations",
-        "Skills training and apprenticeships"
-      ]
+        "Skills training and apprenticeships",
+      ],
     },
     "cat5": {
       "name": "5. Taxes & Revenue",
@@ -539,8 +413,8 @@ const Map<String, dynamic> enLocale = {
         "Income tax filing and refunds",
         "Property tax payments",
         "Business tax compliance",
-        "Customs and import duties"
-      ]
+        "Customs and import duties",
+      ],
     },
     "cat6": {
       "name": "6. Public Safety & Justice",
@@ -548,8 +422,8 @@ const Map<String, dynamic> enLocale = {
         "Police and emergency services",
         "Court and legal aid services",
         "Crime reporting",
-        "Consumer protection laws"
-      ]
+        "Consumer protection laws",
+      ],
     },
     "cat7": {
       "name": "7. Transportation & Mobility",
@@ -557,8 +431,8 @@ const Map<String, dynamic> enLocale = {
         "Driver's licenses and vehicle registration",
         "Public transit and infrastructure",
         "Traffic violations and fines",
-        "Road safety programs"
-      ]
+        "Road safety programs",
+      ],
     },
     "cat8": {
       "name": "8. Housing & Urban Development",
@@ -566,8 +440,8 @@ const Map<String, dynamic> enLocale = {
         "Public housing assistance",
         "Property registration and land records",
         "Housing loans and subsidies",
-        "Zoning and building permits"
-      ]
+        "Zoning and building permits",
+      ],
     },
     "cat9": {
       "name": "9. Utilities & Environment",
@@ -575,8 +449,8 @@ const Map<String, dynamic> enLocale = {
         "Water and electricity services",
         "Waste management and recycling",
         "Environmental regulations",
-        "Renewable energy initiatives"
-      ]
+        "Renewable energy initiatives",
+      ],
     },
     "cat10": {
       "name": "10. Business & Trade",
@@ -584,8 +458,8 @@ const Map<String, dynamic> enLocale = {
         "Business registration and licensing",
         "Trade regulations and permits",
         "Small business grants and incentives",
-        "E-commerce and digital business support"
-      ]
+        "E-commerce and digital business support",
+      ],
     },
     "cat11": {
       "name": "11. Social Security & Pensions",
@@ -593,8 +467,8 @@ const Map<String, dynamic> enLocale = {
         "Retirement benefits",
         "Pension fund management",
         "Survivor benefits",
-        "Disability pensions"
-      ]
+        "Disability pensions",
+      ],
     },
     "cat12": {
       "name": "12. Community & Civic Engagement",
@@ -602,9 +476,9 @@ const Map<String, dynamic> enLocale = {
         "Voting and elections",
         "Public feedback and citizen complaints",
         "Volunteering and community programs",
-        "Local government participation"
-      ]
-    }
+        "Local government participation",
+      ],
+    },
   },
   "settings": {
     "title": "Settings",
@@ -613,6 +487,7 @@ const Map<String, dynamic> enLocale = {
     "saveSettings": "Save Settings",
     "savingSettings": "Saving your settings...",
     "settingsSaved": "Settings saved successfully!",
+    "settingsSavedOffline": "Settings saved locally (Offline Mode)",
     "saveSuccess": "Settings saved successfully",
     "saveError": "Error saving settings",
     "display": "Display",
@@ -620,7 +495,7 @@ const Map<String, dynamic> enLocale = {
     "languages": {
       "english": "English",
       "french": "French",
-      "swahili": "Swahili"
+      "swahili": "Swahili",
     },
     "theme": "Theme",
     "themes": {"light": "Light", "dark": "Dark", "system": "System"},
@@ -634,15 +509,20 @@ const Map<String, dynamic> enLocale = {
     "emailAddress": "Email Address",
     "emailAddressPlaceholder": "Your email address",
     "password": "Password",
-    "changePassword": "Change Password",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc":
+        "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole":
+        "Unable to open account console. Please try again.",
     "resetUserData": "Reset User Data",
     "resetUserDataDesc":
         "This will clear all your profile data and chat history.",
-    "deleteAccount": "Delete Account",
+    "deleteAccount": "Delete My Account",
     "deleteAccountDesc":
-        "This will permanently delete your account and all associated data.",
+        "Permanently delete your account and all data. This cannot be undone.",
     "edit": "Edit",
     "standardAccount": "Standard Account",
+    "userName": "User",
     "confirmEmailChange": "Confirm Email Change",
     "pleaseEnterPassword": "Please enter your password",
     "cancel": "Cancel",
@@ -652,14 +532,14 @@ const Map<String, dynamic> enLocale = {
           "This will clear all your profile data and chat history.",
       "confirmReset":
           "Are you sure you want to reset all your data? This cannot be undone.",
-      "resetComplete": "Your data has been reset."
+      "resetComplete": "Your data has been reset.",
     },
     "language": {"title": "Language", "selectLabel": "Display Language"},
     "appearance": {
       "title": "Appearance",
       "lightTheme": "Light",
       "darkTheme": "Dark",
-      "systemTheme": "System"
+      "systemTheme": "System",
     },
     "confirmDeleteAccount":
         "Are you sure you want to delete your account? This action cannot be undone.",
@@ -692,8 +572,6 @@ const Map<String, dynamic> enLocale = {
     "emailAlreadyInUse": "Email already in use",
     "enterValidEmail": "Please enter a valid email address",
     "failedToUpdateEmail": "Failed to update email. Please try again.",
-    "passwordResetInitiated":
-        "A password reset link has been sent to your email address.",
     "unableToLoadUser": "Unable to load user information. Please try again.",
     "retry": "Retry",
     "user": "User",
@@ -702,7 +580,7 @@ const Map<String, dynamic> enLocale = {
     "confirmResetUserData":
         "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.",
     "reset": "Reset",
-    "deleteAccountTitle": "Delete Account"
+    "deleteAccountTitle": "Delete Account",
   },
   "userProfile": {
     "title": "User Profile",
@@ -748,7 +626,7 @@ const Map<String, dynamic> enLocale = {
       "tab9": "Social Security & Welfare",
       "tab10": "Criminal & Legal Records",
       "tab11": "Transportation & Mobility",
-      "tab12": "Civic & Political Participation"
+      "tab12": "Civic & Political Participation",
     },
     "tabsShort": {
       "personal": "Personal",
@@ -762,14 +640,14 @@ const Map<String, dynamic> enLocale = {
       "social": "Social",
       "criminal": "Criminal",
       "transport": "Transport",
-      "civic": "Civic"
+      "civic": "Civic",
     },
     "actions": {
       "cancel": "Cancel",
       "save": "Save Profile",
       "previous": "Previous",
       "next": "Next",
-      "saving": "Saving..."
+      "saving": "Saving...",
     },
     "fields": {
       "fullName": "Full name (including aliases)",
@@ -843,7 +721,7 @@ const Map<String, dynamic> enLocale = {
       "electionHistory": "Election participation history",
       "partyMembership": "Political party membership",
       "militaryStatus": "Military service or conscription status",
-      "publicServiceRoles": "Public service roles"
+      "publicServiceRoles": "Public service roles",
     },
     "placeholders": {
       "fullName": "Enter your full legal name",
@@ -853,7 +731,7 @@ const Map<String, dynamic> enLocale = {
       "searchDisciplines": "Search disciplines...",
       "selectDiscipline": "Select a discipline",
       "searchDegrees": "Search degrees...",
-      "selectDegree": "Select a degree"
+      "selectDegree": "Select a degree",
     },
     "validation": {
       "nameRequired": "Full name is required",
@@ -864,7 +742,7 @@ const Map<String, dynamic> enLocale = {
       "futureDate": "Date cannot be in the future",
       "invalidSelection": "Please make a valid selection",
       "passwordLength": "Password must be at least 8 characters",
-      "matchError": "Fields do not match"
+      "matchError": "Fields do not match",
     },
     "errors": {
       "savingFailed": "Failed to save profile",
@@ -873,7 +751,7 @@ const Map<String, dynamic> enLocale = {
       "invalidFileType": "Invalid file type",
       "fileTooLarge": "File is too large",
       "countryLoadError": "Error loading countries",
-      "countryUpdateError": "Error updating country"
+      "countryUpdateError": "Error updating country",
     },
     "notifications": {
       "saveSuccess": "Profile saved successfully",
@@ -886,7 +764,7 @@ const Map<String, dynamic> enLocale = {
       "formChanged": "You have unsaved changes",
       "sessionExpired": "Your session has expired, please log in again",
       "profileUpdated": "Your profile has been updated",
-      "profileIncomplete": "Your profile is incomplete"
+      "profileIncomplete": "Your profile is incomplete",
     },
     "instructions": {
       "fullNameHelp":
@@ -902,7 +780,7 @@ const Map<String, dynamic> enLocale = {
       "nextTab": "Continue to next section",
       "previousTab": "Return to previous section",
       "saveInstructions": "Click Save to store your information",
-      "cancelInstructions": "Click Cancel to discard changes"
+      "cancelInstructions": "Click Cancel to discard changes",
     },
     "completionStatus": {
       "notStarted": "Not Started",
@@ -910,26 +788,26 @@ const Map<String, dynamic> enLocale = {
       "complete": "Complete",
       "percentComplete": "{percent}% complete",
       "tabsCompleted": "{completed} of {total} sections completed",
-      "tabComplete": "Tab completed!"
+      "tabComplete": "Tab completed!",
     },
     "gender": {
       "male": "Male",
       "female": "Female",
       "other": "Other",
-      "preferNot": "Prefer not to say"
+      "preferNot": "Prefer not to say",
     },
     "maritalStatus": {
       "single": "Single",
       "married": "Married",
       "divorced": "Divorced",
       "widowed": "Widowed",
-      "other": "Other"
+      "other": "Other",
     },
     "residencyStatuses": {
       "citizen": "Citizen",
       "permanentResident": "Permanent Resident",
       "temporaryResident": "Temporary Resident",
-      "other": "Other"
+      "other": "Other",
     },
     "employmentStatuses": {
       "employed": "Employed",
@@ -938,7 +816,7 @@ const Map<String, dynamic> enLocale = {
       "student": "Student",
       "retired": "Retired",
       "homemaker": "Homemaker",
-      "other": "Other"
+      "other": "Other",
     },
     "educationLevels": {
       "primary": "Primary Education",
@@ -950,14 +828,14 @@ const Map<String, dynamic> enLocale = {
       "master": "Master's Degree",
       "doctoral": "Doctoral Degree",
       "professional": "Professional Degree",
-      "other": "Other"
+      "other": "Other",
     },
     "proficiencyLevels": {
       "native": "Native",
       "fluent": "Fluent",
       "advanced": "Advanced",
       "intermediate": "Intermediate",
-      "basic": "Basic"
+      "basic": "Basic",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -968,7 +846,7 @@ const Map<String, dynamic> enLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
     },
     "languages": {
       "english": "English",
@@ -983,7 +861,7 @@ const Map<String, dynamic> enLocale = {
       "russian": "Russian",
       "hindi": "Hindi",
       "urdu": "Urdu",
-      "other": "Other"
+      "other": "Other",
     },
     "yesNo": {"yes": "Yes", "no": "No"},
     "select": "Please select",
@@ -1090,7 +968,7 @@ const Map<String, dynamic> enLocale = {
       "Veterinary Medicine",
       "Web Development",
       "Wildlife Biology",
-      "Zoology"
+      "Zoology",
     ],
     "degreeOptions": [
       "Associate Degree",
@@ -1120,7 +998,7 @@ const Map<String, dynamic> enLocale = {
       "Vocational Certificate",
       "Graduate Certificate",
       "Post-Graduate Diploma",
-      "Post-Doctoral"
+      "Post-Doctoral",
     ],
     "aria": {
       "tabList": "Profile form sections",
@@ -1129,8 +1007,8 @@ const Map<String, dynamic> enLocale = {
       "closeButton": "Close profile form",
       "saveButton": "Save profile data",
       "requiredField": "Required field",
-      "dropdownSelect": "Select an option"
-    }
+      "dropdownSelect": "Select an option",
+    },
   },
   "chatbot": {
     "placeholder": "Type your query here...",
@@ -1139,7 +1017,7 @@ const Map<String, dynamic> enLocale = {
     "fileUploadError": "Error uploading file.",
     "processingError": "Error processing your request.",
     "welcomeMessage":
-        "Welcome! How can I assist you with Kenya government services today?",
+        "Welcome! I am here to help Lesotho farmers with crops, livestock, soil, and the weather. What would you like to know?",
     "attachFile": "Attach File",
     "fileTooLarge": "File is too large. Maximum size is {maxSize}.",
     "saveChat": "Save Chat",
@@ -1194,69 +1072,58 @@ const Map<String, dynamic> enLocale = {
         "discardAndNew": "Discard & New",
         "discardAndLoad": "Discard & Load",
         "saveFirst": "Save First",
-        "export": "Export"
-      }
+        "export": "Export",
+      },
     },
-    "shareWhatsApp": "Share on WhatsApp"
+    "shareWhatsApp": "Share on WhatsApp",
   },
   "quickhelp": {
-    // Labels (Short for UI)
-    "applyForID": "Apply for ID",
-    "payTaxes": "Pay Taxes",
-    "startBusiness": "Start Business",
-    "findHealthcare": "Healthcare",
-    "educationServices": "Education",
-    "transportLicenses": "Transport",
-    "housingPrograms": "Housing",
-    "findJobs": "Find Jobs",
-    "justChat": "Just Chat",
+    "applyForID": "Maize",
+    "payTaxes": "Beans",
+    "startBusiness": "Soil & fertility",
+    "findHealthcare": "Pests & diseases",
+    "educationServices": "Livestock",
+    "transportLicenses": "Water & irrigation",
+    "housingPrograms": "Weather & seasons",
+    "findJobs": "Markets & cooperatives",
+    "justChat": "Just chat",
 
-    // System Prompts (Hidden from User)
     "applyForIDPrompt":
-        "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Answer using ONLY what the knowledge base retrieval provides about farming in Lesotho. Focus on maize and cereals: planting times for highland vs lowland areas, varieties, rotation, storage. Never give Kenya civil registration, Huduma centres, Maisha Namba, or other non-Lesotho ID processes unless a retrieved document explicitly names them for comparison.",
     "payTaxesPrompt":
-        "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on beans, pulses, and legumes (planting, pests, soil). Do NOT answer with Kenya Revenue Authority, KRA, iTax, tax filing, or business registration unless that information appears in retrieved text about Lesotho or cross-border trade.",
     "startBusinessPrompt":
-        "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on soil health, compost, manure, liming, erosion control, and fertility for Lesotho's conditions. Do NOT give eCitizen, Kenya company registration, or business-name search steps unless retrieved documents mention them.",
     "findHealthcarePrompt":
-        "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on identifying crop pests and diseases, prevention, and safe management relevant to Lesotho. Do NOT answer with Kenya NHIF, SHIF, hospital insurance, or health USSD codes unless retrieved documents include them.",
     "educationServicesPrompt":
-        "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on livestock care (cattle, sheep, goats, poultry), feed, housing, and common diseases in Lesotho. Do NOT discuss Kenya's CBC, NEMIS, KUCCPS, or national exam systems unless retrieved text does.",
     "transportLicensesPrompt":
-        "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on irrigation, rainwater harvesting, soil moisture, and water conservation for crops in Lesotho. Do NOT give Kenya NTSA, eCitizen transport, Smart DL, or vehicle inspection steps unless retrieved documents include them.",
     "housingProgramsPrompt":
-        "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on seasonal planting calendars, frost risk, rainfall patterns, and climate considerations for Lesotho. Do NOT describe Kenya affordable housing, Boma Yangu, or urban mortgage programs unless retrieved documents mention them.",
     "findJobsPrompt":
-        "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on marketing produce, cooperatives, local buyers, and farmer groups in Lesotho. Do NOT give Kenya Public Service Commission, MyGov job portals, or civil-service recruitment unless retrieved text supports it.",
     "justChatPrompt":
-        "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'.",
+        "You are Genie AI, a friendly assistant for people working the land in Lesotho. Be practical and respectful. If the user chats generally, keep the tone helpful but steer toward farming, livestock, soil, water, and climate in Lesotho. Do not present Kenya taxes, IDs, eCitizen, or other Kenya government services as default answers. Always rely on retrieved knowledge when answering factual questions about agriculture.",
 
-    // User Prompts (Visible Text - First Person)
     "applyForIDUserPrompt":
-        "I want to find out about applying for a National ID card in Kenya.",
+        "When should I plant maize and what should I watch for in Lesotho?",
     "payTaxesUserPrompt":
-        "I want to ask about paying taxes or filing my KRA returns in Kenya.",
+        "How can I grow beans and legumes successfully on my farm?",
     "startBusinessUserPrompt":
-        "I want to find out about registering a new business or company in Kenya.",
+        "What soil fertility or compost practices work well in Lesotho?",
     "findHealthcareUserPrompt":
-        "I want to ask about public healthcare facilities and insurance (NHIF/SHIF) in Kenya.",
+        "What are signs of common crop pests or diseases I should look for?",
     "educationServicesUserPrompt":
-        "I want to find out about schools and education services in Kenya.",
+        "How do I care for livestock on a small farm?",
     "transportLicensesUserPrompt":
-        "I want to ask about driving licenses and NTSA services in Kenya.",
+        "How should I manage water or irrigation for my crops?",
     "housingProgramsUserPrompt":
-        "I want to find out about the Affordable Housing Program (Boma Yangu) in Kenya.",
+        "How do seasons and weather affect planting and harvest?",
     "findJobsUserPrompt":
-        "I want to ask about government job opportunities and PSC applications in Kenya.",
-    "justChatUserPrompt": "I want to chat generally about life in Kenya."
+        "How can I sell my produce or connect with other farmers?",
+    "justChatUserPrompt": "I'd like to ask a general question about farming in Lesotho",
   },
   "common": {
     "cancel": "Cancel",
@@ -1272,7 +1139,7 @@ const Map<String, dynamic> enLocale = {
     "open": "Open",
     "done": "Done",
     "confirm": "Confirm",
-    "edit": "Edit"
+    "edit": "Edit",
   },
   "feedback": {
     "title": "Feedback",
@@ -1286,7 +1153,7 @@ const Map<String, dynamic> enLocale = {
     "thankYouMessage": "Thank you for your feedback!",
     "submitting": "Submitting...",
     "error": "Something went wrong. Please try again.",
-    "success": "Thank you for your feedback!"
+    "success": "Thank you for your feedback!",
   },
   "responseRating": {
     "title": "Help Us Improve",
@@ -1298,11 +1165,11 @@ const Map<String, dynamic> enLocale = {
       "2": "Slightly Helpful",
       "3": "Moderately Helpful",
       "4": "Very Helpful",
-      "5": "Life Changing"
+      "5": "Life Changing",
     },
     "additionalComments": "Additional comments...",
     "submit": "Submit",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
   },
   "upload": {"alt": "Upload"},
   "uploadDialog": {
@@ -1320,8 +1187,8 @@ const Map<String, dynamic> enLocale = {
           "Shortcut files (.url) are not supported. Please drag the actual file.",
       "duplicate": "File \"{fileName}\" has already been added.",
       "uploadSuccess": "Successfully uploaded {fileName}",
-      "uploadFailed": "Failed to upload {fileName}."
-    }
+      "uploadFailed": "Failed to upload {fileName}.",
+    },
   },
   "about": {
     "title": "About",
@@ -1329,6 +1196,6 @@ const Map<String, dynamic> enLocale = {
     "description":
         "Genie AI is your intelligent assistant for navigating government services and information.",
     "techStack": "Tech Stack",
-    "copyright": "All rights reserved."
-  }
+    "copyright": "All rights reserved.",
+  },
 };

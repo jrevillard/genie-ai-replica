@@ -17,7 +17,7 @@ class ChatbotProxy {
       'sessionId': sessionId,
       'messages': messages,
       'userId': userId,
-      'timestamp': DateTime.now().toIso8601String(),
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
     };
 
     if (language != null && language.isNotEmpty) {
@@ -60,8 +60,10 @@ class ChatbotProxy {
       // FIX: Ensure userId in body is clean (remove 'users/' prefix)
       // This solves the backend warning "userId in body does not match token userId"
       if (feedback.containsKey('userId') && feedback['userId'] is String) {
-        feedback['userId'] =
-            (feedback['userId'] as String).replaceFirst('users/', '');
+        feedback['userId'] = (feedback['userId'] as String).replaceFirst(
+          'users/',
+          '',
+        );
       }
 
       // Note: queryId here should now be clean (e.g. "274711...") thanks to the fix in the Dialog.

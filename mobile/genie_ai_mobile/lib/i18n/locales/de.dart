@@ -197,154 +197,13 @@ const Map<String, dynamic> deLocale = {
     "VN": "Vietnam",
     "YE": "Jemen",
     "ZM": "Sambia",
-    "ZW": "Simbabwe"
+    "ZW": "Simbabwe",
   },
-  "verification": {
-    "verifying": "Verifiziere deine E-Mail...",
-    "success": "E-Mail erfolgreich verifiziert!",
-    "failed": "Verifizierung fehlgeschlagen",
-    "accountVerified":
-        "Dein Konto wurde erfolgreich verifiziert. Du kannst dich jetzt anmelden.",
-    "invalidLink": "Der Verifizierungslink ist ungültig oder abgelaufen.",
-    "missingToken": "Verifizierungstoken fehlt.",
-    "generalError":
-        "Ein Fehler ist während der Verifizierung aufgetreten. Bitte versuche es später erneut.",
-    "proceedToLogin": "Weiter zur Anmeldung",
-    "backToLogin": "Zurück zur Anmeldung"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Neues Passwort erstellen",
-    "tokenLabel": "Reset-Token",
-    "tokenPlaceholder": "Reset-Token eingeben",
-    "validateButton": "Token validieren",
-    "newPasswordLabel": "Neues Passwort",
-    "newPasswordPlaceholder": "Erstelle ein neues Passwort",
-    "confirmNewPasswordLabel": "Neues Passwort bestätigen",
-    "confirmNewPasswordPlaceholder": "Bestätige dein neues Passwort",
-    "resetButton": "Passwort zurücksetzen",
-    "processing": "Wird zurückgesetzt...",
-    "rememberedPassword": "Passwort eingefallen?",
-    "backToLogin": "Zurück zur Anmeldung",
-    "supportMessage": "Brauchst du Hilfe? Kontaktiere unseren Support",
-    "passwordRequirements":
-        "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl, 1 Großbuchstaben und 1 Sonderzeichen",
-    "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
-    "resetSuccess": "Dein Passwort wurde erfolgreich zurückgesetzt",
-    "resetFailed":
-        "Passwort konnte nicht zurückgesetzt werden. Bitte versuche es erneut.",
-    "noTokenProvided": "Bitte gib ein Reset-Token an",
-    "expiredToken":
-        "Dieses Reset-Token ist abgelaufen. Bitte fordere ein neues an.",
-    "invalidToken": "Ungültiges oder unbekanntes Reset-Token",
-    "validatingToken": "Validiere Token...",
-    "redirecting": "Leite zur Anmeldeseite weiter...",
-    "passwordStrength": "Passwortstärke",
-    "strengthLabels": {
-      "veryWeak": "Sehr schwach",
-      "weak": "Schwach",
-      "fair": "Mittel",
-      "good": "Gut",
-      "strong": "Stark"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Verwende mindestens 8 Zeichen",
-      "addUppercase": "Füge Großbuchstaben hinzu",
-      "addLowercase": "Füge Kleinbuchstaben hinzu",
-      "addNumbers": "Füge Zahlen hinzu",
-      "addSpecialChars": "Füge Sonderzeichen hinzu"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Passwort zurücksetzen",
-    "emailLabel": "E-Mail-Adresse",
-    "emailPlaceholder": "Gib deine E-Mail ein",
-    "resetButton": "Reset-Link senden",
-    "processing": "Sende...",
-    "rememberPassword": "Passwort eingefallen?",
-    "backToLogin": "Zurück zur Anmeldung",
-    "supportMessage": "Brauchst du Hilfe? Kontaktiere unseren Support",
-    "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
-    "resetRequestSuccess":
-        "Link zum Zurücksetzen des Passworts wurde an deine E-Mail gesendet",
-    "resetRequestFailed":
-        "Link konnte nicht gesendet werden. Bitte versuche es erneut.",
-    "checkEmail": "Bitte überprüfe deine E-Mails für weitere Anweisungen."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Neues Konto erstellen",
-    "username": "Benutzername",
-    "usernamePlaceholder": "Gib einen Benutzernamen ein",
-    "email": "E-Mail",
-    "emailPlaceholder": "Gib deine E-Mail ein",
-    "password": "Passwort",
-    "passwordPlaceholder": "Erstelle ein Passwort",
-    "confirmPassword": "Passwort bestätigen",
-    "confirmPasswordPlaceholder": "Bestätige dein Passwort",
-    "acceptTerms": "Ich akzeptiere die",
-    "termsOfService": "Nutzungsbedingungen",
-    "registerButton": "Konto erstellen",
-    "processing": "Verarbeite...",
-    "alreadyHaveAccount": "Hast du schon ein Konto?",
-    "loginNow": "Anmelden",
-    "privacyNotice":
-        "Durch die Registrierung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
-    "usernameMinLength": "Benutzername muss mindestens 3 Zeichen lang sein",
-    "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
-    "passwordRequirements":
-        "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl und 1 Großbuchstaben",
-    "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
-    "mustAcceptTerms": "Du musst die Nutzungsbedingungen akzeptieren",
-    "registrationFailed":
-        "Registrierung fehlgeschlagen. Bitte versuche es erneut.",
-    "usernameExists": "Benutzername existiert bereits",
-    "emailExists": "E-Mail existiert bereits",
-    "registrationSuccess": "Registrierung erfolgreich!",
-    "verificationEmailSent":
-        "Eine Verifizierungs-E-Mail wurde an {email} gesendet",
-    "checkEmailInstructions":
-        "Bitte überprüfe deine E-Mails und befolge die Anweisungen zur Verifizierung deines Kontos vor der Anmeldung.",
-    "backToLogin": "Zurück zur Anmeldung",
-    "noEmailReceived": "Keine E-Mail erhalten?",
-    "resendVerification": "Verifizierungs-E-Mail erneut senden",
-    "verificationResent": "Verifizierungs-E-Mail wurde erneut gesendet",
-    "verificationResendFailed":
-        "Konnte Verifizierungs-E-Mail nicht erneut senden. Bitte versuche es erneut.",
-    "usernameInvalidChars":
-        "Benutzername darf nur Buchstaben, Zahlen, Unterstriche, Punkte und Bindestriche enthalten",
-    "networkError":
-        "Netzwerkfehler. Bitte überprüfe deine Verbindung und versuche es erneut."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Benutzername",
-    "password": "Passwort",
-    "loginButton": "Anmelden",
-    "or": "oder",
-    "savedAccounts": "Gespeicherte Konten",
-    "loginSuccess": "Anmeldung erfolgreich",
-    "loginError":
-        "Anmeldung fehlgeschlagen. Bitte überprüfe deine Anmeldedaten.",
-    "googleLogin": "Weiter mit Google",
-    "facebookLogin": "Weiter mit Facebook",
-    "rememberMe": "Angemeldet bleiben",
-    "forgotPassword": "Passwort vergessen?",
-    "noAccount": "Kein Konto?",
-    "createAccount": "Konto erstellen",
-    "registerNow": "Jetzt registrieren",
-    "termsAndPolicy":
-        "Durch die Anmeldung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
-    "loggingIn": "Melde an...",
-    "fieldsRequired": "Benutzername und Passwort sind erforderlich",
-    "invalidCredentials": "Ungültiger Benutzername oder Passwort",
-    "tooManyAttempts":
-        "Zu viele Anmeldeversuche. Bitte versuche es später erneut.",
-    "loginFailed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
-    "oauthNotImplemented": "Social Login ist noch nicht implementiert",
-    "savedLoginNotImplemented":
-        "Anmeldung mit gespeichertem Konto ist noch nicht implementiert"
+  "auth": {
+    "noInternetConnection": "Keine Internetverbindung",
+    "networkUnreachable": "Netzwerk nicht erreichbar",
+    "authenticationFailed": "Authentifizierung fehlgeschlagen",
+    "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -363,8 +222,8 @@ const Map<String, dynamic> deLocale = {
       "swahili": "Suaheli",
       "german": "Deutsch",
       "spanish": "Spanisch",
-      "arabic": "Arabisch"
-    }
+      "arabic": "Arabisch",
+    },
   },
   "systemStatus": {
     "title": "Dienststatus",
@@ -378,20 +237,20 @@ const Map<String, dynamic> deLocale = {
     "checking": "Prüfe...",
     "nextDeadline": "Nächste Frist",
     "days": "Tage",
-    "viewDetails": "Details anzeigen"
+    "viewDetails": "Details anzeigen",
   },
   "services": {
     "eCitizen": "eCitizen Portal",
     "taxFiling": "Steuererklärungssystem",
     "idApplication": "Ausweisantrag",
     "businessReg": "Unternehmensregistrierung",
-    "drivingLicense": "Führerschein"
+    "drivingLicense": "Führerschein",
   },
   "deadlines": {
     "taxFiling": "Steuererklärungsfrist",
     "businessRenewal": "Erneuerung der Geschäftslizenz",
     "idRenewal": "Ausweiserneuerung",
-    "vehicleRegistration": "Fahrzeugregistrierungsfrist"
+    "vehicleRegistration": "Fahrzeugregistrierungsfrist",
   },
   "sidebar": {
     "governmentServices": "Wissensbereiche",
@@ -433,7 +292,7 @@ const Map<String, dynamic> deLocale = {
       "rain": "Regen",
       "shower": "Schauer",
       "thunderstorm": "Gewitter",
-      "snow": "Schnee"
+      "snow": "Schnee",
     },
     "folders": "Ordner",
     "emptyFolder":
@@ -447,7 +306,7 @@ const Map<String, dynamic> deLocale = {
       "all": "Alle Chats",
       "folders": "Ordner",
       "starred": "Favoriten",
-      "archived": "Archiviert"
+      "archived": "Archiviert",
     },
     "savedChats": "Gespeicherte Chats",
     "chats": "Chats",
@@ -507,7 +366,7 @@ const Map<String, dynamic> deLocale = {
     "noConversations": "Keine Unterhaltungen gefunden",
     "noStarred": "Keine favorisierten Unterhaltungen",
     "noArchived": "Keine archivierten Unterhaltungen",
-    "folderEmptyState": "Ordner ist leer"
+    "folderEmptyState": "Ordner ist leer",
   },
   "leftPanel": {
     "cat1": {
@@ -517,8 +376,8 @@ const Map<String, dynamic> deLocale = {
         "Nationale Personalausweise",
         "Reisepässe",
         "Heirats- und Sterbeurkunden",
-        "Wählerregistrierung"
-      ]
+        "Wählerregistrierung",
+      ],
     },
     "cat2": {
       "name": "2. Gesundheitswesen & Soziale Dienste",
@@ -527,8 +386,8 @@ const Map<String, dynamic> deLocale = {
         "Impfprogramme",
         "Krankenversicherung",
         "Invaliditätsleistungen",
-        "Sozialhilfe und Lebensmittelunterstützung"
-      ]
+        "Sozialhilfe und Lebensmittelunterstützung",
+      ],
     },
     "cat3": {
       "name": "3. Bildung & Lernen",
@@ -536,8 +395,8 @@ const Map<String, dynamic> deLocale = {
         "Öffentliche Schulen und Universitäten",
         "Stipendien und Studienkredite",
         "Erwachsenenbildungsprogramme",
-        "Online-Lernressourcen"
-      ]
+        "Online-Lernressourcen",
+      ],
     },
     "cat4": {
       "name": "4. Beschäftigung & Arbeitsdienste",
@@ -545,8 +404,8 @@ const Map<String, dynamic> deLocale = {
         "Arbeitssuche und Arbeitslosengeld",
         "Arbeitnehmerschutz und Arbeitsrechte",
         "Arbeitssicherheitsvorschriften",
-        "Kompetenztraining und Ausbildung"
-      ]
+        "Kompetenztraining und Ausbildung",
+      ],
     },
     "cat5": {
       "name": "5. Steuern & Einnahmen",
@@ -554,8 +413,8 @@ const Map<String, dynamic> deLocale = {
         "Einkommensteuererklärung und Rückerstattungen",
         "Grundsteuerzahlungen",
         "Gewerbesteuer-Compliance",
-        "Zoll und Einfuhrabgaben"
-      ]
+        "Zoll und Einfuhrabgaben",
+      ],
     },
     "cat6": {
       "name": "6. Öffentliche Sicherheit & Justiz",
@@ -563,8 +422,8 @@ const Map<String, dynamic> deLocale = {
         "Polizei und Notdienste",
         "Gerichts- und Rechtshilfe",
         "Kriminalitätsmeldung",
-        "Verbraucherschutzgesetze"
-      ]
+        "Verbraucherschutzgesetze",
+      ],
     },
     "cat7": {
       "name": "7. Transport & Mobilität",
@@ -572,8 +431,8 @@ const Map<String, dynamic> deLocale = {
         "Führerscheine und Fahrzeugregistrierung",
         "Öffentlicher Nahverkehr und Infrastruktur",
         "Verkehrsverstöße und Bußgelder",
-        "Verkehrssicherheitsprogramme"
-      ]
+        "Verkehrssicherheitsprogramme",
+      ],
     },
     "cat8": {
       "name": "8. Wohnen & Stadtentwicklung",
@@ -581,8 +440,8 @@ const Map<String, dynamic> deLocale = {
         "Öffentliche Wohnungsbauhilfe",
         "Eigentumsregistrierung und Grundbücher",
         "Wohnungsbaudarlehen und Zuschüsse",
-        "Zoneneinteilung und Baugenehmigungen"
-      ]
+        "Zoneneinteilung und Baugenehmigungen",
+      ],
     },
     "cat9": {
       "name": "9. Versorgung & Umwelt",
@@ -590,8 +449,8 @@ const Map<String, dynamic> deLocale = {
         "Wasser- und Stromdienste",
         "Abfallwirtschaft und Recycling",
         "Umweltvorschriften",
-        "Initiativen für erneuerbare Energien"
-      ]
+        "Initiativen für erneuerbare Energien",
+      ],
     },
     "cat10": {
       "name": "10. Wirtschaft & Handel",
@@ -599,8 +458,8 @@ const Map<String, dynamic> deLocale = {
         "Unternehmensregistrierung und Lizenzierung",
         "Handelsvorschriften und Genehmigungen",
         "Zuschüsse und Anreize für Kleinunternehmen",
-        "E-Commerce und digitale Geschäftsunterstützung"
-      ]
+        "E-Commerce und digitale Geschäftsunterstützung",
+      ],
     },
     "cat11": {
       "name": "11. Soziale Sicherheit & Renten",
@@ -608,8 +467,8 @@ const Map<String, dynamic> deLocale = {
         "Rentenleistungen",
         "Pensionsfondsmanagement",
         "Hinterbliebenenleistungen",
-        "Invaliditätsrenten"
-      ]
+        "Invaliditätsrenten",
+      ],
     },
     "cat12": {
       "name": "12. Gemeinschaft & Bürgerbeteiligung",
@@ -617,9 +476,9 @@ const Map<String, dynamic> deLocale = {
         "Wahlen und Abstimmungen",
         "Öffentliches Feedback und Bürgerbeschwerden",
         "Freiwilligenarbeit und Gemeinschaftsprogramme",
-        "Teilnahme an der lokalen Regierung"
-      ]
-    }
+        "Teilnahme an der lokalen Regierung",
+      ],
+    },
   },
   "settings": {
     "title": "Einstellungen",
@@ -635,7 +494,7 @@ const Map<String, dynamic> deLocale = {
     "languages": {
       "english": "Englisch",
       "french": "Französisch",
-      "swahili": "Suaheli"
+      "swahili": "Suaheli",
     },
     "theme": "Design",
     "themes": {"light": "Hell", "dark": "Dunkel", "system": "System"},
@@ -649,10 +508,12 @@ const Map<String, dynamic> deLocale = {
     "emailAddress": "E-Mail-Adresse",
     "emailAddressPlaceholder": "Deine E-Mail-Adresse",
     "password": "Passwort",
-    "changePassword": "Passwort ändern",
     "resetUserData": "Benutzerdaten zurücksetzen",
     "resetUserDataDesc":
         "Dies löscht alle deine Profildaten und den Chatverlauf.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Konto löschen",
     "deleteAccountDesc":
         "Dies löscht dein Konto und alle zugehörigen Daten dauerhaft.",
@@ -667,14 +528,14 @@ const Map<String, dynamic> deLocale = {
           "Dies löscht alle deine Profildaten und den Chatverlauf.",
       "confirmReset":
           "Bist du sicher, dass du alle deine Daten zurücksetzen möchtest? Dies kann nicht rückgängig gemacht werden.",
-      "resetComplete": "Deine Daten wurden zurückgesetzt."
+      "resetComplete": "Deine Daten wurden zurückgesetzt.",
     },
     "language": {"title": "Sprache", "selectLabel": "Anzeigesprache"},
     "appearance": {
       "title": "Erscheinungsbild",
       "lightTheme": "Hell",
       "darkTheme": "Dunkel",
-      "systemTheme": "System"
+      "systemTheme": "System",
     },
     "confirmDeleteAccount":
         "Bist du sicher, dass du dein Konto löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -712,8 +573,6 @@ const Map<String, dynamic> deLocale = {
     "enterValidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
     "failedToUpdateEmail":
         "Aktualisieren der E-Mail fehlgeschlagen. Bitte versuche es erneut.",
-    "passwordResetInitiated":
-        "Ein Link zum Zurücksetzen des Passworts wurde an deine E-Mail-Adresse gesendet.",
     "unableToLoadUser":
         "Benutzerinformationen konnten nicht geladen werden. Bitte versuche es erneut.",
     "retry": "Wiederholen",
@@ -723,7 +582,7 @@ const Map<String, dynamic> deLocale = {
     "confirmResetUserData":
         "Bist du sicher, dass du alle deine Profildaten zurücksetzen möchtest? Dies löscht alle Profilinformationen und den Chatverlauf, behält aber deine Zugangsdaten.",
     "reset": "Zurücksetzen",
-    "deleteAccountTitle": "Konto löschen"
+    "deleteAccountTitle": "Konto löschen",
   },
   "userProfile": {
     "title": "Benutzerprofil",
@@ -772,7 +631,7 @@ const Map<String, dynamic> deLocale = {
       "tab9": "Soziale Sicherheit & Wohlfahrt",
       "tab10": "Straf- & Rechtsregister",
       "tab11": "Transport & Mobilität",
-      "tab12": "Bürgerliche & Politische Beteiligung"
+      "tab12": "Bürgerliche & Politische Beteiligung",
     },
     "tabsShort": {
       "personal": "Persönlich",
@@ -786,14 +645,14 @@ const Map<String, dynamic> deLocale = {
       "social": "Sozial",
       "criminal": "Kriminal",
       "transport": "Verkehr",
-      "civic": "Bürger"
+      "civic": "Bürger",
     },
     "actions": {
       "cancel": "Abbrechen",
       "save": "Profil speichern",
       "previous": "Zurück",
       "next": "Weiter",
-      "saving": "Speichere..."
+      "saving": "Speichere...",
     },
     "fields": {
       "fullName": "Vollständiger Name (einschließlich Aliase)",
@@ -868,7 +727,7 @@ const Map<String, dynamic> deLocale = {
       "electionHistory": "Wahlteilnahmehistorie",
       "partyMembership": "Politische Parteimitgliedschaft",
       "militaryStatus": "Militärdienst- oder Wehrpflichtstatus",
-      "publicServiceRoles": "Rollen im öffentlichen Dienst"
+      "publicServiceRoles": "Rollen im öffentlichen Dienst",
     },
     "placeholders": {
       "fullName": "Gib deinen vollen gesetzlichen Namen ein",
@@ -878,7 +737,7 @@ const Map<String, dynamic> deLocale = {
       "searchDisciplines": "Disziplinen suchen...",
       "selectDiscipline": "Wähle eine Disziplin",
       "searchDegrees": "Abschlüsse suchen...",
-      "selectDegree": "Wähle einen Abschluss"
+      "selectDegree": "Wähle einen Abschluss",
     },
     "validation": {
       "nameRequired": "Vollständiger Name ist erforderlich",
@@ -889,7 +748,7 @@ const Map<String, dynamic> deLocale = {
       "futureDate": "Datum kann nicht in der Zukunft liegen",
       "invalidSelection": "Bitte triff eine gültige Auswahl",
       "passwordLength": "Passwort muss mindestens 8 Zeichen lang sein",
-      "matchError": "Felder stimmen nicht überein"
+      "matchError": "Felder stimmen nicht überein",
     },
     "errors": {
       "savingFailed": "Fehler beim Speichern des Profils",
@@ -898,7 +757,7 @@ const Map<String, dynamic> deLocale = {
       "invalidFileType": "Ungültiger Dateityp",
       "fileTooLarge": "Datei ist zu groß",
       "countryLoadError": "Fehler beim Laden der Länder",
-      "countryUpdateError": "Fehler beim Aktualisieren des Landes"
+      "countryUpdateError": "Fehler beim Aktualisieren des Landes",
     },
     "notifications": {
       "saveSuccess": "Profil erfolgreich gespeichert",
@@ -912,7 +771,7 @@ const Map<String, dynamic> deLocale = {
       "sessionExpired":
           "Deine Sitzung ist abgelaufen, bitte melde dich erneut an",
       "profileUpdated": "Dein Profil wurde aktualisiert",
-      "profileIncomplete": "Dein Profil ist unvollständig"
+      "profileIncomplete": "Dein Profil ist unvollständig",
     },
     "instructions": {
       "fullNameHelp":
@@ -929,7 +788,7 @@ const Map<String, dynamic> deLocale = {
       "previousTab": "Zurück zum vorherigen Abschnitt",
       "saveInstructions":
           "Klicke auf Speichern, um deine Informationen zu speichern",
-      "cancelInstructions": "Klicke auf Abbrechen, um Änderungen zu verwerfen"
+      "cancelInstructions": "Klicke auf Abbrechen, um Änderungen zu verwerfen",
     },
     "completionStatus": {
       "notStarted": "Nicht gestartet",
@@ -937,26 +796,26 @@ const Map<String, dynamic> deLocale = {
       "complete": "Abgeschlossen",
       "percentComplete": "{percent}% abgeschlossen",
       "tabsCompleted": "{completed} von {total} Abschnitten abgeschlossen",
-      "tabComplete": "Tab abgeschlossen!"
+      "tabComplete": "Tab abgeschlossen!",
     },
     "gender": {
       "male": "Männlich",
       "female": "Weiblich",
       "other": "Andere",
-      "preferNot": "Keine Angabe"
+      "preferNot": "Keine Angabe",
     },
     "maritalStatus": {
       "single": "Ledig",
       "married": "Verheiratet",
       "divorced": "Geschieden",
       "widowed": "Verwitwet",
-      "other": "Andere"
+      "other": "Andere",
     },
     "residencyStatuses": {
       "citizen": "Bürger",
       "permanentResident": "Dauerhafter Bewohner",
       "temporaryResident": "Vorübergehender Bewohner",
-      "other": "Andere"
+      "other": "Andere",
     },
     "employmentStatuses": {
       "employed": "Angestellt",
@@ -965,7 +824,7 @@ const Map<String, dynamic> deLocale = {
       "student": "Student",
       "retired": "Im Ruhestand",
       "homemaker": "Hausfrau/Hausmann",
-      "other": "Andere"
+      "other": "Andere",
     },
     "educationLevels": {
       "primary": "Grundschulbildung",
@@ -977,14 +836,14 @@ const Map<String, dynamic> deLocale = {
       "master": "Master-Abschluss",
       "doctoral": "Doktorgrad",
       "professional": "Berufsabschluss",
-      "other": "Andere"
+      "other": "Andere",
     },
     "proficiencyLevels": {
       "native": "Muttersprache",
       "fluent": "Fließend",
       "advanced": "Fortgeschritten",
       "intermediate": "Mittelstufe",
-      "basic": "Grundkenntnisse"
+      "basic": "Grundkenntnisse",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -995,7 +854,7 @@ const Map<String, dynamic> deLocale = {
       "abNegative": "AB-",
       "oPositive": "0+",
       "oNegative": "0-",
-      "unknown": "Unbekannt"
+      "unknown": "Unbekannt",
     },
     "languages": {
       "english": "Englisch",
@@ -1010,7 +869,7 @@ const Map<String, dynamic> deLocale = {
       "russian": "Russisch",
       "hindi": "Hindi",
       "urdu": "Urdu",
-      "other": "Andere"
+      "other": "Andere",
     },
     "yesNo": {"yes": "Ja", "no": "Nein"},
     "select": "Bitte auswählen",
@@ -1117,7 +976,7 @@ const Map<String, dynamic> deLocale = {
       "Veterinärmedizin",
       "Webentwicklung",
       "Wildbiologie",
-      "Zoologie"
+      "Zoologie",
     ],
     "degreeOptions": [
       "Associate Degree",
@@ -1147,7 +1006,7 @@ const Map<String, dynamic> deLocale = {
       "Vocational Certificate",
       "Graduate Certificate",
       "Post-Graduate Diploma",
-      "Post-Doctoral"
+      "Post-Doctoral",
     ],
     "aria": {
       "tabList": "Profilformularabschnitte",
@@ -1156,8 +1015,8 @@ const Map<String, dynamic> deLocale = {
       "closeButton": "Profilformular schließen",
       "saveButton": "Profildaten speichern",
       "requiredField": "Pflichtfeld",
-      "dropdownSelect": "Wähle eine Option"
-    }
+      "dropdownSelect": "Wähle eine Option",
+    },
   },
   "chatbot": {
     "placeholder": "Gib deine Anfrage hier ein...",
@@ -1223,10 +1082,10 @@ const Map<String, dynamic> deLocale = {
         "discardAndNew": "Verwerfen & Neu",
         "discardAndLoad": "Verwerfen & Laden",
         "saveFirst": "Zuerst speichern",
-        "export": "Exportieren"
-      }
+        "export": "Exportieren",
+      },
     },
-    "shareWhatsApp": "Auf WhatsApp teilen"
+    "shareWhatsApp": "Auf WhatsApp teilen",
   },
   "quickhelp": {
     "applyForID": "ID beantragen",
@@ -1273,7 +1132,7 @@ const Map<String, dynamic> deLocale = {
     "findJobsUserPrompt":
         "Ich möchte Fragen zu Stellenangeboten der Regierung und PSC-Bewerbungen in Kenia stellen.",
     "justChatUserPrompt":
-        "Ich möchte allgemein über das Leben in Kenia chatten."
+        "Ich möchte allgemein über das Leben in Kenia chatten.",
   },
   "common": {
     "cancel": "Abbrechen",
@@ -1289,7 +1148,7 @@ const Map<String, dynamic> deLocale = {
     "open": "Öffnen",
     "done": "Fertig",
     "confirm": "Bestätigen",
-    "edit": "Bearbeiten"
+    "edit": "Bearbeiten",
   },
   "feedback": {
     "title": "Feedback",
@@ -1303,7 +1162,7 @@ const Map<String, dynamic> deLocale = {
     "thankYouMessage": "Danke für dein Feedback!",
     "submitting": "Sende...",
     "error": "Etwas ist schief gelaufen. Bitte versuche es erneut.",
-    "success": "Danke für dein Feedback!"
+    "success": "Danke für dein Feedback!",
   },
   "responseRating": {
     "title": "Hilf uns zu verbessern",
@@ -1315,11 +1174,11 @@ const Map<String, dynamic> deLocale = {
       "2": "Wenig hilfreich",
       "3": "Mäßig hilfreich",
       "4": "Sehr hilfreich",
-      "5": "Lebensverändernd"
+      "5": "Lebensverändernd",
     },
     "additionalComments": "Zusätzliche Kommentare...",
     "submit": "Senden",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
   },
   "upload": {"alt": "Hochladen"},
   "uploadDialog": {
@@ -1337,8 +1196,8 @@ const Map<String, dynamic> deLocale = {
           "Verknüpfungsdateien (.url) werden nicht unterstützt. Bitte ziehen Sie die eigentliche Datei.",
       "duplicate": "Datei \"{fileName}\" wurde bereits hinzugefügt.",
       "uploadSuccess": "{fileName} erfolgreich hochgeladen",
-      "uploadFailed": "Fehler beim Hochladen von {fileName}."
-    }
+      "uploadFailed": "Fehler beim Hochladen von {fileName}.",
+    },
   },
   "about": {
     "title": "Über",
@@ -1346,6 +1205,6 @@ const Map<String, dynamic> deLocale = {
     "description":
         "Genie AI ist dein intelligenter Assistent für die Navigation durch staatliche Dienstleistungen und Informationen.",
     "techStack": "Tech-Stack",
-    "copyright": "Alle Rechte vorbehalten."
-  }
+    "copyright": "Alle Rechte vorbehalten.",
+  },
 };

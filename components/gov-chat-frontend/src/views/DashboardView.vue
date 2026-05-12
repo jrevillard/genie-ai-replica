@@ -6,14 +6,14 @@
 </template>
 
 <script>
-import ChatBotComponent from '@/components/ChatBotComponent.vue'
+import ChatBotComponent from '@/components/ChatBotComponent.vue';
 
 export default {
   name: 'DashboardView',
   components: {
     ChatBotComponent
   }
-}
+};
 </script>
 
 <style scoped>

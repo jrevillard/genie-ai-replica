@@ -1,9 +1,113 @@
-node_modules/
+# playwright-cli working directory (test snapshots)
+.playwright-cli/
+.playwright/
+
+# Playwright test results
+test-results/
+
+# Environment files (secrets - never commit)
 .env
 .env.local
-.DS_Store
-*.log
-logs
-*.log.gz
+.env.*.local
+
+# SSL certificates and keys (secrets - never commit)
+# The secrets/ directory contains actual certificates - keep structure but not files
+secrets/*.crt
+secrets/*.key
+secrets/*.pem
+api-gateway-solution/nginx/certs/
+
+# Auto-generated nginx config (rendered from template at container start)
+api-gateway-solution/nginx/conf/default.conf
+
+# Node modules
+node_modules/
+
+# Build outputs
 dist/
+
+# Git worktrees
+.worktrees/
+.claude/worktrees/
 build/
+
+# Logs
+logs/
+*.log
+*.log.txt
+*-log.txt
+*.log.gz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Centralized data directories (bind mounts)
+data/logs/
+data/database_backups/
+data/huggingface/
+data/models*
+
+# Database backups
+database_backups/
+
+# Kong config backups (runtime artifact)
+api-gateway-solution/new-config/kong_backups/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage/
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
+# Optional cache directories
+.npm
+.eslintcache
+.node_repl_history
+
+# Upload directories
+uploads/*.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.env.swp
+
+# Temporary files
+*.tmp
+.tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Docker volumes data
+arango_data/
+
+# EasyOCR models (downloaded during Docker build)
+craft_mlt_*.zip
+english_g2.zip
+
+# Claude Code settings
+.claude/settings.local.json
+
+# Roo local state
+.roo/
+
+# Stray SSL certificates (dev artifacts, never commit)
+*.pem
+*.crt
+!configs/**/*.crt
+!configs/**/*.pem

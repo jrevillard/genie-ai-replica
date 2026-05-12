@@ -6,28 +6,23 @@
       <div class="spinner"></div>
       <p>{{ $t('loading.message', 'Loading user profile...') }}</p>
     </div>
-    
+
     <!-- Error state -->
     <div v-else-if="error" class="error-container">
       <p class="error-message">{{ error }}</p>
-      <button @click="retryLoading" class="retry-button">
+      <button class="retry-button" @click="retryLoading">
         {{ $t('error.retry', 'Retry') }}
       </button>
     </div>
-    
+
     <!-- Profile component -->
-    <UserProfileComponent
-      v-else
-      v-model="profileData"
-      @save="saveProfile"
-      @cancel="handleCancel"
-    />
+    <UserProfileComponent v-else v-model="profileData" @save="saveProfile" @cancel="handleCancel" />
   </div>
 </template>
 
 <script>
 import UserProfileComponent from './UserProfileComponent.vue';
-import { userProfileService, fileService } from '../services';
+import { userProfileService } from '../services';
 
 export default {
   name: 'UserProfileContainer',
@@ -64,7 +59,7 @@ export default {
     async loadUserProfile() {
       this.isLoading = true;
       this.error = null;
-      
+
       try {
         const profileData = await userProfileService.getProfile(this.userId);
         this.profileData = this.processProfileDataForDisplay(profileData);
@@ -75,43 +70,43 @@ export default {
         this.isLoading = false;
       }
     },
-    
+
     /**
      * Process profile data from the backend for display in the component
      */
     processProfileDataForDisplay(data) {
       // Deep clone to avoid modifying the original
       const processedData = JSON.parse(JSON.stringify(data));
-      
+
       // Process file URLs to File objects if needed
       // This is just a placeholder - in a real implementation,
       // you would handle any data transformation needed
-      
+
       return processedData;
     },
-    
+
     /**
      * Save the user profile
      */
     async saveProfile(profileData) {
       this.isSaving = true;
       this.error = null;
-      
+
       try {
         let savedProfile;
-        
+
         if (this.isNewUser) {
           savedProfile = await userProfileService.createProfile(profileData);
-          
+
           // Emit event to notify parent component of the new user ID
           this.$emit('user-created', savedProfile._key);
         } else {
           savedProfile = await userProfileService.updateProfile(this.userId, profileData);
         }
-        
+
         // Success notification
         this.$emit('saved', savedProfile);
-        
+
         // Update local data with saved profile
         this.profileData = this.processProfileDataForDisplay(savedProfile);
       } catch (error) {
@@ -122,14 +117,14 @@ export default {
         this.isSaving = false;
       }
     },
-    
+
     /**
      * Handle cancel button click
      */
     handleCancel() {
       this.$emit('cancel');
     },
-    
+
     /**
      * Retry loading after an error
      */
@@ -141,7 +136,7 @@ export default {
         this.loadUserProfile();
       }
     },
-    
+
     /**
      * Get an empty profile structure
      */
@@ -259,7 +254,7 @@ export default {
 .spinner {
   border: 4px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 4px solid #4E97D1;
+  border-top: 4px solid #4e97d1;
   width: 40px;
   height: 40px;
   animation: spin 1s linear infinite;
@@ -267,8 +262,12 @@ export default {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .error-message {
@@ -278,7 +277,7 @@ export default {
 
 .retry-button {
   padding: 8px 16px;
-  background-color: #4E97D1;
+  background-color: #4e97d1;
   color: white;
   border: none;
   border-radius: 4px;

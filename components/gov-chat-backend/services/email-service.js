@@ -52,8 +52,16 @@ class EmailService {
     // Default frontend URL for links, normalized
     this.defaultFrontendUrl = this.normalizeBaseUrl(process.env.FRONTEND_URL || 'http://localhost:8080'); // Modified
 
-    // Test SMTP connection at startup
-    this.verifyConnection();
+    this.smtpConfigured = this.hasValidSmtpConfig();
+
+    // Test SMTP connection at startup only for non-placeholder config.
+    if (this.smtpConfigured) {
+      this.verifyConnection();
+    } else {
+      logger.warn('EmailService.smtp_not_configured', {
+        message: 'Skipping SMTP verification because EMAIL_* values are missing or placeholders.'
+      });
+    }
 
     logger.info('EmailService.initialized');
   }
@@ -101,6 +109,21 @@ class EmailService {
       });
       return `${this.defaultFrontendUrl}/${path.replace(/^\/+/, '')}`;
     }
+  }
+
+  hasValidSmtpConfig() {
+    const values = [
+      process.env.EMAIL_HOST,
+      process.env.EMAIL_PORT,
+      process.env.EMAIL_USER,
+      process.env.EMAIL_PASSWORD,
+      process.env.EMAIL_FROM
+    ].map((v) => String(v || '').trim());
+    if (values.some((v) => !v)) {
+      return false;
+    }
+    const placeholderRegex = /<[^>]+>|your-|example\.com|smtp-host|smtp-port|smtp-password|domain-name/i;
+    return !values.some((v) => placeholderRegex.test(v));
   }
 
   /**
@@ -160,6 +183,12 @@ class EmailService {
    * @returns {Promise} Send result
    */
   async sendPasswordResetEmail(email, token, userName, frontendUrl) {
+    if (!this.smtpConfigured) {
+      logger.warn('EmailService.password_reset_email_skipped', {
+        reason: 'SMTP is not configured with real credentials.'
+      });
+      throw new Error('Email service is not configured.');
+    }
     const startTime = Date.now();
     if (DEBUG) {
       logger.debug('EmailService.send_password_reset_email_start', {
@@ -301,6 +330,12 @@ The ${this.appName} Team
    * @returns {Promise} Send result
    */
   async sendVerificationEmail(email, token, userName, frontendUrl, verificationUrl) {
+    if (!this.smtpConfigured) {
+      logger.warn('EmailService.verification_email_skipped', {
+        reason: 'SMTP is not configured with real credentials.'
+      });
+      throw new Error('Email service is not configured.');
+    }
     const startTime = Date.now();
     if (!email) {
       logger.error('EmailService.verification_email_missing_recipient', {

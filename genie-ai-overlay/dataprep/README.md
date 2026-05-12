@@ -217,8 +217,8 @@ graph TB
 
 1. **Clone Repository**:
    ```bash
-   git clone https://github.com/your-org/genie-ai-overlay.git
-   cd genie-ai-overlay/dataprep
+   git clone https://github.com/your-org/inko-overlay.git
+   cd inko-overlay/dataprep
    ```
 
 2. **Build Docker Image**:
@@ -909,3 +909,4 @@ Graph storage with [ArangoDB](https://www.arangodb.com/).
 
 **Last Updated**: 2025-02-07
 **Version**: 1.0.0
+

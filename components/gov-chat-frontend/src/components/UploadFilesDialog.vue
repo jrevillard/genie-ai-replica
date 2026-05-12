@@ -3,26 +3,22 @@
   <div class="dialog-container">
     <div class="dialog-header">
       <h2 class="dialog-title">
-        {{ translate("uploadDialog.title", "Upload Files") }}
+        {{ translate('uploadDialog.title', 'Upload Files') }}
       </h2>
-      <button
-        class="dialog-close-btn"
-        @click="$emit('close')"
-        :aria-label="translate('details.close', 'Close')"
-      >
+      <button class="dialog-close-btn" :aria-label="translate('details.close', 'Close')" @click="$emit('close')">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="24"
           height="24"
-          viewBox="0 0 24"
+          viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </div>
@@ -30,91 +26,77 @@
     <div class="dialog-body">
       <div
         class="drop-zone"
+        :class="{ 'drag-over': isDragging }"
         @dragover.prevent="onDragOver"
         @dragleave.prevent="onDragLeave"
         @drop.prevent="handleDrop"
         @click="openFileDialog"
-        :class="{ 'drag-over': isDragging }"
       >
         <input
-          type="file"
           ref="fileInput"
-          @change="handleFileSelect"
+          type="file"
           multiple
           hidden
           :accept="allowedExtensions.join(',')"
+          @change="handleFileSelect"
         />
         <p>
-          {{
-            translate(
-              "uploadDialog.dropzone",
-              "Drag & drop files here, or click to select"
-            )
-          }}
+          {{ translate('uploadDialog.dropzone', 'Drag & drop files here, or click to select') }}
         </p>
       </div>
-      <p class="form-hint">{{ translate('uploadDialog.allowedTypesLabel', 'Allowed types:') }} {{ allowedExtensions.join(", ") }}</p>
+      <p class="form-hint">
+        {{ translate('uploadDialog.allowedTypesLabel', 'Allowed types:') }} {{ allowedExtensions.join(', ') }}
+      </p>
 
-      <div class="file-list-container" v-if="files.length > 0">
+      <div v-if="files.length > 0" class="file-list-container">
         <ul class="file-list">
           <li v-for="(file, index) in files" :key="index" class="file-item">
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file.size) }}</span>
             <button class="remove-file-btn" @click="removeFile(index)">
-              {{ translate("uploadDialog.remove", "Remove") }}
+              {{ translate('uploadDialog.remove', 'Remove') }}
             </button>
           </li>
         </ul>
       </div>
 
       <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
-      </div>
+    </div>
 
     <div class="dialog-footer">
       <button class="btn btn-outline" @click="$emit('close')">
-        {{ translate("common.cancel", "Cancel") }}
+        {{ translate('common.cancel', 'Cancel') }}
       </button>
-      <button
-        class="btn btn-primary"
-        @click="handleUpload"
-        :disabled="files.length === 0 || isUploading"
-      >
-        <span v-if="isUploading">{{
-          translate("uploadDialog.uploading", "Uploading...")
-        }}</span>
-        <span v-else>{{
-          translate("uploadDialog.buttonUpload", `Upload {count} File(s)`).replace('{count}', files.length)
-        }}</span>
+      <button class="btn btn-primary" :disabled="files.length === 0 || isUploading" @click="handleUpload">
+        <span v-if="isUploading">{{ translate('uploadDialog.uploading', 'Uploading...') }}</span>
+        <span v-else>
+          {{ translate('uploadDialog.buttonUpload', `Upload {count} File(s)`).replace('{count}', files.length) }}
+        </span>
       </button>
     </div>
   </div>
 </template>
 
 <script>
-import documentFileService from "../services/documentFileService.js";
-import { eventBus } from "../eventBus.js";
+import documentFileService from '../services/documentFileService.js';
+import { eventBus } from '../eventBus.js';
+import { formatFileSize } from '../utils/fileUtils.js';
 
 export default {
-  name: "UploadFilesDialog",
-  emits: ["close", "files-uploaded"],
+  name: 'UploadFilesDialog',
+  emits: ['close', 'files-uploaded'],
   data() {
     return {
       files: [],
       isDragging: false,
       isUploading: false,
-      errorMessage: "", // --- ADDED ---
+      errorMessage: '', // --- ADDED ---
       // MODIFIED per Spec 4.2
-      allowedExtensions: [
-        ".pdf",
-        ".docx",
-        ".xlsx",
-        ".md",
-        ".html",
-        ".txt",
-      ],
+      allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt']
     };
   },
   methods: {
+    formatFileSize,
     // --- ADDED: Translation Method ---
     translate(key, fallback) {
       if (this.$i18n && this.$i18n.t) {
@@ -131,19 +113,19 @@ export default {
       this.$refs.fileInput.click();
     },
     handleFileSelect(event) {
-      this.errorMessage = ""; // --- ADDED ---
+      this.errorMessage = ''; // --- ADDED ---
       this.addFiles([...event.target.files]);
-      event.target.value = "";
+      event.target.value = '';
     },
     handleDrop(event) {
       this.isDragging = false;
-      this.errorMessage = ""; // --- ADDED ---
+      this.errorMessage = ''; // --- ADDED ---
       event.preventDefault();
       const droppedFiles = [];
       if (event.dataTransfer.items) {
         for (let i = 0; i < event.dataTransfer.items.length; i++) {
           const item = event.dataTransfer.items[i];
-          if (item.kind === "file") {
+          if (item.kind === 'file') {
             const file = item.getAsFile();
             if (file) {
               droppedFiles.push(file);
@@ -157,41 +139,51 @@ export default {
         this.addFiles(droppedFiles);
       } else {
         // --- UPDATED ---
-        const errorMsg = this.translate('uploadDialog.notifications.dropError', "Only files can be dropped. Please check you are dragging a valid file from your computer.");
+        const errorMsg = this.translate(
+          'uploadDialog.notifications.dropError',
+          'Only files can be dropped. Please check you are dragging a valid file from your computer.'
+        );
         this.errorMessage = errorMsg; // --- ADDED ---
-        this.showNotification(errorMsg, "error");
+        this.showNotification(errorMsg, 'error');
       }
     },
     addFiles(newFiles) {
       // Clear previous validation errors when adding new files
-      this.errorMessage = ""; // --- ADDED ---
+      this.errorMessage = ''; // --- ADDED ---
 
       newFiles.forEach((file) => {
-        const extension = "." + file.name.split(".").pop().toLowerCase();
+        const extension = '.' + file.name.split('.').pop().toLowerCase();
 
         if (!this.allowedExtensions.includes(extension)) {
           // --- UPDATED ---
-          const errorMsg = this.translate('uploadDialog.notifications.typeNotAllowed', `File type "{extension}" is not allowed.`).replace('{extension}', extension);
+          const errorMsg = this.translate(
+            'uploadDialog.notifications.typeNotAllowed',
+            `File type "{extension}" is not allowed.`
+          ).replace('{extension}', extension);
           this.errorMessage = errorMsg; // --- ADDED ---
-          this.showNotification(errorMsg, "error");
+          this.showNotification(errorMsg, 'error');
           return;
         }
 
-        if (file.name.toLowerCase().endsWith(".url")) {
+        if (file.name.toLowerCase().endsWith('.url')) {
           // --- UPDATED ---
-          const errorMsg = this.translate('uploadDialog.notifications.shortcutUnsupported', "Shortcut files (.url) are not supported. Please drag the actual file.");
+          const errorMsg = this.translate(
+            'uploadDialog.notifications.shortcutUnsupported',
+            'Shortcut files (.url) are not supported. Please drag the actual file.'
+          );
           this.errorMessage = errorMsg; // --- ADDED ---
-          this.showNotification(errorMsg, "error");
+          this.showNotification(errorMsg, 'error');
           return;
         }
 
-        if (
-          this.files.some((f) => f.name === file.name && f.size === file.size)
-        ) {
+        if (this.files.some((f) => f.name === file.name && f.size === file.size)) {
           // UPDATED
           this.showNotification(
-            this.translate('uploadDialog.notifications.duplicate', `File "{fileName}" has already been added.`).replace('{fileName}', file.name),
-            "info"
+            this.translate('uploadDialog.notifications.duplicate', `File "{fileName}" has already been added.`).replace(
+              '{fileName}',
+              file.name
+            ),
+            'info'
           );
           return;
         }
@@ -201,7 +193,7 @@ export default {
     },
     removeFile(index) {
       this.files.splice(index, 1);
-      this.errorMessage = ""; // --- ADDED ---
+      this.errorMessage = ''; // --- ADDED ---
     },
     onDragOver() {
       this.isDragging = true;
@@ -209,28 +201,31 @@ export default {
     onDragLeave() {
       this.isDragging = false;
     },
-    formatFileSize(bytes) {
-      if (bytes === 0) return "0 Bytes";
-      const k = 1024;
-      const sizes = ["Bytes", "KB", "MB", "GB"];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-    },
     async handleUpload() {
       this.isUploading = true;
-      this.errorMessage = ""; // --- ADDED ---
+      this.errorMessage = ''; // --- ADDED ---
       const successfulUploads = [];
+      const failedUploads = [];
+      let autoIngestScheduled = false;
 
       for (const file of this.files) {
         try {
           const formData = new FormData();
-          formData.append("file", file);
-          await documentFileService.uploadFile(formData);
-          successfulUploads.push(file.name);
+          formData.append('file', file);
+          const res = await documentFileService.uploadFile(formData);
+          if (res && res.autoIngestScheduled === true) {
+            autoIngestScheduled = true;
+          }
+          const inner = res && res.data ? res.data : res;
+          const fileId = inner && inner.file_id ? inner.file_id : null;
+          successfulUploads.push({ fileName: file.name, fileId });
           // UPDATED
           this.showNotification(
-            this.translate('uploadDialog.notifications.uploadSuccess', `Successfully uploaded {fileName}`).replace('{fileName}', file.name),
-            "success"
+            this.translate('uploadDialog.notifications.uploadSuccess', `Successfully uploaded {fileName}`).replace(
+              '{fileName}',
+              file.name
+            ),
+            'success'
           );
         } catch (error) {
           // --- THIS IS THE KEY FIX ---
@@ -239,33 +234,47 @@ export default {
             error.response?.data?.message || // 1. Check for { message: "..." } in data
             (typeof error.response?.data === 'string' ? error.response.data : null) || // 2. Check if data *is* the message string
             error.message || // 3. Check the top-level error message
-            this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace('{fileName}', file.name); // 4. Fallback
+            this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace(
+              '{fileName}',
+              file.name
+            ); // 4. Fallback
 
           // --- UPDATED ---
           this.errorMessage = backendMessage; // --- ADDED: Show error in the dialog box
-          this.showNotification(backendMessage, "error");
-          
+          this.showNotification(backendMessage, 'error');
+          failedUploads.push({ file, message: backendMessage });
+
           console.error(`Error uploading ${file.name}. Displayed message:`, backendMessage);
           console.error(`Full error object for ${file.name}:`, error);
           if (error.response) {
-            console.error("Error response data:", error.response.data);
+            console.error('Error response data:', error.response.data);
           }
           // --- END FIX ---
         }
       }
       this.isUploading = false;
       if (successfulUploads.length > 0) {
-        this.$emit("files-uploaded", successfulUploads);
+        eventBus.$emit('reload-service-tree');
+        this.$emit('files-uploaded', { uploads: successfulUploads, autoIngestScheduled });
       }
-      // Only close if ALL files were uploaded successfully
-      if (successfulUploads.length === this.files.length && this.files.length > 0) {
-        this.$emit("close");
+      if (failedUploads.length > 0) {
+        // Keep only failed files in the dialog so user can retry quickly.
+        this.files = failedUploads.map((f) => f.file);
+        const summary = failedUploads
+          .slice(0, 3)
+          .map((f) => `${f.file.name}: ${f.message}`)
+          .join(' | ');
+        this.errorMessage = summary;
+      }
+      // Close automatically when all selected files uploaded successfully.
+      if (failedUploads.length === 0 && successfulUploads.length > 0) {
+        this.$emit('close');
       }
     },
-    showNotification(message, type = "success") {
-      eventBus.$emit("notification:show", { message, type });
-    },
-  },
+    showNotification(message, type = 'success') {
+      eventBus.$emit('notification:show', { message, type });
+    }
+  }
 };
 </script>
 
@@ -359,7 +368,9 @@ export default {
   text-align: center;
   color: var(--text-secondary, #6b7280);
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
 }
 .drop-zone.drag-over {
   background-color: rgba(59, 130, 246, 0.05);

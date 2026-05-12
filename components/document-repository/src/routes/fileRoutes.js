@@ -1,7 +1,7 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
-const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
-const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
+const { uploadSingle, uploadMultiple, validateFiles } = require('../middlewares/fileUpload');
+const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
 const router = express.Router();
 
@@ -47,7 +47,7 @@ router.use(authenticateToken);
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
+router.post('/upload', authorizeRole(['Admin']), uploadSingle, validateFiles, fileController.uploadFile);
 
 /**
  * @swagger
@@ -90,7 +90,7 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
+router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, validateFiles, fileController.uploadMultipleFiles);
 
 /**
  * @swagger
@@ -259,6 +259,45 @@ router.get('/', fileController.getFiles);
  *         description: Unauthorized
  */
 router.get('/search', fileController.searchMetadata);
+
+/**
+ * @swagger
+ * /api/files/search/files:
+ *   get:
+ *     summary: Search files by text query
+ *     description: Full-text search across file names, source URLs, and authors
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 2
+ *           maxLength: 100
+ *         description: Search query
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 10
+ *         description: Maximum number of results
+ *       - in: query
+ *         name: mimeType
+ *         schema:
+ *           type: string
+ *         description: Filter by MIME type
+ *     responses:
+ *       '200':
+ *         description: Search results
+ *       '401':
+ *         description: Unauthorized
+ */
+router.get('/search/files', fileController.searchFiles);
 
 /**
  * @swagger
@@ -544,7 +583,7 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *       '404':
  *         description: File not found
  */
-router.delete('/:fileId', fileController.deleteFile);
+router.delete('/:fileId', authorizeRole(['Admin']), fileController.deleteFile);
 
 /**
  * @swagger
@@ -574,7 +613,7 @@ router.delete('/:fileId', fileController.deleteFile);
  *       '401':
  *         description: Unauthorized
  */
-router.delete('/', fileController.deleteMultipleFiles);
+router.delete('/', authorizeRole(['Admin']), fileController.deleteMultipleFiles);
 
 /**
  * @swagger
@@ -748,7 +787,7 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.addIngestionLog);
+router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.addIngestionLog);
 
 /**
  * @swagger
@@ -809,6 +848,14 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.ge
  *       '401':
  *         description: Unauthorized
  */
-router.patch('/:fileId/status', authorizeRole(['Admin']), fileController.updateFileStatus);
+router.patch('/:fileId/status', authorizeRole(['Admin', 'dataprep-service']), fileController.updateFileStatus);
+
+router.patch(
+  '/:fileId/ingestion-metadata',
+  authorizeRole(['Admin', 'dataprep-service']),
+  fileController.updateIngestionMetadata
+);
+
+router.post('/:fileId/reextract-taxonomy', authorizeRole(['Admin']), fileController.reextractTaxonomy);
 
 module.exports = router;

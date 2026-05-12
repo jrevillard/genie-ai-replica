@@ -2,43 +2,43 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import fcntl  # Added for file locking
 import json
 import os
 import re
-import asyncio
+from datetime import datetime, timezone
+from typing import Any
+
 import aiohttp
-import fcntl  # Added for file locking
-from typing import List, Optional, Union, Dict, Any
-from datetime import datetime, timedelta
 
-from numpy import dot
-from numpy.linalg import norm
-from rank_bm25 import BM25Okapi
-
-from openai import AsyncOpenAI
-from langchain_community.embeddings import HuggingFaceHubEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.documents import Document
-from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
-from langchain_arangodb import ArangoGraph
 # Import exceptions for robust error handling
 from arango.exceptions import AQLQueryExecuteError
-from fastapi import HTTPException
-from pydantic import ValidationError # Import Pydantic validation error
 
 # Import OPEA Core
-from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry
+from comps import CustomLogger, DocPath, OpeaComponentRegistry
+
 # Import Custom GENIE Protocols
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
+
 # Import Custom Utils
-from comps.dataprep.src.genieai_dataprep_utils import (
-    is_valid_content,
-    docling_document_loader,
-    document_loader
-)
-from comps.dataprep.src.utils import get_tables_result, get_separators
+from comps.dataprep.src.genieai_dataprep_utils import docling_document_loader, document_loader, is_valid_content
+
+from agri_metadata.extractor import METADATA_EXTRACTION_VERSION_DEFAULT, AgriTaxonomyExtractor
+from agri_metadata.schema import taxonomy_to_chunk_flat
+
 # Import Parent Class
 from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep
+from comps.dataprep.src.utils import get_separators
+from fastapi import HTTPException
+from langchain_arangodb import ArangoGraph
+from langchain_core.documents import Document
+from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
+from numpy import dot
+from numpy.linalg import norm
+from openai import AsyncOpenAI
+from pydantic import ValidationError  # Import Pydantic validation error
+from rank_bm25 import BM25Okapi
 
 logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
@@ -48,31 +48,38 @@ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 # 2. Backend Service: Source of Truth for Label Hierarchy
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
-# 3. HTTP Service: Authentication Token Broker
-GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
+
+# 3. Keycloak Service Account for OIDC authentication
+from keycloak_service_account import get_service_account_token
 
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
 GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "false").lower() == "true"
 
 # Spec 8.0: New Env Vars
-LABELING_STRATEGY = os.getenv("LABELING_STRATEGY", "llm") 
+LABELING_STRATEGY = os.getenv("LABELING_STRATEGY", "llm")
 EMBEDDING_LABEL_THRESHOLD = float(os.getenv("EMBEDDING_LABEL_THRESHOLD", "0.75"))
 BM25_LABEL_THRESHOLD = float(os.getenv("BM25_LABEL_THRESHOLD", "2.00"))
-CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea") 
+CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea")
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 # New: Concurrency Control for Batches
 MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "5"))
+AGRI_TAXONOMY_ENABLED = os.getenv("AGRI_TAXONOMY_ENABLED", "true").lower() == "true"
 
-# Spec 5.3: Externalized Prompt
-LABEL_SELECTOR_SYSTEM_PROMPT = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", """
+# Spec 5.3: Externalized Prompt - Two-tier priority
+# Level 1: ENV VAR (highest priority) - override via .env
+# Level 2: Hardcoded default (fallback) - works out-of-the-box
+_LABEL_SELECTOR_DEFAULT = """
 <SYSTEM INSTRUCTIONS>
-You are a precise semantic labeler for a RAG knowledge graph.
-Goal: Assign 1–4 MOST RELEVANT labels from the list below that best match the chunk content.
+You are a precise semantic labeler for a Lesotho-focused agricultural RAG knowledge graph.
+Goal: Assign 1–4 MOST RELEVANT labels from the list below that best match the chunk content (crops,
+livestock, soil, climate, extension topics, or other categories your list uses for farming in Lesotho).
 Rules:
 - Return ONLY labels that are strongly relevant.
 - Most chunks get 1–3 labels. Never exceed 5.
 - Do NOT "maximize" coverage.
 - Do NOT suggest new labels.
+- Do NOT assign labels based on Kenya-specific government or tax content unless the chunk explicitly
+  discusses such material.
 - If nothing fits well → return empty list.
 - Use ONLY exact strings from the list.
 
@@ -82,7 +89,10 @@ Labels:
 Output strict JSON only:
 {"labels": ["Label1", "Label2"]}
 </SYSTEM INSTRUCTIONS>
-""".strip())
+""".strip()
+_env_value = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", "")
+LABEL_SELECTOR_SYSTEM_PROMPT = _env_value.strip() or _LABEL_SELECTOR_DEFAULT
+
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):
@@ -93,195 +103,222 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        # Token caching state
-        self._cached_token = None
-        self._token_expiry = None
-        # FIX: Async Lock to prevent race conditions where 50 tasks fetch token at once
-        self._token_lock = asyncio.Lock()
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
-        self._log_semaphore = asyncio.Semaphore(100) 
-        
+        self._log_semaphore = asyncio.Semaphore(100)
+
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
 
     def _log_environment_variables(self):
         """Debug: Print all critical environment variables at startup."""
-        print("\n" + "="*60)
-        print(f" GENIE-AI DATAPREP CONFIGURATION ")
-        print("="*60)
-        print(f" DOCUMENT_REPO_URL    : {DOCUMENT_REPOSITORY_URL}")
-        print(f" BACKEND_SERVICE_URL  : {BACKEND_SERVICE_URL}")
-        print(f" AUTH_TOKEN_URL       : {GET_AUTH_TOKEN_URL}")
-        print(f" GUARDRAIL_ENABLED    : {GUARDRAIL_ENABLED} ({GUARDRAIL_URL})")
-        print("-" * 60)
-        print(f" LABELING_STRATEGY    : {LABELING_STRATEGY}")
-        print(f" EMBEDDING_THRESHOLD  : {EMBEDDING_LABEL_THRESHOLD}")
-        print(f" BM25_THRESHOLD       : {BM25_LABEL_THRESHOLD}")
-        print(f" EXTRACTION_METHOD    : {CONTENT_EXTRACTION_METHOD}")
-        print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
-        print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
-        print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
-        print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
-        print("="*60 + "\n")
+        logger.debug(f"GENIE-AI DATAPREP CONFIGURATION: "
+                     f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
+                     f"BACKEND={BACKEND_SERVICE_URL}, "
+                     f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
+                     f"LABELING={LABELING_STRATEGY}, "
+                     f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
+                     f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
+                     f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
+                     f"LLM={os.getenv('VLLM_ENDPOINT')}, "
+                     f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
+                     f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
+                     f"BATCHES={MAX_CONCURRENT_BATCHES}")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
-    async def _get_auth_token(self):
-        """Fetches a fresh JWT from the internal http-service with locking and caching."""
-        now = datetime.now()
-        
-        # 1. Fast Path: Check if valid token exists (No lock needed)
-        if self._cached_token and self._token_expiry and now < self._token_expiry:
-            return self._cached_token
-
-        # 2. Slow Path: Acquire Lock to prevent thundering herd
-        async with self._token_lock:
-            # Check again (Double-Checked Locking) in case another task filled it while we waited
-            if self._cached_token and self._token_expiry and now < self._token_expiry:
-                return self._cached_token
-
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(GET_AUTH_TOKEN_URL) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            token = data.get("accessToken")
-                            if token:
-                                # Cache the token for 50 mins (assuming 1h life)
-                                self._cached_token = token
-                                self._token_expiry = now + timedelta(minutes=50)
-                                return token
-                            logger.error(f"Auth Service returned 200 but no accessToken: {data}")
-                        else:
-                            # Log but don't crash, caller handles None
-                            logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
-            except Exception as e:
-                logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
-            
+    async def _service_headers(self):
+        """Return auth headers using Keycloak service account Bearer token."""
+        service_token = os.getenv("SERVICE_AUTH_TOKEN") or os.getenv("JWT_SECRET")
+        if service_token:
+            # Prefer internal service-token auth for stable in-cluster callbacks.
+            return {
+                "X-Service-Token": service_token,
+                "X-Service-Name": "dataprep-arango-service",
+                "Content-Type": "application/json",
+            }
+        try:
+            token = await get_service_account_token()
+            return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        except Exception as e:
+            logger.error(f"Failed to obtain service account token: {e}")
+            # Fallback for environments where Keycloak service-account token flow is unavailable.
+            # This keeps internal dataprep -> document-repository callbacks operational.
+            if service_token:
+                logger.warning("Using SERVICE_AUTH_TOKEN/JWT_SECRET fallback for internal dataprep callbacks.")
+                return {
+                    "X-Service-Token": service_token,
+                    "X-Service-Name": "dataprep-arango-service",
+                    "Content-Type": "application/json",
+                }
             return None
 
     async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
         """Updates file status in Document Repository (Spec 4.1/6.1)."""
-        token = await self._get_auth_token()
-        if not token:
+        headers = await self._service_headers()
+        if not headers:
             if logflag:
                 logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
+
         # FIX: chunk_count must be at the ROOT level, not inside dataprep object
-        payload = {
-            "dataprep": {"status": status}
-        }
+        payload = {"dataprep": {"status": status}}
         if chunk_count is not None:
             payload["chunk_count"] = chunk_count
 
         try:
             # Also apply semaphore here to be safe
-            async with self._log_semaphore:
-                async with aiohttp.ClientSession() as session:
-                    async with session.patch(url, json=payload, headers=headers) as response:
-                        if response.status != 200:
-                            logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
+            async with (
+                self._log_semaphore,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                session.patch(url, json=payload, headers=headers) as response,
+            ):
+                if response.status != 200:
+                    logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
         except Exception as e:
             logger.error(f"Error calling Doc Repo Status API: {e}")
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
-        token = await self._get_auth_token()
-        if not token:
+        headers = await self._service_headers()
+        if not headers:
             if logflag:
                 logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
         payload = {
-            "level": level, # Sent exactly as passed (INFO, WARN, ERROR)
+            "level": level,  # Sent exactly as passed (INFO, WARN, ERROR)
             "stage": stage,
-            "message": message
+            "message": message,
         }
         try:
             # FIX: Limit concurrency of log writes to prevent 429 flooding
-            async with self._log_semaphore:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(url, json=payload, headers=headers) as response:
-                        # Ignore 429s in logs specifically to prevent recursion or spam
-                        if response.status == 429:
-                            if logflag:
-                                logger.warning("Log write rate-limited (429). Dropping log message.")
-                            return
-                        if response.status != 201:
-                            logger.error(f"Failed to write log for {file_id}: {await response.text()}")
+            async with (
+                self._log_semaphore,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                session.post(url, json=payload, headers=headers) as response,
+            ):
+                # Ignore 429s in logs specifically to prevent recursion or spam
+                if response.status == 429:
+                    if logflag:
+                        logger.warning("Log write rate-limited (429). Dropping log message.")
+                    return
+                if response.status != 201:
+                    logger.error(f"Failed to write log for {file_id}: {await response.text()}")
         except Exception as e:
             logger.error(f"Error calling Doc Repo Log API: {e}")
 
+    async def _patch_ingestion_metadata(self, file_id: str, payload: dict):
+        """PATCH extended ingestion fields (taxonomy) on the document-repository service."""
+        headers = await self._service_headers()
+        if not headers:
+            logger.warning(f"Skipping ingestion-metadata patch for {file_id} (no auth token).")
+            return
+        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-metadata"
+        try:
+            async with (
+                self._log_semaphore,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45)) as session,
+                session.patch(url, json=payload, headers=headers) as response,
+            ):
+                if response.status not in (200, 204):
+                    logger.error(
+                        f"ingestion-metadata patch failed for {file_id}: "
+                        f"{response.status} {await response.text()}"
+                    )
+        except Exception as e:
+            logger.error(f"ingestion-metadata patch error for {file_id}: {e}")
+
+    def _ensure_taxonomy_indexes(self, graph_name: str) -> None:
+        """Persistent indexes for metadata-filtered hybrid retrieval on SOURCE chunks."""
+        col_name = f"{graph_name}_SOURCE"
+        try:
+            if not self.db.has_collection(col_name):
+                return
+            col = self.db.collection(col_name)
+            specs = [
+                (["tax_countries"], "idx_tax_countries"),
+                (["tax_crop_names"], "idx_tax_crop_names"),
+                (["tax_varietals"], "idx_tax_varietals"),
+                (["tax_topics"], "idx_tax_topics"),
+                (["tax_climates"], "idx_tax_climates"),
+                (["tax_document_types"], "idx_tax_document_types"),
+                (["tax_is_relevant"], "idx_tax_is_relevant"),
+            ]
+            for fields, name in specs:
+                try:
+                    col.add_persistent_index(fields=fields, name=name, in_background=True)
+                except Exception as ie:  # noqa: BLE001
+                    if "duplicate" not in str(ie).lower():
+                        logger.warning(f"Taxonomy index {name}: {ie}")
+        except Exception as e:
+            logger.warning(f"Skipping taxonomy index ensure for {col_name}: {e}")
+
     async def _fetch_all_labels(self):
         """Fetch full taxonomy from the Backend Service to guide the LLM."""
-        token = await self._get_auth_token()
-        if not token:
-            logger.warning("Skipping label fetch due to missing auth token.")
+        headers = await self._service_headers()
+        if not headers:
+            logger.warning("Skipping label fetch due to missing service account token.")
             return []
 
         # FIX: Target the Backend Service for the hierarchy
         url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
-        headers = {"Authorization": f"Bearer {token}"}
-        
+
         try:
-            async with self._log_semaphore: # Reuse semaphore to be polite to backend
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers=headers) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            labels = []
-                            # Backend returns a tree structure (Category -> Children)
-                            if isinstance(data, list):
-                                for category in data:
-                                    # Add the Category Name
-                                    if isinstance(category, dict) and 'name' in category:
-                                        labels.append(category['name'])
-                                        # Add all Children (Services)
-                                        if 'children' in category and isinstance(category['children'], list):
-                                            for child in category['children']:
-                                                # Children might be strings or objects depending on query
-                                                if isinstance(child, dict) and 'name' in child:
-                                                    labels.append(child['name'])
-                                                elif isinstance(child, str):
-                                                    labels.append(child)
-                            
-                            logger.info(f"Fetched {len(labels)} labels from Backend taxonomy.")
-                            return list(set(labels))
-                        
-                        logger.error(f"Label fetch failed. Status: {response.status}, Body: {await response.text()}")
+            async with (
+                self._log_semaphore,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+                session.get(url, headers=headers) as response,
+            ):
+                if response.status == 200:
+                    data = await response.json()
+                    labels = []
+                    # Backend returns a tree structure (Category -> Children)
+                    if isinstance(data, list):
+                        for category in data:
+                            # Add the Category Name
+                            if isinstance(category, dict) and "name" in category:
+                                labels.append(category["name"])
+                                # Add all Children (Services)
+                                if "children" in category and isinstance(category["children"], list):
+                                    for child in category["children"]:
+                                        # Children might be strings or objects depending on query
+                                        if isinstance(child, dict) and "name" in child:
+                                            labels.append(child["name"])
+                                        elif isinstance(child, str):
+                                            labels.append(child)
+
+                    logger.info(f"Fetched {len(labels)} labels from Backend taxonomy.")
+                    return list(set(labels))
+
+                logger.error(f"Label fetch failed. Status: {response.status}, Body: {await response.text()}")
         except Exception as e:
             logger.error(f"Error fetching labels from Backend: {e}")
         return []
 
     # --- Core Pipeline Steps ---
 
-    async def _load_and_chunk(self, doc_path: DocPath) -> List[str]:
+    @staticmethod
+    def _flatten_content_for_metadata(content: Any) -> str:
+        if isinstance(content, list):
+            return "\n\n".join(str(x) for x in content if x is not None)
+        return str(content or "")
+
+    async def _extract_raw_document_content(self, doc_path: DocPath) -> Any:
+        """Text extraction only (Docling or standard loader)."""
         path = doc_path.path
-        
-        # --- FIX: Expanded Docling Support ---
-        # Added .docx, .pptx, .xlsx, .md, .txt, .html support
         docling_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
-        
+
         if path.endswith(docling_extensions) and CONTENT_EXTRACTION_METHOD == "docling":
             logger.info(f"Using Docling for file: {path}")
-            content = await docling_document_loader(path)
-        else:
-            logger.info(f"Using Standard Loader for file: {path}")
-            content = await document_loader(path)
+            return await docling_document_loader(path)
+        logger.info(f"Using Standard Loader for file: {path}")
+        return await document_loader(path)
 
+    def _plain_chunks_from_content(self, path: str, content: Any, doc_path: DocPath) -> list[str]:
         if not content:
             return []
 
@@ -295,7 +332,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 separators=get_separators(),
             )
 
-        if isinstance(content, list): 
+        if isinstance(content, list):
             raw_chunks = []
             for item in content:
                 item_str = str(item)
@@ -308,27 +345,75 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]
 
-        valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
-        return valid_chunks
+        return [c for c in plain_chunks if is_valid_content(c)]
 
-    async def _run_guardrail(self, plain_chunks: List[str]) -> Dict[str, Any]:
+    async def _load_and_chunk(self, doc_path: DocPath) -> list[str]:
+        content = await self._extract_raw_document_content(doc_path)
+        return self._plain_chunks_from_content(doc_path.path, content, doc_path)
+
+    async def reextract_taxonomy_only(self, input: ArangoDBDataprepRequestFromDocRepo) -> dict[str, Any]:
+        """
+        Re-run agricultural metadata extraction from an on-disk file (no chunking / graph writes).
+        Used by admin or CLI batch tools to refresh document-level taxonomy in the files collection.
+        """
+        doc_path = DocPath(
+            path=input.file_path,
+            chunk_size=input.chunk_size,
+            chunk_overlap=input.chunk_overlap,
+            process_table=input.process_table,
+            table_strategy=input.table_strategy,
+        )
+        raw_content = await self._extract_raw_document_content(doc_path)
+        if not raw_content:
+            raise HTTPException(status_code=400, detail="No textual content extracted.")
+
+        flat_meta_text = self._flatten_content_for_metadata(raw_content)
+
+        def _tax_log(level: str, stage: str, message: str) -> None:
+            try:
+                asyncio.get_running_loop().create_task(
+                    self._write_ingestion_log(input.file_id, level, stage, message)
+                )
+            except RuntimeError:
+                pass
+
+        extractor = AgriTaxonomyExtractor(log=_tax_log)
+        normalized, telemetry = await extractor.extract(flat_meta_text, input.file_id)
+        await self._patch_ingestion_metadata(
+            input.file_id,
+            {
+                "taxonomyMetadata": normalized.model_dump(),
+                "metadataExtractionVersion": METADATA_EXTRACTION_VERSION_DEFAULT,
+                "metadataExtractionTimestamp": datetime.now(timezone.utc).isoformat(),
+                "metadataConfidenceScore": normalized.metadataConfidenceScore,
+                "taxonomyVersion": normalized.taxonomyVersion,
+                "isRelevant": normalized.isRelevant,
+                "taxonomyExtractionTelemetry": telemetry,
+            },
+        )
+        return {
+            "success": True,
+            "file_id": input.file_id,
+            "taxonomyVersion": normalized.taxonomyVersion,
+            "isRelevant": normalized.isRelevant,
+            "metadataConfidenceScore": normalized.metadataConfidenceScore,
+            "telemetry": telemetry,
+        }
+
+    async def _run_guardrail(self, plain_chunks: list[str]) -> dict[str, Any]:
         if not GUARDRAIL_ENABLED:
             return {"success": True}
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             for i, text in enumerate(plain_chunks):
                 try:
                     async with session.post(GUARDRAIL_URL, json={"text": text}) as resp:
                         if resp.status != 200:
                             return {"success": False, "message": f"Guardrail error chunk {i}"}
-                        
+
                         result = await resp.json()
                         if result.get("text") != text:
-                            return {
-                                "success": False, 
-                                "message": f"Chunk {i}: Blocked by guardrail.", 
-                                "chunk_index": i
-                            }
+                            return {"success": False, "message": f"Chunk {i}: Blocked by guardrail.", "chunk_index": i}
                 except Exception as e:
                     return {"success": False, "message": f"Guardrail connection failed: {e}"}
 
@@ -336,46 +421,71 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Labeling Strategies (Spec 5.3, 5.4) ---
 
-    async def _label_with_llm(self, chunks: List[str], all_labels: List[str], file_labels: List[str], file_id: str):
+    async def _label_with_llm(self, chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
         """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
         client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
         model = os.getenv("VLLM_MODEL_ID")
-    
-        # Debug Requirement 3: Print what is sent to LLM
-        print("\n" + "-"*60)
-        print(f" DEBUG: LLM LABELING INPUTS ")
-        print("-"*60)
-        print(f" Taxonomy ({len(all_labels)} labels): {all_labels}")
-        print(f" File Metadata Labels: {file_labels}")
-        print(f" System Prompt: {LABEL_SELECTOR_SYSTEM_PROMPT}")
-        print("-"*60 + "\n")
-        
+
+        # Debug: Log what is sent to LLM
+        logger.debug(f"LLM LABELING INPUTS: "
+                     f"taxonomy ({len(all_labels)} labels): {all_labels}, "
+                     f"file_labels: {file_labels}, "
+                     f"system_prompt ({len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars)")
+
         # Parallel Processing with Semaphore
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES) # Reuse same concurrency limit or define a new one
-        
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)  # Reuse same concurrency limit or define a new one
+
         async def _label_single_chunk(i, text):
             async with semaphore:
                 retries = 0
                 suggested_labels = []
-                
+
+                # Validate that all labels are plain strings (not dicts/objects)
+                def _validate_labels(labels):
+                    non_string = [l for l in labels if not isinstance(l, str)]
+                    if non_string:
+                        return False, non_string
+                    return True, []
+
                 while retries < 3:
                     try:
+                        # Replace {labels_list} placeholder with actual labels
+                        system_prompt = LABEL_SELECTOR_SYSTEM_PROMPT.replace("{labels_list}", str(all_labels))
                         response = await client.chat.completions.create(
                             model=model,
                             messages=[
-                                {"role": "system", "content": LABEL_SELECTOR_SYSTEM_PROMPT},
-                                {"role": "user", "content": f"Input: {text}\nLabels: {all_labels}"}
-                            ]
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": f"Input: {text}"},
+                            ],
                         )
                         parsed = json.loads(response.choices[0].message.content)
                         suggested_labels = parsed.get("labels", [])
-                        break 
-                    except Exception as e:
+
+                        # Validate label format — retry if LLM returned objects instead of strings
+                        valid, bad_items = _validate_labels(suggested_labels)
+                        if not valid:
+                            retries += 1
+                            await self._write_ingestion_log(
+                                file_id,
+                                "WARN",
+                                "Labeling",
+                                f"Chunk {i}: LLM returned non-string labels: {bad_items}. Retrying ({retries}/3)...",
+                            )
+                            continue
+
+                        break
+                    except Exception:
                         retries += 1
-            
+
                 if retries == 3:
-                    await self._write_ingestion_log(file_id, "WARN", "Labeling", f"Chunk {i}: LLM failed to provide valid labels after 3 attempts.")
-                    suggested_labels = []
+                    await self._write_ingestion_log(
+                        file_id,
+                        "WARN",
+                        "Labeling",
+                        f"Chunk {i}: LLM failed to return valid labels after 3 "
+                        f"attempts. Falling back to file metadata labels: {file_labels}",
+                    )
+                    suggested_labels = list(file_labels) if file_labels else []
 
                 final_labels = set()
 
@@ -383,64 +493,63 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 for label in suggested_labels:
                     # Skip duplicates
                     if label in final_labels:
-                        continue 
-                
+                        continue
+
                     # Exact Match
                     if label in all_labels:
                         final_labels.add(label)
                         await self._write_ingestion_log(
-                            file_id, "INFO", "Labeling", 
-                            f"Chunk {i}: LLM selected label '{label}'."
+                            file_id, "INFO", "Labeling", f"Chunk {i}: LLM selected label '{label}'."
                         )
                         continue
-                
+
                     # Fuzzy/Synonym Match Check (plural, case-insensitive)
                     match = next((x for x in all_labels if x.lower() == label.lower()), None)
-                    if not match and label.endswith('s'):
+                    if not match and label.endswith("s"):
                         match = next((x for x in all_labels if x.lower() == label[:-1].lower()), None)
                     if not match:
-                        match = next((x for x in all_labels if x.lower() == label.lower() + 's'), None)
+                        match = next((x for x in all_labels if x.lower() == label.lower() + "s"), None)
 
                     if match:
                         final_labels.add(match)
                         await self._write_ingestion_log(
-                            file_id, "INFO", "Labeling", 
-                            f"Chunk {i}: LLM suggested '{label}' → Mapped to existing '{match}'."
+                            file_id,
+                            "INFO",
+                            "Labeling",
+                            f"Chunk {i}: LLM suggested '{label}' → Mapped to existing '{match}'.",
                         )
                     else:
                         # LLM suggested a label that does NOT exist in taxonomy
                         await self._write_ingestion_log(
-                            file_id, "WARN", "Labeling", 
-                            f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy."
+                            file_id,
+                            "WARN",
+                            "Labeling",
+                            f"Chunk {i}: LLM suggested NEW label '{label}'. "
+                            "Consider adding it to the Knowledge Hierarchy.",
                         )
 
                 labels_list = list(final_labels)
                 if labels_list:
                     await self._write_ingestion_log(
-                        file_id, "INFO", "Labeling",
-                        f"Chunk {i}: Final Labels: {labels_list}"
+                        file_id, "INFO", "Labeling", f"Chunk {i}: Final Labels: {labels_list}"
                     )
 
                 return {"text": text, "labels": labels_list}
 
         # Create tasks for all chunks
-        tasks = [
-            _label_single_chunk(i, text) 
-            for i, text in enumerate(chunks)
-        ]
-        
+        tasks = [_label_single_chunk(i, text) for i, text in enumerate(chunks)]
+
         # Run all tasks concurrently (limited by semaphore)
         results = await asyncio.gather(*tasks)
-        
+
         # Ensure results are sorted by chunk index if order matters (gather preserves order)
         return results
 
-
-    def _label_with_embedding(self, chunks: List[str], all_labels: List[str]):
+    def _label_with_embedding(self, chunks: list[str], all_labels: list[str]):
         """Spec 5.4: Cosine Similarity Labeling."""
-        if not self.embeddings: 
+        if not self.embeddings:
             self._initialize_embeddings()
-            
+
         label_vecs = self.embeddings.embed_documents(all_labels)
         results = []
         for text in chunks:
@@ -453,7 +562,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": selected})
         return results
 
-    def _label_with_bm25(self, chunks: List[str], all_labels: List[str]):
+    def _label_with_bm25(self, chunks: list[str], all_labels: list[str]):
         """Spec 5.4: BM25 Labeling."""
         tokenized_labels = [re.findall(r"\b\w+\b", l.lower()) for l in all_labels]
         bm25 = BM25Okapi(tokenized_labels)
@@ -465,13 +574,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": selected})
         return results
 
-    async def _apply_labels(self, plain_chunks: List[str], all_labels: List[str], file_labels: List[str], file_id: str):
+    async def _apply_labels(self, plain_chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
         if not all_labels:
-            await self._write_ingestion_log(file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels.")
+            await self._write_ingestion_log(
+                file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
+            )
             return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks]
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
-        
+
         if LABELING_STRATEGY == "embedding":
             # Offload CPU-bound embedding calculations to a thread
             return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
@@ -483,17 +594,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
 
     # --- Main Ingestion Logic (Async + Batched) ---
-    
+
     async def _process_batch(self, batch_docs, current_batch_num, total_batches, input, graph_name, semaphore):
         """Helper to process a single batch with concurrency control."""
         async with semaphore:
             try:
-                await self._write_ingestion_log(input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}...")
-                
+                await self._write_ingestion_log(
+                    input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}..."
+                )
+
                 # We need to wrap the synchronous graph transformer calls in asyncio.to_thread
                 # to avoid blocking the event loop if they are heavy CPU tasks.
                 graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
-                
+
                 if graph_docs:
                     # Run graph insertion in a thread as well if it's blocking
                     await asyncio.to_thread(
@@ -507,16 +620,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         embed_source=getattr(input, "embed_chunks", True),
                         embed_nodes=getattr(input, "embed_nodes", True),
                         embed_relationships=getattr(input, "embed_edges", True),
-                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
                     )
             except (ValidationError, Exception) as ve:
                 logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
-                await self._write_ingestion_log(input.file_id, "WARN", "Graph", f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}")
-                
+                await self._write_ingestion_log(
+                    input.file_id,
+                    "WARN",
+                    "Graph",
+                    f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}",
+                )
+
                 # Retry logic for individual docs in case of failure
                 for retry_doc in batch_docs:
                     try:
-                        retry_graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, [retry_doc])
+                        retry_graph_docs = await asyncio.to_thread(
+                            self.llm_transformer.convert_to_graph_documents, [retry_doc]
+                        )
                         if retry_graph_docs:
                             await asyncio.to_thread(
                                 self.graph.add_graph_documents,
@@ -529,7 +649,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                 embed_source=getattr(input, "embed_chunks", True),
                                 embed_nodes=getattr(input, "embed_nodes", True),
                                 embed_relationships=getattr(input, "embed_edges", True),
-                                capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                                capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
                             )
                     except Exception as inner_e:
                         logger.error(f"Skipping individual bad document: {inner_e}")
@@ -541,16 +661,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         # NOTE: lock_file is passed from the microservice and is already LOCKED.
         # We are responsible for releasing and closing it in the finally block.
-        
+
         try:
             # --- START PROTECTED EXECUTION (Spec 5.1) ---
             await self._update_doc_status(input.file_id, "Ingesting")
             await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
-            
+
             try:
                 # 1. Fetch Taxonomy (FROM BACKEND)
                 all_labels = await self._fetch_all_labels()
-                
+
                 self._initialize_llm(
                     allowed_node_types=getattr(input, "allowed_node_types", []),
                     allowed_edge_types=getattr(input, "allowed_edge_types", []),
@@ -565,9 +685,50 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     process_table=input.process_table,
                     table_strategy=input.table_strategy,
                 )
-                
-                # 2. Extract and Chunk Content
-                chunks = await self._load_and_chunk(doc_path)
+
+                # 2. Extract raw text → agricultural taxonomy (pre-chunk) → chunk
+                raw_content = await self._extract_raw_document_content(doc_path)
+                if not raw_content:
+                    raise Exception("No valid content extracted from file.")
+
+                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
+                tax_flat: dict[str, Any] = {}
+
+                if AGRI_TAXONOMY_ENABLED:
+                    self._ensure_taxonomy_indexes(graph_name)
+                    flat_meta_text = self._flatten_content_for_metadata(raw_content)
+
+                    def _tax_log(level: str, stage: str, message: str) -> None:
+                        try:
+                            asyncio.get_running_loop().create_task(
+                                self._write_ingestion_log(input.file_id, level, stage, message)
+                            )
+                        except RuntimeError:
+                            pass
+
+                    extractor = AgriTaxonomyExtractor(log=_tax_log)
+                    normalized, telemetry = await extractor.extract(flat_meta_text, input.file_id)
+                    tax_flat = taxonomy_to_chunk_flat(normalized)
+                    await self._patch_ingestion_metadata(
+                        input.file_id,
+                        {
+                            "taxonomyMetadata": normalized.model_dump(),
+                            "metadataExtractionVersion": METADATA_EXTRACTION_VERSION_DEFAULT,
+                            "metadataExtractionTimestamp": datetime.now(timezone.utc).isoformat(),
+                            "metadataConfidenceScore": normalized.metadataConfidenceScore,
+                            "taxonomyVersion": normalized.taxonomyVersion,
+                            "isRelevant": normalized.isRelevant,
+                            "taxonomyExtractionTelemetry": telemetry,
+                        },
+                    )
+                    await self._write_ingestion_log(
+                        input.file_id,
+                        "INFO",
+                        "AgriTaxonomy",
+                        f"Taxonomy metadata extracted (fallback={telemetry.get('fallback_used')}).",
+                    )
+
+                chunks = self._plain_chunks_from_content(doc_path.path, raw_content, doc_path)
                 if not chunks:
                     raise Exception("No valid content extracted from file.")
 
@@ -584,23 +745,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
-                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
-                
                 documents_to_process = []
                 for i, doc in enumerate(labelled_docs):
-                    documents_to_process.append(Document(
-                        page_content=doc["text"],
-                        metadata={
-                            "file_id": input.file_id,
-                            "file_path": input.storage_path,
-                            "chunk_index": i,
-                            "chunk_labels": doc["labels"]
-                        }
-                    ))
+                    chunk_meta: dict[str, Any] = {
+                        "file_id": input.file_id,
+                        "file_path": input.storage_path,
+                        "chunk_index": i,
+                        "chunk_labels": doc["labels"],
+                    }
+                    chunk_meta.update(tax_flat)
+                    documents_to_process.append(Document(page_content=doc["text"], metadata=chunk_meta))
 
-                BATCH_SIZE = 10 
+                BATCH_SIZE = 10
                 total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
-                
+
                 self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
                 semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
                 tasks = []
@@ -608,13 +766,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 for i in range(0, len(documents_to_process), BATCH_SIZE):
                     batch_docs = documents_to_process[i : i + BATCH_SIZE]
                     current_batch_num = (i // BATCH_SIZE) + 1
-                    
+
                     # Schedule batch processing with concurrency control
                     task = asyncio.create_task(
                         self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
                     )
                     tasks.append(task)
-                
+
                 # Wait for all batches to complete
                 if tasks:
                     await asyncio.gather(*tasks)
@@ -624,9 +782,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
 
                 return {
-                    "status": 200, 
+                    "status": 200,
                     "message": f"Successfully ingested {len(chunks)} chunks.",
-                    "graph_name": graph_name
+                    "graph_name": graph_name,
                 }
 
             except asyncio.CancelledError:
@@ -634,32 +792,38 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # Triggered when task.cancel() is called from the microservice
                 kill_msg = f"Ingestion for {input.file_id} was KILLED by an administrator. Rolling back..."
                 logger.warning(kill_msg)
-                
+
                 # Log the termination event
-                await self._write_ingestion_log(input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
-                
+                await self._write_ingestion_log(
+                    input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup..."
+                )
+
                 # Perform graceful rollback (retraction)
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
-                
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
+
                 # Set final status to "Killed" as per state machine specification
                 await self._update_doc_status(input.file_id, "Killed")
-                
-                await self._write_ingestion_log(input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed.")
-                raise # Re-raise to ensure the task terminates properly
-                
+
+                await self._write_ingestion_log(
+                    input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."
+                )
+                raise  # Re-raise to ensure the task terminates properly
+
             except Exception as e:
                 # --- ERROR HANDLING & AUTO-RETRACTION (Spec 5.5) ---
                 error_msg = f"Ingestion failed: {str(e)}"
                 logger.error(error_msg)
-                
+
                 await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
                 await self._update_doc_status(input.file_id, "Ingestion Error")
-                
+
                 # Auto-retract created data
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
-                await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
-                
-                raise HTTPException(status_code=500, detail=error_msg)
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
+                await self._write_ingestion_log(
+                    input.file_id, "INFO", "System", "Rollback complete. Document retracted."
+                )
+
+                raise HTTPException(status_code=500, detail=error_msg) from e
 
         finally:
             # --- LOCK MANAGEMENT ---
@@ -675,7 +839,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
         await self._write_ingestion_log(file_id, "INFO", "Retract", "Starting retraction analysis...")
-        
+
         col_source = f"{graph_name}_SOURCE"
         col_entity = f"{graph_name}_ENTITY"
         col_has_source = f"{graph_name}_HAS_SOURCE"
@@ -686,18 +850,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # STEP 1: Identify CHUNKS (Sources)
             # ----------------------------------------------------------
             # Fetch both the KEY and ID. Using _key allows safe deletion by key.
-            aql_find_chunks = f"""
+            aql_find_chunks = """
                 FOR doc IN @@col_source
                 FILTER doc.file_id == @file_id OR doc.metadata.file_id == @file_id
-                RETURN {{ key: doc._key, id: doc._id }}
+                RETURN { key: doc._key, id: doc._id }
             """
-            cursor_chunks = self.db.aql.execute(aql_find_chunks, bind_vars={"@col_source": col_source, "file_id": file_id})
-            
+            cursor_chunks = self.db.aql.execute(
+                aql_find_chunks, bind_vars={"@col_source": col_source, "file_id": file_id}
+            )
+
             # These are dicts: {'key': '...', 'id': '...'}
             chunk_objects = [doc for doc in cursor_chunks]
-            chunk_ids_list = [c['id'] for c in chunk_objects]
-            chunk_keys_list = [c['key'] for c in chunk_objects]
-            
+            chunk_ids_list = [c["id"] for c in chunk_objects]
+            chunk_keys_list = [c["key"] for c in chunk_objects]
+
             log_msg = f"Analysis: Found {len(chunk_objects)} chunks in {col_source} matching file_id {file_id}."
             logger.info(log_msg)
             await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
@@ -711,16 +877,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # STEP 2: Identify Edges & Orphans (Before Deleting Chunks)
             # ----------------------------------------------------------
             # Find edges connected to these chunks to identify potentially orphaned entities
-            aql_find_edges = f"""
+            aql_find_edges = """
                 FOR edge IN @@col_has_source
                 FILTER edge._to IN @chunk_ids_list
-                RETURN {{ key: edge._key, id: edge._id, from: edge._from }}
+                RETURN { key: edge._key, id: edge._id, from: edge._from }
             """
-            cursor_edges = self.db.aql.execute(aql_find_edges, bind_vars={"@col_has_source": col_has_source, "chunk_ids_list": chunk_ids_list})
+            cursor_edges = self.db.aql.execute(
+                aql_find_edges, bind_vars={"@col_has_source": col_has_source, "chunk_ids_list": chunk_ids_list}
+            )
             edge_objects = [e for e in cursor_edges]
-            
-            edge_keys_list = [e['key'] for e in edge_objects]
-            candidate_entity_ids = list(set([e['from'] for e in edge_objects]))
+
+            edge_keys_list = [e["key"] for e in edge_objects]
+            candidate_entity_ids = list(set([e["from"] for e in edge_objects]))
 
             log_msg = f"Analysis: Found {len(edge_keys_list)} HAS_SOURCE edges linking to these chunks."
             logger.info(log_msg)
@@ -730,26 +898,30 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # STEP 3: DELETE CHUNKS (Priority 1)
             # ----------------------------------------------------------
             # We use the KEYs for safe deletion
-            aql_delete_chunks = f"""
+            aql_delete_chunks = """
                 FOR key IN @chunk_keys
-                REMOVE key IN @@col_source OPTIONS {{ ignoreErrors: true }}
+                REMOVE key IN @@col_source OPTIONS { ignoreErrors: true }
                 RETURN OLD._id
             """
-            cursor_del_chunks = self.db.aql.execute(aql_delete_chunks, bind_vars={"@col_source": col_source, "chunk_keys": chunk_keys_list})
+            cursor_del_chunks = self.db.aql.execute(
+                aql_delete_chunks, bind_vars={"@col_source": col_source, "chunk_keys": chunk_keys_list}
+            )
             deleted_chunks = [doc for doc in cursor_del_chunks]
-            
+
             await self._write_ingestion_log(file_id, "INFO", "Retract", f"Deleted {len(deleted_chunks)} chunks.")
 
             # ----------------------------------------------------------
             # STEP 4: DELETE EDGES (Priority 2)
             # ----------------------------------------------------------
             if edge_keys_list:
-                aql_delete_edges = f"""
+                aql_delete_edges = """
                     FOR key IN @edge_keys
-                    REMOVE key IN @@col_has_source OPTIONS {{ ignoreErrors: true }}
+                    REMOVE key IN @@col_has_source OPTIONS { ignoreErrors: true }
                     RETURN OLD._id
                 """
-                cursor_del_edges = self.db.aql.execute(aql_delete_edges, bind_vars={"@col_has_source": col_has_source, "edge_keys": edge_keys_list})
+                cursor_del_edges = self.db.aql.execute(
+                    aql_delete_edges, bind_vars={"@col_has_source": col_has_source, "edge_keys": edge_keys_list}
+                )
                 deleted_edges = [doc for doc in cursor_del_edges]
                 await self._write_ingestion_log(file_id, "INFO", "Retract", f"Deleted {len(deleted_edges)} edges.")
 
@@ -758,20 +930,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             log_msg = "Cleaning up LINKS_TO edges associated with file chunks..."
             logger.info(log_msg)
 
-            aql_del_file_links = f"""
+            aql_del_file_links = """
                 FOR edge IN @@col_links_to
                 FILTER edge.file_id == @file_id OR edge.metadata.file_id == @file_id
-                REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
+                REMOVE edge IN @@col_links_to OPTIONS { ignoreErrors: true }
                 RETURN OLD._id
             """
             cursor_del_file_links = self.db.aql.execute(
-                aql_del_file_links, 
-                bind_vars={
-                    "@col_links_to": col_links_to, 
-                    "file_id": file_id}
+                aql_del_file_links, bind_vars={"@col_links_to": col_links_to, "file_id": file_id}
             )
             deleted_file_links = [l for l in cursor_del_file_links]
-            await self._write_ingestion_log(file_id, "INFO", "Retract", f"Deleted {len(deleted_file_links)} file-specific LINKS_TO edges.")
+            await self._write_ingestion_log(
+                file_id, "INFO", "Retract", f"Deleted {len(deleted_file_links)} file-specific LINKS_TO edges."
+            )
 
             # ----------------------------------------------------------
             # STEP 5: DETECT & DELETE ORPHANS (Priority 3)
@@ -779,7 +950,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             deleted_entities_count = 0
             if candidate_entity_ids:
                 # Check if entities have ANY remaining incoming edges
-                aql_find_orphans = f"""
+                aql_find_orphans = """
                     FOR entity_id IN @candidate_ids
                         LET incoming_count = LENGTH(
                             FOR edge IN @@col_has_source
@@ -790,65 +961,79 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         FILTER incoming_count == 0
                         RETURN entity_id
                 """
-                cursor_orphans = self.db.aql.execute(aql_find_orphans, bind_vars={"@col_has_source": col_has_source, "candidate_ids": candidate_entity_ids})
-                orphan_ids = [doc for doc in cursor_orphans] # Full IDs (Collection/Key)
+                cursor_orphans = self.db.aql.execute(
+                    aql_find_orphans,
+                    bind_vars={"@col_has_source": col_has_source, "candidate_ids": candidate_entity_ids},
+                )
+                orphan_ids = [doc for doc in cursor_orphans]  # Full IDs (Collection/Key)
 
                 if orphan_ids:
-                    await self._write_ingestion_log(file_id, "INFO", "Retract", f"Identified {len(orphan_ids)} orphans. Deleting...")
-                    
+                    await self._write_ingestion_log(
+                        file_id, "INFO", "Retract", f"Identified {len(orphan_ids)} orphans. Deleting..."
+                    )
+
                     # 5a. Delete LINKS_TO edges connected to orphans (Source OR Target)
                     # Optimization: Batch delete edges connected to these orphans
                     try:
-                        aql_del_links = f"""
+                        aql_del_links = """
                             FOR edge IN @@col_links_to
                                 FILTER edge._from IN @orphan_ids OR edge._to IN @orphan_ids
-                                REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
+                                REMOVE edge IN @@col_links_to OPTIONS { ignoreErrors: true }
                         """
-                        self.db.aql.execute(aql_del_links, bind_vars={"@col_links_to": col_links_to, "orphan_ids": orphan_ids})
+                        self.db.aql.execute(
+                            aql_del_links, bind_vars={"@col_links_to": col_links_to, "orphan_ids": orphan_ids}
+                        )
                     except Exception as e:
                         logger.warning(f"Error deleting links: {e}")
 
                     # 5b. Delete Entities
                     # Extract keys in Python to avoid AQL parsing issues inside REMOVE loop
-                    orphan_keys = [oid.split('/')[-1] for oid in orphan_ids]
-                    
+                    orphan_keys = [oid.split("/")[-1] for oid in orphan_ids]
+
                     try:
-                        aql_del_entities = f"""
+                        aql_del_entities = """
                             FOR key IN @keys
-                                REMOVE key IN @@col_entity OPTIONS {{ ignoreErrors: true }}
+                                REMOVE key IN @@col_entity OPTIONS { ignoreErrors: true }
                         """
-                        self.db.aql.execute(aql_del_entities, bind_vars={"@col_entity": col_entity, "keys": orphan_keys})
+                        self.db.aql.execute(
+                            aql_del_entities, bind_vars={"@col_entity": col_entity, "keys": orphan_keys}
+                        )
                         deleted_entities_count = len(orphan_keys)
                     except Exception as e:
                         logger.warning(f"Error deleting entities: {e}")
                         deleted_entities_count = 0
-                    
-                    await self._write_ingestion_log(file_id, "INFO", "Retract", f"Deleted {deleted_entities_count} orphan entities.")
+
+                    await self._write_ingestion_log(
+                        file_id, "INFO", "Retract", f"Deleted {deleted_entities_count} orphan entities."
+                    )
 
             # ----------------------------------------------------------
             # FINAL REPORT
             # ----------------------------------------------------------
             await self._update_doc_status(file_id, "Retracted")
-            
-            final_msg = f"Retraction Complete. Deleted: {len(chunk_keys_list)} Chunks, {len(edge_keys_list)} Edges, {deleted_entities_count} Entities."
+
+            final_msg = (
+                f"Retraction Complete. Deleted: {len(chunk_keys_list)} Chunks, "
+                f"{len(edge_keys_list)} Edges, {deleted_entities_count} Entities."
+            )
             logger.info(final_msg)
             await self._write_ingestion_log(file_id, "INFO", "Retract", final_msg)
 
             return {
-                "status": 200, 
-                "message": final_msg, 
+                "status": 200,
+                "message": final_msg,
                 "details": {
                     "deleted_chunks": len(chunk_keys_list),
                     "deleted_edges": len(edge_keys_list),
-                    "deleted_entities": deleted_entities_count
-                }
+                    "deleted_entities": deleted_entities_count,
+                },
             }
-            
+
         except AQLQueryExecuteError as e:
             if e.error_code == 1203:
                 logger.warning(f"Graph Collection {graph_name} not found. Nothing to retract.")
                 return {"status": 200, "message": "Graph not found, nothing to retract."}
-            
+
             err_msg = f"AQL Error during retraction: {str(e)}"
             logger.error(err_msg)
             await self._write_ingestion_log(file_id, "ERROR", "Retract", err_msg)

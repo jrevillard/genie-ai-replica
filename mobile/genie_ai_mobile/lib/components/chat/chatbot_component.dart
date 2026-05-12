@@ -140,16 +140,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
-  // Bridging method for translations
-  String _t(String key, [String fallback = '']) {
-    // tr() handles the lookup globally
-    return tr(key);
-  }
-
   Future<void> _loadQuickHelpConfig() async {
     try {
-      final String configString =
-          await rootBundle.loadString('assets/config/genie-ai-config.json');
+      final String configString = await rootBundle.loadString(
+        'assets/config/genie-ai-config.json',
+      );
       final Map<String, dynamic> config = jsonDecode(configString);
 
       final Map<String, dynamic> quickHelpConfig =
@@ -192,9 +187,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _updateQuickHelpVisibility() {
-    final bool hasInteraction = _messages.any((m) =>
-        m['role'] == 'user' ||
-        (m['role'] == 'assistant' && m['content'] != _welcomeMessage));
+    final bool hasInteraction = _messages.any(
+      (m) =>
+          m['role'] == 'user' ||
+          (m['role'] == 'assistant' && m['content'] != _welcomeMessage),
+    );
 
     setState(() {
       _showQuickHelpOverlay = !hasInteraction;
@@ -207,9 +204,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       if (_scrollController.hasClients) {
         final double maxScroll = _scrollController.position.maxScrollExtent;
         if (animated) {
-          _scrollController.animateTo(maxScroll,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut);
+          _scrollController.animateTo(
+            maxScroll,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
         } else {
           _scrollController.jumpTo(maxScroll);
         }
@@ -239,8 +238,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     try {
       final cleanId = conversationId.replaceFirst('conversations/', '');
-      final res = await _api.get('chat/conversations/$cleanId',
-          params: {'userId': widget.userId});
+      final res = await _api.get(
+        'chat/conversations/$cleanId',
+        params: {'userId': widget.userId},
+      );
 
       if (res.statusCode != 200) {
         throw Exception("Failed to load conversation: ${res.statusCode}");
@@ -261,7 +262,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             'metadata': m['metadata'],
             'sources': m['metadata'] != null
                 ? (m['metadata']['sources'] ??
-                    m['metadata']['source_documents'])
+                      m['metadata']['source_documents'])
                 : [],
           };
         }).toList();
@@ -405,7 +406,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   List<dynamic> _mergeUniqueDocs(
-      List<dynamic> priorityDocs, List<dynamic> secondaryDocs) {
+    List<dynamic> priorityDocs,
+    List<dynamic> secondaryDocs,
+  ) {
     final List<dynamic> merged = List.from(priorityDocs);
 
     for (var doc in secondaryDocs) {
@@ -444,11 +447,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
 
     // Translate both
-    final String visibleText =
-        visibleTextKey.isNotEmpty ? _t(visibleTextKey) : '';
+    final String visibleText = visibleTextKey.isNotEmpty
+        ? tr(visibleTextKey)
+        : '';
     // If hiddenPromptKey is empty, fallback to visible text
-    final String hiddenPrompt =
-        hiddenPromptKey.isNotEmpty ? _t(hiddenPromptKey) : visibleText;
+    final String hiddenPrompt = hiddenPromptKey.isNotEmpty
+        ? tr(hiddenPromptKey)
+        : visibleText;
 
     setState(() {
       _showQuickHelpOverlay = false;
@@ -465,7 +470,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       barrierColor: Colors.black54,
       builder: (context) => ChatResponseFeedbackDialog(
         message: message,
-        translate: _t,
         onSubmit: (feedbackData) async {
           final String? queryId = message['queryId'] ?? message['id'];
 
@@ -480,11 +484,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
               'rating': feedbackData['rating'],
               'feedbackText': feedbackData['text'],
               'thumb': feedbackData['thumbFeedback'],
-              'metadata': {'skinTone': feedbackData['skinTone']}
+              'metadata': {'skinTone': feedbackData['skinTone']},
             };
 
             await _chatBotProxy.submitFeedback(
-                queryId: queryId, feedback: payload);
+              queryId: queryId,
+              feedback: payload,
+            );
 
             NotificationService.success(tr('feedback.success'));
           } catch (e) {
@@ -526,14 +532,18 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         conversationResponse = await _chatHistoryProxy.createConversation(data);
       } else {
         final id = _currentConversationId!.replaceFirst('conversations/', '');
-        conversationResponse =
-            await _chatHistoryProxy.updateConversation(id, data);
+        conversationResponse = await _chatHistoryProxy.updateConversation(
+          id,
+          data,
+        );
       }
 
       final String conversationId =
           conversationResponse['_key'] ?? conversationResponse['_id'];
-      final String conversationIdClean =
-          conversationId.replaceFirst('conversations/', '');
+      final String conversationIdClean = conversationId.replaceFirst(
+        'conversations/',
+        '',
+      );
 
       for (int i = 0; i < _messages.length; i++) {
         final msg = _messages[i];
@@ -552,7 +562,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
         try {
           await _chatHistoryProxy.addMessage(
-              conversationIdClean, messagePayload);
+            conversationIdClean,
+            messagePayload,
+          );
           setState(() {
             _messages[i]['isSaved'] = true;
           });
@@ -576,6 +588,134 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
+  pw.TextSpan _buildInlineSpans(
+    String text,
+    pw.Font? font, {
+    double fontSize = 14,
+    PdfColor? color,
+  }) {
+    final baseStyle = pw.TextStyle(
+      font: font,
+      fontSize: fontSize,
+      color: color,
+    );
+    final boldStyle = pw.TextStyle(
+      font: font,
+      fontSize: fontSize,
+      fontWeight: pw.FontWeight.bold,
+      color: color,
+    );
+    final italicStyle = pw.TextStyle(
+      font: font,
+      fontSize: fontSize,
+      fontStyle: pw.FontStyle.italic,
+      color: color,
+    );
+
+    final pattern = RegExp(r'\*\*(.+?)\*\*|\*([^*]+?)\*');
+    final spans = <pw.TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in pattern.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(
+          pw.TextSpan(
+            text: text.substring(lastEnd, match.start),
+            style: baseStyle,
+          ),
+        );
+      }
+      if (match.group(1) != null) {
+        spans.add(pw.TextSpan(text: match.group(1), style: boldStyle));
+      } else if (match.group(2) != null) {
+        spans.add(pw.TextSpan(text: match.group(2), style: italicStyle));
+      }
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(pw.TextSpan(text: text.substring(lastEnd), style: baseStyle));
+    }
+
+    if (spans.isEmpty) {
+      return pw.TextSpan(text: text, style: baseStyle);
+    }
+    return pw.TextSpan(children: spans);
+  }
+
+  pw.Widget _parseMarkdownBlock(
+    String block,
+    pw.Font? font,
+    PdfColor textColor,
+  ) {
+    final trimmed = block.trim();
+    if (trimmed.isEmpty) return pw.SizedBox.shrink();
+
+    // Headers: # text → 18, ## text → 16, ### text → 15
+    final headerMatch = RegExp(r'^(#{1,3})\s+(.*)').firstMatch(trimmed);
+    if (headerMatch != null) {
+      final level = headerMatch.group(1)!.length;
+      final headerText = headerMatch.group(2)!;
+      final headerSize = level == 1
+          ? 18.0
+          : level == 2
+          ? 16.0
+          : 15.0;
+      return pw.RichText(
+        text: _buildInlineSpans(
+          headerText,
+          font,
+          fontSize: headerSize,
+          color: textColor,
+        ),
+      );
+    }
+
+    // Bullet list: lines starting with - or *
+    final lines = trimmed.split('\n');
+    final isBulletList = lines.every(
+      (l) =>
+          l.trimLeft().startsWith('- ') ||
+          l.trimLeft().startsWith('* ') ||
+          l.trimLeft().isEmpty,
+    );
+
+    if (isBulletList) {
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: lines.where((l) => l.trimLeft().isNotEmpty).map((line) {
+          final bulletText =
+              RegExp(r'^[-*]\s+(.*)').firstMatch(line.trimLeft())?.group(1) ??
+              line.trimLeft();
+          return pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                '•  ',
+                style: pw.TextStyle(font: font, fontSize: 14, color: textColor),
+              ),
+              pw.Expanded(
+                child: pw.RichText(
+                  text: _buildInlineSpans(
+                    bulletText,
+                    font,
+                    fontSize: 14,
+                    color: textColor,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }).toList(),
+      );
+    }
+
+    // Default: paragraph with inline formatting
+    return pw.RichText(
+      text: _buildInlineSpans(trimmed, font, fontSize: 14, color: textColor),
+    );
+  }
+
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
     pw.Font? customFont;
@@ -587,71 +727,99 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
 
     final pages = <pw.Widget>[];
-    pages.add(pw.Center(
-        child: pw.Text(_conversationTitle,
-            style: pw.TextStyle(
-                font: customFont,
-                fontSize: 24,
-                fontWeight: pw.FontWeight.bold))));
+    pages.add(
+      pw.Center(
+        child: pw.Text(
+          _conversationTitle,
+          style: pw.TextStyle(
+            font: customFont,
+            fontSize: 24,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      ),
+    );
     pages.add(pw.SizedBox(height: 20));
 
     for (final msg in _messages) {
       final bool isUser = msg['role'] == 'user';
-      final String sender = isUser ? "You" : "NAAT";
-      // Export visible content for PDF (user expectation)
+      final String sender = isUser ? "You" : "Genie";
       final String content = msg['content'] ?? '';
-      final paragraphs = content.split('\n\n');
+      if (content.trim().isEmpty) continue;
 
-      for (final paragraph in paragraphs) {
-        if (paragraph.trim().isEmpty) continue;
-        pages.add(pw.Container(
-          margin: const pw.EdgeInsets.symmetric(vertical: 8),
-          child: pw.Column(
-            crossAxisAlignment: isUser
-                ? pw.CrossAxisAlignment.end
-                : pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(sender,
-                  style: pw.TextStyle(
-                      font: customFont,
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                      color: isUser ? PdfColors.blue800 : PdfColors.grey800)),
-              pw.SizedBox(height: 4),
-              pw.Container(
-                constraints: const pw.BoxConstraints(maxWidth: 500),
-                padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                    color: isUser ? PdfColors.blue50 : PdfColors.grey100,
-                    borderRadius: pw.BorderRadius.circular(12),
-                    border: pw.Border.all(color: PdfColors.grey300)),
-                child: pw.Text(paragraph.trim(),
-                    style: pw.TextStyle(
-                        font: customFont, fontSize: 14, height: 1.4)),
-              ),
-            ],
+      final PdfColor bgColor = isUser ? PdfColors.blue50 : PdfColors.grey100;
+      final PdfColor accentColor = isUser
+          ? PdfColors.blue400
+          : PdfColors.green400;
+      final PdfColor textColor = isUser ? PdfColors.blue900 : PdfColors.grey800;
+
+      // One sender label per message
+      pages.add(
+        pw.Text(
+          sender,
+          style: pw.TextStyle(
+            font: customFont,
+            fontSize: 12,
+            fontWeight: pw.FontWeight.bold,
+            color: isUser ? PdfColors.blue800 : PdfColors.grey800,
           ),
-        ));
-        pages.add(pw.SizedBox(height: 8));
+        ),
+      );
+      pages.add(pw.SizedBox(height: 2));
+
+      // Split by \n\n into blocks for markdown parsing
+      final blocks = content.split('\n\n');
+      for (final block in blocks) {
+        if (block.trim().isEmpty) continue;
+        pages.add(
+          pw.Container(
+            width: double.infinity,
+            margin: const pw.EdgeInsets.only(bottom: 2),
+            padding: const pw.EdgeInsets.only(
+              left: 10,
+              top: 6,
+              bottom: 6,
+              right: 12,
+            ),
+            decoration: pw.BoxDecoration(
+              color: bgColor,
+              border: pw.Border(
+                left: pw.BorderSide(color: accentColor, width: 3),
+              ),
+            ),
+            child: _parseMarkdownBlock(block, customFont, textColor),
+          ),
+        );
       }
+
+      pages.add(pw.SizedBox(height: 12));
     }
 
     try {
-      pdf.addPage(pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.copyWith(
-            marginBottom: 60, marginTop: 60, marginLeft: 50, marginRight: 50),
-        build: (pw.Context context) => pages,
-      ));
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.copyWith(
+            marginBottom: 60,
+            marginTop: 60,
+            marginLeft: 50,
+            marginRight: 50,
+          ),
+          build: (pw.Context context) => pages,
+        ),
+      );
 
       final filename = _exportFilename.trim().isEmpty
           ? "genie_chat_${DateTime.now().toIso8601String().split('T').first}"
           : _exportFilename.trim();
 
       await Printing.sharePdf(
-          bytes: await pdf.save(), filename: '$filename.pdf');
+        bytes: await pdf.save(),
+        filename: '$filename.pdf',
+      );
       NotificationService.success(tr('chatbot.exportSuccess'));
       setState(() => _showExportDialog = false);
     } catch (e) {
+      debugPrint("[PDF EXPORT] ERROR: $e");
       NotificationService.error(tr('chatbot.exportError'));
     }
   }
@@ -664,11 +832,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     final StringBuffer buffer = StringBuffer();
     // Optional header
-    buffer.writeln("Conversation with NAAT (${_conversationTitle}):\n");
+    buffer.writeln("Conversation with Genie (${_conversationTitle}):\n");
 
     for (final msg in _messages) {
       // Skip system/welcome messages if desired, or keep them all
-      final String role = msg['role'] == 'user' ? "Me" : "NAAT";
+      final String role = msg['role'] == 'user' ? "Me" : "Genie";
       // Share visible content
       final String content = msg['content'] ?? "";
 
@@ -679,8 +847,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     final String text = buffer.toString();
 
     // 1. Try launching the native app scheme first
-    final Uri whatsappAppUrl =
-        Uri.parse("whatsapp://send?text=${Uri.encodeComponent(text)}");
+    final Uri whatsappAppUrl = Uri.parse(
+      "whatsapp://send?text=${Uri.encodeComponent(text)}",
+    );
 
     // 2. Fallback to web browser if app is not installed
     final Uri whatsappWebUrl = Uri.https("wa.me", "/", {"text": text});
@@ -736,34 +905,46 @@ class ChatBotComponentState extends State<ChatBotComponent> {
               if (_selectedCategoryName.isNotEmpty)
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: colors['primary'].withOpacity(0.1),
                     border: Border(bottom: BorderSide(color: colors['border'])),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.lightbulb_outline,
-                          size: 20, color: colors['primary']),
+                      Icon(
+                        Icons.lightbulb_outline,
+                        size: 20,
+                        color: colors['primary'],
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                            "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: colors['text']),
-                            overflow: TextOverflow.ellipsis),
+                          "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: colors['text'],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       Tooltip(
-                          message: tr('chatbot.removeContext'),
-                          child: IconButton(
-                              icon: Icon(Icons.close,
-                                  size: 18, color: colors['text']),
-                              onPressed: () => setCategoryContext("", ""),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              splashRadius: 20)),
+                        message: tr('chatbot.removeContext'),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.close,
+                            size: 18,
+                            color: colors['text'],
+                          ),
+                          onPressed: () => setCategoryContext("", ""),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          splashRadius: 20,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -777,25 +958,30 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                   itemBuilder: (context, index) {
                     if (index == _messages.length && _isLoading) {
                       return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: Row(children: [
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          children: [
                             const CircularProgressIndicator(strokeWidth: 2),
                             const SizedBox(width: 12),
-                            Text(tr('chatbot.thinking'))
-                          ]));
+                            Text(tr('chatbot.thinking')),
+                          ],
+                        ),
+                      );
                     }
 
                     final msg = _messages[index];
                     final bool isUser = msg['role'] == 'user';
 
                     return Align(
-                      alignment:
-                          isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      alignment: isUser
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         padding: const EdgeInsets.all(16),
                         constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.75),
+                          maxWidth: MediaQuery.of(context).size.width * 0.75,
+                        ),
                         decoration: BoxDecoration(
                           color: isUser
                               ? colors['primary']
@@ -809,23 +995,26 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                               data: msg['content'] ?? '',
                               styleSheet: MarkdownStyleSheet(
                                 p: TextStyle(
-                                    color:
-                                        isUser ? Colors.white : colors['text'],
-                                    fontSize: 16,
-                                    height: 1.5),
+                                  color: isUser ? Colors.white : colors['text'],
+                                  fontSize: 16,
+                                  height: 1.5,
+                                ),
                                 codeblockDecoration: BoxDecoration(
-                                    color: isUser
-                                        ? Colors.white.withOpacity(0.1)
-                                        : (isDark
+                                  color: isUser
+                                      ? Colors.white.withOpacity(0.1)
+                                      : (isDark
                                             ? Colors.white10
                                             : Colors.black12),
-                                    borderRadius: BorderRadius.circular(8)),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                               ),
                               selectable: true,
                               onTapLink: (text, href, title) {
                                 if (href != null) {
-                                  launchUrl(Uri.parse(href),
-                                      mode: LaunchMode.externalApplication);
+                                  launchUrl(
+                                    Uri.parse(href),
+                                    mode: LaunchMode.externalApplication,
+                                  );
                                 }
                               },
                             ),
@@ -842,10 +1031,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                       Text(
                                         "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
                                         style: TextStyle(
-                                            fontSize: 11,
-                                            color:
-                                                colors['text'].withOpacity(0.6),
-                                            fontStyle: FontStyle.italic),
+                                          fontSize: 11,
+                                          color: colors['text'].withOpacity(
+                                            0.6,
+                                          ),
+                                          fontStyle: FontStyle.italic,
+                                        ),
                                       ),
                                     // Feedback Button
                                     Tooltip(
@@ -858,8 +1049,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                           child: Icon(
                                             Icons.thumb_up_alt_outlined,
                                             size: 16,
-                                            color:
-                                                colors['text'].withOpacity(0.5),
+                                            color: colors['text'].withOpacity(
+                                              0.5,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -879,91 +1071,108 @@ class ChatBotComponentState extends State<ChatBotComponent> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: colors['surface'],
-                    border: Border(top: BorderSide(color: colors['border']))),
+                  color: colors['surface'],
+                  border: Border(top: BorderSide(color: colors['border'])),
+                ),
                 child: Column(
                   children: [
-                    Row(children: [
-                      IconButton(
-                          icon: Icon(Icons.add_circle_outline,
-                              color: colors['text']),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.add_circle_outline,
+                            color: colors['text'],
+                          ),
                           tooltip: tr('chatbot.newChatTitle'),
-                          onPressed: startNewChat),
-                      IconButton(
-                          icon:
-                              Icon(Icons.save_outlined, color: colors['text']),
+                          onPressed: startNewChat,
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.save_outlined,
+                            color: colors['text'],
+                          ),
                           tooltip: tr('chatbot.saveChat'),
                           onPressed: () {
                             _titleController.text = _conversationTitle;
                             setState(() => _showSaveDialog = true);
-                          }),
-                      IconButton(
-                          icon: Icon(Icons.picture_as_pdf_outlined,
-                              color: colors['text']),
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.picture_as_pdf_outlined,
+                            color: colors['text'],
+                          ),
                           tooltip: tr('chatbot.exportChat'),
                           onPressed: () {
                             _exportFilename =
                                 "chat_${DateTime.now().toIso8601String().split('T').first}";
                             setState(() => _showExportDialog = true);
-                          }),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: tr('chatbot.shareWhatsApp'),
-                        onPressed:
-                            _shareToWhatsApp, // Ensure you added the function from the previous step
-                        icon: SvgPicture.string(
-                          '''
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: tr('chatbot.shareWhatsApp'),
+                          onPressed:
+                              _shareToWhatsApp, // Ensure you added the function from the previous step
+                          icon: SvgPicture.string(
+                            '''
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
       <path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 16.61c-1.48 0-2.94-.4-4.21-1.15l-.3-.18-3.11.82.83-3.04-.19-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23m4.53-6.18c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28z"/>
     </svg>
     ''',
-                          width: 24,
-                          height: 24,
+                            width: 24,
+                            height: 24,
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                     const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _inputController,
-                          focusNode: _inputFocusNode,
-                          style: TextStyle(color: colors['text']),
-                          decoration: InputDecoration(
-                            hintText: tr('chatbot.placeholder'),
-                            hintStyle: TextStyle(
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _inputController,
+                            focusNode: _inputFocusNode,
+                            style: TextStyle(color: colors['text']),
+                            decoration: InputDecoration(
+                              hintText: tr('chatbot.placeholder'),
+                              hintStyle: TextStyle(
                                 color: isDark
                                     ? Colors.grey[500]
-                                    : Colors.grey[600]),
-                            filled: true,
-                            fillColor: isDark
-                                ? Colors.white.withOpacity(0.05)
-                                : Colors.transparent,
-                            border: OutlineInputBorder(
+                                    : Colors.grey[600],
+                              ),
+                              filled: true,
+                              fillColor: isDark
+                                  ? Colors.white.withOpacity(0.05)
+                                  : Colors.transparent,
+                              border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide:
-                                    BorderSide(color: colors['border'])),
-                            enabledBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: colors['border']),
+                              ),
+                              enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide:
-                                    BorderSide(color: colors['border'])),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
+                                borderSide: BorderSide(color: colors['border']),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                            maxLines: null,
+                            onSubmitted: (_) =>
+                                _sendMessage(_inputController.text),
                           ),
-                          maxLines: null,
-                          onSubmitted: (_) =>
-                              _sendMessage(_inputController.text),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      IconButton(
-                        icon: const Icon(Icons.send),
-                        color: colors['primary'],
-                        onPressed: _isLoading
-                            ? null
-                            : () => _sendMessage(_inputController.text),
-                      ),
-                    ]),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          icon: const Icon(Icons.send),
+                          color: colors['primary'],
+                          onPressed: _isLoading
+                              ? null
+                              : () => _sendMessage(_inputController.text),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -981,7 +1190,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                   Text(
                     tr('chatbot.whatCanIHelp'),
                     style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold, color: colors['text']),
+                      fontWeight: FontWeight.bold,
+                      color: colors['text'],
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
@@ -992,28 +1203,29 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                             _quickHelpLayout['columns'] as int? ?? 2;
                         final double aspectRatio =
                             (_quickHelpLayout['childAspectRatio'] as num?)
-                                    ?.toDouble() ??
-                                3.5;
+                                ?.toDouble() ??
+                            3.5;
 
                         return GridView.builder(
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  childAspectRatio: aspectRatio,
-                                  mainAxisSpacing: 10,
-                                  crossAxisSpacing: 10),
+                                crossAxisCount: crossAxisCount,
+                                childAspectRatio: aspectRatio,
+                                mainAxisSpacing: 10,
+                                crossAxisSpacing: 10,
+                              ),
                           itemCount: _quickHelpButtons.length,
                           itemBuilder: (context, index) {
                             final button = _quickHelpButtons[index];
                             // Use safe access with casting to Map to prevent null cast errors
                             final appearance =
                                 button['appearance'] as Map<String, dynamic>? ??
-                                    {};
+                                {};
                             final action =
                                 button['action'] as Map<String, dynamic>? ?? {};
                             final darkMode =
                                 button['darkMode'] as Map<String, dynamic>? ??
-                                    {};
+                                {};
 
                             // Determine active styles based on Theme
                             // If in Dark Mode and darkMode overrides exist, merge them
@@ -1028,7 +1240,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                       {}),
                                   ...(darkMode['label']
                                           as Map<String, dynamic>? ??
-                                      {})
+                                      {}),
                                 },
                                 'icon': {
                                   ...(appearance['icon']
@@ -1036,7 +1248,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                       {}),
                                   ...(darkMode['icon']
                                           as Map<String, dynamic>? ??
-                                      {})
+                                      {}),
                                 },
                                 'style': {
                                   ...(appearance['style']
@@ -1044,7 +1256,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                       {}),
                                   ...(darkMode['style']
                                           as Map<String, dynamic>? ??
-                                      {})
+                                      {}),
                                 },
                               };
 
@@ -1052,17 +1264,21 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                               if (darkMode['style'] != null &&
                                   (darkMode['style'] as Map)['background'] !=
                                       null) {
-                                final baseStyle = appearance['style']
+                                final baseStyle =
+                                    appearance['style']
                                         as Map<String, dynamic>? ??
                                     {};
-                                final darkStyle = darkMode['style']
+                                final darkStyle =
+                                    darkMode['style']
                                         as Map<String, dynamic>? ??
                                     {};
 
-                                final baseBg = baseStyle['background']
+                                final baseBg =
+                                    baseStyle['background']
                                         as Map<String, dynamic>? ??
                                     {};
-                                final darkBg = darkStyle['background']
+                                final darkBg =
+                                    darkStyle['background']
                                         as Map<String, dynamic>? ??
                                     {};
 
@@ -1071,7 +1287,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                 final mergedStyle = {
                                   ...(activeAppearance['style']
                                       as Map<String, dynamic>),
-                                  'background': mergedBg
+                                  'background': mergedBg,
                                 };
                                 activeAppearance['style'] = mergedStyle;
                               }
@@ -1080,21 +1296,23 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                             }
 
                             // CORRECTED: Use label text key for button display
-                            final labelMap = activeAppearance['label']
-                                as Map<String, dynamic>?;
+                            final labelMap =
+                                activeAppearance['label']
+                                    as Map<String, dynamic>?;
                             final String titleKey =
                                 labelMap?['text']?.toString() ?? '';
-                            final String translatedTitle = _t(titleKey);
+                            final String translatedTitle = tr(titleKey);
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
 
                             // Style Extraction from Active Appearance
-                            final styles = activeAppearance['style']
+                            final styles =
+                                activeAppearance['style']
                                     as Map<String, dynamic>? ??
                                 {};
                             final bg =
                                 styles['background'] as Map<String, dynamic>? ??
-                                    {};
+                                {};
                             final gradientConfig =
                                 bg['gradient'] as Map<String, dynamic>? ?? {};
                             final borderConfig =
@@ -1105,35 +1323,39 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                             // Colors
                             final String startColorHex =
                                 gradientConfig['start']?.toString() ??
-                                    '#FFFFFF';
+                                '#FFFFFF';
                             final String endColorHex =
                                 gradientConfig['end']?.toString() ??
-                                    startColorHex;
+                                startColorHex;
                             final String gradientDirection =
                                 gradientConfig['direction']?.toString() ??
-                                    'horizontal';
+                                'horizontal';
 
-                            final Color startColor = Color(int.parse(
-                                startColorHex.replaceAll('#', '0xFF')));
+                            final Color startColor = Color(
+                              int.parse(startColorHex.replaceAll('#', '0xFF')),
+                            );
                             final Color endColor = Color(
-                                int.parse(endColorHex.replaceAll('#', '0xFF')));
+                              int.parse(endColorHex.replaceAll('#', '0xFF')),
+                            );
 
                             final bool showShadow =
                                 (_quickHelpDefaults['showShadow'] == true) ||
-                                    (shadowConfig['enabled'] == true);
+                                (shadowConfig['enabled'] == true);
                             final bool showBorder =
                                 (_quickHelpDefaults['showBorder'] == true) ||
-                                    (borderConfig['enabled'] == true);
+                                (borderConfig['enabled'] == true);
 
                             // Label Color
-                            final labelConfig = activeAppearance['label']
+                            final labelConfig =
+                                activeAppearance['label']
                                     as Map<String, dynamic>? ??
                                 {};
                             final String labelColorHex =
                                 labelConfig['color']?.toString() ??
-                                    (isDark ? '#FFFFFF' : '#000000');
-                            final Color labelColor = Color(int.parse(
-                                labelColorHex.replaceAll('#', '0xFF')));
+                                (isDark ? '#FFFFFF' : '#000000');
+                            final Color labelColor = Color(
+                              int.parse(labelColorHex.replaceAll('#', '0xFF')),
+                            );
 
                             // Icon Color (if you want to tint icons, though SVGs might have own colors)
                             // final iconConfig = activeAppearance['icon'] as Map<String, dynamic>? ?? {};
@@ -1141,16 +1363,17 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                             // final Color iconColor = Color(int.parse(iconColorHex.replaceAll('#', '0xFF')));
 
                             // Shadow Configuration (Stronger defaults)
-                            final defaultShadow = _quickHelpDefaults['shadow']
+                            final defaultShadow =
+                                _quickHelpDefaults['shadow']
                                     as Map<String, dynamic>? ??
                                 {};
                             final double shadowOpacity =
                                 (defaultShadow['opacity'] as num?)
-                                        ?.toDouble() ??
-                                    0.25; // Stronger default
+                                    ?.toDouble() ??
+                                0.25; // Stronger default
                             final double shadowBlur = _parsePixelValue(
-                                defaultShadow['blur']?.toString() ??
-                                    '8px'); // Stronger default
+                              defaultShadow['blur']?.toString() ?? '8px',
+                            ); // Stronger default
 
                             return Material(
                               color: Colors.transparent,
@@ -1159,15 +1382,21 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                 onTap: () => _quickHelpPressed(button),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
                                     // Gradient Fill with Direction
                                     gradient: LinearGradient(
                                       colors: [startColor, endColor],
                                       begin: _getGradientAlignment(
-                                          gradientDirection, true),
+                                        gradientDirection,
+                                        true,
+                                      ),
                                       end: _getGradientAlignment(
-                                          gradientDirection, false),
+                                        gradientDirection,
+                                        false,
+                                      ),
                                     ),
                                     borderRadius: BorderRadius.circular(12),
                                     // Border
@@ -1178,36 +1407,42 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                     boxShadow: showShadow
                                         ? [
                                             BoxShadow(
-                                                color: Colors.black
-                                                    .withOpacity(shadowOpacity),
-                                                blurRadius: shadowBlur,
-                                                offset: const Offset(0, 2))
+                                              color: Colors.black.withOpacity(
+                                                shadowOpacity,
+                                              ),
+                                              blurRadius: shadowBlur,
+                                              offset: const Offset(0, 2),
+                                            ),
                                           ]
                                         : null,
                                   ),
                                   child: Row(
                                     // Changed to Row for Slimline
                                     children: [
-                                      SvgPicture.asset(iconAsset,
-                                          width:
-                                              18, // Smaller icon for slimline
-                                          height: 18,
-                                          placeholderBuilder: (_) => Icon(
-                                              Icons.help_outline,
-                                              size: 20,
-                                              // Fallback icon color matches text if not specified in SVG
-                                              color: labelColor)),
+                                      SvgPicture.asset(
+                                        iconAsset,
+                                        width: 18, // Smaller icon for slimline
+                                        height: 18,
+                                        placeholderBuilder: (_) => Icon(
+                                          Icons.help_outline,
+                                          size: 20,
+                                          // Fallback icon color matches text if not specified in SVG
+                                          color: labelColor,
+                                        ),
+                                      ),
                                       const SizedBox(width: 12),
                                       Expanded(
-                                        child: Text(translatedTitle,
-                                            style: theme.textTheme.labelMedium
-                                                ?.copyWith(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize:
-                                                        11, // Smaller font
-                                                    color: labelColor),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis),
+                                        child: Text(
+                                          translatedTitle,
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 11, // Smaller font
+                                                color: labelColor,
+                                              ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -1264,39 +1499,48 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             AlertDialog(
               title: Text(tr('chatbot.dialogs.saveTitle')),
               content: TextField(
-                  controller: _titleController,
-                  decoration: InputDecoration(
-                      hintText: tr('chatbot.dialogs.saveHint'),
-                      border: const OutlineInputBorder()),
-                  onChanged: (v) => _conversationTitle = v,
-                  autofocus: true),
+                controller: _titleController,
+                decoration: InputDecoration(
+                  hintText: tr('chatbot.dialogs.saveHint'),
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (v) => _conversationTitle = v,
+                autofocus: true,
+              ),
               actions: [
                 TextButton(
-                    onPressed: () => setState(() => _showSaveDialog = false),
-                    child: Text(tr('common.cancel'))),
+                  onPressed: () => setState(() => _showSaveDialog = false),
+                  child: Text(tr('common.cancel')),
+                ),
                 ElevatedButton(
-                    onPressed: () {
-                      saveConversation().then((_) {});
-                    },
-                    child: Text(tr('common.save')))
+                  onPressed: () {
+                    saveConversation().then((_) {});
+                  },
+                  child: Text(tr('common.save')),
+                ),
               ],
             ),
           if (_showExportDialog)
             AlertDialog(
               title: Text(tr('chatbot.dialogs.exportTitle')),
               content: TextField(
-                  decoration: InputDecoration(
-                      hintText: tr('chatbot.dialogs.exportHint')),
-                  onChanged: (v) => _exportFilename = v,
-                  controller: TextEditingController(text: _exportFilename)),
+                decoration: InputDecoration(
+                  hintText: tr('chatbot.dialogs.exportHint'),
+                ),
+                onChanged: (v) => _exportFilename = v,
+                controller: TextEditingController(text: _exportFilename),
+              ),
               actions: [
                 TextButton(
-                    onPressed: () => setState(() => _showExportDialog = false),
-                    child: Text(tr('common.cancel'))),
+                  onPressed: () => setState(() => _showExportDialog = false),
+                  child: Text(tr('common.cancel')),
+                ),
                 ElevatedButton(
-                    onPressed:
-                        _exportFilename.trim().isEmpty ? null : exportChatToPDF,
-                    child: Text(tr('chatbot.dialogs.actions.export')))
+                  onPressed: _exportFilename.trim().isEmpty
+                      ? null
+                      : exportChatToPDF,
+                  child: Text(tr('chatbot.dialogs.actions.export')),
+                ),
               ],
             ),
         ],

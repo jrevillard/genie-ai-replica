@@ -149,7 +149,7 @@ class CpuTranslateBackend {
       this.fallbackMap = this.languageMap.fallbackMap || {};
     } catch (error) {
       logger.error(`[CPU-BACKEND] Failed to load language map: ${error.message}`);
-      throw new Error(`Failed to load language map for model ${modelId}`);
+      throw new Error(`Failed to load language map for model ${modelId}`, { cause: error });
     }
   }
 
@@ -232,7 +232,7 @@ class CpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return this.languageMap && this.languageMap.languageMap.hasOwnProperty(isoCode);
+    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
   }
 
   /**
@@ -312,7 +312,7 @@ class CpuTranslateBackend {
         sourceCode: sourceCode,
         targetCode: targetCode
       });
-      throw new Error('[CPU-BACKEND] Failed to perform translation.');
+      throw new Error('[CPU-BACKEND] Failed to perform translation.', { cause: error });
     }
   }
 

@@ -6,27 +6,15 @@ const geoip = require('geoip-lite');
 class SecurityMiddleware {
   static threatPatterns = {
     sqlInjection: [
-      /((\%27)|(\')|(\-\-)|(\%23)|(#))/i,
-      /((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(\%3B)|(;))/i,
+      /((%27)|(')|(--)|(%23)|(#))/i,
+      /((%3D)|(=))[^\n]*((%27)|(')|(--)|(%3B)|(;))/i,
       /exec(\s|\+)+(s|x)p\w+/i,
       /UNION(\s|\+)+(ALL|SELECT)/i
     ],
-    commandInjection: [
-      /(cmd|command)=|(\bls\b|\bcat\b)/i,
-      /(\bwget\b|\bcurl\b|\bnc\b)/i
-    ],
-    crossSiteScripting: [
-      /(\%3Cscript)|(script)/i,
-      /javascript:/i
-    ],
-    serverSideInclusion: [
-      /<!--#(exec|include)/i
-    ],
-    pathTraversal: [
-      /(\.\.[\/\\])+/i,
-      /(%2e%2e[\/\\])+/i,
-      /\b(etc\/passwd|\/root\/)\b/i
-    ]
+    commandInjection: [/(cmd|command)=|(\bls\b|\bcat\b)/i, /(\bwget\b|\bcurl\b|\bnc\b)/i],
+    crossSiteScripting: [/(%3Cscript)|(script)/i, /javascript:/i],
+    serverSideInclusion: [/<!--#(exec|include)/i],
+    pathTraversal: [/(\.\.[/\\])+/i, /(%2e%2e[/\\])+/i, /\b(etc\/passwd|\/root\/)\b/i]
   };
 
   static ipReputation = new Map();
@@ -68,14 +56,8 @@ class SecurityMiddleware {
   });
 
   static threatDetectionMiddleware(req, res, next) {
-    // Skip threat detection for authenticated requests or auth endpoints
-    if (req.headers.authorization || req.user || req.path.startsWith('/api/auth')) {
-      logger.debug('Skipping threat detection for authenticated request', {
-        ip: req.ip,
-        path: req.path,
-        user: req.user || null,
-        hasAuthHeader: !!req.headers.authorization
-      });
+    // Skip threat detection for authenticated requests, auth endpoints, and health checks
+    if (req.headers.authorization || req.user || req.path.startsWith('/api/auth') || req.path === '/api/health') {
       return next();
     }
 
@@ -97,9 +79,9 @@ class SecurityMiddleware {
 
     if (detectedThreats.length > 0) {
       SecurityMiddleware.handleThreatDetection(req, detectedThreats);
-      return res.status(403).json({ 
-        message: 'Potential security threat detected', 
-        threats: detectedThreats 
+      return res.status(403).json({
+        message: 'Potential security threat detected',
+        threats: detectedThreats
       });
     }
 
@@ -113,7 +95,7 @@ class SecurityMiddleware {
     Object.entries(inputs).forEach(([key, value]) => {
       if (typeof value === 'string') {
         threatChecks.forEach(({ type, patterns }) => {
-          patterns.forEach(pattern => {
+          patterns.forEach((pattern) => {
             if (pattern.test(value)) {
               detectedThreats.push({
                 type,
@@ -136,11 +118,13 @@ class SecurityMiddleware {
     SecurityMiddleware.logSecurityEvent('Threat Detection', {
       type: 'threat_detected',
       ip: req.ip,
-      geo: geoInfo ? {
-        country: geoInfo.country,
-        city: geoInfo.city,
-        region: geoInfo.region
-      } : null,
+      geo: geoInfo
+        ? {
+            country: geoInfo.country,
+            city: geoInfo.city,
+            region: geoInfo.region
+          }
+        : null,
       path: req.path,
       method: req.method,
       threats: detectedThreats,
@@ -149,12 +133,12 @@ class SecurityMiddleware {
       user: req.user || null
     });
 
-    SecurityMiddleware.blockIP(req.ip, 'Threat detected');
+    SecurityMiddleware.blockIP(req.ip, 'Threat detected', req);
   }
 
   static updateIPReputation(req) {
-    // Skip reputation scoring for auth endpoints or authenticated requests
-    if (req.path.startsWith('/api/auth') || req.headers.authorization || req.user) {
+    // Skip reputation scoring for auth endpoints, authenticated requests, and health checks
+    if (req.path.startsWith('/api/auth') || req.headers.authorization || req.user || req.path === '/api/health') {
       logger.debug('Skipping IP reputation scoring for authenticated request', {
         ip: req.ip,
         path: req.path,
@@ -166,9 +150,9 @@ class SecurityMiddleware {
 
     const ip = req.ip;
     const key = ip;
-    const reputation = SecurityMiddleware.ipReputation.get(key) || { 
-      score: 0, 
-      lastSeen: Date.now() 
+    const reputation = SecurityMiddleware.ipReputation.get(key) || {
+      score: 0,
+      lastSeen: Date.now()
     };
     const timeSinceLastSeen = Date.now() - reputation.lastSeen;
     reputation.score = Math.max(0, reputation.score - Math.floor(timeSinceLastSeen / (1000 * 60 * 60)));
@@ -185,7 +169,7 @@ class SecurityMiddleware {
     });
 
     if (reputation.score > 100) {
-      SecurityMiddleware.blockIP(ip, 'High threat score');
+      SecurityMiddleware.blockIP(ip, `High threat score (${reputation.score})`, req);
     }
   }
 
@@ -195,7 +179,7 @@ class SecurityMiddleware {
 
     // Apply general API rate limiter, skipping auth endpoints
     app.use('/api/', (req, res, next) => {
-      if (req.path.startsWith('/api/auth')) {
+      if (req.path.startsWith('/api/auth') || req.path === '/api/health') {
         return next();
       }
       SecurityMiddleware.apiLimiter(req, res, next);
@@ -209,13 +193,13 @@ class SecurityMiddleware {
 
     // Sanitize inputs
     app.use((req, res, next) => {
-      Object.keys(req.query).forEach(key => {
+      Object.keys(req.query).forEach((key) => {
         if (typeof req.query[key] === 'string') {
           req.query[key] = validator.escape(req.query[key]);
         }
       });
       if (req.body) {
-        Object.keys(req.body).forEach(key => {
+        Object.keys(req.body).forEach((key) => {
           if (typeof req.body[key] === 'string') {
             req.body[key] = validator.escape(req.body[key]);
           }
@@ -225,10 +209,14 @@ class SecurityMiddleware {
     });
   }
 
-  static blockIP(ip, reason) {
-    logger.warn('IP Blocked', { 
-      ip, 
-      reason 
+  static blockIP(ip, reason, req = null) {
+    logger.warn('IP Blocked', {
+      ip,
+      reason,
+      path: req?.path || null,
+      method: req?.method || null,
+      userAgent: req?.headers?.['user-agent'] || null,
+      user: req?.user || null
     });
   }
 
@@ -238,8 +226,8 @@ class SecurityMiddleware {
 
   static authFailureLogger(req, res, next) {
     const originalEnd = res.end;
-    
-    res.end = function(chunk, encoding) {
+
+    res.end = function (chunk, encoding) {
       if (res.statusCode === 401 || res.statusCode === 403) {
         SecurityMiddleware.logSecurityEvent(`Authentication Failure - ${res.statusCode}`, {
           ip: req.ip,

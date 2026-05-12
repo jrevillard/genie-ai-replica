@@ -239,8 +239,8 @@ The following services must be running (depending on deployment mode):
 
 1. **Clone Repository**:
    ```bash
-   git clone https://github.com/your-org/genie-ai-overlay.git
-   cd genie-ai-overlay/chatqna
+   git clone https://github.com/your-org/inko-overlay.git
+   cd inko-overlay/chatqna
    ```
 
 2. **Build Docker Image**:
@@ -701,3 +701,4 @@ Built with [OPEA (Open Platform for Enterprise AI)](https://opea.dev) framework.
 
 **Last Updated**: 2025-02-07
 **Version**: 1.0.0
+

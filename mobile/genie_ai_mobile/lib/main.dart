@@ -18,24 +18,27 @@ import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
 // ===========================================================================
-import 'package:genie_ai_mobile/components/auth/login_screen.dart';
-import 'package:genie_ai_mobile/components/auth/register_screen.dart';
-import 'package:genie_ai_mobile/components/auth/registration_success_screen.dart';
-import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.dart';
-import 'package:genie_ai_mobile/components/auth/password_reset_confirm_screen.dart';
+import 'package:genie_ai_mobile/components/auth/oidc_login_screen.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
+import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
+import 'package:genie_ai_mobile/services/auth/auth_state.dart';
+import 'package:app_links/app_links.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ===========================================================================
 // COMPONENT IMPORTS
 // ===========================================================================
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
 import 'package:genie_ai_mobile/components/settings/about_screen.dart';
 
-/// SSL Override for local development to bypass self-signed certificate issues
-class MyHttpOverrides extends HttpOverrides {
+/// DEBUG ONLY: Bypasses TLS validation for local development with self-signed
+/// certificates. Tree-shaken in release builds — unused when kDebugMode is false.
+class _DebugHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
@@ -48,45 +51,133 @@ void main() async {
   // Ensure binding is initialized for rootBundle access
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Apply the HTTP overrides for development environment
-  if (!kIsWeb) {
-    HttpOverrides.global = MyHttpOverrides();
+  // DEBUG ONLY: Bypass TLS for local dev with self-signed certificates.
+  // kDebugMode is a compile-time constant — this entire block is
+  // tree-shaken from release builds.
+  if (kDebugMode && !kIsWeb) {
+    HttpOverrides.global = _DebugHttpOverrides();
   }
 
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 
-  runApp(const MyApp());
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
-  // User session state
-  Map<String, dynamic>? _user;
+class _MyAppState extends ConsumerState<MyApp> {
   bool _isConfigLoaded = false;
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _appLinkSubscription;
 
   @override
   void initState() {
     super.initState();
+    _appLinks = AppLinks();
+
+    // Handle cold-start links (app launched from terminated state via universal link)
+    _appLinks.getInitialLink().then((Uri? link) {
+      if (link != null) {
+        _handleIncomingLink(link);
+      }
+    });
+
+    // Handle warm-start links (app already running in background)
+    _appLinkSubscription = _appLinks.uriLinkStream.listen(
+      _handleIncomingLink,
+      onError: (Object error) {
+        debugPrint('[APPLINKS] Stream error: $error');
+      },
+    );
+
     _loadAppConfiguration();
+  }
+
+  Future<void> _handleIncomingLink(Uri uri) async {
+    // DEBUG ONLY: E2E test-auth deep link — inject tokens directly into storage.
+    // kDebugMode is a compile-time constant — this block is tree-shaken in release.
+    // Path: genie-e2e-test://test-auth?access_token=...&id_token=...&refresh_token=...&expires_at=...
+    // Uses a dedicated scheme to avoid conflict with flutter_appauth's
+    // RedirectUriReceiverActivity which owns the appAuthRedirectScheme.
+    //
+    // NOTE: This bypasses AuthNotifier's normal state transition logic
+    // (authorize → token exchange → authenticated). It sets the state
+    // directly because invalidate() re-runs build() and crashes on late
+    // final fields. This is acceptable for E2E because the test-only
+    // deep link scheme cannot be triggered in production.
+    if (kDebugMode && uri.host == 'test-auth') {
+      final tokenStorage = ref.read(tokenStorageProvider);
+      final accessToken = uri.queryParameters['access_token'];
+      final idToken = uri.queryParameters['id_token'];
+      final refreshToken = uri.queryParameters['refresh_token'];
+      final expiresAt = uri.queryParameters['expires_at'];
+      if (accessToken != null && idToken != null && refreshToken != null) {
+        final expiration = expiresAt != null
+            ? DateTime.tryParse(expiresAt) ?? DateTime.now().add(const Duration(seconds: 300))
+            : DateTime.now().add(const Duration(seconds: 300));
+        await tokenStorage.saveTokens(
+          accessToken: accessToken,
+          idToken: idToken,
+          refreshToken: refreshToken,
+          accessTokenExpiration: expiration,
+        );
+        // Set authenticated state directly — avoid invalidate() which
+        // re-runs build() and crashes on late final fields.
+        ref.read(authProvider.notifier).state = const AuthState.authenticated();
+        debugPrint('[TEST-AUTH] Tokens injected via deep link, expiration: $expiration');
+      } else {
+        debugPrint('[TEST-AUTH] Missing token parameters in deep link');
+      }
+      return;
+    }
+
+    // OIDC callbacks use custom scheme (e.g., com.itu.genieai://callback)
+    // These are handled internally by flutter_appauth — do NOT process them here
+    if (uri.scheme != 'https') return;
+
+    // Non-OIDC HTTPS links (email verification, etc.) → open in system browser
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (launched) {
+        debugPrint('[APPLINKS] Launched system browser for: $uri');
+      } else {
+        debugPrint('[APPLINKS] Failed to launch browser for: $uri (no browser app available)');
+      }
+    } catch (e) {
+      debugPrint('[APPLINKS] Error launching browser: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _appLinkSubscription?.cancel();
+    super.dispose();
   }
 
   /// Loads the theme configuration from assets and initializes ThemeManager
   Future<void> _loadAppConfiguration() async {
     try {
       debugPrint("[MAIN] Loading configuration...");
-      final String configString =
-          await rootBundle.loadString('assets/config/genie-ai-config.json');
+      final String configString = await rootBundle.loadString(
+        'assets/config/genie-ai-config.json',
+      );
       final Map<String, dynamic> config = json.decode(configString);
 
       // Initialize ThemeManager with the loaded config
       ThemeManager().setConfiguration(config);
+
+      // Load GenieAiConfig for branding (iconPath, title) used by OidcLoginScreen
+      await GenieAiConfig.load();
 
       debugPrint("[MAIN] Configuration loaded successfully.");
     } catch (e) {
@@ -105,22 +196,14 @@ class _MyAppState extends State<MyApp> {
     ThemeManager().toggleTheme();
   }
 
-  void _handleLogin(Map<String, dynamic> user) {
-    debugPrint("User logged in: ${user['email'] ?? 'unknown'}");
-    setState(() {
-      _user = user;
-    });
-  }
-
-  void _handleLogout() {
-    debugPrint("User logged out");
-    setState(() {
-      _user = null;
-    });
+  void _onLogout() {
+    ref.read(authProvider.notifier).logout();
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return AnimatedBuilder(
       animation: Listenable.merge([ThemeManager(), I18nService()]),
       builder: (context, child) {
@@ -128,8 +211,9 @@ class _MyAppState extends State<MyApp> {
           title: 'Genie AI',
           debugShowCheckedModeBanner: false,
           locale: I18nService().currentLocale,
-          supportedLocales:
-              I18nService().supportedLanguages.keys.map((code) => Locale(code)),
+          supportedLocales: I18nService().supportedLanguages.keys.map(
+            (code) => Locale(code),
+          ),
           localizationsDelegates: const [
             FallbackMaterialLocalizationsDelegate(),
             FallbackWidgetsLocalizationsDelegate(),
@@ -151,34 +235,25 @@ class _MyAppState extends State<MyApp> {
             }
             return child!;
           },
-          home: _user == null
-              ? LoginScreen(onLoginSuccess: _handleLogin)
-              : MainScreen(
-                  user: _user!,
+          home: authState.status == AuthStatus.authenticated
+              ? MainScreen(
+                  // TODO(Epic 2): accessToken is empty until AuthInterceptor
+                  // provides real tokens to downstream components.
+                  user: {
+                    'id': authState.userId ?? '',
+                    'accessToken': '',
+                  },
                   isDarkMode: ThemeManager().isDarkMode,
                   toggleTheme: _toggleTheme,
-                  onLogout: _handleLogout,
-                ),
+                  onLogout: _onLogout,
+                )
+              : const OidcLoginScreen(),
           routes: {
-            '/login': (context) => LoginScreen(onLoginSuccess: _handleLogin),
-            '/register': (context) => const RegisterScreen(),
-            '/registration-success': (context) =>
-                const RegistrationSuccessScreen(),
-            '/password-reset': (context) => const PasswordResetInitiateScreen(),
-            '/profile': (context) => UserProfileScreen(user: _user ?? {}),
+            '/login': (context) => const OidcLoginScreen(),
+            '/profile': (context) => UserProfileScreen(
+              user: {'id': authState.userId ?? ''},
+            ),
             '/about': (context) => const AboutScreen(),
-            '/password-reset-confirm': (context) {
-              final settings = ModalRoute.of(context)?.settings;
-              final String? token = settings?.arguments as String?;
-              if (token == null) {
-                return const Scaffold(
-                  body: Center(
-                    child: Text("Invalid or missing reset token"),
-                  ),
-                );
-              }
-              return PasswordResetConfirmScreen(token: token);
-            },
           },
         );
       },
@@ -224,8 +299,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _isOnline = ConnectivityService().isOnline;
 
     // 3. Listen to Connectivity Stream for Sync Trigger
-    _connectivitySubscription =
-        ConnectivityService().isOnlineStream.listen((isOnline) {
+    _connectivitySubscription = ConnectivityService().isOnlineStream.listen((
+      isOnline,
+    ) {
       if (mounted) {
         setState(() {
           _isOnline = isOnline;
@@ -233,7 +309,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
         if (isOnline) {
           debugPrint(
-              "[MAIN] App is Online. Placeholder for future Sync Trigger.");
+            "[MAIN] App is Online. Placeholder for future Sync Trigger.",
+          );
           // TODO: TRIGGER SYNC SERVICE HERE WHEN IMPLEMENTED
           // e.g. SyncService().syncPendingData();
         }
@@ -287,8 +364,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     // Theme color logic for Binder Tabs
     // Dark Mode -> Green (Primary), Light Mode -> Grey
-    final Color binderColor =
-        widget.isDarkMode ? ThemeManager().getColors()['primary'] : Colors.grey;
+    final Color binderColor = widget.isDarkMode
+        ? ThemeManager().getColors()['primary']
+        : Colors.grey;
 
     return Scaffold(
       // Drawer is handled via Scaffold callbacks but triggered by BinderTabs
@@ -348,11 +426,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           ignoring: !_isOnline,
                           child: Opacity(
                             opacity: _isOnline ? 1.0 : 0.5,
-                            child: ChatBotComponent(
-                              key: _chatBotKey,
-                              userId: widget.user['id'] ?? widget.user['_id'],
-                              onRefreshSidebar: _refreshSidebar,
-                              onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                            child: KeyedSubtree(
+                              key: const Key('main_chat_bot'),
+                              child: ChatBotComponent(
+                                key: _chatBotKey,
+                                userId: widget.user['id'] ?? widget.user['_id'],
+                                onRefreshSidebar: _refreshSidebar,
+                                onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                              ),
                             ),
                           ),
                         ),
@@ -432,7 +513,7 @@ class _BinderTab extends StatelessWidget {
         width: 10, // Slim Width
         height: 60, // Height matching Navbar approx
         decoration: BoxDecoration(
-          color: color.withOpacity(0.45), // Transparent
+          color: color.withValues(alpha: 0.45), // Transparent
           borderRadius: BorderRadius.horizontal(
             right: isLeft ? const Radius.circular(10) : Radius.zero,
             left: !isLeft ? const Radius.circular(10) : Radius.zero,
@@ -442,13 +523,13 @@ class _BinderTab extends StatelessWidget {
               color: Colors.black12,
               blurRadius: 4,
               offset: isLeft ? const Offset(2, 0) : const Offset(-2, 0),
-            )
+            ),
           ],
         ),
         child: Center(
           child: Icon(
             isLeft ? Icons.chevron_right : Icons.chevron_left,
-            color: Colors.white.withOpacity(0.8),
+            color: Colors.white.withValues(alpha: 0.8),
             size: 12,
           ),
         ),

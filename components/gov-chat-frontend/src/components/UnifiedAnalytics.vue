@@ -1,57 +1,55 @@
 <template>
-  <div class="analytics-modal" @click.self="close" :data-theme="theme">
-    <div class="analytics-content" :key="'analytics-content-' + currentLocale">
+  <div class="analytics-modal" :data-theme="theme" @click.self="close">
+    <div :key="'analytics-content-' + currentLocale" class="analytics-content">
       <div class="analytics-header">
         <h2 style="color: var(--text-primary) !important">
-          {{ $t("analytics.title") }}
+          {{ $t('analytics.title') }}
         </h2>
-        <button class="close-btn" @click="close" aria-label="Close">×</button>
+        <button class="close-btn" aria-label="Close" @click="close">×</button>
       </div>
 
       <div class="analytics-body">
         <div v-if="useDynamicData" class="period-selector">
-          <label style="color: var(--text-primary) !important">{{
-            translate("analytics.period")
-          }}</label>
+          <label style="color: var(--text-primary) !important">{{ translate('analytics.period') }}</label>
           <select
             v-model="selectedPeriod"
-            @change="loadAnalytics"
             style="background-color: var(--bg-dialog) !important"
+            @change="loadAnalytics"
           >
             <option value="daily">
-              {{ translate("analytics.periods.daily") }}
+              {{ translate('analytics.periods.daily') }}
             </option>
             <option value="weekly">
-              {{ translate("analytics.periods.weekly") }}
+              {{ translate('analytics.periods.weekly') }}
             </option>
             <option value="monthly">
-              {{ translate("analytics.periods.monthly") }}
+              {{ translate('analytics.periods.monthly') }}
             </option>
             <option value="all-time">
-              {{ translate("analytics.periods.allTime") }}
+              {{ translate('analytics.periods.allTime') }}
             </option>
           </select>
 
           <div v-if="selectedPeriod !== 'all-time'" class="date-picker">
             <input
-              type="date"
               v-model="selectedDate"
-              @change="loadAnalytics"
+              type="date"
               :max="todayStr"
               style="background-color: var(--bg-dialog) !important"
+              @change="loadAnalytics"
             />
           </div>
         </div>
 
         <div v-if="isLoading" class="loading-container">
           <div class="spinner"></div>
-          <p>{{ translate("analytics.loading") }}</p>
+          <p>{{ translate('analytics.loading') }}</p>
         </div>
 
         <div v-else-if="error" class="error-container">
           <p class="error-message">{{ error }}</p>
-          <button @click="loadAnalytics" class="retry-button">
-            {{ translate("analytics.retry") }}
+          <button class="retry-button" @click="loadAnalytics">
+            {{ translate('analytics.retry') }}
           </button>
         </div>
 
@@ -60,46 +58,38 @@
             <usage-trend-chart
               ref="usageTrendChart"
               :data="timeSeriesData"
-              :externalData="true"
-              :showPeriodSelector="true"
-              :showDualChart="true"
+              :external-data="true"
+              :show-period-selector="true"
+              :show-dual-chart="true"
               @period-change="onPeriodChange"
             />
           </div>
 
           <div class="metrics-summary">
             <div class="metric-card">
-              <h3>{{ translate("analytics.metrics.totalQueries") }}</h3>
+              <h3>{{ translate('analytics.metrics.totalQueries') }}</h3>
               <div class="metric-value">
                 {{ formatValue(analytics.totalQueries) }}
               </div>
-              <div
-                v-if="comparison.totalQueries"
-                class="trend"
-                :class="getTrendClass(comparison.totalQueries)"
-              >
+              <div v-if="comparison.totalQueries" class="trend" :class="getTrendClass(comparison.totalQueries)">
                 {{ formatTrend(comparison.totalQueries) }}
               </div>
             </div>
 
             <div class="metric-card">
-              <h3>{{ translate("analytics.metrics.uniqueUsers") }}</h3>
+              <h3>{{ translate('analytics.metrics.uniqueUsers') }}</h3>
               <div class="metric-value">
                 {{ formatValue(analytics.uniqueUsers) }}
               </div>
-              <div
-                v-if="comparison.uniqueUsers"
-                class="trend"
-                :class="getTrendClass(comparison.uniqueUsers)"
-              >
+              <div v-if="comparison.uniqueUsers" class="trend" :class="getTrendClass(comparison.uniqueUsers)">
                 {{ formatTrend(comparison.uniqueUsers) }}
               </div>
             </div>
 
             <div class="metric-card">
-              <h3>{{ translate("analytics.metrics.avgResponseTime") }}</h3>
+              <h3>{{ translate('analytics.metrics.avgResponseTime') }}</h3>
               <div class="metric-value">
-                {{ formatValue(analytics.averageResponseTime, "milliseconds") }}
+                {{ formatValue(analytics.averageResponseTime, 'milliseconds') }}
               </div>
               <div
                 v-if="comparison.averageResponseTime"
@@ -111,15 +101,11 @@
             </div>
 
             <div class="metric-card">
-              <h3>{{ translate("analytics.metrics.satisfaction") }}</h3>
+              <h3>{{ translate('analytics.metrics.satisfaction') }}</h3>
               <div class="metric-value">
-                {{ formatValue(analytics.satisfactionRate, "percent") }}
+                {{ formatValue(analytics.satisfactionRate, 'percent') }}
               </div>
-              <div
-                v-if="comparison.satisfactionRate"
-                class="trend"
-                :class="getTrendClass(comparison.satisfactionRate)"
-              >
+              <div v-if="comparison.satisfactionRate" class="trend" :class="getTrendClass(comparison.satisfactionRate)">
                 {{ formatTrend(comparison.satisfactionRate) }}
               </div>
             </div>
@@ -127,23 +113,14 @@
 
           <div class="satisfaction-charts">
             <h3 class="satisfaction-title">
-              {{
-                translate(
-                  "analytics.satisfactionAnalysis",
-                  "User Satisfaction Analysis"
-                )
-              }}
+              {{ translate('analytics.satisfactionAnalysis', 'User Satisfaction Analysis') }}
             </h3>
             <div class="satisfaction-container">
               <div class="analytics-section half-width">
                 <satisfaction-gauge
                   :value="analytics.satisfactionGaugeData?.currentValue || 0"
-                  :historical-data="
-                    analytics.satisfactionGaugeData?.historicalData || []
-                  "
-                  :change-percentage="
-                    analytics.satisfactionGaugeData?.changePercentage || 0
-                  "
+                  :historical-data="analytics.satisfactionGaugeData?.historicalData || []"
+                  :change-percentage="analytics.satisfactionGaugeData?.changePercentage || 0"
                   :target="analytics.satisfactionGaugeData?.target || 85"
                   :external-data="true"
                   :render-key="currentLocale"
@@ -164,34 +141,31 @@
 
           <div class="charts-container">
             <div class="analytics-section half-width">
-              <h3>{{ translate("analytics.topQueries") }}</h3>
+              <h3>{{ translate('analytics.topQueries') }}</h3>
               <top-queries-chart
                 v-if="analytics.topQueries && analytics.topQueries.length > 0"
                 :data="analytics.topQueries"
                 :external-data="true"
               />
               <div v-else class="no-data">
-                {{ translate("analytics.noData") }}
+                {{ translate('analytics.noData') }}
               </div>
             </div>
 
             <div class="analytics-section half-width">
-              <h3>{{ translate("analytics.serviceUsage") }}</h3>
+              <h3>{{ translate('analytics.serviceUsage') }}</h3>
               <category-distribution-chart
-                v-if="
-                  analytics.queryDistribution &&
-                  analytics.queryDistribution.length > 0
-                "
+                v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
                 :data="analytics.queryDistribution"
                 :external-data="true"
                 :render-key="currentLocale"
               />
               <div v-else class="category-chart-container">
                 <div v-if="categoryLoading" class="chart-loading">
-                  {{ translate("analytics.loading") }}
+                  {{ translate('analytics.loading') }}
                 </div>
                 <div v-else class="no-data">
-                  {{ translate("analytics.noData") }}
+                  {{ translate('analytics.noData') }}
                 </div>
               </div>
             </div>
@@ -203,25 +177,24 @@
 </template>
 
 <script>
-import UsageTrendChart from "./charts/UsageTrendChart.vue";
-import TopQueriesChart from "./charts/TopQueriesChart.vue";
-import CategoryDistributionChart from "./charts/CategoryDistributionChart.vue";
-import SatisfactionGauge from "./charts/SatisfactionGauge.vue";
-import SatisfactionHeatmap from "./charts/SatisfactionHeatmap.vue";
-import analyticsService from "../services/analyticsService";
-import { getCurrentTheme } from "../utils/ThemeManager";
+import UsageTrendChart from './charts/UsageTrendChart.vue';
+import TopQueriesChart from './charts/TopQueriesChart.vue';
+import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
+import SatisfactionGauge from './charts/SatisfactionGauge.vue';
+import SatisfactionHeatmap from './charts/SatisfactionHeatmap.vue';
+import analyticsService from '../services/analyticsService';
 
 export default {
-  name: "UnifiedAnalytics",
+  name: 'UnifiedAnalytics',
   components: {
     UsageTrendChart,
     TopQueriesChart,
     CategoryDistributionChart,
     SatisfactionGauge,
-    SatisfactionHeatmap,
+    SatisfactionHeatmap
   },
 
-  emits: ["close"],
+  emits: ['close'],
 
   data() {
     return {
@@ -231,9 +204,9 @@ export default {
       isLoading: false,
       categoryLoading: false,
       error: null,
-      selectedPeriod: "monthly",
-      selectedDate: new Date().toISOString().split("T")[0], // Today's date in YYYY-MM-DD format
-      currentLocale: this.$i18n ? this.$i18n.locale : "en",
+      selectedPeriod: 'monthly',
+      selectedDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
+      currentLocale: this.$i18n ? this.$i18n.locale : 'en',
 
       // Analytics data
       analytics: {
@@ -244,13 +217,13 @@ export default {
         queryDistribution: [],
         topQueries: [],
         satisfactionGaugeData: null,
-        satisfactionHeatmapData: [],
+        satisfactionHeatmapData: []
       },
       comparison: {
         totalQueries: null,
         uniqueUsers: null,
         averageResponseTime: null,
-        satisfactionRate: null,
+        satisfactionRate: null
       },
       timeSeriesData: [],
 
@@ -266,52 +239,52 @@ export default {
         satisfactionRate: 87.5,
         queryDistribution: [
           {
-            categoryId: "cat1",
-            name: "Business & Economy",
+            categoryId: 'cat1',
+            name: 'Business & Economy',
             count: 2347,
-            value: 24,
+            value: 24
           },
           {
-            categoryId: "cat2",
-            name: "Transportation",
+            categoryId: 'cat2',
+            name: 'Transportation',
             count: 1782,
-            value: 18,
+            value: 18
           },
           {
-            categoryId: "cat3",
-            name: "Taxes & Revenue",
+            categoryId: 'cat3',
+            name: 'Taxes & Revenue',
             count: 1645,
-            value: 16,
+            value: 16
           },
           {
-            categoryId: "cat4",
-            name: "Immigration & Citizenship",
+            categoryId: 'cat4',
+            name: 'Immigration & Citizenship',
             count: 1245,
-            value: 12,
+            value: 12
           },
           {
-            categoryId: "cat5",
-            name: "Education & Learning",
+            categoryId: 'cat5',
+            name: 'Education & Learning',
             count: 980,
-            value: 10,
+            value: 10
           },
           {
-            categoryId: "cat6",
-            name: "Housing & Properties",
+            categoryId: 'cat6',
+            name: 'Housing & Properties',
             count: 850,
-            value: 8,
+            value: 8
           },
           {
-            categoryId: "cat7",
-            name: "Health & Healthcare",
+            categoryId: 'cat7',
+            name: 'Health & Healthcare',
             count: 720,
-            value: 6,
+            value: 6
           },
-          { categoryId: "cat8", name: "Others", count: 650, value: 6 },
+          { categoryId: 'cat8', name: 'Others', count: 650, value: 6 }
         ],
-        topQueries: [],
+        topQueries: []
       },
-      theme: null,
+      theme: null
     };
   },
 
@@ -320,8 +293,8 @@ export default {
      * Today's date in YYYY-MM-DD format
      */
     todayStr() {
-      return new Date().toISOString().split("T")[0];
-    },
+      return new Date().toISOString().split('T')[0];
+    }
   },
 
   created() {
@@ -336,21 +309,20 @@ export default {
     this.staticData.topQueries = [...this.translatedTopQueries];
 
     // Detect initial theme, prioritizing localStorage
-    const localStorageTheme = localStorage.getItem("theme") || "light";
-    const domTheme =
-      document.documentElement.getAttribute("data-theme") || "light";
-    console.log("[UnifiedAnalytics] LocalStorage theme:", localStorageTheme);
-    console.log("[UnifiedAnalytics] DOM data-theme:", domTheme);
+    const localStorageTheme = localStorage.getItem('theme') || 'light';
+    const domTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    console.log('[UnifiedAnalytics] LocalStorage theme:', localStorageTheme);
+    console.log('[UnifiedAnalytics] DOM data-theme:', domTheme);
     if (localStorageTheme !== domTheme) {
       console.warn(
-        "[UnifiedAnalytics] Theme conflict detected! LocalStorage:",
+        '[UnifiedAnalytics] Theme conflict detected! LocalStorage:',
         localStorageTheme,
-        "DOM data-theme:",
+        'DOM data-theme:',
         domTheme
       );
     }
     this.theme = localStorageTheme;
-    console.log("[UnifiedAnalytics] Initial theme set to:", this.theme);
+    console.log('[UnifiedAnalytics] Initial theme set to:', this.theme);
 
     // *** REMOVED getComputedStyle BLOCK FROM created() ***
     // The previous block was removed here to prevent the DOM access error.
@@ -363,8 +335,8 @@ export default {
     // Listen for locale changes
     if (this.$i18n) {
       this.currentLocale = this.$i18n.locale;
-      this.$watch("$i18n.locale", (newLocale) => {
-        console.log("Locale changed in UnifiedAnalytics:", newLocale);
+      this.$watch('$i18n.locale', (newLocale) => {
+        console.log('Locale changed in UnifiedAnalytics:', newLocale);
 
         // Update current locale
         this.currentLocale = newLocale;
@@ -391,50 +363,47 @@ export default {
 
   mounted() {
     // Add theme change listener
-    console.log("[UnifiedAnalytics] Adding themeChange event listener...");
-    window.addEventListener("themeChange", this.handleThemeChange);
+    console.log('[UnifiedAnalytics] Adding themeChange event listener...');
+    window.addEventListener('themeChange', this.handleThemeChange);
 
     // Log mounted state
-    console.log("UnifiedAnalytics mounted with locale:", this.currentLocale);
-    console.log("[UnifiedAnalytics] Current theme after mount:", this.theme);
+    console.log('UnifiedAnalytics mounted with locale:', this.currentLocale);
+    console.log('[UnifiedAnalytics] Current theme after mount:', this.theme);
 
     // *** NEW: Log computed styles after mounting, when DOM is ready ***
-    this.logComputedStyles("Initial Mounted");
+    this.logComputedStyles('Initial Mounted');
 
     // Add resize listener
-    window.addEventListener("resize", this.handleResize);
+    window.addEventListener('resize', this.handleResize);
   },
 
   beforeUnmount() {
-    console.log("[UnifiedAnalytics] Removing themeChange event listener...");
-    window.removeEventListener("themeChange", this.handleThemeChange);
-    window.removeEventListener("resize", this.handleResize);
+    console.log('[UnifiedAnalytics] Removing themeChange event listener...');
+    window.removeEventListener('themeChange', this.handleThemeChange);
+    window.removeEventListener('resize', this.handleResize);
   },
 
   methods: {
     handleThemeChange(event) {
-      console.log("[UnifiedAnalytics] Theme change event received:", event);
-      const newTheme =
-        localStorage.getItem("theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        "light";
-      console.log("[UnifiedAnalytics] Updating theme to:", newTheme);
+      console.log('[UnifiedAnalytics] Theme change event received:', event);
+      const newTheme = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
+      console.log('[UnifiedAnalytics] Updating theme to:', newTheme);
       this.theme = newTheme;
 
       // *** NEW: Log computed styles after theme change ***
-      this.logComputedStyles("After Theme Change");
+      this.logComputedStyles('After Theme Change');
 
       // Force chart re-rendering to ensure child charts update
-      console.log("[UnifiedAnalytics] Triggering chart re-render...");
+      console.log('[UnifiedAnalytics] Triggering chart re-render...');
       this.loadAnalytics();
     },
 
     // *** NEW METHOD TO SAFELY LOG COMPUTED STYLES ***
     logComputedStyles(stage) {
       this.$nextTick(() => {
-        const content = this.$el.querySelector(".analytics-content");
-        const h2 = this.$el.querySelector("h2");
-        const metricValue = this.$el.querySelector(".metric-value");
+        const content = this.$el.querySelector('.analytics-content');
+        const h2 = this.$el.querySelector('h2');
+        const metricValue = this.$el.querySelector('.metric-value');
 
         if (this.$el) {
           console.log(
@@ -447,29 +416,17 @@ export default {
               getComputedStyle(content).backgroundColor
             );
           } else {
-            console.warn(
-              `[UnifiedAnalytics] ${stage} Analytics content element not found.`
-            );
+            console.warn(`[UnifiedAnalytics] ${stage} Analytics content element not found.`);
           }
           if (h2) {
-            console.log(
-              `[UnifiedAnalytics] ${stage} Header title color:`,
-              getComputedStyle(h2).color
-            );
+            console.log(`[UnifiedAnalytics] ${stage} Header title color:`, getComputedStyle(h2).color);
           } else {
-            console.warn(
-              `[UnifiedAnalytics] ${stage} Header h2 element not found.`
-            );
+            console.warn(`[UnifiedAnalytics] ${stage} Header h2 element not found.`);
           }
           if (metricValue) {
-            console.log(
-              `[UnifiedAnalytics] ${stage} Metric value color:`,
-              getComputedStyle(metricValue).color
-            );
+            console.log(`[UnifiedAnalytics] ${stage} Metric value color:`, getComputedStyle(metricValue).color);
           } else {
-            console.warn(
-              `[UnifiedAnalytics] ${stage} Metric value element not found.`
-            );
+            console.warn(`[UnifiedAnalytics] ${stage} Metric value element not found.`);
           }
         }
       });
@@ -478,20 +435,13 @@ export default {
 
     applyTheme() {
       // Use saved theme preference or data-theme attribute
-      let themeMode =
-        localStorage.getItem("theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        "light";
+      let themeMode = localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'light';
       // Validate themeMode
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[UnifiedAnalytics] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
+      if (!['light', 'dark', 'system'].includes(themeMode)) {
+        console.warn(`[UnifiedAnalytics] Invalid themeMode: ${themeMode}, defaulting to light`);
+        themeMode = 'light';
       }
       this.theme = themeMode;
-      // Set data-theme attribute on root element
-      this.$el.setAttribute("data-theme", themeMode);
       console.log(`[UnifiedAnalytics] Applied theme: ${themeMode}`);
       // Force re-render of charts to pick up theme
       this.$nextTick(() => {
@@ -499,7 +449,7 @@ export default {
       });
     },
 
-    translate(key, fallback = "") {
+    translate(key, fallback = '') {
       if (!this.$i18n) return fallback;
 
       try {
@@ -509,7 +459,7 @@ export default {
         }
         return translation;
       } catch (e) {
-        console.error("Translation error:", e);
+        console.error('Translation error:', e);
         return fallback || key;
       }
     },
@@ -525,114 +475,112 @@ export default {
       const sampleQueriesPerLanguage = {
         en: [
           {
-            text: "How do I apply for a business license?",
+            text: 'How do I apply for a business license?',
             count: 2347,
-            avgTime: 2.3,
+            avgTime: 2.3
           },
-          { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
+          { text: 'Where can I find tax forms?', count: 1982, avgTime: 1.8 },
           {
             text: "How to renew my driver's license?",
             count: 1645,
-            avgTime: 2.1,
+            avgTime: 2.1
           },
           {
-            text: "What documents do I need for passport application?",
+            text: 'What documents do I need for passport application?',
             count: 1423,
-            avgTime: 3.4,
+            avgTime: 3.4
           },
-          { text: "When are property taxes due?", count: 1289, avgTime: 1.5 },
+          { text: 'When are property taxes due?', count: 1289, avgTime: 1.5 }
         ],
         fr: [
           {
-            text: "Comment faire une demande de licence commerciale?",
+            text: 'Comment faire une demande de licence commerciale?',
             count: 2347,
-            avgTime: 2.3,
+            avgTime: 2.3
           },
           {
-            text: "Où puis-je trouver des formulaires fiscaux?",
+            text: 'Où puis-je trouver des formulaires fiscaux?',
             count: 1982,
-            avgTime: 1.8,
+            avgTime: 1.8
           },
           {
-            text: "Comment renouveler mon permis de conduire?",
+            text: 'Comment renouveler mon permis de conduire?',
             count: 1645,
-            avgTime: 2.1,
+            avgTime: 2.1
           },
           {
-            text: "Quels documents me faut-il pour une demande de passeport?",
+            text: 'Quels documents me faut-il pour une demande de passeport?',
             count: 1423,
-            avgTime: 3.4,
+            avgTime: 3.4
           },
           {
-            text: "Quand les taxes foncières sont-elles dues?",
+            text: 'Quand les taxes foncières sont-elles dues?',
             count: 1289,
-            avgTime: 1.5,
-          },
+            avgTime: 1.5
+          }
         ],
         sw: [
           {
-            text: "Nawezaje kuomba leseni ya biashara?",
+            text: 'Nawezaje kuomba leseni ya biashara?',
             count: 2347,
-            avgTime: 2.3,
+            avgTime: 2.3
           },
           {
-            text: "Naweza kupata fomu za kodi wapi?",
+            text: 'Naweza kupata fomu za kodi wapi?',
             count: 1982,
-            avgTime: 1.8,
+            avgTime: 1.8
           },
           {
-            text: "Jinsi ya kufanya upya leseni yangu ya udereva?",
+            text: 'Jinsi ya kufanya upya leseni yangu ya udereva?',
             count: 1645,
-            avgTime: 2.1,
+            avgTime: 2.1
           },
           {
-            text: "Ni nyaraka gani ninahitaji kwa maombi ya pasipoti?",
+            text: 'Ni nyaraka gani ninahitaji kwa maombi ya pasipoti?',
             count: 1423,
-            avgTime: 3.4,
+            avgTime: 3.4
           },
-          { text: "Kodi za mali hulipwa lini?", count: 1289, avgTime: 1.5 },
-        ],
+          { text: 'Kodi za mali hulipwa lini?', count: 1289, avgTime: 1.5 }
+        ]
       };
 
-      const locale = this.currentLocale || "en";
-      this.translatedTopQueries =
-        sampleQueriesPerLanguage[locale] || sampleQueriesPerLanguage["en"];
+      const locale = this.currentLocale || 'en';
+      this.translatedTopQueries = sampleQueriesPerLanguage[locale] || sampleQueriesPerLanguage['en'];
     },
 
     translateCategories() {
       const categoryDataPerLanguage = {
         en: [
-          { category: "Business & Economy", value: 24 },
-          { category: "Transportation", value: 18 },
-          { category: "Taxes & Revenue", value: 16 },
-          { category: "Immigration & Citizenship", value: 12 },
-          { category: "Education & Learning", value: 10 },
-          { category: "Housing & Properties", value: 8 },
-          { category: "Others", value: 12 },
+          { category: 'Business & Economy', value: 24 },
+          { category: 'Transportation', value: 18 },
+          { category: 'Taxes & Revenue', value: 16 },
+          { category: 'Immigration & Citizenship', value: 12 },
+          { category: 'Education & Learning', value: 10 },
+          { category: 'Housing & Properties', value: 8 },
+          { category: 'Others', value: 12 }
         ],
         fr: [
-          { category: "Affaires & Économie", value: 24 },
-          { category: "Transport", value: 18 },
-          { category: "Impôts & Recettes", value: 16 },
-          { category: "Immigration & Citoyenneté", value: 12 },
-          { category: "Éducation & Apprentissage", value: 10 },
-          { category: "Logement & Propriétés", value: 8 },
-          { category: "Autres", value: 12 },
+          { category: 'Affaires & Économie', value: 24 },
+          { category: 'Transport', value: 18 },
+          { category: 'Impôts & Recettes', value: 16 },
+          { category: 'Immigration & Citoyenneté', value: 12 },
+          { category: 'Éducation & Apprentissage', value: 10 },
+          { category: 'Logement & Propriétés', value: 8 },
+          { category: 'Autres', value: 12 }
         ],
         sw: [
-          { category: "Biashara & Uchumi", value: 24 },
-          { category: "Usafiri", value: 18 },
-          { category: "Kodi & Mapato", value: 16 },
-          { category: "Uhamiaji & Uraia", value: 12 },
-          { category: "Elimu & Mafunzo", value: 10 },
-          { category: "Makazi & Mali", value: 8 },
-          { category: "Nyinginezo", value: 12 },
-        ],
+          { category: 'Biashara & Uchumi', value: 24 },
+          { category: 'Usafiri', value: 18 },
+          { category: 'Kodi & Mapato', value: 16 },
+          { category: 'Uhamiaji & Uraia', value: 12 },
+          { category: 'Elimu & Mafunzo', value: 10 },
+          { category: 'Makazi & Mali', value: 8 },
+          { category: 'Nyinginezo', value: 12 }
+        ]
       };
 
-      const locale = this.currentLocale || "en";
-      this.translatedCategories =
-        categoryDataPerLanguage[locale] || categoryDataPerLanguage["en"];
+      const locale = this.currentLocale || 'en';
+      this.translatedCategories = categoryDataPerLanguage[locale] || categoryDataPerLanguage['en'];
 
       if (this.staticData.queryDistribution) {
         this.translatedCategories.forEach((item, index) => {
@@ -644,7 +592,7 @@ export default {
     },
 
     close() {
-      this.$emit("close");
+      this.$emit('close');
     },
 
     handleResize() {
@@ -661,29 +609,24 @@ export default {
             currentValue: 87.5,
             changePercentage: 1.2,
             historicalData: [
-              { label: "Previous Month", value: 86.3 },
-              { label: "Two Months Ago", value: 85.0 },
+              { label: 'Previous Month', value: 86.3 },
+              { label: 'Two Months Ago', value: 85.0 }
             ],
-            target: 85,
+            target: 85
           },
-          satisfactionHeatmapData: this.staticData.queryDistribution.map(
-            (category) => ({
-              name: category.name,
-              data: [
-                { x: "4 Weeks Ago", y: 75 + Math.random() * 10 },
-                { x: "3 Weeks Ago", y: 78 + Math.random() * 10 },
-                { x: "2 Weeks Ago", y: 80 + Math.random() * 10 },
-                { x: "Last Week", y: 82 + Math.random() * 10 },
-                { x: "Current", y: 85 + Math.random() * 10 },
-              ],
-            })
-          ),
+          satisfactionHeatmapData: this.staticData.queryDistribution.map((category) => ({
+            name: category.name,
+            data: [
+              { x: '4 Weeks Ago', y: 75 + Math.random() * 10 },
+              { x: '3 Weeks Ago', y: 78 + Math.random() * 10 },
+              { x: '2 Weeks Ago', y: 80 + Math.random() * 10 },
+              { x: 'Last Week', y: 82 + Math.random() * 10 },
+              { x: 'Current', y: 85 + Math.random() * 10 }
+            ]
+          }))
         };
 
-        if (
-          !this.analytics.topQueries ||
-          this.analytics.topQueries.length === 0
-        ) {
+        if (!this.analytics.topQueries || this.analytics.topQueries.length === 0) {
           this.analytics.topQueries = [...this.translatedTopQueries];
         }
 
@@ -693,7 +636,7 @@ export default {
           totalQueries: 5.2,
           uniqueUsers: 3.8,
           averageResponseTime: -0.3,
-          satisfactionRate: 1.2,
+          satisfactionRate: 1.2
         };
 
         this.isLoading = false;
@@ -720,11 +663,7 @@ export default {
           this.currentLocale
         );
 
-        const uniqueUsers = await analyticsService.getUniqueUsersCount(
-          startDate,
-          endDate,
-          this.currentLocale
-        );
+        const uniqueUsers = await analyticsService.getUniqueUsersCount(startDate, endDate, this.currentLocale);
 
         const gaugeData = await analyticsService.getSatisfactionGauge(
           this.selectedPeriod,
@@ -745,20 +684,17 @@ export default {
             currentValue: gaugeData?.currentValue || 0,
             historicalData: gaugeData?.historicalData || [],
             changePercentage: gaugeData?.changePercentage || 0,
-            target: gaugeData?.target || 85,
+            target: gaugeData?.target || 85
           },
           satisfactionRate: gaugeData?.currentValue || 0,
-          satisfactionHeatmapData: heatmapData || [],
+          satisfactionHeatmapData: heatmapData || []
         };
 
         await this.loadComparisonData();
         await this.loadTimeSeriesData();
       } catch (error) {
-        console.error("Error loading analytics data:", error);
-        this.error = this.translate(
-          "analytics.errors.loading",
-          `Failed to load analytics data: ${error.message}`
-        );
+        console.error('Error loading analytics data:', error);
+        this.error = this.translate('analytics.errors.loading', `Failed to load analytics data: ${error.message}`);
       } finally {
         this.isLoading = false;
       }
@@ -768,7 +704,7 @@ export default {
       const now = new Date();
       const result = [];
 
-      if (this.selectedPeriod === "daily") {
+      if (this.selectedPeriod === 'daily') {
         for (let hour = 0; hour < 24; hour++) {
           const time = new Date(now);
           time.setHours(hour, 0, 0, 0);
@@ -779,13 +715,13 @@ export default {
           result.push({
             timestamp: time.toISOString(),
             dateLabel: time.toLocaleTimeString(this.currentLocale, {
-              hour: "2-digit",
-              minute: "2-digit",
+              hour: '2-digit',
+              minute: '2-digit'
             }),
-            value: value,
+            value: value
           });
         }
-      } else if (this.selectedPeriod === "weekly") {
+      } else if (this.selectedPeriod === 'weekly') {
         for (let day = 6; day >= 0; day--) {
           const date = new Date(now);
           date.setDate(date.getDate() - day);
@@ -798,10 +734,10 @@ export default {
           result.push({
             timestamp: date.toISOString(),
             dateLabel: date.toLocaleDateString(this.currentLocale, {
-              month: "short",
-              day: "numeric",
+              month: 'short',
+              day: 'numeric'
             }),
-            value: value,
+            value: value
           });
         }
       } else {
@@ -818,10 +754,10 @@ export default {
           result.push({
             timestamp: date.toISOString(),
             dateLabel: date.toLocaleDateString(this.currentLocale, {
-              month: "short",
-              day: "numeric",
+              month: 'short',
+              day: 'numeric'
             }),
-            value: value,
+            value: value
           });
         }
       }
@@ -833,12 +769,7 @@ export default {
       try {
         const { previousPeriod, previousDate } = this.calculatePreviousPeriod();
 
-        const metrics = [
-          "totalQueries",
-          "uniqueUsers",
-          "averageResponseTime",
-          "satisfactionRate",
-        ];
+        const metrics = ['totalQueries', 'uniqueUsers', 'averageResponseTime', 'satisfactionRate'];
 
         for (const metric of metrics) {
           const comparisonData = await analyticsService.getComparisonData(
@@ -850,58 +781,51 @@ export default {
             this.currentLocale
           );
 
-          if (
-            comparisonData.previous !== null &&
-            comparisonData.previous !== undefined
-          ) {
-            this.comparison[metric] = this.calculatePercentChange(
-              comparisonData.current,
-              comparisonData.previous
-            );
+          if (comparisonData.previous !== null && comparisonData.previous !== undefined) {
+            this.comparison[metric] = this.calculatePercentChange(comparisonData.current, comparisonData.previous);
           } else {
             this.comparison[metric] = null;
           }
         }
       } catch (error) {
-        console.error("Error loading comparison data:", error);
+        console.error('Error loading comparison data:', error);
         this.comparison = {
           totalQueries: null,
           uniqueUsers: null,
           averageResponseTime: null,
-          satisfactionRate: null,
+          satisfactionRate: null
         };
       }
     },
 
     async loadTimeSeriesData() {
       try {
-        const { interval, startDate, endDate } =
-          this.calculateTimeSeriesParams();
+        const { interval, startDate, endDate } = this.calculateTimeSeriesParams();
 
         this.timeSeriesData = await analyticsService.getTimeSeriesData(
-          "queries",
+          'queries',
           interval,
           startDate,
           endDate,
           this.currentLocale
         );
       } catch (error) {
-        console.error("Error loading time series data:", error);
+        console.error('Error loading time series data:', error);
         this.timeSeriesData = this.getStaticTimeSeriesData();
       }
     },
 
-    formatValue(value, format = "number") {
+    formatValue(value, format = 'number') {
       return analyticsService.formatValue(value, format, this.currentLocale);
     },
 
     formatTrend(percentChange, isInverse = false) {
-      const prefix = percentChange > 0 ? "+" : "";
+      const prefix = percentChange > 0 ? '+' : '';
       const suffix = isInverse
         ? percentChange > 0
-          ? " " + this.translate("analytics.slower")
-          : " " + this.translate("analytics.faster")
-        : "";
+          ? ' ' + this.translate('analytics.slower')
+          : ' ' + this.translate('analytics.faster')
+        : '';
 
       return `${prefix}${percentChange.toFixed(1)}%${suffix}`;
     },
@@ -915,70 +839,60 @@ export default {
       let previousDate, previousPeriod;
 
       switch (this.selectedPeriod) {
-        case "daily":
+        case 'daily':
           previousDate = new Date(currentDate);
           previousDate.setDate(currentDate.getDate() - 1);
-          previousPeriod = "daily";
+          previousPeriod = 'daily';
           break;
 
-        case "weekly":
+        case 'weekly':
           previousDate = new Date(currentDate);
           previousDate.setDate(currentDate.getDate() - 7);
-          previousPeriod = "weekly";
+          previousPeriod = 'weekly';
           break;
 
-        case "monthly":
+        case 'monthly':
           previousDate = new Date(currentDate);
           previousDate.setMonth(currentDate.getMonth() - 1);
-          previousPeriod = "monthly";
+          previousPeriod = 'monthly';
           break;
 
-        case "all-time":
-          previousPeriod = "all-time";
+        case 'all-time':
+          previousPeriod = 'all-time';
           previousDate = null;
           break;
       }
 
       return {
         previousPeriod,
-        previousDate: previousDate
-          ? previousDate.toISOString().split("T")[0]
-          : null,
+        previousDate: previousDate ? previousDate.toISOString().split('T')[0] : null
       };
     },
 
     calculateTimeSeriesParams() {
-      let interval, startDate, endDate;
+      let interval, startDate;
 
-      endDate = this.selectedDate || new Date().toISOString().split("T")[0];
+      const endDate = this.selectedDate || new Date().toISOString().split('T')[0];
 
       switch (this.selectedPeriod) {
-        case "daily":
-          interval = "hourly";
+        case 'daily':
+          interval = 'hourly';
           startDate = endDate;
           break;
 
-        case "weekly":
-          interval = "daily";
-          startDate = new Date(
-            new Date(endDate).setDate(new Date(endDate).getDate() - 6)
-          )
-            .toISOString()
-            .split("T")[0];
+        case 'weekly':
+          interval = 'daily';
+          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 6)).toISOString().split('T')[0];
           break;
 
-        case "monthly":
-          interval = "daily";
-          startDate = new Date(
-            new Date(endDate).setDate(new Date(endDate).getDate() - 29)
-          )
-            .toISOString()
-            .split("T")[0];
+        case 'monthly':
+          interval = 'daily';
+          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 29)).toISOString().split('T')[0];
           break;
 
-        case "all-time":
-          interval = "monthly";
-          startDate = "2020-01-01";
+        case 'all-time':
+          interval = 'monthly';
+          startDate = '2020-01-01';
           break;
       }
 
@@ -987,18 +901,15 @@ export default {
 
     calculatePercentChange(current, previous) {
       return analyticsService.calculatePercentChange(current, previous);
-    },
-  },
+    }
+  }
 };
 </script>
 
 <style scoped>
 /* Theme-specific styles */
 .analytics-modal {
-  background: var(
-    --dialog-overlay-background,
-    rgba(0, 0, 0, 0.5)
-  ); /* Semi-transparent overlay */
+  background: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5)); /* Semi-transparent overlay */
   position: fixed;
   top: 0;
   left: 0;
@@ -1011,10 +922,7 @@ export default {
 }
 
 .analytics-content {
-  background: var(
-    --bg-dialog,
-    #ffffff
-  ) !important; /* Opaque dialog background */
+  background: var(--bg-dialog, #ffffff) !important; /* Opaque dialog background */
   color: var(--text-primary, #333333);
   border-radius: 8px;
   width: 90%;
@@ -1027,18 +935,15 @@ export default {
 }
 
 /* Dark mode overrides */
-[data-theme="dark"] .analytics-modal {
+[data-theme='dark'] .analytics-modal {
   --dialog-overlay-background: rgba(0, 0, 0, 0.7);
   --bg-dialog: #414141;
   --text-primary: #ffffff;
   --border-color: #555;
 }
 
-[data-theme="dark"] .analytics-content {
-  background: var(
-    --bg-dialog,
-    #414141
-  ) !important; /* Original dark mode color */
+[data-theme='dark'] .analytics-content {
+  background: var(--bg-dialog, #414141) !important; /* Original dark mode color */
 }
 
 .analytics-header {
@@ -1218,7 +1123,7 @@ export default {
   color: var(--text-secondary, #757575);
 }
 
-[data-theme="dark"] .trend.neutral {
+[data-theme='dark'] .trend.neutral {
   color: var(--text-primary, #ffffff);
 }
 
@@ -1268,19 +1173,16 @@ export default {
   font-style: italic;
 }
 
-[data-theme="dark"] .spinner {
+[data-theme='dark'] .spinner {
   border-color: rgba(255, 255, 255, 0.1);
   border-top-color: var(--accent-color, #4e97d1);
 }
 
-[data-theme="dark"] .chart-container,
-[data-theme="dark"] .metric-card,
-[data-theme="dark"] .analytics-section,
-[data-theme="dark"] .half-width {
-  background-color: var(
-    --bg-card,
-    #414141
-  ) !important; /* Original dark mode color */
+[data-theme='dark'] .chart-container,
+[data-theme='dark'] .metric-card,
+[data-theme='dark'] .analytics-section,
+[data-theme='dark'] .half-width {
+  background-color: var(--bg-card, #414141) !important; /* Original dark mode color */
 }
 
 .satisfaction-charts {
@@ -1302,23 +1204,23 @@ export default {
 }
 
 /* Comprehensive dark mode overrides to prevent light mode leakage */
-[data-theme="dark"] .analytics-modal *,
-[data-theme="dark"] .analytics-content *,
-[data-theme="dark"] .analytics-header h2,
-[data-theme="dark"] .analytics-body,
-[data-theme="dark"] .period-selector label,
-[data-theme="dark"] .period-selector select,
-[data-theme="dark"] .period-selector input,
-[data-theme="dark"] .loading-container p,
-[data-theme="dark"] .error-message,
-[data-theme="dark"] .dashboard-content,
-[data-theme="dark"] .analytics-section h3,
-[data-theme="dark"] .metric-card h3,
-[data-theme="dark"] .metric-value,
-[data-theme="dark"] .trend,
-[data-theme="dark"] .satisfaction-title,
-[data-theme="dark"] .no-data,
-[data-theme="dark"] .chart-loading {
+[data-theme='dark'] .analytics-modal *,
+[data-theme='dark'] .analytics-content *,
+[data-theme='dark'] .analytics-header h2,
+[data-theme='dark'] .analytics-body,
+[data-theme='dark'] .period-selector label,
+[data-theme='dark'] .period-selector select,
+[data-theme='dark'] .period-selector input,
+[data-theme='dark'] .loading-container p,
+[data-theme='dark'] .error-message,
+[data-theme='dark'] .dashboard-content,
+[data-theme='dark'] .analytics-section h3,
+[data-theme='dark'] .metric-card h3,
+[data-theme='dark'] .metric-value,
+[data-theme='dark'] .trend,
+[data-theme='dark'] .satisfaction-title,
+[data-theme='dark'] .no-data,
+[data-theme='dark'] .chart-loading {
   color: var(--text-primary, #ffffff) !important;
   background-color: var(--bg-card, #414141) !important;
 }
@@ -1349,10 +1251,10 @@ export default {
     min-width: calc(50% - 10px);
   }
 
-  [data-theme="dark"] .metric-card h3,
-  [data-theme="dark"] .metric-value,
-  [data-theme="dark"] .analytics-section h3,
-  [data-theme="dark"] .satisfaction-title {
+  [data-theme='dark'] .metric-card h3,
+  [data-theme='dark'] .metric-value,
+  [data-theme='dark'] .analytics-section h3,
+  [data-theme='dark'] .satisfaction-title {
     color: var(--text-primary, #ffffff) !important;
   }
 

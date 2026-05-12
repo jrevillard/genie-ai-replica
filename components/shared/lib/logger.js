@@ -9,8 +9,8 @@ const logFormat = format.printf(({ level, message, timestamp }) => {
 });
 
 // Default configuration for the logger
-let loggerConfig = {
-  level: 'info',
+const loggerConfig = {
+  level: process.env.LOG_LEVEL || 'info',
   format: format.combine(
     format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),
@@ -18,10 +18,10 @@ let loggerConfig = {
   ),
   transports: [
     new transports.Console({
-      handleExceptions: true,  // Log unhandled exceptions
+      handleExceptions: true, // Log unhandled exceptions
       json: false,
-      colorize: true,          // Colorize output for readability
-      stderrLevels: ['error'], // Write error logs to stderr
+      colorize: true, // Colorize output for readability
+      stderrLevels: ['error'] // Write error logs to stderr
     }),
     new DailyRotateFile({
       filename: 'logs/error-%DATE%.log',
@@ -29,35 +29,27 @@ let loggerConfig = {
       level: 'error',
       maxSize: '10m',
       maxFiles: '30d',
-      zippedArchive: true,
+      zippedArchive: true
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: '10m',
       maxFiles: '30d',
-      zippedArchive: true,
+      zippedArchive: true
     }),
     new transports.File({
       filename: 'logs/combined.log',
       maxsize: 5242880, // 5MB
       maxFiles: 1,
-      tailable: true,   // Recreate log file when max size is reached
-      handleExceptions: true,
-    }),
-  ],
+      tailable: true, // Recreate log file when max size is reached
+      handleExceptions: true
+    })
+  ]
 };
 
 // Create the initial logger instance
-let logger = createLogger(loggerConfig);
-
-// Store references to the DailyRotateFile transports for manual rotation
-let errorTransport = logger.transports.find(
-  (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
-);
-let combinedTransport = logger.transports.find(
-  (transport) => transport instanceof DailyRotateFile && !transport.level
-);
+const logger = createLogger(loggerConfig);
 
 // Function to reconfigure the logger
 const reconfigureLogger = (newConfig) => {
@@ -68,7 +60,7 @@ const reconfigureLogger = (newConfig) => {
       handleExceptions: true,
       json: false,
       colorize: true,
-      stderrLevels: ['error'],
+      stderrLevels: ['error']
     }),
     new DailyRotateFile({
       filename: 'logs/error-%DATE%.log',
@@ -76,22 +68,22 @@ const reconfigureLogger = (newConfig) => {
       level: 'error',
       maxSize: newConfig.errorMaxSize || '10m',
       maxFiles: newConfig.errorMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
+      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: newConfig.combinedMaxSize || '10m',
       maxFiles: newConfig.combinedMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
+      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
     }),
     new transports.File({
       filename: 'logs/combined.log',
       maxsize: newConfig.combinedLogMaxSize || 5242880, // 5MB
       maxFiles: newConfig.combinedLogMaxFiles || 1,
       tailable: true,
-      handleExceptions: true,
-    }),
+      handleExceptions: true
+    })
   ];
 
   // Clear existing transports
@@ -101,16 +93,8 @@ const reconfigureLogger = (newConfig) => {
   logger.configure({
     level: loggerConfig.level,
     format: loggerConfig.format,
-    transports: loggerConfig.transports,
+    transports: loggerConfig.transports
   });
-
-  // Update references to the new DailyRotateFile transports
-  errorTransport = logger.transports.find(
-    (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
-  );
-  combinedTransport = logger.transports.find(
-    (transport) => transport instanceof DailyRotateFile && !transport.level
-  );
 
   logger.info('Logger configuration updated');
 };
@@ -179,5 +163,5 @@ module.exports = {
   reconfigureLogger,
   triggerLogRollover,
   cleanupCombinedLog,
-  flushLogs,
+  flushLogs
 };

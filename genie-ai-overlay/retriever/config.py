@@ -72,8 +72,8 @@ NEO4J_PORT2 = os.getenv("NEO4J_PORT2", "7687")
 NEO4J_URL = os.getenv("NEO4J_URI", f"bolt://localhost:{NEO4J_PORT2}")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "test")
-host_ip = os.getenv("host_ip")
-TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", f"http://{host_ip}:6005")
+HOST_IP = os.getenv("HOST_IP")
+TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", f"http://{HOST_IP}:6005")
 TGI_LLM_ENDPOINT_KEY = os.getenv("TGI_LLM_ENDPOINT_KEY", "fake")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
@@ -129,7 +129,7 @@ MILVUS_URI = f"http://{MILVUS_HOST}:{MILVUS_PORT}"
 INDEX_PARAMS = {"index_type": "FLAT", "metric_type": "IP", "params": {}}
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "rag_milvus")
 # TEI configuration
-TEI_EMBEDDING_MODEL = os.environ.get("TEI_EMBEDDING_MODEL", "/home/user/bce-embedding-base_v1")
+TEI_EMBEDDING_MODEL = os.getenv("TEI_EMBEDDING_MODEL", "/home/user/bce-embedding-base_v1")
 os.environ["OPENAI_API_BASE"] = TEI_EMBEDDING_ENDPOINT
 # os.environ["OPENAI_API_KEY"] = "Dummy key"
 
@@ -200,11 +200,11 @@ DISTANCE_STRATEGY = os.getenv("DISTANCE_STRATEGY", "IP")
 # ArangoDB Connection configuration
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_USERNAME = os.getenv("ARANGO_USERNAME", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "test")
-ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD")
+ARANGO_DB = os.getenv("ARANGO_DB", "genie-ai")
 
 # ArangoDB Vector configuration
-ARANGO_GRAPH_NAME = os.getenv("RETRIEVER_ARANGO_GRAPH_NAME", "GRAPH")
+ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_DISTANCE_STRATEGY = os.getenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE")
 ARANGO_USE_APPROX_SEARCH = os.getenv("RETRIEVER_ARANGO_USE_APPROX_SEARCH", "false").lower() == "true"
 ARANGO_NUM_CENTROIDS = int(os.getenv("RETRIEVER_ARANGO_NUM_CENTROIDS", 1))

@@ -11,7 +11,7 @@ export default {
   show(message, type = 'success', duration = 3000) {
     eventBus.$emit('notification:show', { message, type, duration });
   },
-  
+
   /**
    * Show a success notification
    * @param {String} message - Notification message
@@ -20,7 +20,7 @@ export default {
   success(message, duration = 3000) {
     this.show(message, 'success', duration);
   },
-  
+
   /**
    * Show an error notification
    * @param {String} message - Notification message
@@ -29,7 +29,7 @@ export default {
   error(message, duration = 3000) {
     this.show(message, 'error', duration);
   },
-  
+
   /**
    * Show an info notification
    * @param {String} message - Notification message
@@ -38,7 +38,7 @@ export default {
   info(message, duration = 3000) {
     this.show(message, 'info', duration);
   },
-  
+
   /**
    * Show a warning notification
    * @param {String} message - Notification message

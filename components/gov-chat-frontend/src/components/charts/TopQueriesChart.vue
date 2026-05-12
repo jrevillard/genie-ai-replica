@@ -3,13 +3,13 @@
   <div class="top-queries-chart">
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ $t("analytics.status.loading") }}</span>
+      <span>{{ $t('analytics.status.loading') }}</span>
     </div>
     <div v-else-if="error" class="error-message">
       {{ error }}
     </div>
     <div v-else-if="!data || data.length === 0" class="no-data">
-      {{ $t("analytics.status.noData") }}
+      {{ $t('analytics.status.noData') }}
     </div>
     <div v-else>
       <!-- Compressed table view -->
@@ -18,14 +18,14 @@
           <thead>
             <tr>
               <th class="rank" :style="textStyle">
-                {{ $t("analytics.table.rank") }}
+                {{ $t('analytics.table.rank') }}
               </th>
-              <th :style="textStyle">{{ $t("analytics.table.query") }}</th>
+              <th :style="textStyle">{{ $t('analytics.table.query') }}</th>
               <th class="count" :style="textStyle">
-                {{ $t("analytics.table.count") }}
+                {{ $t('analytics.table.count') }}
               </th>
               <th class="avg-time" :style="textStyle">
-                {{ $t("analytics.table.avgTime") }}
+                {{ $t('analytics.table.avgTime') }}
               </th>
             </tr>
           </thead>
@@ -50,70 +50,71 @@
           height="140"
           :options="chartOptions"
           :series="chartSeries"
-        ></apexchart>
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import analyticsService from "../../services/analyticsService";
+import analyticsService from '../../services/analyticsService';
+import { useChartTheme } from '../../composables/useChartTheme';
 
 export default {
-  name: "TopQueriesChart",
+  name: 'TopQueriesChart',
   props: {
     // Data can be provided by parent component
     data: {
       type: Array,
-      default: () => [],
+      default: () => []
     },
     // Whether data is provided externally
     externalData: {
       type: Boolean,
-      default: true,
+      default: true
     },
     // Period and date for API fetching if not using external data
     period: {
       type: String,
-      default: "daily",
+      default: 'daily'
     },
     selectedDate: {
       type: String,
-      default: () => new Date().toISOString().split("T")[0],
+      default: () => new Date().toISOString().split('T')[0]
     },
     // Added to force re-render when language or theme changes
     renderKey: {
       type: String,
-      default: null,
-    },
+      default: null
+    }
+  },
+  setup() {
+    const { theme, getTheme } = useChartTheme();
+    return { theme, getTheme };
   },
   data() {
     return {
-      theme: "light", // Store current theme
       chartData: [],
       loading: false,
       error: null,
       chartOptions: null,
       chartSeries: [],
       isMobile: false,
-      tooltipId: "top-queries-chart-tooltip", // Store tooltip ID for reference
-      themeObserver: null,
+      tooltipId: 'top-queries-chart-tooltip' // Store tooltip ID for reference
     };
   },
   computed: {
     tableStyle() {
       // Apply inline style to force correct background color
       // Dark mode uses transparent to blend with UnifiedAnalytics.vue .analytics-content (#414141)
-      return this.theme === "light"
-        ? { backgroundColor: "#ffffff !important" }
-        : { backgroundColor: "transparent !important" };
+      return this.theme === 'light'
+        ? { backgroundColor: '#ffffff !important' }
+        : { backgroundColor: 'transparent !important' };
     },
     textStyle() {
       // Apply inline style to force correct text color
-      return this.theme === "light"
-        ? { color: "#333333 !important" }
-        : { color: "#ffffff !important" };
-    },
+      return this.theme === 'light' ? { color: '#333333 !important' } : { color: '#ffffff !important' };
+    }
   },
   watch: {
     // Watch for data changes from parent
@@ -124,7 +125,7 @@ export default {
           this.updateChart();
         }
       },
-      deep: true,
+      deep: true
     },
     // Re-fetch if period or date changes
     period: {
@@ -132,14 +133,14 @@ export default {
         if (!this.externalData) {
           this.fetchData();
         }
-      },
+      }
     },
     selectedDate: {
       handler() {
         if (!this.externalData) {
           this.fetchData();
         }
-      },
+      }
     },
     // Watch for renderKey (theme/locale) changes to force complete re-render
     renderKey: {
@@ -149,10 +150,10 @@ export default {
             this.updateChart();
           }
         });
-      },
+      }
     },
     // Watch for locale changes directly
-    "$i18n.locale": {
+    '$i18n.locale': {
       handler() {
         this.$nextTick(() => {
           if (this.chartData && this.chartData.length > 0) {
@@ -160,18 +161,23 @@ export default {
           }
         });
       },
-      immediate: false,
+      immediate: false
     },
+    // Watch for theme changes from the composable
+    theme: {
+      handler() {
+        this.$nextTick(() => {
+          this.injectGlobalStyleForTheme();
+          if (this.chartData && this.chartData.length > 0) {
+            this.updateChart();
+          }
+        });
+      }
+    }
   },
   mounted() {
     // Check if mobile on mount
     this.checkMobile();
-
-    // Initialize theme based on localStorage
-    this.initializeTheme();
-
-    // Force theme sync with localStorage
-    this.forceThemeSync();
 
     // Use data from props or fetch from API
     if (this.externalData && this.data.length > 0) {
@@ -182,13 +188,10 @@ export default {
     }
 
     // Add resize listener
-    window.addEventListener("resize", this.handleResize);
+    window.addEventListener('resize', this.handleResize);
 
     // Create custom tooltip element
     this.ensureCustomTooltipExists();
-
-    // Set up theme change listener
-    this.setupThemeChangeListener();
 
     // Force re-render after parent theme sync
     setTimeout(() => {
@@ -197,81 +200,31 @@ export default {
     }, 300); // Increased delay for parent theme sync
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener('resize', this.handleResize);
 
     // Clean up tooltip
     this.cleanupTooltip();
 
-    // Clean up theme observer
-    if (this.themeObserver) {
-      this.themeObserver.disconnect();
-    }
-
     // Remove the injected style if it exists
-    const injectedStyle = document.getElementById(
-      "top-queries-chart-theme-style"
-    );
+    const injectedStyle = document.getElementById('top-queries-chart-theme-style');
     if (injectedStyle) {
       document.head.removeChild(injectedStyle);
     }
   },
   methods: {
     /**
-     * Initialize theme based on localStorage to ensure correct initial rendering
-     */
-    initializeTheme() {
-      let themeMode = localStorage.getItem("theme") || "light";
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[TopQueriesChart] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      console.log(`[TopQueriesChart] Initial theme set to: ${themeMode}`);
-      this.injectGlobalStyleForTheme();
-    },
-
-    /**
-     * Force sync of DOM data-theme with localStorage to prevent mismatches
-     */
-    forceThemeSync() {
-      const localStorageTheme = localStorage.getItem("theme") || "light";
-      const parentElement = this.$el.closest("[data-theme]");
-      if (
-        parentElement &&
-        parentElement.getAttribute("data-theme") !== localStorageTheme
-      ) {
-        console.warn(
-          `[TopQueriesChart] Forcing DOM data-theme to match localStorage: ${localStorageTheme}`
-        );
-        parentElement.setAttribute("data-theme", localStorageTheme);
-      }
-      document.documentElement.setAttribute("data-theme", localStorageTheme);
-    },
-
-    /**
      * Inject a global stylesheet that targets ApexCharts data labels and chart elements
      */
     injectGlobalStyleForTheme() {
-      let styleEl = document.getElementById("top-queries-chart-theme-style");
+      let styleEl = document.getElementById('top-queries-chart-theme-style');
       if (!styleEl) {
-        styleEl = document.createElement("style");
-        styleEl.id = "top-queries-chart-theme-style";
+        styleEl = document.createElement('style');
+        styleEl.id = 'top-queries-chart-theme-style';
         document.head.appendChild(styleEl);
       }
 
       const theme = this.getTheme();
-      console.log(
-        `[TopQueriesChart] Injected ${
-          theme.isDarkMode ? "dark" : "light"
-        } mode style`
-      );
+      console.log(`[TopQueriesChart] Injected ${theme.isDarkMode ? 'dark' : 'light'} mode style`);
 
       if (theme.isDarkMode) {
         styleEl.textContent = `
@@ -346,68 +299,7 @@ export default {
      */
     checkMobile() {
       this.isMobile = window.innerWidth < 768;
-      console.log(
-        `[DEBUG] Device detected as ${this.isMobile ? "mobile" : "desktop"}`
-      );
-    },
-
-    /**
-     * Get current theme information
-     */
-    getTheme() {
-      let themeMode = this.theme;
-      const localStorageTheme = localStorage.getItem("theme") || "light";
-      if (themeMode !== localStorageTheme) {
-        console.warn(
-          `[TopQueriesChart] Theme mismatch: component=${themeMode}, localStorage=${localStorageTheme}`
-        );
-        themeMode = localStorageTheme;
-        this.theme = themeMode;
-      }
-      if (!["light", "dark", "system"].includes(themeMode)) {
-        console.warn(
-          `[TopQueriesChart] Invalid themeMode: ${themeMode}, defaulting to light`
-        );
-        themeMode = "light";
-      }
-      if (themeMode === "system") {
-        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      this.theme = themeMode;
-      return {
-        isDarkMode: themeMode === "dark",
-        accentColor: "#4E97D1",
-        backgroundColor: themeMode === "dark" ? "#414141" : "#FFFFFF",
-        textColor: themeMode === "dark" ? "#FFFFFF" : "#333333",
-      };
-    },
-
-    /**
-     * Set up theme change listener
-     */
-    setupThemeChangeListener() {
-      this.themeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (
-            mutation.attributeName === "class" ||
-            mutation.attributeName === "data-theme"
-          ) {
-            console.log("[TopQueriesChart] Theme change detected");
-            this.forceThemeSync();
-            this.injectGlobalStyleForTheme();
-            this.updateChart();
-            break;
-          }
-        }
-      });
-
-      this.themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
-      });
-      console.log("[DEBUG] Theme change listener set up");
+      console.log(`[DEBUG] Device detected as ${this.isMobile ? 'mobile' : 'desktop'}`);
     },
 
     /**
@@ -421,54 +313,25 @@ export default {
 
       try {
         try {
-          const dashboardData = await analyticsService.getDashboardAnalytics(
-            this.period,
-            this.selectedDate
-          );
+          const dashboardData = await analyticsService.getDashboardAnalytics(this.period, this.selectedDate);
           if (dashboardData && dashboardData.topQueries) {
             this.chartData = dashboardData.topQueries;
           } else {
-            throw new Error(this.$t("analytics.status.noData"));
+            throw new Error(this.$t('analytics.status.noData'));
           }
         } catch (apiError) {
-          console.error("Error calling API:", apiError);
-          console.log("Falling back to sample query data...");
-          this.chartData = this.getFallbackData();
+          console.error('Error calling API:', apiError);
+          console.log('No top queries data available from API');
+          this.chartData = [];
         }
 
         this.updateChart();
       } catch (error) {
-        console.error("Error fetching top queries data:", error);
-        this.error = this.$t("analytics.status.error");
+        console.error('Error fetching top queries data:', error);
+        this.error = this.$t('analytics.status.error');
       } finally {
         this.loading = false;
       }
-    },
-
-    /**
-     * Get fallback data for top queries
-     * @returns {Array} Sample top queries data
-     */
-    getFallbackData() {
-      return [
-        {
-          text: "How do I apply for a business license?",
-          count: 2347,
-          avgTime: 2.3,
-        },
-        { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
-        {
-          text: "How to renew my driver's license?",
-          count: 1645,
-          avgTime: 2.1,
-        },
-        {
-          text: "What documents do I need for passport application?",
-          count: 1423,
-          avgTime: 3.4,
-        },
-        { text: "When are property taxes due?", count: 1289, avgTime: 1.5 },
-      ];
     },
 
     /**
@@ -483,8 +346,8 @@ export default {
      * Truncate text to fit in available space
      */
     truncateText(text, maxLength) {
-      if (!text) return "";
-      return text.length > maxLength ? text.slice(0, maxLength) + "..." : text;
+      if (!text) return '';
+      return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
     },
 
     /**
@@ -492,7 +355,7 @@ export default {
      */
     ensureCustomTooltipExists() {
       this.cleanupTooltip();
-      const tooltip = document.createElement("div");
+      const tooltip = document.createElement('div');
       tooltip.id = this.tooltipId;
       tooltip.style.cssText = `
         position: absolute;
@@ -534,19 +397,17 @@ export default {
       if (!chartContainer) return;
 
       const barSelectors = [
-        ".apexcharts-bar-area",
-        ".apexcharts-bar-series rect",
-        ".apexcharts-bar rect",
-        ".apexcharts-series rect",
+        '.apexcharts-bar-area',
+        '.apexcharts-bar-series rect',
+        '.apexcharts-bar rect',
+        '.apexcharts-series rect'
       ];
 
       let bars = [];
       for (const selector of barSelectors) {
         bars = chartContainer.querySelectorAll(selector);
         if (bars.length > 0) {
-          console.log(
-            `[DEBUG] Found ${bars.length} bars using selector: ${selector}`
-          );
+          console.log(`[DEBUG] Found ${bars.length} bars using selector: ${selector}`);
           break;
         }
       }
@@ -555,9 +416,7 @@ export default {
         for (const selector of barSelectors) {
           bars = document.querySelectorAll(selector);
           if (bars.length > 0) {
-            console.log(
-              `[DEBUG] Found ${bars.length} bars in document using selector: ${selector}`
-            );
+            console.log(`[DEBUG] Found ${bars.length} bars in document using selector: ${selector}`);
             break;
           }
         }
@@ -567,48 +426,42 @@ export default {
         bars.forEach((bar, index) => {
           if (index >= this.chartData.length) return;
 
-          bar.style.cursor = "pointer";
-          bar.setAttribute("data-bar-index", index);
+          bar.style.cursor = 'pointer';
+          bar.setAttribute('data-bar-index', index);
 
-          bar.addEventListener("mouseenter", (e) => {
-            const barIndex = parseInt(e.target.getAttribute("data-bar-index"));
-            const item =
-              this.chartData[barIndex !== undefined ? barIndex : index];
+          bar.addEventListener('mouseenter', (e) => {
+            const barIndex = parseInt(e.target.getAttribute('data-bar-index'));
+            const item = this.chartData[barIndex !== undefined ? barIndex : index];
             if (!item) return;
 
             tooltip.innerHTML = `
-              <div style="font-weight: bold; margin-bottom: 6px;">${this.truncateText(
-                item.text,
-                40
-              )}</div>
+              <div style="font-weight: bold; margin-bottom: 6px;">${this.truncateText(item.text, 40)}</div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span>${this.$t("analytics.table.count")}:</span>
+                <span>${this.$t('analytics.table.count')}:</span>
                 <span style="font-weight: 500;">${item.count.toLocaleString()}</span>
               </div>
               <div style="display: flex; justify-content: space-between;">
-                <span>${this.$t("analytics.table.avgTime")}:</span>
+                <span>${this.$t('analytics.table.avgTime')}:</span>
                 <span style="font-weight: 500;">${item.avgTime}s</span>
               </div>
             `;
-            tooltip.style.display = "block";
+            tooltip.style.display = 'block';
           });
 
-          bar.addEventListener("mousemove", (e) => {
+          bar.addEventListener('mousemove', (e) => {
             const offset = 15;
-            tooltip.style.left = e.pageX + offset + "px";
-            tooltip.style.top = e.pageY + offset + "px";
+            tooltip.style.left = e.pageX + offset + 'px';
+            tooltip.style.top = e.pageY + offset + 'px';
           });
 
-          bar.addEventListener("mouseleave", () => {
-            tooltip.style.display = "none";
+          bar.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
           });
         });
 
-        console.log("[DEBUG] Successfully added tooltip handlers to bars");
+        console.log('[DEBUG] Successfully added tooltip handlers to bars');
       } else {
-        console.log(
-          "[DEBUG] No bars found to attach tooltips, trying again later"
-        );
+        console.log('[DEBUG] No bars found to attach tooltips, trying again later');
         setTimeout(() => {
           this.addTooltipHandlers();
         }, 1000);
@@ -620,7 +473,7 @@ export default {
      */
     updateChart() {
       if (!this.chartData || this.chartData.length === 0) {
-        this.error = this.$t("analytics.status.noData");
+        this.error = this.$t('analytics.status.noData');
         return;
       }
 
@@ -634,24 +487,24 @@ export default {
       }
 
       const theme = this.getTheme();
-      const textColor = theme.isDarkMode ? "#FFFFFF" : "#333333";
+      const textColor = theme.isDarkMode ? '#FFFFFF' : '#333333';
 
       const topQueries = this.chartData.slice(0, 5);
 
       this.chartSeries = [
         {
-          name: this.$t("analytics.table.count"),
-          data: topQueries.map((query) => query.count),
-        },
+          name: this.$t('analytics.table.count'),
+          data: topQueries.map((query) => query.count)
+        }
       ];
 
       this.chartOptions = {
         chart: {
-          type: "bar",
+          type: 'bar',
           height: 140,
-          fontFamily: "inherit",
+          fontFamily: 'inherit',
           toolbar: { show: false },
-          background: "transparent",
+          background: 'transparent',
           foreColor: textColor,
           events: {
             mounted: () => {
@@ -665,55 +518,55 @@ export default {
                 this.addTooltipHandlers();
                 this.fixLabelColors(textColor);
               }, 100);
-            },
-          },
+            }
+          }
         },
         plotOptions: {
           bar: {
             horizontal: false, // ← VERTICAL BARS (this was the fuckup)
             borderRadius: 2,
-            columnWidth: "45%",
-            dataLabels: { position: "top" },
-          },
+            columnWidth: '45%',
+            dataLabels: { position: 'top' }
+          }
         },
-        colors: [theme.accentColor || "#4E97D1"],
+        colors: [theme.accentColor || '#4E97D1'],
         dataLabels: {
           enabled: true,
           formatter: (val) => val.toLocaleString(),
           offsetY: -20,
           style: {
-            fontSize: "10px",
+            fontSize: '10px',
             colors: [textColor],
-            fontWeight: "600",
-          },
+            fontWeight: '600'
+          }
         },
         grid: {
-          show: false,
+          show: false
         },
         xaxis: {
           categories: topQueries.map((q, i) => `#${i + 1}`),
           labels: {
-            style: { colors: textColor, fontSize: "11px" },
+            style: { colors: textColor, fontSize: '11px' }
           },
           axisBorder: { show: false },
-          axisTicks: { show: false },
+          axisTicks: { show: false }
         },
         yaxis: {
           labels: { show: false },
           axisBorder: { show: false },
-          axisTicks: { show: false },
+          axisTicks: { show: false }
         },
         tooltip: { enabled: false },
         states: {
-          hover: { filter: { type: "none" } },
+          hover: { filter: { type: 'none' } },
           active: {
             allowMultipleDataPointsSelection: false,
-            filter: { type: "none" },
-          },
+            filter: { type: 'none' }
+          }
         },
         theme: {
-          mode: theme.isDarkMode ? "dark" : "light",
-        },
+          mode: theme.isDarkMode ? 'dark' : 'light'
+        }
       };
     },
 
@@ -724,41 +577,39 @@ export default {
       const chartContainer = this.$refs.chart;
       if (!chartContainer) return;
 
-      const textElements = chartContainer.querySelectorAll("text");
+      const textElements = chartContainer.querySelectorAll('text');
       textElements.forEach((element) => {
-        element.setAttribute("fill", textColor);
+        element.setAttribute('fill', textColor);
       });
 
-      const dataLabels = chartContainer.querySelectorAll(
-        ".apexcharts-datalabels text"
-      );
+      const dataLabels = chartContainer.querySelectorAll('.apexcharts-datalabels text');
       dataLabels.forEach((label) => {
-        label.setAttribute("fill", textColor);
-        const children = label.querySelectorAll("*");
+        label.setAttribute('fill', textColor);
+        const children = label.querySelectorAll('*');
         children.forEach((child) => {
-          if (child.tagName === "tspan") {
-            child.setAttribute("fill", textColor);
+          if (child.tagName === 'tspan') {
+            child.setAttribute('fill', textColor);
           }
         });
       });
 
       const topDataLabels = chartContainer.querySelectorAll(
-        ".apexcharts-bar-top-datalabels text, .apexcharts-datalabel-value"
+        '.apexcharts-bar-top-datalabels text, .apexcharts-datalabel-value'
       );
       topDataLabels.forEach((label) => {
-        label.setAttribute("fill", textColor);
+        label.setAttribute('fill', textColor);
       });
 
-      if (textColor === "#FFFFFF") {
+      if (textColor === '#FFFFFF') {
         const allDataLabelElements = chartContainer.querySelectorAll(
-          ".apexcharts-datalabels text, .apexcharts-datalabel, .apexcharts-datalabel-label, .apexcharts-datalabel-value"
+          '.apexcharts-datalabels text, .apexcharts-datalabel, .apexcharts-datalabel-label, .apexcharts-datalabel-value'
         );
         allDataLabelElements.forEach((el) => {
-          el.setAttribute("fill", "#FFFFFF");
+          el.setAttribute('fill', '#FFFFFF');
         });
       }
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -880,110 +731,110 @@ export default {
 }
 
 /* Force data labels to be white in dark mode */
-:deep([data-theme="dark"]) .apexcharts-datalabels text,
-:deep([data-theme="dark"]) .apexcharts-datalabel-value,
-:deep([data-theme="dark"]) .apexcharts-datalabel-label {
+:deep([data-theme='dark']) .apexcharts-datalabels text,
+:deep([data-theme='dark']) .apexcharts-datalabel-value,
+:deep([data-theme='dark']) .apexcharts-datalabel-label {
   fill: white !important;
 }
 
 /* Target specifically the data labels above the bars */
-:deep([data-theme="dark"]) .apexcharts-bar-series .apexcharts-datalabels text {
+:deep([data-theme='dark']) .apexcharts-bar-series .apexcharts-datalabels text {
   fill: white !important;
 }
 
 /* Force all text in charts to follow theme colors */
-:deep([data-theme="dark"]) .apexcharts-text {
+:deep([data-theme='dark']) .apexcharts-text {
   fill: white !important;
 }
 
-:deep([data-theme="light"]) .apexcharts-text {
+:deep([data-theme='light']) .apexcharts-text {
   fill: #333333 !important;
 }
 
 /* Target x-axis and y-axis labels */
-:deep([data-theme="dark"]) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
-:deep([data-theme="dark"]) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
+:deep([data-theme='dark']) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
+:deep([data-theme='dark']) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
   fill: white !important;
   color: white !important;
 }
 
-:deep([data-theme="light"]) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
-:deep([data-theme="light"]) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
+:deep([data-theme='light']) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
+:deep([data-theme='light']) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
   fill: #333333 !important;
   color: #333333 !important;
 }
 
 /* Target data value labels on top of bars */
-:deep([data-theme="dark"]) .apexcharts-datalabels text {
+:deep([data-theme='dark']) .apexcharts-datalabels text {
   fill: white !important;
   color: white !important;
 }
 
-:deep([data-theme="light"]) .apexcharts-datalabels text {
+:deep([data-theme='light']) .apexcharts-datalabels text {
   fill: #333333 !important;
   color: #333333 !important;
 }
 
 /* Dark mode overrides */
-[data-theme="dark"] .top-queries-chart {
+[data-theme='dark'] .top-queries-chart {
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table th {
+[data-theme='dark'] .top-queries-table th {
   background-color: #414141 !important;
   color: white !important;
 }
 
-[data-theme="dark"] .bar-chart-container {
+[data-theme='dark'] .bar-chart-container {
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table td {
+[data-theme='dark'] .top-queries-table td {
   border-top: 1px solid #555 !important;
   color: white !important;
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .table-container {
+[data-theme='dark'] .table-container {
   background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table .query-text {
+[data-theme='dark'] .top-queries-table .query-text {
   color: white !important;
 }
 
-[data-theme="dark"] .top-queries-table {
+[data-theme='dark'] .top-queries-table {
   background-color: #414141 !important;
 }
 
 /* Light mode overrides */
-[data-theme="light"] .top-queries-chart {
+[data-theme='light'] .top-queries-chart {
   background-color: #ffffff !important;
 }
 
-[data-theme="light"] .top-queries-table {
+[data-theme='light'] .top-queries-table {
   background-color: #ffffff !important;
 }
 
-[data-theme="light"] .top-queries-table th {
+[data-theme='light'] .top-queries-table th {
   background-color: #f5f7fa !important;
   color: #333333 !important;
 }
 
-[data-theme="light"] .top-queries-table td {
+[data-theme='light'] .top-queries-table td {
   background-color: #ffffff !important;
   color: #333333 !important;
 }
 
-[data-theme="light"] .table-container {
+[data-theme='light'] .table-container {
   background-color: #ffffff !important;
 }
 
-[data-theme="light"] .top-queries-table .query-text {
+[data-theme='light'] .top-queries-table .query-text {
   color: #333333 !important;
 }
 
-[data-theme="light"] .bar-chart-container {
+[data-theme='light'] .bar-chart-container {
   background-color: transparent !important;
 }
 </style>

@@ -196,153 +196,13 @@ const Map<String, dynamic> ruLocale = {
     "VN": "Вьетнам",
     "YE": "Йемен",
     "ZM": "Замбия",
-    "ZW": "Зимбабве"
+    "ZW": "Зимбабве",
   },
-  "verification": {
-    "verifying": "Проверка вашего email...",
-    "success": "Email успешно подтвержден!",
-    "failed": "Ошибка проверки",
-    "accountVerified":
-        "Ваш аккаунт успешно подтвержден. Теперь вы можете войти в систему.",
-    "invalidLink":
-        "Ссылка для проверки недействительна или срок ее действия истек.",
-    "missingToken": "Токен проверки отсутствует.",
-    "generalError":
-        "Произошла ошибка во время проверки. Пожалуйста, попробуйте позже.",
-    "proceedToLogin": "Перейти к входу",
-    "backToLogin": "Вернуться к входу"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Создать новый пароль",
-    "tokenLabel": "Токен сброса",
-    "tokenPlaceholder": "Введите токен сброса",
-    "validateButton": "Проверить токен",
-    "newPasswordLabel": "Новый пароль",
-    "newPasswordPlaceholder": "Придумайте новый пароль",
-    "confirmNewPasswordLabel": "Подтвердите новый пароль",
-    "confirmNewPasswordPlaceholder": "Повторите новый пароль",
-    "resetButton": "Сбросить пароль",
-    "processing": "Сброс...",
-    "rememberedPassword": "Вспомнили пароль?",
-    "backToLogin": "Вернуться к входу",
-    "supportMessage": "Нужна помощь? Свяжитесь с поддержкой",
-    "passwordRequirements":
-        "Пароль должен содержать не менее 8 символов, включая 1 цифру, 1 заглавную букву и 1 специальный символ",
-    "passwordsDoNotMatch": "Пароли не совпадают",
-    "resetSuccess": "Ваш пароль был успешно сброшен",
-    "resetFailed": "Не удалось сбросить пароль. Пожалуйста, попробуйте снова.",
-    "noTokenProvided": "Пожалуйста, предоставьте токен сброса",
-    "expiredToken": "Срок действия токена истек. Пожалуйста, запросите новый.",
-    "invalidToken": "Недействительный или неизвестный токен",
-    "validatingToken": "Проверка токена...",
-    "redirecting": "Перенаправление на страницу входа...",
-    "passwordStrength": "Надежность пароля",
-    "strengthLabels": {
-      "veryWeak": "Очень слабый",
-      "weak": "Слабый",
-      "fair": "Средний",
-      "good": "Хороший",
-      "strong": "Надежный"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Используйте не менее 8 символов",
-      "addUppercase": "Добавьте заглавные буквы",
-      "addLowercase": "Добавьте строчные буквы",
-      "addNumbers": "Добавьте цифры",
-      "addSpecialChars": "Добавьте специальные символы"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Сброс пароля",
-    "emailLabel": "Адрес электронной почты",
-    "emailPlaceholder": "Введите ваш email",
-    "resetButton": "Отправить ссылку для сброса",
-    "processing": "Отправка...",
-    "rememberPassword": "Вспомнили пароль?",
-    "backToLogin": "Вернуться к входу",
-    "supportMessage": "Нужна помощь? Свяжитесь с поддержкой",
-    "invalidEmail":
-        "Пожалуйста, введите действительный адрес электронной почты",
-    "resetRequestSuccess":
-        "Ссылка для сброса пароля была отправлена на ваш email",
-    "resetRequestFailed":
-        "Не удалось отправить ссылку. Пожалуйста, попробуйте снова.",
-    "checkEmail": "Пожалуйста, проверьте вашу почту для дальнейших инструкций."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Создать новый аккаунт",
-    "username": "Имя пользователя",
-    "usernamePlaceholder": "Введите имя пользователя",
-    "email": "Email",
-    "emailPlaceholder": "Введите ваш email",
-    "password": "Пароль",
-    "passwordPlaceholder": "Придумайте пароль",
-    "confirmPassword": "Подтвердите пароль",
-    "confirmPasswordPlaceholder": "Повторите пароль",
-    "acceptTerms": "Я принимаю",
-    "termsOfService": "Условия использования",
-    "registerButton": "Создать аккаунт",
-    "processing": "Обработка...",
-    "alreadyHaveAccount": "Уже есть аккаунт?",
-    "loginNow": "Войти",
-    "privacyNotice":
-        "Регистрируясь, вы соглашаетесь с нашими Условиями использования и Политикой конфиденциальности",
-    "usernameMinLength":
-        "Имя пользователя должно содержать не менее 3 символов",
-    "invalidEmail":
-        "Пожалуйста, введите действительный адрес электронной почты",
-    "passwordRequirements":
-        "Пароль должен содержать не менее 8 символов, включая 1 цифру и 1 заглавную букву",
-    "passwordsDoNotMatch": "Пароли не совпадают",
-    "mustAcceptTerms": "Вы должны принять Условия использования",
-    "registrationFailed": "Ошибка регистрации. Пожалуйста, попробуйте снова.",
-    "usernameExists": "Имя пользователя уже занято",
-    "emailExists": "Email уже используется",
-    "registrationSuccess": "Регистрация успешна!",
-    "verificationEmailSent": "Письмо с подтверждением отправлено на {email}",
-    "checkEmailInstructions":
-        "Пожалуйста, проверьте почту и следуйте инструкциям для подтверждения аккаунта перед входом.",
-    "backToLogin": "Вернуться к входу",
-    "noEmailReceived": "Не получили письмо?",
-    "resendVerification": "Отправить повторно",
-    "verificationResent": "Письмо с подтверждением отправлено повторно",
-    "verificationResendFailed":
-        "Не удалось отправить письмо повторно. Пожалуйста, попробуйте снова.",
-    "usernameInvalidChars":
-        "Имя пользователя может содержать только буквы, цифры, подчеркивания, точки и дефисы",
-    "networkError":
-        "Ошибка сети. Пожалуйста, проверьте подключение и попробуйте снова."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Имя пользователя",
-    "password": "Пароль",
-    "loginButton": "Войти",
-    "or": "или",
-    "savedAccounts": "Сохраненные аккаунты",
-    "loginSuccess": "Вход выполнен успешно",
-    "loginError": "Ошибка входа. Пожалуйста, проверьте свои данные.",
-    "googleLogin": "Продолжить с Google",
-    "facebookLogin": "Продолжить с Facebook",
-    "rememberMe": "Запомнить меня",
-    "forgotPassword": "Забыли пароль?",
-    "noAccount": "Нет аккаунта?",
-    "createAccount": "Создать аккаунт",
-    "registerNow": "Зарегистрироваться",
-    "termsAndPolicy":
-        "Входя в систему, вы соглашаетесь с нашими Условиями использования и Политикой конфиденциальности",
-    "loggingIn": "Вход в систему...",
-    "fieldsRequired": "Имя пользователя и пароль обязательны",
-    "invalidCredentials": "Неверное имя пользователя или пароль",
-    "tooManyAttempts":
-        "Слишком много попыток входа. Пожалуйста, попробуйте позже.",
-    "loginFailed": "Ошибка входа. Пожалуйста, попробуйте снова.",
-    "oauthNotImplemented": "Вход через соцсети еще не реализован",
-    "savedLoginNotImplemented":
-        "Вход через сохраненный аккаунт еще не реализован"
+  "auth": {
+    "noInternetConnection": "Нет подключения к Интернету",
+    "networkUnreachable": "Сеть недоступна",
+    "authenticationFailed": "Ошибка аутентификации",
+    "sessionExpired": "Ваша сессия истекла. Пожалуйста, войдите снова.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -361,8 +221,8 @@ const Map<String, dynamic> ruLocale = {
       "swahili": "Суахили",
       "german": "Немецкий",
       "spanish": "Испанский",
-      "arabic": "Арабский"
-    }
+      "arabic": "Арабский",
+    },
   },
   "systemStatus": {
     "title": "Статус сервисов",
@@ -376,20 +236,20 @@ const Map<String, dynamic> ruLocale = {
     "checking": "Проверка...",
     "nextDeadline": "Следующий срок",
     "days": "дн.",
-    "viewDetails": "Подробнее"
+    "viewDetails": "Подробнее",
   },
   "services": {
     "eCitizen": "Портал eCitizen",
     "taxFiling": "Система налоговой отчетности",
     "idApplication": "Заявка на ID",
     "businessReg": "Регистрация бизнеса",
-    "drivingLicense": "Водительские права"
+    "drivingLicense": "Водительские права",
   },
   "deadlines": {
     "taxFiling": "Срок подачи налогов",
     "businessRenewal": "Продление бизнес-лицензии",
     "idRenewal": "Обновление ID-карты",
-    "vehicleRegistration": "Срок регистрации ТС"
+    "vehicleRegistration": "Срок регистрации ТС",
   },
   "sidebar": {
     "governmentServices": "Области знаний",
@@ -429,7 +289,7 @@ const Map<String, dynamic> ruLocale = {
       "rain": "Дождь",
       "shower": "Ливень",
       "thunderstorm": "Гроза",
-      "snow": "Снег"
+      "snow": "Снег",
     },
     "folders": "Папки",
     "emptyFolder": "Эта папка пуста. Переместите сюда разговоры из меню чата.",
@@ -442,7 +302,7 @@ const Map<String, dynamic> ruLocale = {
       "all": "Все чаты",
       "folders": "Папки",
       "starred": "Избранное",
-      "archived": "Архив"
+      "archived": "Архив",
     },
     "savedChats": "Сохраненные чаты",
     "chats": "Чаты",
@@ -502,7 +362,7 @@ const Map<String, dynamic> ruLocale = {
     "noConversations": "Разговоры не найдены",
     "noStarred": "Нет избранных разговоров",
     "noArchived": "Нет архивированных разговоров",
-    "folderEmptyState": "Папка пуста"
+    "folderEmptyState": "Папка пуста",
   },
   "leftPanel": {
     "cat1": {
@@ -512,8 +372,8 @@ const Map<String, dynamic> ruLocale = {
         "Национальные ID-карты",
         "Паспорта",
         "Свидетельства о браке и смерти",
-        "Регистрация избирателей"
-      ]
+        "Регистрация избирателей",
+      ],
     },
     "cat2": {
       "name": "2. Здравоохранение и социальные услуги",
@@ -522,8 +382,8 @@ const Map<String, dynamic> ruLocale = {
         "Программы вакцинации",
         "Медицинское страхование",
         "Пособия по инвалидности",
-        "Социальная и продовольственная помощь"
-      ]
+        "Социальная и продовольственная помощь",
+      ],
     },
     "cat3": {
       "name": "3. Образование и обучение",
@@ -531,8 +391,8 @@ const Map<String, dynamic> ruLocale = {
         "Государственные школы и университеты",
         "Стипендии и студенческие кредиты",
         "Программы образования для взрослых",
-        "Онлайн-ресурсы для обучения"
-      ]
+        "Онлайн-ресурсы для обучения",
+      ],
     },
     "cat4": {
       "name": "4. Занятость и трудовые услуги",
@@ -540,8 +400,8 @@ const Map<String, dynamic> ruLocale = {
         "Поиск работы и пособия по безработице",
         "Защита работников и трудовые права",
         "Правила безопасности на рабочем месте",
-        "Профессиональное обучение и стажировка"
-      ]
+        "Профессиональное обучение и стажировка",
+      ],
     },
     "cat5": {
       "name": "5. Налоги и доходы",
@@ -549,8 +409,8 @@ const Map<String, dynamic> ruLocale = {
         "Подача налоговых деклараций и возвраты",
         "Уплата налога на имущество",
         "Налоговое соответствие бизнеса",
-        "Таможенные пошлины и сборы"
-      ]
+        "Таможенные пошлины и сборы",
+      ],
     },
     "cat6": {
       "name": "6. Общественная безопасность и правосудие",
@@ -558,8 +418,8 @@ const Map<String, dynamic> ruLocale = {
         "Полиция и экстренные службы",
         "Суды и юридическая помощь",
         "Сообщение о преступлениях",
-        "Законы о защите прав потребителей"
-      ]
+        "Законы о защите прав потребителей",
+      ],
     },
     "cat7": {
       "name": "7. Транспорт и мобильность",
@@ -567,8 +427,8 @@ const Map<String, dynamic> ruLocale = {
         "Водительские права и регистрация ТС",
         "Общественный транспорт и инфраструктура",
         "Нарушения ПДД и штрафы",
-        "Программы безопасности дорожного движения"
-      ]
+        "Программы безопасности дорожного движения",
+      ],
     },
     "cat8": {
       "name": "8. Жилье и городское развитие",
@@ -576,8 +436,8 @@ const Map<String, dynamic> ruLocale = {
         "Помощь в получении государственного жилья",
         "Регистрация собственности и земельные записи",
         "Жилищные кредиты и субсидии",
-        "Зонирование и разрешения на строительство"
-      ]
+        "Зонирование и разрешения на строительство",
+      ],
     },
     "cat9": {
       "name": "9. Коммунальные услуги и окружающая среда",
@@ -585,8 +445,8 @@ const Map<String, dynamic> ruLocale = {
         "Водоснабжение и электроэнергия",
         "Управление отходами и переработка",
         "Экологические нормы",
-        "Инициативы по возобновляемой энергии"
-      ]
+        "Инициативы по возобновляемой энергии",
+      ],
     },
     "cat10": {
       "name": "10. Бизнес и торговля",
@@ -594,8 +454,8 @@ const Map<String, dynamic> ruLocale = {
         "Регистрация и лицензирование бизнеса",
         "Торговые правила и разрешения",
         "Гранты и стимулы для малого бизнеса",
-        "Электронная коммерция и поддержка цифрового бизнеса"
-      ]
+        "Электронная коммерция и поддержка цифрового бизнеса",
+      ],
     },
     "cat11": {
       "name": "11. Социальное обеспечение и пенсии",
@@ -603,8 +463,8 @@ const Map<String, dynamic> ruLocale = {
         "Пенсионные выплаты",
         "Управление пенсионным фондом",
         "Пособия по потере кормильца",
-        "Пенсии по инвалидности"
-      ]
+        "Пенсии по инвалидности",
+      ],
     },
     "cat12": {
       "name": "12. Сообщество и гражданское участие",
@@ -612,9 +472,9 @@ const Map<String, dynamic> ruLocale = {
         "Голосование и выборы",
         "Обратная связь и жалобы граждан",
         "Волонтерство и общественные программы",
-        "Участие в местном самоуправлении"
-      ]
-    }
+        "Участие в местном самоуправлении",
+      ],
+    },
   },
   "settings": {
     "title": "Настройки",
@@ -630,7 +490,7 @@ const Map<String, dynamic> ruLocale = {
     "languages": {
       "english": "Английский",
       "french": "Французский",
-      "swahili": "Суахили"
+      "swahili": "Суахили",
     },
     "theme": "Тема",
     "themes": {"light": "Светлая", "dark": "Темная", "system": "Системная"},
@@ -644,9 +504,11 @@ const Map<String, dynamic> ruLocale = {
     "emailAddress": "Email адрес",
     "emailAddressPlaceholder": "Ваш email",
     "password": "Пароль",
-    "changePassword": "Изменить пароль",
     "resetUserData": "Сброс данных пользователя",
     "resetUserDataDesc": "Это удалит все данные вашего профиля и историю чата.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Удалить аккаунт",
     "deleteAccountDesc":
         "Это навсегда удалит ваш аккаунт и все связанные данные.",
@@ -661,14 +523,14 @@ const Map<String, dynamic> ruLocale = {
           "Это удалит все данные вашего профиля и историю чата.",
       "confirmReset":
           "Вы уверены, что хотите сбросить все данные? Это действие необратимо.",
-      "resetComplete": "Ваши данные были сброшены."
+      "resetComplete": "Ваши данные были сброшены.",
     },
     "language": {"title": "Язык", "selectLabel": "Язык интерфейса"},
     "appearance": {
       "title": "Внешний вид",
       "lightTheme": "Светлая",
       "darkTheme": "Темная",
-      "systemTheme": "Системная"
+      "systemTheme": "Системная",
     },
     "confirmDeleteAccount":
         "Вы уверены, что хотите удалить аккаунт? Это действие необратимо.",
@@ -703,8 +565,6 @@ const Map<String, dynamic> ruLocale = {
     "enterValidEmail": "Пожалуйста, введите действительный email",
     "failedToUpdateEmail":
         "Не удалось обновить email. Пожалуйста, попробуйте снова.",
-    "passwordResetInitiated":
-        "Ссылка для сброса пароля отправлена на ваш email.",
     "unableToLoadUser":
         "Не удалось загрузить информацию о пользователе. Пожалуйста, попробуйте снова.",
     "retry": "Повторить",
@@ -714,7 +574,7 @@ const Map<String, dynamic> ruLocale = {
     "confirmResetUserData":
         "Вы уверены, что хотите сбросить все данные профиля? Это удалит всю информацию профиля и историю чата, но сохранит данные для входа.",
     "reset": "Сбросить",
-    "deleteAccountTitle": "Удалить аккаунт"
+    "deleteAccountTitle": "Удалить аккаунт",
   },
   "userProfile": {
     "title": "Профиль пользователя",
@@ -762,7 +622,7 @@ const Map<String, dynamic> ruLocale = {
       "tab9": "Социальное обеспечение и благосостояние",
       "tab10": "Уголовные и юридические записи",
       "tab11": "Транспорт и мобильность",
-      "tab12": "Гражданское и политическое участие"
+      "tab12": "Гражданское и политическое участие",
     },
     "tabsShort": {
       "personal": "Личные",
@@ -776,14 +636,14 @@ const Map<String, dynamic> ruLocale = {
       "social": "Соц.",
       "criminal": "Крим.",
       "transport": "Транспорт",
-      "civic": "Гражд."
+      "civic": "Гражд.",
     },
     "actions": {
       "cancel": "Отмена",
       "save": "Сохранить профиль",
       "previous": "Назад",
       "next": "Далее",
-      "saving": "Сохранение..."
+      "saving": "Сохранение...",
     },
     "fields": {
       "fullName": "Полное имя (включая псевдонимы)",
@@ -858,7 +718,7 @@ const Map<String, dynamic> ruLocale = {
       "electionHistory": "История участия в выборах",
       "partyMembership": "Членство в политической партии",
       "militaryStatus": "Военная служба или призывной статус",
-      "publicServiceRoles": "Роли на государственной службе"
+      "publicServiceRoles": "Роли на государственной службе",
     },
     "placeholders": {
       "fullName": "Введите ваше полное юридическое имя",
@@ -868,7 +728,7 @@ const Map<String, dynamic> ruLocale = {
       "searchDisciplines": "Поиск дисциплин...",
       "selectDiscipline": "Выберите дисциплину",
       "searchDegrees": "Поиск степеней...",
-      "selectDegree": "Выберите степень"
+      "selectDegree": "Выберите степень",
     },
     "validation": {
       "nameRequired": "Полное имя обязательно",
@@ -879,7 +739,7 @@ const Map<String, dynamic> ruLocale = {
       "futureDate": "Дата не может быть в будущем",
       "invalidSelection": "Пожалуйста, сделайте действительный выбор",
       "passwordLength": "Пароль должен содержать не менее 8 символов",
-      "matchError": "Поля не совпадают"
+      "matchError": "Поля не совпадают",
     },
     "errors": {
       "savingFailed": "Не удалось сохранить профиль",
@@ -888,7 +748,7 @@ const Map<String, dynamic> ruLocale = {
       "invalidFileType": "Неверный тип файла",
       "fileTooLarge": "Файл слишком большой",
       "countryLoadError": "Ошибка загрузки стран",
-      "countryUpdateError": "Ошибка обновления страны"
+      "countryUpdateError": "Ошибка обновления страны",
     },
     "notifications": {
       "saveSuccess": "Профиль успешно сохранен",
@@ -901,7 +761,7 @@ const Map<String, dynamic> ruLocale = {
       "formChanged": "У вас есть несохраненные изменения",
       "sessionExpired": "Ваша сессия истекла, пожалуйста, войдите снова",
       "profileUpdated": "Ваш профиль был обновлен",
-      "profileIncomplete": "Ваш профиль не заполнен"
+      "profileIncomplete": "Ваш профиль не заполнен",
     },
     "instructions": {
       "fullNameHelp":
@@ -917,7 +777,7 @@ const Map<String, dynamic> ruLocale = {
       "nextTab": "Перейти к следующему разделу",
       "previousTab": "Вернуться к предыдущему разделу",
       "saveInstructions": "Нажмите Сохранить, чтобы сохранить информацию",
-      "cancelInstructions": "Нажмите Отмена, чтобы отменить изменения"
+      "cancelInstructions": "Нажмите Отмена, чтобы отменить изменения",
     },
     "completionStatus": {
       "notStarted": "Не начато",
@@ -925,26 +785,26 @@ const Map<String, dynamic> ruLocale = {
       "complete": "Завершено",
       "percentComplete": "{percent}% завершено",
       "tabsCompleted": "Завершено {completed} из {total} разделов",
-      "tabComplete": "Вкладка завершена!"
+      "tabComplete": "Вкладка завершена!",
     },
     "gender": {
       "male": "Мужской",
       "female": "Женский",
       "other": "Другой",
-      "preferNot": "Предпочитаю не указывать"
+      "preferNot": "Предпочитаю не указывать",
     },
     "maritalStatus": {
       "single": "Холост/Не замужем",
       "married": "Женат/Замужем",
       "divorced": "Разведен(а)",
       "widowed": "Вдовец/Вдова",
-      "other": "Другое"
+      "other": "Другое",
     },
     "residencyStatuses": {
       "citizen": "Гражданин",
       "permanentResident": "Постоянный житель",
       "temporaryResident": "Временный житель",
-      "other": "Другое"
+      "other": "Другое",
     },
     "employmentStatuses": {
       "employed": "Работающий",
@@ -953,7 +813,7 @@ const Map<String, dynamic> ruLocale = {
       "student": "Студент",
       "retired": "Пенсионер",
       "homemaker": "Домохозяйка/Домохозяин",
-      "other": "Другое"
+      "other": "Другое",
     },
     "educationLevels": {
       "primary": "Начальное образование",
@@ -965,14 +825,14 @@ const Map<String, dynamic> ruLocale = {
       "master": "Магистр",
       "doctoral": "Докторская степень",
       "professional": "Профессиональная степень",
-      "other": "Другое"
+      "other": "Другое",
     },
     "proficiencyLevels": {
       "native": "Родной",
       "fluent": "Свободный",
       "advanced": "Продвинутый",
       "intermediate": "Средний",
-      "basic": "Базовый"
+      "basic": "Базовый",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -983,7 +843,7 @@ const Map<String, dynamic> ruLocale = {
       "abNegative": "AB-",
       "oPositive": "0+",
       "oNegative": "0-",
-      "unknown": "Неизвестно"
+      "unknown": "Неизвестно",
     },
     "languages": {
       "english": "Английский",
@@ -998,7 +858,7 @@ const Map<String, dynamic> ruLocale = {
       "russian": "Русский",
       "hindi": "Хинди",
       "urdu": "Урду",
-      "other": "Другое"
+      "other": "Другое",
     },
     "yesNo": {"yes": "Да", "no": "Нет"},
     "select": "Пожалуйста, выберите",
@@ -1105,7 +965,7 @@ const Map<String, dynamic> ruLocale = {
       "Ветеринария",
       "Веб-разработка",
       "Биология дикой природы",
-      "Зоология"
+      "Зоология",
     ],
     "degreeOptions": [
       "Степень ассоциата",
@@ -1135,7 +995,7 @@ const Map<String, dynamic> ruLocale = {
       "Профессиональный сертификат",
       "Сертификат о высшем образовании",
       "Диплом о высшем образовании",
-      "Постдокторантура"
+      "Постдокторантура",
     ],
     "aria": {
       "tabList": "Разделы формы профиля",
@@ -1144,8 +1004,8 @@ const Map<String, dynamic> ruLocale = {
       "closeButton": "Закрыть форму профиля",
       "saveButton": "Сохранить данные профиля",
       "requiredField": "Обязательное поле",
-      "dropdownSelect": "Выберите вариант"
-    }
+      "dropdownSelect": "Выберите вариант",
+    },
   },
   "chatbot": {
     "placeholder": "Введите ваш запрос здесь...",
@@ -1212,10 +1072,10 @@ const Map<String, dynamic> ruLocale = {
         "discardAndNew": "Отм. и Новый",
         "discardAndLoad": "Отм. и Загр.",
         "saveFirst": "Снач. Сохр.",
-        "export": "Экспорт"
-      }
+        "export": "Экспорт",
+      },
     },
-    "shareWhatsApp": "Поделиться в WhatsApp"
+    "shareWhatsApp": "Поделиться в WhatsApp",
   },
   "quickhelp": {
     "applyForID": "Заявка на ID",
@@ -1261,7 +1121,7 @@ const Map<String, dynamic> ruLocale = {
         "Я хочу узнать о Программе доступного жилья (Boma Yangu) в Кении.",
     "findJobsUserPrompt":
         "Я хочу спросить о вакансиях в государственных учреждениях и заявках в PSC в Кении.",
-    "justChatUserPrompt": "Я хочу просто пообщаться о жизни в Кении."
+    "justChatUserPrompt": "Я хочу просто пообщаться о жизни в Кении.",
   },
   "common": {
     "cancel": "Отмена",
@@ -1277,7 +1137,7 @@ const Map<String, dynamic> ruLocale = {
     "open": "Открыть",
     "done": "Готово",
     "confirm": "Подтвердить",
-    "edit": "Редактировать"
+    "edit": "Редактировать",
   },
   "feedback": {
     "title": "Отзыв",
@@ -1291,7 +1151,7 @@ const Map<String, dynamic> ruLocale = {
     "thankYouMessage": "Спасибо за ваш отзыв!",
     "submitting": "Отправка...",
     "error": "Что-то пошло не так. Пожалуйста, попробуйте снова.",
-    "success": "Спасибо за ваш отзыв!"
+    "success": "Спасибо за ваш отзыв!",
   },
   "responseRating": {
     "title": "Помогите нам стать лучше",
@@ -1303,11 +1163,11 @@ const Map<String, dynamic> ruLocale = {
       "2": "Немного полезно",
       "3": "В меру полезно",
       "4": "Очень полезно",
-      "5": "Изменило жизнь"
+      "5": "Изменило жизнь",
     },
     "additionalComments": "Дополнительные комментарии...",
     "submit": "Отправить",
-    "cancel": "Отмена"
+    "cancel": "Отмена",
   },
   "upload": {"alt": "Загрузить"},
   "uploadDialog": {
@@ -1325,8 +1185,8 @@ const Map<String, dynamic> ruLocale = {
           "Файлы ярлыков (.url) не поддерживаются. Пожалуйста, перетащите сам файл.",
       "duplicate": "Файл \"{fileName}\" уже добавлен.",
       "uploadSuccess": "Успешно загружен {fileName}",
-      "uploadFailed": "Не удалось загрузить {fileName}."
-    }
+      "uploadFailed": "Не удалось загрузить {fileName}.",
+    },
   },
   "about": {
     "title": "О приложении",
@@ -1334,6 +1194,6 @@ const Map<String, dynamic> ruLocale = {
     "description":
         "Genie AI — ваш интеллектуальный помощник для навигации по государственным услугам и информации.",
     "techStack": "Технологический стек",
-    "copyright": "Все права защищены."
-  }
+    "copyright": "Все права защищены.",
+  },
 };

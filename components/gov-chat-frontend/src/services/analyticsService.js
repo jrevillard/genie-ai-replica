@@ -9,7 +9,7 @@ class AnalyticsService {
    * Base URL for the analytics API endpoints
    */
   constructor() {
-    this.baseUrl = process.env.VUE_APP_API_URL || '/api';
+    this.baseUrl = window.APP_CONFIG?.apiUrl || process.env.VUE_APP_API_URL || '/api';
     this.$i18n = null; // Will be set after initialization
   }
 
@@ -53,7 +53,7 @@ class AnalyticsService {
         }
       });
 
-      console.log("Unique users direct response:", response.data);
+      console.log('Unique users direct response:', response.data);
 
       return typeof response.data.value === 'number' ? response.data.value : 0;
     } catch (error) {
@@ -115,10 +115,10 @@ class AnalyticsService {
 
       // Map frontend metric names to backend API metric names
       const metricMap = {
-        'totalQueries': 'totalQueries',
-        'uniqueUsers': 'uniqueUsers',
-        'averageResponseTime': 'averageResponseTime',
-        'satisfactionRate': 'satisfactionRate'
+        totalQueries: 'totalQueries',
+        uniqueUsers: 'uniqueUsers',
+        averageResponseTime: 'averageResponseTime',
+        satisfactionRate: 'satisfactionRate'
       };
 
       const apiMetric = metricMap[metric] || metric;
@@ -183,11 +183,11 @@ class AnalyticsService {
 
       if (!response.data || !Array.isArray(response.data)) {
         console.warn(`Invalid response format for ${metricType} time series:`, response.data);
-        return this.getFallbackTimeSeriesData(interval);
+        return [];
       }
 
       // Process the data to ensure it's valid
-      return response.data.map(item => ({
+      return response.data.map((item) => ({
         timestamp: item.timestamp || '',
         dateLabel: this.formatDateLabel(item.timestamp, interval),
         value: typeof item.value === 'number' ? item.value : 0,
@@ -195,76 +195,8 @@ class AnalyticsService {
       }));
     } catch (error) {
       console.error('Error fetching time series data:', error);
-      return this.getFallbackTimeSeriesData(interval);
+      return [];
     }
-  }
-
-  /**
-   * Get fallback time series data
-   * @param {string} interval - Time interval
-   * @returns {Array} Sample time series data
-   */
-  getFallbackTimeSeriesData(interval) {
-    const result = [];
-    const now = new Date();
-    let count = 0;
-
-    // Determine number of data points based on interval
-    switch (interval) {
-      case 'hourly':
-        count = 24;
-        break;
-      case 'daily':
-        count = 30;
-        break;
-      case 'weekly':
-        count = 12;
-        break;
-      case 'monthly':
-        count = 12;
-        break;
-      default:
-        count = 30;
-    }
-
-    // Generate sample data
-    for (let i = 0; i < count; i++) {
-      const date = new Date(now);
-
-      // Adjust date based on interval
-      switch (interval) {
-        case 'hourly':
-          date.setHours(date.getHours() - (count - i - 1));
-          break;
-        case 'daily':
-          date.setDate(date.getDate() - (count - i - 1));
-          break;
-        case 'weekly':
-          date.setDate(date.getDate() - (count - i - 1) * 7);
-          break;
-        case 'monthly':
-          date.setMonth(date.getMonth() - (count - i - 1));
-          break;
-        default:
-          date.setDate(date.getDate() - (count - i - 1));
-      }
-
-      // Format date label
-      const dateLabel = this.formatDateLabel(date, interval);
-
-      // Generate random value
-      const value = Math.floor(Math.random() * 500) + 500;
-
-      // Add data point
-      result.push({
-        timestamp: date.toISOString(),
-        dateLabel,
-        value,
-        userCount: Math.floor(value * 0.2) // 20% of value
-      });
-    }
-
-    return result;
   }
 
   /**
@@ -312,12 +244,12 @@ class AnalyticsService {
     if (!data || !Array.isArray(data)) return [];
 
     // Filter out invalid entries
-    const validData = data.filter(item => item && item.timestamp);
+    const validData = data.filter((item) => item && item.timestamp);
 
     // Get current locale for formatting
     const locale = this.$i18n ? this.$i18n.locale : 'en';
 
-    return validData.map(item => {
+    return validData.map((item) => {
       // Format date label based on interval
       let dateLabel;
       try {
@@ -333,10 +265,11 @@ class AnalyticsService {
               dateLabel = date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
               break;
 
-            case 'weekly':
+            case 'weekly': {
               const weekNum = this.getWeekNumber(date);
               dateLabel = `W${weekNum} ${date.toLocaleDateString(locale, { month: 'short' })}`;
               break;
+            }
 
             case 'monthly':
               dateLabel = date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
@@ -371,7 +304,7 @@ class AnalyticsService {
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
   }
 
   /**
@@ -381,7 +314,22 @@ class AnalyticsService {
    * @returns {Object} Start and end date
    */
   calculateDateRange(period, date) {
-    const endDate = date ? new Date(date) : new Date();
+    // Parse YYYY-MM-DD as a *local* date. `new Date('YYYY-MM-DD')` parses as
+    // UTC midnight, which combined with the local-time `setHours(...)` calls
+    // below shifts the window by the user's UTC offset (e.g. an IST user
+    // ends up with an upper bound of 18:29:59Z, dropping data captured
+    // between local-midnight and the actual UTC end-of-day).
+    let endDate;
+    if (date) {
+      const parts = String(date).split('-').map(Number);
+      if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
+        endDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      } else {
+        endDate = new Date(date);
+      }
+    } else {
+      endDate = new Date();
+    }
     let startDate = new Date(endDate);
 
     switch (period) {
@@ -435,11 +383,11 @@ class AnalyticsService {
 
     if (!data) return defaultData;
 
-    console.log("Dashboard data received:", data);
+    console.log('Dashboard data received:', data);
 
     // Extract the unique users count
-    let uniqueUsers = data.users && typeof data.users.activeCount === 'number' ? data.users.activeCount : 0;
-    console.log("Unique users count from API:", uniqueUsers);
+    const uniqueUsers = data.users && typeof data.users.activeCount === 'number' ? data.users.activeCount : 0;
+    console.log('Unique users count from API:', uniqueUsers);
 
     // Transform the data from the API response structure
     return {
@@ -449,7 +397,7 @@ class AnalyticsService {
       satisfactionRate: data.feedback?.positivePercentage || 0,
 
       // Transform category distribution
-      queryDistribution: (data.categories || []).map(cat => ({
+      queryDistribution: (data.categories || []).map((cat) => ({
         categoryId: cat.categoryId,
         name: cat.name,
         count: cat.count
@@ -469,25 +417,25 @@ class AnalyticsService {
    */
   formatValue(value, format = 'number', locale = null) {
     if (value === null || value === undefined) return '—';
-  
+
     // Get current locale
     const currentLocale = locale || (this.$i18n ? this.$i18n.locale : 'en');
-  
+
     switch (format) {
       case 'number':
         return value.toLocaleString(currentLocale);
-  
+
       case 'time':
         // Format as seconds with 1 decimal place
         return `${value.toFixed(1)}s`;
-  
+
       case 'percent':
         return `${value.toFixed(1)}%`;
-  
+
       case 'milliseconds':
         // Format as whole milliseconds with 'ms' suffix
         return `${Math.round(value)}ms`;
-  
+
       default:
         return String(value);
     }
@@ -550,110 +498,14 @@ class AnalyticsService {
 
       if (!response.data || !Array.isArray(response.data)) {
         console.warn('Invalid response format for satisfaction heatmap:', response.data);
-        return this.getFallbackSatisfactionHeatmap(currentLocale);
+        return [];
       }
 
       return response.data;
     } catch (error) {
       console.error('Error fetching satisfaction heatmap data:', error);
-      return this.getFallbackSatisfactionHeatmap(this.getCurrentLocale(locale));
+      return [];
     }
-  }
-
-  /**
-   * Get fallback satisfaction heatmap data
-   * @param {string} locale - Locale for translations
-   * @returns {Array} Sample satisfaction heatmap data
-   */
-  getFallbackSatisfactionHeatmap(locale = 'en') {
-    // Define knowledge areas based on locale
-    const getLocalizedAreas = () => {
-      if (locale === 'fr') {
-        return [
-          'Immigration et Citoyenneté',
-          'Entreprise et Commerce',
-          'Identité et État Civil',
-          'Sécurité Sociale et Retraites',
-          'Éducation et Apprentissage',
-          'Emploi et Services du Travail',
-          'Santé et Services Sociaux'
-        ];
-      } else if (locale === 'sw') {
-        return [
-          'Uhamiaji na Uraia',
-          'Biashara na Biashara',
-          'Utambulisho na Usajili wa Kiraia',
-          'Usalama wa Jamii na Pensheni',
-          'Elimu na Mafunzo',
-          'Ajira na Huduma za Kazi',
-          'Afya na Huduma za Kijamii'
-        ];
-      } else {
-        // Default to English
-        return [
-          'Immigration & Citizenship',
-          'Business & Trade',
-          'Identity & Civil Registration',
-          'Social Security & Pensions',
-          'Education & Learning',
-          'Employment & Labor Services',
-          'Health & Social Services'
-        ];
-      }
-    };
-
-    // Define time periods based on locale
-    const getLocalizedPeriods = () => {
-      if (locale === 'fr') {
-        return [
-          'Il y a 4 semaines',
-          'Il y a 3 semaines',
-          'Il y a 2 semaines',
-          'Semaine dernière',
-          'Actuel'
-        ];
-      } else if (locale === 'sw') {
-        return [
-          'Wiki 4 iliyopita',
-          'Wiki 3 iliyopita',
-          'Wiki 2 iliyopita',
-          'Wiki iliyopita',
-          'Sasa'
-        ];
-      } else {
-        // Default to English
-        return [
-          '4 Weeks Ago',
-          '3 Weeks Ago',
-          '2 Weeks Ago',
-          'Last Week',
-          'Current'
-        ];
-      }
-    };
-
-    const areas = getLocalizedAreas();
-    const periods = getLocalizedPeriods();
-
-    // Generate sample data for each area and time period
-    return areas.map(area => {
-      const data = {};
-      data.name = area;
-      data.data = periods.map((period, index) => {
-        // Generate random satisfaction scores that trend slightly upward
-        let baseScore = 75 + Math.floor(Math.random() * 15);
-        // Add a small upward trend (with some randomness)
-        baseScore += index * (1 + Math.random());
-        // Ensure score doesn't exceed 100
-        const score = Math.min(Math.round(baseScore), 100);
-
-        return {
-          x: period,
-          y: score
-        };
-      });
-      return data;
-    });
   }
 
   /**
@@ -722,6 +574,61 @@ class AnalyticsService {
   }
 
   /**
+   * Get feedback + unanswered time series for the admin Feedback page.
+   * Returns one row per bucket with positive / negative / neutral feedback counts
+   * and the number of unanswered queries in that bucket.
+   *
+   * @param {string} period - daily | weekly | monthly | all-time
+   * @param {string} date - Selected date (YYYY-MM-DD) used as the upper bound
+   * @param {string} interval - Bucket size (hourly|daily|weekly|monthly)
+   * @returns {Promise<Array>} Time series rows
+   */
+  async getFeedbackTimeSeries(period, date, interval = 'daily') {
+    try {
+      const { startDate, endDate } = this.calculateDateRange(period, date);
+      const response = await httpService.get('analytics/feedback/timeseries', {
+        params: { startDate, endDate, interval }
+      });
+      if (!response.data || !Array.isArray(response.data)) {
+        console.warn('Invalid feedback time series response:', response.data);
+        return [];
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching feedback time series:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a paginated list of recent feedback entries for the admin Feedback page.
+   *
+   * @param {string} period - daily | weekly | monthly | all-time
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @param {Object} options - { filter, limit, offset }
+   * @returns {Promise<{items:Array,total:number}>}
+   */
+  async getFeedbackList(period, date, options = {}) {
+    try {
+      const { startDate, endDate } = this.calculateDateRange(period, date);
+      const filter = options.filter || 'all';
+      const limit = options.limit || 10;
+      const offset = options.offset || 0;
+      const response = await httpService.get('analytics/feedback/list', {
+        params: { startDate, endDate, filter, limit, offset }
+      });
+      const data = response?.data || {};
+      return {
+        items: Array.isArray(data.items) ? data.items : [],
+        total: typeof data.total === 'number' ? data.total : 0
+      };
+    } catch (error) {
+      console.error('Error fetching feedback list:', error);
+      return { items: [], total: 0 };
+    }
+  }
+
+  /**
    * Record feedback in analytics
    * @param {String} queryId - Query ID
    * @param {Object} feedback - Feedback data
@@ -739,7 +646,6 @@ class AnalyticsService {
       throw error;
     }
   }
-
 }
 
 export default new AnalyticsService();

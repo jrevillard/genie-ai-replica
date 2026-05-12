@@ -196,135 +196,19 @@ const Map<String, dynamic> manLocale = {
     "VN": "Viyetinami",
     "YE": "Yemeni",
     "ZM": "Zambiya",
-    "ZW": "Zimbabuwe"
+    "ZW": "Zimbabuwe",
   },
-  "verification": {
-    "verifying": "I la imeelo korosila...",
-    "success": "Imeelo korosita a benta!",
-    "failed": "Korosiro manta",
-    "accountVerified": "I la akawunto korosita a benta. I dunta nyin akawunto kono saaying.",
-    "invalidLink": "Korosi linko manta wama a waati tammita.",
-    "missingToken": "Korosi tokeno man je.",
-    "generalError": "Fili sota korosiro waatoo. A nyoofa yelamasaaying.",
-    "proceedToLogin": "Taa dungo la",
-    "backToLogin": "Sayo dungo la"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Passwordo kuta ladang",
-    "tokenLabel": "Riseti Tokeno",
-    "tokenPlaceholder": "Riseti tokeno safee",
-    "validateButton": "Tokeno korosi",
-    "newPasswordLabel": "Passwordo kuta",
-    "newPasswordPlaceholder": "Passwordo kuta dundi",
-    "confirmNewPasswordLabel": "Passwordo kuta laating",
-    "confirmNewPasswordPlaceholder": "I la passwordo kuta laating",
-    "resetButton": "Passwordo yelema",
-    "processing": "A be yelema la...",
-    "rememberedPassword": "I hakili be i la passwordo la?",
-    "backToLogin": "Sayo dungo la",
-    "supportMessage": "I mako be dembaro la? Makaamaku nna dembaro kumo la",
-    "passwordRequirements": "Passwordo ka kanyaming le a sabang karafisi 8 ani karafisi baa kiling, nomboo kiling ani karafisi soto kiling",
-    "passwordsDoNotMatch": "Passwordo nulu man bengo",
-    "resetSuccess": "I la passwordo yelemata a benta",
-    "resetFailed": "Passwordo man yelema. A nyoofa tukung.",
-    "noTokenProvided": "I ka riseti tokeno dii",
-    "expiredToken": "Nyin riseti tokeno waati tammita. A kuta nyininka.",
-    "invalidToken": "Tokeno manta wama tokeno man londi",
-    "validatingToken": "Tokeno korosila...",
-    "redirecting": "A be sayola dungo page la...",
-    "passwordStrength": "Passwordo semboo",
-    "strengthLabels": {
-      "veryWeak": "A man fangkung",
-      "weak": "A munyaata",
-      "fair": "A beteyaata dooma",
-      "good": "A beteyaata",
-      "strong": "A bambanta"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Karafisi 8 dundi",
-      "addUppercase": "Karafisi baa dundi",
-      "addLowercase": "Karafisi nding dundi",
-      "addNumbers": "Nomboolu dundi",
-      "addSpecialChars": "Karafisi sotolu dundi"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "I la Passwordo yelema",
-    "emailLabel": "Imeelo",
-    "emailPlaceholder": "I la imeelo safee",
-    "resetButton": "Riseti linko kii",
-    "processing": "A be kiila...",
-    "rememberPassword": "I hakili be i la passwordo la?",
-    "backToLogin": "Sayo dungo la",
-    "supportMessage": "I mako be dembaro la? Makaamaku nna dembaro kumo la",
-    "invalidEmail": "Imeelo nyimma safee",
-    "resetRequestSuccess": "Passwordo riseti linko kiita i la imeelo la",
-    "resetRequestFailed": "Passwordo riseti linko man kii. A nyoofa tukung.",
-    "checkEmail": "I la imeelo korosi a kuma doolu kama."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Akawunto kuta ladang",
-    "username": "Moo toko",
-    "usernamePlaceholder": "Moo toko safee",
-    "email": "Imeelo",
-    "emailPlaceholder": "I la imeelo safee",
-    "password": "Passwordo",
-    "passwordPlaceholder": "Passwordo kuta ladang",
-    "confirmPassword": "Passwordo laating",
-    "confirmPasswordPlaceholder": "I la passwordo laating",
-    "acceptTerms": "N sota",
-    "termsOfService": "Doo sariyaalu la",
-    "registerButton": "Akawunto ladang",
-    "processing": "A be ladang na...",
-    "alreadyHaveAccount": "I sota akawunto la folee?",
-    "loginNow": "Dung saaying",
-    "privacyNotice": "I la sefoo la, i sota nna sariyaalu ani kumpa kumoo kumo la",
-    "usernameMinLength": "Moo toko ka kanyaming le karafisi 3 dundi",
-    "invalidEmail": "Imeelo nyimma safee",
-    "passwordRequirements": "Passwordo ka kanyaming le karafisi 8 ani nomboo kiling ani karafisi baa kiling",
-    "passwordsDoNotMatch": "Passwordo nulu man bengo",
-    "mustAcceptTerms": "I ka kanyaming le i sota sariyaalu la",
-    "registrationFailed": "Sefoo manta. A nyoofa tukung.",
-    "usernameExists": "Moo toko sota foloo",
-    "emailExists": "Imeelo sota foloo",
-    "registrationSuccess": "Sefoo benta!",
-    "verificationEmailSent": "Korosi imeelo kiita {email} la",
-    "checkEmailInstructions": "I la imeelo korosi ani i tugu kuma doolu la k'i la akawunto korosi i si foloo dundi.",
-    "backToLogin": "Sayo dungo la",
-    "noEmailReceived": "Imeelo man je?",
-    "resendVerification": "Korosi imeelo kii tukung",
-    "verificationResent": "Korosi imeelo kiita tukung",
-    "verificationResendFailed": "Korosi imeelo kii tukung manta. A nyoofa tukung.",
-    "usernameInvalidChars": "Moo toko ka kanyaming le karafisolu, nomboolu, ani toolu dorong",
-    "networkError": "Netwoku fili. I la konneksyon korosi ani a nyoofa tukung."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Moo toko",
-    "password": "Passwordo",
-    "loginButton": "Dung",
-    "or": "wama",
-    "savedAccounts": "Akawunto maratolu",
-    "loginSuccess": "Dungo benta",
-    "loginError": "Dungo manta. I la kumoo korosi.",
-    "googleLogin": "A nyoofa Google la",
-    "facebookLogin": "A nyoofa Facebook la",
-    "rememberMe": "N hakili too",
-    "forgotPassword": "I hakili funtita passwordo la?",
-    "noAccount": "Akawunto man soto?",
-    "createAccount": "Akawunto ladang",
-    "registerNow": "Sefoo saaying",
-    "termsAndPolicy": "I la dungo la, i sota nna sariyaalu ani kumpa kumoo kumo la",
-    "loggingIn": "A be dundi la...",
-    "fieldsRequired": "Moo toko ani passwordo lafeng na",
-    "invalidCredentials": "Moo toko wama passwordo manta",
-    "tooManyAttempts": "Dungo nyoofa tiyaata. A nyoofa yelamasaaying.",
-    "loginFailed": "Dungo manta. A nyoofa tukung.",
-    "oauthNotImplemented": "Sosiyaal dungo man ladang foloo",
-    "savedLoginNotImplemented": "Akawunto marato dungo man ladang foloo"
+  "auth": {
+    "noInternetConnection": "Internet koneksio nyala",
+    "networkUnreachable": "Netwɔrk hɛrɛ fɔ jɛn",
+    "authenticationFailed": "Autɛntifikasiɛn wuli",
+    "sessionExpired": "Sɛsɔn in fɛnɛ. Kɛn sɔn dɛn.",
+    "timeout": "Sɛm in banna. Suubun ko interneti la ka bota fanna.",
+    "retry": "Bota fanna",
+    "signIn": "Sɛnna",
+    "error": "Autɛntifikasiɛn laka",
+    "accessDenied": "Jɔkɔrɔma laɗi. Manto a mɛɛrɛmɛ.",
+    "unknownError": "Lala laka kɛra. Suubun fanna.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -343,8 +227,8 @@ const Map<String, dynamic> manLocale = {
       "swahili": "Suwahilikang",
       "german": "Alimaanikang",
       "spanish": "Sipeenikang",
-      "arabic": "Arabukang"
-    }
+      "arabic": "Arabukang",
+    },
   },
   "systemStatus": {
     "title": "Serivisi kumo",
@@ -358,20 +242,20 @@ const Map<String, dynamic> manLocale = {
     "checking": "A be korosila...",
     "nextDeadline": "Waati tammita kuta",
     "days": "tilolu",
-    "viewDetails": "A fanani kumo je"
+    "viewDetails": "A fanani kumo je",
   },
   "services": {
     "eCitizen": "Moo-portaloo",
     "taxFiling": "Takisi joong sisitemu",
     "idApplication": "Aydi (ID) nyininka",
     "businessReg": "Jula sefoo",
-    "drivingLicense": "Bori laysensi"
+    "drivingLicense": "Bori laysensi",
   },
   "deadlines": {
     "taxFiling": "Takisi joong waati tammita",
     "businessRenewal": "Jula laysensi kutaayaa",
     "idRenewal": "Aydi kardoo kutaayaa",
-    "vehicleRegistration": "Mobiloo sefoo waati tammita"
+    "vehicleRegistration": "Mobiloo sefoo waati tammita",
   },
   "sidebar": {
     "governmentServices": "Londi kuwolu",
@@ -392,13 +276,15 @@ const Map<String, dynamic> manLocale = {
     "chatTitlePlaceholder": "Nyin kumoo toko safee",
     "deleteFolder": "Folodaa kilin",
     "deleteFolderConfirm": "I lafita '{name}' folodaa kilin la?",
-    "chatsMoveWarning": "Kumoolu biling nyin folodaa kono be wulula difolti folodaa la.",
+    "chatsMoveWarning":
+        "Kumoolu biling nyin folodaa kono be wulula difolti folodaa la.",
     "weatherError": "Sanji kumo te ladang na. A nyoofa tukung.",
     "weatherTitle": "Sanji kumo",
     "weatherLoading": "Sanji kumo be sabang na...",
     "weatherLocationLoading": "Dulaa be sabang na...",
     "weatherErrorDefault": "Sanji kumo te soto la.",
-    "weatherGeolocationUnsupported": "Jiyolokeshano te baara la i la borawuzaro la.",
+    "weatherGeolocationUnsupported":
+        "Jiyolokeshano te baara la i la borawuzaro la.",
     "weatherRefresh": "Sanji kumo kutaayaa",
     "weatherConditions": {
       "clear": "A kenda",
@@ -408,7 +294,7 @@ const Map<String, dynamic> manLocale = {
       "rain": "Sanji",
       "shower": "Sanji nding",
       "thunderstorm": "Sankuli",
-      "snow": "Snoo"
+      "snow": "Snoo",
     },
     "folders": "Folodaalu",
     "emptyFolder": "Nyin folodaa be kankang. Kumoolu wulu nna kuma menoo la.",
@@ -421,7 +307,7 @@ const Map<String, dynamic> manLocale = {
       "all": "Kumoolu biling",
       "folders": "Folodaalu",
       "starred": "Lotolu",
-      "archived": "Maratolu"
+      "archived": "Maratolu",
     },
     "savedChats": "Kuma maratolu",
     "chats": "Kumoolu",
@@ -477,7 +363,7 @@ const Map<String, dynamic> manLocale = {
     "noConversations": "Kuma te je",
     "noStarred": "Kuma loto te je",
     "noArchived": "Kuma marato te je",
-    "folderEmptyState": "Folodaa be kankang"
+    "folderEmptyState": "Folodaa be kankang",
   },
   "leftPanel": {
     "cat1": {
@@ -487,8 +373,8 @@ const Map<String, dynamic> manLocale = {
         "Aydi (ID) kaito",
         "Pasportolu",
         "Futuo ani saya kaito",
-        "Votoro sefoo"
-      ]
+        "Votoro sefoo",
+      ],
     },
     "cat2": {
       "name": "2. Kendeyaa ani Demba Seriviso",
@@ -497,8 +383,8 @@ const Map<String, dynamic> manLocale = {
         "Tubo kumo",
         "Kendeyaa insorans",
         "Moo-nani demba",
-        "Kendo ani domoroo demba"
-      ]
+        "Kendo ani domoroo demba",
+      ],
     },
     "cat3": {
       "name": "3. Karango",
@@ -506,8 +392,8 @@ const Map<String, dynamic> manLocale = {
         "Jamahoo karang-bongo ani uniwersiti",
         "Sikolariship ani karang loo",
         "Moo-baa karango kumo",
-        "Onilayni karango nafolu"
-      ]
+        "Onilayni karango nafolu",
+      ],
     },
     "cat4": {
       "name": "4. Baara ani Moko Seriviso",
@@ -515,8 +401,8 @@ const Map<String, dynamic> manLocale = {
         "Baara nyining ani loraani demba",
         "Mokoolu kanto ani sariyaa",
         "Baara-dulaa lafiya sariyaa",
-        "Londi kumo ani karang-dulaa"
-      ]
+        "Londi kumo ani karang-dulaa",
+      ],
     },
     "cat5": {
       "name": "5. Takisi ani Munafo",
@@ -524,8 +410,8 @@ const Map<String, dynamic> manLocale = {
         "Munafo takisi joong ani sayo",
         "Kampaani takisi joong",
         "Jula takisi sariyaa",
-        "Kasitomi ani ladung takisi"
-      ]
+        "Kasitomi ani ladung takisi",
+      ],
     },
     "cat6": {
       "name": "6. Jamahoo Lafiya ani Kitiro",
@@ -533,8 +419,8 @@ const Map<String, dynamic> manLocale = {
         "Polisi ani jula-n-kalo seriviso",
         "Kitiro ani sariyaa demba",
         "Tilimburo fengo",
-        "Sango-moo kanto sariyaa"
-      ]
+        "Sango-moo kanto sariyaa",
+      ],
     },
     "cat7": {
       "name": "7. Taa-ani-Sayo",
@@ -542,8 +428,8 @@ const Map<String, dynamic> manLocale = {
         "Bori laysensi ani mobiloo sefoo",
         "Jamahoo taa-dulaa ani silaro",
         "Trafiki tinyaa ani joongo",
-        "Silo lafiya kumo"
-      ]
+        "Silo lafiya kumo",
+      ],
     },
     "cat8": {
       "name": "8. Suti-bongo ani Sate Ladang",
@@ -551,8 +437,8 @@ const Map<String, dynamic> manLocale = {
         "Jamahoo suti demba",
         "Bongo sefoo ani bongo kaito",
         "Bongo loo ani joong-manding",
-        "Dulaa ani bongo laysensi"
-      ]
+        "Dulaa ani bongo laysensi",
+      ],
     },
     "cat9": {
       "name": "9. Kurango ani Fangkang-kuto",
@@ -560,8 +446,8 @@ const Map<String, dynamic> manLocale = {
         "Jiyo ani kurango seriviso",
         "Nyooha bungo ani nyooha ladang",
         "Fangkang-kuto sariyaa",
-        "Semboo kuta ladang kumo"
-      ]
+        "Semboo kuta ladang kumo",
+      ],
     },
     "cat10": {
       "name": "10. Jula ani Busiinisi",
@@ -569,8 +455,8 @@ const Map<String, dynamic> manLocale = {
         "Jula sefoo ani laysensi",
         "Jula sariyaa ani laysensi",
         "Jula nding demba ani kaira",
-        "Onilayni jula ani dijital jula demba"
-      ]
+        "Onilayni jula ani dijital jula demba",
+      ],
     },
     "cat11": {
       "name": "11. Jamahoo Semboo ani Pensiyono",
@@ -578,8 +464,8 @@ const Map<String, dynamic> manLocale = {
         "Koro-bongo demba",
         "Pensiyon kodo kumo",
         "Balunto-moo demba",
-        "Moo-nani pensiyono"
-      ]
+        "Moo-nani pensiyono",
+      ],
     },
     "cat12": {
       "name": "12. Kabilo ani Moo-nyooya",
@@ -587,9 +473,9 @@ const Map<String, dynamic> manLocale = {
         "Votoro ani boloo-kendi",
         "Jamahoo kuma ani moo fango",
         "Seriviso fango ani kabilo kumo",
-        "Sate jamahoo bung-n-dungo"
-      ]
-    }
+        "Sate jamahoo bung-n-dungo",
+      ],
+    },
   },
   "settings": {
     "title": "Setinolu",
@@ -605,7 +491,7 @@ const Map<String, dynamic> manLocale = {
     "languages": {
       "english": "Angaleekang",
       "french": "Faranseekang",
-      "swahili": "Suwahilikang"
+      "swahili": "Suwahilikang",
     },
     "theme": "Teemo",
     "themes": {"light": "Kuyatoo", "dark": "Diboo", "system": "Sisitemu"},
@@ -619,9 +505,12 @@ const Map<String, dynamic> manLocale = {
     "emailAddress": "Imeelo",
     "emailAddressPlaceholder": "I la imeelo safee",
     "password": "Passwordo",
-    "changePassword": "Passwordo yelema",
     "resetUserData": "Moo Kumo Kutaayaa",
-    "resetUserDataDesc": "Nyin be i la moo kumo ani kuma tariku biling kilin na.",
+    "resetUserDataDesc":
+        "Nyin be i la moo kumo ani kuma tariku biling kilin na.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Akawunto Kilin",
     "deleteAccountDesc": "Nyin be i la akawunto ani kumo biling kilin na fey.",
     "edit": "A ladang",
@@ -631,20 +520,24 @@ const Map<String, dynamic> manLocale = {
     "cancel": "A bula",
     "account": {
       "title": "Akawunto",
-      "resetDescription": "Nyin be i la moo kumo ani kuma tariku biling kilin na.",
-      "confirmReset": "I lafita i la kumo biling kutaayaa la? Nyin te yelema la tukung.",
-      "resetComplete": "I la kumo kutaayaata."
+      "resetDescription":
+          "Nyin be i la moo kumo ani kuma tariku biling kilin na.",
+      "confirmReset":
+          "I lafita i la kumo biling kutaayaa la? Nyin te yelema la tukung.",
+      "resetComplete": "I la kumo kutaayaata.",
     },
     "language": {"title": "Kango", "selectLabel": "Jandiro Kango"},
     "appearance": {
       "title": "Jandiro lafiya",
       "lightTheme": "Kuyatoo",
       "darkTheme": "Diboo",
-      "systemTheme": "Sisitemu"
+      "systemTheme": "Sisitemu",
     },
-    "confirmDeleteAccount": "I lafita i la akawunto kilin la? Nyin te yelema la tukung.",
+    "confirmDeleteAccount":
+        "I lafita i la akawunto kilin la? Nyin te yelema la tukung.",
     "confirmAccountDeletion": "Akawunto Kilin laating",
-    "accountDeletionWarning": "Hakuurula: Nyin baara te yelema la tukung fey. I la kumo biling be kilin na fey.",
+    "accountDeletionWarning":
+        "Hakuurula: Nyin baara te yelema la tukung fey. I la kumo biling be kilin na fey.",
     "deletionReason": "Kilin kumo (ni i lafita):",
     "deletionReasonPlaceholder": "Mune yaata i la akawunto kilin na?",
     "enterPasswordConfirm": "I la passwordo dundi laatingo kama:",
@@ -657,7 +550,8 @@ const Map<String, dynamic> manLocale = {
     "confirmChange": "Yelema laating",
     "processing": "A be yelema la...",
     "userDataReset": "I la moo kumo kutaayaata a benta.",
-    "failedToResetUserData": "I la moo kumo kutaayaa manta. A nyoofa yelamasaaying.",
+    "failedToResetUserData":
+        "I la moo kumo kutaayaa manta. A nyoofa yelamasaaying.",
     "changingEmailTo": "I la imeelo be yelema la k'a ke",
     "will": "be",
     "logOutSystem": "I bongo sisitemu kono",
@@ -668,19 +562,19 @@ const Map<String, dynamic> manLocale = {
     "emailAlreadyInUse": "Imeelo sota foloo baara kono",
     "enterValidEmail": "Imeelo nyimma safee",
     "failedToUpdateEmail": "Imeelo kutaayaa manta. A nyoofa tukung.",
-    "passwordResetInitiated": "Passwordo riseti linko kiita i la imeelo la.",
-    "unableToLoadUser": "Moo kumo sabang manta. A nyoofa tukung.",
     "retry": "A nyoofa tukung",
     "user": "Moo",
     "loadingUserInfo": "Moo kumo be sabang na...",
     "resetUserDataTitle": "Moo Kumo Kutaayaa",
-    "confirmResetUserData": "I lafita i la moo kumo biling kutaayaa la? Nyin be i la moo kumo ani kuma tariku kilin na, bari i la akawunto kumo be too.",
+    "confirmResetUserData":
+        "I lafita i la moo kumo biling kutaayaa la? Nyin be i la moo kumo ani kuma tariku kilin na, bari i la akawunto kumo be too.",
     "reset": "Kutaayaa",
-    "deleteAccountTitle": "Akawunto Kilin"
+    "deleteAccountTitle": "Akawunto Kilin",
   },
   "userProfile": {
     "title": "Moo Kumpoo",
-    "privacyInfo": "Ni i ka kumo doolu dii tukung, i be kihoo nyimma soto la kuma-lo-boto la. I yandi nna",
+    "privacyInfo":
+        "Ni i ka kumo doolu dii tukung, i be kihoo nyimma soto la kuma-lo-boto la. I yandi nna",
     "privacyPolicyLink": "Kumpa Sariyaalu",
     "tabComingSoon": "Nyin page be baara la saaying, a be bong na ne.",
     "saveSuccess": "Kumpoo marata a benta",
@@ -693,7 +587,8 @@ const Map<String, dynamic> manLocale = {
     "confirmDiscardChanges": "Yelema baliyaalu fili?",
     "uploadPhoto": "Nuunoo wulu",
     "uploadFile": "Kaito wulu",
-    "photoRequirements": "Nuunoo ka kanyaming le a kenda, a kuta, ani i daa biling je",
+    "photoRequirements":
+        "Nuunoo ka kanyaming le a kenda, a kuta, ani i daa biling je",
     "biometricRequirements": "Bayometirik kaito nyimma dorong le sota",
     "documentUpload": "Kaito wulu",
     "validationTitle": "Nyin filolu ladang:",
@@ -718,7 +613,7 @@ const Map<String, dynamic> manLocale = {
       "tab9": "Jamahoo Semboo ani Demba",
       "tab10": "Tinyaa ani Sariyaa Kaitolu",
       "tab11": "Taa-ani-Sayo",
-      "tab12": "Jamahoo ani Politiki Kumo"
+      "tab12": "Jamahoo ani Politiki Kumo",
     },
     "tabsShort": {
       "personal": "Moo fango",
@@ -732,14 +627,14 @@ const Map<String, dynamic> manLocale = {
       "social": "Jamahoo",
       "criminal": "Tinyaa",
       "transport": "Taa",
-      "civic": "Jamahoo kumo"
+      "civic": "Jamahoo kumo",
     },
     "actions": {
       "cancel": "A bula",
       "save": "Kumpoo mara",
       "previous": "A koto",
       "next": "A tugu",
-      "saving": "A be mara la..."
+      "saving": "A be mara la...",
     },
     "fields": {
       "fullName": "Toko biling (ani tokodingolu)",
@@ -813,7 +708,7 @@ const Map<String, dynamic> manLocale = {
       "electionHistory": "Boloo-kendi taa tariku",
       "partyMembership": "Politiki kafu moo",
       "militaryStatus": "Sori baara kumo",
-      "publicServiceRoles": "Jamahoo seriviso kumo"
+      "publicServiceRoles": "Jamahoo seriviso kumo",
     },
     "placeholders": {
       "fullName": "I la toko biling safee",
@@ -823,7 +718,7 @@ const Map<String, dynamic> manLocale = {
       "searchDisciplines": "Baara nyining...",
       "selectDiscipline": "Baara taa",
       "searchDegrees": "Degereelu nyining...",
-      "selectDegree": "Degeree taa"
+      "selectDegree": "Degeree taa",
     },
     "validation": {
       "nameRequired": "Toko biling lafeng na",
@@ -834,7 +729,7 @@ const Map<String, dynamic> manLocale = {
       "futureDate": "Tilo te kuta ti",
       "invalidSelection": "Taa nyimma ke",
       "passwordLength": "Passwordo ka kanyaming le karafisi 8 soto",
-      "matchError": "Filolu man bengo"
+      "matchError": "Filolu man bengo",
     },
     "errors": {
       "savingFailed": "Kumpoo mara manta",
@@ -843,7 +738,7 @@ const Map<String, dynamic> manLocale = {
       "invalidFileType": "Kaito suu manta",
       "fileTooLarge": "Kaito baa tiyaata",
       "countryLoadError": "Bankoolu sabang manta",
-      "countryUpdateError": "Bankoo kutaayaa manta"
+      "countryUpdateError": "Bankoo kutaayaa manta",
     },
     "notifications": {
       "saveSuccess": "Kumpoo marata a benta",
@@ -856,20 +751,23 @@ const Map<String, dynamic> manLocale = {
       "formChanged": "I sota yelema baliyaalu la",
       "sessionExpired": "I la waati tammita, dung tukung",
       "profileUpdated": "I la kumpoo kutaayaata",
-      "profileIncomplete": "I la kumpoo man paree"
+      "profileIncomplete": "I la kumpoo man paree",
     },
     "instructions": {
-      "fullNameHelp": "I la toko biling safee n'a safeeta i la kaitolu la nyooma",
+      "fullNameHelp":
+          "I la toko biling safee n'a safeeta i la kaitolu la nyooma",
       "dobHelp": "I la bang tilo safee MM/DD/YYYY nyooma",
-      "uploadPhotoHelp": "Nuunoo kuta wulu. Kaito ka kanyaming le JPG, PNG, wama GIF ani 2MB koto",
-      "passwordHelp": "Passwordo ka kanyaming le karafisi 8 soto ani karafisi baa kiling, nomboo kiling, ani karafisi soto kiling",
+      "uploadPhotoHelp":
+          "Nuunoo kuta wulu. Kaito ka kanyaming le JPG, PNG, wama GIF ani 2MB koto",
+      "passwordHelp":
+          "Passwordo ka kanyaming le karafisi 8 soto ani karafisi baa kiling, nomboo kiling, ani karafisi soto kiling",
       "documentHelp": "Kaitolu lafita: PDF, JPG, PNG (5MB fanaa)",
       "requiredFields": "Filolu lotolu * lafeng na le",
       "selectFromList": "Taa kiling ke listoo kono",
       "nextTab": "Taa filoo tuguto la",
       "previousTab": "Sayo filoo kotoma la",
       "saveInstructions": "Digi 'Mara' k'i la kumo mara",
-      "cancelInstructions": "Digi 'A bula' ka yelemaalu fili"
+      "cancelInstructions": "Digi 'A bula' ka yelemaalu fili",
     },
     "completionStatus": {
       "notStarted": "Man daminang foloo",
@@ -877,26 +775,26 @@ const Map<String, dynamic> manLocale = {
       "complete": "A pareeta",
       "percentComplete": "{percent}% pareeta",
       "tabsCompleted": "{completed} filolu pareeta {total} kono",
-      "tabComplete": "Filoo pareeta!"
+      "tabComplete": "Filoo pareeta!",
     },
     "gender": {
       "male": "Kewo",
       "female": "Musoo",
       "other": "Doo",
-      "preferNot": "N te kuma la a kumo la"
+      "preferNot": "N te kuma la a kumo la",
     },
     "maritalStatus": {
       "single": "Singo",
       "married": "Futuo",
       "divorced": "Futuo bula",
       "widowed": "Balo",
-      "other": "Doo"
+      "other": "Doo",
     },
     "residencyStatuses": {
       "citizen": "Sate moo",
       "permanentResident": "Sigoo fango moo",
       "temporaryResident": "Waati sigo moo",
-      "other": "Doo"
+      "other": "Doo",
     },
     "employmentStatuses": {
       "employed": "Baara sota",
@@ -905,7 +803,7 @@ const Map<String, dynamic> manLocale = {
       "student": "Karangdingo",
       "retired": "Baara bula",
       "homemaker": "Bungo baara",
-      "other": "Doo"
+      "other": "Doo",
     },
     "educationLevels": {
       "primary": "Foloo karang-bongo",
@@ -917,14 +815,14 @@ const Map<String, dynamic> manLocale = {
       "master": "Degeree filanjango (Master's)",
       "doctoral": "Degeree baa (Doctoral)",
       "professional": "Baara degeree",
-      "other": "Doo"
+      "other": "Doo",
     },
     "proficiencyLevels": {
       "native": "Bango kango",
       "fluent": "Londi-baa",
       "advanced": "Taa-nyaa",
       "intermediate": "Temaroo",
-      "basic": "Foloo londi"
+      "basic": "Foloo londi",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -935,7 +833,7 @@ const Map<String, dynamic> manLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Londi-baliyaa"
+      "unknown": "Londi-baliyaa",
     },
     "languages": {
       "english": "Angaleekang",
@@ -950,7 +848,7 @@ const Map<String, dynamic> manLocale = {
       "russian": "Rusiyakang",
       "hindi": "Hindikang",
       "urdu": "Urdukang",
-      "other": "Doo"
+      "other": "Doo",
     },
     "yesNo": {"yes": "Haa", "no": "Hani"},
     "select": "Yandi taa ke",
@@ -1057,7 +955,7 @@ const Map<String, dynamic> manLocale = {
       "Damo tubo",
       "Web ladang",
       "Damo londi",
-      "Damo tubo londi"
+      "Damo tubo londi",
     ],
     "degreeOptions": [
       "Degeree nding (Associate)",
@@ -1087,7 +985,7 @@ const Map<String, dynamic> manLocale = {
       "Baara nding kaito",
       "Karango kaito",
       "Karango koto dipoloma",
-      "Karango koto degeree"
+      "Karango koto degeree",
     ],
     "aria": {
       "tabList": "Kumpoo filolu",
@@ -1096,8 +994,8 @@ const Map<String, dynamic> manLocale = {
       "closeButton": "Kumpoo dada",
       "saveButton": "Kumpoo mara",
       "requiredField": "Filoo lafeng na",
-      "dropdownSelect": "Taa kiling ke"
-    }
+      "dropdownSelect": "Taa kiling ke",
+    },
   },
   "chatbot": {
     "placeholder": "I la nyininka safee jang...",
@@ -1105,7 +1003,8 @@ const Map<String, dynamic> manLocale = {
     "fileReceived": "Kaito sotota a benta.",
     "fileUploadError": "Kaito wulu manta.",
     "processingError": "I la nyininka sabang manta.",
-    "welcomeMessage": "Bismillah! N si i demba nyaadii Keniya mansa serivisolu kumo la bii?",
+    "welcomeMessage":
+        "Bismillah! N si i demba nyaadii Keniya mansa serivisolu kumo la bii?",
     "attachFile": "Kaito dii",
     "fileTooLarge": "Kaito baa tiyaata. A ka kanyaming le {maxSize} koto.",
     "saveChat": "Kumoo mara",
@@ -1115,7 +1014,8 @@ const Map<String, dynamic> manLocale = {
     "selectFolder": "Folodaa taa",
     "newChat": "Kuma kuta",
     "clearContext": "Kumo kilin ani kuma kuta daminang",
-    "unsavedChanges": "I sota yelema baliyaalu la. I lafita kuma kuta daminang na?",
+    "unsavedChanges":
+        "I sota yelema baliyaalu la. I lafita kuma kuta daminang na?",
     "whatCanIHelp": "N si i demba nyaadii bii?",
     "justChat": "Kuma dorong",
     "queryContext": "Nyininka kumo",
@@ -1130,7 +1030,8 @@ const Map<String, dynamic> manLocale = {
     "saveConfirmTitle": "Saaying kumoo mara",
     "saveConfirmMessage": "Saaying kumoo mara?",
     "loadConfirmTitle": "Saaying kumoo sabang",
-    "loadConfirmMessage": "I sota yelema baliyaalu la. I lafita i fili la ani kumoo sabang, wama saaying kumoo mara foloo?",
+    "loadConfirmMessage":
+        "I sota yelema baliyaalu la. I lafita i fili la ani kumoo sabang, wama saaying kumoo mara foloo?",
     "loadAndDiscard": "Sabang ani Fili",
     "saveAndLoad": "Mara ani Sabang",
     "saveAndStartNew": "Mara ani Kuta Daminang",
@@ -1147,7 +1048,8 @@ const Map<String, dynamic> manLocale = {
     "removeContext": "Kumo wulu",
     "dialogs": {
       "newChatTitle": "Kuma Kuta Daminang?",
-      "newChatContent": "I sota yelema baliyaalu la. Kuma kuta daminang le fey?",
+      "newChatContent":
+          "I sota yelema baliyaalu la. Kuma kuta daminang le fey?",
       "loadChatTitle": "Kumoo Sabang?",
       "loadChatContent": "I sota yelema baliyaalu la. Sabang le fey?",
       "saveTitle": "Kumoo Mara",
@@ -1158,10 +1060,10 @@ const Map<String, dynamic> manLocale = {
         "discardAndNew": "Fili ani Kuta",
         "discardAndLoad": "Fili ani Sabang",
         "saveFirst": "Mara foloo",
-        "export": "Kii bongo"
-      }
+        "export": "Kii bongo",
+      },
     },
-    "shareWhatsApp": "A kii WhatsApp la"
+    "shareWhatsApp": "A kii WhatsApp la",
   },
   "quickhelp": {
     "applyForID": "Aydi (ID) nyininka",
@@ -1174,33 +1076,50 @@ const Map<String, dynamic> manLocale = {
     "findJobs": "Baara nyining",
     "justChat": "Kuma dorong",
 
-    "applyForIDPrompt": "I fango k'i ke Keniya sate sefoo moo ti. Aydi (ID) kaito soto wama a tunta kutaayaa kumo ladang. NAFA BAA: Kaito lafiyalu safee (Bang kaito, mbaa ani baa la Aydi kaito) ani moo wulandi Huduma bung wama Sefoo bung na. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "applyForIDPrompt":
+        "I fango k'i ke Keniya sate sefoo moo ti. Aydi (ID) kaito soto wama a tunta kutaayaa kumo ladang. NAFA BAA: Kaito lafiyalu safee (Bang kaito, mbaa ani baa la Aydi kaito) ani moo wulandi Huduma bung wama Sefoo bung na. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "payTaxesPrompt": "I fango k'i ke KRA (Keniya Takisi Bongo) moo ti. Takisi joong ani KRA Pini nyininka wama iTax portaloo la passwordo yelema kumo ladang. NAFA BAA: Moo hakili tu June 30 waati tammita kumo la ani i demba ni munafo te je la takisi joong (Nil) kumo la. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "payTaxesPrompt":
+        "I fango k'i ke KRA (Keniya Takisi Bongo) moo ti. Takisi joong ani KRA Pini nyininka wama iTax portaloo la passwordo yelema kumo ladang. NAFA BAA: Moo hakili tu June 30 waati tammita kumo la ani i demba ni munafo te je la takisi joong (Nil) kumo la. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "startBusinessPrompt": "I fango k'i ke eCitizen jula demba moo ti. Jula toko sefoo ani kampaani sefoo Keniya kono ladang. NAFA BAA: Toko nyining ani sefoo kodo kumo ladang, ani moo wulandi eCitizen portaloo la a paree kama. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "startBusinessPrompt":
+        "I fango k'i ke eCitizen jula demba moo ti. Jula toko sefoo ani kampaani sefoo Keniya kono ladang. NAFA BAA: Toko nyining ani sefoo kodo kumo ladang, ani moo wulandi eCitizen portaloo la a paree kama. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "findHealthcarePrompt": "I fango k'i ke kendeyaa seriviso moo ti. NHIF taa SHIF (Jamahoo Kendeyaa Insorans) ani sefoo kumo ladang. NAFA BAA: USSD koodo (*263#) wama website linko safee ani jamahoo kendeyaa nafolu ladang. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "findHealthcarePrompt":
+        "I fango k'i ke kendeyaa seriviso moo ti. NHIF taa SHIF (Jamahoo Kendeyaa Insorans) ani sefoo kumo ladang. NAFA BAA: USSD koodo (*263#) wama website linko safee ani jamahoo kendeyaa nafolu ladang. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "educationServicesPrompt": "I fango k'i ke karango demba moo ti. CBC karango, NEMIS sefoo, wama uniwersiti taa KUCCPS la kumo ladang. NAFA BAA: Mbaa ani baa demba karang-dingolu tesiti nomboolu je kama SMS wama KNEC portaloo la. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "educationServicesPrompt":
+        "I fango k'i ke karango demba moo ti. CBC karango, NEMIS sefoo, wama uniwersiti taa KUCCPS la kumo ladang. NAFA BAA: Mbaa ani baa demba karang-dingolu tesiti nomboolu je kama SMS wama KNEC portaloo la. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "transportLicensesPrompt": "I fango k'i ke NTSA seriviso moo ti. Bori laysensi kutaayaa, mobiloo tubo, wama TIMS akawunto kumo ladang. NAFA BAA: Moo demba eCitizen NTSA portaloo dung kumo la ani mobiloo tubo waati nyininka. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "transportLicensesPrompt":
+        "I fango k'i ke NTSA seriviso moo ti. Bori laysensi kutaayaa, mobiloo tubo, wama TIMS akawunto kumo ladang. NAFA BAA: Moo demba eCitizen NTSA portaloo dung kumo la ani mobiloo tubo waati nyininka. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "housingProgramsPrompt": "I fango k'i ke bungo demba moo ti. Boma Yangu (Bungo Demba) sefoo ani joongo kumo ladang. NAFA BAA: Moo wulandi Boma Yangu portaloo la bungo je kama ani moo taa kumo ladang. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "housingProgramsPrompt":
+        "I fango k'i ke bungo demba moo ti. Boma Yangu (Bungo Demba) sefoo ani joongo kumo ladang. NAFA BAA: Moo wulandi Boma Yangu portaloo la bungo je kama ani moo taa kumo ladang. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "findJobsPrompt": "I fango k'i ke mansa baara demba moo ti. Public Service Commission (PSC) portaloo la akawunto ladang ani baara nyininka kumo ladang. NAFA BAA: Moo demba a la karango kaitolu paree ani PSC website wama MyGov kaitolu je nyining kama. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "findJobsPrompt":
+        "I fango k'i ke mansa baara demba moo ti. Public Service Commission (PSC) portaloo la akawunto ladang ani baara nyininka kumo ladang. NAFA BAA: Moo demba a la karango kaitolu paree ani PSC website wama MyGov kaitolu je nyining kama. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "justChatPrompt": "I fango k'i ke sate moo ti. Kuma nyooma, i dembanta ani Keniya moo-n-kuwolu londi. NAFA BAA: Moo hakili tu ko i si kuma kuwo biling fey, bari i la semboo mu Keniya mansa serivisolu le ti, nyooma **Aydi**, **Takisi**, ani **Jula Sefoo**. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
+    "justChatPrompt":
+        "I fango k'i ke sate moo ti. Kuma nyooma, i dembanta ani Keniya moo-n-kuwolu londi. NAFA BAA: Moo hakili tu ko i si kuma kuwo biling fey, bari i la semboo mu Keniya mansa serivisolu le ti, nyooma **Aydi**, **Takisi**, ani **Jula Sefoo**. SARIYAA: Kuma-lo-boto too ke 'Genie AI' ti.",
 
-    "applyForIDUserPrompt": "N lafita londi la Aydi (ID) kaito nyininka la Keniya kono.",
-    "payTaxesUserPrompt": "N lafita londi la takisi joong wama KRA joong la Keniya kono.",
-    "startBusinessUserPrompt": "N lafita londi la jula kuta wama kampaani sefoo la Keniya kono.",
-    "findHealthcareUserPrompt": "N lafita londi la jamahoo kendeyaa ani insorans (NHIF/SHIF) la Keniya kono.",
-    "educationServicesUserPrompt": "N lafita londi la karang-bongo ani karango serivisolu la Keniya kono.",
-    "transportLicensesUserPrompt": "N lafita londi la bori laysensi ani NTSA serivisolu la Keniya kono.",
-    "housingProgramsUserPrompt": "N lafita londi la Boma Yangu (Bungo Demba) la Keniya kono.",
-    "findJobsUserPrompt": "N lafita londi la mansa baara ani PSC nyininka la Keniya kono.",
-    "justChatUserPrompt": "N lafita kuma dorong Keniya moo-n-kuwolu la."
+    "applyForIDUserPrompt":
+        "N lafita londi la Aydi (ID) kaito nyininka la Keniya kono.",
+    "payTaxesUserPrompt":
+        "N lafita londi la takisi joong wama KRA joong la Keniya kono.",
+    "startBusinessUserPrompt":
+        "N lafita londi la jula kuta wama kampaani sefoo la Keniya kono.",
+    "findHealthcareUserPrompt":
+        "N lafita londi la jamahoo kendeyaa ani insorans (NHIF/SHIF) la Keniya kono.",
+    "educationServicesUserPrompt":
+        "N lafita londi la karang-bongo ani karango serivisolu la Keniya kono.",
+    "transportLicensesUserPrompt":
+        "N lafita londi la bori laysensi ani NTSA serivisolu la Keniya kono.",
+    "housingProgramsUserPrompt":
+        "N lafita londi la Boma Yangu (Bungo Demba) la Keniya kono.",
+    "findJobsUserPrompt":
+        "N lafita londi la mansa baara ani PSC nyininka la Keniya kono.",
+    "justChatUserPrompt": "N lafita kuma dorong Keniya moo-n-kuwolu la.",
   },
   "common": {
     "cancel": "A bula",
@@ -1216,7 +1135,7 @@ const Map<String, dynamic> manLocale = {
     "open": "Yele",
     "done": "Paree",
     "confirm": "Laating",
-    "edit": "Ladang"
+    "edit": "Ladang",
   },
   "feedback": {
     "title": "Kihoo sayo (Feedback)",
@@ -1230,7 +1149,7 @@ const Map<String, dynamic> manLocale = {
     "thankYouMessage": "I ni ce i la kihoo sayo la!",
     "submitting": "A be kiila...",
     "error": "Fili sota. A nyoofa tukung.",
-    "success": "I ni ce i la kihoo sayo la!"
+    "success": "I ni ce i la kihoo sayo la!",
   },
   "responseRating": {
     "title": "N demba n na baara kutaayaa",
@@ -1241,11 +1160,11 @@ const Map<String, dynamic> manLocale = {
       "2": "Nafa nding sota",
       "3": "Nafa sota",
       "4": "Nafa baa sota",
-      "5": "Baara beto fey"
+      "5": "Baara beto fey",
     },
     "additionalComments": "Kuma doolu...",
     "submit": "Kii",
-    "cancel": "A bula"
+    "cancel": "A bula",
   },
   "upload": {"alt": "Wulu"},
   "uploadDialog": {
@@ -1261,14 +1180,15 @@ const Map<String, dynamic> manLocale = {
       "shortcutUnsupported": "Shortkut kaito (.url) manta. Kaito fango wulu.",
       "duplicate": "\"{fileName}\" kaito sota foloo.",
       "uploadSuccess": "{fileName} wuluta a benta",
-      "uploadFailed": "{fileName} wulu manta."
-    }
+      "uploadFailed": "{fileName} wulu manta.",
+    },
   },
   "about": {
     "title": "A kumo",
     "version": "Baara nding (Version)",
-    "description": "Genie AI mu i la londi demba moo ti mansa serivisolu ani londi kumo la.",
+    "description":
+        "Genie AI mu i la londi demba moo ti mansa serivisolu ani londi kumo la.",
     "techStack": "Baara fengo",
-    "copyright": "Sariyaalu biling maratolu."
-  }
+    "copyright": "Sariyaalu biling maratolu.",
+  },
 };

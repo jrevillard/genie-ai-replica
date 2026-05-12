@@ -4,9 +4,9 @@
     <div class="dialog-content">
       <!-- Two-column layout for more compact appearance -->
       <div class="dialog-header">
-        <h4>{{ $t("responseRating.title") }}</h4>
+        <h4>{{ $t('responseRating.title') }}</h4>
         <p class="note">
-          {{ $t("responseRating.note") }}
+          {{ $t('responseRating.note') }}
         </p>
       </div>
 
@@ -14,17 +14,17 @@
         <!-- Left column -->
         <div class="dialog-column">
           <div class="message-preview">
-            <strong>{{ $t("responseRating.chatbotResponse") }}</strong>
+            <strong>{{ $t('responseRating.chatbotResponse') }}</strong>
             <div class="message-text">{{ message?.content }}</div>
           </div>
 
           <!-- Thumbs up/down options with SVG icons and skin tone -->
           <div class="thumbs-container">
             <button
-              @click="selectThumbFeedback('up')"
               class="thumb-button"
               :class="{ selected: thumbFeedback === 'up' }"
               :aria-label="$t('feedback.positive')"
+              @click="selectThumbFeedback('up')"
             >
               <!-- SVG Thumbs Up with skin tone fill -->
               <svg
@@ -38,20 +38,20 @@
                 stroke-linejoin="round"
                 class="thumb-icon"
               >
-                <path d="M7 10v12" stroke-width="2" fill="none"></path>
+                <path d="M7 10v12" stroke-width="2" fill="none" />
                 <path
                   d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"
                   :fill="thumbFeedback === 'up' ? skinToneColor : 'none'"
-                ></path>
+                />
               </svg>
-              <span class="thumb-label">{{ $t("feedback.positive") }}</span>
+              <span class="thumb-label">{{ $t('feedback.positive') }}</span>
             </button>
 
             <button
-              @click="selectThumbFeedback('down')"
               class="thumb-button"
               :class="{ selected: thumbFeedback === 'down' }"
               :aria-label="$t('feedback.negative')"
+              @click="selectThumbFeedback('down')"
             >
               <!-- SVG Thumbs Down with skin tone fill -->
               <svg
@@ -65,13 +65,13 @@
                 stroke-linejoin="round"
                 class="thumb-icon"
               >
-                <path d="M17 14V2" stroke-width="2" fill="none"></path>
+                <path d="M17 14V2" stroke-width="2" fill="none" />
                 <path
                   d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22h0a3.13 3.13 0 0 1-3-3.88Z"
                   :fill="thumbFeedback === 'down' ? skinToneColor : 'none'"
-                ></path>
+                />
               </svg>
-              <span class="thumb-label">{{ $t("feedback.negative") }}</span>
+              <span class="thumb-label">{{ $t('feedback.negative') }}</span>
             </button>
           </div>
 
@@ -84,8 +84,8 @@
                 class="skin-tone-button"
                 :class="{ selected: skinToneColor === color }"
                 :style="{ backgroundColor: color }"
-                @click="skinToneColor = color"
                 :aria-label="`Skin tone ${index + 1}`"
+                @click="skinToneColor = color"
               ></button>
             </div>
           </div>
@@ -94,7 +94,7 @@
         <!-- Right column -->
         <div class="dialog-column">
           <!-- Rating scale section -->
-          <p class="rating-title">{{ $t("feedback.promptText") }}</p>
+          <p class="rating-title">{{ $t('feedback.promptText') }}</p>
           <div class="rating-group">
             <label
               v-for="rating in 5"
@@ -102,20 +102,15 @@
               class="rating-option"
               :class="{ selected: selectedRating === rating }"
             >
-              <input
-                type="radio"
-                :value="rating"
-                v-model="selectedRating"
-                :aria-label="getRatingLabel(rating)"
-              />
+              <input v-model="selectedRating" type="radio" :value="rating" :aria-label="getRatingLabel(rating)" />
               <span class="rating-number">{{ rating }}</span>
               <span class="rating-label">{{ getRatingLabel(rating) }}</span>
             </label>
           </div>
 
           <textarea
-            class="feedback-text"
             v-model="feedbackText"
+            class="feedback-text"
             rows="3"
             :placeholder="$t('responseRating.additionalComments')"
           ></textarea>
@@ -123,15 +118,11 @@
       </div>
 
       <div class="actions">
-        <button
-          class="submit-btn"
-          @click="submitFeedback"
-          :disabled="!(selectedRating || thumbFeedback)"
-        >
-          {{ $t("responseRating.submit") }}
+        <button class="submit-btn" :disabled="!(selectedRating || thumbFeedback)" @click="submitFeedback">
+          {{ $t('responseRating.submit') }}
         </button>
         <button class="cancel-btn" @click="closeDialog">
-          {{ $t("responseRating.cancel") }}
+          {{ $t('responseRating.cancel') }}
         </button>
       </div>
     </div>
@@ -140,40 +131,78 @@
 
 <script>
 export default {
-  name: "ChatResponseFeedbackDialog",
+  name: 'ChatResponseFeedbackDialog',
   props: {
     visible: { type: Boolean, default: false },
-    message: { type: Object, default: null },
+    message: { type: Object, default: null }
   },
+  emits: ['close', 'submit'],
   data() {
     return {
       selectedRating: null,
       thumbFeedback: null,
-      feedbackText: "",
-      skinToneColor: "#FFCBA4", // Default skin tone
+      feedbackText: '',
+      skinToneColor: '#FFCBA4', // Default skin tone
       skinTones: [
-        "#FFDBAC", // Light skin tone
-        "#F1C27D", // Medium-light skin tone
-        "#E0AC69", // Medium skin tone
-        "#C68642", // Medium-dark skin tone
-        "#8D5524", // Dark skin tone
-      ],
+        '#FFDBAC', // Light skin tone
+        '#F1C27D', // Medium-light skin tone
+        '#E0AC69', // Medium skin tone
+        '#C68642', // Medium-dark skin tone
+        '#8D5524' // Dark skin tone
+      ]
     };
+  },
+  watch: {
+    visible(newVal) {
+      if (newVal) {
+        // Reset state when dialog is opened
+        this.selectedRating = null;
+        this.thumbFeedback = null;
+        this.feedbackText = '';
+
+        // Focus management
+        this.$nextTick(() => {
+          const firstButton = this.$el.querySelector('.thumb-button');
+          if (firstButton) firstButton.focus();
+        });
+      }
+    }
+  },
+  // Focus management for accessibility
+  mounted() {
+    // Handle escape key press
+    this.escHandler = (e) => {
+      if (e.key === 'Escape' && this.visible) {
+        this.closeDialog();
+      }
+    };
+    document.addEventListener('keydown', this.escHandler);
+
+    // Focus the first thumbs button when dialog opens
+    this.$nextTick(() => {
+      if (this.visible) {
+        const firstButton = this.$el.querySelector('.thumb-button');
+        if (firstButton) firstButton.focus();
+      }
+    });
+  },
+  beforeUnmount() {
+    document.removeEventListener('keydown', this.escHandler);
   },
   methods: {
     closeDialog() {
       this.selectedRating = null;
       this.thumbFeedback = null;
-      this.feedbackText = "";
-      this.$emit("close");
+      this.feedbackText = '';
+      this.$emit('close');
     },
     selectThumbFeedback(type) {
       this.thumbFeedback = type;
 
       // Auto-set rating based on thumb selection (optional)
-      if (type === "up") {
+      if (type === 'up') {
         this.selectedRating = 4; // Default "up" to a 4 rating
-      } else if (type === "down") {
+      } else if (type === 'down') {
         this.selectedRating = 2; // Default "down" to a 2 rating
       }
     },
@@ -181,12 +210,12 @@ export default {
       // Validate that either a rating or thumb feedback is selected
       if (!this.selectedRating && !this.thumbFeedback) return;
 
-      this.$emit("submit", {
+      this.$emit('submit', {
         rating: this.selectedRating,
         thumbFeedback: this.thumbFeedback,
         skinTone: this.skinToneColor,
         text: this.feedbackText,
-        message: this.message,
+        message: this.message
       });
 
       this.closeDialog();
@@ -195,52 +224,14 @@ export default {
       // Directly access translation data to avoid missing translation issues
       try {
         const locale = this.$i18n.locale;
-        const label =
-          this.$i18n.messages[locale]?.responseRating?.ratingLabels[rating];
+        const label = this.$i18n.messages[locale]?.responseRating?.ratingLabels[rating];
         return label || `Rating ${rating}`;
       } catch (err) {
-        console.error("Error getting rating label:", err);
+        console.error('Error getting rating label:', err);
         return `Rating ${rating}`;
       }
-    },
-  },
-  // Focus management for accessibility
-  mounted() {
-    // Handle escape key press
-    this.escHandler = (e) => {
-      if (e.key === "Escape" && this.visible) {
-        this.closeDialog();
-      }
-    };
-    document.addEventListener("keydown", this.escHandler);
-
-    // Focus the first thumbs button when dialog opens
-    this.$nextTick(() => {
-      if (this.visible) {
-        const firstButton = this.$el.querySelector(".thumb-button");
-        if (firstButton) firstButton.focus();
-      }
-    });
-  },
-  beforeDestroy() {
-    document.removeEventListener("keydown", this.escHandler);
-  },
-  watch: {
-    visible(newVal) {
-      if (newVal) {
-        // Reset state when dialog is opened
-        this.selectedRating = null;
-        this.thumbFeedback = null;
-        this.feedbackText = "";
-
-        // Focus management
-        this.$nextTick(() => {
-          const firstButton = this.$el.querySelector(".thumb-button");
-          if (firstButton) firstButton.focus();
-        });
-      }
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -250,7 +241,7 @@ export default {
   --bg-button-primary-hover: #3a7da0; /* Fallback, overridden by config */
   --bg-button-primary-disabled: #b3d1f5; /* Fallback */
 }
-[data-theme="dark"] {
+[data-theme='dark'] {
   --bg-button-primary-hover: #3a7da0;
   --bg-button-primary-disabled: #b3d1f5;
 }
@@ -300,7 +291,7 @@ h4 {
   color: var(--text-primary);
   text-align: center;
 }
-[data-theme="dark"] .dialog-header h4 {
+[data-theme='dark'] .dialog-header h4 {
   color: var(--text-primary) !important;
 }
 
@@ -310,7 +301,7 @@ h4 {
   color: var(--text-secondary);
   text-align: center;
 }
-[data-theme="dark"] .note {
+[data-theme='dark'] .note {
   color: var(--text-secondary);
 }
 
@@ -341,7 +332,7 @@ h4 {
   color: #444;
   border-left: 3px solid #e0e0e0;
 }
-[data-theme="dark"] .message-text {
+[data-theme='dark'] .message-text {
   background: var(--bg-input);
   border-left-color: var(--border-color);
   color: var(--text-primary);
@@ -367,7 +358,7 @@ h4 {
   flex-direction: column;
   align-items: center;
 }
-[data-theme="dark"] .thumb-button {
+[data-theme='dark'] .thumb-button {
   background: var(--bg-section);
   border-color: var(--border-color);
 }
@@ -377,7 +368,7 @@ h4 {
   color: #555;
   transition: all 0.2s ease;
 }
-[data-theme="dark"] .thumb-button .thumb-icon {
+[data-theme='dark'] .thumb-button .thumb-icon {
   color: var(--text-secondary);
 }
 
@@ -397,7 +388,7 @@ h4 {
   border-color: var(--bg-button-primary);
   background-color: rgba(74, 144, 226, 0.1);
 }
-[data-theme="dark"] .thumb-button.selected {
+[data-theme='dark'] .thumb-button.selected {
   background: rgba(59, 130, 246, 0.1);
 }
 
@@ -408,7 +399,7 @@ h4 {
 .thumb-button.selected .thumb-label {
   color: var(--text-secondary);
 }
-[data-theme="dark"] .thumb-button.selected .thumb-label {
+[data-theme='dark'] .thumb-button.selected .thumb-label {
   color: var(--text-secondary);
 }
 
@@ -433,7 +424,7 @@ h4 {
   cursor: pointer;
   transition: all 0.2s ease;
 }
-[data-theme="dark"] .skin-tone-button {
+[data-theme='dark'] .skin-tone-button {
   border-color: var(--border-color);
 }
 
@@ -453,7 +444,7 @@ h4 {
   color: var(--text-secondary);
   margin: 0 0 8px;
 }
-[data-theme="dark"] .rating-title {
+[data-theme='dark'] .rating-title {
   color: var(--text-secondary);
 }
 
@@ -473,7 +464,7 @@ h4 {
   cursor: pointer;
   transition: all 0.2s ease;
 }
-[data-theme="dark"] .rating-option {
+[data-theme='dark'] .rating-option {
   border-color: var(--border-color);
 }
 
@@ -481,7 +472,7 @@ h4 {
   background-color: #f5f5f5;
   border-color: #d0d0d0;
 }
-[data-theme="dark"] .rating-option:hover {
+[data-theme='dark'] .rating-option:hover {
   background: var(--bg-section);
   border-color: var(--border-color);
 }
@@ -490,7 +481,7 @@ h4 {
   background-color: #f0f7ff;
   border-color: var(--bg-button-primary);
 }
-[data-theme="dark"] .rating-option.selected {
+[data-theme='dark'] .rating-option.selected {
   background: rgba(59, 130, 246, 0.1);
 }
 
@@ -515,7 +506,7 @@ h4 {
   color: #555;
   transition: all 0.2s ease;
 }
-[data-theme="dark"] .rating-number {
+[data-theme='dark'] .rating-number {
   background: var(--bg-section);
   color: var(--text-secondary);
 }
@@ -530,7 +521,7 @@ h4 {
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
-[data-theme="dark"] .rating-option.selected .rating-label {
+[data-theme='dark'] .rating-option.selected .rating-label {
   color: var(--text-secondary);
 }
 
@@ -544,7 +535,7 @@ h4 {
   resize: vertical;
   font-family: inherit;
 }
-[data-theme="dark"] .feedback-text {
+[data-theme='dark'] .feedback-text {
   background: var(--bg-input);
   border-color: var(--border-color);
   color: var(--text-primary);
@@ -589,14 +580,14 @@ h4 {
   background: #f0f0f0;
   color: #555;
 }
-[data-theme="dark"] .cancel-btn {
+[data-theme='dark'] .cancel-btn {
   background: var(--bg-section);
   color: var(--text-secondary);
 }
 .cancel-btn:hover {
   background: #e0e0e0;
 }
-[data-theme="dark"] .cancel-btn:hover {
+[data-theme='dark'] .cancel-btn:hover {
   background: var(--bg-button-secondary);
 }
 

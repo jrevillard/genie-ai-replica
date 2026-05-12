@@ -21,52 +21,53 @@
 
 <script>
 export default {
-  name: "ConfirmDialog",
+  name: 'ConfirmDialog',
   props: {
     visible: {
       type: Boolean,
-      default: false,
+      default: false
     },
     title: {
       type: String,
-      default: "Confirm",
+      default: 'Confirm'
     },
     message: {
       type: String,
-      default: "Are you sure?",
+      default: 'Are you sure?'
     },
     confirmText: {
       type: String,
-      default: "OK",
+      default: 'OK'
     },
     cancelText: {
       type: String,
-      default: "Cancel",
+      default: 'Cancel'
     },
     theme: {
       type: String,
-      default: "light",
+      default: 'light'
     },
     parentStyles: {
       type: Object,
-      default: () => ({}),
+      default: () => ({})
     },
     secondaryText: {
       type: String,
-      default: "",
-    },
+      default: ''
+    }
   },
+  emits: ['confirm', 'cancel', 'secondary'],
   methods: {
     confirm() {
-      this.$emit("confirm");
+      this.$emit('confirm');
     },
     cancel() {
-      this.$emit("cancel");
+      this.$emit('cancel');
     },
     secondary() {
-      this.$emit("secondary");
-    },
-  },
+      this.$emit('secondary');
+    }
+  }
 };
 </script>
 
@@ -159,32 +160,26 @@ export default {
 }
 
 /* Base dark theme styles - apply non-button styles when parentStyles are not provided */
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-background"]) {
+.confirm-dialog[data-theme='dark']:not([style*='--dialog-background']) {
   background-color: #2a2a2a;
   color: #ffffff;
 }
 
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-border-color"])
-  .confirm-dialog-header,
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-border-color"])
-  .confirm-dialog-footer {
+.confirm-dialog[data-theme='dark']:not([style*='--dialog-border-color']) .confirm-dialog-header,
+.confirm-dialog[data-theme='dark']:not([style*='--dialog-border-color']) .confirm-dialog-footer {
   border-color: #444444;
 }
 
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-title-color"])
-  .confirm-dialog-header
-  h3 {
+.confirm-dialog[data-theme='dark']:not([style*='--dialog-title-color']) .confirm-dialog-header h3 {
   color: #ffffff;
 }
 
 /* Ensure data-themed="true" works regardless of other settings */
-.confirm-dialog-header h3[data-themed="true"] {
+.confirm-dialog-header h3[data-themed='true'] {
   color: var(--dialog-title-color, #333333) !important;
 }
 
-.confirm-dialog[data-theme="dark"]
-  .confirm-dialog-header
-  h3[data-themed="true"] {
+.confirm-dialog[data-theme='dark'] .confirm-dialog-header h3[data-themed='true'] {
   color: var(--dialog-title-color-dark, #ffffff) !important;
 }
 </style>

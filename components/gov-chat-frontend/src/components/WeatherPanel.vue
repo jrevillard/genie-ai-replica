@@ -1,25 +1,38 @@
 <template>
-  <div class="weather-panel" :data-theme="$route.meta.theme || 'light'" :key="$i18n.locale">
-    <div class="weather-header">
+  <div
+    :key="$i18n.locale"
+    class="weather-panel"
+    :class="{ compact: isTransientError }"
+    :data-theme="$route.meta.theme || 'light'"
+  >
+    <div v-if="!isTransientError" class="weather-header">
       <h4>{{ weatherTitle }}</h4>
       <div class="weather-location">
         {{ location || weatherLocationLoading }}
-        <button @click="refreshWeather" class="refresh-btn" :title="weatherRefresh">
-          <i class="fas fa-sync-alt" :class="{ 'rotating': isLoading }"></i>
+        <button class="refresh-btn" :title="weatherRefresh" @click="refreshWeather">
+          <i class="fas fa-sync-alt" :class="{ rotating: isLoading }"></i>
         </button>
       </div>
     </div>
-    
+
     <div v-if="isLoading" class="weather-loading">
       <i class="fas fa-spinner fa-pulse"></i>
       {{ weatherLoading }}
     </div>
-    
+
+    <div v-else-if="isTransientError" class="weather-error-compact" :title="$t(`sidebar.${errorKey}`)">
+      <i class="fas fa-cloud-sun"></i>
+      <span class="weather-error-text">{{ $t('sidebar.weatherUnavailable', 'Weather unavailable') }}</span>
+      <button class="refresh-btn" :title="weatherRefresh" @click="refreshWeather">
+        <i class="fas fa-sync-alt" :class="{ rotating: isLoading }"></i>
+      </button>
+    </div>
+
     <div v-else-if="errorKey" class="weather-error">
       <i class="fas fa-exclamation-triangle"></i>
       {{ $t(`sidebar.${errorKey}`) }}
     </div>
-    
+
     <div v-else class="weather-content">
       <div class="current-weather">
         <div class="current-icon">
@@ -30,15 +43,11 @@
           <div class="current-condition">{{ getTranslatedCondition(currentWeather.condition) }}</div>
         </div>
         <div class="current-info">
-          <div class="info-item">
-            <i class="fas fa-tint"></i> {{ currentWeather.humidity }}%
-          </div>
-          <div class="info-item">
-            <i class="fas fa-wind"></i> {{ currentWeather.windSpeed }} km/h
-          </div>
+          <div class="info-item"><i class="fas fa-tint"></i> {{ currentWeather.humidity }}%</div>
+          <div class="info-item"><i class="fas fa-wind"></i> {{ currentWeather.windSpeed }} km/h</div>
         </div>
       </div>
-      
+
       <div class="forecast-list">
         <div v-for="(day, index) in formattedForecast" :key="index" class="forecast-day">
           <div class="day-name">{{ day.formattedDate }}</div>
@@ -57,14 +66,12 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'; // FIX: Import Vuex getters
-import weatherService from '@/services/weatherService'; // Adjust path as needed
-// FIX: No longer need authService, will get user from Vuex store
-// import authService from '@/services/authService'; 
+import { mapGetters } from 'vuex';
+import weatherService from '@/services/weatherService';
 
 export default {
   name: 'WeatherPanel',
-  
+
   data() {
     return {
       location: null,
@@ -79,7 +86,7 @@ export default {
       forecast: []
     };
   },
-  
+
   computed: {
     // FIX: Map isAuthenticated and user getters from Vuex store
     ...mapGetters(['isAuthenticated', 'user']),
@@ -97,15 +104,25 @@ export default {
       return this.$t('sidebar.weatherRefresh');
     },
     formattedForecast() {
-      return this.forecast.map(day => ({
+      return this.forecast.map((day) => ({
         ...day,
         formattedDate: this.formatDay(day.date),
         iconClass: this.getWeatherIcon(day.condition),
         translatedCondition: this.getTranslatedCondition(day.condition)
       }));
+    },
+    isTransientError() {
+      const transient = new Set([
+        'weatherGeolocationTimeout',
+        'weatherPositionUnavailable',
+        'weatherGeolocationUnsupported',
+        'weatherError',
+        'weatherErrorDefault'
+      ]);
+      return !this.isLoading && transient.has(this.errorKey);
     }
   },
-  
+
   watch: {
     '$i18n.locale': {
       handler() {
@@ -114,7 +131,7 @@ export default {
           this.getWeather();
         }
         this.$forceUpdate();
-      },
+      }
       // Do not use immediate: true here, let the auth watcher handle it
     },
 
@@ -134,12 +151,12 @@ export default {
       immediate: true // Check auth state immediately when component loads
     }
   },
-  
+
   created() {
     // FIX: Removed this.getWeather() from here.
     // The isAuthenticated watcher will now handle the initial call.
   },
-  
+
   methods: {
     async getWeather() {
       // Extra safety check
@@ -159,12 +176,11 @@ export default {
             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
           });
           const { latitude, longitude } = position.coords;
-          
+
           // FIX: Get userId from the Vuex store 'user' object
-          const userId = this.user?._key || null;
           const locale = this.$i18n.locale;
 
-          const weatherData = await weatherService.getWeather({ latitude, longitude, userId, locale });
+          const weatherData = await weatherService.getWeather({ latitude, longitude, locale });
           this.location = weatherData.location;
           this.currentWeather = weatherData.current;
           this.forecast = weatherData.forecast;
@@ -172,13 +188,21 @@ export default {
           this.errorKey = 'weatherGeolocationUnsupported';
         }
       } catch (error) {
-        console.warn('Weather fetch error:', error);
-        this.errorKey = 'weatherErrorDefault';
+        const code = error && typeof error.code === 'number' ? error.code : null;
+        if (code === 1) {
+          this.errorKey = 'weatherGeolocationPermissionDenied';
+        } else if (code === 2) {
+          this.errorKey = 'weatherPositionUnavailable';
+        } else if (code === 3) {
+          this.errorKey = 'weatherGeolocationTimeout';
+        } else {
+          this.errorKey = 'weatherErrorDefault';
+        }
       } finally {
         this.isLoading = false;
       }
     },
-    
+
     async refreshWeather() {
       // The watcher will prevent this from running if not authed,
       // but an explicit check is good practice.
@@ -186,11 +210,11 @@ export default {
         await this.getWeather();
       }
     },
-    
+
     formatDay(date) {
       return new Date(date).toLocaleDateString(this.$i18n.locale, { weekday: 'short' });
     },
-    
+
     getTranslatedCondition(condition) {
       if (!condition) return '';
       const conditionLower = condition.toLowerCase();
@@ -198,7 +222,7 @@ export default {
       const translationKey = `sidebar.weatherConditions.${key}`;
       return this.$te(translationKey) ? this.$t(translationKey) : condition;
     },
-    
+
     getConditionKey(conditionLower) {
       if (conditionLower.includes('thunder')) return 'thunderstorm';
       if (conditionLower.includes('shower')) return 'shower';
@@ -209,10 +233,10 @@ export default {
       if (conditionLower.includes('partly')) return 'partlycloudy';
       return 'clear';
     },
-    
+
     getWeatherIcon(condition) {
       const conditionLower = condition.toLowerCase();
-      
+
       if (conditionLower.includes('thunder')) {
         return 'fas fa-bolt';
       } else if (conditionLower.includes('rain') || conditionLower.includes('shower')) {
@@ -253,8 +277,8 @@ export default {
   letter-spacing: 0.5px;
 }
 
-[data-theme="dark"] .weather-header h4,
-html[data-theme="dark"] .weather-header h4 {
+[data-theme='dark'] .weather-header h4,
+html[data-theme='dark'] .weather-header h4 {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
@@ -285,11 +309,16 @@ html[data-theme="dark"] .weather-header h4 {
 }
 
 @keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.weather-loading, .weather-error {
+.weather-loading,
+.weather-error {
   text-align: center;
   padding: 10px;
   display: flex;
@@ -297,6 +326,34 @@ html[data-theme="dark"] .weather-header h4 {
   align-items: center;
   gap: 8px;
   color: var(--text-secondary);
+}
+
+.weather-panel.compact {
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+
+.weather-error-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.weather-error-compact i.fa-cloud-sun {
+  color: var(--accent-color);
+}
+
+.weather-error-compact .weather-error-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-error-compact .refresh-btn {
+  margin-left: auto;
 }
 
 .current-weather {

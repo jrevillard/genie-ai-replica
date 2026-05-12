@@ -16,13 +16,19 @@ class GenieDataprepLoader(OpeaDataprepLoader):
     A custom GENIE.AI loader extending OPEA dataprep loader.
     Forwards Genie-specific methods to the GenieArangoDataprep component.
     """
+
     async def ingest_file_with_guardrail(self, *args, **kwargs):
         if logflag:
             logger.info("[ dataprep loader ] ingest file with guardrail")
         # Forward arguments (including lock_file) to the component
         return await self.component.ingest_file_with_guardrail(*args, **kwargs)
-    
+
     async def retract_file(self, *args, **kwargs):
         if logflag:
             logger.info("[ dataprep loader ] retract files")
         return await self.component.retract_file(*args, **kwargs)
+
+    async def reextract_taxonomy_only(self, *args, **kwargs):
+        if logflag:
+            logger.info("[ dataprep loader ] reextract taxonomy")
+        return await self.component.reextract_taxonomy_only(*args, **kwargs)

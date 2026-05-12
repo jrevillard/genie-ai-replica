@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { logger } = require('../shared-lib');
+const { isValidDateStr } = require('./path-sanitizer');
 const zlib = require('zlib');
 const util = require('util');
 
@@ -64,6 +65,10 @@ class LogsService {
     try {
       logger.info('Getting logs summary with options:', options);
       const date = options.date || new Date().toISOString().split('T')[0];
+      if (!isValidDateStr(date)) {
+        logger.warn('getLogsSummary.invalid_date', { date });
+        return { errors: [], warnings: [], date };
+      }
       logger.info(`Getting summary for date: ${date}`);
   
       // Use same file selection logic as searchLogs
@@ -75,7 +80,7 @@ class LogsService {
         return { errors: [], warnings: [], date };
       }
   
-      let allParsedLogs = [];
+      const allParsedLogs = [];
       for (const logFile of logFiles) {
         try {
           const logContent = await this.readLogFile(logFile);
@@ -250,7 +255,7 @@ class LogsService {
     } catch (error) {
       if (error.code === 'ENOENT') {
         logger.debug(`File does not exist: ${filePath}`);
-        throw new Error(`File not found: ${filePath}`);
+        throw new Error(`File not found: ${filePath}`, { cause: error });
       }
       throw error;
     }
@@ -305,12 +310,17 @@ class LogsService {
    */
   async getLogFilesInRange(startDate, endDate, includeArchived = true) {
     try {
+      if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
+        logger.warn('getLogFilesInRange.invalid_date_params', { startDate, endDate });
+        return [];
+      }
+
       const logDir = path.join(__dirname, '../logs');
       logger.debug(`Checking logs directory: ${logDir}`);
   
       try {
         await fs.access(logDir);
-      } catch (error) {
+      } catch {
         logger.error(`Logs directory does not exist: ${logDir}`);
         return [];
       }
@@ -347,7 +357,7 @@ class LogsService {
             continue;
           }
   
-          const [, logType, fileDate] = dateMatch;
+          const [, , fileDate] = dateMatch;
           if (fileDate >= startDate && fileDate <= endDate) {
             const filePath = path.join(logDir, file);
             try {

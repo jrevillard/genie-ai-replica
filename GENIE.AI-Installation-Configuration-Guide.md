@@ -126,7 +126,7 @@ GENIE.AI requires significant computational resources, particularly for AI model
 ## 2.2 Software Prerequisites
 
 * **Ubuntu Linux 22.04:** Everything has been tested on Ubuntu 22.04. It is OK to use variant Linux distributions but that is something you need to resolve.  
-* **Docker & Docker Compose:** Required for orchestrating the containerized services.  
+* **Docker & Docker Swarm:** Required for orchestrating the containerized services. Ensure Swarm is initialized: `docker swarm init`.
 * **NVIDIA Drivers & CUDA:** Required for GPU acceleration of the AI services (vLLM, TEI).  
   * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.  
 * **Node.js:** Required for the JavaScript components
@@ -139,7 +139,7 @@ GENIE.AI requires significant computational resources, particularly for AI model
 2. node
 3. npm
 
-#### CRITICAL - pay strict attention to the specifics of 3-node or single-node architecture
+#### CRITICAL - pay strict attention to the prerequisites — all services deploy on a single host
 
 Bash
 
@@ -159,10 +159,13 @@ sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 ##### 3\. Set up the official Docker repository
 
-echo  
-"deb \[arch="$(dpkg \--print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg\] [https://download.docker.com/linux/ubuntu](https://download.docker.com/linux/ubuntu)  
-"$(. /etc/os-release && echo "$VERSION\_CODENAME")" stable" |  
-sudo tee /etc/apt/sources.list.d/docker.list \> /dev/null
+```bash
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/debian \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```
 
 ##### 4\. Install Docker Engine
 
@@ -208,39 +211,15 @@ npm \-v
 
 # Step 3: Base Installation
 
-You must complete one of these base docker compose based installations before configuring the application services (single node or three node) \- Kubernetes will be added later. The way that the 2 docker compose based deployent options are organized in the repository is as follows:
+You must complete the base installation before configuring the application services. The deployment is organized in the repository as follows:
 
 Plaintext
 
-repository-root/  
-├── docker-compose.yaml           \# Single-node docker compose deployment model  
-├── env                           \# .env file for the single-node docker compose  
-├── components/  
-│   ├── docker-compose.yaml       \# Docker compose for infrastructure tier (three node model)  
-│   ├── gov-chat-backend/  
-│   │   └── env                   \# .env file for the node.js backend service  
-│   ├── gov-chat-frontend/  
-│   │   └── env                   \# .env file for the Vue 3 application  
-│   └── document-repository/  
-│       └── env                   \# .env file for the document repository service  
-├── api-gateway-solution/  
-│   ├── docker-compose.yaml       \# Docker compose for bastion host tier  
-│   └── env                       \# .env file for the bastion tier  
-└── genie-ai-overlay/       \# This is the folder where all the build overlay files exist  
-│   ├── build-patches       \# Shell scripts to patch the build  
-│   ├── chatqna                \# Overlay files for the chatqna server extensions  
-│   ├── core                      \# Overlay files for the OPEA core extensions  
-│   ├── dataprep              \# Overlay files for the dataprep service extensions  
-│   ├── http-service          \# Overlay files for the http-service service extensions  
-     └── retriever                \# Overlay files for the retriever service extensions  
-├── docker-compose.yaml       \# Docker compose for customized GENIE.AI OPEA  
-└── env                       \# .env file for the OPEA tier
+Stashed changes:Inko-Installation-Configuration-Guide.md
 
-Following are the details for configuring both the single-node deployment model and the three node deployment model (Options A and B):
+## Single-Node Installation
 
-## Option A: Single-Node Installation (MVP/Dev)
-
-This method deploys all services onto a single host using Docker Compose.
+This method deploys all services onto a single host using Docker Swarm.
 
 ##### 1\. Clone the Repository
 
@@ -261,9 +240,38 @@ cd genie-ai-replica
 
 The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.
 
-There are 2 templates in the repository to start with:
-1) env - used for modern GPU on single-node deployments (copy env .env to kickstart your config)
-2) env-T4 - used for older GPUs on single node deployments
+There are 3 templates in the repository to start with:
+1) `env` - used for default deployments (copy env .env to kickstart your config)
+2) `env.t4` - used for NVIDIA T4 GPU (16GB VRAM) — source after .env before deploying
+3) `env.rtx6000` - used for RTX 6000 ADA GPU (24GB VRAM) — source after .env before deploying
+
+**Customizing LLM Prompts**
+
+GENIE.AI uses a simple two-tier priority system for LLM prompts:
+
+1. **ENV VAR** (highest): Override in `.env` for deployment-specific customization
+2. **DEFAULT** (lowest): Built-in prompts in Python code (works out-of-the-box)
+
+| Variable | Purpose | Default |
+| :---- | :---- | :---- |
+| `CHATQNA_SYSTEM_PROMPT` | Main system prompt defining the AI's behavior | Friendly, information assistant (built-in) |
+| `CHATQNA_ABSTENTION_INSTRUCTIONS` | Instructions when no relevant documents found | Standard abstention message (built-in) |
+| `CHATQNA_ENFORCE_ABSTENTION` | Enable/disable abstention behavior | `"true"` |
+| `LABEL_SELECTOR_SYSTEM_PROMPT` | Rules for automatic document labeling | Rule-based classifier (built-in) |
+
+To customize prompts for your deployment, add the variables to your `.env` file:
+
+```bash
+# Example: Custom system prompt
+CHATQNA_SYSTEM_PROMPT="You are a formal assistant for government inquiries..."
+
+# Example: Disable abstention
+CHATQNA_ENFORCE_ABSTENTION="false"
+```
+
+To change built-in defaults, edit the Python code:
+- `genie-ai-overlay/chatqna/genieai_chatqna.py` - CHATQNA_SYSTEM_PROMPT default
+- `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py` - LABEL_SELECTOR_SYSTEM_PROMPT default
 
 The following tables document all variables found in the .env file, grouped by the service they configure. You can determin the appropriate configuration and use this table to determin the values that you should use. Note that you will need to create access tokens and API keys yourselves for various services. You will also need to establish email infrastructure services and configure the credentials for that. If you are starting with one of the templates, then you can largely skip the settings section other than tailoring some specifics which should be self-evident when you look at the .env file.
 
@@ -282,18 +290,18 @@ Configuration for the Kong API Gateway and its backing PostgreSQL database.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| POSTGRES\_USER | Username for the Kong database. | kong |
-| POSTGRES\_DB | Name of the Kong database. | kong |
-| POSTGRES\_PASSWORD | Password for the Kong database. | k1ngk0ng |
+| POSTGRES\_USER | PostgreSQL superuser username. | genieai |
+| POSTGRES\_DB | Default database created on init. | kong |
+| POSTGRES\_PASSWORD | PostgreSQL superuser password. | sup3rus3r |
 | KONG\_DATABASE | Tells Kong which database type to use. | postgres |
-| KONG\_PG\_HOST | Hostname for the Kong database service. | kong-database |
-| KONG\_PG\_USER | Kong service user (usually matches POSTGRES\_USER). | kong |
-| KONG\_PG\_PASSWORD | Kong service password. | k1ngk0ng |
+| KONG\_PG\_HOST | Hostname for the PostgreSQL service. | postgres |
+| KONG\_PG\_USER | Kong dedicated database user. | kong |
+| KONG\_PG\_PASSWORD | Kong dedicated database user password (KONG\_DB\_PASSWORD). | k0ngus3r |
 | KONG\_PROXY\_ACCESS\_LOG | Path for proxy access logs. | /dev/stdout |
 | KONG\_ADMIN\_ACCESS\_LOG | Path for admin access logs. | /dev/stdout |
 | KONG\_PROXY\_ERROR\_LOG | Path for proxy error logs. | /dev/stderr |
 | KONG\_ADMIN\_ERROR\_LOG | Path for admin error logs. | /dev/stderr |
-| KONG\_ADMIN\_LISTEN | Kong admin API listen address and ports. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
+| KONG\_ADMIN\_LISTEN | Kong admin API listen address and ports. | 127.0.0.1:8001, 127.0.0.1:8444 ssl |
 | KONG\_DNS\_RESOLVER | DNS resolver for Kong (Docker internal DNS). | 127.0.0.11 |
 | KONG\_DNS\_ORDER | Order of DNS resolution types. | LAST,A,AAAA,CNAME |
 
@@ -305,7 +313,7 @@ Configuration for the user-facing web application.
 | APP\_NAME | The display name of the application. | Genie AI |
 | FRONTEND\_PORT | The port the Vue 3 app runs on locally. | 8090 |
 | VUE\_APP\_API\_URL | Public URL for the frontend to reach the backend API. | https://\<your-proxy\>/api |
-| VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
+| VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8000 |
 | VUE\_APP\_CSP\_CONNECT\_SRC | Allowed connection sources for CSP (Vue build). | 'self' https://genie-ai.itu.int |
 | CSP\_CONNECT\_SRC | Allowed connection sources for CSP (Backend Helmet config). | 'self' wss://localhost:8090 |
 | CORS\_ALLOWED\_ORIGINS | Comma-separated list of allowed CORS origins. | http://localhost,https://genie.ai |
@@ -333,7 +341,7 @@ Configuration for core logic, sessions, email, backups, and OPEA integration.
 | EMAIL\_PASSWORD | SMTP password. | \<your-smtp-password\> |
 | EMAIL\_FROM | Noreply email address. | noreply@\<your-domain\> |
 | FRONTEND\_URL | Base URL of the frontend (for email links). | https://localhost/ |
-| BACKUP\_DIR | Directory to store database backups. | ./database\_backups |
+| BACKUP\_DIR | Directory to store database backups. | ./data/database\_backups |
 | MAX\_BACKUPS | Number of backups to retain. | 5 |
 | BACKUP\_FORMAT | Format for backups (e.g., json, dump). | json |
 | COMPRESS\_BACKUPS | Enable gzip compression for backups. | true |
@@ -354,17 +362,17 @@ Configuration for the translation engine and Redis caching.
 | TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
 | TRANSLATION\_CACHE\_PASSWORD | Password for the Redis cache. | \!@\#$5678 |
 
-**ArangoDB (Knowledge Base)**  
+**ArangoDB (Knowledge Base)**
 Connection settings for the graph and vector database.
+
+**Note:** All GENIE.AI services (backend, frontend, document-repository, and OPEA services) share a single ArangoDB database. The default name is `genie-ai`.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | ARANGO\_URL | Connection URL for ArangoDB. | http://arango-vector-db:8529 |
 | ARANGO\_PORT | Port ArangoDB is listening on. | 8529 |
-| ARANGO\_DB\_NAME | Database name used by the backend. | genie-ai |
-| ARANGO\_DB | Database name used by the frontend/utility scripts. | genie-ai |
+| ARANGO\_DB | Database name shared by all GENIE.AI and OPEA services. | genie-ai |
 | ARANGO\_USER | Database username. | root |
-| ARANGO\_USERNAME | Database username (alias). | root |
 | ARANGO\_PASSWORD | Root password for ArangoDB. | test |
 | MAX\_SOCKETS | Maximum concurrent socket connections. | 100 |
 | MAX\_FREE\_SOCKETS | Maximum free sockets to keep open. | 50 |
@@ -376,7 +384,7 @@ Configuration for file ingestion, storage, and security scanning.
 | :---- | :---- | :---- |
 | DOC\_REPO\_PORT | Internal port for the document service. | 3001 |
 | DOC\_REPO\_URL | URL for the backend to access the doc repo. | http://localhost:3001 |
-| UPLOAD\_DIR | Local directory path for file uploads. | ./uploads |
+| UPLOAD\_DIR | Local directory path for file uploads. | backend\_uploads (named volume) |
 | MAX\_FILES\_UPLOAD | Max number of files allowed per upload. | 10 |
 | MAX\_FILE\_SIZE | Maximum file upload size in bytes (approx 50MB). | 52428800 |
 | DOCUMENT\_INGESTION\_LANGUAGE | Language code for document ingestion. | en |
@@ -394,18 +402,7 @@ Configuration for file ingestion, storage, and security scanning.
 | CLAMSCAN\_LOCAL\_FALLBACK | Fallback to local binary if daemon fails. | true |
 | CLAMSCAN\_PATH | Path to local ClamAV binary. | /usr/bin/clamdscan |
 
-**Authentication Service**  
-Dedicated service for managing user authorization tokens.
-
-| Variable | Description | Example Value |
-| :---- | :---- | :---- |
-| AUTH\_SERVICE\_URL | Base URL for the auth service. | https://localhost/ |
-| AUTH\_SERVICE\_PORT | Port for the auth service. | 6666 |
-| GET\_AUTH\_TOKEN\_URL | Internal URL to retrieve auth tokens. | http://http-service:6666/get-token |
-| AUTH\_SERVICE\_USERNAME | Service account username for token generation. | genie-ai-manager |
-| AUTH\_SERVICE\_PASSWORD | Service account password for token generation. | 1357924680+Manager |
-
-**OPEA & ChatQnA Service Orchestration**  
+**OPEA & ChatQnA Service Orchestration**
 These variables define the internal wiring and ports for the AI microservices.
 
 | Variable | Description | Example Value |
@@ -431,6 +428,8 @@ These variables define the internal wiring and ports for the AI microservices.
 | LLM\_SERVER\_HOST\_IP | Hostname for the vLLM inference engine. | vllm |
 | LLM\_SERVER\_PORT | Port for the vLLM inference engine. | 8000 |
 | CHATQNA\_SYSTEM\_PROMPT | Main ChatQnA system prompt for responding to user queries based on retrieved content. | "You are a friendly and polite information assistant..." |
+| CHATQNA\_ENFORCE\_ABSTENTION | Enables or disables strict abstention behavior by the LLM | true |
+| CHATQNA\_ABSTENTION\_INSTRUCTIONS | Custom instructions to enforce abstention when no relevant info is retrieved | "The knowledge base search did not return relevant or sufficient information. You should clearly inform the user ..." |
 | GUARDRAIL\_SERVICE\_HOST\_IP | Hostname for the guardrail service. | guardrail |
 | GUARDRAIL\_SERVICE\_PORT | Port for the guardrail service. | 9090 |
 | TRANSLATION\_SERVICE\_HOST\_IP | Hostname for the translation service. | translation |
@@ -560,28 +559,55 @@ Configuration for the reranker logic
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker to the ChatQnA workflow. Increasing the number may improve response quality, while decreasing the value may reduce latency. | 3 | 
+| RERANKING\_STRATEGY | Defines how the final subset of chunks is selected after reranking. Possible values are: 'slice', 'threshold', and 'knee_threshold'. | threshold |
+| RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker if RERANKING_STRATEGY is 'slice'. | 3 | 
+| RERANKING\_THRESHOLD | Defines the minimum relevance score required for a chunk to be included if RERANKING_STRATEGY is 'threshold'. | 0.75 |
+
 
 ## The Reranker
 
 The Reranker acts as the final quality filter. It receives the top candidates from the retriever and performs a more computationally intensive **"cross-encoder"** analysis to re-score the relevance of each chunk against the actual user query.
 
-### Key Parameter: `RERANKER_TOP_N`
+### Key Parameters 
+#### `RERANKING_STRATEGY`
+Defines how the final subset of chunks is selected after reranking.
 
-In the context of **GENIE.AI**, `RERANKER_TOP_N` is currently the key configurable high-level reranker parameter. This parameter controls the final number of high-confidence chunks sent to the LLM as context for response generation.
+**slice (default)**
+Selects the top N chunks based on ranking score. → Controlled by RERANKER_TOP_N.
 
-#### Increasing the value of `RERANKER_TOP_N`
+**threshold**
+Selects all chunks whose relevance score exceeds a fixed threshold. → Controlled by RERANKING_THRESHOLD.
+
+**knee_threshold**
+Dynamically determines a cutoff point (“knee” or “elbow”) in the score distribution using the kneed algorithm. → Automatically balances recall and precision based on score drop-off.
+
+#### `RERANKER_TOP_N`
+This parameter controls the final number of high-confidence chunks sent to the LLM as context for response generation.
+
+##### Increasing the value of `RERANKER_TOP_N`
 - **Improves the "Recall"** for the LLM. It is more likely to capture the full answer if the information is spread across multiple documents.
 - Can introduce **"Context Stuffing."** If the extra chunks are only marginally relevant, they can distract the LLM or lead to **"lost in the middle"** phenomena, where the model ignores the most relevant data.
 - **Increases** the time to generate a response. A larger context window requires the LLM to perform more computation during the "prefill" stage, and increased prompt size can lead to higher token costs and slower output.
 
-#### Reducing the value of `RERANKER_TOP_N`
+##### Reducing the value of `RERANKER_TOP_N`
 - Creates a **higher risk of missing the answer.** If reranker's top results are very similar, or if answering requires four specific pieces of information, a low N will result in incomplete or **"I don't know"** responses.
 - Significantly **speeds up** response times. Smaller prompts allow for faster processing by the LLM and reduce memory consumption on inference servers.
 - Forces the LLM to focus only on high-confidence matches, which can reduce hallucinations caused by conflicting or noisy information in lower-ranked chunks.
 
+#### `RERANKING_THRESHOLD`
+Defines the minimum relevance score required for a chunk to be included.
 
-**Crawler Configuration (implemented in the doc repo)**  
+##### Increasing the value of `RERANKING_THRESHOLD`
+- Produces fewer, higher-confidence chunks;
+- Increases the risk of missing information (especially when spread across multiple chunks and mixed with other context);
+
+##### Reducing the value of `RERANKING_THRESHOLD`
+- Produces more context, potentially leading to more comprehensive responses;
+- Increases noise and adds more 'cost' to response generation;
+
+
+
+## Crawler Configuration (implemented in the doc repo) 
 These variables control the specifics of how crawls are done.
 
 | Variable | Description | Example Value |
@@ -595,8 +621,7 @@ These variables control the specific AI models used for generation, guardrails, 
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| HUGGINGFACEHUB\_API\_TOKEN | API key for Hugging Face (Required for gated models). | hf\_... |
-| HUGGING\_FACE\_HUB\_TOKEN | Alias for the Hugging Face Token. | hf\_... |
+| HUGGING\_FACE\_HUB\_TOKEN | API key for Hugging Face (Required for gated models). | hf\_... |
 | VLLM\_API\_KEY | API key for the VLLM service. | eyJhb... |
 | VLLM\_ENDPOINT | URL for the VLLM inference server. | http://vllm:8000 |
 | TEXTGEN\_PORT | Port for the text generation service. | 9000 |
@@ -739,34 +764,122 @@ Bash
 wget \-O craft\_mlt\_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip  
 wget \-O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zip
 
-Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100 / A40)  
-Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (48GB+). This uses the standard docker-compose.yaml.
+Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100 / A40)
+Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (24GB+). This uses `env.rtx6000` for GPU-specific overrides:
 
 Bash
 
-docker compose up \-d \--build
+set -a && source .env && source env.rtx6000 && set +a && docker stack deploy -c docker-compose.yaml genieai
 
-Launch Option B: Legacy Launch (nVIDIA Tesla T4)  
-Use this command only if you are running on a Tesla T4 (16GB). This uses docker-compose-t4.yaml, which applies specific overrides. It must be understood that the environment for the T4 is restrictive due to the VRAM and the configuration shoe-horns multiple models into a small VRAM footprint:
+Launch Option B: GPU Launch (nVIDIA Tesla T4)
+Use this command for a Tesla T4 (16GB VRAM). This uses `env.t4` for GPU-specific overrides:
 
-* **Precision:** Forces dtype=half (float16).  
-* **Images:** Uses specific turing tags for TEI containers to ensure CUDA 7.5 compatibility.  
-* **Memory Safety:** Reduces batch tokens and GPU utilization limits to prevent system crashes.
+* **Precision:** Forces dtype=half (float16)
+* **Memory Safety:** Reduces GPU utilization and model length limits
 
 Bash
 
-docker compose \-f docker-compose-t4.yaml up \-d \--build
+set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+
+**Important:** First create your .env file and generate the required secrets:
+
+```bash
+cp env .env
+```
+
+#### Generate Required Secrets
+
+All secrets **must** be set in `.env` before launching. There are no defaults — the services will fail to start without them.
+
+Generate strong random values for each secret:
+
+```bash
+# Generate a random secret (use a different one for each variable)
+openssl rand -base64 32
+```
+
+| Variable | Purpose | How to Generate |
+|----------|---------|-----------------|
+| `ARANGO_PASSWORD` | Root password for ArangoDB | `openssl rand -base64 32` |
+| `TRANSLATION_CACHE_PASSWORD` | Redis cache password | `openssl rand -base64 32` |
+| `POSTGRES_PASSWORD` | PostgreSQL superuser password | `openssl rand -base64 32` |
+| `KONG_DB_PASSWORD` | Kong dedicated database user password | `openssl rand -base64 32` |
+| `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin console password | `openssl rand -base64 32` |
+| `KEYCLOAK_DB_PASSWORD` | Keycloak dedicated database user password | `openssl rand -base64 32` |
+| `KEYCLOAK_CLIENT_SECRET` | OIDC client secret for GENIE.AI app | `openssl rand -base64 32` |
+
+**Example — set all secrets in one pass:**
+
+```bash
+sed -i "s/^ARANGO_PASSWORD=.*/ARANGO_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^TRANSLATION_CACHE_PASSWORD=.*/TRANSLATION_CACHE_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KONG_DB_PASSWORD=.*/KONG_DB_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KEYCLOAK_ADMIN_PASSWORD=.*/KEYCLOAK_ADMIN_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KEYCLOAK_DB_PASSWORD=.*/KEYCLOAK_DB_PASSWORD=$(openssl rand -base64 32)/" .env
+sed -i "s/^KEYCLOAK_CLIENT_SECRET=.*/KEYCLOAK_CLIENT_SECRET=$(openssl rand -base64 32)/" .env
+```
+
+After running the commands above, review your `.env` to verify all values are set:
+
+```bash
+grep -E '^(ARANGO_PASSWORD|TRANSLATION_CACHE_PASSWORD|POSTGRES_PASSWORD|KONG_DB_PASSWORD|KEYCLOAK_ADMIN_PASSWORD|KEYCLOAK_DB_PASSWORD|KEYCLOAK_CLIENT_SECRET)' .env
+```
+
+#### Additional Required Configuration
+
+The following are not secrets but **must** also be configured before launch:
+
+| Variable | Purpose | How to Obtain |
+|----------|---------|---------------|
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASSWORD` / `EMAIL_FROM` | SMTP for user verification emails | Your email provider's SMTP settings (Gmail App Password, SendGrid, AWS SES, etc.) |
+| `HUGGING_FACE_HUB_TOKEN` | Required for downloading AI models | Create at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) ("Read" permission sufficient) |
+
+Edit your `.env` to add these values:
+
+```bash
+nano .env
+```
+
+#### SSL/TLS Certificates
+
+NGINX terminates TLS and serves the application over HTTPS. Certificates are volume-mounted from `./secrets/ssl/`.
+
+**Development (auto-generated):**
+No action needed — a self-signed certificate is generated automatically on first start. Your browser will show a security warning, which is expected.
+
+**Production (your own certificates):**
+
+1. Create the secrets directory and place your certificates:
+
+```bash
+mkdir -p secrets/ssl
+cp /path/to/your/certificate.crt secrets/ssl/server.crt
+cp /path/to/your/private-key.key secrets/ssl/server.key
+```
+
+2. Obtain a certificate from one of these sources:
+   - **Let's Encrypt** (free): `certbot certonly --standalone -d your-domain.gov`
+   - **Your organization's PKI** (internal CA)
+   - **Cloud provider:** AWS ACM, GCP Certificate Manager, Azure Key Vault
+
+**Important:** These files are listed in `.gitignore` and must never be committed. The docker-compose.yaml mounts them as volumes into the NGINX container.
+
+Bash
+
+set -a && source .env && set +a
+docker stack deploy -c docker-compose.yaml genieai
 
 5\. Initial Verification  
 After the containers launch, check their status. It may take several minutes for the large AI models (vLLM) to download and initialize.
 
 Bash
 
-\# Check container status  
-docker ps
+\# Check service status
+docker service ls
 
-\# Monitor the vLLM initialization (wait for "Application startup complete")  
-docker logs \-f vllm-vllm-2
+\# Monitor the vLLM initialization (wait for "Application startup complete")
+docker service logs genieai_vllm \-f
 
 ⚠️ **IMPORTANT: EXPECTED ERRORS**  
 At this stage, while the containers are running, they are not yet configured. If you inspect the backend logs now, you will see errors related to missing databases (ArangoDB) and unconfigured routes (Kong). This is normal. Do NOT attempt to debug these errors yet. Proceed immediately to Step 4 to complete the necessary infrastructure configuration. The primary purpose of booting the containers now is to allow us to continur configuring Kong, NGINX and ArangoDB infrastructure.
@@ -782,88 +895,70 @@ Once the base services are running (Step 3), you must configure the core infrast
 
 ## 4.1 ArangoDB Database Initialization
 
-While the arango-vector-db service is running, the specific application databases must be created.
+While the arango-vector-db service is running, the application database must be created.
 
-1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).  
-2. Create the necessary databases as defined in your environment variables (default: genie-ai) \- ensure ALL of the services use the same database (check the .env) - there are multiple ARANGO vars ARANGO_DB and ARANGO_DB_NAME (they msut be the same).
+1. Create the database using the ArangoDB shell inside the container (the port is not exposed in Swarm). Run the following command, replacing `genie-ai` with your `ARANGO_DB` value if different:
 
-## 4.2 NGINX and Kong API Gateway Configuration **CRITICAL**
+```bash
+docker exec -it $(docker ps --filter "name=arango-vector-db" --format "{{.ID}}") arangosh --server.password "$ARANGO_PASSWORD" --javascript.execute-stdout "db._createDatabase('genie-ai')"
+```
 
-#### There are Nginx default.conf files available for both three-node and single-node deployments:
+   Alternatively, you can access the ArangoDB web interface by temporarily exposing the port:
 
-1. For three-node deployments, use the default default.conf and modify the upstream addresses (different servers as it is a three-node deployment)
-2. for single-node deployments, use the default.conf-single-node (this uses the container service names)
+```bash
+docker service update --publish-add 8529:8529 genieai_arango-vector-db
+```
 
-#### Kong requires specific initialization and configuration to route traffic correctly.
+   Then open [http://localhost:8529](http://localhost:8529) in your browser (login with root and the password defined in your .env). Afterward, remove the port publish for security:
 
-1. **Initialize Database:** Execute these commands to prepare the Kong postgres database:
+```bash
+docker service update --publish-rm 8529:8529 genieai_arango-vector-db
+```
 
-Bash
+2. Create the database defined in your `ARANGO_DB` environment variable (default: **`genie-ai`**).
 
-\# Note:- the database may have already bean iniitalized
-docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;" 
+**Note:** All services share this single database. Only one variable to configure: `ARANGO_DB`.
 
-docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
+## 4.2 API Gateway Configuration (NGINX + Kong)
 
-docker compose run \--rm kong kong migrations bootstrap docker compose restart kong
+The API gateway layer consists of two components: **NGINX** (TLS termination, reverse proxy, security headers) and **Kong** (API routing, rate limiting).
 
-2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script (ensure that curl and jq are installed).  
-   For Single-Node installation: 
+### 4.2.1 NGINX — Fully Automated
 
-Bash
+NGINX configuration is template-based and auto-rendered at container startup via `entrypoint.sh`. No manual config editing is needed.
 
-cd api-gateway-solution/new-config/
+**Set these variables in your root `.env` file:**
 
-cp kong\_config.json-single-node kong\_config.json
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `NGINX_PUBLIC_DOMAIN` | Public domain or IP for TLS and CORS | `genie.agency.gov` |
+| `CSP_CONNECT_SRC` | Allowed CSP `connect-src` sources (nginx) | `'self' https://genie.agency.gov wss://genie.agency.gov` |
+| `VUE_APP_CSP_CONNECT_SRC` | Allowed CSP sources (runtime config via `window.APP_CONFIG`) | `'self' https://genie.agency.gov wss://genie.agency.gov` |
 
-chmod \+x [manage-kong-config.sh](http://manage-kong-config.sh)
+After changing `.env`, redeploy the stack: `docker stack deploy -c docker-compose.yaml genieai`
 
-sudo apt update 
+SSL certificates are auto-generated (self-signed) in development. For production, mount your own certificates into `secrets/ssl/`.
 
-sudo apt install jq
+### 4.2.2 Kong — Database Migrations (Automated)
 
-./manage-kong-config.sh \-a
+Kong database migrations are handled automatically by the `kong-migrations` init container defined in `docker-compose.yaml`. This container runs on every deployment and performs:
 
-#### (For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default). For a single node config you must use the container service names from the docker-compose.yaml to configure the services in kong i.e. backend and document-repository\*
+- `kong migrations bootstrap` — on first deployment (fresh database)
+- `kong migrations up && finish` — on subsequent deployments (existing schema)
 
-## CRITICAL - Enter the correct hosts and expect the following output:
+**No manual database initialization is required.**
 
-Bash
+### 4.2.3 Kong — Routes and Plugins (Automated)
 
-govstack@bb-ai-gpu-01:\~/genie-ai-replica-single-node/api-gateway-solution/new-config$ ./manage-kong-config.sh \-a  
-This script will configure your Kong instance.  
-Please provide the required connection details - be sure to enter the correct hosts (this depends on whether you are using a 3-node or single-node config - for single-node, use the container service names - for 3-node, use the infrastructure hostname). The example below shows a single-node config.
+Kong routes and plugins are applied automatically via the `kong-config` one-shot Swarm service after the stack is deployed. No manual configuration is required. The service waits for Kong to be healthy, then applies `kong_config.json` via the Admin API.
 
-\--- Kong Admin API Details \---  
-Enter Kong host \[default: localhost\]:  
-Enter Kong admin port \[default: 8001\]:
+**Note:** Kong routes persist in the Kong database across container restarts. The post-deploy script is idempotent — it is safe to re-run.
 
-\--- Backend Service Details \---  
-Enter 'express-api' service host \[default: localhost\]: backend  
-Enter 'express-api' service port \[default: 3000\]:
+**DNS cache:** Kong is configured with `KONG_DNS_STALE_TTL=5` by default. If you recreate a backend container and see 502 errors, wait up to 5 seconds for DNS re-resolution, or run `docker exec <kong-container> kong reload` for immediate flush.
 
-Enter 'document-repository' service host \[default: localhost\]: document-repository  
-Enter 'document-repository' service port \[default: 3001\]:
+See [docs/docker-swarm-setup.md](docs/docker-swarm-setup.md) Step 9 for the post-deploy Kong configuration procedure.
 
-\[2025-11-08 14:12:02\] Applying configuration from kong\_config.json  
-\[2025-11-08 14:12:02\] Using Kong Admin API at: [http://localhost:8001](http://localhost:8001)  
-\[2025-11-08 14:12:02\] Setting 'express-api' to: backend:3000  
-\[2025-11-08 14:12:02\] Setting 'document-repository' to: document-repository:3001  
-\[2025-11-08 14:12:02\] Processing service: express-api  
-\[2025-11-08 14:12:02\] Service 'express-api' applied successfully.  
-...
-
-## 4.3 Nginx Configuration
-
-Nginx acts as the reverse proxy and SSL termination point.
-
-1. Navigate to api-gateway-solution/nginx.  
-2. Select the appropriate configuration file:  
-\* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
-\* For \*\*Three-Node\*\*, use: default.conf.  
-3. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
-
-## 4.4 Domain & Security Configuration (CSP & CORS)
+## 4.3 Domain & Security Configuration (CSP & CORS)
 
 When deploying GENIE.AI to a specific host domain (e.g., genie.agency.gov) or a public IP address other than localhost, you must configure the **Content Security Policy (CSP)** and **Cross-Origin Resource Sharing (CORS)** settings. Failure to do this will result in the browser blocking the application from connecting to the backend API or WebSocket services.
 
@@ -899,35 +994,39 @@ CORS\_ALLOWED\_ORIGINS=https://genie.agency.gov,https://genie-ai.itu.int
 * **Quoting:** Verify that 'self' is enclosed in single quotes, and the whole string is enclosed in double quotes.
 * **System Prompts:** These must be single line strings in the environment or docker will not like them.
 
-### 2\. Update Nginx Configuration
+### 2\. Nginx Configuration (Auto-Rendered)
 
-The Nginx reverse proxy also serves a Content-Security-Policy header which acts as the final gatekeeper. You must ensure the default.conf file matches your environment variables.
+The Nginx configuration is now auto-rendered from `default.conf.template` at container startup using environment variables. No manual editing of nginx config files is needed.
 
-1. Open your active Nginx configuration file (e.g., api-gateway-solution/nginx/default.conf or default.conf-single-node).  
-2. Locate the add\_header Content-Security-Policy directive.  
-3. Append your new domain to the connect-src section.
+Set `CSP_CONNECT_SRC` in your `.env` file to include your domain. The template will automatically use this value for the CSP `connect-src` directive.
 
-**Example Nginx Update:**
+**Example `.env` update:**
 
-Nginx
+```bash
+CSP_CONNECT_SRC='self' https://genie.agency.gov wss://genie.agency.gov
+```
 
-\# Ensure this is on a SINGLE line to avoid syntax errors  
-add\_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int;" always;
+Then redeploy the stack to pick up the changes: `set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai`
 
-### 3\. Rebuild the Frontend
+Alternatively, to force-restart just the NGINX service: `docker service update --force genieai_nginx`
 
-**Crucial Step:** The Vue.js frontend "bakes" the VUE\_APP\_ environment variables into the static HTML/JS files at **build time**. Simply restarting the container is not enough.
+### 3\. Update Frontend Configuration (No Rebuild Needed)
 
-If you change the CSP or Domain settings, you must force a rebuild of the frontend container:
+**The frontend image is generic.** It reads its configuration at runtime via `window.APP_CONFIG` (generated from environment variables at container startup by `docker-entrypoint.sh`).
 
-Bash
+If you change the CSP or Domain settings, simply update `.env` and redeploy — no image rebuild required:
 
-\# For Single Node  
-docker compose down  
-docker compose \-f docker-compose.yaml up --build \-d --force-recreate
+```bash
+# Update variables in .env (or edit with nano)
+# Then redeploy the stack
+set -a && source .env && set +a && docker stack deploy -c docker-compose.yaml genieai
+```
 
-\# For Standard/Three-Node  
-TBD
+The frontend container will generate `/config.js` with the new values on startup. If you want to force an immediate restart of the frontend service:
+
+```bash
+docker service update --force genieai_frontend
+```
 
 ---
 
@@ -998,7 +1097,7 @@ node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 Uses the built-in NLLB-200 translation model running in the GENIE.AI stack. No external API keys required.
 
 **Prerequisites:**
-- GENIE.AI services must be running (`docker-compose up -d`)
+- GENIE.AI services must be running (`docker service ls` to verify)
 - Valid user account with login credentials
 
 **Usage:**
@@ -1098,7 +1197,7 @@ node create-translations.js FR --translation-engine=google
 
 | Error | Solution |
 |-------|----------|
-| `404 Not Found` | Ensure backend services are running: `docker-compose ps` |
+| `404 Not Found` | Ensure backend services are running: `docker service ls` |
 | `401 Unauthorized` | Verify credentials are correct. Password is hashed via SHA-256 before sending. |
 | `500 Unsupported language code` | Check that the language code is supported by NLLB-200 model (see list above). |
 | `Connection refused` | Ensure the backend is accessible at `http://localhost:3000` |
@@ -1121,9 +1220,11 @@ This method is ideal for users who prefer a visual interface, or for making incr
 
 After all configuration steps are complete, you must restart the services to ensure they pick up the new configurations and verify the system is healthy.
 
-1. Restart Services: \`\`\`bash  
-   docker-compose down  
-   docker-compose up \-d
+1. Restart Services: \`\`\`bash
+   docker stack rm genieai
+   sleep 30
+   set -a && source .env && set +a
+   docker stack deploy -c docker-compose.yaml genieai
 
 2. Verify Service Health:  
 Check that all containers are running and healthy.
@@ -1134,15 +1235,15 @@ watch nvidia-smi
 
 Bash
 
-docker ps
+docker service ls
 
-*Look for (healthy) status next to critical services like kong, kong-database, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
+*Look for (healthy) replicas next to critical services like kong, postgres, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
 
 Inspect the logs again to ensure no new critical errors have appeared after the restart.
 
 Bash
 
-docker-compose logs \-f
+docker service logs genieai_backend \-f
 
 4. Initial Login:  
    Access the application in your browser (e.g., [https://localhost](https://localhost) or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
@@ -1224,7 +1325,7 @@ We recommend following this three-phase approach to build and mature your Knowle
 
 ## 3\. Configuration Reference
 
-Add or modify the following variables in your .env file to control the behavior. You must restart the dataprep-arango-service container for changes to take effect.
+Add or modify the following variables in your .env file to control the behavior. You must force-update the dataprep service for changes to take effect: `docker service update --force genieai_dataprep-arango-service`
 
 ### Option A: LLM Strategy (Default / Discovery)
 
@@ -1683,3 +1784,4 @@ flutter build web
 1. Verify `genie-ai-config.json` is valid JSON
 2. Check that the config file is declared in `pubspec.yaml`
 3. Ensure the config loader is initialized in `main.dart`  
+

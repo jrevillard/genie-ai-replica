@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const AnalyticsController = require('../controllers/analyticsController');
 const { logger } = require('../shared-lib');
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 
 module.exports = (analyticsService) => {
   try {
@@ -10,13 +10,13 @@ module.exports = (analyticsService) => {
       throw new Error('analyticsService is invalid or missing getDashboardAnalytics');
     }
     logger.debug('analytics-routes initialized with analyticsService', {
-      methods: Object.getOwnPropertyNames(Object.getPrototypeOf(analyticsService)).filter(m => m !== 'constructor')
+      methods: Object.getOwnPropertyNames(Object.getPrototypeOf(analyticsService)).filter((m) => m !== 'constructor')
     });
 
     // Instantiate controller with singleton analyticsService
     const analyticsController = new AnalyticsController(analyticsService);
 
-    router.use(authMiddleware.authenticate);
+    router.use(keycloakAuthMiddleware.authenticate);
 
     /**
      * @swagger
@@ -25,6 +25,8 @@ module.exports = (analyticsService) => {
      *     summary: Get dashboard analytics
      *     description: Retrieves analytics data for the dashboard within a date range
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate
@@ -42,9 +44,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale for category names
+     *         description: Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: Dashboard analytics data
@@ -114,10 +115,10 @@ module.exports = (analyticsService) => {
         const startDate = req.query.startDate || new Date().toISOString().split('T')[0];
         const endDate = req.query.endDate || new Date().toISOString();
         const locale = req.query.locale || 'en';
-        
+
         logger.info(`Getting dashboard analytics from ${startDate} to ${endDate} with locale ${locale}`);
         const analytics = await analyticsService.getDashboardAnalytics(startDate, endDate, locale);
-        
+
         res.json(analytics);
       } catch (error) {
         logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
@@ -132,6 +133,8 @@ module.exports = (analyticsService) => {
      *     summary: Get specific metric data
      *     description: Retrieves data for a specific analytics metric
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: path
      *         name: metric
@@ -183,6 +186,8 @@ module.exports = (analyticsService) => {
      *     summary: Get general analytics
      *     description: Retrieves general analytics data with optional filters and date range
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate
@@ -205,9 +210,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale for category names
+     *         description: Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: General analytics data
@@ -239,10 +243,12 @@ module.exports = (analyticsService) => {
         const endDate = req.query.endDate;
         const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
         const locale = req.query.locale || 'en';
-        
-        logger.info(`Getting analytics from ${startDate || 'unspecified'} to ${endDate || 'unspecified'} with filters: ${JSON.stringify(filters)} and locale: ${locale}`);
+
+        logger.info(
+          `Getting analytics from ${startDate || 'unspecified'} to ${endDate || 'unspecified'} with filters: ${JSON.stringify(filters)} and locale: ${locale}`
+        );
         const analytics = await analyticsService.getAnalytics(filters, startDate, endDate);
-        
+
         res.json(analytics);
       } catch (error) {
         logger.error(`Error getting analytics: ${error.message}`, { stack: error.stack });
@@ -257,6 +263,8 @@ module.exports = (analyticsService) => {
      *     summary: Get time series data
      *     description: Retrieves time series data for a specific metric, interval, and date range
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: path
      *         name: metricType
@@ -305,7 +313,9 @@ module.exports = (analyticsService) => {
      *         description: Server error
      */
     router.get('/timeseries/:metricType', (req, res) => {
-      logger.info(`Fetching time series data for metricType: ${req.params.metricType}, interval: ${req.query.interval || 'daily'}, from ${req.query.startDate} to ${req.query.endDate}`);
+      logger.info(
+        `Fetching time series data for metricType: ${req.params.metricType}, interval: ${req.query.interval || 'daily'}, from ${req.query.startDate} to ${req.query.endDate}`
+      );
       analyticsController.getTimeSeriesData(req, res);
     });
 
@@ -316,6 +326,8 @@ module.exports = (analyticsService) => {
      *     summary: Track an event
      *     description: Records a user event for analytics
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     requestBody:
      *       required: true
      *       content:
@@ -323,12 +335,8 @@ module.exports = (analyticsService) => {
      *           schema:
      *             type: object
      *             required:
-     *               - userId
      *               - eventType
      *             properties:
-     *               userId:
-     *                 type: string
-     *                 description: ID of the user
      *               eventType:
      *                 type: string
      *                 description: Type of event (e.g., pageView, buttonClick)
@@ -349,13 +357,18 @@ module.exports = (analyticsService) => {
      */
     router.post('/events', async (req, res) => {
       try {
-        const { userId, eventType, eventData } = req.body;
-        
-        if (!userId || !eventType) {
-          logger.warn(`Missing required fields in event tracking: userId=${userId}, eventType=${eventType}`);
-          return res.status(400).json({ message: 'userId and eventType are required' });
+        const { eventType, eventData } = req.body;
+
+        if (!eventType) {
+          logger.warn('Missing required field: eventType');
+          return res.status(400).json({ message: 'eventType is required' });
         }
-        
+
+        const userId = req.user?.iss_sub;
+        if (!userId) {
+          return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
+        }
+
         logger.info(`Recording event of type ${eventType} for user ${userId}`);
         const result = await analyticsService.trackEvent(userId, eventType, eventData || {});
         res.status(201).json(result);
@@ -372,6 +385,8 @@ module.exports = (analyticsService) => {
      *     summary: Get analytics records
      *     description: Retrieves analytics records with pagination
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: limit
@@ -401,16 +416,16 @@ module.exports = (analyticsService) => {
       try {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
-        
+
         logger.info(`Getting analytics records with limit ${limit} and offset ${offset}`);
-        
+
         const cursor = await analyticsService.db.query(`
           FOR a IN analytics
             SORT a.timestamp DESC
             LIMIT ${offset}, ${limit}
             RETURN a
         `);
-        
+
         const records = await cursor.all();
         res.json(records);
       } catch (error) {
@@ -426,6 +441,8 @@ module.exports = (analyticsService) => {
      *     summary: Get events records
      *     description: Retrieves event records with pagination
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: limit
@@ -455,16 +472,16 @@ module.exports = (analyticsService) => {
       try {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
-        
+
         logger.info(`Getting event records with limit ${limit} and offset ${offset}`);
-        
+
         const cursor = await analyticsService.db.query(`
           FOR e IN events
             SORT e.timestamp DESC
             LIMIT ${offset}, ${limit}
             RETURN e
         `);
-        
+
         const events = await cursor.all();
         res.json(events);
       } catch (error) {
@@ -480,6 +497,8 @@ module.exports = (analyticsService) => {
      *     summary: Get satisfaction gauge data
      *     description: Retrieves satisfaction percentage data for the gauge visualization
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate
@@ -497,9 +516,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale
+     *         description: Language locale (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: Satisfaction gauge data
@@ -529,7 +547,9 @@ module.exports = (analyticsService) => {
      *         description: Server error
      */
     router.get('/satisfaction/gauge', (req, res) => {
-      logger.info(`Fetching satisfaction gauge data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`);
+      logger.info(
+        `Fetching satisfaction gauge data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`
+      );
       analyticsController.getSatisfactionGauge(req, res);
     });
 
@@ -540,6 +560,8 @@ module.exports = (analyticsService) => {
      *     summary: Get satisfaction heatmap data
      *     description: Retrieves satisfaction percentage data by knowledge area over time
      *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
      *     parameters:
      *       - in: query
      *         name: startDate
@@ -557,9 +579,8 @@ module.exports = (analyticsService) => {
      *         name: locale
      *         schema:
      *           type: string
-     *           enum: [en, fr, sw]
      *           default: en
-     *         description: Language locale
+     *         description: Language locale (e.g. en, fr, sw, ar, id, es, etc.)
      *     responses:
      *       200:
      *         description: Satisfaction heatmap data
@@ -585,8 +606,103 @@ module.exports = (analyticsService) => {
      *         description: Server error
      */
     router.get('/satisfaction/heatmap', (req, res) => {
-      logger.info(`Fetching satisfaction heatmap data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`);
+      logger.info(
+        `Fetching satisfaction heatmap data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`
+      );
       analyticsController.getSatisfactionHeatmap(req, res);
+    });
+
+    /**
+     * @swagger
+     * /analytics/feedback/timeseries:
+     *   get:
+     *     summary: Get feedback + unanswered time series
+     *     description: Returns per-bucket counts of positive/negative/neutral feedback and unanswered queries for the Feedback admin page.
+     *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
+     *     parameters:
+     *       - in: query
+     *         name: startDate
+     *         schema: { type: string, format: date-time }
+     *       - in: query
+     *         name: endDate
+     *         schema: { type: string, format: date-time }
+     *       - in: query
+     *         name: interval
+     *         schema:
+     *           type: string
+     *           enum: [hourly, daily, weekly, monthly]
+     *           default: daily
+     *     responses:
+     *       200:
+     *         description: Feedback time series
+     */
+    router.get('/feedback/timeseries', async (req, res) => {
+      try {
+        const { startDate, endDate } = req.query;
+        const interval = req.query.interval || 'daily';
+        logger.info(`Fetching feedback time series from ${startDate} to ${endDate} (interval=${interval})`);
+        const data = await analyticsService.getFeedbackTimeSeries(startDate, endDate, interval);
+        res.json(data);
+      } catch (error) {
+        logger.error(`Error getting feedback time series: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    /**
+     * @swagger
+     * /analytics/feedback/list:
+     *   get:
+     *     summary: Get a paginated list of recent feedback entries
+     *     description: Returns recent feedback entries enriched with the originating query text/response for the Feedback admin page.
+     *     tags: [Analytics]
+     *     security:
+     *       - KeycloakOAuth2: ['openid']
+     *     parameters:
+     *       - in: query
+     *         name: startDate
+     *         schema: { type: string, format: date-time }
+     *       - in: query
+     *         name: endDate
+     *         schema: { type: string, format: date-time }
+     *       - in: query
+     *         name: filter
+     *         schema:
+     *           type: string
+     *           enum: [all, positive, negative, commentOnly]
+     *           default: all
+     *       - in: query
+     *         name: limit
+     *         schema: { type: integer, default: 10 }
+     *       - in: query
+     *         name: offset
+     *         schema: { type: integer, default: 0 }
+     *     responses:
+     *       200:
+     *         description: Feedback list with total count
+     */
+    router.get('/feedback/list', async (req, res) => {
+      try {
+        const { startDate, endDate } = req.query;
+        const filter = req.query.filter || 'all';
+        const limit = parseInt(req.query.limit, 10) || 10;
+        const offset = parseInt(req.query.offset, 10) || 0;
+
+        logger.info(
+          `Fetching feedback list from ${startDate} to ${endDate} (filter=${filter}, limit=${limit}, offset=${offset})`
+        );
+        const data = await analyticsService.getFeedbackList(startDate, endDate, {
+          filter,
+          limit,
+          offset
+        });
+        res.json(data);
+      } catch (error) {
+        logger.error(`Error getting feedback list: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ message: error.message });
+      }
     });
 
     return router;

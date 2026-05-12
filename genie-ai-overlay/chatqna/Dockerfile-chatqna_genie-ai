@@ -64,7 +64,8 @@ COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint
 
 # Step C: Install dependencies
 # Install extra dependencies from our original Dockerfile_genieai
-RUN pip install --no-cache-dir langdetect transformers
+# python-jose[cryptography]: Keycloak JWKS validation (keycloak_token_validator.py)
+RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]"
 
 # Step D: "Overlay" our custom GENIE-AI "glue" files
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
@@ -78,6 +79,7 @@ COPY --chown=user:user genie-ai-overlay/core/constants.py /home/user/comps/cores
 
 # This copies your main script
 COPY --chown=user:user genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
+COPY --chown=user:user genie-ai-overlay/chatqna/keycloak_token_validator.py /app/ChatQnA/keycloak_token_validator.py
 COPY --chown=user:user genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
 
 # Step E: Run our new GENIE-AI entry point

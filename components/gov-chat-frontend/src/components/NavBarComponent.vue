@@ -5,8 +5,12 @@
       <!-- Left section with hamburger menu, logo, and title -->
       <div class="nav-left">
         <!-- Hamburger button for sidebar toggle -->
-        <button class="icon-btn hamburger-btn" @click="toggleSidebar" :class="{ 'is-active': isSidebarOpen }"
-          aria-label="Toggle sidebar">
+        <button
+          class="icon-btn hamburger-btn"
+          :class="{ 'is-active': isSidebarOpen }"
+          aria-label="Toggle sidebar"
+          @click="toggleSidebar"
+        >
           <span class="hamburger-inner"></span>
         </button>
 
@@ -14,7 +18,7 @@
         <div class="logo-container">
           <!-- Display SVG icon from config (file or inline) -->
           <img v-if="config.app.icon.type === 'file'" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
-          <span v-else v-html="config.app.icon.value" class="govt-logo"></span>
+          <span v-else class="govt-logo" v-html="config.app.icon.value"></span>
         </div>
         <!-- Title from GENIE.AI config - Hide on mobile -->
         <h1 class="brand-name hide-on-mobile">{{ config.app.title }}</h1>
@@ -22,9 +26,12 @@
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
           <!-- Status Indicator for Mobile -->
-          <div class="status-indicator-container" ref="mobileStatusContainer">
-            <button class="status-indicator-btn mobile-status-btn" @click="toggleStatusDropdown"
-              aria-label="System Status">
+          <div ref="mobileStatusContainer" class="status-indicator-container">
+            <button
+              class="status-indicator-btn mobile-status-btn"
+              aria-label="System Status"
+              @click="toggleStatusDropdown"
+            >
               <span class="status-dot" :class="getStatusDotClass"></span>
               <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
             </button>
@@ -56,14 +63,14 @@
                 </div>
               </div>
 
-              <div v-if="nextDeadline" class="next-deadline">
-                <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
-                <div class="deadline-info">
-                  <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                  <span class="deadline-days" :class="{ 'urgent': nextDeadline.daysRemaining < 7 }">
-                    {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
-                  </span>
-                </div>
+              <div class="status-service-block">
+                <h4 class="status-service-subtitle">{{ $t('systemStatus.stackSubtitle') }}</h4>
+                <ul class="status-service-list" role="list">
+                  <li v-for="(svc, idx) in systemStatus.services" :key="idx" class="status-service-row" role="listitem">
+                    <span class="status-dot" :class="serviceStatusDotClass(svc.status)"></span>
+                    <span class="status-service-name">{{ $t(svc.nameKey) }}</span>
+                  </li>
+                </ul>
               </div>
 
               <div class="status-footer">
@@ -80,10 +87,24 @@
           </div>
 
           <!-- Analytics button for Mobile -->
-          <button class="icon-btn mobile-btn" @click="$emit('openAnalytics')" aria-label="Analytics"
-                 :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button
+            class="icon-btn mobile-btn"
+            aria-label="Analytics"
+            :disabled="!isAdmin"
+            :class="{ 'disabled-btn': !isAdmin }"
+            @click="$emit('openAnalytics')"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
               <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
             </svg>
@@ -91,10 +112,24 @@
           </button>
 
           <!-- Admin button for Mobile -->
-          <button class="icon-btn admin-btn mobile-btn" @click="$emit('openAdmin')" aria-label="Administration"
-                 :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button
+            class="icon-btn admin-btn mobile-btn"
+            aria-label="Administration"
+            :disabled="!isAdmin"
+            :class="{ 'disabled-btn': !isAdmin }"
+            @click="$emit('openAdmin')"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="3" y1="9" x2="21" y2="9"></line>
               <line x1="9" y1="21" x2="9" y2="9"></line>
@@ -102,20 +137,38 @@
             <span class="tooltip">{{ $t('nav.administration') }}</span>
           </button>
 
-          <button class="icon-btn mobile-btn" @click="$emit('openSettings')" aria-label="Settings">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button class="icon-btn mobile-btn" aria-label="Settings" @click="$emit('openSettings')">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <circle cx="12" cy="12" r="3"></circle>
               <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-              </path>
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+              ></path>
             </svg>
             <span class="tooltip">{{ $t('nav.settings') }}</span>
           </button>
 
-          <button class="icon-btn user-btn mobile-btn" @click="$emit('openProfile')" aria-label="User profile">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button class="icon-btn user-btn mobile-btn" aria-label="User profile" @click="$emit('openProfile')">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
@@ -123,9 +176,18 @@
           </button>
 
           <!-- ADDED: Logout button for mobile -->
-          <button class="icon-btn logout-btn mobile-btn" @click="handleLogout" aria-label="Log out">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button class="icon-btn logout-btn mobile-btn" aria-label="Log out" @click="handleLogout">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16 17 21 12 16 7"></polyline>
               <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -138,8 +200,8 @@
       <!-- Main navbar area with status - Only visible on desktop -->
       <div class="nav-main desktop-only">
         <!-- Status Indicator -->
-        <div class="status-indicator-container" ref="statusContainer">
-          <button class="status-indicator-btn" @click="toggleStatusDropdown" aria-label="System Status">
+        <div ref="statusContainer" class="status-indicator-container">
+          <button class="status-indicator-btn" aria-label="System Status" @click="toggleStatusDropdown">
             <span class="status-dot" :class="getStatusDotClass"></span>
             <span class="status-text">{{ statusText }}</span>
             <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
@@ -172,14 +234,19 @@
               </div>
             </div>
 
-            <div v-if="nextDeadline" class="next-deadline">
-              <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
-              <div class="deadline-info">
-                <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                <span class="deadline-days" :class="{ 'urgent': nextDeadline.daysRemaining < 7 }">
-                  {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
-                </span>
-              </div>
+            <div class="status-service-block">
+              <h4 class="status-service-subtitle">{{ $t('systemStatus.stackSubtitle') }}</h4>
+              <ul class="status-service-list" role="list">
+                <li
+                  v-for="(svc, idx) in systemStatus.services"
+                  :key="'desk-' + idx"
+                  class="status-service-row"
+                  role="listitem"
+                >
+                  <span class="status-dot" :class="serviceStatusDotClass(svc.status)"></span>
+                  <span class="status-service-name">{{ $t(svc.nameKey) }}</span>
+                </li>
+              </ul>
             </div>
 
             <div class="status-footer">
@@ -198,10 +265,24 @@
         </div>
 
         <!-- Analytics button for Desktop -->
-        <button class="icon-btn" @click="$emit('openAnalytics')" aria-label="Analytics"
-               :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button
+          class="icon-btn"
+          aria-label="Analytics"
+          :disabled="!isAdmin"
+          :class="{ 'disabled-btn': !isAdmin }"
+          @click="$emit('openAnalytics')"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
             <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
           </svg>
@@ -209,10 +290,24 @@
         </button>
 
         <!-- Admin button for Desktop -->
-        <button class="icon-btn admin-btn" @click="$emit('openAdmin')" aria-label="Administration"
-               :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button
+          class="icon-btn admin-btn"
+          aria-label="Administration"
+          :disabled="!isAdmin"
+          :class="{ 'disabled-btn': !isAdmin }"
+          @click="$emit('openAdmin')"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="3" y1="9" x2="21" y2="9"></line>
             <line x1="9" y1="21" x2="9" y2="9"></line>
@@ -220,20 +315,38 @@
           <span class="tooltip">{{ $t('nav.administration') }}</span>
         </button>
 
-        <button class="icon-btn" @click="$emit('openSettings')" aria-label="Settings">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn" aria-label="Settings" @click="$emit('openSettings')">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <circle cx="12" cy="12" r="3"></circle>
             <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-            </path>
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+            ></path>
           </svg>
           <span class="tooltip">{{ $t('nav.settings') }}</span>
         </button>
 
-        <button class="icon-btn user-btn" @click="$emit('openProfile')" aria-label="User profile">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn user-btn" aria-label="User profile" @click="$emit('openProfile')">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
@@ -241,9 +354,18 @@
         </button>
 
         <!-- ADDED: Logout button -->
-        <button class="icon-btn logout-btn" @click="handleLogout" aria-label="Log out">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn logout-btn" aria-label="Log out" @click="handleLogout">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
             <polyline points="16 17 21 12 16 7"></polyline>
             <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -256,14 +378,13 @@
 </template>
 
 <script>
-import LanguageSelector from '@/components/LanguageSelector.vue'
+import LanguageSelector from '@/components/LanguageSelector.vue';
 
 export default {
   name: 'NavBarComponent',
   components: {
     LanguageSelector
   },
-  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout', 'openAdmin'],
   props: {
     isSidebarOpen: {
       type: Boolean,
@@ -283,78 +404,77 @@ export default {
       })
     }
   },
+  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout', 'openAdmin'],
   data() {
     return {
       isStatusDropdownOpen: false,
       currentUser: null,
-      // Sample system status data - would be fetched from an API
+      // Shipped as all-operational placeholders until a real health API exists (see mounted()).
       systemStatus: {
-        overall: 'degraded', // 'operational', 'degraded', or 'outage'
+        overall: 'operational',
         services: [
-          { name: 'eCitizen Portal', status: 'operational' },
-          { name: 'Tax Filing System', status: 'degraded' },
-          { name: 'ID Application', status: 'outage' },
-          { name: 'Business Registration', status: 'operational' },
-          { name: 'Driving License', status: 'operational' }
+          { nameKey: 'systemStatus.stack.backendApi', status: 'operational' },
+          { nameKey: 'systemStatus.stack.chatAi', status: 'operational' },
+          { nameKey: 'systemStatus.stack.documentRepo', status: 'operational' },
+          { nameKey: 'systemStatus.stack.knowledgeBase', status: 'operational' },
+          { nameKey: 'systemStatus.stack.aiModels', status: 'operational' }
         ]
       },
-      // Sample next deadline - would be personalized
-      nextDeadline: {
-        titleKey: 'taxFiling',
-        daysRemaining: 12
-      }
-    }
+      nextDeadline: null
+    };
   },
   computed: {
     operationalCount() {
-      return this.systemStatus.services.filter(s => s.status === 'operational').length;
+      return this.systemStatus.services.filter((s) => s.status === 'operational').length;
     },
     degradedCount() {
-      return this.systemStatus.services.filter(s => s.status === 'degraded').length;
+      return this.systemStatus.services.filter((s) => s.status === 'degraded').length;
     },
     outageCount() {
-      return this.systemStatus.services.filter(s => s.status === 'outage').length;
+      return this.systemStatus.services.filter((s) => s.status === 'outage').length;
     },
     totalServices() {
       return this.systemStatus.services.length;
     },
     getStatusDotClass() {
       switch (this.systemStatus.overall) {
-        case 'operational': return 'status-operational';
-        case 'degraded': return 'status-degraded';
-        case 'outage': return 'status-outage';
-        default: return '';
+        case 'operational':
+          return 'status-operational';
+        case 'degraded':
+          return 'status-degraded';
+        case 'outage':
+          return 'status-outage';
+        default:
+          return '';
       }
     },
     statusText() {
       // Show in user's language
       switch (this.systemStatus.overall) {
-        case 'operational': return this.$t('systemStatus.allOperational');
-        case 'degraded': return this.$t('systemStatus.someIssues');
-        case 'outage': return this.$t('systemStatus.majorIssues');
-        default: return this.$t('systemStatus.checking');
+        case 'operational':
+          return this.$t('systemStatus.allOperational');
+        case 'degraded':
+          return this.$t('systemStatus.someIssues');
+        case 'outage':
+          return this.$t('systemStatus.majorIssues');
+        default:
+          return this.$t('systemStatus.checking');
       }
     },
-    // Compute if the user has admin role
+    // Compute if the user has admin role (legacy `role` string and/or Keycloak-style `roles` array)
     isAdmin() {
-      // Debug the user object and its role value
-      console.log('Current user:', this.currentUser);
-
       if (!this.currentUser) {
-        console.log('No user found');
         return false;
       }
-
-      // Check for role in various formats/locations
-      const userRole = this.currentUser.role ||
-        (this.currentUser.user && this.currentUser.user.role) ||
-        '';
-
-      console.log('User role:', userRole);
-
-      // Case-insensitive comparison for 'admin', 'Admin', etc.
-      return typeof userRole === 'string' &&
-        userRole.toLowerCase() === 'admin';
+      const userRole = this.currentUser.role || (this.currentUser.user && this.currentUser.user.role) || '';
+      if (typeof userRole === 'string' && userRole.toLowerCase() === 'admin') {
+        return true;
+      }
+      const roles = this.currentUser.roles;
+      if (Array.isArray(roles)) {
+        return roles.some((r) => String(r).toLowerCase() === 'admin');
+      }
+      return false;
     }
   },
   watch: {
@@ -424,8 +544,7 @@ export default {
           }
 
           // Check role information
-          const role = this.currentUser.role ||
-            (this.currentUser.user && this.currentUser.user.role);
+          const role = this.currentUser.role || (this.currentUser.user && this.currentUser.user.role);
           console.log('Detected role:', role);
         } else {
           console.log('No user found in localStorage');
@@ -434,7 +553,7 @@ export default {
         console.error('Error parsing user from localStorage:', error);
       }
     },
-    
+
     //Logout handler that properly handles backend and frontend
     async handleLogout() {
       try {
@@ -462,7 +581,6 @@ export default {
         // Navigate using window.location
         console.log('Redirecting to login page');
         window.location.href = '/login';
-
       } catch (error) {
         console.error('Logout error:', error);
 
@@ -473,7 +591,7 @@ export default {
       }
     },
     toggleSidebar() {
-      this.$emit('toggleSidebar')
+      this.$emit('toggleSidebar');
     },
     toggleStatusDropdown() {
       this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
@@ -483,17 +601,33 @@ export default {
       const desktopContainer = this.$refs.statusContainer;
       const mobileContainer = this.$refs.mobileStatusContainer;
 
-      if ((desktopContainer && !desktopContainer.contains(event.target)) &&
-        (mobileContainer && !mobileContainer.contains(event.target))) {
+      if (
+        desktopContainer &&
+        !desktopContainer.contains(event.target) &&
+        mobileContainer &&
+        !mobileContainer.contains(event.target)
+      ) {
         this.isStatusDropdownOpen = false;
       }
     },
     viewStatusPage() {
       this.$emit('viewStatusPage');
       this.isStatusDropdownOpen = false;
+    },
+    serviceStatusDotClass(status) {
+      switch (status) {
+        case 'operational':
+          return 'status-operational';
+        case 'degraded':
+          return 'status-degraded';
+        case 'outage':
+          return 'status-outage';
+        default:
+          return '';
+      }
     }
   }
-}
+};
 </script>
 
 <style scoped>
@@ -506,7 +640,7 @@ export default {
 .nav-bar {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, var(--navbar-gradient-start, #4E97D1), var(--navbar-gradient-end, #2C5F8A));
+  background: linear-gradient(135deg, var(--navbar-gradient-start, #4e97d1), var(--navbar-gradient-end, #2c5f8a));
   color: var(--navbar-text-color, #fff);
   height: 60px;
   padding: 0 16px;
@@ -552,51 +686,97 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  height: 52px;
   margin-left: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 /* Adjusted for GENIE.AI configured SVG icon */
 .govt-logo {
-  height: 40px;
-  width: 40px;
+  display: block;
+  height: 52px;
+  width: auto;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
   color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
   transition: transform 0.3s ease;
 }
 
+.govt-logo:not(img) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.govt-logo:not(img) :deep(svg) {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
 .logo-container:hover .govt-logo {
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
 /* Logo animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideDown {
-  from { transform: translateY(-10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes pulse {
-  0% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.08); }
-  100% { opacity: 0.8; transform: scale(1); }
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
 }
 
 @keyframes rotateIn {
-  from { transform: rotate(-15deg); opacity: 0; }
-  to { transform: rotate(0deg); opacity: 1; }
+  from {
+    transform: rotate(-15deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
 }
 
 @keyframes shimmer {
-  0% { stroke-dashoffset: 200; }
-  100% { stroke-dashoffset: 0; }
+  0% {
+    stroke-dashoffset: 200;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
 }
 
 .logo-base {
@@ -707,8 +887,14 @@ export default {
 }
 
 @keyframes dropdownFadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .status-dropdown-header {
@@ -751,6 +937,43 @@ export default {
 
 .status-count-item:last-child {
   margin-bottom: 0;
+}
+
+.status-service-block {
+  padding: 10px 16px 4px;
+  border-bottom: 1px solid #eee;
+}
+
+.status-service-subtitle {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.status-service-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.status-service-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+.status-service-row .status-dot {
+  flex-shrink: 0;
+}
+
+.status-service-name {
+  line-height: 1.3;
 }
 
 .status-label {
@@ -874,24 +1097,28 @@ export default {
 }
 
 /* Disabled button styling */
-.icon-btn:disabled, .disabled-btn {
+.icon-btn:disabled,
+.disabled-btn {
   opacity: 0.5;
   cursor: not-allowed;
   background: rgba(255, 255, 255, 0.05);
   box-shadow: none;
 }
 
-.icon-btn:disabled:hover, .disabled-btn:hover {
+.icon-btn:disabled:hover,
+.disabled-btn:hover {
   transform: none;
   background: rgba(255, 255, 255, 0.05);
   box-shadow: none;
 }
 
-.icon-btn:disabled svg, .disabled-btn svg {
+.icon-btn:disabled svg,
+.disabled-btn svg {
   opacity: 0.6;
 }
 
-.icon-btn:disabled:hover svg, .disabled-btn:hover svg {
+.icon-btn:disabled:hover svg,
+.disabled-btn:hover svg {
   transform: none;
 }
 
@@ -918,7 +1145,9 @@ export default {
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
+  transition:
+    opacity 0.2s,
+    visibility 0.2s;
   pointer-events: none;
   z-index: 40;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
@@ -1042,7 +1271,7 @@ export default {
 }
 
 .language-select-container :deep(select option) {
-  background: #4E97D1;
+  background: #4e97d1;
   color: white;
   padding: 8px;
   font-weight: 500;
@@ -1156,9 +1385,12 @@ export default {
     display: flex;
   }
 
+  .logo-container {
+    height: 44px;
+  }
+
   .govt-logo {
-    height: 36px;
-    width: 36px;
+    height: 44px;
   }
 
   .nav-bar {
@@ -1196,7 +1428,7 @@ export default {
   }
 
   .mobile-language-select :deep(select option) {
-    background: #4E97D1;
+    background: #4e97d1;
     color: white;
     padding: 8px;
     font-weight: 500;
@@ -1204,9 +1436,12 @@ export default {
 }
 
 @media (max-width: 600px) {
+  .logo-container {
+    height: 40px;
+  }
+
   .govt-logo {
-    height: 32px;
-    width: 32px;
+    height: 40px;
   }
 
   .icon-btn {
@@ -1230,9 +1465,12 @@ export default {
 }
 
 @media (max-width: 480px) {
+  .logo-container {
+    height: 38px;
+  }
+
   .govt-logo {
-    height: 32px;
-    width: 32px;
+    height: 38px;
   }
 
   .nav-bar {
@@ -1269,145 +1507,145 @@ export default {
 
 /* Theme Styles - Dark and System Mode */
 /* Dark mode - applied to both explicit dark theme and system dark mode */
-.nav-bar[data-theme="dark"],
-html[data-theme="dark"] .nav-bar,
-.nav-bar[data-theme="system"].dark-mode,
-html[data-theme="system"].dark-mode .nav-bar {
+.nav-bar[data-theme='dark'],
+html[data-theme='dark'] .nav-bar,
+.nav-bar[data-theme='system'].dark-mode,
+html[data-theme='system'].dark-mode .nav-bar {
   background: linear-gradient(135deg, var(--navbar-gradient-start, #1e3a58), var(--navbar-gradient-end, #0f1c2b));
 }
 
 /* Buttons and Controls - Dark Mode */
-[data-theme="dark"] .icon-btn,
-[data-theme="dark"] .hamburger-btn,
-[data-theme="dark"] .status-indicator-btn,
-[data-theme="dark"] .language-select-container,
-html[data-theme="dark"] .icon-btn,
-html[data-theme="dark"] .hamburger-btn,
-html[data-theme="dark"] .status-indicator-btn,
-html[data-theme="dark"] .language-select-container,
-[data-theme="system"].dark-mode .icon-btn,
-[data-theme="system"].dark-mode .hamburger-btn,
-[data-theme="system"].dark-mode .status-indicator-btn,
-[data-theme="system"].dark-mode .language-select-container,
-html[data-theme="system"].dark-mode .icon-btn,
-html[data-theme="system"].dark-mode .hamburger-btn,
-html[data-theme="system"].dark-mode .status-indicator-btn,
-html[data-theme="system"].dark-mode .language-select-container {
+[data-theme='dark'] .icon-btn,
+[data-theme='dark'] .hamburger-btn,
+[data-theme='dark'] .status-indicator-btn,
+[data-theme='dark'] .language-select-container,
+html[data-theme='dark'] .icon-btn,
+html[data-theme='dark'] .hamburger-btn,
+html[data-theme='dark'] .status-indicator-btn,
+html[data-theme='dark'] .language-select-container,
+[data-theme='system'].dark-mode .icon-btn,
+[data-theme='system'].dark-mode .hamburger-btn,
+[data-theme='system'].dark-mode .status-indicator-btn,
+[data-theme='system'].dark-mode .language-select-container,
+html[data-theme='system'].dark-mode .icon-btn,
+html[data-theme='system'].dark-mode .hamburger-btn,
+html[data-theme='system'].dark-mode .status-indicator-btn,
+html[data-theme='system'].dark-mode .language-select-container {
   background: rgba(255, 255, 255, 0.08);
 }
 
 /* Button Hover States - Dark Mode */
-[data-theme="dark"] .icon-btn:hover,
-[data-theme="dark"] .hamburger-btn:hover,
-[data-theme="dark"] .status-indicator-btn:hover,
-[data-theme="dark"] .language-select-container:hover,
-html[data-theme="dark"] .icon-btn:hover,
-html[data-theme="dark"] .hamburger-btn:hover,
-html[data-theme="dark"] .status-indicator-btn:hover,
-html[data-theme="dark"] .language-select-container:hover,
-[data-theme="system"].dark-mode .icon-btn:hover,
-[data-theme="system"].dark-mode .hamburger-btn:hover,
-[data-theme="system"].dark-mode .status-indicator-btn:hover,
-[data-theme="system"].dark-mode .language-select-container:hover,
-html[data-theme="system"].dark-mode .icon-btn:hover,
-html[data-theme="system"].dark-mode .hamburger-btn:hover,
-html[data-theme="system"].dark-mode .status-indicator-btn:hover,
-html[data-theme="system"].dark-mode .language-select-container:hover {
+[data-theme='dark'] .icon-btn:hover,
+[data-theme='dark'] .hamburger-btn:hover,
+[data-theme='dark'] .status-indicator-btn:hover,
+[data-theme='dark'] .language-select-container:hover,
+html[data-theme='dark'] .icon-btn:hover,
+html[data-theme='dark'] .hamburger-btn:hover,
+html[data-theme='dark'] .status-indicator-btn:hover,
+html[data-theme='dark'] .language-select-container:hover,
+[data-theme='system'].dark-mode .icon-btn:hover,
+[data-theme='system'].dark-mode .hamburger-btn:hover,
+[data-theme='system'].dark-mode .status-indicator-btn:hover,
+[data-theme='system'].dark-mode .language-select-container:hover,
+html[data-theme='system'].dark-mode .icon-btn:hover,
+html[data-theme='system'].dark-mode .hamburger-btn:hover,
+html[data-theme='system'].dark-mode .status-indicator-btn:hover,
+html[data-theme='system'].dark-mode .language-select-container:hover {
   background: rgba(255, 255, 255, 0.15);
 }
 
 /* Status Dropdown - Dark Mode */
-[data-theme="dark"] .status-dropdown,
-html[data-theme="dark"] .status-dropdown,
-[data-theme="system"].dark-mode .status-dropdown,
-html[data-theme="system"].dark-mode .status-dropdown {
+[data-theme='dark'] .status-dropdown,
+html[data-theme='dark'] .status-dropdown,
+[data-theme='system'].dark-mode .status-dropdown,
+html[data-theme='system'].dark-mode .status-dropdown {
   background: #1f2937;
   border: 1px solid #374151;
 }
 
-[data-theme="dark"] .status-dropdown-header,
-html[data-theme="dark"] .status-dropdown-header,
-[data-theme="system"].dark-mode .status-dropdown-header,
-html[data-theme="system"].dark-mode .status-dropdown-header {
+[data-theme='dark'] .status-dropdown-header,
+html[data-theme='dark'] .status-dropdown-header,
+[data-theme='system'].dark-mode .status-dropdown-header,
+html[data-theme='system'].dark-mode .status-dropdown-header {
   background: #111827;
   border-bottom: 1px solid #374151;
 }
 
-[data-theme="dark"] .status-dropdown-header h4,
-[data-theme="dark"] .next-deadline h4,
-html[data-theme="dark"] .status-dropdown-header h4,
-html[data-theme="dark"] .next-deadline h4,
-[data-theme="system"].dark-mode .status-dropdown-header h4,
-[data-theme="system"].dark-mode .next-deadline h4,
-html[data-theme="system"].dark-mode .status-dropdown-header h4,
-html[data-theme="system"].dark-mode .next-deadline h4 {
+[data-theme='dark'] .status-dropdown-header h4,
+[data-theme='dark'] .next-deadline h4,
+html[data-theme='dark'] .status-dropdown-header h4,
+html[data-theme='dark'] .next-deadline h4,
+[data-theme='system'].dark-mode .status-dropdown-header h4,
+[data-theme='system'].dark-mode .next-deadline h4,
+html[data-theme='system'].dark-mode .status-dropdown-header h4,
+html[data-theme='system'].dark-mode .next-deadline h4 {
   color: rgba(255, 255, 255, 0.9);
 }
 
-[data-theme="dark"] .status-dropdown .status-label,
-[data-theme="dark"] .deadline-title,
-html[data-theme="dark"] .status-dropdown .status-label,
-html[data-theme="dark"] .deadline-title,
-[data-theme="system"].dark-mode .status-dropdown .status-label,
-[data-theme="system"].dark-mode .deadline-title,
-html[data-theme="system"].dark-mode .status-dropdown .status-label,
-html[data-theme="system"].dark-mode .deadline-title {
+[data-theme='dark'] .status-dropdown .status-label,
+[data-theme='dark'] .deadline-title,
+html[data-theme='dark'] .status-dropdown .status-label,
+html[data-theme='dark'] .deadline-title,
+[data-theme='system'].dark-mode .status-dropdown .status-label,
+[data-theme='system'].dark-mode .deadline-title,
+html[data-theme='system'].dark-mode .status-dropdown .status-label,
+html[data-theme='system'].dark-mode .deadline-title {
   color: rgba(255, 255, 255, 0.7);
 }
 
-[data-theme="dark"] .status-summary,
-html[data-theme="dark"] .status-summary,
-[data-theme="system"].dark-mode .status-summary,
-html[data-theme="system"].dark-mode .status-summary {
+[data-theme='dark'] .status-summary,
+html[data-theme='dark'] .status-summary,
+[data-theme='system'].dark-mode .status-summary,
+html[data-theme='system'].dark-mode .status-summary {
   color: rgba(255, 255, 255, 0.5);
 }
 
-[data-theme="dark"] .status-count-item:hover,
-[data-theme="dark"] .deadline-info:hover,
-html[data-theme="dark"] .status-count-item:hover,
-html[data-theme="dark"] .deadline-info:hover,
-[data-theme="system"].dark-mode .status-count-item:hover,
-[data-theme="system"].dark-mode .deadline-info:hover,
-html[data-theme="system"].dark-mode .status-count-item:hover,
-html[data-theme="system"].dark-mode .deadline-info:hover {
+[data-theme='dark'] .status-count-item:hover,
+[data-theme='dark'] .deadline-info:hover,
+html[data-theme='dark'] .status-count-item:hover,
+html[data-theme='dark'] .deadline-info:hover,
+[data-theme='system'].dark-mode .status-count-item:hover,
+[data-theme='system'].dark-mode .deadline-info:hover,
+html[data-theme='system'].dark-mode .status-count-item:hover,
+html[data-theme='system'].dark-mode .deadline-info:hover {
   background-color: #111827;
 }
 
-[data-theme="dark"] .status-value,
-html[data-theme="dark"] .status-value,
-[data-theme="system"].dark-mode .status-value,
-html[data-theme="system"].dark-mode .status-value {
+[data-theme='dark'] .status-value,
+html[data-theme='dark'] .status-value,
+[data-theme='system'].dark-mode .status-value,
+html[data-theme='system'].dark-mode .status-value {
   background: #374151;
   color: rgba(255, 255, 255, 0.9);
 }
 
-[data-theme="dark"] .status-footer,
-html[data-theme="dark"] .status-footer,
-[data-theme="system"].dark-mode .status-footer,
-html[data-theme="system"].dark-mode .status-footer {
+[data-theme='dark'] .status-footer,
+html[data-theme='dark'] .status-footer,
+[data-theme='system'].dark-mode .status-footer,
+html[data-theme='system'].dark-mode .status-footer {
   background: #111827;
   border-top: 1px solid #374151;
 }
 
-[data-theme="dark"] .status-footer a,
-html[data-theme="dark"] .status-footer a,
-[data-theme="system"].dark-mode .status-footer a,
-html[data-theme="system"].dark-mode .status-footer a {
+[data-theme='dark'] .status-footer a,
+html[data-theme='dark'] .status-footer a,
+[data-theme='system'].dark-mode .status-footer a,
+html[data-theme='system'].dark-mode .status-footer a {
   color: #60a5fa;
 }
 
-[data-theme="dark"] .status-footer a:hover,
-html[data-theme="dark"] .status-footer a:hover,
-[data-theme="system"].dark-mode .status-footer a:hover,
-html[data-theme="system"].dark-mode .status-footer a:hover {
+[data-theme='dark'] .status-footer a:hover,
+html[data-theme='dark'] .status-footer a:hover,
+[data-theme='system'].dark-mode .status-footer a:hover,
+html[data-theme='system'].dark-mode .status-footer a:hover {
   background-color: #1e3a58;
 }
 
 /* Fix dropdown arrow in dark mode */
-[data-theme="dark"] .status-dropdown::before,
-html[data-theme="dark"] .status-dropdown::before,
-[data-theme="system"].dark-mode .status-dropdown::before,
-html[data-theme="system"].dark-mode .status-dropdown::before {
+[data-theme='dark'] .status-dropdown::before,
+html[data-theme='dark'] .status-dropdown::before,
+[data-theme='system'].dark-mode .status-dropdown::before,
+html[data-theme='system'].dark-mode .status-dropdown::before {
   background: #111827;
 }
 </style>

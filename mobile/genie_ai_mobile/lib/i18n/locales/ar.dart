@@ -196,146 +196,13 @@ const Map<String, dynamic> arLocale = {
     "VN": "فيتنام",
     "YE": "اليمن",
     "ZM": "زامبيا",
-    "ZW": "زيمبابوي"
+    "ZW": "زيمبابوي",
   },
-  "verification": {
-    "verifying": "جاري التحقق من بريدك الإلكتروني...",
-    "success": "تم التحقق من البريد الإلكتروني بنجاح!",
-    "failed": "فشل التحقق",
-    "accountVerified":
-        "تم التحقق من حسابك بنجاح. يمكنك الآن تسجيل الدخول إلى حسابك.",
-    "invalidLink": "رابط التحقق غير صالح أو منتهي الصلاحية.",
-    "missingToken": "رمز التحقق مفقود.",
-    "generalError": "حدث خطأ أثناء التحقق. يرجى المحاولة مرة أخرى لاحقًا.",
-    "proceedToLogin": "المتابعة لتسجيل الدخول",
-    "backToLogin": "العودة لتسجيل الدخول"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "إنشاء كلمة مرور جديدة",
-    "tokenLabel": "رمز إعادة التعيين",
-    "tokenPlaceholder": "أدخل رمز إعادة التعيين",
-    "validateButton": "التحقق من الرمز",
-    "newPasswordLabel": "كلمة المرور الجديدة",
-    "newPasswordPlaceholder": "أنشئ كلمة مرور جديدة",
-    "confirmNewPasswordLabel": "تأكيد كلمة المرور الجديدة",
-    "confirmNewPasswordPlaceholder": "أعد إدخال كلمة المرور الجديدة",
-    "resetButton": "إعادة تعيين كلمة المرور",
-    "processing": "جاري إعادة التعيين...",
-    "rememberedPassword": "تذكرت كلمة المرور؟",
-    "backToLogin": "العودة لتسجيل الدخول",
-    "supportMessage": "تحتاج مساعدة؟ اتصل بفريق الدعم",
-    "passwordRequirements":
-        "يجب أن تكون كلمة المرور 8 أحرف على الأقل وتحتوي على رقم واحد وحرف كبير واحد وحرف خاص واحد",
-    "passwordsDoNotMatch": "كلمتا المرور غير متطابقتين",
-    "resetSuccess": "تم إعادة تعيين كلمة المرور بنجاح",
-    "resetFailed": "تعذر إعادة تعيين كلمة المرور. يرجى المحاولة مرة أخرى.",
-    "noTokenProvided": "يرجى تقديم رمز إعادة التعيين",
-    "expiredToken": "انتهت صلاحية رمز إعادة التعيين هذا. يرجى طلب واحد جديد.",
-    "invalidToken": "رمز إعادة التعيين غير صالح أو غير معروف",
-    "validatingToken": "جاري التحقق من الرمز...",
-    "redirecting": "جاري التوجيه لصفحة تسجيل الدخول...",
-    "passwordStrength": "قوة كلمة المرور",
-    "strengthLabels": {
-      "veryWeak": "ضعيفة جداً",
-      "weak": "ضعيفة",
-      "fair": "مقبولة",
-      "good": "جيدة",
-      "strong": "قوية"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "استخدم 8 أحرف على الأقل",
-      "addUppercase": "أضف أحرفاً كبيرة",
-      "addLowercase": "أضف أحرفاً صغيرة",
-      "addNumbers": "أضف أرقاماً",
-      "addSpecialChars": "أضف رموزاً خاصة"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "إعادة تعيين كلمة المرور",
-    "emailLabel": "البريد الإلكتروني",
-    "emailPlaceholder": "أدخل بريدك الإلكتروني",
-    "resetButton": "إرسال رابط إعادة التعيين",
-    "processing": "جاري الإرسال...",
-    "rememberPassword": "تذكرت كلمة المرور؟",
-    "backToLogin": "العودة لتسجيل الدخول",
-    "supportMessage": "تحتاج مساعدة؟ اتصل بفريق الدعم",
-    "invalidEmail": "يرجى إدخال بريد إلكتروني صالح",
-    "resetRequestSuccess":
-        "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني",
-    "resetRequestFailed":
-        "تعذر إرسال رابط إعادة تعيين كلمة المرور. يرجى المحاولة مرة أخرى.",
-    "checkEmail":
-        "يرجى التحقق من بريدك الإلكتروني للحصول على مزيد من التعليمات."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "إنشاء حساب جديد",
-    "username": "اسم المستخدم",
-    "usernamePlaceholder": "أدخل اسم المستخدم",
-    "email": "البريد الإلكتروني",
-    "emailPlaceholder": "أدخل بريدك الإلكتروني",
-    "password": "كلمة المرور",
-    "passwordPlaceholder": "أنشئ كلمة مرور",
-    "confirmPassword": "تأكيد كلمة المرور",
-    "confirmPasswordPlaceholder": "أعد إدخال كلمة المرور",
-    "acceptTerms": "أوافق على",
-    "termsOfService": "شروط الخدمة",
-    "registerButton": "إنشاء حساب",
-    "processing": "جاري المعالجة...",
-    "alreadyHaveAccount": "لديك حساب بالفعل؟",
-    "loginNow": "سجل الدخول",
-    "privacyNotice":
-        "بالتسجيل، أنت توافق على شروط الخدمة وسياسة الخصوصية الخاصة بنا",
-    "usernameMinLength": "يجب أن يكون اسم المستخدم 3 أحرف على الأقل",
-    "invalidEmail": "يرجى إدخال بريد إلكتروني صالح",
-    "passwordRequirements":
-        "يجب أن تكون كلمة المرور 8 أحرف على الأقل وتحتوي على رقم واحد وحرف كبير واحد",
-    "passwordsDoNotMatch": "كلمتا المرور غير متطابقتين",
-    "mustAcceptTerms": "يجب الموافقة على شروط الخدمة",
-    "registrationFailed": "فشل التسجيل. يرجى المحاولة مرة أخرى.",
-    "usernameExists": "اسم المستخدم موجود بالفعل",
-    "emailExists": "البريد الإلكتروني موجود بالفعل",
-    "registrationSuccess": "تم التسجيل بنجاح!",
-    "verificationEmailSent": "تم إرسال بريد تحقق إلى {email}",
-    "checkEmailInstructions":
-        "يرجى التحقق من بريدك الإلكتروني واتباع التعليمات لتفعيل حسابك قبل تسجيل الدخول.",
-    "backToLogin": "العودة لتسجيل الدخول",
-    "noEmailReceived": "لم تستلم البريد الإلكتروني؟",
-    "resendVerification": "إعادة إرسال بريد التحقق",
-    "verificationResent": "تم إعادة إرسال بريد التحقق",
-    "verificationResendFailed":
-        "فشل إعادة إرسال بريد التحقق. يرجى المحاولة مرة أخرى.",
-    "usernameInvalidChars":
-        "يمكن لاسم المستخدم أن يحتوي فقط على أحرف وأرقام وشرطات سفلية ونقاط",
-    "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك والمحاولة مرة أخرى."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "اسم المستخدم",
-    "password": "كلمة المرور",
-    "loginButton": "تسجيل الدخول",
-    "or": "أو",
-    "savedAccounts": "الحسابات المحفوظة",
-    "loginSuccess": "تم تسجيل الدخول بنجاح",
-    "loginError": "فشل تسجيل الدخول. يرجى التحقق من بيانات الاعتماد.",
-    "googleLogin": "المتابعة باستخدام Google",
-    "facebookLogin": "المتابعة باستخدام Facebook",
-    "rememberMe": "تذكرني",
-    "forgotPassword": "نسيت كلمة المرور؟",
-    "noAccount": "ليس لديك حساب؟",
-    "createAccount": "إنشاء حساب",
-    "registerNow": "سجل الآن",
-    "termsAndPolicy":
-        "بتسجيل الدخول، أنت توافق على شروط الخدمة وسياسة الخصوصية الخاصة بنا",
-    "loggingIn": "جاري تسجيل الدخول...",
-    "fieldsRequired": "اسم المستخدم وكلمة المرور مطلوبان",
-    "invalidCredentials": "اسم المستخدم أو كلمة المرور غير صالحة",
-    "tooManyAttempts": "محاولات تسجيل دخول كثيرة جداً. يرجى المحاولة لاحقاً.",
-    "loginFailed": "فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.",
-    "oauthNotImplemented": "تسجيل الدخول الاجتماعي غير مفعل حالياً",
-    "savedLoginNotImplemented": "تسجيل الدخول بالحساب المحفوظ غير مفعل حالياً"
+  "auth": {
+    "noInternetConnection": "لا يوجد اتصال بالإنترنت",
+    "networkUnreachable": "الشبكة غير متاحة",
+    "authenticationFailed": "فشل المصادقة",
+    "sessionExpired": "انتهت صلاحية جلستك. يرجى تسجيل الدخول مرة أخرى.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -354,8 +221,8 @@ const Map<String, dynamic> arLocale = {
       "swahili": "السواحيلية",
       "german": "الألمانية",
       "spanish": "الإسبانية",
-      "arabic": "العربية"
-    }
+      "arabic": "العربية",
+    },
   },
   "systemStatus": {
     "title": "حالة الخدمة",
@@ -369,20 +236,20 @@ const Map<String, dynamic> arLocale = {
     "checking": "جاري الفحص...",
     "nextDeadline": "الموعد النهائي القادم",
     "days": "أيام",
-    "viewDetails": "عرض التفاصيل"
+    "viewDetails": "عرض التفاصيل",
   },
   "services": {
     "eCitizen": "بوابة المواطن الإلكتروني",
     "taxFiling": "نظام تقديم الإقرارات الضريبية",
     "idApplication": "طلب الهوية",
     "businessReg": "تسجيل الشركات",
-    "drivingLicense": "رخصة القيادة"
+    "drivingLicense": "رخصة القيادة",
   },
   "deadlines": {
     "taxFiling": "موعد تقديم الضرائب",
     "businessRenewal": "تجديد رخصة العمل",
     "idRenewal": "تجديد بطاقة الهوية",
-    "vehicleRegistration": "موعد تسجيل المركبة"
+    "vehicleRegistration": "موعد تسجيل المركبة",
   },
   "sidebar": {
     "governmentServices": "مجالات المعرفة",
@@ -420,7 +287,7 @@ const Map<String, dynamic> arLocale = {
       "rain": "مطر",
       "shower": "زخات مطر",
       "thunderstorm": "عاصفة رعدية",
-      "snow": "ثلج"
+      "snow": "ثلج",
     },
     "folders": "المجلدات",
     "emptyFolder": "هذا المجلد فارغ. انقل المحادثات هنا من القائمة.",
@@ -433,7 +300,7 @@ const Map<String, dynamic> arLocale = {
       "all": "كل المحادثات",
       "folders": "المجلدات",
       "starred": "المميزة بنجمة",
-      "archived": "المؤرشفة"
+      "archived": "المؤرشفة",
     },
     "savedChats": "المحادثات المحفوظة",
     "chats": "المحادثات",
@@ -490,7 +357,7 @@ const Map<String, dynamic> arLocale = {
     "noConversations": "لم يتم العثور على محادثات",
     "noStarred": "لا توجد محادثات مميزة بنجمة",
     "noArchived": "لا توجد محادثات مؤرشفة",
-    "folderEmptyState": "المجلد فارغ"
+    "folderEmptyState": "المجلد فارغ",
   },
   "leftPanel": {
     "cat1": {
@@ -500,8 +367,8 @@ const Map<String, dynamic> arLocale = {
         "بطاقات الهوية الوطنية",
         "جوازات السفر",
         "شهادات الزواج والوفاة",
-        "تسجيل الناخبين"
-      ]
+        "تسجيل الناخبين",
+      ],
     },
     "cat2": {
       "name": "2. الرعاية الصحية والخدمات الاجتماعية",
@@ -510,8 +377,8 @@ const Map<String, dynamic> arLocale = {
         "برامج التطعيم",
         "التأمين الصحي",
         "إعانات الإعاقة",
-        "المساعدات الاجتماعية والغذائية"
-      ]
+        "المساعدات الاجتماعية والغذائية",
+      ],
     },
     "cat3": {
       "name": "3. التعليم والتعلم",
@@ -519,8 +386,8 @@ const Map<String, dynamic> arLocale = {
         "المدارس العامة والجامعات",
         "المنح الدراسية والقروض الطلابية",
         "برامج تعليم الكبار",
-        "موارد التعلم عبر الإنترنت"
-      ]
+        "موارد التعلم عبر الإنترنت",
+      ],
     },
     "cat4": {
       "name": "4. التوظيف وخدمات العمل",
@@ -528,8 +395,8 @@ const Map<String, dynamic> arLocale = {
         "البحث عن عمل وإعانات البطالة",
         "حماية العمال وحقوق العمل",
         "لوائح السلامة في مكان العمل",
-        "التدريب على المهارات والتدريب المهني"
-      ]
+        "التدريب على المهارات والتدريب المهني",
+      ],
     },
     "cat5": {
       "name": "5. الضرائب والإيرادات",
@@ -537,8 +404,8 @@ const Map<String, dynamic> arLocale = {
         "تقديم إقرارات ضريبة الدخل والاسترداد",
         "مدفوعات الضرائب العقارية",
         "الامتثال الضريبي للأعمال",
-        "الجمارك ورسوم الاستيراد"
-      ]
+        "الجمارك ورسوم الاستيراد",
+      ],
     },
     "cat6": {
       "name": "6. السلامة العامة والعدالة",
@@ -546,8 +413,8 @@ const Map<String, dynamic> arLocale = {
         "الشرطة وخدمات الطوارئ",
         "المحاكم والمساعدة القانونية",
         "الإبلاغ عن الجرائم",
-        "قوانين حماية المستهلك"
-      ]
+        "قوانين حماية المستهلك",
+      ],
     },
     "cat7": {
       "name": "7. النقل والتنقل",
@@ -555,8 +422,8 @@ const Map<String, dynamic> arLocale = {
         "رخص القيادة وتسجيل المركبات",
         "النقل العام والبنية التحتية",
         "مخالفات المرور والغرامات",
-        "برامج السلامة على الطرق"
-      ]
+        "برامج السلامة على الطرق",
+      ],
     },
     "cat8": {
       "name": "8. الإسكان والتنمية الحضرية",
@@ -564,8 +431,8 @@ const Map<String, dynamic> arLocale = {
         "مساعدة الإسكان العام",
         "تسجيل الممتلكات وسجلات الأراضي",
         "قروض الإسكان والدعم",
-        "تقسيم المناطق وتصاريح البناء"
-      ]
+        "تقسيم المناطق وتصاريح البناء",
+      ],
     },
     "cat9": {
       "name": "9. المرافق والبيئة",
@@ -573,8 +440,8 @@ const Map<String, dynamic> arLocale = {
         "خدمات المياه والكهرباء",
         "إدارة النفايات وإعادة التدوير",
         "اللوائح البيئية",
-        "مبادرات الطاقة المتجددة"
-      ]
+        "مبادرات الطاقة المتجددة",
+      ],
     },
     "cat10": {
       "name": "10. الأعمال والتجارة",
@@ -582,8 +449,8 @@ const Map<String, dynamic> arLocale = {
         "تسجيل وترخيص الأعمال",
         "اللوائح التجارية والتصاريح",
         "منح الأعمال الصغيرة والحوافز",
-        "التجارة الإلكترونية ودعم الأعمال الرقمية"
-      ]
+        "التجارة الإلكترونية ودعم الأعمال الرقمية",
+      ],
     },
     "cat11": {
       "name": "11. الضمان الاجتماعي والرفاهية",
@@ -591,8 +458,8 @@ const Map<String, dynamic> arLocale = {
         "مزايا التقاعد",
         "إدارة صندوق المعاشات",
         "مزايا الورثة",
-        "معاشات الإعاقة"
-      ]
+        "معاشات الإعاقة",
+      ],
     },
     "cat12": {
       "name": "12. المجتمع والمشاركة المدنية",
@@ -600,9 +467,9 @@ const Map<String, dynamic> arLocale = {
         "التصويت والانتخابات",
         "ملاحظات الجمهور وشكاوى المواطنين",
         "التطوع والبرامج المجتمعية",
-        "المشاركة في الحكم المحلي"
-      ]
-    }
+        "المشاركة في الحكم المحلي",
+      ],
+    },
   },
   "settings": {
     "title": "الإعدادات",
@@ -618,7 +485,7 @@ const Map<String, dynamic> arLocale = {
     "languages": {
       "english": "الإنجليزية",
       "french": "الفرنسية",
-      "swahili": "السواحيلية"
+      "swahili": "السواحيلية",
     },
     "theme": "السمة",
     "themes": {"light": "فاتح", "dark": "داكن", "system": "النظام"},
@@ -632,10 +499,12 @@ const Map<String, dynamic> arLocale = {
     "emailAddress": "البريد الإلكتروني",
     "emailAddressPlaceholder": "بريدك الإلكتروني",
     "password": "كلمة المرور",
-    "changePassword": "تغيير كلمة المرور",
     "resetUserData": "إعادة تعيين بيانات المستخدم",
     "resetUserDataDesc":
         "سيؤدي هذا إلى مسح جميع بيانات ملفك الشخصي وسجل المحادثات.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "حذف الحساب",
     "deleteAccountDesc":
         "سيؤدي هذا إلى حذف حسابك وجميع البيانات المرتبطة به نهائياً.",
@@ -650,14 +519,14 @@ const Map<String, dynamic> arLocale = {
           "سيؤدي هذا إلى مسح جميع بيانات ملفك الشخصي وسجل المحادثات.",
       "confirmReset":
           "هل أنت متأكد أنك تريد إعادة تعيين جميع بياناتك؟ لا يمكن التراجع عن هذا.",
-      "resetComplete": "تم إعادة تعيين بياناتك."
+      "resetComplete": "تم إعادة تعيين بياناتك.",
     },
     "language": {"title": "اللغة", "selectLabel": "لغة العرض"},
     "appearance": {
       "title": "المظهر",
       "lightTheme": "فاتح",
       "darkTheme": "داكن",
-      "systemTheme": "النظام"
+      "systemTheme": "النظام",
     },
     "confirmDeleteAccount":
         "هل أنت متأكد أنك تريد حذف حسابك؟ لا يمكن التراجع عن هذا الإجراء.",
@@ -691,8 +560,6 @@ const Map<String, dynamic> arLocale = {
     "enterValidEmail": "يرجى إدخال بريد إلكتروني صالح",
     "failedToUpdateEmail":
         "فشل تحديث البريد الإلكتروني. يرجى المحاولة مرة أخرى.",
-    "passwordResetInitiated":
-        "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.",
     "unableToLoadUser": "تعذر تحميل معلومات المستخدم. يرجى المحاولة مرة أخرى.",
     "retry": "إعادة المحاولة",
     "user": "المستخدم",
@@ -704,7 +571,7 @@ const Map<String, dynamic> arLocale = {
     "reset": "إعادة تعيين",
     "deleteAccountTitle": "حذف الحساب",
     "updateFailed": "فشل التحديث",
-    "deletionFailed": "فشل الحذف"
+    "deletionFailed": "فشل الحذف",
   },
   "userProfile": {
     "title": "ملف المستخدم",
@@ -748,7 +615,7 @@ const Map<String, dynamic> arLocale = {
       "tab9": "الضمان الاجتماعي والرفاهية",
       "tab10": "السجلات الجنائية والقانونية",
       "tab11": "النقل والتنقل",
-      "tab12": "المشاركة المدنية والسياسية"
+      "tab12": "المشاركة المدنية والسياسية",
     },
     "tabsShort": {
       "personal": "شخصي",
@@ -762,14 +629,14 @@ const Map<String, dynamic> arLocale = {
       "social": "اجتماعي",
       "criminal": "جنائي",
       "transport": "نقل",
-      "civic": "مواطنة"
+      "civic": "مواطنة",
     },
     "actions": {
       "cancel": "إلغاء",
       "save": "حفظ الملف الشخصي",
       "previous": "السابق",
       "next": "التالي",
-      "saving": "جاري الحفظ..."
+      "saving": "جاري الحفظ...",
     },
     "fields": {
       "fullName": "الاسم الكامل (شاملاً الألقاب)",
@@ -843,7 +710,7 @@ const Map<String, dynamic> arLocale = {
       "electionHistory": "تاريخ المشاركة في الانتخابات",
       "partyMembership": "عضوية الأحزاب السياسية",
       "militaryStatus": "حالة الخدمة العسكرية أو التجنيد",
-      "publicServiceRoles": "أدوار الخدمة العامة"
+      "publicServiceRoles": "أدوار الخدمة العامة",
     },
     "placeholders": {
       "fullName": "أدخل اسمك القانوني الكامل",
@@ -853,7 +720,7 @@ const Map<String, dynamic> arLocale = {
       "searchDisciplines": "بحث عن تخصصات...",
       "selectDiscipline": "اختر تخصصاً",
       "searchDegrees": "بحث عن درجات علمية...",
-      "selectDegree": "اختر درجة علمية"
+      "selectDegree": "اختر درجة علمية",
     },
     "validation": {
       "nameRequired": "الاسم الكامل مطلوب",
@@ -864,7 +731,7 @@ const Map<String, dynamic> arLocale = {
       "futureDate": "التاريخ لا يمكن أن يكون في المستقبل",
       "invalidSelection": "يرجى إجراء اختيار صالح",
       "passwordLength": "يجب أن تكون كلمة المرور 8 أحرف على الأقل",
-      "matchError": "الحقول غير متطابقة"
+      "matchError": "الحقول غير متطابقة",
     },
     "errors": {
       "savingFailed": "فشل حفظ الملف الشخصي",
@@ -873,7 +740,7 @@ const Map<String, dynamic> arLocale = {
       "invalidFileType": "نوع الملف غير صالح",
       "fileTooLarge": "الملف كبير جداً",
       "countryLoadError": "خطأ في تحميل الدول",
-      "countryUpdateError": "خطأ في تحديث الدولة"
+      "countryUpdateError": "خطأ في تحديث الدولة",
     },
     "notifications": {
       "saveSuccess": "تم حفظ الملف الشخصي بنجاح",
@@ -886,7 +753,7 @@ const Map<String, dynamic> arLocale = {
       "formChanged": "لديك تغييرات غير محفوظة",
       "sessionExpired": "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى",
       "profileUpdated": "تم تحديث ملفك الشخصي",
-      "profileIncomplete": "ملفك الشخصي غير مكتمل"
+      "profileIncomplete": "ملفك الشخصي غير مكتمل",
     },
     "instructions": {
       "fullNameHelp": "أدخل اسمك القانوني الكامل كما يظهر في مستنداتك الرسمية",
@@ -901,7 +768,7 @@ const Map<String, dynamic> arLocale = {
       "nextTab": "متابعة للقسم التالي",
       "previousTab": "العودة للقسم السابق",
       "saveInstructions": "انقر حفظ لتخزين معلوماتك",
-      "cancelInstructions": "انقر إلغاء لتجاهل التغييرات"
+      "cancelInstructions": "انقر إلغاء لتجاهل التغييرات",
     },
     "completionStatus": {
       "notStarted": "لم يبدأ",
@@ -909,26 +776,26 @@ const Map<String, dynamic> arLocale = {
       "complete": "مكتمل",
       "percentComplete": "{percent}% مكتمل",
       "tabsCompleted": "تم إكمال {completed} من {total} أقسام",
-      "tabComplete": "تم إكمال علامة التبويب!"
+      "tabComplete": "تم إكمال علامة التبويب!",
     },
     "gender": {
       "male": "ذكر",
       "female": "أنثى",
       "other": "آخر",
-      "preferNot": "أفضل عدم التصريح"
+      "preferNot": "أفضل عدم التصريح",
     },
     "maritalStatus": {
       "single": "أعزب/عزباء",
       "married": "متزوج/متزوجة",
       "divorced": "مطلق/مطلقة",
       "widowed": "أرمل/أرملة",
-      "other": "آخر"
+      "other": "آخر",
     },
     "residencyStatuses": {
       "citizen": "مواطن",
       "permanentResident": "مقيم دائم",
       "temporaryResident": "مقيم مؤقت",
-      "other": "آخر"
+      "other": "آخر",
     },
     "employmentStatuses": {
       "employed": "موظف",
@@ -937,7 +804,7 @@ const Map<String, dynamic> arLocale = {
       "student": "طالب",
       "retired": "متقاعد",
       "homemaker": "ربة منزل",
-      "other": "آخر"
+      "other": "آخر",
     },
     "educationLevels": {
       "primary": "التعليم الابتدائي",
@@ -949,14 +816,14 @@ const Map<String, dynamic> arLocale = {
       "master": "درجة الماجستير",
       "doctoral": "درجة الدكتوراه",
       "professional": "درجة مهنية",
-      "other": "آخر"
+      "other": "آخر",
     },
     "proficiencyLevels": {
       "native": "لغة أم",
       "fluent": "طليق",
       "advanced": "متقدم",
       "intermediate": "متوسط",
-      "basic": "أساسي"
+      "basic": "أساسي",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -967,7 +834,7 @@ const Map<String, dynamic> arLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "غير معروف"
+      "unknown": "غير معروف",
     },
     "languages": {
       "english": "الإنجليزية",
@@ -982,7 +849,7 @@ const Map<String, dynamic> arLocale = {
       "russian": "الروسية",
       "hindi": "الهندية",
       "urdu": "الأردية",
-      "other": "أخرى"
+      "other": "أخرى",
     },
     "yesNo": {"yes": "نعم", "no": "لا"},
     "select": "يرجى الاختيار",
@@ -1089,7 +956,7 @@ const Map<String, dynamic> arLocale = {
       "الطب البيطري",
       "تطوير الويب",
       "بيولوجيا الحياة البرية",
-      "علم الحيوان"
+      "علم الحيوان",
     ],
     "degreeOptions": [
       "درجة مشاركة",
@@ -1119,7 +986,7 @@ const Map<String, dynamic> arLocale = {
       "شهادة مهنية",
       "شهادة دراسات عليا",
       "دبلوم دراسات عليا",
-      "ما بعد الدكتوراه"
+      "ما بعد الدكتوراه",
     ],
     "aria": {
       "tabList": "أقسام نموذج الملف الشخصي",
@@ -1128,8 +995,8 @@ const Map<String, dynamic> arLocale = {
       "closeButton": "إغلاق نموذج الملف الشخصي",
       "saveButton": "حفظ بيانات الملف الشخصي",
       "requiredField": "حقل مطلوب",
-      "dropdownSelect": "اختر خياراً"
-    }
+      "dropdownSelect": "اختر خياراً",
+    },
   },
   "chatbot": {
     "placeholder": "اكتب استفسارك هنا...",
@@ -1194,10 +1061,10 @@ const Map<String, dynamic> arLocale = {
         "discardAndNew": "تجاهل وجديد",
         "discardAndLoad": "تجاهل وتحميل",
         "saveFirst": "حفظ أولاً",
-        "export": "تصدير"
-      }
+        "export": "تصدير",
+      },
     },
-    "shareWhatsApp": "شارك على واتساب"
+    "shareWhatsApp": "شارك على واتساب",
   },
   "quickhelp": {
     "applyForID": "طلب الهوية",
@@ -1243,7 +1110,7 @@ const Map<String, dynamic> arLocale = {
         "أريد معرفة المزيد عن برنامج الإسكان الميسر (Boma Yangu) في كينيا.",
     "findJobsUserPrompt":
         "أريد أن أسأل عن فرص العمل الحكومية وطلبات PSC في كينيا.",
-    "justChatUserPrompt": "أريد الدردشة بشكل عام حول الحياة في كينيا."
+    "justChatUserPrompt": "أريد الدردشة بشكل عام حول الحياة في كينيا.",
   },
   "common": {
     "cancel": "إلغاء",
@@ -1259,7 +1126,7 @@ const Map<String, dynamic> arLocale = {
     "open": "فتح",
     "done": "تم",
     "confirm": "تأكيد",
-    "edit": "تعديل"
+    "edit": "تعديل",
   },
   "feedback": {
     "title": "ملاحظات",
@@ -1273,7 +1140,7 @@ const Map<String, dynamic> arLocale = {
     "thankYouMessage": "شكراً لملاحظاتك!",
     "submitting": "جاري الإرسال...",
     "error": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
-    "success": "شكراً لملاحظاتك!"
+    "success": "شكراً لملاحظاتك!",
   },
   "responseRating": {
     "title": "ساعدنا في التحسين",
@@ -1285,11 +1152,11 @@ const Map<String, dynamic> arLocale = {
       "2": "مفيد قليلاً",
       "3": "مفيد باعتدال",
       "4": "مفيد جداً",
-      "5": "مغير للحياة"
+      "5": "مغير للحياة",
     },
     "additionalComments": "تعليقات إضافية...",
     "submit": "إرسال",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
   },
   "upload": {"alt": "تحميل"},
   "uploadDialog": {
@@ -1307,8 +1174,8 @@ const Map<String, dynamic> arLocale = {
           "ملفات الاختصار (.url) غير مدعومة. يرجى سحب الملف الفعلي.",
       "duplicate": "تمت إضافة الملف \"{fileName}\" بالفعل.",
       "uploadSuccess": "تم تحميل {fileName} بنجاح",
-      "uploadFailed": "فشل تحميل {fileName}."
-    }
+      "uploadFailed": "فشل تحميل {fileName}.",
+    },
   },
   "about": {
     "title": "حول",
@@ -1316,6 +1183,6 @@ const Map<String, dynamic> arLocale = {
     "description":
         "Genie AI هو مساعدك الذكي للتنقل في الخدمات والمعلومات الحكومية.",
     "techStack": "التقنيات المستخدمة",
-    "copyright": "جميع الحقوق محفوظة."
-  }
+    "copyright": "جميع الحقوق محفوظة.",
+  },
 };

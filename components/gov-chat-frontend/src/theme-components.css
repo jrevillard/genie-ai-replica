@@ -18,13 +18,13 @@ body {
   color: var(--text-navbar);
 }
 
-/* Brand name/title in navbar - Force white color */
+/* Brand name/title in navbar - Force white color.
+   Scoped to .brand-name only; broader selectors like `.nav-bar h4` or
+   `.nav-bar [class*='title']` were leaking into popups rendered inside
+   the navbar (e.g. status dropdown), making their text white-on-white. */
 .brand-name,
-.nav-bar h4,
 .nav-bar .brand-name,
-[class*="brand-name"],
-.nav-bar [class*="title"],
-.nav-bar [class*="heading"] {
+[class*='brand-name'] {
   color: var(--text-navbar, #ffffff) !important;
 }
 

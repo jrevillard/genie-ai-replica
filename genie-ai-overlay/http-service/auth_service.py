@@ -1,4 +1,3 @@
-import hashlib
 import time
 from http_service import HttpService
 
@@ -11,14 +10,10 @@ class AuthService:
         self.refresh_token = None
         self.token_expiry = 0
 
-    def _hash_password(self, password: str) -> str:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
     async def login(self):
-        enc_password = self._hash_password(self.password)
         data = await self.http.post("/api/auth/login", {
             "loginName": self.login_name,
-            "encPassword": enc_password
+            "encPassword": self.password
         })
         self.access_token = data["accessToken"]
         self.refresh_token = data["refreshToken"]

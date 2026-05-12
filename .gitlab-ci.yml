@@ -1,0 +1,53 @@
+stages:
+  - test
+  - e2e
+
+# Unit tests — runs on every PR touching mobile/
+# Uses cirrusci/flutter Docker image (no Android SDK needed for unit tests)
+flutter:test:
+  image: cirrusci/flutter:stable
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - mobile/genie_ai_mobile/**
+  before_script:
+    - cd mobile/genie_ai_mobile
+    - flutter pub get
+  script:
+    - flutter analyze
+    - flutter test --coverage
+  artifacts:
+    paths:
+      - mobile/genie_ai_mobile/coverage/
+    when: always
+    expire_in: 7 days
+
+# Patrol E2E tests — requires Android SDK + emulator runner
+# Self-hosted runner tagged 'android-emulator' provides Android SDK and emulator
+# No Docker image specified — runner provides the environment
+patrol:e2e:
+  stage: e2e
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - mobile/genie_ai_mobile/**
+  before_script:
+    - cd mobile/genie_ai_mobile
+    - flutter pub get
+    - dart pub global activate patrol_cli
+    - export PATH="$PATH:$HOME/.pub-cache/bin"
+  script:
+    - bash patrol-wrapper.sh --flavor e2e
+  artifacts:
+    when: always
+    paths:
+      - mobile/genie_ai_mobile/test_failure/
+    expire_in: 7 days
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+  tags:
+    - android-emulator

@@ -6,7 +6,7 @@ const dbService = require ('./db-connection-service');
 
 module.exports = {
   logger: loggerModule.logger, // Export the Winston logger instance
-  dbService, 
+  dbService,
   securityHeaders,
-  SecurityMiddleware
+  SecurityMiddleware,
 };

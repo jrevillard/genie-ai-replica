@@ -196,151 +196,13 @@ const Map<String, dynamic> swLocale = {
     "VN": "Vietnam",
     "YE": "Yemeni",
     "ZM": "Zambia",
-    "ZW": "Zimbabwe"
+    "ZW": "Zimbabwe",
   },
-  "verification": {
-    "verifying": "Inathibitisha barua pepe yako...",
-    "success": "Barua pepe Imethibitishwa!",
-    "failed": "Uthibitishaji Umeshindikana",
-    "accountVerified":
-        "Akaunti yako imethibitishwa. Sasa unaweza kuingia kwenye akaunti yako.",
-    "invalidLink": "Kiungo cha uthibitishaji si sahihi au kimeisha muda.",
-    "missingToken": "Tokeni ya uthibitishaji haipo.",
-    "generalError":
-        "Hitilafu imetokea wakati wa uthibitishaji. Tafadhali jaribu tena baadaye.",
-    "proceedToLogin": "Endelea Kuingia",
-    "backToLogin": "Rudi Kuingia"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Unda Nenosiri Mpya",
-    "tokenLabel": "Tokeni ya Kuweka Upya",
-    "tokenPlaceholder": "Weka tokeni ya kuweka upya",
-    "validateButton": "Thibitisha Tokeni",
-    "newPasswordLabel": "Nenosiri Mpya",
-    "newPasswordPlaceholder": "Unda nenosiri mpya",
-    "confirmNewPasswordLabel": "Thibitisha Nenosiri Mpya",
-    "confirmNewPasswordPlaceholder": "Thibitisha nenosiri lako mpya",
-    "resetButton": "Weka Upya Nenosiri",
-    "processing": "Inaweka upya...",
-    "rememberedPassword": "Unakumbuka nenosiri lako?",
-    "backToLogin": "Rudi Kuingia",
-    "supportMessage": "Unahitaji msaada? Wasiliana na timu yetu ya usaidizi",
-    "passwordRequirements":
-        "Nenosiri lazima liwe na angalau herufi 8, nambari 1, herufi kubwa 1, na alama maalum 1",
-    "passwordsDoNotMatch": "Nywila hazilingani",
-    "resetSuccess": "Nenosiri lako limewekwa upya",
-    "resetFailed": "Imeshindwa kuweka upya nenosiri. Tafadhali jaribu tena.",
-    "noTokenProvided": "Tafadhali toa tokeni ya kuweka upya",
-    "expiredToken":
-        "Tokeni hii ya kuweka upya imeisha muda. Tafadhali omba mpya.",
-    "invalidToken": "Tokeni ya kuweka upya si sahihi au haitambuliki",
-    "validatingToken": "Inathibitisha tokeni...",
-    "redirecting": "Inaelekeza kwenye ukurasa wa kuingia...",
-    "passwordStrength": "Nguvu ya Nenosiri",
-    "strengthLabels": {
-      "veryWeak": "Dhaifu Sana",
-      "weak": "Dhaifu",
-      "fair": "Wastani",
-      "good": "Nzuri",
-      "strong": "Imara"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Tumia angalau herufi 8",
-      "addUppercase": "Ongeza herufi kubwa",
-      "addLowercase": "Ongeza herufi ndogo",
-      "addNumbers": "Ongeza nambari",
-      "addSpecialChars": "Ongeza alama maalum"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Weka Upya Nenosiri Lako",
-    "emailLabel": "Barua pepe",
-    "emailPlaceholder": "Weka barua pepe yako",
-    "resetButton": "Tuma Kiungo cha Kuweka Upya",
-    "processing": "Inatuma...",
-    "rememberPassword": "Unakumbuka nenosiri lako?",
-    "backToLogin": "Rudi Kuingia",
-    "supportMessage": "Unahitaji msaada? Wasiliana na timu yetu ya usaidizi",
-    "invalidEmail": "Tafadhali weka barua pepe sahihi",
-    "resetRequestSuccess":
-        "Kiungo cha kuweka upya nenosiri kimetumwa kwenye barua pepe yako",
-    "resetRequestFailed":
-        "Imeshindwa kutuma kiungo cha kuweka upya nenosiri. Tafadhali jaribu tena.",
-    "checkEmail": "Tafadhali angalia barua pepe yako kwa maelekezo zaidi."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Unda Akaunti Mpya",
-    "username": "Jina la Mtumiaji",
-    "usernamePlaceholder": "Weka jina la mtumiaji",
-    "email": "Barua pepe",
-    "emailPlaceholder": "Weka barua pepe yako",
-    "password": "Nenosiri",
-    "passwordPlaceholder": "Unda nenosiri",
-    "confirmPassword": "Thibitisha Nenosiri",
-    "confirmPasswordPlaceholder": "Thibitisha nenosiri lako",
-    "acceptTerms": "Nakubali",
-    "termsOfService": "Masharti ya Huduma",
-    "registerButton": "Unda Akaunti",
-    "processing": "Inachakata...",
-    "alreadyHaveAccount": "Tayari una akaunti?",
-    "loginNow": "Ingia",
-    "privacyNotice":
-        "Kwa kujiandikisha, unakubali Masharti yetu ya Huduma na Sera ya Faragha",
-    "usernameMinLength": "Jina la mtumiaji lazima liwe na angalau herufi 3",
-    "invalidEmail": "Tafadhali weka barua pepe sahihi",
-    "passwordRequirements":
-        "Nenosiri lazima liwe na angalau herufi 8, nambari 1 na herufi kubwa 1",
-    "passwordsDoNotMatch": "Nywila hazilingani",
-    "mustAcceptTerms": "Lazima ukubali Masharti ya Huduma",
-    "registrationFailed": "Usajili umeshindwa. Tafadhali jaribu tena.",
-    "usernameExists": "Jina la mtumiaji tayari linatumika",
-    "emailExists": "Barua pepe tayari inatumika",
-    "registrationSuccess": "Usajili Umefanikiwa!",
-    "verificationEmailSent": "Barua pepe ya uthibitishaji imetumwa kwa {email}",
-    "checkEmailInstructions":
-        "Tafadhali angalia barua pepe yako na ufuate maelekezo ya kuthibitisha akaunti yako kabla ya kuingia.",
-    "backToLogin": "Rudi Kuingia",
-    "noEmailReceived": "Hukupata barua pepe?",
-    "resendVerification": "Tuma tena barua pepe ya uthibitishaji",
-    "verificationResent": "Barua pepe ya uthibitishaji imetumwa tena",
-    "verificationResendFailed":
-        "Imeshindwa kutuma tena barua pepe ya uthibitishaji. Tafadhali jaribu tena.",
-    "usernameInvalidChars":
-        "Jina la mtumiaji linaweza kuwa na herufi, nambari, mistari chini, nukta na deshi pekee",
-    "networkError":
-        "Hitilafu ya mtandao. Tafadhali angalia muunganisho wako na ujaribu tena."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Jina la Mtumiaji",
-    "password": "Nenosiri",
-    "loginButton": "Ingia",
-    "or": "au",
-    "savedAccounts": "Akaunti Zilizohifadhiwa",
-    "loginSuccess": "Kuingia kumefanikiwa",
-    "loginError": "Kuingia kumeshindwa. Tafadhali angalia taarifa zako.",
-    "googleLogin": "Endelea na Google",
-    "facebookLogin": "Endelea na Facebook",
-    "rememberMe": "Nikumbuke",
-    "forgotPassword": "Umesahau nenosiri?",
-    "noAccount": "Huna akaunti?",
-    "createAccount": "Unda akaunti",
-    "registerNow": "Jisajili sasa",
-    "termsAndPolicy":
-        "Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha",
-    "loggingIn": "Inaingia...",
-    "fieldsRequired": "Jina la mtumiaji na nenosiri zinahitajika",
-    "invalidCredentials": "Jina la mtumiaji au nenosiri si sahihi",
-    "tooManyAttempts":
-        "Majaribio mengi ya kuingia. Tafadhali jaribu tena baadaye.",
-    "loginFailed": "Kuingia kumeshindwa. Tafadhali jaribu tena.",
-    "oauthNotImplemented":
-        "Kuingia kupitia mitandao ya kijamii bado hakujatekelezwa",
-    "savedLoginNotImplemented":
-        "Kuingia kwa akaunti iliyohifadhiwa bado hakujatekelezwa"
+  "auth": {
+    "noInternetConnection": "Hakuna muunganisho wa mtandao",
+    "networkUnreachable": "Mtandao haupatikani",
+    "authenticationFailed": "Uthibitishaji umeshindwa",
+    "sessionExpired": "Kipindi chako kimeisha. Tafadhali ingia tena.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -359,8 +221,8 @@ const Map<String, dynamic> swLocale = {
       "swahili": "Kiswahili",
       "german": "Kijerumani",
       "spanish": "Kihispania",
-      "arabic": "Kiarabu"
-    }
+      "arabic": "Kiarabu",
+    },
   },
   "systemStatus": {
     "title": "Hali ya Huduma",
@@ -374,20 +236,20 @@ const Map<String, dynamic> swLocale = {
     "checking": "Inakagua...",
     "nextDeadline": "Tarehe ya Mwisho Ijayo",
     "days": "siku",
-    "viewDetails": "Angalia Maelezo"
+    "viewDetails": "Angalia Maelezo",
   },
   "services": {
     "eCitizen": "Tovuti ya eCitizen",
     "taxFiling": "Mfumo wa Kulipa Ushuru",
     "idApplication": "Maombi ya Kitambulisho",
     "businessReg": "Usajili wa Biashara",
-    "drivingLicense": "Leseni ya Udereva"
+    "drivingLicense": "Leseni ya Udereva",
   },
   "deadlines": {
     "taxFiling": "Tarehe ya Mwisho ya Ushuru",
     "businessRenewal": "Uhuishaji wa Leseni ya Biashara",
     "idRenewal": "Uhuishaji wa Kitambulisho",
-    "vehicleRegistration": "Tarehe ya Mwisho ya Usajili wa Gari"
+    "vehicleRegistration": "Tarehe ya Mwisho ya Usajili wa Gari",
   },
   "sidebar": {
     "governmentServices": "Maeneo ya Maarifa",
@@ -427,7 +289,7 @@ const Map<String, dynamic> swLocale = {
       "rain": "Mvua",
       "shower": "Manyunyu",
       "thunderstorm": "Ngurumo",
-      "snow": "Theluji"
+      "snow": "Theluji",
     },
     "folders": "Folda",
     "emptyFolder":
@@ -441,7 +303,7 @@ const Map<String, dynamic> swLocale = {
       "all": "Gumzo Zote",
       "folders": "Folda",
       "starred": "Zilizopewa Nyota",
-      "archived": "Zilizohifadhiwa"
+      "archived": "Zilizohifadhiwa",
     },
     "savedChats": "Gumzo Zilizohifadhiwa",
     "chats": "Gumzo",
@@ -501,7 +363,7 @@ const Map<String, dynamic> swLocale = {
     "noConversations": "Hakuna mazungumzo yaliyopatikana",
     "noStarred": "Hakuna mazungumzo yenye nyota",
     "noArchived": "Hakuna mazungumzo yaliyohifadhiwa",
-    "folderEmptyState": "Folda ni tupu"
+    "folderEmptyState": "Folda ni tupu",
   },
   "leftPanel": {
     "cat1": {
@@ -511,8 +373,8 @@ const Map<String, dynamic> swLocale = {
         "Vitambulisho vya kitaifa",
         "Pasipoti",
         "Vyeti vya ndoa na kifo",
-        "Usajili wa wapiga kura"
-      ]
+        "Usajili wa wapiga kura",
+      ],
     },
     "cat2": {
       "name": "2. Huduma za Afya na Jamii",
@@ -521,8 +383,8 @@ const Map<String, dynamic> swLocale = {
         "Mipango ya chanjo",
         "Bima ya afya",
         "Faida za ulemavu",
-        "Ustawi na msaada wa chakula"
-      ]
+        "Ustawi na msaada wa chakula",
+      ],
     },
     "cat3": {
       "name": "3. Elimu na Kujifunza",
@@ -530,8 +392,8 @@ const Map<String, dynamic> swLocale = {
         "Shule za umma na vyuo vikuu",
         "Biasis na mikopo ya wanafunzi",
         "Programu za elimu ya watu wazima",
-        "Rasilimali za kujifunza mtandaoni"
-      ]
+        "Rasilimali za kujifunza mtandaoni",
+      ],
     },
     "cat4": {
       "name": "4. Ajira na Huduma za Kazi",
@@ -539,8 +401,8 @@ const Map<String, dynamic> swLocale = {
         "Utafutaji wa kazi na faida za ukosefu wa ajira",
         "Ulinzi wa wafanyakazi na haki za kazi",
         "Kanuni za usalama mahali pa kazi",
-        "Mafunzo ya ujuzi na uanagenzi"
-      ]
+        "Mafunzo ya ujuzi na uanagenzi",
+      ],
     },
     "cat5": {
       "name": "5. Ushuru na Mapato",
@@ -548,8 +410,8 @@ const Map<String, dynamic> swLocale = {
         "Uwasilishaji wa kodi ya mapato na marejesho",
         "Malipo ya kodi ya mali",
         "Uzingatiaji wa kodi ya biashara",
-        "Forodha na ushuru wa kuagiza"
-      ]
+        "Forodha na ushuru wa kuagiza",
+      ],
     },
     "cat6": {
       "name": "6. Usalama wa Umma na Haki",
@@ -557,8 +419,8 @@ const Map<String, dynamic> swLocale = {
         "Polisi na huduma za dharura",
         "Mahakama na msaada wa kisheria",
         "Kuripoti uhalifu",
-        "Sheria za ulinzi wa watumiaji"
-      ]
+        "Sheria za ulinzi wa watumiaji",
+      ],
     },
     "cat7": {
       "name": "7. Usafiri na Uhamaji",
@@ -566,8 +428,8 @@ const Map<String, dynamic> swLocale = {
         "Leseni za madereva na usajili wa magari",
         "Usafiri wa umma na miundombinu",
         "Makovu ya barabarani na faini",
-        "Programu za usalama barabarani"
-      ]
+        "Programu za usalama barabarani",
+      ],
     },
     "cat8": {
       "name": "8. Nyumba na Maendeleo ya Miji",
@@ -575,8 +437,8 @@ const Map<String, dynamic> swLocale = {
         "Msaada wa nyumba za umma",
         "Usajili wa mali na rekodi za ardhi",
         "Mikopo ya nyumba na ruzuku",
-        "Zoning na vibali vya ujenzi"
-      ]
+        "Zoning na vibali vya ujenzi",
+      ],
     },
     "cat9": {
       "name": "9. Huduma na Mazingira",
@@ -584,8 +446,8 @@ const Map<String, dynamic> swLocale = {
         "Huduma za maji na umeme",
         "Usimamizi wa taka na kuchakata",
         "Kanuni za mazingira",
-        "Mipango ya nishati mbadala"
-      ]
+        "Mipango ya nishati mbadala",
+      ],
     },
     "cat10": {
       "name": "10. Biashara na Biashara",
@@ -593,8 +455,8 @@ const Map<String, dynamic> swLocale = {
         "Usajili na leseni za biashara",
         "Kanuni za biashara na vibali",
         "Ruzuku na motisha kwa biashara ndogo",
-        "Biashara ya mtandaoni na msaada wa biashara za kidijitali"
-      ]
+        "Biashara ya mtandaoni na msaada wa biashara za kidijitali",
+      ],
     },
     "cat11": {
       "name": "11. Usalama wa Jamii na Pensheni",
@@ -602,8 +464,8 @@ const Map<String, dynamic> swLocale = {
         "Faida za kustaafu",
         "Usimamizi wa mfuko wa pensheni",
         "Faida za warithi",
-        "Pensheni za ulemavu"
-      ]
+        "Pensheni za ulemavu",
+      ],
     },
     "cat12": {
       "name": "12. Jamii na Ushiriki wa Kiraia",
@@ -611,9 +473,9 @@ const Map<String, dynamic> swLocale = {
         "Kupiga kura na uchaguzi",
         "Maoni ya umma na malalamiko ya raia",
         "Kujitolea na programu za jamii",
-        "Ushiriki wa serikali za mitaa"
-      ]
-    }
+        "Ushiriki wa serikali za mitaa",
+      ],
+    },
   },
   "settings": {
     "title": "Mipangilio",
@@ -629,7 +491,7 @@ const Map<String, dynamic> swLocale = {
     "languages": {
       "english": "Kiingereza",
       "french": "Kifaransa",
-      "swahili": "Kiswahili"
+      "swahili": "Kiswahili",
     },
     "theme": "Mandhari",
     "themes": {"light": "Nuru", "dark": "Giza", "system": "Mfumo"},
@@ -643,10 +505,12 @@ const Map<String, dynamic> swLocale = {
     "emailAddress": "Anwani ya Barua pepe",
     "emailAddressPlaceholder": "Barua pepe yako",
     "password": "Nenosiri",
-    "changePassword": "Badilisha Nenosiri",
     "resetUserData": "Weka Upya Data ya Mtumiaji",
     "resetUserDataDesc":
         "Hii itafuta data yako yote ya wasifu na historia ya gumzo.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Futa Akaunti",
     "deleteAccountDesc":
         "Hii itafuta akaunti yako na data zote zinazohusiana nayo kabisa.",
@@ -661,14 +525,14 @@ const Map<String, dynamic> swLocale = {
           "Hii itafuta data yako yote ya wasifu na historia ya gumzo.",
       "confirmReset":
           "Una uhakika unataka kuweka upya data yako yote? Hii haiwezi kubatilishwa.",
-      "resetComplete": "Data yako imewekwa upya."
+      "resetComplete": "Data yako imewekwa upya.",
     },
     "language": {"title": "Lugha", "selectLabel": "Lugha ya Onyesho"},
     "appearance": {
       "title": "Muonekano",
       "lightTheme": "Nuru",
       "darkTheme": "Giza",
-      "systemTheme": "Mfumo"
+      "systemTheme": "Mfumo",
     },
     "confirmDeleteAccount":
         "Una uhakika unataka kufuta akaunti yako? Kitendo hiki hakiwezi kubatilishwa.",
@@ -706,8 +570,6 @@ const Map<String, dynamic> swLocale = {
     "enterValidEmail": "Tafadhali weka barua pepe sahihi",
     "failedToUpdateEmail":
         "Imeshindwa kusasisha barua pepe. Tafadhali jaribu tena.",
-    "passwordResetInitiated":
-        "Kiungo cha kuweka upya nenosiri kimetumwa kwa anwani yako ya barua pepe.",
     "unableToLoadUser":
         "Imeshindwa kupakia taarifa za mtumiaji. Tafadhali jaribu tena.",
     "retry": "Jaribu tena",
@@ -717,7 +579,7 @@ const Map<String, dynamic> swLocale = {
     "confirmResetUserData":
         "Una uhakika unataka kuweka upya data yote ya wasifu wako? Hii itafuta taarifa zote za wasifu na historia ya gumzo, lakini itahifadhi sifa zako za akaunti.",
     "reset": "Weka Upya",
-    "deleteAccountTitle": "Futa Akaunti"
+    "deleteAccountTitle": "Futa Akaunti",
   },
   "userProfile": {
     "title": "Wasifu wa Mtumiaji",
@@ -765,7 +627,7 @@ const Map<String, dynamic> swLocale = {
       "tab9": "Usalama wa Jamii na Ustawi",
       "tab10": "Rekodi za Jinai na Kisheria",
       "tab11": "Usafiri na Uhamaji",
-      "tab12": "Ushiriki wa Kiraia na Kisiasa"
+      "tab12": "Ushiriki wa Kiraia na Kisiasa",
     },
     "tabsShort": {
       "personal": "Binafsi",
@@ -779,14 +641,14 @@ const Map<String, dynamic> swLocale = {
       "social": "Kijamii",
       "criminal": "Jinai",
       "transport": "Usafiri",
-      "civic": "Kiraia"
+      "civic": "Kiraia",
     },
     "actions": {
       "cancel": "Ghairi",
       "save": "Hifadhi Wasifu",
       "previous": "Iliyopita",
       "next": "Inayofuata",
-      "saving": "Inahifadhi..."
+      "saving": "Inahifadhi...",
     },
     "fields": {
       "fullName": "Jina kamili (pamoja na majina ya utani)",
@@ -861,7 +723,7 @@ const Map<String, dynamic> swLocale = {
       "electionHistory": "Historia ya ushiriki wa uchaguzi",
       "partyMembership": "Uanachama wa chama cha siasa",
       "militaryStatus": "Huduma ya kijeshi au hali ya kuandikishwa",
-      "publicServiceRoles": "Majukumu ya utumishi wa umma"
+      "publicServiceRoles": "Majukumu ya utumishi wa umma",
     },
     "placeholders": {
       "fullName": "Weka jina lako kamili la kisheria",
@@ -871,7 +733,7 @@ const Map<String, dynamic> swLocale = {
       "searchDisciplines": "Tafuta taaluma...",
       "selectDiscipline": "Chagua taaluma",
       "searchDegrees": "Tafuta digrii...",
-      "selectDegree": "Chagua digrii"
+      "selectDegree": "Chagua digrii",
     },
     "validation": {
       "nameRequired": "Jina kamili linahitajika",
@@ -882,7 +744,7 @@ const Map<String, dynamic> swLocale = {
       "futureDate": "Tarehe haiwezi kuwa katika siku zijazo",
       "invalidSelection": "Tafadhali fanya uteuzi sahihi",
       "passwordLength": "Nenosiri lazima liwe na angalau herufi 8",
-      "matchError": "Sehemu hazilingani"
+      "matchError": "Sehemu hazilingani",
     },
     "errors": {
       "savingFailed": "Imeshindwa kuhifadhi wasifu",
@@ -891,7 +753,7 @@ const Map<String, dynamic> swLocale = {
       "invalidFileType": "Aina ya faili batili",
       "fileTooLarge": "Faili ni kubwa mno",
       "countryLoadError": "Hitilafu kupakia nchi",
-      "countryUpdateError": "Hitilafu kusasisha nchi"
+      "countryUpdateError": "Hitilafu kusasisha nchi",
     },
     "notifications": {
       "saveSuccess": "Wasifu umehifadhiwa",
@@ -904,7 +766,7 @@ const Map<String, dynamic> swLocale = {
       "formChanged": "Una mabadiliko ambayo hayajahifadhiwa",
       "sessionExpired": "Kipindi chako kimeisha, tafadhali ingia tena",
       "profileUpdated": "Wasifu wako umesasishwa",
-      "profileIncomplete": "Wasifu wako haujakamilika"
+      "profileIncomplete": "Wasifu wako haujakamilika",
     },
     "instructions": {
       "fullNameHelp":
@@ -921,7 +783,7 @@ const Map<String, dynamic> swLocale = {
       "nextTab": "Endelea kwenye sehemu inayofuata",
       "previousTab": "Rudi kwenye sehemu iliyopita",
       "saveInstructions": "Bofya Hifadhi ili kuhifadhi taarifa zako",
-      "cancelInstructions": "Bofya Ghairi ili kutupa mabadiliko"
+      "cancelInstructions": "Bofya Ghairi ili kutupa mabadiliko",
     },
     "completionStatus": {
       "notStarted": "Haijaanza",
@@ -929,26 +791,26 @@ const Map<String, dynamic> swLocale = {
       "complete": "Imekamilika",
       "percentComplete": "{percent}% imekamilika",
       "tabsCompleted": "Imekamilika sehemu {completed} kati ya {total}",
-      "tabComplete": "Kichupo kimekamilika!"
+      "tabComplete": "Kichupo kimekamilika!",
     },
     "gender": {
       "male": "Mwanaume",
       "female": "Mwanamke",
       "other": "Nyingine",
-      "preferNot": "Pendelea kutosema"
+      "preferNot": "Pendelea kutosema",
     },
     "maritalStatus": {
       "single": "Hajaoa/Hajaolewa",
       "married": "Ameoa/Ameolewa",
       "divorced": "Ametalikiwa",
       "widowed": "Mjane",
-      "other": "Nyingine"
+      "other": "Nyingine",
     },
     "residencyStatuses": {
       "citizen": "Raia",
       "permanentResident": "Mkazi wa Kudumu",
       "temporaryResident": "Mkazi wa Muda",
-      "other": "Nyingine"
+      "other": "Nyingine",
     },
     "employmentStatuses": {
       "employed": "Ameajiriwa",
@@ -957,7 +819,7 @@ const Map<String, dynamic> swLocale = {
       "student": "Mwanafunzi",
       "retired": "Amestaafu",
       "homemaker": "Mama/Baba wa Nyumbani",
-      "other": "Nyingine"
+      "other": "Nyingine",
     },
     "educationLevels": {
       "primary": "Elimu ya Msingi",
@@ -969,14 +831,14 @@ const Map<String, dynamic> swLocale = {
       "master": "Shahada ya Uzamili",
       "doctoral": "Shahada ya Uzamivu",
       "professional": "Shahada ya Kitaaluma",
-      "other": "Nyingine"
+      "other": "Nyingine",
     },
     "proficiencyLevels": {
       "native": "Mzawa",
       "fluent": "Fasaha",
       "advanced": "Juu",
       "intermediate": "Kati",
-      "basic": "Msingi"
+      "basic": "Msingi",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -987,7 +849,7 @@ const Map<String, dynamic> swLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Haijulikani"
+      "unknown": "Haijulikani",
     },
     "languages": {
       "english": "Kiingereza",
@@ -1002,7 +864,7 @@ const Map<String, dynamic> swLocale = {
       "russian": "Kirusi",
       "hindi": "Kihindi",
       "urdu": "Kiurdu",
-      "other": "Nyingine"
+      "other": "Nyingine",
     },
     "yesNo": {"yes": "Ndiyo", "no": "Hapana"},
     "select": "Tafadhali chagua",
@@ -1109,7 +971,7 @@ const Map<String, dynamic> swLocale = {
       "Tiba ya Mifugo",
       "Maendeleo ya Wavuti",
       "Biolojia ya Wanyamapori",
-      "Zoolojia"
+      "Zoolojia",
     ],
     "degreeOptions": [
       "Shahada ya Ushirika",
@@ -1139,7 +1001,7 @@ const Map<String, dynamic> swLocale = {
       "Cheti cha Ufundi",
       "Cheti cha Wahitimu",
       "Diploma ya Wahitimu",
-      "Baada ya Udaktari"
+      "Baada ya Udaktari",
     ],
     "aria": {
       "tabList": "Sehemu za fomu ya wasifu",
@@ -1148,8 +1010,8 @@ const Map<String, dynamic> swLocale = {
       "closeButton": "Funga fomu ya wasifu",
       "saveButton": "Hifadhi data ya wasifu",
       "requiredField": "Sehemu inayohitajika",
-      "dropdownSelect": "Chagua chaguo"
-    }
+      "dropdownSelect": "Chagua chaguo",
+    },
   },
   "chatbot": {
     "placeholder": "Andika swali lako hapa...",
@@ -1158,7 +1020,7 @@ const Map<String, dynamic> swLocale = {
     "fileUploadError": "Hitilafu kupakia faili.",
     "processingError": "Hitilafu kuchakata ombi lako.",
     "welcomeMessage":
-        "Karibu! Ninawezaje kukusaidia na huduma za serikali ya Kenya leo?",
+        "Karibu! Niko hapa kuwasaidia wakulima wa Lesotho kuhusu mazao, mifugo, udongo na hali ya hewa. Ungependa kujua nini leo?",
     "attachFile": "Ambatanisha Faili",
     "fileTooLarge": "Faili ni kubwa mno. Ukubwa wa juu ni {maxSize}.",
     "saveChat": "Hifadhi Gumzo",
@@ -1215,57 +1077,57 @@ const Map<String, dynamic> swLocale = {
         "discardAndNew": "Tupa & Mpya",
         "discardAndLoad": "Tupa & Pakia",
         "saveFirst": "Hifadhi Kwanza",
-        "export": "Hamisha"
-      }
+        "export": "Hamisha",
+      },
     },
-    "shareWhatsApp": "Shiriki kwenye WhatsApp"
+    "shareWhatsApp": "Shiriki kwenye WhatsApp",
   },
   "quickhelp": {
-    "applyForID": "Omba Kitambulisho",
-    "payTaxes": "Lipa Ushuru",
-    "startBusiness": "Anzisha Biashara",
-    "findHealthcare": "Afya",
-    "educationServices": "Elimu",
-    "transportLicenses": "Usafiri",
-    "housingPrograms": "Makazi",
-    "findJobs": "Tafuta Kazi",
+    "applyForID": "Mahindi na nafaka",
+    "payTaxes": "Maharage na kunde",
+    "startBusiness": "Udongo na rutuba",
+    "findHealthcare": "Wadudu na magonjwa",
+    "educationServices": "Mifugo",
+    "transportLicenses": "Maji na umwagiliaji",
+    "housingPrograms": "Hali ya hewa na majira",
+    "findJobs": "Masoko na ushirika",
     "justChat": "Gumzo",
     "applyForIDPrompt":
-        "Tenda kama mtaalamu wa usajili wa raia wa Kenya anayesaidia. Fafanua hatua za kupata Kitambulisho cha Taifa (Maisha Namba) au kubadilisha kilichopotea. MUHIMU: Toa orodha wazi ya hati zinazohitajika (mfano, Cheti cha Kuzaliwa, nakala za vitambulisho vya wazazi) na umshauri mtumiaji kutembelea Huduma Centre iliyo karibu au ofisi ya Msajili wa Watu. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Answer using ONLY what the knowledge base retrieval provides about farming in Lesotho. Focus on maize and cereals: planting times for highland vs lowland areas, varieties, rotation, storage. Never give Kenya civil registration, Huduma centres, Maisha Namba, or other non-Lesotho ID processes unless a retrieved document explicitly names them for comparison.",
     "payTaxesPrompt":
-        "Tenda kama mwongozo wa KRA (Mamlaka ya Ushuru ya Kenya). Fafanua mchakato wa kuwasilisha marejesho, kutuma maombi ya KRA PIN, au kuweka upya nenosiri kwenye tovuti ya iTax. MUHIMU: Mkumbushe mtumiaji kuhusu tarehe ya mwisho ya Juni 30 kwa marejesho ya mwaka na umwelekeze jinsi ya kuwasilisha marejesho ya bila (Nil returns) ikiwa hakuwa na mapato. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on beans, pulses, and legumes (planting, pests, soil). Do NOT answer with Kenya Revenue Authority, KRA, iTax, tax filing, or business registration unless that information appears in retrieved text about Lesotho or cross-border trade.",
     "startBusinessPrompt":
-        "Tenda kama mshauri wa biashara kwa huduma za eCitizen. Mwelekeze mtumiaji kupitia uhifadhi wa jina la biashara na usajili wa kampuni nchini Kenya. MUHIMU: Fafanua gharama za sasa za utafutaji wa jina na usajili, na umwelekeze mtumiaji kwenye tovuti rasmi ya eCitizen ili kukamilisha maombi. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on soil health, compost, manure, liming, erosion control, and fertility for Lesotho's conditions. Do NOT give eCitizen, Kenya company registration, or business-name search steps unless retrieved documents mention them.",
     "findHealthcarePrompt":
-        "Tenda kama mwongozo wa huduma za afya. Toa maelezo kuhusu mabadiliko kutoka NHIF hadi SHIF (Mfuko wa Bima ya Afya ya Kijamii) na jinsi ya kujiandikisha. MUHIMU: Shiriki nambari rasmi za USSD (kama *263#) au viungo vya tovuti kwa usajili na ufafanue faida za bima ya afya ya umma. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on identifying crop pests and diseases, prevention, and safe management relevant to Lesotho. Do NOT answer with Kenya NHIF, SHIF, hospital insurance, or health USSD codes unless retrieved documents include them.",
     "educationServicesPrompt":
-        "Tenda kama mshauri wa elimu. Jadili mtaala wa CBC, usajili wa NEMIS, au upangaji wa chuo kikuu kupitia KUCCPS. MUHIMU: Fafanua jinsi wazazi wanavyoweza kuangalia matokeo ya mitihani ya kitaifa kupitia SMS au tovuti ya KNEC yanapotolewa. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on livestock care (cattle, sheep, goats, poultry), feed, housing, and common diseases in Lesotho. Do NOT discuss Kenya's CBC, NEMIS, KUCCPS, or national exam systems unless retrieved text does.",
     "transportLicensesPrompt":
-        "Tenda kama mwongozo wa huduma za NTSA. Fafanua mchakato wa kusasisha leseni ya kuendesha gari, ukaguzi wa gari, au usimamizi wa akaunti ya TIMS. MUHIMU: Mwelekeze mtumiaji jinsi ya kuingia kwenye tovuti ya eCitizen NTSA ili kutuma maombi ya Smart DL au kuweka nafasi ya ukaguzi wa gari. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved content. Focus on irrigation, rainwater harvesting, soil moisture, and water conservation for crops in Lesotho. Do NOT give Kenya NTSA, eCitizen transport, Smart DL, or vehicle inspection steps unless retrieved documents include them.",
     "housingProgramsPrompt":
-        "Tenda kama mshauri wa mpango wa makazi. Fafanua usajili wa Mpango wa Makazi ya Bei Nafuu (Boma Yangu) na mchakato wa uchangiaji wa hiari. MUHIMU: Mwelekeze mtumiaji kwenye tovuti ya Boma Yangu ili kuona miradi na ufafanue vigezo vya kustahiki kwa ugawaji. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved materials. Focus on seasonal planting calendars, frost risk, rainfall patterns, and climate considerations for Lesotho. Do NOT describe Kenya affordable housing, Boma Yangu, or urban mortgage programs unless retrieved documents mention them.",
     "findJobsPrompt":
-        "Tenda kama kocha wa kazi kwa utumishi wa umma. Mwelekeze mtumiaji kuunda wasifu na kutuma maombi ya nafasi za kazi kupitia tovuti ya Tume ya Utumishi wa Umma (PSC). MUHIMU: Mshauri mtumiaji kuweka vyeti vyake vya masomo tayari na kuangalia mara kwa mara tovuti ya PSC au magazeti ya ndani kwa matangazo ya MyGov. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, an agricultural assistant for farmers in Lesotho. Use ONLY retrieved documents. Focus on marketing produce, cooperatives, local buyers, and farmer groups in Lesotho. Do NOT give Kenya Public Service Commission, MyGov job portals, or civil-service recruitment unless retrieved text supports it.",
     "justChatPrompt":
-        "Tenda kama rafiki wa karibu na mwenye urafiki. Kuwa na heshima, msaada, na mwenye ujuzi kuhusu utamaduni wa Kenya na maisha ya kila siku. MUHIMU: Mkumbushe mtumiaji kwamba ingawa unaweza kupiga gumzo kuhusu chochote, nguvu yako kuu ni kuwasaidia kuvinjari huduma za serikali ya Kenya kama **Vitambulisho**, **Ushuru**, na **Usajili wa Biashara**. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+        "You are Genie AI, a friendly assistant for people working the land in Lesotho. Be practical and respectful. If the user chats generally, keep the tone helpful but steer toward farming, livestock, soil, water, and climate in Lesotho. Do not present Kenya taxes, IDs, eCitizen, or other Kenya government services as default answers. Always rely on retrieved knowledge when answering factual questions about agriculture.",
     "applyForIDUserPrompt":
-        "Nataka kujua kuhusu kutuma maombi ya Kitambulisho cha Taifa nchini Kenya.",
+        "Ni lini nisteue mahindi na ninachopaswa kuzingatia Lesotho?",
     "payTaxesUserPrompt":
-        "Nataka kuuliza kuhusu kulipa ushuru au kuwasilisha marejesho yangu ya KRA nchini Kenya.",
+        "Ninawezaje kulima maharage na kunde kwa mafanikio shambani?",
     "startBusinessUserPrompt":
-        "Nataka kujua kuhusu kusajili biashara mpya au kampuni nchini Kenya.",
+        "Ni mbinu zipi za udongo au mbolea zinazofanya vizuri Lesotho?",
     "findHealthcareUserPrompt":
-        "Nataka kuuliza kuhusu vituo vya afya vya umma na bima (NHIF/SHIF) nchini Kenya.",
+        "Ni ishara gani za wadudu au magonjwa ya mazao nifuate?",
     "educationServicesUserPrompt":
-        "Nataka kujua kuhusu shule na huduma za elimu nchini Kenya.",
+        "Ninawezaje kutunza mifugo katika shamba dogo?",
     "transportLicensesUserPrompt":
-        "Nataka kuuliza kuhusu leseni za kuendesha gari na huduma za NTSA nchini Kenya.",
+        "Ninapaswa kudhibiti maji au umwagiliaji wa mazao vipi?",
     "housingProgramsUserPrompt":
-        "Nataka kujua kuhusu Mpango wa Makazi ya Bei Nafuu (Boma Yangu) nchini Kenya.",
+        "Majira na hali ya hewa huathirije kupanda na mavuno?",
     "findJobsUserPrompt":
-        "Nataka kuuliza kuhusu nafasi za kazi za serikali na maombi ya PSC nchini Kenya.",
+        "Ninawezaje kuuza mazao yangu au kuungana na wakulima wengine?",
     "justChatUserPrompt":
-        "Nataka kupiga gumzo kwa ujumla kuhusu maisha nchini Kenya."
+        "Nataka kuuliza swali jumla kuhusu ukulima Lesotho",
   },
   "common": {
     "cancel": "Ghairi",
@@ -1281,7 +1143,7 @@ const Map<String, dynamic> swLocale = {
     "open": "Fungua",
     "done": "Imekamilika",
     "confirm": "Thibitisha",
-    "edit": "Hariri"
+    "edit": "Hariri",
   },
   "feedback": {
     "title": "Maoni",
@@ -1295,7 +1157,7 @@ const Map<String, dynamic> swLocale = {
     "thankYouMessage": "Asante kwa maoni yako!",
     "submitting": "Inatuma...",
     "error": "Hitilafu imetokea. Tafadhali jaribu tena.",
-    "success": "Asante kwa maoni yako!"
+    "success": "Asante kwa maoni yako!",
   },
   "responseRating": {
     "title": "Tusaidie Kuboresha",
@@ -1307,11 +1169,11 @@ const Map<String, dynamic> swLocale = {
       "2": "Inasaidia Kidogo",
       "3": "Inasaidia Kiasi",
       "4": "Inasaidia Sana",
-      "5": "Inabadilisha Maisha"
+      "5": "Inabadilisha Maisha",
     },
     "additionalComments": "Maoni ya ziada...",
     "submit": "Tuma",
-    "cancel": "Ghairi"
+    "cancel": "Ghairi",
   },
   "upload": {"alt": "Pakia"},
   "uploadDialog": {
@@ -1329,8 +1191,8 @@ const Map<String, dynamic> swLocale = {
           "Faili za mkato (.url) hazitumiki. Tafadhali buruta faili halisi.",
       "duplicate": "Faili \"{fileName}\" tayari imeongezwa.",
       "uploadSuccess": "Imefanikiwa kupakia {fileName}",
-      "uploadFailed": "Imeshindwa kupakia {fileName}."
-    }
+      "uploadFailed": "Imeshindwa kupakia {fileName}.",
+    },
   },
   "about": {
     "title": "Kuhusu",
@@ -1338,6 +1200,6 @@ const Map<String, dynamic> swLocale = {
     "description":
         "Genie AI ni msaidizi wako mahiri wa kuvinjari huduma na taarifa za serikali.",
     "techStack": "Teknolojia",
-    "copyright": "Haki zote zimehifadhiwa."
-  }
+    "copyright": "Haki zote zimehifadhiwa.",
+  },
 };

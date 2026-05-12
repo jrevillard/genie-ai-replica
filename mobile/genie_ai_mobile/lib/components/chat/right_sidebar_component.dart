@@ -108,7 +108,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       if (mounted) {
         setState(() {
           _faqItems = [
-            {'question': 'Error', 'answer': tr('sidebar.weatherErrorDefault')}
+            {'question': 'Error', 'answer': tr('sidebar.weatherErrorDefault')},
           ];
           _isLoadingFaq = false;
         });
@@ -128,7 +128,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
         if (currentQuestion != null) {
           faqs.add({
             'question': currentQuestion,
-            'answer': currentAnswer.toString().trim()
+            'answer': currentAnswer.toString().trim(),
           });
           currentAnswer.clear();
         }
@@ -143,7 +143,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     if (currentQuestion != null) {
       faqs.add({
         'question': currentQuestion,
-        'answer': currentAnswer.toString().trim()
+        'answer': currentAnswer.toString().trim(),
       });
     }
 
@@ -185,7 +185,8 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       return Icons.slideshow;
     if (type.contains('image') ||
         name.contains('.jpg') ||
-        name.contains('.png')) return Icons.image;
+        name.contains('.png'))
+      return Icons.image;
     if (type.contains('video')) return Icons.videocam;
     if (type.contains('audio')) return Icons.audiotrack;
     if (name.endsWith('.md') || name.endsWith('.txt'))
@@ -200,8 +201,13 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   }
 
   String _formatFileSize(Map<String, dynamic> doc) {
-    final val = _getDocValue(
-        doc, ['size', 'fileSize', 'length', 'contentLength', 'file_size']);
+    final val = _getDocValue(doc, [
+      'size',
+      'fileSize',
+      'length',
+      'contentLength',
+      'file_size',
+    ]);
 
     num bytes = 0;
     if (val is num) {
@@ -225,8 +231,8 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       return s.toUpperCase();
     }
 
-    final String name =
-        (_getDocValue(doc, ['fileName', 'document_name']) ?? '').toString();
+    final String name = (_getDocValue(doc, ['fileName', 'document_name']) ?? '')
+        .toString();
     if (name.contains('.')) return name.split('.').last.toUpperCase();
 
     return "FILE";
@@ -272,19 +278,25 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       return;
     }
 
-    final String? fileId =
-        _getDocValue(doc, ['id', '_id', 'fileId', 'document_id'])?.toString();
+    final String? fileId = _getDocValue(doc, [
+      'id',
+      '_id',
+      'fileId',
+      'document_id',
+    ])?.toString();
 
     if (fileId == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(tr('sidebar.docIdNotFound'))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr('sidebar.docIdNotFound'))));
       return;
     }
 
-    final String? token = widget.accessToken ?? _api.accessToken;
+    final String? token = widget.accessToken;
     if (token == null || token.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(tr('sidebar.authError'))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr('sidebar.authError'))));
       return;
     }
 
@@ -302,9 +314,9 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('sidebar.launchError'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr('sidebar.launchError'))));
       }
     }
   }
@@ -312,8 +324,12 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   // ===========================================================================
   // CONTENT BUILDER (Abstracted to support Drawer vs Panel)
   // ===========================================================================
-  Widget _buildRightSidebarContent(BuildContext context, ThemeData theme,
-      Map<String, dynamic> colors, bool isDark) {
+  Widget _buildRightSidebarContent(
+    BuildContext context,
+    ThemeData theme,
+    Map<String, dynamic> colors,
+    bool isDark,
+  ) {
     return Material(
       color: colors['background'],
       child: Container(
@@ -344,29 +360,38 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildSectionTitle(tr('sidebar.relatedDocs'),
-                        Icons.description_outlined, colors),
+                    _buildSectionTitle(
+                      tr('sidebar.relatedDocs'),
+                      Icons.description_outlined,
+                      colors,
+                    ),
                     const SizedBox(height: 12),
                     if (widget.relatedDocuments.isEmpty)
                       _buildEmptyState(tr('sidebar.noDocuments'), colors)
                     else
-                      ...widget.relatedDocuments
-                          .map((doc) => _buildDocItem(doc, colors, isDark)),
+                      ...widget.relatedDocuments.map(
+                        (doc) => _buildDocItem(doc, colors, isDark),
+                      ),
                     const SizedBox(height: 32),
                     _buildSectionTitle(
-                        tr('sidebar.faq'), Icons.help_outline, colors),
+                      tr('sidebar.faq'),
+                      Icons.help_outline,
+                      colors,
+                    ),
                     const SizedBox(height: 12),
                     if (_isLoadingFaq)
                       const Center(
-                          child: Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ))
+                        child: Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
                     else if (_faqItems.isEmpty)
                       _buildEmptyState(tr('sidebar.faqError'), colors)
                     else
-                      ..._faqItems
-                          .map((item) => _buildFaqItem(item, colors, isDark)),
+                      ..._faqItems.map(
+                        (item) => _buildFaqItem(item, colors, isDark),
+                      ),
                   ],
                 ),
               ),
@@ -427,8 +452,12 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
               ),
               // Actual Content
               Expanded(
-                child:
-                    _buildRightSidebarContent(context, theme, colors, isDark),
+                child: _buildRightSidebarContent(
+                  context,
+                  theme,
+                  colors,
+                  isDark,
+                ),
               ),
             ],
           ),
@@ -442,7 +471,10 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   // ===========================================================================
 
   Widget _buildSectionTitle(
-      String title, IconData icon, Map<String, dynamic> colors) {
+    String title,
+    IconData icon,
+    Map<String, dynamic> colors,
+  ) {
     return Row(
       children: [
         Icon(icon, size: 18, color: colors['text'].withOpacity(0.6)),
@@ -481,13 +513,17 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   }
 
   Widget _buildDocItem(
-      Map<String, dynamic> doc, Map<String, dynamic> colors, bool isDark) {
-    final String title = _getDocValue(doc, [
+    Map<String, dynamic> doc,
+    Map<String, dynamic> colors,
+    bool isDark,
+  ) {
+    final String title =
+        _getDocValue(doc, [
           'title',
           'document_name',
           'documentName',
           'fileName',
-          'name'
+          'name',
         ])?.toString() ??
         tr('sidebar.unknown');
 
@@ -499,7 +535,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     final String confidence = _formatScore(doc['score'] ?? doc['confidence']);
     final String id =
         _getDocValue(doc, ['id', '_id', 'document_id', 'fileId'])?.toString() ??
-            "";
+        "";
 
     return Card(
       elevation: 0,
@@ -520,8 +556,11 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(_getDocumentIcon(doc),
-                      size: 20, color: colors['primary']),
+                  Icon(
+                    _getDocumentIcon(doc),
+                    size: 20,
+                    color: colors['primary'],
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -538,14 +577,16 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
                 ],
               ),
               const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4),
-                  child: Divider(height: 1)),
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Divider(height: 1),
+              ),
               if (fileName.isNotEmpty && fileName != title)
                 _buildDetailRow("File Name", fileName, colors),
               Row(
                 children: [
                   Expanded(
-                      child: _buildDetailRow("Format", fileFormat, colors)),
+                    child: _buildDetailRow("Format", fileFormat, colors),
+                  ),
                   Expanded(child: _buildDetailRow("Size", fileSize, colors)),
                 ],
               ),
@@ -560,7 +601,10 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   }
 
   Widget _buildDetailRow(
-      String label, String value, Map<String, dynamic> colors) {
+    String label,
+    String value,
+    Map<String, dynamic> colors,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -577,10 +621,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
           Expanded(
             child: Text(
               value,
-              style: TextStyle(
-                fontSize: 11,
-                color: colors['text'],
-              ),
+              style: TextStyle(fontSize: 11, color: colors['text']),
             ),
           ),
         ],
@@ -589,7 +630,10 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   }
 
   Widget _buildFaqItem(
-      Map<String, String> item, Map<String, dynamic> colors, bool isDark) {
+    Map<String, String> item,
+    Map<String, dynamic> colors,
+    bool isDark,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -621,14 +665,17 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
               data: item['answer'] ?? '',
               styleSheet: MarkdownStyleSheet(
                 p: TextStyle(
-                    fontSize: 13,
-                    color: colors['text'].withOpacity(0.8),
-                    height: 1.4),
+                  fontSize: 13,
+                  color: colors['text'].withOpacity(0.8),
+                  height: 1.4,
+                ),
               ),
               onTapLink: (text, href, title) {
                 if (href != null) {
-                  launchUrl(Uri.parse(href),
-                      mode: LaunchMode.externalApplication);
+                  launchUrl(
+                    Uri.parse(href),
+                    mode: LaunchMode.externalApplication,
+                  );
                 }
               },
             ),

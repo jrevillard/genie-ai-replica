@@ -2,9 +2,7 @@ const { logger, dbService } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
-const util = require('util');
-const childProcess = require('child_process');
-const exec = util.promisify(childProcess.exec);
+const { isValidDateStr } = require('./path-sanitizer');
 
 class AdminDashboardService {
   constructor() {
@@ -212,10 +210,12 @@ class AdminDashboardService {
 
       const resourceUsage = await this.resourceUsageMonitor.getResourceUsage();
       logger.debug(`Resource Usage: ${JSON.stringify(resourceUsage)}`);
+      const apiHealth = await this.checkApiServicesHealth();
+      logger.debug(`API health check result: ${JSON.stringify(apiHealth)}`);
 
       logger.debug('Determining health status of services');
       const healthServices = [
-        { id: 'apiServices', name: 'API Services', status: resourceUsage.cpu < 80 ? 'good' : 'warning' },
+        { id: 'apiServices', name: 'API Services', status: apiHealth.status },
         { id: 'database', name: 'Database', status: 'good' },
         { id: 'cache', name: 'Cache', status: 'good' },
         { id: 'storage', name: 'Storage', status: resourceUsage.storage < 90 ? 'good' : 'warning' },
@@ -284,78 +284,6 @@ class AdminDashboardService {
   }
 
   /**
-   * Get storage usage percentage
-   * @returns {Promise<number>} Storage usage percentage
-   */
-  async getStorageUsage() {
-    try {
-      logger.debug('Calculating storage usage');
-      if (process.platform !== 'win32') {
-        const { stdout } = await exec('df -h / | tail -1 | awk \'{print $5}\'');
-        const usageString = stdout.trim();
-        const usage = parseInt(usageString.replace('%', ''));
-        logger.debug(`Storage usage (Linux): ${usage}%`);
-        return usage;
-      } else {
-        const { stdout } = await exec('wmic logicaldisk get size,freespace | findstr /C:"C:"');
-        const [size, freeSpace] = stdout.trim().split(/\s+/).map(num => parseInt(num));
-        const usage = Math.round(((size - freeSpace) / size) * 100);
-        logger.debug(`Storage usage (Windows): size=${size}, freeSpace=${freeSpace}, usage=${usage}%`);
-        return usage;
-      }
-    } catch (error) {
-      logger.error(`Error getting storage usage: ${error.message}`);
-      logger.debug('Falling back to default storage usage: 50%');
-      return 50;
-    }
-  }
-
-  /**
-   * Get network usage percentage (simulated)
-   * @returns {Promise<number>} Network usage percentage
-   */
-  async getNetworkUsage() {
-    try {
-      const { stdout: interfaces } = await exec("ip -br link show up | awk '{print $1}' | grep -vE '^lo$'");
-      const activeInterfaces = interfaces.trim().split('\n');
-      let totalBandwidthUsage = 0;
-      let interfacesChecked = 0;
-
-      for (const iface of activeInterfaces) {
-        try {
-          const rxBytes = parseInt(await fs.readFile(`/sys/class/net/${iface}/statistics/rx_bytes`, 'utf8'));
-          const txBytes = parseInt(await fs.readFile(`/sys/class/net/${iface}/statistics/tx_bytes`, 'utf8'));
-          const totalBytes = rxBytes + txBytes;
-          const speedFile = `/sys/class/net/${iface}/speed`;
-          let interfaceSpeed = 1000;
-          try {
-            interfaceSpeed = parseInt(await fs.readFile(speedFile, 'utf8'));
-          } catch (speedError) {
-            logger.warn(`Could not read speed for interface ${iface}`);
-          }
-          const bandwidthUsage = Math.min(
-            Math.round((totalBytes * 8) / (interfaceSpeed * 1000 * 1000 / 8) * 100),
-            100
-          );
-          totalBandwidthUsage += bandwidthUsage;
-          interfacesChecked++;
-        } catch (interfaceError) {
-          logger.warn(`Error checking interface ${iface}: ${interfaceError.message}`);
-        }
-      }
-
-      const averageBandwidthUsage = interfacesChecked > 0
-        ? Math.round(totalBandwidthUsage / interfacesChecked)
-        : 0;
-      logger.debug(`Network bandwidth usage: ${averageBandwidthUsage}%`);
-      return averageBandwidthUsage;
-    } catch (error) {
-      logger.error(`Error getting network usage: ${error.message}`);
-      return 35;
-    }
-  }
-
-  /**
    * Get database statistics
    * @returns {Promise<Object>} Database statistics
    */
@@ -368,38 +296,60 @@ class AdminDashboardService {
     try {
       logger.debug('Fetching collection statistics');
       const collections = await this.db.collections();
+
+      /**
+       * Best-effort byte estimate from ArangoDB collection figures (shape varies by version / engine).
+       * ArangoDB 3.12+ may expose sizes under figures.files, figures.indexes, etc., not only documentsSize.
+       */
+      const collectionBytes = raw => {
+        if (!raw || typeof raw !== 'object') return 0;
+        let n = 0;
+        const add = v => {
+          if (typeof v === 'number' && Number.isFinite(v) && v > 0) n += v;
+        };
+        const walk = obj => {
+          if (!obj || typeof obj !== 'object') return;
+          add(obj.documentsSize);
+          add(obj.size);
+          if (obj.indexes && typeof obj.indexes === 'object') add(obj.indexes.size);
+          if (obj.datafiles && typeof obj.datafiles === 'object') add(obj.datafiles.fileSize);
+          if (obj.journals && typeof obj.journals === 'object') add(obj.journals.fileSize);
+          if (obj.files && typeof obj.files === 'object') add(obj.files.fileSize);
+        };
+        walk(raw);
+        if (raw.figures) walk(raw.figures);
+        return n;
+      };
+
+      const formatDiskBytes = bytes => {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return `${parseFloat((bytes / 1024 ** i).toFixed(i === 0 ? 0 : 2))} ${units[i]}`;
+      };
+
       const collectionStats = await Promise.all(
         collections.map(async (collection) => {
           const figures = await collection.figures();
-          logger.debug(`Collection ${collection.name}: count=${figures.count}, size=${figures.size}`);
+          const inner = figures.figures || figures;
+          const count = typeof inner.alive === 'number'
+            ? inner.alive
+            : (typeof figures.count === 'number' ? figures.count : 0);
+          const bytes = collectionBytes(figures);
+          logger.debug(`Collection ${collection.name}: count=${count}, bytes=${bytes}`);
           return {
             name: collection.name,
-            count: figures.count,
-            size: figures.size
+            count,
+            size: bytes
           };
         })
       );
 
       const totalSize = collectionStats.reduce((sum, coll) => sum + coll.size, 0);
-      const formattedSize = (totalSize / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+      const formattedSize = formatDiskBytes(totalSize);
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
-      logger.debug('Fetching last reindex time from analytics');
-      const reindexCursor = await this.db.query(`
-        FOR a IN analytics
-          FILTER a.event == 'reindex'
-          SORT a.timestamp DESC
-          LIMIT 1
-          RETURN a.timestamp
-      `);
-      const lastReindexTimestamp = await reindexCursor.next();
-      const lastReindex = lastReindexTimestamp
-        ? this.formatTimeAgo(new Date(lastReindexTimestamp))
-        : 'Never';
-      logger.debug(`Last reindex time: ${lastReindexTimestamp || 'Never'}, formatted: ${lastReindex}`);
-
       const response = {
-        lastReindex,
         databaseSize: formattedSize,
         totalTables: collections.length,
         collections: collectionStats
@@ -443,7 +393,7 @@ class AdminDashboardService {
     try {
       logger.debug('Fetching total user count');
       const userCountCursor = await this.db.query(`
-        RETURN LENGTH(FOR u IN users RETURN 1)
+        RETURN LENGTH(FOR u IN users FILTER u.deleted != true RETURN 1)
       `);
       const userCount = await userCountCursor.next();
       logger.debug(`Total users: ${userCount}`);
@@ -466,6 +416,7 @@ class AdminDashboardService {
         LET oneMonthAgo = DATE_SUBTRACT(DATE_NOW(), 1, "month")
         RETURN LENGTH(
           FOR u IN users
+            FILTER u.deleted != true
             FILTER DATE_TIMESTAMP(u.createdAt) >= DATE_TIMESTAMP(oneMonthAgo)
             RETURN 1
         )
@@ -476,14 +427,15 @@ class AdminDashboardService {
       logger.debug('Fetching sample user list (top 10)');
       const usersCursor = await this.db.query(`
         FOR u IN users
+          FILTER u.deleted != true
           SORT u.updatedAt DESC
           LIMIT 10
           RETURN {
             _key: u._key,
             loginName: u.loginName,
             email: u.email,
-            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-            role: HAS(u, "role") ? u.role : "User"
+            fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+            roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : [])
           }
       `);
       const users = await usersCursor.all();
@@ -545,6 +497,10 @@ class AdminDashboardService {
           logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
         }
       } else if (dateRange === 'custom' && startDate && endDate) {
+        if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
+          logger.warn('getLogs.invalid_custom_date_range', { startDate, endDate });
+          return { logs: [], totalLogs: 0 };
+        }
         const start = new Date(startDate);
         const end = new Date(endDate);
         const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
@@ -675,55 +631,6 @@ class AdminDashboardService {
    */
   async getLogsSummary(options = {}) {
     return this.logsService.getLogsSummary(options);
-    // Note I am just leaving this dead code here in case something comes up
-    const { date = new Date().toISOString().split('T')[0], level } = options;
-    logger.info(`Getting logs summary for date: ${date}, level: ${level}`);
-
-    try {
-      const logFile = path.join(__dirname, `../logs/combined-${date}.log`);
-      logger.debug(`Reading log file for summary: ${logFile}`);
-      let logs = [];
-
-      try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
-
-        logs = logLines.map(line => {
-          const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-          if (!match) return null;
-          const [, timestamp, level, service] = match;
-          return { level: level.toUpperCase(), service };
-        }).filter(log => log !== null);
-      } catch (error) {
-        logger.error(`Error reading log file ${logFile}: ${error.message}`);
-        return { byType: {}, byService: {} };
-      }
-
-      let filteredLogs = logs;
-      if (level) {
-        logger.debug(`Filtering logs by level: ${level}`);
-        filteredLogs = filteredLogs.filter(log => log.level.toLowerCase() === level.toLowerCase());
-      }
-
-      const byType = {};
-      const byService = {};
-
-      filteredLogs.forEach(log => {
-        byType[log.level] = (byType[log.level] || 0) + 1;
-        byService[log.service] = (byService[log.service] || 0) + 1;
-      });
-
-      const response = {
-        byType,
-        byService
-      };
-      logger.debug(`Logs summary response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in getLogsSummary: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
   }
 
   /**
@@ -778,45 +685,6 @@ class AdminDashboardService {
   }
 
   /**
-   * Reindex database
-   * @returns {Promise<Object>} Reindex result
-   */
-  async reindexDatabase() {
-    if (!this.db) {
-      throw new Error('Database not initialized. Call init() first.');
-    }
-    logger.info('Reindexing database');
-
-    try {
-      logger.debug('Starting database reindex');
-      const collections = await this.db.collections();
-      for (const collection of collections) {
-        logger.debug(`Reindexing collection: ${collection.name}`);
-        // Simulate reindexing (actual implementation depends on ArangoDB setup)
-        await collection.figures();
-      }
-
-      const timestamp = new Date().toISOString();
-      await this.storeAnalyticsData({
-        event: 'reindex',
-        timestamp
-      });
-
-      const response = {
-        status: 'success',
-        message: 'Database reindexed successfully',
-        timestamp
-      };
-      logger.debug(`Reindex response: ${JSON.stringify(response)}`);
-
-      return response;
-    } catch (error) {
-      logger.error(`Error in reindexDatabase: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  /**
    * Backup database
    * @returns {Promise<Object>} Backup result
    */
@@ -829,20 +697,36 @@ class AdminDashboardService {
     try {
       logger.debug('Starting database backup');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupDir = path.join(__dirname, '../backups');
+      const backupDir = process.env.BACKUP_DIR || path.join(__dirname, '../backups');
       await fs.mkdir(backupDir, { recursive: true });
 
-      const backupFile = path.join(backupDir, `backup-${timestamp}.dump`);
-      logger.debug(`Backup file path: ${backupFile}`);
+      // Export all collections using arangojs API (no shell commands needed)
+      const collections = await this.db.collections();
+      const backupData = {};
+      let totalDocuments = 0;
 
-      // Simulate backup (actual implementation depends on ArangoDB setup)
-      await exec(`arangodump --output-directory ${backupDir} --server.database ${process.env.ARANGO_DB_NAME}`);
-      logger.debug('Backup completed');
+      for (const collection of collections) {
+        try {
+          const cursor = await collection.all();
+          const documents = await cursor.all();
+          backupData[collection.name] = documents;
+          totalDocuments += documents.length;
+          logger.debug(`Exported ${documents.length} documents from ${collection.name}`);
+        } catch (err) {
+          logger.warn(`Skipping collection ${collection.name}: ${err.message}`);
+        }
+      }
+
+      const backupFile = path.join(backupDir, `backup-${timestamp}.json`);
+      await fs.writeFile(backupFile, JSON.stringify(backupData, null, 2));
+      logger.debug(`Backup completed: ${totalDocuments} documents across ${Object.keys(backupData).length} collections`);
 
       const response = {
         status: 'success',
         message: 'Database backup completed successfully',
-        backupFile
+        backupFile,
+        collections: Object.keys(backupData),
+        documentCount: totalDocuments
       };
       logger.debug(`Backup response: ${JSON.stringify(response)}`);
 
@@ -965,9 +849,12 @@ class AdminDashboardService {
       logger.debug('Checking disk space');
       let diskSpace;
       try {
-        const { stdout } = await exec('df -h');
-        diskSpace = stdout;
-        logger.debug(`Disk space output: ${diskSpace}`);
+        const stats = await fs.statfs('/');
+        const totalGB = Math.round((stats.blocks * stats.bsize) / (1024 * 1024 * 1024));
+        const freeGB = Math.round((stats.bavail * stats.bsize) / (1024 * 1024 * 1024));
+        const usedPercent = Math.round(((stats.blocks - stats.bavail) / stats.blocks) * 100);
+        diskSpace = `Filesystem /: ${totalGB}G total, ${freeGB}G available (${usedPercent}% used)`;
+        logger.debug(`Disk space: ${diskSpace}`);
       } catch (error) {
         diskSpace = 'Unable to fetch disk space information';
         logger.error(`Error getting disk space: ${error.message}`);
@@ -1169,11 +1056,11 @@ class AdminDashboardService {
     logger.info(`Searching users with options: ${JSON.stringify(options)}`);
 
     try {
-      let { term = '', field = 'all', limit = 20, offset = 0 } = options;
+      const { term = '', field = 'all', limit = 20, offset = 0 } = options;
 
       // Correctly parse string query parameters to numbers
-      limit = parseInt(limit, 10) || 20;
-      offset = parseInt(offset, 10) || 0;
+      const parsedLimit = parseInt(limit, 10) || 20;
+      const parsedOffset = parseInt(offset, 10) || 0;
 
       let countQuery, usersQuery, queryParams;
 
@@ -1185,6 +1072,7 @@ class AdminDashboardService {
             queryParams.term = `%${term.toLowerCase()}%`;
             filterCondition = `
               LOWER(u.loginName) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
             `;
             break;
@@ -1198,7 +1086,7 @@ class AdminDashboardService {
             break;
           case 'role':
             queryParams.term = `%${term.toLowerCase()}%`;
-            filterCondition = `HAS(u, "role") AND LOWER(u.role) LIKE @term`;
+            filterCondition = `HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0`;
             break;
           case 'all':
           default:
@@ -1206,8 +1094,9 @@ class AdminDashboardService {
             filterCondition = `
               LOWER(u.loginName) LIKE @term
               OR LOWER(u.email) LIKE @term
+              OR LOWER(u.name) LIKE @term
               OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
-              OR (HAS(u, "role") AND LOWER(u.role) LIKE @term)
+              OR (HAS(u, "roles") AND LENGTH(FOR r IN u.roles FILTER LOWER(r) LIKE @term RETURN 1) > 0)
             `;
             break;
         }
@@ -1215,6 +1104,7 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               FILTER ${filterCondition}
               RETURN 1
           )
@@ -1222,15 +1112,17 @@ class AdminDashboardService {
 
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             FILTER ${filterCondition}
             SORT u.updatedAt DESC
-            LIMIT ${offset}, ${limit}
+            LIMIT ${parsedOffset}, ${parsedLimit}
             RETURN {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }
@@ -1240,19 +1132,22 @@ class AdminDashboardService {
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
+              FILTER u.deleted != true
               RETURN 1
           )
         `;
         usersQuery = `
           FOR u IN users
+            FILTER u.deleted != true
             SORT u.updatedAt DESC
-            LIMIT ${offset}, ${limit}
+            LIMIT ${parsedOffset}, ${parsedLimit}
             RETURN {
               _key: u._key,
               loginName: u.loginName,
               email: u.email,
-              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
-              role: HAS(u, "role") ? u.role : "User",
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : u.name,
+              roles: HAS(u, "roles") ? (FOR r IN u.roles FILTER r != "offline_access" AND r != "uma_authorization" AND r NOT LIKE "default-roles-%" RETURN r) : (HAS(u, "role") ? [u.role] : []),
+              sub: HAS(u, "sub") ? u.sub : null,
               createdAt: u.createdAt,
               updatedAt: u.updatedAt
             }
@@ -1306,6 +1201,48 @@ class AdminDashboardService {
       throw error;
     }
   }
+
+  async _probeHttp(url) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      // 4xx can still indicate a healthy service (e.g., auth required).
+      return response.status > 0 && response.status < 500;
+    } catch (error) {
+      logger.warn(`API probe failed for ${url}: ${error.message}`);
+      return false;
+    }
+  }
+
+  async checkApiServicesHealth() {
+    const dataprepHost = (process.env.DATAPREP_HOST || 'http://dataprep-arango-service').replace(/\/+$/, '');
+    const dataprepPort = String(process.env.DATAPREP_PORT || '5000').replace(/^:/, '');
+    const dataprepBase = /:\d+$/.test(dataprepHost) ? dataprepHost : `${dataprepHost}:${dataprepPort}`;
+
+    const checks = [
+      { service: 'backend', url: `http://localhost:${process.env.BACKEND_PORT || '3000'}/api-docs` },
+      { service: 'document-repository', url: `${process.env.DOCUMENT_REPOSITORY_URL || 'http://document-repository:3001'}/api/files` },
+      { service: 'dataprep', url: `${dataprepBase}/v1/health_check` },
+      { service: 'retriever', url: `http://${process.env.RETRIEVER_SERVICE_HOST_IP || 'retriever-arango-service'}:${process.env.RETRIEVER_SERVICE_PORT || '7025'}/v1/health_check` },
+      { service: 'chatqna', url: `http://${process.env.OPEA_HOST || 'chatqna-xeon-backend-server'}:${process.env.OPEA_PORT || '8888'}/v1/health_check` },
+      { service: 'reranker', url: `http://${process.env.RERANK_SERVER_HOST_IP || 'reranker'}:${process.env.RERANK_SERVER_PORT || '8000'}/v1/health_check` }
+    ];
+
+    const results = await Promise.all(
+      checks.map(async (check) => ({
+        service: check.service,
+        healthy: await this._probeHttp(check.url)
+      }))
+    );
+
+    const failed = results.filter((r) => !r.healthy);
+    if (failed.length === 0) {
+      return { status: 'good', checks: results };
+    }
+    if (failed.length <= 2) {
+      return { status: 'warning', checks: results };
+    }
+    return { status: 'error', checks: results };
+  }
 }
 
 class ResourceUsageMonitor {
@@ -1316,7 +1253,8 @@ class ResourceUsageMonitor {
   }
 
   async getCpuUsage() {
-    return Math.round((os.loadavg()[0] / os.cpus().length) * 100);
+    const value = Math.round((os.loadavg()[0] / os.cpus().length) * 100);
+    return Math.min(Math.max(value, 0), 100);
   }
 
   async getMemoryUsage() {
@@ -1325,15 +1263,8 @@ class ResourceUsageMonitor {
 
   async getStorageUsage() {
     try {
-      if (process.platform !== 'win32') {
-        const { stdout } = await exec('df -h / | tail -1 | awk \'{print $5}\'');
-        const usageString = stdout.trim();
-        return parseInt(usageString.replace('%', ''));
-      } else {
-        const { stdout } = await exec('wmic logicaldisk get size,freespace | findstr /C:"C:"');
-        const [size, freeSpace] = stdout.trim().split(/\s+/).map(num => parseInt(num));
-        return Math.round(((size - freeSpace) / size) * 100);
-      }
+      const stats = await fs.statfs('/');
+      return Math.round(((stats.blocks - stats.bavail) / stats.blocks) * 100);
     } catch (error) {
       logger.error(`Error getting storage usage: ${error.message}`);
       return 50;
@@ -1342,26 +1273,24 @@ class ResourceUsageMonitor {
 
   async getNetworkUsage() {
     try {
-      if (process.platform === 'linux') {
-        const { stdout } = await exec('cat /proc/net/dev');
-        const lines = stdout.split('\n').slice(2);
-        let totalBytes = 0;
+      const data = await fs.readFile('/proc/net/dev', 'utf8');
+      const lines = data.split('\n').slice(2);
+      let totalBytes = 0;
 
-        lines.forEach(line => {
-          if (line.trim()) {
-            const parts = line.trim().split(/\s+/);
-            const interfaceName = parts[0].replace(':', '');
-            if (interfaceName !== 'lo') {
-              totalBytes += parseInt(parts[1]) + parseInt(parts[9]);
-            }
+      for (const line of lines) {
+        if (line.trim()) {
+          const parts = line.trim().split(/\s+/);
+          const interfaceName = parts[0].replace(':', '');
+          if (interfaceName !== 'lo') {
+            totalBytes += parseInt(parts[1]) + parseInt(parts[9]);
           }
-        });
-        return Math.min(Math.round((totalBytes / (1024 * 1024)) % 100), 100);
+        }
       }
-      return Math.round(Math.random() * 100);
+      return Math.min(Math.round((totalBytes / (1024 * 1024)) % 100), 100);
     } catch (error) {
-      logger.error(`Error getting network usage: ${error.message}`);
-      return 35;
+      // /proc/net/dev unavailable (e.g., Kubernetes with restricted mounts)
+      logger.debug(`Network stats unavailable: ${error.message}`);
+      return 0;
     }
   }
 

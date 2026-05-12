@@ -1,0 +1,34 @@
+[
+  {
+    "category": "Maize",
+    "services": ["General information"]
+  },
+  {
+    "category": "Beans",
+    "services": ["General information"]
+  },
+  {
+    "category": "Soil fertility",
+    "services": ["General information"]
+  },
+  {
+    "category": "Pests & diseases",
+    "services": ["General information"]
+  },
+  {
+    "category": "Livestock",
+    "services": ["General information"]
+  },
+  {
+    "category": "Water & irrigation",
+    "services": ["General information"]
+  },
+  {
+    "category": "Weather & seasons",
+    "services": ["General information"]
+  },
+  {
+    "category": "Markets & cooperatives",
+    "services": ["General information"]
+  }
+]

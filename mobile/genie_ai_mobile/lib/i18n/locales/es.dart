@@ -196,152 +196,13 @@ const Map<String, dynamic> esLocale = {
     "VN": "Vietnam",
     "YE": "Yemen",
     "ZM": "Zambia",
-    "ZW": "Zimbabue"
+    "ZW": "Zimbabue",
   },
-  "verification": {
-    "verifying": "Verificando tu correo...",
-    "success": "¡Correo verificado con éxito!",
-    "failed": "Verificación fallida",
-    "accountVerified":
-        "Tu cuenta ha sido verificada con éxito. Ahora puedes iniciar sesión.",
-    "invalidLink": "El enlace de verificación no es válido o ha caducado.",
-    "missingToken": "Falta el token de verificación.",
-    "generalError":
-        "Ocurrió un error durante la verificación. Por favor, inténtalo de nuevo más tarde.",
-    "proceedToLogin": "Proceder al inicio de sesión",
-    "backToLogin": "Volver al inicio de sesión"
-  },
-  "passwordResetConfirm": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Crear nueva contraseña",
-    "tokenLabel": "Token de restablecimiento",
-    "tokenPlaceholder": "Ingresa el token",
-    "validateButton": "Validar token",
-    "newPasswordLabel": "Nueva contraseña",
-    "newPasswordPlaceholder": "Crea una nueva contraseña",
-    "confirmNewPasswordLabel": "Confirmar nueva contraseña",
-    "confirmNewPasswordPlaceholder": "Confirma tu nueva contraseña",
-    "resetButton": "Restablecer contraseña",
-    "processing": "Restableciendo...",
-    "rememberedPassword": "¿Recordaste tu contraseña?",
-    "backToLogin": "Volver al inicio de sesión",
-    "supportMessage": "¿Necesitas ayuda? Contacta a soporte",
-    "passwordRequirements":
-        "La contraseña debe tener al menos 8 caracteres, con al menos 1 número, 1 mayúscula y 1 carácter especial",
-    "passwordsDoNotMatch": "Las contraseñas no coinciden",
-    "resetSuccess": "Tu contraseña se ha restablecido con éxito",
-    "resetFailed": "No se pudo restablecer la contraseña. Inténtalo de nuevo.",
-    "noTokenProvided": "Por favor, proporciona un token de restablecimiento",
-    "expiredToken": "Este token ha caducado. Por favor, solicita uno nuevo.",
-    "invalidToken": "Token no válido o desconocido",
-    "validatingToken": "Validando token...",
-    "redirecting": "Redirigiendo a la página de inicio de sesión...",
-    "passwordStrength": "Fortaleza de la contraseña",
-    "strengthLabels": {
-      "veryWeak": "Muy débil",
-      "weak": "Débil",
-      "fair": "Regular",
-      "good": "Buena",
-      "strong": "Fuerte"
-    },
-    "passwordSuggestions": {
-      "atLeast8Chars": "Usa al menos 8 caracteres",
-      "addUppercase": "Añade letras mayúsculas",
-      "addLowercase": "Añade letras minúsculas",
-      "addNumbers": "Añade números",
-      "addSpecialChars": "Añade caracteres especiales"
-    }
-  },
-  "passwordReset": {
-    "appTitle": "Genie AI",
-    "resetPassword": "Restablecer tu contraseña",
-    "emailLabel": "Dirección de correo electrónico",
-    "emailPlaceholder": "Ingresa tu correo",
-    "resetButton": "Enviar enlace",
-    "processing": "Enviando...",
-    "rememberPassword": "¿Recordaste tu contraseña?",
-    "backToLogin": "Volver al inicio de sesión",
-    "supportMessage": "¿Necesitas ayuda? Contacta a soporte",
-    "invalidEmail": "Por favor ingresa un correo válido",
-    "resetRequestSuccess":
-        "Se ha enviado un enlace de restablecimiento a tu correo",
-    "resetRequestFailed":
-        "No se pudo enviar el enlace. Por favor, inténtalo de nuevo.",
-    "checkEmail": "Por favor revisa tu correo para más instrucciones."
-  },
-  "register": {
-    "appTitle": "Genie AI",
-    "createAccount": "Crear cuenta nueva",
-    "username": "Nombre de usuario",
-    "usernamePlaceholder": "Ingresa un nombre de usuario",
-    "email": "Correo electrónico",
-    "emailPlaceholder": "Ingresa tu correo",
-    "password": "Contraseña",
-    "passwordPlaceholder": "Crea una contraseña",
-    "confirmPassword": "Confirmar contraseña",
-    "confirmPasswordPlaceholder": "Confirma tu contraseña",
-    "acceptTerms": "Acepto los",
-    "termsOfService": "Términos de servicio",
-    "registerButton": "Crear cuenta",
-    "processing": "Procesando...",
-    "alreadyHaveAccount": "¿Ya tienes una cuenta?",
-    "loginNow": "Iniciar sesión",
-    "privacyNotice":
-        "Al registrarte, aceptas nuestros Términos de servicio y Política de privacidad",
-    "usernameMinLength":
-        "El nombre de usuario debe tener al menos 3 caracteres",
-    "invalidEmail": "Por favor ingresa un correo válido",
-    "passwordRequirements":
-        "La contraseña debe tener al menos 8 caracteres, con al menos 1 número y 1 mayúscula",
-    "passwordsDoNotMatch": "Las contraseñas no coinciden",
-    "mustAcceptTerms": "Debes aceptar los Términos de servicio",
-    "registrationFailed": "Error en el registro. Inténtalo de nuevo.",
-    "usernameExists": "El nombre de usuario ya existe",
-    "emailExists": "El correo ya existe",
-    "registrationSuccess": "¡Registro exitoso!",
-    "verificationEmailSent":
-        "Se ha enviado un correo de verificación a {email}",
-    "checkEmailInstructions":
-        "Por favor revisa tu correo y sigue las instrucciones para verificar tu cuenta antes de iniciar sesión.",
-    "backToLogin": "Volver al inicio de sesión",
-    "noEmailReceived": "¿No recibiste el correo?",
-    "resendVerification": "Reenviar correo de verificación",
-    "verificationResent": "El correo de verificación ha sido reenviado",
-    "verificationResendFailed":
-        "No se pudo reenviar el correo. Inténtalo de nuevo.",
-    "usernameInvalidChars":
-        "El usuario solo puede contener letras, números, guiones bajos, puntos y guiones",
-    "networkError":
-        "Error de red. Por favor revisa tu conexión e inténtalo de nuevo."
-  },
-  "login": {
-    "appTitle": "Genie AI",
-    "username": "Usuario",
-    "password": "Contraseña",
-    "loginButton": "Iniciar sesión",
-    "or": "o",
-    "savedAccounts": "Cuentas guardadas",
-    "loginSuccess": "Inicio de sesión exitoso",
-    "loginError":
-        "Error al iniciar sesión. Por favor verifica tus credenciales.",
-    "googleLogin": "Continuar con Google",
-    "facebookLogin": "Continuar con Facebook",
-    "rememberMe": "Recuérdame",
-    "forgotPassword": "¿Olvidaste la contraseña?",
-    "noAccount": "¿No tienes cuenta?",
-    "createAccount": "Crear cuenta",
-    "registerNow": "Regístrate ahora",
-    "termsAndPolicy":
-        "Al iniciar sesión, aceptas nuestros Términos de servicio y Política de privacidad",
-    "loggingIn": "Iniciando sesión...",
-    "fieldsRequired": "Se requiere usuario y contraseña",
-    "invalidCredentials": "Usuario o contraseña inválidos",
-    "tooManyAttempts": "Demasiados intentos. Por favor inténtalo más tarde.",
-    "loginFailed": "Error al iniciar sesión. Inténtalo de nuevo.",
-    "oauthNotImplemented":
-        "El inicio de sesión social aún no está implementado",
-    "savedLoginNotImplemented":
-        "El inicio con cuenta guardada aún no está implementado"
+  "auth": {
+    "noInternetConnection": "Sin conexión a Internet",
+    "networkUnreachable": "Red inalcanzable",
+    "authenticationFailed": "Error de autenticación",
+    "sessionExpired": "Su sesión ha expirado. Por favor, inicie sesión de nuevo.",
   },
   "brandName": "Genie AI",
   "nav": {
@@ -360,8 +221,8 @@ const Map<String, dynamic> esLocale = {
       "swahili": "Suajili",
       "german": "Alemán",
       "spanish": "Español",
-      "arabic": "Árabe"
-    }
+      "arabic": "Árabe",
+    },
   },
   "systemStatus": {
     "title": "Estado del servicio",
@@ -375,20 +236,20 @@ const Map<String, dynamic> esLocale = {
     "checking": "Comprobando...",
     "nextDeadline": "Próxima fecha límite",
     "days": "días",
-    "viewDetails": "Ver detalles"
+    "viewDetails": "Ver detalles",
   },
   "services": {
     "eCitizen": "Portal eCitizen",
     "taxFiling": "Sistema de declaración de impuestos",
     "idApplication": "Solicitud de identificación",
     "businessReg": "Registro de empresas",
-    "drivingLicense": "Licencia de conducir"
+    "drivingLicense": "Licencia de conducir",
   },
   "deadlines": {
     "taxFiling": "Fecha límite de impuestos",
     "businessRenewal": "Renovación de licencia comercial",
     "idRenewal": "Renovación de identificación",
-    "vehicleRegistration": "Registro de vehículo"
+    "vehicleRegistration": "Registro de vehículo",
   },
   "sidebar": {
     "governmentServices": "Áreas de conocimiento",
@@ -429,7 +290,7 @@ const Map<String, dynamic> esLocale = {
       "rain": "Lluvia",
       "shower": "Chubasco",
       "thunderstorm": "Tormenta",
-      "snow": "Nieve"
+      "snow": "Nieve",
     },
     "folders": "Carpetas",
     "emptyFolder":
@@ -443,7 +304,7 @@ const Map<String, dynamic> esLocale = {
       "all": "Todos los chats",
       "folders": "Carpetas",
       "starred": "Destacados",
-      "archived": "Archivados"
+      "archived": "Archivados",
     },
     "savedChats": "Chats guardados",
     "chats": "Chats",
@@ -503,7 +364,7 @@ const Map<String, dynamic> esLocale = {
     "noConversations": "No se encontraron conversaciones",
     "noStarred": "Sin conversaciones destacadas",
     "noArchived": "Sin conversaciones archivadas",
-    "folderEmptyState": "La carpeta está vacía"
+    "folderEmptyState": "La carpeta está vacía",
   },
   "leftPanel": {
     "cat1": {
@@ -513,8 +374,8 @@ const Map<String, dynamic> esLocale = {
         "Tarjetas de identidad nacional",
         "Pasaportes",
         "Certificados de matrimonio y defunción",
-        "Registro de votantes"
-      ]
+        "Registro de votantes",
+      ],
     },
     "cat2": {
       "name": "2. Salud y Servicios Sociales",
@@ -523,8 +384,8 @@ const Map<String, dynamic> esLocale = {
         "Programas de vacunación",
         "Seguro de salud",
         "Beneficios por discapacidad",
-        "Asistencia social y alimentaria"
-      ]
+        "Asistencia social y alimentaria",
+      ],
     },
     "cat3": {
       "name": "3. Educación y Aprendizaje",
@@ -532,8 +393,8 @@ const Map<String, dynamic> esLocale = {
         "Escuelas públicas y universidades",
         "Becas y préstamos estudiantiles",
         "Educación para adultos",
-        "Recursos de aprendizaje en línea"
-      ]
+        "Recursos de aprendizaje en línea",
+      ],
     },
     "cat4": {
       "name": "4. Empleo y Servicios Laborales",
@@ -541,8 +402,8 @@ const Map<String, dynamic> esLocale = {
         "Búsqueda de empleo y desempleo",
         "Protección al trabajador",
         "Seguridad laboral",
-        "Capacitación y formación"
-      ]
+        "Capacitación y formación",
+      ],
     },
     "cat5": {
       "name": "5. Impuestos e Ingresos",
@@ -550,8 +411,8 @@ const Map<String, dynamic> esLocale = {
         "Declaración de renta y devoluciones",
         "Impuestos prediales",
         "Cumplimiento fiscal empresarial",
-        "Aduanas y aranceles"
-      ]
+        "Aduanas y aranceles",
+      ],
     },
     "cat6": {
       "name": "6. Seguridad Pública y Justicia",
@@ -559,8 +420,8 @@ const Map<String, dynamic> esLocale = {
         "Policía y servicios de emergencia",
         "Tribunales y asistencia legal",
         "Denuncia de delitos",
-        "Leyes de protección al consumidor"
-      ]
+        "Leyes de protección al consumidor",
+      ],
     },
     "cat7": {
       "name": "7. Transporte y Movilidad",
@@ -568,8 +429,8 @@ const Map<String, dynamic> esLocale = {
         "Licencias de conducir y registro vehicular",
         "Transporte público e infraestructura",
         "Infracciones de tránsito y multas",
-        "Programas de seguridad vial"
-      ]
+        "Programas de seguridad vial",
+      ],
     },
     "cat8": {
       "name": "8. Vivienda y Desarrollo Urbano",
@@ -577,8 +438,8 @@ const Map<String, dynamic> esLocale = {
         "Asistencia de vivienda pública",
         "Registro de propiedades y tierras",
         "Préstamos y subsidios de vivienda",
-        "Zonificación y permisos de construcción"
-      ]
+        "Zonificación y permisos de construcción",
+      ],
     },
     "cat9": {
       "name": "9. Servicios Públicos y Medio Ambiente",
@@ -586,8 +447,8 @@ const Map<String, dynamic> esLocale = {
         "Servicios de agua y electricidad",
         "Gestión de residuos y reciclaje",
         "Regulaciones ambientales",
-        "Energías renovables"
-      ]
+        "Energías renovables",
+      ],
     },
     "cat10": {
       "name": "10. Negocios y Comercio",
@@ -595,8 +456,8 @@ const Map<String, dynamic> esLocale = {
         "Registro y licencias comerciales",
         "Regulaciones comerciales",
         "Subvenciones para pequeñas empresas",
-        "Comercio electrónico y soporte digital"
-      ]
+        "Comercio electrónico y soporte digital",
+      ],
     },
     "cat11": {
       "name": "11. Seguridad Social y Pensiones",
@@ -604,8 +465,8 @@ const Map<String, dynamic> esLocale = {
         "Beneficios de jubilación",
         "Gestión de fondos de pensiones",
         "Beneficios para sobrevivientes",
-        "Pensiones por discapacidad"
-      ]
+        "Pensiones por discapacidad",
+      ],
     },
     "cat12": {
       "name": "12. Comunidad y Participación Cívica",
@@ -613,9 +474,9 @@ const Map<String, dynamic> esLocale = {
         "Votaciones y elecciones",
         "Quejas ciudadanas",
         "Voluntariado y programas comunitarios",
-        "Participación en gobierno local"
-      ]
-    }
+        "Participación en gobierno local",
+      ],
+    },
   },
   "settings": {
     "title": "Configuración",
@@ -631,7 +492,7 @@ const Map<String, dynamic> esLocale = {
     "languages": {
       "english": "Inglés",
       "french": "Francés",
-      "swahili": "Suajili"
+      "swahili": "Suajili",
     },
     "theme": "Tema",
     "themes": {"light": "Claro", "dark": "Oscuro", "system": "Sistema"},
@@ -645,10 +506,12 @@ const Map<String, dynamic> esLocale = {
     "emailAddress": "Correo electrónico",
     "emailAddressPlaceholder": "Tu correo electrónico",
     "password": "Contraseña",
-    "changePassword": "Cambiar contraseña",
     "resetUserData": "Restablecer datos de usuario",
     "resetUserDataDesc":
         "Esto borrará todos tus datos de perfil e historial de chat.",
+    "manageMyAccount": "Manage My Account",
+    "manageMyAccountDesc": "Update your email, password, and account settings.",
+    "cannotOpenAccountConsole": "Unable to open account console. Please try again.",
     "deleteAccount": "Eliminar cuenta",
     "deleteAccountDesc":
         "Esto eliminará permanentemente tu cuenta y todos los datos asociados.",
@@ -663,14 +526,14 @@ const Map<String, dynamic> esLocale = {
           "Esto borrará todos tus datos de perfil e historial de chat.",
       "confirmReset":
           "¿Seguro que quieres restablecer todos tus datos? Esto no se puede deshacer.",
-      "resetComplete": "Tus datos han sido restablecidos."
+      "resetComplete": "Tus datos han sido restablecidos.",
     },
     "language": {"title": "Idioma", "selectLabel": "Idioma de visualización"},
     "appearance": {
       "title": "Apariencia",
       "lightTheme": "Claro",
       "darkTheme": "Oscuro",
-      "systemTheme": "Sistema"
+      "systemTheme": "Sistema",
     },
     "confirmDeleteAccount":
         "¿Seguro que quieres eliminar tu cuenta? Esta acción no se puede deshacer.",
@@ -704,8 +567,6 @@ const Map<String, dynamic> esLocale = {
     "emailAlreadyInUse": "El correo ya está en uso",
     "enterValidEmail": "Por favor ingresa un correo válido",
     "failedToUpdateEmail": "Error al actualizar el correo. Inténtalo de nuevo.",
-    "passwordResetInitiated":
-        "Se ha enviado un enlace de restablecimiento a tu correo.",
     "unableToLoadUser":
         "No se pudo cargar la información del usuario. Inténtalo de nuevo.",
     "retry": "Reintentar",
@@ -715,7 +576,7 @@ const Map<String, dynamic> esLocale = {
     "confirmResetUserData":
         "¿Seguro que quieres restablecer todos tus datos de perfil? Esto borrará toda la información y el historial, pero mantendrá tus credenciales.",
     "reset": "Restablecer",
-    "deleteAccountTitle": "Eliminar cuenta"
+    "deleteAccountTitle": "Eliminar cuenta",
   },
   "userProfile": {
     "title": "Perfil de usuario",
@@ -762,7 +623,7 @@ const Map<String, dynamic> esLocale = {
       "tab9": "Seguridad Social y Bienestar",
       "tab10": "Registros Penales y Legales",
       "tab11": "Transporte y Movilidad",
-      "tab12": "Participación Cívica y Política"
+      "tab12": "Participación Cívica y Política",
     },
     "tabsShort": {
       "personal": "Personal",
@@ -776,14 +637,14 @@ const Map<String, dynamic> esLocale = {
       "social": "Social",
       "criminal": "Penal",
       "transport": "Transporte",
-      "civic": "Cívico"
+      "civic": "Cívico",
     },
     "actions": {
       "cancel": "Cancelar",
       "save": "Guardar perfil",
       "previous": "Anterior",
       "next": "Siguiente",
-      "saving": "Guardando..."
+      "saving": "Guardando...",
     },
     "fields": {
       "fullName": "Nombre completo (incluyendo alias)",
@@ -858,7 +719,7 @@ const Map<String, dynamic> esLocale = {
       "electionHistory": "Historial de participación electoral",
       "partyMembership": "Membresía en partidos políticos",
       "militaryStatus": "Servicio militar o estado de reclutamiento",
-      "publicServiceRoles": "Roles de servicio público"
+      "publicServiceRoles": "Roles de servicio público",
     },
     "placeholders": {
       "fullName": "Ingresa tu nombre legal completo",
@@ -868,7 +729,7 @@ const Map<String, dynamic> esLocale = {
       "searchDisciplines": "Buscar disciplinas...",
       "selectDiscipline": "Selecciona una disciplina",
       "searchDegrees": "Buscar títulos...",
-      "selectDegree": "Selecciona un título"
+      "selectDegree": "Selecciona un título",
     },
     "validation": {
       "nameRequired": "El nombre completo es obligatorio",
@@ -879,7 +740,7 @@ const Map<String, dynamic> esLocale = {
       "futureDate": "La fecha no puede ser futura",
       "invalidSelection": "Por favor haz una selección válida",
       "passwordLength": "La contraseña debe tener al menos 8 caracteres",
-      "matchError": "Los campos no coinciden"
+      "matchError": "Los campos no coinciden",
     },
     "errors": {
       "savingFailed": "Error al guardar perfil",
@@ -888,7 +749,7 @@ const Map<String, dynamic> esLocale = {
       "invalidFileType": "Tipo de archivo inválido",
       "fileTooLarge": "El archivo es demasiado grande",
       "countryLoadError": "Error al cargar países",
-      "countryUpdateError": "Error al actualizar país"
+      "countryUpdateError": "Error al actualizar país",
     },
     "notifications": {
       "saveSuccess": "Perfil guardado con éxito",
@@ -901,7 +762,7 @@ const Map<String, dynamic> esLocale = {
       "formChanged": "Tienes cambios sin guardar",
       "sessionExpired": "Tu sesión ha expirado, inicia sesión de nuevo",
       "profileUpdated": "Tu perfil ha sido actualizado",
-      "profileIncomplete": "Tu perfil está incompleto"
+      "profileIncomplete": "Tu perfil está incompleto",
     },
     "instructions": {
       "fullNameHelp":
@@ -917,7 +778,7 @@ const Map<String, dynamic> esLocale = {
       "nextTab": "Continuar a la siguiente sección",
       "previousTab": "Volver a la sección anterior",
       "saveInstructions": "Haz clic en Guardar para almacenar tu información",
-      "cancelInstructions": "Haz clic en Cancelar para descartar cambios"
+      "cancelInstructions": "Haz clic en Cancelar para descartar cambios",
     },
     "completionStatus": {
       "notStarted": "No iniciado",
@@ -925,26 +786,26 @@ const Map<String, dynamic> esLocale = {
       "complete": "Completado",
       "percentComplete": "{percent}% completado",
       "tabsCompleted": "{completed} de {total} secciones completadas",
-      "tabComplete": "¡Pestaña completada!"
+      "tabComplete": "¡Pestaña completada!",
     },
     "gender": {
       "male": "Masculino",
       "female": "Femenino",
       "other": "Otro",
-      "preferNot": "Prefiero no decirlo"
+      "preferNot": "Prefiero no decirlo",
     },
     "maritalStatus": {
       "single": "Soltero/a",
       "married": "Casado/a",
       "divorced": "Divorciado/a",
       "widowed": "Viudo/a",
-      "other": "Otro"
+      "other": "Otro",
     },
     "residencyStatuses": {
       "citizen": "Ciudadano",
       "permanentResident": "Residente permanente",
       "temporaryResident": "Residente temporal",
-      "other": "Otro"
+      "other": "Otro",
     },
     "employmentStatuses": {
       "employed": "Empleado",
@@ -953,7 +814,7 @@ const Map<String, dynamic> esLocale = {
       "student": "Estudiante",
       "retired": "Jubilado",
       "homemaker": "Ama de casa/Amo de casa",
-      "other": "Otro"
+      "other": "Otro",
     },
     "educationLevels": {
       "primary": "Educación Primaria",
@@ -965,14 +826,14 @@ const Map<String, dynamic> esLocale = {
       "master": "Maestría",
       "doctoral": "Doctorado",
       "professional": "Título Profesional",
-      "other": "Otro"
+      "other": "Otro",
     },
     "proficiencyLevels": {
       "native": "Nativo",
       "fluent": "Fluido",
       "advanced": "Avanzado",
       "intermediate": "Intermedio",
-      "basic": "Básico"
+      "basic": "Básico",
     },
     "bloodTypes": {
       "aPositive": "A+",
@@ -983,7 +844,7 @@ const Map<String, dynamic> esLocale = {
       "abNegative": "AB-",
       "oPositive": "O+",
       "oNegative": "O-",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
     },
     "languages": {
       "english": "Inglés",
@@ -998,7 +859,7 @@ const Map<String, dynamic> esLocale = {
       "russian": "Ruso",
       "hindi": "Hindi",
       "urdu": "Urdu",
-      "other": "Otro"
+      "other": "Otro",
     },
     "yesNo": {"yes": "Sí", "no": "No"},
     "select": "Por favor selecciona",
@@ -1105,7 +966,7 @@ const Map<String, dynamic> esLocale = {
       "Medicina Veterinaria",
       "Desarrollo Web",
       "Biología de la Vida Silvestre",
-      "Zoología"
+      "Zoología",
     ],
     "degreeOptions": [
       "Grado Asociado",
@@ -1135,7 +996,7 @@ const Map<String, dynamic> esLocale = {
       "Certificado Vocacional",
       "Certificado de Posgrado",
       "Diploma de Posgrado",
-      "Post-Doctorado"
+      "Post-Doctorado",
     ],
     "aria": {
       "tabList": "Secciones del formulario de perfil",
@@ -1144,8 +1005,8 @@ const Map<String, dynamic> esLocale = {
       "closeButton": "Cerrar formulario de perfil",
       "saveButton": "Guardar datos del perfil",
       "requiredField": "Campo obligatorio",
-      "dropdownSelect": "Selecciona una opción"
-    }
+      "dropdownSelect": "Selecciona una opción",
+    },
   },
   "chatbot": {
     "placeholder": "Escribe tu consulta aquí...",
@@ -1211,10 +1072,10 @@ const Map<String, dynamic> esLocale = {
         "discardAndNew": "Descartar y Nuevo",
         "discardAndLoad": "Descartar y Cargar",
         "saveFirst": "Guardar Primero",
-        "export": "Exportar"
-      }
+        "export": "Exportar",
+      },
     },
-    "shareWhatsApp": "Compartir en WhatsApp"
+    "shareWhatsApp": "Compartir en WhatsApp",
   },
   "quickhelp": {
     "applyForID": "Solicitar ID",
@@ -1260,7 +1121,7 @@ const Map<String, dynamic> esLocale = {
         "Quiero averiguar sobre el Programa de Vivienda Asequible (Boma Yangu) en Kenia.",
     "findJobsUserPrompt":
         "Quiero preguntar sobre oportunidades de trabajo gubernamentales y solicitudes de PSC en Kenia.",
-    "justChatUserPrompt": "Quiero charlar en general sobre la vida en Kenia."
+    "justChatUserPrompt": "Quiero charlar en general sobre la vida en Kenia.",
   },
   "common": {
     "cancel": "Cancelar",
@@ -1276,7 +1137,7 @@ const Map<String, dynamic> esLocale = {
     "open": "Abrir",
     "done": "Hecho",
     "confirm": "Confirmar",
-    "edit": "Editar"
+    "edit": "Editar",
   },
   "feedback": {
     "title": "Comentarios",
@@ -1290,7 +1151,7 @@ const Map<String, dynamic> esLocale = {
     "thankYouMessage": "¡Gracias por tus comentarios!",
     "submitting": "Enviando...",
     "error": "Algo salió mal. Inténtalo de nuevo.",
-    "success": "¡Gracias por tus comentarios!"
+    "success": "¡Gracias por tus comentarios!",
   },
   "responseRating": {
     "title": "Ayúdanos a mejorar",
@@ -1302,11 +1163,11 @@ const Map<String, dynamic> esLocale = {
       "2": "Poco útil",
       "3": "Moderadamente útil",
       "4": "Muy útil",
-      "5": "Cambia la vida"
+      "5": "Cambia la vida",
     },
     "additionalComments": "Comentarios adicionales...",
     "submit": "Enviar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
   },
   "upload": {"alt": "Subir"},
   "uploadDialog": {
@@ -1324,8 +1185,8 @@ const Map<String, dynamic> esLocale = {
           "Los archivos de acceso directo (.url) no son compatibles. Por favor arrastra el archivo real.",
       "duplicate": "El archivo \"{fileName}\" ya ha sido añadido.",
       "uploadSuccess": "Se subió {fileName} con éxito",
-      "uploadFailed": "Error al subir {fileName}."
-    }
+      "uploadFailed": "Error al subir {fileName}.",
+    },
   },
   "about": {
     "title": "Acerca de",
@@ -1333,6 +1194,6 @@ const Map<String, dynamic> esLocale = {
     "description":
         "Genie AI es tu asistente inteligente para navegar por los servicios e información gubernamentales.",
     "techStack": "Stack Tecnológico",
-    "copyright": "Todos los derechos reservados."
-  }
+    "copyright": "Todos los derechos reservados.",
+  },
 };

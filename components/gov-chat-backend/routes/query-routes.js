@@ -315,7 +315,7 @@ module.exports = (queryService) => {
       return { source_documents: [], confidence_score: 0 };
     }
 
-    let retrievedDocs = [];
+    let retrievedDocs;
     try {
       const retrieverUrl = 'http://retriever-arango-service:7000/v1/retrieval';
       const retrieverResponse = await axios.post(retrieverUrl, {

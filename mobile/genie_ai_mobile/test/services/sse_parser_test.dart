@@ -117,7 +117,7 @@ void main() {
       // Actually, split('\n') on "data: {...}\n" gives ["data: {...}", ""]
       // so the line IS processed. Let's test a truly incomplete buffer:
       final events = parser.parseChunk(
-        'data: {"type":"chunk","content":"Hi"}\ndata: {"type":"chunk","content":" Bye"',
+        'data: {"type":"chunk","content":"Hi"}\ndata: {"type":"chunk","content":" Bye"}',
       );
       expect(events, hasLength(1));
       expect((events[0] as SseChunkEvent).content, 'Hi');

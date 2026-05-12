@@ -61,6 +61,7 @@ A Flutter patient-facing app that connects to the AMINA backend.
 - 🔐 **Secure auth** — JWT stored in FlutterSecureStorage; session expiry handled automatically
 
 **Tech stack:** Flutter 3 · Riverpod · Dio · flutter\_secure\_storage · shared\_preferences
+
 **Minimum device:** Android 9 (API 28) · 1 GB RAM · 720×1280
 
 

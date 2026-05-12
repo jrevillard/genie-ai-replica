@@ -562,6 +562,7 @@ class QueryService {
         const WEATHER_FORECAST_PHRASES = [
           'how is the weather', 'what is the weather', 'what will the weather',
           'weather today', 'weather tomorrow', 'weather this week', 'weather next week',
+          'weather next month', 'next month', '30 days', 'next 30 days',
           'weather in 1', 'weather in 2', 'weather in 3', 'weather in 4', 'weather in 5',
           'weather in 6', 'weather in 7', 'weather forecast', 'current weather',
           'will it rain', 'will it be hot', 'will it be cold', 'how hot will', 'how cold will',
@@ -582,6 +583,7 @@ class QueryService {
         const WEATHER_AMBIGUOUS = ['weather', 'temperature', 'rain', 'humid', 'climate', 'forecast', 'wind', 'drought'];
         const PLANTING_DECISION_TERMS = ['sow', 'sowing', 'plant', 'planting', 'transplant', 'good time', 'right time'];
         const CURRENT_TIME_TERMS = ['now', 'today', 'currently', 'current', 'this week', 'right now'];
+        const LONG_TERM_FORECAST_HORIZON = /\b(?:(?:next|in|for)\s+)?(?:[8-9]|[1-9]\d)\s*days?\b|\b(?:(?:next|in|for)\s+)?(?:two|three|four|five|six|[2-6])\s*weeks?\b|\bfortnight\b|\bnext\s+month\b|\b(?:next\s+)?(?:few|couple\s+of|coming)\s+months?\b/;
 
         const lowerMsg          = lastUserMsg.toLowerCase();
         const hasRagOverride    = RAG_OVERRIDE.some(kw => lowerMsg.includes(kw));
@@ -589,6 +591,7 @@ class QueryService {
         const hasHardSignal     = WEATHER_HARD.some(kw => lowerMsg.includes(kw));
         const hasAgroTerm       = AGRO_TERMS.some(kw => lowerMsg.includes(kw));
         const hasAmbiguous      = WEATHER_AMBIGUOUS.some(kw => lowerMsg.includes(kw));
+        const hasLongTermHorizon = LONG_TERM_FORECAST_HORIZON.test(lowerMsg);
         const asksPlantingDecision =
           hasAgroTerm &&
           PLANTING_DECISION_TERMS.some(kw => lowerMsg.includes(kw)) &&
@@ -599,11 +602,12 @@ class QueryService {
           if (hasRagOverride) {
             // Tier 0: document/knowledge query signals — always RAG, no LLM call needed
             logger.info('[WEATHER] Tier 0 — document/knowledge signal detected → RAG');
-          } else if (hasForecastPhrase || hasHardSignal || asksPlantingDecision) {
+          } else if (hasForecastPhrase || hasHardSignal || asksPlantingDecision || (hasAmbiguous && hasLongTermHorizon)) {
             // Tier 1: unambiguous forecast phrase ("how is the weather", "weather tomorrow"…),
-            // hard event keyword (cyclone, flood…), or current planting/sowing decision.
+            // hard event keyword (cyclone, flood…), current planting/sowing decision,
+            // or weather term with a long-term horizon beyond the 7-day short forecast.
             isWeatherQuery = true;
-            logger.info(`[WEATHER] Tier 1 — ${asksPlantingDecision ? 'current planting decision' : (hasForecastPhrase ? 'forecast phrase' : 'hard weather keyword')} → weather`);
+            logger.info(`[WEATHER] Tier 1 — ${asksPlantingDecision ? 'current planting decision' : (hasLongTermHorizon ? 'long-term forecast horizon' : (hasForecastPhrase ? 'forecast phrase' : 'hard weather keyword'))} → weather`);
           } else if (hasAgroTerm) {
             // Tier 2: agricultural/knowledge context — route to RAG without LLM call
             // Agro terms (soil, pest, crop, worm…) never appear in real forecast queries

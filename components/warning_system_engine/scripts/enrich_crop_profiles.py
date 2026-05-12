@@ -1,9 +1,9 @@
 """
 enrich_crop_profiles.py
 =======================
-Reads bamis_metadata.json and vector_ready_chunks.jsonl, then generates (or
-overwrites) example_crop_profile.json with a rich profile for every
-crop × region combination found in the source data.
+Reads bamis_metadata.json, then generates (or overwrites)
+example_crop_profile.json with a rich profile for every crop × region
+combination found in the source data.
 
 Usage:
     python3 scripts/enrich_crop_profiles.py
@@ -23,7 +23,7 @@ Schema per key:
   weather_warnings     — from advisory Weather Warning records
   pest_disease_advisories — all raw advisory texts for this crop × region
   risk_by_stage        — which weeks exceed crop_rules thresholds
-  source_chunks        — chunk IDs referencing vector_ready_chunks.jsonl
+  source_chunks        — retained for compatibility; no chunk IDs are generated
 """
 import argparse
 import json
@@ -38,7 +38,6 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 _HERE = Path(__file__).parent.parent
 _BAMIS_META = _HERE / "data" / "bamis_metadata.json"
-_CHUNKS_FILE = _HERE / "data" / "vector_ready_chunks.jsonl"
 _OUTPUT_FILE = _HERE / "data" / "example_crop_profile.json"
 
 # ---------------------------------------------------------------------------
@@ -427,7 +426,6 @@ def _build_profile(
     region: str,
     climate_records: list[dict],
     advisory_records: list[dict],
-    chunk_lookup: dict[str, dict],
 ) -> dict:
     """Return a complete crop profile dict for this crop × region."""
 
@@ -444,19 +442,17 @@ def _build_profile(
         seen_weeks.add(week)
 
         stage = _normalise_stage(rec["crop_stage"])
-        chunk_id = f"climate_{crop}_{region}_w{week}"
-        chunk = chunk_lookup.get(chunk_id, {})
-        temp_mean = round((rec["min_temp_c"] + rec["max_temp_c"]) / 2, 2)
+        temp_min = rec.get("min_temp_c")
+        temp_max = rec.get("max_temp_c")
+        temp_mean = round((temp_min + temp_max) / 2, 2) if temp_min is not None and temp_max is not None else None
 
         entry = {
             "week":         week,
             "month":        rec["month"],
             "stage":        stage,
-            "chunk_id":     chunk_id,
-            "chunk_text":   chunk.get("text", ""),
-            "temp_min_c":   rec.get("min_temp_c"),
-            "temp_max_c":   rec.get("max_temp_c"),
-            "temp_mean_c":  temp_mean if rec.get("min_temp_c") is not None and rec.get("max_temp_c") is not None else None,
+            "temp_min_c":   temp_min,
+            "temp_max_c":   temp_max,
+            "temp_mean_c":  temp_mean,
             "rainfall_mm":  rec.get("rainfall_mm"),
             "rh_max_pct":   rec.get("rh_max_percent"),
             "rh_min_pct":   rec.get("rh_min_percent"),
@@ -624,14 +620,6 @@ def _build_profile(
     # ── 9. Risk by stage ─────────────────────────────────────────────────────
     risk_by_stage = _compute_risk_by_stage(weekly_calendar, crop_rules)
 
-    # ── 10. Source chunks inventory ──────────────────────────────────────────
-    climate_ids  = [e["chunk_id"] for e in weekly_calendar]
-    advisory_ids = []
-    for adv in advisory_records:
-        cid = adv.get("chunk_id")
-        if cid:
-            advisory_ids.append(cid)
-
     # ── Assemble ─────────────────────────────────────────────────────────────
     return {
         "crop":              crop,
@@ -647,10 +635,10 @@ def _build_profile(
         "pest_disease_advisories": pest_disease_advisories,
         "risk_by_stage":     risk_by_stage,
         "source_chunks": {
-            "climate_count":      len(climate_ids),
-            "advisory_count":     len(advisory_ids),
-            "climate_chunk_ids":  climate_ids,
-            "advisory_chunk_ids": advisory_ids,
+            "climate_count":      0,
+            "advisory_count":     0,
+            "climate_chunk_ids":  [],
+            "advisory_chunk_ids": [],
         },
     }
 
@@ -670,24 +658,6 @@ def main() -> None:
     print(f"[INFO] Loading {_BAMIS_META} ...")
     with open(_BAMIS_META, encoding="utf-8") as f:
         raw_meta = json.load(f)
-
-    print(f"[INFO] Loading {_CHUNKS_FILE} ...")
-    chunk_lookup: dict[str, dict] = {}
-    advisory_by_chunk: dict[str, dict] = {}
-    with open(_CHUNKS_FILE, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            obj = json.loads(line)
-            chunk_lookup[obj["id"]] = obj
-            if obj["id"].startswith("advisory_"):
-                meta = obj.get("metadata", {})
-                key = f"{meta.get('crop')}_{meta.get('region')}"
-                advisory_by_chunk.setdefault(key, [])
-                entry = dict(meta)
-                entry["chunk_id"] = obj["id"]
-                advisory_by_chunk[key].append(entry)
 
     # Separate climate vs advisory records from metadata
     climate_meta: list[dict] = []
@@ -732,7 +702,6 @@ def main() -> None:
             region=region,
             climate_records=climate_by_key[key],
             advisory_records=adv_records + global_adv,
-            chunk_lookup=chunk_lookup,
         )
         profiles[key] = profile
         print(f"  [OK] {key:40s} weeks={profile['season_span']['duration_weeks']:3d}  stages={len(profile['growth_stages'])}")

@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
-_DEFAULT_PATH = Path(__file__).parent / "data" / "example_crop_profile.json"
+_DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "example_crop_profile.json"
 
 
 class CropProfileLoader:
@@ -110,7 +110,7 @@ class CropProfileLoader:
                 "rh_max_pct", "rh_min_pct")
         result: dict = {"week_count": len(entries), "weeks_in_season": [e["week"] for e in entries]}
         for k in keys:
-            vals = [e[k] for e in entries if k in e]
+            vals = [e[k] for e in entries if e.get(k) is not None]
             if vals:
                 result[k] = round(sum(vals) / len(vals), 2)
         return result

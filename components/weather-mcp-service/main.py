@@ -213,6 +213,11 @@ _DROUGHT_KEYWORDS = re.compile(
 )
 _SEASONAL_KEYWORDS = re.compile(
     r"(?:\b[2-6]\s*months?\b|"
+    r"\b(?:(?:next|in|for)\s+)?(?:[8-9]|[1-9]\d)\s*days?\b|"
+    r"\b(?:(?:next|in|for)\s+)?(?:two|three|four|five|six|[2-6])\s*weeks?\b|"
+    r"\bfortnight\b|"
+    r"\bnext\s+month\b|"
+    r"\b(?:next\s+)?30\s*days?\b|"
     r"\bnext\s+(?:few|couple\s+of?|coming)\s+months?\b|"
     r"\bcoming\s+months?\b|"
     r"\bseasonal\s+(?:forecast|outlook|weather|climate)\b|"

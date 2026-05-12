@@ -74,15 +74,17 @@ _CHATQNA_SYSTEM_DEFAULT = """You are a friendly and polite information assistant
 
 Your task is to answer the user's latest question using only the content provided from the knowledge base.
 
-**Instructions:**
-- Do not invent or assume information.
-- If the answer is not in the provided content, inform the user that the information is unavailable.
-- Use the user's name, gender, age, preferences, and chat history to tailor and personalise your responses.
-- Keep answers informative but concise; provide detailed explanations only when necessary or explicitly requested.
-- When you use information from a specific document, cite it inline using the format [Source: <document title>] right after the statement it supports. Use only titles that appear in the provided content; do not invent source titles.
+**Strict rules:**
+- Do NOT invent, assume, or extrapolate information. Every concrete fact in your answer (names, codes, URLs, phone numbers, dates, deadlines, prices, statistics, organisation names) MUST appear verbatim in the provided knowledge-base content. If the user's question contains such facts, do not repeat them as authoritative unless the knowledge base confirms them.
+- If the knowledge base content does NOT directly answer the question, do not attempt a partial answer or "general guidance". Say clearly that the requested information is not available in the knowledge base and stop. Do not suggest where else to look unless that suggestion is itself in the knowledge base.
+- When you use a fact from a retrieved document, cite the source inline using the exact format [Source: <document title>] immediately after the statement. The available document titles are listed alongside each retrieved chunk under "from "<file_name>"". Use those file names verbatim as the title; never invent a title.
 
-In line with the above instructions, generate a reply to the user's latest
-message in the chat history based on the relevant content provided."""
+**Style rules:**
+- Reply directly as a chat message. Do NOT use letter-style framing: no "Dear ...", "Hello <Name>," opener; no "Best regards", "Sincerely", "[Your Assistant]", or any signoff at the end.
+- Keep answers informative but concise; expand only when necessary or explicitly requested.
+- Use the user's name and chat history to personalise tone, not to invent context.
+
+In line with the above rules, generate a reply to the user's latest message in the chat history using only the relevant content provided."""
 CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", "").strip() or _CHATQNA_SYSTEM_DEFAULT
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
@@ -458,18 +460,31 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         ##################################
         system_instructions = CHATQNA_SYSTEM_PROMPT
 
-        # Per-knowledge-area extension: if the active category has a registered
-        # extension in CATEGORY_PROMPT_EXTENSIONS, append it after the base prompt.
+        # Per-knowledge-area extension: append any registered prompt extension
+        # whose key matches the active categoryLabel OR any of the selected
+        # serviceLabels. After the taxonomy was flattened (top-level categories
+        # turned into services under a single "Healthcare" category), the JSON
+        # keys are aligned with service names; we still lookup by category for
+        # backward compatibility. Duplicate text is filtered. Each appended
+        # extension is separated by a blank line.
         retrieval_context = kwargs.get("retrieval_context") or {}
         if isinstance(retrieval_context, dict) and CATEGORY_PROMPT_EXTENSIONS:
-            category_label = retrieval_context.get("categoryLabel")
-            if category_label:
-                extension = CATEGORY_PROMPT_EXTENSIONS.get(category_label)
-                if extension:
+            seen_extensions = set()
+            ordered_keys = []
+            cat_label = retrieval_context.get("categoryLabel")
+            if cat_label:
+                ordered_keys.append(cat_label)
+            service_labels = retrieval_context.get("serviceLabels") or []
+            if isinstance(service_labels, list):
+                ordered_keys.extend(service_labels)
+            for key in ordered_keys:
+                extension = CATEGORY_PROMPT_EXTENSIONS.get(key)
+                if extension and extension not in seen_extensions:
                     system_instructions = system_instructions + "\n\n" + extension
+                    seen_extensions.add(extension)
                     if logflag:
                         logger.info(
-                            f"[SYSTEM PROMPT] Appended extension for category: {category_label}"
+                            f"[SYSTEM PROMPT] Appended extension for label: {key}"
                         )
 
         # CRITICAL: Inject explicit English language instructions when language is EN
@@ -595,12 +610,18 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         # file_id pairs with retrieved doc id (generated by orchestrator)
         file_id_pairs = {}
+        # doc_id -> file_name (used downstream to inject [Source: ...] titles
+        # into the LLM prompt so the model can cite real document names).
+        file_name_pairs = {}
         # Get the file ids (all ids in the metadata)
         file_id_list = []
+        file_name_list = []
 
         for item in data.get("metadata", []):
             if "file_ids" in item:
                 file_id_list.extend(item["file_ids"])
+            if "file_names" in item:
+                file_name_list.extend(item["file_names"])
 
         # Check if metadata is not None before checking length
         metadata = data.get("metadata")
@@ -618,8 +639,10 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                     doc_text = retrieved_doc["text"]
                     if "\n------\nRELATED INFORMATION:\n------\n" in doc_text:
                         file_id_pairs[doc_id] = file_id_list.pop(0) if len(file_id_list) > 0 else ""
+                        file_name_pairs[doc_id] = file_name_list.pop(0) if len(file_name_list) > 0 else ""
                     else:
                         file_id_pairs[doc_id] = ""
+                        file_name_pairs[doc_id] = ""
             elif RETRIEVER_SEARCH_START == "chunk":
                 assert len(file_id_list) == len(retrieved_docs), (
                     f"Length of file_id_list {len(file_id_list)} is not equal "
@@ -628,6 +651,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                 for retrieved_doc in retrieved_docs:
                     doc_id = retrieved_doc["id"]
                     file_id_pairs[doc_id] = file_id_list.pop(0) if len(file_id_list) > 0 else ""
+                    file_name_pairs[doc_id] = file_name_list.pop(0) if len(file_name_list) > 0 else ""
             else:
                 logger.error(
                     f"RETRIEVER_SEARCH_START is not set correctly: "
@@ -644,6 +668,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             next_data["initial_query"] = data["initial_query"]
             next_data["retrieved_docs"] = retrieved_docs
             next_data["file_id_pairs"] = file_id_pairs
+            next_data["file_name_pairs"] = file_name_pairs
 
             # Expected data format if using tei_reranker directly (bypassing reranker service):
             # next_data["query"] = data["initial_query"]
@@ -714,6 +739,15 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         original_retrieved_docs = inputs.get("retrieved_docs", [])
         text_to_id = {doc.get("text", ""): doc.get("id", "N/A") for doc in original_retrieved_docs}
 
+        # text -> source file_name, so the final LLM prompt can label each
+        # retrieved chunk with the document title that the system prompt
+        # instructs the model to cite as [Source: <title>].
+        file_name_pairs = inputs.get("file_name_pairs", {})
+        text_to_filename = {
+            doc.get("text", ""): file_name_pairs.get(doc.get("id", ""), "")
+            for doc in original_retrieved_docs
+        }
+
         # 1. Handle output from custom Genie Python Wrapper
         if isinstance(data, dict):
             if "reranked_docs" in data:
@@ -778,8 +812,13 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             )
             next_data["inputs"] = initial_query + abstention_instructions
         else:
+            def _format_retrieved(doc_text):
+                fname = text_to_filename.get(doc_text, "")
+                label = f' from "{fname}"' if fname else ""
+                return f"\n[Retrieved Document{label}]: {doc_text}"
+
             next_data["inputs"] = initial_query + "".join(
-                f"\n[Retrieved Document]: {doc}" for doc in docs
+                _format_retrieved(doc) for doc in docs
             )  # prompt <- change to 'prompt' if you re-introduce the code above
 
         next_data["retrieved_docs"] = reranked_docs_with_scores

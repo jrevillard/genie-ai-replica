@@ -727,7 +727,9 @@ class GenieaiArangoRetriever(OpeaComponent):
         logger.info(f"Found {len(search_res)} documents.")
         logger.info(f"Search results after similarity search: {search_res}")
 
-        # Retrieve file_id for each chunk using AQL (search_start == 'chunk')
+        # Retrieve file_id AND file_name for each chunk using AQL
+        # (search_start == 'chunk'). file_name is needed so chatqna can pass
+        # it through to the LLM as the [Source: ...] citation title.
         if search_start == "chunk":
             for r in search_res:
                 chunk_id = r["doc"].id if r["doc"].id else None
@@ -735,13 +737,26 @@ class GenieaiArangoRetriever(OpeaComponent):
                     aql = f"""
                         FOR doc IN {collection_name}
                             FILTER doc._key == @chunk_id
-                            RETURN doc.{ARANGO_FILE_ID_FIELD}
+                            LET fid = doc.{ARANGO_FILE_ID_FIELD}
+                            LET file_doc = FIRST(
+                                FOR f IN files
+                                    FILTER f.file_id == fid
+                                    LIMIT 1
+                                    RETURN f.file_name
+                            )
+                            RETURN {{ file_id: fid, file_name: file_doc }}
                     """
                     bind_vars = {"chunk_id": chunk_id}
                     cursor = self.db.aql.execute(aql, bind_vars=bind_vars)
-                    file_ids = list(doc for doc in cursor)
-                    r["doc"].metadata["file_ids"] = file_ids if file_ids else []
-            logger.info(f"Adding file id metadata after similarity search: {search_res}")
+                    file_ids = []
+                    file_names = []
+                    for row in cursor:
+                        if row.get("file_id"):
+                            file_ids.append(row["file_id"])
+                            file_names.append(row.get("file_name") or row["file_id"])
+                    r["doc"].metadata["file_ids"] = file_ids
+                    r["doc"].metadata["file_names"] = file_names
+            logger.info(f"Adding file id+name metadata after similarity search: {search_res}")
 
         #######################################################################
         # Traverse Source Documents (based on ARANGO_TRAVERSAL_ENABLED value) #

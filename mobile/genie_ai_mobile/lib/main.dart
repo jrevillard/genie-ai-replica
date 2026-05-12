@@ -19,6 +19,7 @@ import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
 import 'package:genie_ai_mobile/services/fallback_localizations.dart';
 import 'package:genie_ai_mobile/services/voice_conversation_service.dart';
+import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
@@ -132,6 +133,7 @@ class _MyAppState extends State<MyApp> {
 
   void _handleLogin(Map<String, dynamic> user) {
     debugPrint("User logged in: ${user['email'] ?? 'unknown'}");
+    ChatbotProxy.markLoginNow();
     setState(() {
       _user = user;
     });

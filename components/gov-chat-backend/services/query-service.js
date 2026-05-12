@@ -49,6 +49,82 @@ async function classifyWeatherWithLLM(query) {
   }
 }
 
+
+function getClientDate(queryData) {
+  const clientContext = queryData.clientContext || {};
+  const iso = clientContext.currentTimeIso || queryData.timestamp || new Date().toISOString();
+  const parsed = new Date(iso);
+  const baseDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const offset = Number(clientContext.timezoneOffsetMinutes);
+
+  if (!Number.isFinite(offset)) {
+    return { date: baseDate, useUtc: false, clientContext };
+  }
+
+  return {
+    date: new Date(baseDate.getTime() + offset * 60 * 1000),
+    useUtc: true,
+    clientContext,
+  };
+}
+
+function formatClientDate(queryData) {
+  const { date, useUtc, clientContext } = getClientDate(queryData);
+  const locale = clientContext.locale || queryData.language || 'en';
+  const options = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    ...(useUtc ? { timeZone: 'UTC' } : {}),
+  };
+  const formattedDate = new Intl.DateTimeFormat(locale, options).format(date);
+  const formattedTime = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(useUtc ? { timeZone: 'UTC' } : {}),
+  }).format(date);
+  const timezone = clientContext.timezoneName ||
+    (Number.isFinite(Number(clientContext.timezoneOffsetMinutes))
+      ? `UTC${Number(clientContext.timezoneOffsetMinutes) >= 0 ? '+' : ''}${Number(clientContext.timezoneOffsetMinutes) / 60}`
+      : 'server local time');
+
+  return { formattedDate, formattedTime, timezone };
+}
+
+function isDirectDateTimeQuestion(query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return false;
+  return /\b(what|whats|what's)\s+(date|day|time)\b/.test(q) ||
+    /\b(date|day|time)\s+(is\s+it\s+)?(today|now|current)\b/.test(q) ||
+    /\bcurrent\s+(date|day|time)\b/.test(q) ||
+    /আজ\s*(কত\s*)?(তারিখ|বার|সময়|সময়)/.test(query || '');
+}
+
+function buildDirectDateTimeAnswer(queryData, query) {
+  if (!isDirectDateTimeQuestion(query)) return null;
+  const { formattedDate, formattedTime, timezone } = formatClientDate(queryData);
+  const locale = queryData.clientContext?.locale || queryData.language || '';
+  console.log(locale);
+  if (String(locale).startsWith('bn') || /[\u0980-\u09FF]/.test(query || '')) {
+    return `আজ ${formattedDate}। স্থানীয় সময় ${formattedTime} (${timezone})।`;
+  }
+  return `Today is ${formattedDate}. The local time is ${formattedTime} (${timezone}).`;
+}
+
+function buildTemporalSystemMessage(queryData) {
+  const { formattedDate, formattedTime, timezone } = formatClientDate(queryData);
+  const loginTime = queryData.clientContext?.loginTimeIso || 'unknown';
+  return [
+    'User temporal context:',
+    `- User local date: ${formattedDate}`,
+    `- User local time: ${formattedTime} (${timezone})`,
+    `- User login time: ${loginTime}`,
+    `- Server received time: ${new Date().toISOString()}`,
+    'Use this for today, now, tomorrow, current-season, and time-sensitive agricultural advice. Do not say the date is unavailable.',
+  ].join('\n');
+}
+
 class QueryService {
   constructor() {
     this.dbService = dbService; // Store the service reference instead of the promise
@@ -342,6 +418,15 @@ class QueryService {
         logger.warn('No extractable text from messages; analytics may be affected.');
       }
 
+      const temporalSystemMessage = buildTemporalSystemMessage(queryData);
+      queryData.context = {
+        ...queryData.context,
+        temporalContext: {
+          client: queryData.clientContext || null,
+          serverReceivedAt: new Date().toISOString(),
+        },
+      };
+
       // Resolve categoryLabel to categoryId if not provided
       let categoryId = queryData.categoryId || null;
       if (queryData.context?.categoryLabel && !categoryId) {
@@ -396,6 +481,7 @@ class QueryService {
         contextOption: backendMode,
         messages: queryData.messages,
         context: queryData.context,
+        clientContext: queryData.clientContext || null,
         text: queryText
       };
 
@@ -409,8 +495,26 @@ class QueryService {
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
 
+      const directTemporalAnswer = buildDirectDateTimeAnswer(queryData, queryText);
+
       // *** START: TEST MODE LOGIC ***
-      if (backendMode === 'test-mode') {
+      if (directTemporalAnswer) {
+        logger.info('[TIME] Direct date/time query answered without RAG.');
+        opeaResponseContent = directTemporalAnswer;
+        opeaMetadata = {
+          source_documents: [],
+          confidence_score: 1.0,
+          temporal: true,
+          clientContext: queryData.clientContext || null,
+        };
+        opeaResponseTime = Date.now() - opeaStartTime;
+        await this.queries.update(queryId, {
+          response: opeaResponseContent,
+          responseTime: opeaResponseTime,
+          isAnswered: true,
+          metadata: opeaMetadata
+        });
+      } else if (backendMode === 'test-mode') {
         logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
@@ -476,6 +580,8 @@ class QueryService {
           'infestation', 'blight', 'mite', 'aphid', 'thrip', 'nematode',
         ];
         const WEATHER_AMBIGUOUS = ['weather', 'temperature', 'rain', 'humid', 'climate', 'forecast', 'wind', 'drought'];
+        const PLANTING_DECISION_TERMS = ['sow', 'sowing', 'plant', 'planting', 'transplant', 'good time', 'right time'];
+        const CURRENT_TIME_TERMS = ['now', 'today', 'currently', 'current', 'this week', 'right now'];
 
         const lowerMsg          = lastUserMsg.toLowerCase();
         const hasRagOverride    = RAG_OVERRIDE.some(kw => lowerMsg.includes(kw));
@@ -483,17 +589,21 @@ class QueryService {
         const hasHardSignal     = WEATHER_HARD.some(kw => lowerMsg.includes(kw));
         const hasAgroTerm       = AGRO_TERMS.some(kw => lowerMsg.includes(kw));
         const hasAmbiguous      = WEATHER_AMBIGUOUS.some(kw => lowerMsg.includes(kw));
+        const asksPlantingDecision =
+          hasAgroTerm &&
+          PLANTING_DECISION_TERMS.some(kw => lowerMsg.includes(kw)) &&
+          CURRENT_TIME_TERMS.some(kw => lowerMsg.includes(kw));
 
         let isWeatherQuery = false;
         if (weatherEnabled) {
           if (hasRagOverride) {
             // Tier 0: document/knowledge query signals — always RAG, no LLM call needed
             logger.info('[WEATHER] Tier 0 — document/knowledge signal detected → RAG');
-          } else if (hasForecastPhrase || hasHardSignal) {
-            // Tier 1: unambiguous forecast phrase ("how is the weather", "weather tomorrow"…)
-            // or hard event keyword (cyclone, flood…) — route to weather without LLM call
+          } else if (hasForecastPhrase || hasHardSignal || asksPlantingDecision) {
+            // Tier 1: unambiguous forecast phrase ("how is the weather", "weather tomorrow"…),
+            // hard event keyword (cyclone, flood…), or current planting/sowing decision.
             isWeatherQuery = true;
-            logger.info(`[WEATHER] Tier 1 — ${hasForecastPhrase ? 'forecast phrase' : 'hard weather keyword'} → weather`);
+            logger.info(`[WEATHER] Tier 1 — ${asksPlantingDecision ? 'current planting decision' : (hasForecastPhrase ? 'forecast phrase' : 'hard weather keyword')} → weather`);
           } else if (hasAgroTerm) {
             // Tier 2: agricultural/knowledge context — route to RAG without LLM call
             // Agro terms (soil, pest, crop, worm…) never appear in real forecast queries
@@ -567,10 +677,13 @@ class QueryService {
           const vllmModel = process.env.VLLM_MODEL || 'granite-3.2-2b-instruct';
 
           // Build OpenAI-compatible messages from queryData
-          const vllmMessages = queryData.messages.map(m => ({
-            role: m.role || 'user',
-            content: m.content
-          }));
+          const vllmMessages = [
+            { role: 'system', content: temporalSystemMessage },
+            ...queryData.messages.map(m => ({
+              role: m.role || 'user',
+              content: m.content
+            }))
+          ];
 
           const llmClient = {
             chat: async ({ messages, tools, tool_choice }) => {
@@ -623,17 +736,21 @@ class QueryService {
           }
 
           opeaPayload = {
-            messages: queryText,
+            messages: `${temporalSystemMessage}\n\nUser question: ${queryText}`,
             stream: false
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
           opeaPayload = {
-            messages: queryData.messages,
+            messages: [
+              { role: 'system', content: temporalSystemMessage },
+              ...queryData.messages
+            ],
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language
+              language: queryData.context.language,
+              temporalContext: queryData.context.temporalContext
             },
             user_id: queryData.userId,
             stream: false

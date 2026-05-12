@@ -4,6 +4,11 @@ import 'package:genie_ai_mobile/services/api_service.dart';
 
 class ChatbotProxy {
   final ApiService _api = ApiService();
+  static DateTime? _loginTime;
+
+  static void markLoginNow() {
+    _loginTime = DateTime.now();
+  }
 
   Future<Map<String, dynamic>> submitQuery({
     required String sessionId,
@@ -13,11 +18,21 @@ class ChatbotProxy {
     String? contextLabels,
     String? language,
   }) async {
+    final now = DateTime.now();
+    final loginTime = _loginTime ?? now;
     final Map<String, dynamic> payload = {
       'sessionId': sessionId,
       'messages': messages,
       'userId': userId,
-      'timestamp': DateTime.now().toIso8601String(),
+      'timestamp': now.toUtc().toIso8601String(),
+      'clientContext': {
+        'currentTimeIso': now.toUtc().toIso8601String(),
+        'loginTimeIso': loginTime.toUtc().toIso8601String(),
+        'timezoneOffsetMinutes': now.timeZoneOffset.inMinutes,
+        'timezoneName': now.timeZoneName,
+        'locale': language,
+        'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+      },
     };
 
     if (language != null && language.isNotEmpty) {
@@ -60,8 +75,10 @@ class ChatbotProxy {
       // FIX: Ensure userId in body is clean (remove 'users/' prefix)
       // This solves the backend warning "userId in body does not match token userId"
       if (feedback.containsKey('userId') && feedback['userId'] is String) {
-        feedback['userId'] =
-            (feedback['userId'] as String).replaceFirst('users/', '');
+        feedback['userId'] = (feedback['userId'] as String).replaceFirst(
+          'users/',
+          '',
+        );
       }
 
       // Note: queryId here should now be clean (e.g. "274711...") thanks to the fix in the Dialog.

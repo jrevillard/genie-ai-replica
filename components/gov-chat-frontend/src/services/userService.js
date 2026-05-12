@@ -171,7 +171,12 @@ class UserService {
    * @private
    */
   setUserData(userData) {
-    localStorage.setItem(this.tokenKey, JSON.stringify(userData));
+    const stored = {
+      ...userData,
+      loginTimeIso: userData.loginTimeIso || new Date().toISOString(),
+    };
+    localStorage.setItem(this.tokenKey, JSON.stringify(stored));
+    localStorage.setItem('loginTimeIso', stored.loginTimeIso);
   }
 
   /**
@@ -180,6 +185,7 @@ class UserService {
    */
   clearUserData() {
     localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem('loginTimeIso');
   }
 
   // Add this to userService.js - make sure it's inside the class definition

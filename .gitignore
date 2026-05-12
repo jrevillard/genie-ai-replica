@@ -99,3 +99,32 @@ secrets/
 !haystack-stack/.env.encrypted
 !components/multichannel-access/.env.example
 !components/frontend/.env.example
+
+# ─── .env backups — always carry real provider keys, never commit ──
+*.env.backup_*
+haystack-stack/.env.backup_*
+haystack-stack/.env.bak.*
+haystack-stack/.env.broken.*
+
+# ─── Claude Code working dir — temp deploy scripts hard-code SSH
+#     creds & paramiko sessions to the A40, plus local-machine
+#     Claude settings. Watchdog scripts live in scripts/ops/. ──────
+.claude/_tmp_*
+.claude/_seed_*
+.claude/_RESTORE.md
+.claude/_amina_*
+.claude/settings.local.json
+.claude/settings.json
+.claude/scheduled_tasks.lock
+
+# ─── Runtime artifacts ─────────────────────────────────────────────
+var/
+*.err
+components/frontend/vite-test.err
+
+# ─── Caregiver education certificates — PII. The pre-existing .webp
+#     committed before this rule is left in place; new uploads stay
+#     local only. Per privacy policy, originals are pseudonymised. ─
+haystack-stack/education_certs/*.jpg
+haystack-stack/education_certs/*.png
+haystack-stack/education_certs/*.pdf

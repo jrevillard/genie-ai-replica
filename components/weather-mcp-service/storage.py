@@ -22,7 +22,13 @@ from models import RiskAssessment, UnifiedForecast
 
 logger = logging.getLogger(__name__)
 
-_COLLECTIONS = ("weather_forecasts", "risk_assessments", "alerts_sent", "drought_assessments")
+_COLLECTIONS = (
+    "weather_forecasts",
+    "risk_assessments",
+    "alerts_sent",
+    "seasonal_forecasts",
+    "drought_assessments",
+)
 
 
 def _norm_key(s: str) -> str:

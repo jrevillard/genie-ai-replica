@@ -20,6 +20,11 @@ COPY data/ ./data/
 COPY scripts/ ./scripts/
 
 ENV PYTHONUNBUFFERED=1 \
-    LOG_LEVEL=INFO
+    LOG_LEVEL=INFO \
+    BAMIS_PDF_DIR=/data/raw_pdfs \
+    BAMIS_DATA_DIR=/app/data
+
+# Mount point for raw BAMIS PDFs supplied by the crawl step
+VOLUME ["/data/raw_pdfs"]
 
 CMD ["python", "-m", "app.main"]

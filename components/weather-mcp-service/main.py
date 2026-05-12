@@ -836,8 +836,9 @@ async def query(request: QueryRequest):
             "answer": (
                 f"## Seasonal Weather Outlook — {district}\n\n"
                 "The long-term seasonal forecast for this district is not yet available. "
-                "It is generated once per week from the **Copernicus SEAS5** model (ECMWF) "
-                "and will be ready after the first scheduled weekly run.\n\n"
+                "The warning system seeds Copernicus SEAS5 data when its container starts, "
+                "then refreshes it weekly. The initial download may still be running, or "
+                "Copernicus CDS credentials may be missing.\n\n"
                 "For short-term weather (next 1–7 days), please ask something like: "
                 f"*\"What is the weather forecast for {district} this week?\"*"
             ),

@@ -12,9 +12,11 @@ Long-term pipeline  (weekly, Monday 06:00 UTC):
 
 Startup:
   Short-term catch-up fires 10 s after start.
-  Long-term catch-up fires 60 s after start (gives short-term time to run first).
+  Long-term seed fires shortly after start and downloads Copernicus only when
+  seasonal data is missing, so fresh deployments do not wait for Monday cron.
 """
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -41,6 +43,21 @@ DISTRICT_LIST = [
     "Bogra", "Dinajpur", "Pabna", "Tangail", "Faridpur",
     "Noakhali", "Brahmanbaria", "Cox's Bazar", "Chandpur", "Narsingdi",
 ]
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        logger.warning("[SCHEDULER] Invalid integer for %s — using %d", name, default)
+        return default
 
 
 async def run_potato_ews_pipeline(
@@ -230,6 +247,52 @@ async def run_long_term_pipeline(
     return result
 
 
+async def run_long_term_startup_seed(
+    storage:       "StorageLayer",
+    copernicus:    "CopernicusFetcher",
+    long_term_ews: "LongTermPotatoEWS",
+    notifier:      "Notifier | None" = None,
+) -> dict:
+    """
+    Startup seed for seasonal forecasts.
+
+    Runs the expensive Copernicus pipeline only when the shared ArangoDB does
+    not already contain seasonal outlooks for all supported districts. This
+    gives a new container/database usable long-term data immediately after
+    startup without re-downloading SEAS5 on every restart.
+    """
+    import asyncio
+
+    if not _env_flag("COPERNICUS_STARTUP_SEED_ENABLED", default=True):
+        logger.info("[LT_STARTUP] Startup Copernicus seed disabled")
+        return {"status": "skipped", "reason": "startup seed disabled"}
+
+    force = _env_flag("COPERNICUS_STARTUP_SEED_FORCE", default=False)
+
+    missing: list[str] = []
+    if not force:
+        def _missing_locations() -> list[str]:
+            return [
+                location for location in DISTRICT_LIST
+                if storage.get_seasonal_forecast(location) is None
+            ]
+
+        missing = await asyncio.get_running_loop().run_in_executor(None, _missing_locations)
+        if not missing:
+            logger.info("[LT_STARTUP] Seasonal forecasts already present — startup seed skipped")
+            return {"status": "skipped", "reason": "seasonal forecasts already present"}
+
+    if force:
+        logger.info("[LT_STARTUP] Forced startup Copernicus seed requested")
+    else:
+        logger.info(
+            "[LT_STARTUP] Missing seasonal forecasts for %d/%d districts — running Copernicus seed",
+            len(missing), len(DISTRICT_LIST),
+        )
+
+    return await run_long_term_pipeline(storage, copernicus, long_term_ews, notifier)
+
+
 async def _dispatch_seasonal_alerts(
     storage:  "StorageLayer",
     notifier: "Notifier",
@@ -371,7 +434,7 @@ def create_scheduler(
 
     Long-term jobs (only registered when copernicus and long_term_ews provided):
       long_term_pipeline      — every Monday at 06:00 UTC
-      startup_long_term       — once, 60 s after start
+      startup_long_term_seed  — once after start, only fetches if data is missing
 
     Call scheduler.start() after creation (done in main.py).
     """
@@ -419,20 +482,22 @@ def create_scheduler(
             max_instances=1,
         )
 
+        startup_seed_delay = max(0, _env_int("COPERNICUS_STARTUP_SEED_DELAY_SECONDS", 5))
+
         scheduler.add_job(
-            run_long_term_pipeline,
+            run_long_term_startup_seed,
             trigger="date",
-            run_date=datetime.now(timezone.utc) + timedelta(seconds=60),
+            run_date=datetime.now(timezone.utc) + timedelta(seconds=startup_seed_delay),
             args=lt_args,
-            id="startup_long_term",
-            name="Startup long-term catch-up (60 s delay)",
+            id="startup_long_term_seed",
+            name=f"Startup Copernicus seed ({startup_seed_delay} s delay)",
             replace_existing=True,
             max_instances=1,
         )
 
         logger.info(
             "[SCHEDULER] Jobs: daily_pipeline (05:00 UTC) + "
-            "long_term_pipeline (Mon 06:00 UTC) + startup catch-ups"
+            "long_term_pipeline (Mon 06:00 UTC) + startup Copernicus seed"
         )
     else:
         logger.info(

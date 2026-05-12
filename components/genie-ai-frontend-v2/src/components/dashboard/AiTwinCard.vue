@@ -95,9 +95,18 @@ function closeImagePreview() {
           <dd class="font-medium text-slate-800">{{ dateEdited }}</dd>
         </div>
       </dl>
-      <div class="flex items-center justify-between gap-3 border-l border-slate-200 pl-6">
-        <span class="text-slate-500">{{ t('twins.list.card.kbFiles', 'KB Files') }}</span>
-        <span class="font-medium text-slate-800">{{ twin.linkedKbFileIds.length }}</span>
+      <div class="flex flex-col justify-center gap-2 border-l border-slate-200 pl-6">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-slate-500">{{ t('twins.list.card.kbFiles', 'KB Files') }}</span>
+          <span class="font-medium text-slate-800">{{ twin.linkedKbFileIds.length }}</span>
+        </div>
+        <div
+          v-if="twin.twinNumber && twin.twinNumber.trim()"
+          class="flex items-center justify-between gap-3"
+        >
+          <span class="text-slate-500">{{ t('twins.list.card.twinNumber', 'Twin Number') }}</span>
+          <span class="font-medium text-slate-800" :title="twin.twinNumber">{{ twin.twinNumber }}</span>
+        </div>
       </div>
     </div>
 

@@ -85,6 +85,9 @@ module.exports = (translationService) => {
       logger.info(`[TRANSLATION-ROUTES] Successfully sent ${translatedTexts.length} translated texts to client.`);
     } catch (error) {
       logger.error(`[TRANSLATION-ROUTES] Error translating content: ${error.message}`, { stack: error.stack });
+      if (error.status === 400) {
+        return res.status(400).json({ message: error.message });
+      }
       next(error); // Pass to the global error handler
     }
   });
@@ -150,6 +153,9 @@ module.exports = (translationService) => {
       logger.info('[TRANSLATION-ROUTES] Successfully sent translated markdown to client.');
     } catch (error) {
       logger.error(`[TRANSLATION-ROUTES] Error translating markdown: ${error.message}`, { stack: error.stack });
+      if (error.status === 400) {
+        return res.status(400).json({ message: error.message });
+      }
       next(error); // Pass to the global error handler
     }
   });

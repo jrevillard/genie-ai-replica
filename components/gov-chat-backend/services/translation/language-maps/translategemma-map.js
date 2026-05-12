@@ -40,6 +40,9 @@ module.exports = {
     ru: 'ru',     // Russian
     pt: 'pt',     // Portuguese
     sw: 'sw',     // Kiswahili
+    ja: 'ja',     // Japanese
+    ko: 'ko',     // Korean
+    hi: 'hi',     // Hindi
 
     // Newly added languages (total 34)
     am: 'am',     // Amharic

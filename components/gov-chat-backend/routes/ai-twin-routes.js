@@ -1217,7 +1217,6 @@ module.exports = (aiTwinService) => {
    *         name: twinId
    *         required: true
    *         schema: { type: string }
-   *     parameters:
    *       - in: query
    *         name: status
    *         required: false

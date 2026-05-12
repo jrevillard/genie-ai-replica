@@ -112,7 +112,12 @@ watch(
 // All chat content (greeting, suggested questions) is authored in English.
 // The selected ChatLang is the target.
 const CHAT_SOURCE_LANG = 'en';
-const { current: twin, loading: twinLoading, error: twinError } = storeToRefs(aiTwinsStore);
+const {
+  current: twin,
+  loading: twinLoading,
+  error: twinError,
+  publicTwins,
+} = storeToRefs(aiTwinsStore);
 const { messages, sending, lang, restoring } = storeToRefs(chatStore);
 
 const showTwinSkeleton = computed(
@@ -206,9 +211,13 @@ async function loadLanguages(): Promise<void> {
 }
 
 async function loadSuggestedQuestions(): Promise<void> {
+  if (!twinId.value) {
+    suggestedQuestions.value = [];
+    return;
+  }
   suggestedQuestionsLoading.value = true;
   try {
-    suggestedQuestions.value = await getPublicSuggestedQuestions();
+    suggestedQuestions.value = await getPublicSuggestedQuestions(twinId.value);
   } catch {
     suggestedQuestions.value = [];
   } finally {
@@ -304,7 +313,13 @@ watch(
 );
 
 async function loadTwin(): Promise<void> {
-  if (!twinId.value) return;
+  if (!twinId.value) {
+    // Visitor arrived on `/chat` without picking a twin (typical guest flow).
+    // Fetch the public twin catalog so we can render a picker instead of a
+    // dead-end empty state with an admin-only CTA.
+    void loadPublicTwinsForPicker();
+    return;
+  }
   chatStore.setTwinContext(twinId.value);
   // Resume the prior conversation for this twin if one was persisted (page
   // reload, back-nav). No-op if no stored session or it's no longer valid.
@@ -316,7 +331,30 @@ async function loadTwin(): Promise<void> {
   }
 }
 
-watch(twinId, loadTwin);
+const publicTwinsLoading = ref(false);
+async function loadPublicTwinsForPicker(): Promise<void> {
+  // Cache across renders: only fetch once unless the list comes back empty
+  // (e.g. transient network failure on a previous attempt).
+  if (publicTwinsLoading.value || publicTwins.value.length > 0) return;
+  publicTwinsLoading.value = true;
+  try {
+    await aiTwinsStore.fetchAllPublic({ limit: 24 });
+  } catch {
+    // The picker renders an inline retry button against this empty list.
+  } finally {
+    publicTwinsLoading.value = false;
+  }
+}
+
+function pickTwin(picked: { _key: string }): void {
+  router.push({ name: 'chat', params: { twinId: picked._key } });
+}
+
+watch(twinId, () => {
+  loadTwin();
+  // Suggested questions are per-twin now, so re-fetch on twin switch.
+  void loadSuggestedQuestions();
+});
 
 function autoSize(): void {
   const el = composer.value;
@@ -1172,18 +1210,71 @@ function translationToggleLabel(id: string): string {
 
       <!-- Body -->
       <div class="flex min-h-0 flex-1 flex-col">
-        <!-- No twin selected -->
-        <EmptyState
-          v-if="!twinId"
-          full-height
-          :icon="BubbleChatIcon"
-          :title="tt('chat.pickTwinTitle', t.pickTwinTitle)"
-          :description="tt('chat.pickTwinDescription', t.pickTwinDescription)"
-        >
-          <BaseButton variant="primary" @click="router.push({ name: 'ai-twins' })">
-            {{ tt('chat.pickTwinAction', t.pickTwinAction) }}
-          </BaseButton>
-        </EmptyState>
+        <!-- No twin selected — show a picker of public twins so guests can
+             choose one and start chatting without ever hitting an admin-only
+             route. -->
+        <section v-if="!twinId" class="flex h-full min-h-0 flex-col overflow-y-auto px-4 py-8 sm:px-8 sm:py-12">
+          <div class="mx-auto w-full max-w-3xl">
+            <header class="text-center">
+              <h2 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                {{ tt('chat.pickTwinTitle', t.pickTwinTitle) }}
+              </h2>
+              <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500 sm:text-base">
+                {{ tt('chat.pickTwinDescription', t.pickTwinDescription) }}
+              </p>
+            </header>
+
+            <!-- Loading skeleton: three grey cards while the public list lands. -->
+            <div
+              v-if="publicTwinsLoading && publicTwins.length === 0"
+              class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              <div
+                v-for="i in 3"
+                :key="`twin-skel-${i}`"
+                class="h-32 animate-pulse rounded-2xl border border-slate-100 bg-slate-50"
+              />
+            </div>
+
+            <!-- Twin cards -->
+            <ul
+              v-else-if="publicTwins.length > 0"
+              class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              <li v-for="pt in publicTwins" :key="pt._key">
+                <button
+                  type="button"
+                  class="group flex h-full w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-ieee-300 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ieee-700"
+                  @click="pickTwin(pt)"
+                >
+                  <div class="flex items-center gap-3">
+                    <BaseAvatar :src="pt.profilePicUrl ?? ''" :name="pt.name" size="md" />
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-semibold text-slate-900">{{ pt.name }}</span>
+                      <span class="block text-xs text-slate-400 group-hover:text-ieee-700">
+                        {{ tt('chat.pickTwinStart', 'Start chatting →') }}
+                      </span>
+                    </span>
+                  </div>
+                  <p v-if="pt.description" class="line-clamp-3 text-xs leading-relaxed text-slate-500">
+                    {{ pt.description }}
+                  </p>
+                </button>
+              </li>
+            </ul>
+
+            <!-- Empty / error fallback -->
+            <div v-else class="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+              <Icon :icon="BubbleChatIcon" :size="28" class="text-slate-400" />
+              <p class="text-sm text-slate-500">
+                {{ tt('chat.pickTwinEmpty', 'No AI Twins are available right now.') }}
+              </p>
+              <BaseButton variant="outline" @click="loadPublicTwinsForPicker">
+                {{ tt('common.retry', 'Retry') }}
+              </BaseButton>
+            </div>
+          </div>
+        </section>
 
         <!-- Greeting (twin selected, no messages yet, not mid-restore) -->
         <div

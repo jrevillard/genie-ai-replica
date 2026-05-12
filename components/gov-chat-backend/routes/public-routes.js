@@ -284,7 +284,10 @@ router.get('/chat-sessions/languages', (req, res) => {
  */
 router.get('/suggested-questions', (req, res) => {
   const { SUGGESTED_QUESTIONS } = require('../constants/suggested-questions');
-  res.json(SUGGESTED_QUESTIONS);
+  // Match the per-twin default-enabled cap so the chat-landing UI never
+  // surfaces more than 3 questions, whether the source is a twin's
+  // generated rows or this curated fallback list.
+  res.json(SUGGESTED_QUESTIONS.slice(0, 3));
 });
 
 /* =========================================================================
@@ -409,6 +412,15 @@ router.get('/ai-twins/:id', async (req, res) => {
  *         name: id
  *         required: true
  *         schema: { type: string }
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema: { type: string, enum: [enabled, all], default: enabled }
+ *         description: >-
+ *           `enabled` (default) — only rows the admin has left toggled on; used
+ *           by the chat-landing UI. Falls back to the global curated list when
+ *           none are enabled. `all` — returns every row including disabled
+ *           ones, with the full row shape.
  *     responses:
  *       200:
  *         description: Suggested questions
@@ -419,14 +431,23 @@ router.get('/ai-twins/:id', async (req, res) => {
  *               items:
  *                 type: object
  *                 properties:
+ *                   _key:     { type: string, nullable: true }
+ *                   twinId:   { type: string, nullable: true }
  *                   order:    { type: integer }
  *                   category: { type: string }
  *                   content:  { type: string }
+ *                   enabled:  { type: boolean, nullable: true }
+ *                   source:   { type: string, enum: [generated, manual], nullable: true }
  *       404: { description: Twin not found }
  */
 router.get('/ai-twins/:id/suggested-questions', async (req, res) => {
   try {
-    const questions = await aiTwinService.getSuggestedQuestions(req.params.id);
+    const status = req.query.status === 'all' ? 'all' : 'enabled';
+    const questions = await aiTwinService.getSuggestedQuestions(
+      req.params.id,
+      undefined,
+      { status }
+    );
     res.json(questions);
   } catch (error) {
     if (error.statusCode === 404) {

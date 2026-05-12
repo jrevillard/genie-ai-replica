@@ -389,23 +389,15 @@ defineExpose({ save, discard });
       <div class="min-w-0">
         <div class="flex items-center gap-2">
           <h2 class="text-title text-text">{{ t('twins.knowledge.title', 'Edit Your Knowledge Set') }}</h2>
+          <!-- Top badge: total files known about (assigned + not assigned).
+               The per-section headers below show the assigned/available
+               breakdown, so this one is a quick "how big is the catalog"
+               readout. -->
           <span
-            v-if="props.editing"
+            v-if="totalAvailable"
             class="inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-meta font-semibold text-accent"
           >
-            {{
-              t(
-                'twins.knowledge.linkedOfTotal',
-                { linked: linkedCount, total: totalAvailable },
-                '{linked} of {total} linked'
-              )
-            }}
-          </span>
-          <span
-            v-else-if="linkedCount"
-            class="inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-meta font-semibold text-accent"
-          >
-            {{ linkedCount }}
+            {{ totalAvailable }}
           </span>
         </div>
         <p class="mt-0.5 text-caption text-text-muted">

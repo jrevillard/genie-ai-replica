@@ -291,16 +291,7 @@ async function confirmDelete() {
 
           <Transition name="edit-actions" mode="out-in">
             <div v-if="!editing" key="view" class="flex items-center gap-2">
-              <!-- Suggestions tab has no editable fields; Regenerate inside
-                   the tab is the only mutating action there, so the global
-                   Update button would be confusing. -->
-              <BaseButton
-                v-if="tab !== 'suggestions'"
-                variant="outline"
-                size="md"
-                rounded="full"
-                @click="startEditing"
-              >
+              <BaseButton variant="outline" size="md" rounded="full" @click="startEditing">
                 <Icon :icon="Edit02Icon" :size="16" />
                 {{ t('common.update', 'Update') }}
               </BaseButton>
@@ -332,14 +323,14 @@ async function confirmDelete() {
         <TwinStatsGrid v-if="tab === 'general'" :twin="twin" />
 
         <fieldset
-          :disabled="!editing && tab !== 'voice' && tab !== 'suggestions'"
+          :disabled="!editing && tab !== 'voice'"
           :class="[
             'rounded-2xl border bg-surface p-6 shadow-card transition-colors',
             editing ? 'border-accent/30 ring-1 ring-accent/10' : 'border-border',
-            !editing && tab !== 'voice' && tab !== 'suggestions' && 'opacity-70',
+            !editing && tab !== 'voice' && 'opacity-70',
           ]"
         >
-          <div :class="!editing && tab !== 'voice' && tab !== 'suggestions' && 'pointer-events-none select-none'">
+          <div :class="!editing && tab !== 'voice' && 'pointer-events-none select-none'">
             <GeneralTab
               v-if="tab === 'general'"
               ref="activeTab"
@@ -375,6 +366,8 @@ async function confirmDelete() {
               v-else-if="tab === 'suggestions'"
               ref="activeTab"
               :twin="twin"
+              :editing="editing"
+              @request-edit-mode="startEditing"
             />
           </div>
         </fieldset>

@@ -356,9 +356,18 @@ export async function getChatLanguages(): Promise<ChatLanguage[]> {
   return Array.isArray(res.data) ? res.data : [];
 }
 
-export async function getPublicSuggestedQuestions(): Promise<SuggestedQuestion[]> {
-  const res = await api.get<SuggestedQuestion[] | { questions?: SuggestedQuestion[] }>(
-    '/public/suggested-questions'
+// Per-twin (guest) suggested questions. The backend transparently falls back
+// to the global curated list when the twin has no KB / no chunks / no LLM
+// generation yet, so callers don't need a separate global fetch. The
+// response carries admin-only fields (_key, source, enabled, …) too — we
+// strip them down to the shape the landing UI actually needs.
+type PublicSuggestedQuestionRaw = SuggestedQuestion & {
+  enabled?: boolean;
+};
+
+export async function getPublicSuggestedQuestions(twinId: string): Promise<SuggestedQuestion[]> {
+  const res = await api.get<PublicSuggestedQuestionRaw[] | { questions?: PublicSuggestedQuestionRaw[] }>(
+    `/public/ai-twins/${encodeURIComponent(twinId)}/suggested-questions`
   );
   const list = Array.isArray(res.data)
     ? res.data
@@ -366,7 +375,17 @@ export async function getPublicSuggestedQuestions(): Promise<SuggestedQuestion[]
       ? res.data.questions
       : [];
   return list
-    .filter((item) => typeof item?.content === 'string' && item.content.trim().length > 0)
+    .filter(
+      (item) =>
+        typeof item?.content === 'string' &&
+        item.content.trim().length > 0 &&
+        item.enabled !== false
+    )
+    .map((item) => ({
+      order: item.order,
+      category: item.category,
+      content: item.content,
+    }))
     .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
 }
 

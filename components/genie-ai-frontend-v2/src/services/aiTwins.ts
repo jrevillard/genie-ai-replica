@@ -246,34 +246,79 @@ export async function getSuggestedInstructions(twinId: string): Promise<string[]
 
 // Per-twin LLM-generated chat-landing questions. The backend refreshes this
 // set fire-and-forget whenever the KB changes; the regenerate endpoint forces
-// a synchronous re-run (~1-3s) for admins. When the twin has no KB, the
-// backend falls back to the global curated NCD set.
+// a synchronous re-run (~1-3s) for admins. Admin CRUD is supported too —
+// manual rows survive regen, and editing a generated row promotes it to
+// manual (sticky-on-edit). When the twin has no KB at all, the backend
+// falls back to the global curated NCD set.
+export type TwinSuggestedQuestionSource = 'generated' | 'manual';
+
 export interface TwinSuggestedQuestion {
+  // Server-assigned id present on persisted rows. The fallback global list
+  // may omit it — callers must check before mutating.
+  _key?: string;
   order: number;
   category: string;
   content: string;
+  enabled?: boolean;
+  source?: TwinSuggestedQuestionSource;
+}
+
+export interface CreateTwinSuggestedQuestionPayload {
+  content: string;
+  category: string;
+  order?: number;
+  enabled?: boolean;
+}
+
+export interface UpdateTwinSuggestedQuestionPayload {
+  content?: string;
+  category?: string;
+  enabled?: boolean;
+  order?: number;
+}
+
+function normaliseSuggestedQuestionRow(raw: unknown, idx: number): TwinSuggestedQuestion | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const content = typeof r.content === 'string' ? r.content.trim() : '';
+  if (!content) return null;
+  const idCandidate = r._key ?? r.id ?? r.questionId;
+  return {
+    _key: typeof idCandidate === 'string' ? idCandidate : undefined,
+    // Server may omit `order` on the fallback list — derive a stable index
+    // so grouping/sorting still works.
+    order: typeof r.order === 'number' ? r.order : idx + 1,
+    category: typeof r.category === 'string' && r.category.trim() ? r.category.trim() : 'General',
+    content,
+    // `enabled` defaults to true so legacy rows (pre-toggle field) stay visible.
+    enabled: typeof r.enabled === 'boolean' ? r.enabled : true,
+    source:
+      r.source === 'manual' || r.source === 'generated'
+        ? (r.source as TwinSuggestedQuestionSource)
+        : undefined,
+  };
 }
 
 function normaliseTwinSuggestedQuestions(raw: unknown): TwinSuggestedQuestion[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .filter(
-      (item): item is TwinSuggestedQuestion =>
-        typeof item?.content === 'string' && item.content.trim().length > 0
-    )
-    .map((item, idx) => ({
-      // Server may omit `order` on the fallback list — derive a stable index
-      // so grouping/sorting still works.
-      order: typeof item.order === 'number' ? item.order : idx + 1,
-      category: typeof item.category === 'string' && item.category.trim() ? item.category.trim() : 'General',
-      content: item.content.trim(),
-    }))
+    .map((item, idx) => normaliseSuggestedQuestionRow(item, idx))
+    .filter((q): q is TwinSuggestedQuestion => q !== null)
     .sort((a, b) => a.order - b.order);
 }
 
-export async function getTwinSuggestedQuestions(twinId: string): Promise<TwinSuggestedQuestion[]> {
+// `enabled` (default, used by the chat landing): only rows the admin has left
+// turned on; the server falls back to the global curated list when none are.
+// `all` (admin management view): returns every row including disabled ones.
+export type SuggestedQuestionStatusFilter = 'enabled' | 'all';
+
+export async function getTwinSuggestedQuestions(
+  twinId: string,
+  status: SuggestedQuestionStatusFilter = 'enabled'
+): Promise<TwinSuggestedQuestion[]> {
   const res = await api.get<TwinSuggestedQuestion[]>(
-    `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions`
+    `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions`,
+    { params: { status } }
   );
   return normaliseTwinSuggestedQuestions(res.data);
 }
@@ -285,6 +330,42 @@ export async function regenerateTwinSuggestedQuestions(
     `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions/regenerate`
   );
   return normaliseTwinSuggestedQuestions(res.data);
+}
+
+export async function createTwinSuggestedQuestion(
+  twinId: string,
+  payload: CreateTwinSuggestedQuestionPayload
+): Promise<TwinSuggestedQuestion> {
+  const res = await api.post<TwinSuggestedQuestion>(
+    `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions`,
+    payload
+  );
+  const row = normaliseSuggestedQuestionRow(res.data, 0);
+  if (!row) throw new Error('Malformed response from create suggested question');
+  return row;
+}
+
+export async function updateTwinSuggestedQuestion(
+  twinId: string,
+  questionId: string,
+  payload: UpdateTwinSuggestedQuestionPayload
+): Promise<TwinSuggestedQuestion> {
+  const res = await api.patch<TwinSuggestedQuestion>(
+    `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions/${encodeURIComponent(questionId)}`,
+    payload
+  );
+  const row = normaliseSuggestedQuestionRow(res.data, 0);
+  if (!row) throw new Error('Malformed response from update suggested question');
+  return row;
+}
+
+export async function deleteTwinSuggestedQuestion(
+  twinId: string,
+  questionId: string
+): Promise<void> {
+  await api.delete(
+    `/ai-twins/${encodeURIComponent(twinId)}/suggested-questions/${encodeURIComponent(questionId)}`
+  );
 }
 
 // System prompt — admin-editable base prompt for a twin. The backend always

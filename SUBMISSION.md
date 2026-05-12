@@ -53,7 +53,7 @@ The same underlying RAG retrieval, language pipeline, and personality controls d
 
 - **Three converged channels** (web, voice, WhatsApp) all flowing through the same RAG pipeline — not three parallel mini-products.
 - **Custom WebSocket voice bridge** with inline RAG against the shared chunk store, so live calls stay grounded without paying the chatqna pipeline's latency.
-- **Mandinka, Sesotho, Swahili** in the language coverage — not just the usual EN/FR/ES.
+- **Sesotho, Swahili** in the language coverage — not just the usual EN/FR/ES. **Mandinka and Wolof are partially supported** (UI strings + auto-detection) but end-to-end translation quality is not fully under our control yet; see [§4.3.1](#431-mandinka--wolof-research-notes-partial-support) for the research notes.
 - **AI Twin + Personality system** built on top of GENIE.AI's chat pipeline so a single deployment serves multiple personas with distinct voices, greetings, and conversational style.
 
 ---
@@ -351,14 +351,49 @@ Project default for any unset twin: `slang` + `medium`.
 
 ### 4.3 Multilingual chat
 
-- Translator (Gemma 3 4B) supports the **17 languages** declared in `language_codes.json` — including **Mandinka**, **Sesotho**, **Swahili** for the Gambian audience.
+- Translator (Gemma 3 4B) supports the **17 languages** declared in `language_codes.json` — including **Sesotho** and **Swahili** for the Gambian audience. **Mandinka** and **Wolof** are listed as partially supported: detection works, UI is translated, but Gemma's translation quality for these two languages is inconsistent and not yet production-grade — see [§4.3.1](#431-mandinka--wolof-research-notes-partial-support).
 - LLM (Llama 3.1 8B Instruct) is fine-tuned on **8 languages**; everything else is bridged via translation: user-language → English → LLM → English → user-language.
-- Auto-detection (`langdetect`) when the client doesn't supply a language; the user can override via `context.language`.
-- Voice channel restricts to the four languages we have Piper voices for (`en`, `fr`, `es`, `sw`).
+- Auto-detection: fastText `lid` microservice (NLLB-aligned, 217 languages including Wolof, Mandinka, Fulah, Hausa, Yoruba) with `langdetect` as a fallback. The user can override via `context.language`.
+- Voice channel supports **11 languages** end-to-end (ASR + LLM + TTS): `en`, `fr`, `es`, `de`, `ar`, `ru`, `zh`, `pt`, `hi`, `id`, `sw`. The frontend's `GET /api/chat-sessions/languages` returns `isVoiceSupported: boolean` per language so the UI can gate the Call button. The voice-bridge auto-picks a per-language Piper voice (M/F where available) and switches voice when the user picks a language the twin's assigned voice can't speak. **Mandinka and Wolof are deliberately excluded from voice** until translation quality is validated (see §4.3.1).
 
 Endpoints:
 
 - `GET /api/chat-sessions/languages` (authed) and `GET /api/public/chat-sessions/languages` (guest).
+
+### 4.3.1 Mandinka & Wolof research notes (partial support)
+
+Mandinka and Wolof are first-class targets for the Gambian audience but neither is currently a "solved" language in the open-source NLP stack we had access to. We invested significant time evaluating candidate models and have marked both languages as **partially supported** in the final submission — detection works, UI strings are translated, and the assistant will *attempt* a response, but we do not yet have a translation path we are confident enough in to call production-grade. This section documents what we tried and why we paused that line of work.
+
+**What we evaluated:**
+
+| Model / library | Role we tested it for | Outcome on Mandinka / Wolof |
+|---|---|---|
+| `langdetect` (Python) | Auto-detection of input language | Reliably misclassifies Mandinka and Wolof as French, Portuguese, or "unknown" — the model's training data does not include either language. Kept only as a fallback. |
+| fastText `lid218e` (NLLB-aligned LID) | Auto-detection replacement | Covers both languages (217-language model). Detection accuracy is acceptable; this is what we shipped as the `lid` microservice. **Detection is the one piece of the Mandinka/Wolof stack where we have working coverage.** |
+| **NLLB-200** (Meta, 200 languages incl. Wolof / Mandinka) | Translation user-language → English and back | Wolof and Mandinka are nominally supported, but our short bench runs on Gambian-style phrases produced literal or semantically drifted English. We could not bring the model into the deployment within the prototype window because the smaller distilled variants still degraded quickly on the kind of mixed-register, code-switched text patients actually send (e.g. `"Salaam aleekum, sama tudd RYAAN la te bég naa la gis."`). |
+| **MADLAD-400** (Google, 400 languages) | Translation, same role as NLLB | We stood up a CPU sidecar and ran a 25-phrase Mandinka/Wolof evaluation set. Quality on common patient phrasings (greetings, health complaints, medication questions) was visibly worse than Gemma's zero-shot attempt; the service was decommissioned after evaluation. |
+| **Oolel-v0.1** (Wolof-specialised, `soynade-research/Oolel-v0.1`) | Wolof-specialised generation | Promising on paper but research-only / non-DPG-friendly licensing, and no Mandinka coverage — not a route we could realistically integrate for a public-sector deployment. |
+| **Gemma 3 4B** (currently wired) | Zero-shot translation as a generalist fallback | This is what's actually in production. Gemma handles Mandinka and Wolof better than NLLB or MADLAD on our test phrases — but it still hallucinates on idiomatic input and is not consistent enough for us to advertise as full support. |
+
+**Why we paused this line of research:**
+
+- **Data scarcity.** Mandinka has very limited parallel corpora; Wolof has more but still drops sharply off everyday Senegambian phrasing. Open models inherit that scarcity.
+- **Licensing.** Several promising specialised models (Oolel, some Wolof checkpoints on HuggingFace) carry non-commercial or research-only licences that don't align with the DPG / public-sector goals of GENIE.AI.
+- **Evaluation overhead.** Proper translation evaluation for low-resource African languages needs a native-speaker reviewer panel and a held-out test set — that's a workstream of its own, not something we could rubber-stamp inside the prototype phase.
+
+**What "partially supported" means in this submission:**
+
+- Auto-detection: ✅ works (fastText `lid`).
+- UI strings: ✅ translated (locale files committed).
+- Chat translation round-trip: ⚠️ best-effort via Gemma; quality not yet validated by native speakers.
+- Voice channel: ❌ not enabled for Mandinka or Wolof (no Piper voices, no validated Whisper coverage); both languages return `isVoiceSupported: false`.
+
+**Next steps (post-prototype):**
+
+1. Build a Wolof + Mandinka evaluation set with native-speaker scoring.
+2. Re-evaluate NLLB-200 distilled-1.3B and MADLAD-400-7B with proper prompt engineering and back-translation checks.
+3. Investigate fine-tuning Gemma 3 on a small curated Gambian-health corpus rather than relying on its zero-shot behaviour.
+4. Pursue Piper voice contributions for Mandinka and Wolof so the voice channel can be opened up once translation quality is acceptable.
 
 ### 4.4 Web chat
 
@@ -460,7 +495,7 @@ All metrics read from existing collections (`queries`, `chatSessions`, `chatSess
 - Routes: `/signin`, `/twins`, `/twins/:id`, `/chat/:twinId?`, `/call/:twinId?`, `/admin/...`.
 - Voice runtime (`src/services/voiceCall.ts`, `src/stores/voiceCall.ts`) — TS port of the WebSocket protocol with the same 4-layer echo strategy.
 - Audio playback per message (user voice notes + assistant TTS).
-- Multilingual UI (i18n with locale files for 14+ languages including Mandinka).
+- Multilingual UI (i18n with locale files for 14+ languages — including Mandinka and Wolof at the UI level, even though the translation backend for those two is still partial; see §4.3.1).
 
 ### 4.12 Measured performance
 

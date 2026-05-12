@@ -41,6 +41,9 @@ module.exports = {
     ru: 'ru',     // Russian
     pt: 'pt',     // Portuguese
     sw: 'sw',     // Kiswahili
+    ja: 'ja',     // Japanese
+    ko: 'ko',     // Korean
+    hi: 'hi',     // Hindi
 
     // Newly added languages (total 34)
     am: 'am',     // Amharic
@@ -110,7 +113,8 @@ module.exports = {
   languageNames: {
     en: 'English', ar: 'Arabic', th: 'Thai', zh: 'Chinese', de: 'German',
     fr: 'French', id: 'Indonesian', es: 'Spanish', ru: 'Russian', pt: 'Portuguese',
-    sw: 'Kiswahili', am: 'Amharic', az: 'Azerbaijani', bn: 'Bengali', fa: 'Persian',
+    sw: 'Kiswahili', ja: 'Japanese', ko: 'Korean', hi: 'Hindi',
+    am: 'Amharic', az: 'Azerbaijani', bn: 'Bengali', fa: 'Persian',
     ff: 'Fulah', ha: 'Hausa', jv: 'Javanese', kk: 'Kazakh', ku: 'Kurdish',
     ml: 'Malayalam', ms: 'Malay', om: 'Oromo', pa: 'Punjabi', ps: 'Pashto',
     sd: 'Sindhi', skr: 'Saraiki', so: 'Somali', su: 'Sundanese', tr: 'Turkish',

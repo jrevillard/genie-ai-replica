@@ -196,7 +196,9 @@ class TranslationService {
     const sourceLangCode = this.backend.getLanguageCode(sourceLang);
     if (!sourceLangCode) {
       logger.warn(`[TRANSLATION-SERVICE] Unsupported source language code: ${sourceLang}`);
-      throw new Error(`Unsupported source language: ${sourceLang}`);
+      const err = new Error(`Unsupported source language: ${sourceLang}`);
+      err.status = 400;
+      throw err;
     }
 
     // Check if target language is supported
@@ -209,7 +211,9 @@ class TranslationService {
         return this.translate(texts, sourceLang, fallbackLang);
       }
       logger.warn(`[TRANSLATION-SERVICE] Unsupported target language code: ${targetLang}`);
-      throw new Error(`Unsupported target language: ${targetLang}`);
+      const err = new Error(`Unsupported target language: ${targetLang}`);
+      err.status = 400;
+      throw err;
     }
 
     const targetLangCode = this.backend.getLanguageCode(targetLang);

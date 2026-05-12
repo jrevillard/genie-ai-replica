@@ -8,12 +8,15 @@ import {
   Copy01Icon,
   Delete02Icon,
   Edit02Icon,
+  Menu08Icon,
   RefreshIcon,
   Tick02Icon,
 } from '@hugeicons/core-free-icons';
+import { VueDraggable } from 'vue-draggable-plus';
 import Icon from '../ui/Icon.vue';
 import BaseToggle from '../ui/BaseToggle.vue';
 import BaseButton from '../ui/BaseButton.vue';
+import ConfirmDialog from '../ui/ConfirmDialog.vue';
 import SuggestionsTabSkeleton from '../ui/skeletons/SuggestionsTabSkeleton.vue';
 import { extractError } from '../../lib/errors';
 import { notify } from '../../lib/notify';
@@ -35,13 +38,23 @@ const props = withDefaults(
   { editing: false }
 );
 
-// ─── Server snapshot vs. local working copy ───────────────────────────────
-// The other tabs in the detail view follow a snapshot/working pattern: read
-// values render straight from the server snapshot, and entering edit mode
-// clones a working copy that absorbs every mutation. Save() diffs working
-// against the snapshot and fires the minimum API calls; Cancel discards.
+// Asks the parent to enter edit mode — row-level icons stay visible always,
+// so clicking edit/delete/toggle from view mode flips edit mode on first.
+const emit = defineEmits<{ (e: 'request-edit-mode'): void }>();
+
+function ensureEditMode(): void {
+  if (!props.editing) emit('request-edit-mode');
+}
+
+// Snapshot/working pattern (same as the other twin tabs): the snapshot is the
+// last known server state; `working` is the local copy edited during a session;
+// `save()` diffs working against the snapshot and PATCHes the difference.
 
 const TEMP_ID_PREFIX = '__pending__';
+
+// Hard cap on visible (enabled) questions — patients only see this many on the
+// chat landing. Toggles/creates above the cap are blocked with a warning.
+const MAX_VISIBLE = 3;
 
 const loaded = ref<TwinSuggestedQuestion[]>([]);
 const working = ref<TwinSuggestedQuestion[]>([]);
@@ -58,8 +71,6 @@ function cloneRow(q: TwinSuggestedQuestion): TwinSuggestedQuestion {
 function snapshotForEditing(): void {
   working.value = loaded.value.map(cloneRow);
   pendingDeleteIds.value = new Set();
-  // Always exit any inline-row edit / dialog state when entering or leaving
-  // the editing flow so stale drafts don't leak across sessions.
   cancelInlineEdit();
   closeCreate();
 }
@@ -69,7 +80,9 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    loaded.value = await getTwinSuggestedQuestions(props.twin._key);
+    // `status=all` is the admin management view — includes hidden rows so
+    // the visibility toggles have something to flip.
+    loaded.value = await getTwinSuggestedQuestions(props.twin._key, 'all');
     if (props.editing) snapshotForEditing();
   } catch (err) {
     error.value = extractError(err, t('twins.suggestions.loadFailed', 'Failed to load suggested questions'));
@@ -91,8 +104,7 @@ watch(
   }
 );
 
-// When the parent toggles editing on, fork a working copy from the snapshot.
-// When it toggles off (without going through save), discard back to snapshot.
+// Entering edit mode forks the working copy; leaving without save discards it.
 watch(
   () => props.editing,
   (next, prev) => {
@@ -102,9 +114,8 @@ watch(
   }
 );
 
-// ─── Display set ──────────────────────────────────────────────────────────
-// In view mode, render straight from the server snapshot. In edit mode,
-// render the working copy minus rows the user marked for delete.
+// View mode renders the server snapshot; edit mode renders the working copy
+// minus rows staged for deletion.
 const displayQuestions = computed<TwinSuggestedQuestion[]>(() => {
   if (!props.editing) return loaded.value;
   return working.value
@@ -114,12 +125,39 @@ const displayQuestions = computed<TwinSuggestedQuestion[]>(() => {
 });
 
 // ─── Regenerate ───────────────────────────────────────────────────────────
-async function regenerate(): Promise<void> {
+// Regenerate replaces the entire list. When there are pending changes we
+// confirm first, since save() would otherwise lose them.
+const regenerateConfirmOpen = ref(false);
+
+function onRegenerateClick(): void {
+  if (regenerating.value || loading.value) return;
+  if (props.editing && hasPendingChanges.value) {
+    regenerateConfirmOpen.value = true;
+    return;
+  }
+  void doRegenerate();
+}
+
+async function confirmRegenerate(): Promise<void> {
+  regenerateConfirmOpen.value = false;
+  await doRegenerate();
+}
+
+function cancelRegenerateConfirm(): void {
+  if (regenerating.value) return;
+  regenerateConfirmOpen.value = false;
+}
+
+async function doRegenerate(): Promise<void> {
   if (!props.twin?._key || regenerating.value) return;
   regenerating.value = true;
   error.value = null;
   try {
-    loaded.value = await regenerateTwinSuggestedQuestions(props.twin._key);
+    await regenerateTwinSuggestedQuestions(props.twin._key);
+    // Regenerate returns only the freshly-generated set; refetch with
+    // `status=all` so any preserved manual rows (including ones the admin
+    // previously hid) come back into the management view.
+    loaded.value = await getTwinSuggestedQuestions(props.twin._key, 'all');
     if (props.editing) snapshotForEditing();
     notify.success(
       t('twins.suggestions.regenerated', 'Suggested questions regenerated'),
@@ -154,11 +192,6 @@ async function copyQuestion(q: TwinSuggestedQuestion): Promise<void> {
   } catch {
     notify.error(t('twins.suggestions.copyFailed', 'Could not copy to clipboard'));
   }
-}
-
-// ─── Working-copy helpers ─────────────────────────────────────────────────
-function findWorkingRow(id: string): TwinSuggestedQuestion | undefined {
-  return working.value.find((q) => q._key === id);
 }
 
 function updateWorkingRow(id: string, patch: Partial<TwinSuggestedQuestion>): void {
@@ -206,18 +239,32 @@ function commitInlineEdit(q: TwinSuggestedQuestion): void {
   cancelInlineEdit();
 }
 
-// ─── Toggle enabled (local only — staged for save) ────────────────────────
+const workingVisibleCount = computed<number>(() =>
+  working.value.filter(
+    (q) => q.enabled !== false && !(q._key && pendingDeleteIds.value.has(q._key))
+  ).length
+);
+
+const visibleLimitReached = computed<boolean>(() => workingVisibleCount.value >= MAX_VISIBLE);
+
 function toggleEnabled(q: TwinSuggestedQuestion, next: boolean): void {
   if (!q._key) return;
+  if (next && q.enabled === false && visibleLimitReached.value) {
+    notify.warning(
+      t('twins.suggestions.maxVisibleTitle', 'You can only show 3 at a time'),
+      t(
+        'twins.suggestions.maxVisibleBody',
+        `Hide one of the currently visible questions first, then you can show this one.`
+      )
+    );
+    return;
+  }
   updateWorkingRow(q._key, { enabled: next });
 }
 
-// ─── Stage delete (local only) ────────────────────────────────────────────
 function stageDelete(q: TwinSuggestedQuestion): void {
   if (!q._key) return;
-  // Newly-created rows that haven't been persisted yet: just drop them from
-  // the working set. Persisted rows go into pendingDeleteIds instead so
-  // save() knows to fire the DELETE.
+  // Unsaved rows just disappear; persisted rows queue a DELETE for save().
   if (q._key.startsWith(TEMP_ID_PREFIX)) {
     working.value = working.value.filter((row) => row._key !== q._key);
     return;
@@ -225,7 +272,47 @@ function stageDelete(q: TwinSuggestedQuestion): void {
   pendingDeleteIds.value = new Set(pendingDeleteIds.value).add(q._key);
 }
 
-// ─── Stage create (local only) ────────────────────────────────────────────
+// Drag-and-drop reorder within a category. Each card is its own sortable
+// (pull/put: false), so a drag never changes the item's category — we just
+// re-sequence `order` so the save() diff picks up the moved rows.
+function onGroupReorder(category: string, items: TwinSuggestedQuestion[]): void {
+  if (!props.editing) return;
+  const next: TwinSuggestedQuestion[] = [];
+  for (const g of grouped.value) {
+    next.push(...(g.category === category ? items : g.items));
+  }
+  working.value = next.map((row, idx) => ({ ...row, order: idx + 1 }));
+}
+
+// Row-level actions stay visible always. Clicking from view mode flips edit
+// mode on first (nextTick → watcher snapshots working), then runs the action.
+function handleToggleClick(q: TwinSuggestedQuestion, next: boolean): void {
+  if (!props.editing) {
+    ensureEditMode();
+    void nextTick(() => toggleEnabled(q, next));
+    return;
+  }
+  toggleEnabled(q, next);
+}
+
+function handleEditClick(q: TwinSuggestedQuestion): void {
+  if (!props.editing) {
+    ensureEditMode();
+    void nextTick(() => startInlineEdit(q));
+    return;
+  }
+  startInlineEdit(q);
+}
+
+function handleDeleteClick(q: TwinSuggestedQuestion): void {
+  if (!props.editing) {
+    ensureEditMode();
+    void nextTick(() => stageDelete(q));
+    return;
+  }
+  stageDelete(q);
+}
+
 const createOpen = ref(false);
 const createDraft = reactive({
   content: '',
@@ -268,6 +355,14 @@ function commitCreate(): void {
     notify.error(t('twins.suggestions.categoryRequired', 'Category is required'));
     return;
   }
+  // Past the cap: stash as hidden rather than rejecting — keeps the typed
+  // content intact and lets the admin pick which existing question to swap.
+  let enabled = createDraft.enabled;
+  let cappedHidden = false;
+  if (enabled && visibleLimitReached.value) {
+    enabled = false;
+    cappedHidden = true;
+  }
   const maxOrder = working.value.reduce((m, q) => Math.max(m, q.order), 0);
   const tempId = `${TEMP_ID_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   working.value = [
@@ -277,17 +372,27 @@ function commitCreate(): void {
       order: maxOrder + 1,
       content,
       category,
-      enabled: createDraft.enabled,
+      enabled,
       source: 'manual',
     },
   ];
   closeCreate();
+  if (cappedHidden) {
+    notify.warning(
+      t('twins.suggestions.maxVisibleTitle', 'You can only show 3 at a time'),
+      t(
+        'twins.suggestions.createdHiddenBody',
+        `Only ${MAX_VISIBLE} questions can be shown at a time. Your new one was added as Hidden — toggle off another to show it.`
+      )
+    );
+  }
 }
 
-// ─── Diff working against snapshot, return mutation plan ──────────────────
+// Diff working against the server snapshot. PATCH with only `order` is a
+// pure reorder per the API spec — it does NOT promote generated → manual.
 interface MutationPlan {
   deletes: string[];
-  creates: TwinSuggestedQuestion[]; // entries with _key starting with TEMP_ID_PREFIX
+  creates: TwinSuggestedQuestion[];
   updates: Array<{ id: string; payload: Partial<TwinSuggestedQuestion> }>;
 }
 
@@ -299,20 +404,18 @@ function buildMutationPlan(): MutationPlan {
 
   for (const row of working.value) {
     if (!row._key) continue;
-    // Staged but later marked for delete — skip; the delete (which won't have
-    // a real id because the row was never persisted) is already handled above
-    // by stripping from working.
     if (pendingDeleteIds.value.has(row._key)) continue;
     if (row._key.startsWith(TEMP_ID_PREFIX)) {
       creates.push(row);
       continue;
     }
     const before = original.get(row._key);
-    if (!before) continue; // should not happen
+    if (!before) continue;
     const patch: Partial<TwinSuggestedQuestion> = {};
     if (row.content !== before.content) patch.content = row.content;
     if (row.category !== before.category) patch.category = row.category;
     if ((row.enabled ?? true) !== (before.enabled ?? true)) patch.enabled = row.enabled;
+    if (row.order !== before.order) patch.order = row.order;
     if (Object.keys(patch).length > 0) updates.push({ id: row._key, payload: patch });
   }
 
@@ -325,7 +428,7 @@ const hasPendingChanges = computed<boolean>(() => {
   return plan.deletes.length > 0 || plan.creates.length > 0 || plan.updates.length > 0;
 });
 
-// ─── Public hooks — called by the parent's Save Changes / Cancel ──────────
+// Save / Cancel — called by the parent's Save Changes / Cancel buttons.
 async function save(): Promise<boolean> {
   if (!props.twin?._key) return true;
   const plan = buildMutationPlan();
@@ -333,9 +436,7 @@ async function save(): Promise<boolean> {
     return true;
   }
   try {
-    // Order: deletes first, then updates, then creates. Deleting up front
-    // avoids hitting any uniqueness constraints that re-using a category /
-    // order on a new row might trip.
+    // Deletes first to free up any uniqueness slots; updates next; creates last.
     for (const id of plan.deletes) {
       await deleteTwinSuggestedQuestion(props.twin._key, id);
     }
@@ -350,9 +451,9 @@ async function save(): Promise<boolean> {
         enabled: row.enabled,
       });
     }
-    // Refetch so the snapshot reflects server state (real ids, normalised
-    // ordering, source promotion on PATCH-ed generated rows).
-    loaded.value = await getTwinSuggestedQuestions(props.twin._key);
+    // Refetch so the snapshot picks up real ids, normalised ordering, and any
+    // source promotion the server applied during PATCH.
+    loaded.value = await getTwinSuggestedQuestions(props.twin._key, 'all');
     pendingDeleteIds.value = new Set();
     working.value = loaded.value.map(cloneRow);
     notify.success(t('twins.suggestions.savedToast', 'Suggested questions updated'));
@@ -372,12 +473,13 @@ function discard(): void {
 
 defineExpose({ save, discard });
 
-// ─── Derived state ────────────────────────────────────────────────────────
 interface CategoryGroup {
   category: string;
   items: TwinSuggestedQuestion[];
 }
 
+// Both within and across groups, sort by `order`. Drag-and-drop rewrites the
+// field, so the user's sequence is always the source of truth.
 const grouped = computed<CategoryGroup[]>(() => {
   const map = new Map<string, TwinSuggestedQuestion[]>();
   for (const q of displayQuestions.value) {
@@ -385,10 +487,11 @@ const grouped = computed<CategoryGroup[]>(() => {
     if (bucket) bucket.push(q);
     else map.set(q.category, [q]);
   }
-  return Array.from(map.entries()).map(([category, items]) => ({
+  const groups: CategoryGroup[] = Array.from(map.entries()).map(([category, items]) => ({
     category,
     items: items.slice().sort((a, b) => a.order - b.order),
   }));
+  return groups.sort((a, b) => a.items[0].order - b.items[0].order);
 });
 
 const totalCount = computed(() => displayQuestions.value.length);
@@ -407,7 +510,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
           {{
             t(
               'twins.suggestions.subtitle',
-              'The starter prompts your patients see when opening a new chat. Auto-refreshed from this twin\'s knowledge base whenever files are added, removed or replaced.'
+              `Up to ${MAX_VISIBLE} starter questions shown when a new chat opens.`
             )
           }}
         </p>
@@ -418,18 +521,20 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
           <span class="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
           {{
             hasPendingChanges
-              ? t('twins.suggestions.unsavedHint', 'You have unsaved changes. Hit Save Changes when ready.')
-              : t('twins.suggestions.editingHint', 'Editing — changes are staged locally until you Save.')
+              ? t('twins.suggestions.unsavedHint', 'You have unsaved changes. Press Save Changes to apply them.')
+              : t('twins.suggestions.editingHint', 'Editing mode — your changes apply once you press Save Changes.')
           }}
         </p>
       </div>
       <div class="flex shrink-0 flex-wrap items-center gap-2">
         <button
           type="button"
-          :disabled="regenerating || loading || props.editing"
-          :title="props.editing ? t('twins.suggestions.regenerateDisabled', 'Save or cancel your changes before regenerating.') : undefined"
+          :disabled="regenerating || loading"
+          :title="props.editing && hasPendingChanges
+            ? t('twins.suggestions.regenerateWillDiscard', 'Your unsaved changes will be lost if you regenerate now.')
+            : undefined"
           class="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/5 px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent/50 hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60 pointer-events-auto"
-          @click="regenerate"
+          @click="onRegenerateClick"
         >
           <Icon :icon="RefreshIcon" :size="15" :class="regenerating && 'animate-spin'" />
           {{
@@ -477,13 +582,19 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
           <span class="text-[10px] font-medium text-text-muted">/ {{ totalCount }}</span>
         </p>
       </div>
-      <div class="rounded-2xl border border-border bg-surface px-4 py-3">
+      <div
+        class="rounded-2xl border bg-surface px-4 py-3"
+        :class="visibleCount > MAX_VISIBLE ? 'border-amber-200 ring-1 ring-amber-100' : 'border-border'"
+      >
         <p class="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-          {{ t('twins.suggestions.statVisible', 'Visible') }}
+          {{ t('twins.suggestions.statVisible', 'Visible to users') }}
         </p>
-        <p class="mt-1 inline-flex items-baseline gap-1 text-lg font-bold tabular-nums text-text">
+        <p
+          class="mt-1 inline-flex items-baseline gap-1 text-lg font-bold tabular-nums"
+          :class="visibleCount > MAX_VISIBLE ? 'text-amber-700' : 'text-emerald-700'"
+        >
           {{ visibleCount }}
-          <span class="text-[10px] font-medium text-text-muted">/ {{ totalCount }}</span>
+          <span class="text-[10px] font-medium text-text-muted">/ {{ MAX_VISIBLE }} {{ t('twins.suggestions.maxLabel', 'max') }}</span>
         </p>
       </div>
     </div>
@@ -522,7 +633,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
       <p class="relative mx-auto mt-1 max-w-md text-caption text-text-muted">
         {{
           props.editing
-            ? t('twins.suggestions.emptyBodyEditing', 'Hit Add question to stage your first one, then Save Changes to publish.')
+            ? t('twins.suggestions.emptyBodyEditing', 'Press Add question to create your first one, then Save Changes to apply.')
             : t(
                 'twins.suggestions.emptyBody',
                 'Add files to this twin\'s Knowledge Set or hit Regenerate to ask the model for a fresh set.'
@@ -534,7 +645,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
           <Icon :icon="Add01Icon" :size="14" />
           {{ t('twins.suggestions.addFirst', 'Add the first question') }}
         </BaseButton>
-        <BaseButton v-if="!props.editing" variant="ghost" rounded="full" :disabled="regenerating" @click="regenerate">
+        <BaseButton v-if="!props.editing" variant="ghost" rounded="full" :disabled="regenerating" @click="onRegenerateClick">
           <Icon :icon="RefreshIcon" :size="14" :class="regenerating && 'animate-spin'" />
           {{ t('twins.suggestions.regenerate', 'Regenerate') }}
         </BaseButton>
@@ -558,11 +669,23 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
           </div>
         </header>
 
-        <ul class="divide-y divide-border">
+        <VueDraggable
+          :model-value="group.items"
+          tag="ul"
+          class="divide-y divide-border"
+          :animation="180"
+          :disabled="!props.editing"
+          handle=".drag-handle"
+          ghost-class="suggestion-row--ghost"
+          chosen-class="suggestion-row--chosen"
+          drag-class="suggestion-row--dragging"
+          :group="{ name: `suggestions-${group.category}`, pull: false, put: false }"
+          @update:model-value="(items: TwinSuggestedQuestion[]) => onGroupReorder(group.category, items)"
+        >
           <li
-            v-for="(q, idx) in group.items"
-            :key="rowKey(q) + '-' + idx"
-            class="suggestion-row group/row relative flex items-center gap-4 px-5 py-3.5 transition-colors"
+            v-for="q in group.items"
+            :key="rowKey(q)"
+            class="suggestion-row group/row relative flex items-center gap-3 px-5 py-3.5 transition-colors"
             :class="[
               editingId === q._key
                 ? 'bg-accent/[0.035]'
@@ -580,6 +703,17 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
               :class="[editingId === q._key && 'opacity-100']"
               aria-hidden="true"
             />
+
+            <!-- Drag handle (edit mode only) -->
+            <button
+              v-if="props.editing && q._key"
+              type="button"
+              class="drag-handle -ml-1 inline-grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded text-text-muted/60 transition hover:text-text active:cursor-grabbing"
+              :aria-label="t('twins.suggestions.dragHandleAria', 'Drag to reorder')"
+              :title="t('twins.suggestions.dragHandleTitle', 'Drag to reorder within this category')"
+            >
+              <Icon :icon="Menu08Icon" :size="14" />
+            </button>
 
             <!-- Order badge -->
             <span
@@ -629,15 +763,19 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
                 </div>
               </div>
 
-              <!-- Right cluster: only shown while editing -->
-              <div v-if="props.editing" class="flex shrink-0 items-center gap-2">
+              <!-- Right cluster — always visible. Clicking toggle / edit /
+                   delete from view mode flips the parent into edit mode and
+                   then performs the action; the rest happens normally once
+                   editing is on. -->
+              <div class="flex shrink-0 items-center gap-2">
                 <BaseToggle
                   v-if="q._key"
                   :model-value="q.enabled !== false"
                   :aria-label="t('twins.suggestions.toggleAria', 'Show or hide this question in chat')"
-                  @update:model-value="(v) => toggleEnabled(q, v)"
+                  class="suggestion-row__toggle"
+                  @update:model-value="(v) => handleToggleClick(q, v)"
                 />
-                <span class="h-6 w-px bg-border/80" aria-hidden="true" />
+                <span v-if="q._key" class="h-6 w-px bg-border/80" aria-hidden="true" />
                 <div class="suggestion-row__actions flex items-center gap-0.5">
                   <button
                     type="button"
@@ -653,8 +791,8 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
                     type="button"
                     class="row-action inline-grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-accent/10 hover:text-accent pointer-events-auto"
                     :aria-label="t('twins.suggestions.editAria', 'Edit question')"
-                    :title="t('common.edit', 'Edit')"
-                    @click="startInlineEdit(q)"
+                    :title="props.editing ? t('common.edit', 'Edit') : t('twins.suggestions.editEnterMode', 'Edit (opens edit mode)')"
+                    @click="handleEditClick(q)"
                   >
                     <Icon :icon="Edit02Icon" :size="14" />
                   </button>
@@ -663,25 +801,12 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
                     type="button"
                     class="row-action inline-grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-danger/10 hover:text-danger pointer-events-auto"
                     :aria-label="t('twins.suggestions.deleteAria', 'Delete question')"
-                    :title="t('common.delete', 'Delete')"
-                    @click="stageDelete(q)"
+                    :title="props.editing ? t('common.delete', 'Delete') : t('twins.suggestions.deleteEnterMode', 'Delete (opens edit mode)')"
+                    @click="handleDeleteClick(q)"
                   >
                     <Icon :icon="Delete02Icon" :size="14" />
                   </button>
                 </div>
-              </div>
-
-              <!-- Right cluster: read-only (Copy only) -->
-              <div v-else class="flex shrink-0 items-center gap-0.5">
-                <button
-                  type="button"
-                  class="row-action inline-grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-surface-muted hover:text-text pointer-events-auto"
-                  :aria-label="t('twins.suggestions.copyAria', 'Copy question')"
-                  :title="t('twins.suggestions.copy', 'Copy')"
-                  @click="copyQuestion(q)"
-                >
-                  <Icon :icon="copiedKey === rowKey(q) ? Tick02Icon : Copy01Icon" :size="14" />
-                </button>
               </div>
             </template>
 
@@ -693,7 +818,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
                   v-model="editDraft.content"
                   rows="3"
                   class="w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-body text-text outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-                  :placeholder="t('twins.suggestions.contentPlaceholder', 'What would a patient ask?')"
+                  :placeholder="t('twins.suggestions.contentPlaceholder', 'What would a user ask?')"
                 />
                 <div class="flex flex-wrap items-center gap-2">
                   <label class="text-meta font-semibold uppercase tracking-wide text-text-muted">
@@ -728,7 +853,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
               </div>
             </template>
           </li>
-        </ul>
+        </VueDraggable>
       </section>
     </div>
 
@@ -743,8 +868,8 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
           <strong class="font-semibold">{{ pendingDeleteIds.size }}</strong>
           {{
             pendingDeleteIds.size === 1
-              ? t('twins.suggestions.pendingDeleteOne', 'question staged for deletion')
-              : t('twins.suggestions.pendingDeleteMany', 'questions staged for deletion')
+              ? t('twins.suggestions.pendingDeleteOne', 'question marked for removal')
+              : t('twins.suggestions.pendingDeleteMany', 'questions marked for removal')
           }}
         </span>
       </span>
@@ -754,7 +879,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
         @click="pendingDeleteIds = new Set()"
       >
         <Icon :icon="ArrowReloadHorizontalIcon" :size="12" />
-        {{ t('twins.suggestions.undoStagedDelete', 'Undo deletions') }}
+        {{ t('twins.suggestions.undoStagedDelete', 'Restore them') }}
       </button>
     </div>
 
@@ -782,7 +907,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
                 {{
                   t(
                     'twins.suggestions.createSubtitleBuffered',
-                    'Staged locally — nothing is published until you Save Changes.'
+                    'Nothing goes live until you press Save Changes.'
                   )
                 }}
               </p>
@@ -809,7 +934,7 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
                 rows="3"
                 maxlength="500"
                 class="w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-body text-text outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-                :placeholder="t('twins.suggestions.contentPlaceholder', 'What would a patient ask?')"
+                :placeholder="t('twins.suggestions.contentPlaceholder', 'What would a user ask?')"
               />
               <div class="flex justify-end text-[11px] text-text-muted tabular-nums">
                 {{ createDraft.content.length }} / 500
@@ -842,18 +967,23 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
             <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-muted/30 px-3 py-2.5">
               <div>
                 <p class="text-meta font-semibold text-text">
-                  {{ t('twins.suggestions.enabledLabel', 'Visible to patients') }}
+                  {{ t('twins.suggestions.enabledLabel', 'Visible to users') }}
                 </p>
                 <p class="text-[11px] text-text-muted">
                   {{
-                    t(
-                      'twins.suggestions.enabledHint',
-                      'Hidden questions stay saved but won\'t appear in chat.'
-                    )
+                    visibleLimitReached
+                      ? t(
+                          'twins.suggestions.enabledHintCapped',
+                          `${MAX_VISIBLE} questions are already shown — this one will be added as Hidden.`
+                        )
+                      : t(
+                          'twins.suggestions.enabledHint',
+                          'Hidden questions are saved but won\'t appear in chat.'
+                        )
                   }}
                 </p>
               </div>
-              <BaseToggle v-model="createDraft.enabled" />
+              <BaseToggle v-model="createDraft.enabled" :disabled="visibleLimitReached" />
             </div>
 
             <div class="flex items-center justify-end gap-2 pt-2">
@@ -862,13 +992,27 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
               </BaseButton>
               <BaseButton type="submit" variant="primary" rounded="full">
                 <Icon :icon="Add01Icon" :size="14" />
-                {{ t('twins.suggestions.stageBtn', 'Stage question') }}
+                {{ t('twins.suggestions.stageBtn', 'Add question') }}
               </BaseButton>
             </div>
           </form>
         </section>
       </div>
     </Teleport>
+
+    <!-- Regenerate-while-editing confirmation -->
+    <ConfirmDialog
+      v-model:open="regenerateConfirmOpen"
+      :title="t('twins.suggestions.regenerateConfirmTitle', 'You have unsaved changes')"
+      :description="t(
+        'twins.suggestions.regenerateConfirmBody',
+        'Regenerate will replace this whole list with a fresh one from the knowledge base. Any changes you haven\'t saved yet will be lost.'
+      )"
+      :confirm-label="t('twins.suggestions.regenerateConfirmCta', 'Regenerate anyway')"
+      :loading="regenerating"
+      @confirm="confirmRegenerate"
+      @cancel="cancelRegenerateConfirm"
+    />
   </div>
 </template>
 
@@ -882,5 +1026,41 @@ const visibleCount = computed(() => displayQuestions.value.filter((q) => q.enabl
 .row-action:focus-visible {
   outline: 2px solid var(--tw-color-accent, #0b3d91);
   outline-offset: 2px;
+}
+
+/* Shrink the shared BaseToggle a touch — the default size is too dominant on
+   the dense question rows. Scales the actual <button> inside the BaseToggle. */
+.suggestion-row__toggle :deep(button[role='switch']) {
+  height: 1.25rem;   /* 20px */
+  width: 2.25rem;    /* 36px */
+}
+.suggestion-row__toggle :deep(button[role='switch'] > span) {
+  height: 1rem;      /* 16px */
+  width: 1rem;
+}
+.suggestion-row__toggle :deep(button[role='switch'][aria-checked='true'] > span) {
+  transform: translateX(18px);
+}
+.suggestion-row__toggle :deep(button[role='switch'][aria-checked='false'] > span) {
+  transform: translateX(2px);
+}
+
+/* SortableJS drag visuals — these class names are configured on the
+   <VueDraggable> element via ghost-class / chosen-class / drag-class.
+   `:deep()` is needed because SortableJS adds them outside Vue's scope. */
+:deep(.suggestion-row--ghost) {
+  opacity: 0.35;
+  background: rgb(15 61 145 / 0.06);
+}
+:deep(.suggestion-row--chosen) {
+  cursor: grabbing;
+}
+:deep(.suggestion-row--dragging) {
+  background: #fff;
+  box-shadow:
+    0 12px 28px -8px rgb(15 23 42 / 0.18),
+    0 4px 12px -4px rgb(15 23 42 / 0.10);
+  border-radius: 12px;
+  transform: scale(1.01);
 }
 </style>

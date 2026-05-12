@@ -248,16 +248,13 @@ services:
     container_name: warning-system-engine
     env_file:
       - .env
+      - ./components/warning_system_engine/.env
     environment:
       - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
       - ARANGO_URL=${ARANGO_URL}
       - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
       - ARANGO_USER=${ARANGO_USER:-root}
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
-      # Copernicus SEAS5 long-term pipeline
-      - CDSAPI_URL=${CDSAPI_URL:-https://cds.climate.copernicus.eu/api}
-      - CDSAPI_KEY=${CDSAPI_KEY:-}
-      - COPERNICUS_MONTHS_AHEAD=${COPERNICUS_MONTHS_AHEAD:-5}
     depends_on:
       arango-vector-db:
         condition: service_healthy

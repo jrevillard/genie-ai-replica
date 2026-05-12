@@ -12,6 +12,12 @@ services:
     container_name: warning-system-engine
     restart: unless-stopped
     env_file: .env
+    volumes:
+      # Mount raw BAMIS PDFs so the pipeline script can access them.
+      # crawl_bamis.py writes: <host-path>/<crop>/<region>/<crop>_<region>.pdf
+      - ${BAMIS_PDF_DIR:-./data/raw_pdfs}:/data/raw_pdfs:ro
+      # Persist generated data (bamis_metadata.json, example_crop_profile.json)
+      - warning-engine-data:/app/data
     environment:
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB_NAME=genie-ai
@@ -40,3 +46,6 @@ networks:
   mewa-net:
     external: true
     name: mewa-net
+
+volumes:
+  warning-engine-data:
